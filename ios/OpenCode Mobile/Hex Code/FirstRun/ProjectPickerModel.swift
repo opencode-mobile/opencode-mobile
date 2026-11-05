@@ -17,15 +17,15 @@ struct ChosenProject: Codable, Equatable, Sendable {
     }
 }
 
-/// Pick a project and Browse folders, on OpenCode Mobile's Add project state: the server's
-/// recent repositories, then a path field over the server's folders with a pinned
-/// "Use this folder" bar. Nothing is added to the server; the pick only names a folder.
+/// Pick a project and Browse folders: the server's recent repositories, then a path field over
+/// the server's folders with a pinned "Use this folder" bar. Nothing is added to the server;
+/// the pick only names a folder.
 @MainActor
 @Observable
 final class ProjectPickerModel {
-    private(set) var sheet = AddProjectSheetState.empty
+    private(set) var sheet = FolderBrowserState.empty
 
-    @ObservationIgnored private var inputs = AddProjectSheetInputs()
+    @ObservationIgnored private var inputs = FolderBrowserInputs()
     @ObservationIgnored private let projects: any ProjectListing
     @ObservationIgnored private let filesystem: any FilesystemRepository
     @ObservationIgnored private var generation = 0
@@ -54,14 +54,14 @@ final class ProjectPickerModel {
         summaryQueue = []
         summariesInFlight = []
         summaryFailures = []
-        inputs = AddProjectSheetInputs()
+        inputs = FolderBrowserInputs()
         publish()
         let paths: ServerPaths
         do {
             paths = try await filesystem.getPaths()
         } catch {
             guard generation == self.generation else { return }
-            inputs.pathsError = AddProjectSheetState.listErrorMessage
+            inputs.pathsError = FolderBrowserState.listErrorMessage
             inputs.suggestionsResolved = true
             publish()
             return
@@ -114,7 +114,6 @@ final class ProjectPickerModel {
         if !inputs.home.isEmpty {
             inputs.fieldText = ServerPathPolicy.fieldText(inputs.home)
         }
-        inputs.fieldError = nil
         publish()
     }
 
@@ -122,7 +121,6 @@ final class ProjectPickerModel {
     func updateField(_ text: String) {
         guard text != inputs.fieldText else { return }
         inputs.fieldText = text
-        inputs.fieldError = nil
         publish()
         scheduleListing()
     }
@@ -157,7 +155,7 @@ final class ProjectPickerModel {
 
     /// The folder "Use this folder" names, while the bar allows it.
     var folderToUse: ChosenProject? {
-        guard sheet.addEnabled, let target = sheet.addTarget else { return nil }
+        guard sheet.useEnabled, let target = sheet.useTarget else { return nil }
         return ChosenProject(path: target)
     }
 
@@ -169,7 +167,6 @@ final class ProjectPickerModel {
     private func show(_ folder: String) async {
         listingTask?.cancel()
         inputs.fieldText = ServerPathPolicy.fieldText(folder)
-        inputs.fieldError = nil
         publish()
         if let directory = sheet.directory {
             await loadListing(directory, generation: generation)
@@ -214,7 +211,7 @@ final class ProjectPickerModel {
         case .failure(FilesystemError.directoryNotFound):
             inputs.missingDirectories.insert(directory)
         case .failure:
-            inputs.listErrors[directory] = AddProjectSheetState.listErrorMessage
+            inputs.listErrors[directory] = FolderBrowserState.listErrorMessage
         }
         publish()
     }
@@ -229,7 +226,7 @@ final class ProjectPickerModel {
 
     private func startSummaries() {
         let generation = generation
-        while summariesInFlight.count < AddProjectSheetState.folderSummaryConcurrency, !summaryQueue.isEmpty {
+        while summariesInFlight.count < FolderBrowserState.folderSummaryConcurrency, !summaryQueue.isEmpty {
             let path = summaryQueue.removeFirst()
             guard inputs.listings[path] == nil else { continue }
             summariesInFlight.insert(path)
@@ -268,7 +265,7 @@ final class ProjectPickerModel {
     private func publish() {
         publishTask?.cancel()
         publishTask = nil
-        let next = AddProjectSheetState.make(inputs)
+        let next = FolderBrowserState.make(inputs)
         if next != sheet { sheet = next }
     }
 }

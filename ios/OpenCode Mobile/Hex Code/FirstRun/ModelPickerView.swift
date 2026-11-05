@@ -16,18 +16,22 @@ struct ModelPickerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HexTopBar(title: title, subtitle: subtitle, onBack: onBack)
+            HexTopBar(title, subtitle: subtitle, onBack: onBack)
             switch page.phase {
             case .loading:
-                OpenCodeStatusStack(spinner: OpenCodeText(LocalizedStringResource("model.loading", defaultValue: "Loading models")))
+                HexStatusLine(.waiting, LocalizedStringResource("model.loading", defaultValue: "Loading models"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .failed:
-                failed
+                PickerNotice(
+                    text: String(localized: "model.failed", defaultValue: "Couldn’t load the models from OpenCode."),
+                    onRetry: { Task { await page.load() } }
+                )
+                Spacer()
             case let .loaded(picker):
                 loaded(picker)
             }
         }
-        .background(OpenCodeColors.backgroundBase)
+        .hexScreenBackground()
     }
 
     private var subtitle: String {
@@ -36,60 +40,36 @@ struct ModelPickerView: View {
         return String(localized: "model.subtitle", defaultValue: "\(serverLabel) · \(count) models from OpenCode")
     }
 
-    private var failed: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(LocalizedStringResource("model.failed", defaultValue: "Couldn’t load the models from OpenCode."))
-                .font(.system(size: 14.5))
-                .foregroundStyle(OpenCodeColors.textWeak)
-            Button {
-                Task { await page.load() }
-            } label: {
-                Text(LocalizedStringResource("common.retry", defaultValue: "Retry"))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(OpenCodeColors.textStrong)
-            }
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(HexLayout.edge)
-    }
-
     private func loaded(_ picker: ModelPickerState) -> some View {
         VStack(spacing: 0) {
-            search(picker)
+            HexSearchField(
+                LocalizedStringResource("model.search", defaultValue: "Search models"),
+                text: Binding(get: { picker.query }, set: { page.setQuery($0) })
+            )
+            .padding(.horizontal, HexSpacing.screen)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     let sections = picker.sections
                     if sections.isEmpty {
-                        Text(LocalizedStringResource("model.no_match", defaultValue: "No models match “\(picker.query)”"))
-                            .font(.system(size: 14.5))
-                            .foregroundStyle(OpenCodeColors.textWeak)
-                            .padding(.horizontal, HexLayout.edge)
-                            .padding(.vertical, 14)
+                        PickerNotice(text: String(localized: "model.no_match", defaultValue: "No models match “\(picker.query)”"))
                     }
                     ForEach(sections) { section in
                         if let title = section.title {
-                            Text(verbatim: title)
-                                .textCase(.uppercase)
-                                .font(.system(size: 11.5, weight: .semibold))
-                                .tracking(0.7)
-                                .foregroundStyle(OpenCodeColors.textWeaker)
-                                .padding(.horizontal, HexLayout.edge)
-                                .padding(.top, 16)
-                                .padding(.bottom, 4)
-                                .accessibilityAddTraits(.isHeader)
+                            HexSectionLabel(verbatim: title)
                         }
                         ForEach(section.rows) { row in
-                            HexRow(
+                            HexPickerRow(
+                                variant: .model,
                                 title: row.option.modelLabel,
-                                titleWeight: row.isSelected ? .semibold : .regular,
-                                tag: row.isServerDefault ? OpenCodeText(LocalizedStringResource("model.default_tag", defaultValue: "default")) : nil,
+                                selected: row.isSelected,
+                                badge: row.isServerDefault ? Text(LocalizedStringResource("model.default_tag", defaultValue: "default")) : nil,
+                                monoBadge: true,
                                 subtitle: row.providerCaption,
                                 trailing: row.isSelected ? .check : .none,
-                                minHeight: 46,
                                 action: { page.select(row.option) }
                             )
-                            .accessibilityAddTraits(row.isSelected ? .isSelected : [])
                         }
                     }
                 }
@@ -99,100 +79,52 @@ struct ModelPickerView: View {
         }
     }
 
-    private func search(_ picker: ModelPickerState) -> some View {
-        HStack(spacing: 8) {
-            OpenCodeIconImage(icon: .search, size: 15)
-                .foregroundStyle(OpenCodeColors.textWeaker)
-            TextField(
-                String(localized: "model.search", defaultValue: "Search models"),
-                text: Binding(get: { picker.query }, set: { page.setQuery($0) })
-            )
-            .font(.system(size: 15.5))
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .submitLabel(.search)
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 40)
-        .background(OpenCodeColors.surfaceBaseHover, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .padding(.horizontal, HexLayout.edge)
-        .padding(.top, 6)
-        .padding(.bottom, 2)
-    }
-
     private func bar(_ picker: ModelPickerState) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 0) {
                 Text(LocalizedStringResource("model.reasoning", defaultValue: "Reasoning"))
-                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .foregroundStyle(HexColor.text2)
                 if let option = picker.selectedOption {
                     Text(verbatim: " · \(option.modelLabel)")
-                        .foregroundStyle(OpenCodeColors.textWeaker)
+                        .foregroundStyle(HexColor.text3)
                 }
             }
-            .font(.system(size: 12.5))
+            .hexFont(.caption)
             .lineLimit(1)
             levels(picker)
             testStatus(picker)
-                .frame(minHeight: 40, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
             if picker.canStart {
-                HexPrimaryButton(title: finishTitle, busy: finishing, action: onFinish)
+                HexPrimaryButton(finishTitle, loading: finishing, action: onFinish)
             } else {
                 HexPrimaryButton(
-                    title: testButtonTitle(picker),
+                    testButtonTitle(picker),
                     enabled: !picker.isTesting && picker.selectedOption != nil,
                     action: { page.test() }
                 )
             }
             if let error = finishError {
-                Text(verbatim: error)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(OpenCodeColors.error)
+                HexStatusLine(.warning, verbatim: error)
             }
         }
-        .padding(.horizontal, HexLayout.edge)
+        .padding(.horizontal, HexSpacing.screen)
         .padding(.top, 14)
         .padding(.bottom, 4)
-        .background(OpenCodeColors.backgroundBase)
-        .overlay(alignment: .top) { Divider().overlay(OpenCodeColors.borderWeakBase) }
+        .background(HexColor.background)
+        .overlay(alignment: .top) { HexColor.line.frame(height: 1) }
     }
 
     @ViewBuilder
     private func levels(_ picker: ModelPickerState) -> some View {
         let levels = picker.reasoningLevels
         if levels.isEmpty {
-            Text(LocalizedStringResource("model.no_levels", defaultValue: "This model has no reasoning levels"))
-                .font(.system(size: 13))
-                .foregroundStyle(OpenCodeColors.textWeaker)
-                .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
-                .background(OpenCodeColors.surfaceBaseHover, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            HexSegmentedPlaceholder(LocalizedStringResource("model.no_levels", defaultValue: "This model has no reasoning levels"))
         } else {
-            HStack(spacing: 0) {
-                ForEach(levels, id: \.self) { level in
-                    let selected = picker.selectedLevel == level
-                    Button {
-                        page.selectLevel(level)
-                    } label: {
-                        Text(verbatim: TitleCaseIdentifier.displayName(for: level))
-                            .font(.system(size: 13.5, weight: .medium))
-                            .foregroundStyle(selected ? OpenCodeColors.textStrong : OpenCodeColors.textWeak)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(
-                                selected ? OpenCodeColors.surfaceRaisedBase : .clear,
-                                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            )
-                            .shadow(color: selected ? .black.opacity(0.15) : .clear, radius: 1, y: 1)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                }
-            }
-            .padding(3)
-            .frame(height: 36)
-            .background(OpenCodeColors.surfaceBaseHover, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            HexSegmented(
+                levels,
+                selection: Binding(get: { picker.selectedLevel }, set: { page.selectLevel($0) }),
+                label: { TitleCaseIdentifier.displayName(for: $0) }
+            )
         }
     }
 
@@ -201,34 +133,16 @@ struct ModelPickerView: View {
         let name = picker.selectedOption?.modelLabel ?? ""
         switch picker.currentTest {
         case .notRun:
-            Text(LocalizedStringResource("model.test.hint", defaultValue: "A one-line test prompt checks it works"))
-                .font(.system(size: 13))
-                .foregroundStyle(OpenCodeColors.textWeaker)
+            HexStatusLine(.hint, LocalizedStringResource("model.test.hint", defaultValue: "A one-line test prompt checks it works"))
         case .testing:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text(LocalizedStringResource("model.test.running", defaultValue: "Asking \(name) to reply…"))
-            }
-            .font(.system(size: 13))
-            .foregroundStyle(OpenCodeColors.textWeak)
+            HexStatusLine(.waiting, LocalizedStringResource("model.test.running", defaultValue: "Asking \(name) to reply…"))
         case let .passed(seconds):
-            HStack(spacing: 6) {
-                OpenCodeIconImage(icon: .check, size: 14).foregroundStyle(OpenCodeColors.success)
-                Text(LocalizedStringResource(
-                    "model.test.passed",
-                    defaultValue: "Works · replied in \(seconds.formatted(.number.precision(.fractionLength(1)))) s"
-                ))
-            }
-            .font(.system(size: 13))
-            .foregroundStyle(OpenCodeColors.textStrong)
+            HexStatusLine(.ok, LocalizedStringResource(
+                "model.test.passed",
+                defaultValue: "Works · replied in \(seconds.formatted(.number.precision(.fractionLength(1)))) s"
+            ))
         case let .failed(message):
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                OpenCodeIconImage(icon: .close, size: 14).foregroundStyle(OpenCodeColors.error)
-                Text(verbatim: message)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .font(.system(size: 13))
-            .foregroundStyle(OpenCodeColors.error)
+            HexStatusLine(.warning, verbatim: message)
         }
     }
 

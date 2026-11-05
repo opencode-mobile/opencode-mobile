@@ -14,61 +14,77 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HexTopBar(
-                title: LocalizedStringResource("settings.title", defaultValue: "Settings"),
+                LocalizedStringResource("settings.title", defaultValue: "Settings"),
                 subtitle: serverSubtitle,
                 onBack: { main.back() }
             )
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    HexSectionLabel(title: OpenCodeText(LocalizedStringResource("settings.session", defaultValue: "Session")))
-                    row(.folder, LocalizedStringResource("settings.project", defaultValue: "Project"), value: main.setup.project.name, subtitle: main.setup.project.path) {
-                        Task { await main.openProject() }
-                    }
-                    row(.restart, LocalizedStringResource("settings.new_session", defaultValue: "Start a new session"), subtitle: String(
-                        localized: "settings.new_session.sub",
-                        defaultValue: "Today’s session stays on your computer"
-                    )) { main.showPlaceholder() }
+                    HexSectionLabel(LocalizedStringResource("settings.session", defaultValue: "Session"))
+                    HexRow(
+                        icon: .folder,
+                        LocalizedStringResource("settings.project", defaultValue: "Project"),
+                        subtitle: main.setup.project.path,
+                        value: main.setup.project.name
+                    ) { Task { await main.openProject() } }
+                    HexRow(
+                        icon: .refresh,
+                        LocalizedStringResource("settings.new_session", defaultValue: "Start a new session"),
+                        subtitle: String(localized: "settings.new_session.sub", defaultValue: "Today’s session stays on your computer")
+                    ) { main.showPlaceholder() }
 
-                    HexSectionLabel(title: OpenCodeText(LocalizedStringResource("settings.agent", defaultValue: "Agent")))
-                    row(.agent, LocalizedStringResource("settings.model", defaultValue: "Model"), value: modelName) { Task { await main.openModel() } }
-                    row(.architecture, LocalizedStringResource("settings.reasoning", defaultValue: "Reasoning"), value: reasoning) { Task { await main.openModel() } }
-
-                    HexSectionLabel(title: OpenCodeText(LocalizedStringResource("settings.dictation", defaultValue: "Dictation · on this phone")))
-                    row(.mic, LocalizedStringResource("settings.speech_model", defaultValue: "Speech model"), value: voice.modelName, subtitle: String(
-                        localized: "settings.speech_model.sub",
-                        defaultValue: "Runs on this phone"
-                    )) { main.showPlaceholder() }
-                    row(.description, LocalizedStringResource("settings.language", defaultValue: "Language"), value: String(localized: "settings.language.english", defaultValue: "English")) {
-                        main.showPlaceholder()
+                    HexSectionLabel(LocalizedStringResource("settings.agent", defaultValue: "Agent"))
+                    HexRow(icon: .cpu, LocalizedStringResource("settings.model", defaultValue: "Model"), value: modelName) {
+                        Task { await main.openModel() }
                     }
-                    row(.edit, LocalizedStringResource("settings.text_style", defaultValue: "Text style"), value: String(localized: "settings.text_style.plain", defaultValue: "Plain")) {
-                        main.showPlaceholder()
+                    HexRow(icon: .spark, LocalizedStringResource("settings.reasoning", defaultValue: "Reasoning"), value: reasoning) {
+                        Task { await main.openModel() }
                     }
 
-                    HexSectionLabel(title: OpenCodeText(LocalizedStringResource("settings.app", defaultValue: "App")))
-                    row(.widgets, LocalizedStringResource("settings.appearance", defaultValue: "Appearance"), value: appearance.label) {
+                    HexSectionLabel(LocalizedStringResource("settings.dictation", defaultValue: "Dictation · on this phone"))
+                    HexRow(
+                        icon: .mic,
+                        LocalizedStringResource("settings.speech_model", defaultValue: "Speech model"),
+                        subtitle: String(localized: "settings.speech_model.sub", defaultValue: "Runs on this phone"),
+                        value: voice.modelName
+                    ) { main.showPlaceholder() }
+                    HexRow(
+                        icon: .book,
+                        LocalizedStringResource("settings.language", defaultValue: "Language"),
+                        value: String(localized: "settings.language.english", defaultValue: "English")
+                    ) { main.showPlaceholder() }
+                    HexRow(
+                        icon: .pencil,
+                        LocalizedStringResource("settings.text_style", defaultValue: "Text style"),
+                        value: String(localized: "settings.text_style.plain", defaultValue: "Plain")
+                    ) { main.showPlaceholder() }
+
+                    HexSectionLabel(LocalizedStringResource("settings.app", defaultValue: "App"))
+                    HexRow(icon: .sun, LocalizedStringResource("settings.appearance", defaultValue: "Appearance"), value: appearance.label) {
                         appearance = appearance.next
                     }
-                    row(.cloud, LocalizedStringResource("settings.server", defaultValue: "Server"), value: main.serverLabel, subtitle: serverDetail) {
-                        showsServer = true
-                    }
+                    HexRow(
+                        icon: .server,
+                        LocalizedStringResource("settings.server", defaultValue: "Server"),
+                        subtitle: serverDetail,
+                        value: main.serverLabel
+                    ) { showsServer = true }
                 }
             }
             if let note = main.note {
                 HomeToastView(toast: note, onUndo: {})
-                    .padding(.horizontal, HexLayout.edge)
+                    .padding(.horizontal, HexSpacing.screen)
                     .padding(.bottom, 8)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .background(OpenCodeColors.backgroundBase)
-        .animation(.easeOut(duration: 0.2), value: main.note)
-        .sheet(isPresented: $showsServer) {
+        .hexScreenBackground()
+        .animation(HexMotion.ease(HexMotion.fade), value: main.note)
+        .hexSheet(isPresented: $showsServer) {
             ServerDetailsView(setup: main.setup, onForget: {
                 showsServer = false
                 onForgetServer()
             })
-            .presentationDetents([.medium, .large])
         }
     }
 
@@ -91,47 +107,6 @@ struct SettingsView: View {
     private var reasoning: String {
         main.setup.model.variant.map(TitleCaseIdentifier.displayName(for:))
             ?? String(localized: "settings.reasoning.default", defaultValue: "Default")
-    }
-
-    private func row(
-        _ icon: OpenCodeIcon,
-        _ title: LocalizedStringResource,
-        value: String? = nil,
-        subtitle: String? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                OpenCodeIconImage(icon: icon, size: 18)
-                    .foregroundStyle(OpenCodeColors.textWeak)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(OpenCodeColors.textStrong)
-                    if let subtitle {
-                        Text(verbatim: subtitle)
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(OpenCodeColors.textWeak)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
-                Spacer(minLength: 8)
-                if let value {
-                    Text(verbatim: value)
-                        .font(.system(size: 14))
-                        .foregroundStyle(OpenCodeColors.textWeak)
-                        .lineLimit(1)
-                }
-                OpenCodeIconImage(icon: .chevronRight, size: 14)
-                    .foregroundStyle(OpenCodeColors.textWeaker)
-            }
-            .padding(.horizontal, HexLayout.edge)
-            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(HexRowStyle())
     }
 }
 
@@ -214,48 +189,46 @@ struct ServerDetailsView: View {
     @State private var confirmsForget = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: setup.serverName)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .padding(.top, 24)
-            if let detail {
-                Text(verbatim: detail)
-                    .font(.system(size: 13))
-                    .foregroundStyle(OpenCodeColors.textWeak)
-                    .padding(.top, 4)
-            }
-            HexSectionLabel(title: OpenCodeText(LocalizedStringResource("server.addresses", defaultValue: "Addresses")))
-                .padding(.horizontal, -HexLayout.edge)
-            ForEach(addresses, id: \.self) { address in
-                HStack {
-                    Text(verbatim: address)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(OpenCodeColors.textStrong)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
-                    Spacer(minLength: 8)
-                    if address == inUse {
-                        OpenCodeTag(OpenCodeText(LocalizedStringResource("server.in_use", defaultValue: "in use")), size: .small)
-                    }
+        HexSheet {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(verbatim: setup.serverName)
+                    .hexFont(.pageTitle)
+                    .foregroundStyle(HexColor.text1)
+                    .padding(.top, 8)
+                if let detail {
+                    Text(verbatim: detail)
+                        .hexFont(HexTextStyle.small.weight(.regular))
+                        .foregroundStyle(HexColor.text2)
+                        .padding(.top, 4)
                 }
-                .padding(.vertical, 6)
+                HexSectionLabel(LocalizedStringResource("server.addresses", defaultValue: "Addresses"))
+                    .padding(.horizontal, -HexSpacing.screen)
+                ForEach(addresses, id: \.self) { address in
+                    HStack {
+                        Text(verbatim: address)
+                            .hexFont(HexTextStyle.small.weight(.regular).monospaced())
+                            .foregroundStyle(HexColor.text1)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                        Spacer(minLength: 8)
+                        if address == inUse {
+                            HexBadge(LocalizedStringResource("server.in_use", defaultValue: "in use"))
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                Spacer()
+                HexButton(
+                    LocalizedStringResource("settings.forget.button", defaultValue: "Forget this computer"),
+                    size: .regular,
+                    style: .danger,
+                    fullWidth: true
+                ) { confirmsForget = true }
+                    .padding(.bottom, 8)
             }
-            Spacer()
-            Button {
-                confirmsForget = true
-            } label: {
-                Text(LocalizedStringResource("settings.forget.button", defaultValue: "Forget this computer"))
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(OpenCodeColors.error)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-            }
-            .padding(.bottom, 8)
+            .padding(.horizontal, 2)
         }
-        .padding(.horizontal, HexLayout.edge)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(OpenCodeColors.backgroundBase)
         .confirmationDialog(
             Text(LocalizedStringResource("settings.forget.title", defaultValue: "Pair again?")),
             isPresented: $confirmsForget,

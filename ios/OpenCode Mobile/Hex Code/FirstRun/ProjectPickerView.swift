@@ -1,8 +1,7 @@
-import OpenCodeKit
 import SwiftUI
 
 /// First run, step 3: Browse folders, then up to five recent repositories on the computer.
-/// Taken from OpenCode Mobile's Add project sheet, on its shared Add project state.
+/// After OpenCode Mobile's Add project sheet.
 struct ProjectPickerView: View {
     let picker: ProjectPickerModel
     var title = LocalizedStringResource("project.title", defaultValue: "Pick a project")
@@ -22,18 +21,14 @@ struct ProjectPickerView: View {
         }
     }
 
-    private var sheet: AddProjectSheetState { picker.sheet }
+    private var sheet: FolderBrowserState { picker.sheet }
 
     private var list: some View {
         VStack(spacing: 0) {
-            HexTopBar(
-                title: title,
-                subtitle: serverLabel,
-                onBack: onBack
-            )
+            HexTopBar(title, subtitle: serverLabel, onBack: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    HexRow(
+                    HexPickerRow(
                         icon: .folder,
                         title: String(localized: "project.browse", defaultValue: "Browse folders"),
                         subtitle: String(localized: "project.browse.subtitle", defaultValue: "Pick any folder on this computer"),
@@ -43,63 +38,44 @@ struct ProjectPickerView: View {
                         }
                     )
                     .disabled(sheet.homePath.isEmpty)
-                    HexSectionLabel(title: OpenCodeText(LocalizedStringResource("project.on_this_computer", defaultValue: "On this computer")))
+                    HexSectionLabel(LocalizedStringResource("project.on_this_computer", defaultValue: "On this computer"))
                     suggestions
                 }
+                .padding(.top, 4)
             }
             Text(note)
-                .font(.system(size: 12.5))
-                .foregroundStyle(OpenCodeColors.textWeaker)
+                .hexFont(.caption)
+                .foregroundStyle(HexColor.text3)
                 .frame(maxWidth: .infinity)
+                .padding(.horizontal, HexSpacing.screen)
                 .padding(.bottom, 8)
         }
-        .background(OpenCodeColors.backgroundBase)
+        .hexScreenBackground()
     }
 
     @ViewBuilder
     private var suggestions: some View {
         if let error = sheet.listError, sheet.homePath.isEmpty {
-            retryNotice(error)
+            PickerNotice(text: error, onRetry: { Task { await picker.retry() } })
         } else if !sheet.suggestionsResolved {
-            OpenCodeStatusStack(spinner: OpenCodeText(LocalizedStringResource("project.loading", defaultValue: "Loading projects")))
-                .frame(maxWidth: .infinity)
-                .padding(24)
+            HexStatusLine(.waiting, LocalizedStringResource("project.loading", defaultValue: "Loading projects"))
+                .padding(.horizontal, HexSpacing.screen)
+                .padding(.vertical, 14)
         } else if sheet.suggestions.isEmpty {
-            Text(LocalizedStringResource("project.none", defaultValue: "No repositories yet. Browse folders to pick one."))
-                .font(.system(size: 14.5))
-                .foregroundStyle(OpenCodeColors.textWeak)
-                .padding(.horizontal, HexLayout.edge)
-                .padding(.vertical, 12)
+            PickerNotice(text: String(localized: "project.none", defaultValue: "No repositories yet. Browse folders to pick one."))
         } else {
             ForEach(sheet.suggestions) { suggestion in
-                HexRow(
+                HexPickerRow(
                     icon: .folder,
                     title: suggestion.name,
                     subtitle: suggestion.path,
-                    trailing: suggestion.activityLabel.map(HexRow.Trailing.caption) ?? .none,
+                    trailing: suggestion.activityLabel.map(HexRowTrailing.caption) ?? .none,
                     action: {
                         if let chosen = picker.suggestion(at: suggestion.path) { onPick(chosen) }
                     }
                 )
             }
         }
-    }
-
-    private func retryNotice(_ message: OpenCodeText) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(openCode: message)
-                .font(.system(size: 14.5))
-                .foregroundStyle(OpenCodeColors.textWeak)
-            Button {
-                Task { await picker.retry() }
-            } label: {
-                Text(LocalizedStringResource("common.retry", defaultValue: "Retry"))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(OpenCodeColors.textStrong)
-            }
-        }
-        .padding(.horizontal, HexLayout.edge)
-        .padding(.vertical, 12)
     }
 }
 
@@ -113,56 +89,42 @@ struct FolderBrowserView: View {
 
     @FocusState private var editingPath: Bool
 
-    private var sheet: AddProjectSheetState { picker.sheet }
+    private var sheet: FolderBrowserState { picker.sheet }
 
     var body: some View {
         VStack(spacing: 0) {
             HexTopBar(
-                title: LocalizedStringResource("browse.title", defaultValue: "Pick a folder"),
+                LocalizedStringResource("browse.title", defaultValue: "Pick a folder"),
                 onBack: { if let onBack { onBack() } else { picker.closeBrowser() } }
             )
             pathField
             roots
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) { rows }
+                    .padding(.top, 4)
             }
             .scrollDismissesKeyboard(.immediately)
         }
-        .background(OpenCodeColors.backgroundBase)
+        .hexScreenBackground()
         .safeAreaInset(edge: .bottom, spacing: 0) { bar }
     }
 
     private var pathField: some View {
         HStack(spacing: 8) {
-            TextField(
-                String(localized: "add_project.folder_path", defaultValue: "Folder path"),
-                text: Binding(get: { sheet.fieldText }, set: { picker.updateField($0) })
+            HexTextField(
+                LocalizedStringResource("add_project.folder_path", defaultValue: "Folder path"),
+                text: Binding(get: { sheet.fieldText }, set: { picker.updateField($0) }),
+                monospaced: true,
+                submitLabel: .go,
+                focus: $editingPath,
+                onSubmit: { Task { await picker.submitField() } }
             )
-            .font(.system(size: 14, design: .monospaced))
-            .foregroundStyle(OpenCodeColors.textStrong)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .submitLabel(.go)
-            .focused($editingPath)
-            .onSubmit { Task { await picker.submitField() } }
-            .padding(.horizontal, 14)
-            .frame(height: 44)
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(OpenCodeColors.borderWeakBase, lineWidth: 1))
-            Button {
+            HexButton(icon: .send, size: .field, enabled: sheet.upTarget != nil) {
                 Task { await picker.up() }
-            } label: {
-                OpenCodeIconImage(icon: .arrowUpward, size: 17)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                    .frame(width: 44, height: 44)
-                    .background(OpenCodeColors.surfaceBaseHover, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-            .buttonStyle(HexPressStyle())
-            .disabled(sheet.upTarget == nil)
-            .opacity(sheet.upTarget == nil ? 0.3 : 1)
-            .accessibilityLabel(Text("add_project.up_one_folder", comment: "Up one folder"))
+            .accessibilityLabel(Text(LocalizedStringResource("add_project.up_one_folder", defaultValue: "Up one folder")))
         }
-        .padding(.horizontal, HexLayout.edge)
+        .padding(.horizontal, HexSpacing.screen)
         .padding(.top, 4)
     }
 
@@ -172,21 +134,12 @@ struct FolderBrowserView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(sheet.roots) { root in
-                        Button {
+                        RootChip(label: root.label, selected: root.selected) {
                             Task { await picker.selectRoot(root.path) }
-                        } label: {
-                            Text(openCode: root.label)
-                                .font(.system(size: 13.5, weight: .medium))
-                                .foregroundStyle(root.selected ? OpenCodeColors.iconInvertBase : OpenCodeColors.textWeak)
-                                .padding(.horizontal, 13)
-                                .frame(height: 32)
-                                .background(root.selected ? OpenCodeColors.buttonPrimaryBase : .clear, in: Capsule())
-                                .overlay(Capsule().stroke(root.selected ? .clear : OpenCodeColors.borderWeakBase, lineWidth: 1))
                         }
-                        .buttonStyle(HexPressStyle())
                     }
                 }
-                .padding(.horizontal, HexLayout.edge)
+                .padding(.horizontal, HexSpacing.screen)
             }
             .padding(.top, 12)
             .padding(.bottom, 6)
@@ -196,37 +149,21 @@ struct FolderBrowserView: View {
     @ViewBuilder
     private var rows: some View {
         if sheet.isLoading {
-            OpenCodeStatusStack(spinner: OpenCodeText(LocalizedStringResource("browse.loading", defaultValue: "Loading folders")))
-                .frame(maxWidth: .infinity)
-                .padding(24)
-        } else if let error = sheet.listError {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(openCode: error)
-                    .font(.system(size: 14.5))
-                    .foregroundStyle(OpenCodeColors.textWeak)
-                Button {
-                    Task { await picker.retry() }
-                } label: {
-                    Text(LocalizedStringResource("common.retry", defaultValue: "Retry"))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(OpenCodeColors.textStrong)
-                }
-            }
-            .padding(.horizontal, HexLayout.edge)
-            .padding(.vertical, 14)
-        } else if let empty = sheet.emptyMessage {
-            Text(openCode: empty)
-                .font(.system(size: 14.5))
-                .foregroundStyle(OpenCodeColors.textWeak)
-                .padding(.horizontal, HexLayout.edge)
+            HexStatusLine(.waiting, LocalizedStringResource("browse.loading", defaultValue: "Loading folders"))
+                .padding(.horizontal, HexSpacing.screen)
                 .padding(.vertical, 14)
+        } else if let error = sheet.listError {
+            PickerNotice(text: error, onRetry: { Task { await picker.retry() } })
+        } else if let empty = sheet.emptyMessage {
+            PickerNotice(text: empty)
         } else {
             ForEach(sheet.entries) { entry in
-                HexRow(
+                HexPickerRow(
                     icon: .folder,
                     title: entry.name,
-                    tag: entry.isGitRepository ? AddProjectSheetState.gitTag : nil,
-                    subtitle: entry.subtitle?.resolved,
+                    badge: entry.isGitRepository ? Text(verbatim: FolderBrowserState.gitTag) : nil,
+                    monoBadge: true,
+                    subtitle: entry.subtitle,
                     reservesSubtitle: true,
                     trailing: .chevron,
                     action: { Task { await picker.openFolder(entry.path) } }
@@ -235,10 +172,10 @@ struct FolderBrowserView: View {
                 .onDisappear { picker.rowDisappeared(entry.path) }
             }
             if let hint = sheet.truncationHint {
-                Text(openCode: hint)
-                    .font(.system(size: 13))
-                    .foregroundStyle(OpenCodeColors.textWeak)
-                    .padding(.horizontal, HexLayout.edge)
+                Text(verbatim: hint)
+                    .hexFont(.caption)
+                    .foregroundStyle(HexColor.text2)
+                    .padding(.horizontal, HexSpacing.screen)
                     .padding(.vertical, 12)
             }
         }
@@ -248,37 +185,82 @@ struct FolderBrowserView: View {
         VStack(alignment: .leading, spacing: 0) {
             if let target = sheet.barTarget, !editingPath {
                 HStack(spacing: 12) {
-                    OpenCodeIconImage(icon: .folder, size: 20)
-                        .foregroundStyle(OpenCodeColors.textStrong)
+                    HexIconView(.folder, size: HexIconSize.large)
+                        .foregroundStyle(HexColor.text1)
                         .frame(width: 24)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 7) {
                             Text(verbatim: target.name)
-                                .font(.system(size: 15.5, weight: .semibold))
-                                .foregroundStyle(OpenCodeColors.textStrong)
+                                .hexFont(.bodyStrong)
+                                .foregroundStyle(HexColor.text1)
+                                .lineLimit(1)
                             if target.isGitRepository {
-                                OpenCodeTag(AddProjectSheetState.gitTag, size: .small)
+                                HexBadge(text: Text(verbatim: FolderBrowserState.gitTag), mono: true)
                             }
                         }
                         Text(verbatim: target.path)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(OpenCodeColors.textWeak)
+                            .hexFont(HexTextStyle.footnote.monospaced())
+                            .foregroundStyle(HexColor.text2)
                             .lineLimit(1)
                             .truncationMode(.head)
                     }
                 }
+                .padding(.top, 4)
                 .padding(.bottom, 12)
             }
             HexPrimaryButton(
-                text: sheet.addTitle,
+                verbatim: sheet.useTitle,
                 enabled: picker.folderToUse != nil,
                 action: { if let folder = picker.folderToUse { onPick(folder) } }
             )
         }
-        .padding(.horizontal, HexLayout.edge)
+        .padding(.horizontal, HexSpacing.screen)
         .padding(.top, 10)
         .padding(.bottom, 4)
-        .background(OpenCodeColors.backgroundBase)
-        .overlay(alignment: .top) { Divider().overlay(OpenCodeColors.borderWeakBase) }
+        .background(HexColor.background)
+        .overlay(alignment: .top) { HexColor.line.frame(height: 1) }
+    }
+}
+
+/// A root the path field can jump to: Home, `/`, a volume or a drive.
+private struct RootChip: View {
+    let label: String
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(verbatim: label)
+                .hexFont(.callout)
+                .foregroundStyle(selected ? HexColor.onSolid : HexColor.text2)
+                .lineLimit(1)
+                .padding(.horizontal, 13)
+                .frame(height: 32)
+                .background(selected ? HexColor.solid : .clear, in: Capsule())
+                .overlay(Capsule().strokeBorder(selected ? .clear : HexColor.line2, lineWidth: 1))
+        }
+        .buttonStyle(HexPressStyle(scale: 0.96))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// A line of text in place of the list (empty, or a failure with Retry).
+struct PickerNotice: View {
+    let text: String
+    var onRetry: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(verbatim: text)
+                .hexFont(.row)
+                .foregroundStyle(HexColor.text2)
+                .fixedSize(horizontal: false, vertical: true)
+            if let onRetry {
+                HexButton(LocalizedStringResource("common.retry", defaultValue: "Retry"), action: onRetry)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, HexSpacing.screen)
+        .padding(.vertical, 14)
     }
 }

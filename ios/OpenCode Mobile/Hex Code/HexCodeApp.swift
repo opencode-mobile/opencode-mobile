@@ -1,4 +1,3 @@
-import OpenCodeKit
 import SwiftUI
 
 @main
@@ -6,24 +5,30 @@ struct HexCodeApp: App {
     @State private var app = HexAppModel()
     @AppStorage(HexAppearance.key) private var appearance: HexAppearance = .auto
 
-    init() {
-        // Hex Code always looks like Hex; Appearance only picks light, dark or the system's.
-        ThemeManager.appID = "hexcode"
-        ThemeManager.shared.applyPreset(id: "hex")
-    }
-
     var body: some Scene {
         WindowGroup {
             Group {
                 if Self.runsSpeechLab {
                     DictationScreen()
+                } else if Self.showsGallery {
+                    #if DEBUG
+                    HexGallery().hexTheme(appearance.colorScheme)
+                    #endif
                 } else {
                     HexRootView(app: app, appearance: $appearance)
-                        .preferredColorScheme(appearance.colorScheme)
+                        .hexTheme(appearance.colorScheme)
                 }
             }
-            .openCodeTheme()
         }
+    }
+
+    /// `-HexCodeGallery YES` opens the design system gallery.
+    private static var showsGallery: Bool {
+        #if DEBUG
+        return UserDefaults.standard.bool(forKey: "HexCodeGallery")
+        #else
+        return false
+        #endif
     }
 
     /// `-HexCodeLab <folder>` and `-HexCodeSample <file>` open the dictation lab screen, which runs
@@ -46,7 +51,7 @@ struct HexRootView: View {
         Group {
             switch app.phase {
             case .launching:
-                OpenCodeColors.backgroundBase.ignoresSafeArea()
+                HexColor.background.ignoresSafeArea()
             case .firstRun:
                 if let firstRun = app.firstRun {
                     FirstRunView(model: firstRun)
@@ -59,7 +64,7 @@ struct HexRootView: View {
                 }
             }
         }
-        .background(OpenCodeColors.backgroundBase.ignoresSafeArea())
+        .hexScreenBackground()
         .task { await app.launch() }
     }
 }

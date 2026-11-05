@@ -1,6 +1,5 @@
 import OpenCodeKit
 import SwiftUI
-import VisionKit
 
 /// First run, step 2: the camera (always dark) and one panel. The server checks run behind
 /// "Connecting" and only show when one fails.
@@ -14,21 +13,16 @@ struct ScanView: View {
     var body: some View {
         ZStack {
             camera
-            PairingQRReticle()
-                .ignoresSafeArea()
+            ScanReticle(found: isConnected)
+                .frame(width: 220, height: 220)
+                .allowsHitTesting(false)
             VStack(spacing: 0) {
                 HStack {
-                    Button(action: onClose) {
-                        OpenCodeIconImage(icon: .close, size: 18)
-                            .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
-                            .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .buttonStyle(HexPressStyle())
-                    .accessibilityLabel(Text("common.close", comment: "Close the camera"))
+                    HexButton(icon: .x, size: .regular, action: onClose)
+                        .accessibilityLabel(Text(LocalizedStringResource("common.close", defaultValue: "Close")))
                     Spacer()
                 }
-                .padding(.horizontal, HexLayout.edge)
+                .padding(.horizontal, HexSpacing.screen)
                 .padding(.top, 8)
                 Spacer()
                 panel
@@ -36,90 +30,120 @@ struct ScanView: View {
                     .padding(.bottom, 8)
             }
         }
-        .background(Color.black)
+        .hexScreenBackground()
         .environment(\.colorScheme, .dark)
+    }
+
+    private var isConnected: Bool {
+        if case .connected = phase { return true }
+        return false
     }
 
     @ViewBuilder
     private var camera: some View {
-        if DataScannerViewController.isSupported, DataScannerViewController.isAvailable {
-            PairingQRDataScanner(onScanned: onScanned)
+        if QRCodeScanner.isAvailable {
+            QRCodeScanner(onScanned: onScanned)
                 .id(attempt)
                 .ignoresSafeArea()
         } else {
-            Color.black.ignoresSafeArea()
+            HexColor.background.ignoresSafeArea()
         }
     }
 
     private var panel: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            switch phase {
-            case .scanning:
-                title(LocalizedStringResource("scan.point.title", defaultValue: "Point at the code"), icon: .search)
-                Text(LocalizedStringResource(
-                    "scan.point.body",
-                    defaultValue: "It’s on your computer after `opencode pair`. It works once."
-                ))
-                .modifier(PanelBody())
-                if !(DataScannerViewController.isSupported && DataScannerViewController.isAvailable) {
-                    Text(LocalizedStringResource(
-                        "scan.no_camera",
-                        defaultValue: "The camera isn’t available. Allow it in Settings › Hex Code."
+        HexPanel(translucent: true) {
+            VStack(alignment: .leading, spacing: 6) {
+                switch phase {
+                case .scanning:
+                    title(LocalizedStringResource("scan.point.title", defaultValue: "Point at the code")) {
+                        HexIconView(.scan).foregroundStyle(HexColor.text2)
+                    }
+                    panelBody(LocalizedStringResource(
+                        "scan.point.body",
+                        defaultValue: "It’s on your computer after `opencode pair`. It works once."
                     ))
-                    .modifier(PanelBody())
+                    if !QRCodeScanner.isAvailable {
+                        panelBody(LocalizedStringResource(
+                            "scan.no_camera",
+                            defaultValue: "The camera isn’t available. Allow it in Settings › Hex Code."
+                        ))
+                    }
+                case .connecting:
+                    title(LocalizedStringResource("scan.connecting", defaultValue: "Connecting to your computer")) {
+                        HexSpinner()
+                    }
+                    panelBody(LocalizedStringResource("scan.checking", defaultValue: "Checking the server can run this app."))
+                case let .connected(server):
+                    title(LocalizedStringResource("scan.connected", defaultValue: "Connected to \(server.displayName)")) {
+                        HexIconView(.check).foregroundStyle(HexColor.green)
+                    }
+                    panelBody(LocalizedStringResource("scan.connected.detail", defaultValue: "OpenCode \(server.version ?? "2")"))
+                case let .failed(failure):
+                    title(PairingFailureCopy.title(failure)) {
+                        HexIconView(.alert).foregroundStyle(HexColor.amber)
+                    }
+                    panelBody(PairingFailureCopy.body(failure))
+                    HexPrimaryButton(LocalizedStringResource("scan.again", defaultValue: "Scan again"), action: onScanAgain)
+                        .padding(.top, 8)
                 }
-            case .connecting:
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small).tint(.white)
-                    Text(LocalizedStringResource("scan.connecting", defaultValue: "Connecting to your computer"))
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                Text(LocalizedStringResource("scan.checking", defaultValue: "Checking the server can run this app."))
-                    .modifier(PanelBody())
-            case let .connected(server):
-                title(
-                    LocalizedStringResource("scan.connected", defaultValue: "Connected to \(server.displayName)"),
-                    icon: .check,
-                    tint: OpenCodeColors.success
-                )
-                Text(LocalizedStringResource("scan.connected.detail", defaultValue: "OpenCode \(server.version ?? "2")"))
-                .modifier(PanelBody())
-            case let .failed(failure):
-                title(PairingFailureCopy.title(failure), icon: .close, tint: OpenCodeColors.error)
-                Text(PairingFailureCopy.body(failure))
-                    .modifier(PanelBody())
-                Button(action: onScanAgain) {
-                    Text(LocalizedStringResource("scan.again", defaultValue: "Scan again"))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(HexPressStyle())
-                .padding(.top, 8)
             }
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .animation(.easeOut(duration: 0.2), value: phase)
+        .animation(HexMotion.ease(HexMotion.fade), value: phase)
     }
 
-    private func title(_ text: LocalizedStringResource, icon: OpenCodeIcon, tint: Color = .white.opacity(0.7)) -> some View {
+    private func title<Icon: View>(_ text: LocalizedStringResource, @ViewBuilder icon: () -> Icon) -> some View {
         HStack(spacing: 8) {
-            OpenCodeIconImage(icon: icon, size: 16).foregroundStyle(tint)
-            Text(text).font(.system(size: 16, weight: .semibold))
+            icon()
+            Text(text)
+                .hexFont(.bodyStrong)
+                .foregroundStyle(HexColor.text1)
         }
     }
 
-    private struct PanelBody: ViewModifier {
-        func body(content: Content) -> some View {
-            content
-                .font(.system(size: 14))
-                .lineSpacing(2)
-                .foregroundStyle(.white.opacity(0.7))
+    private func panelBody(_ text: LocalizedStringResource) -> some View {
+        Text(text)
+            .hexFont(.row)
+            .foregroundStyle(HexColor.text2)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Four corner brackets round the code; green once connected.
+private struct ScanReticle: View {
+    let found: Bool
+
+    var body: some View {
+        ZStack {
+            let corners: [Alignment] = [.topLeading, .topTrailing, .bottomTrailing, .bottomLeading]
+            ForEach(0 ..< 4, id: \.self) { index in
+                ScanCorner()
+                    .stroke(found ? HexColor.green : HexColor.text1, style: StrokeStyle(lineWidth: 3, lineCap: .square))
+                    .frame(width: 30, height: 30)
+                    .rotationEffect(.degrees(Double(index) * 90))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: corners[index])
+            }
         }
+        .animation(HexMotion.ease(HexMotion.fade), value: found)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The top-left corner of the reticle, rounded at radius `m`.
+private struct ScanCorner: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let radius = HexRadius.m
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + radius))
+        path.addArc(
+            center: CGPoint(x: rect.minX + radius, y: rect.minY + radius),
+            radius: radius,
+            startAngle: .degrees(180),
+            endAngle: .degrees(270),
+            clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        return path
     }
 }
 

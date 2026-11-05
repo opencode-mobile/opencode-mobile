@@ -1,4 +1,3 @@
-import OpenCodeKit
 import SwiftUI
 import VoiceEngineKit
 
@@ -33,24 +32,23 @@ struct HomeView: View {
             TalkButton(home: home, voice: voice)
                 .padding(.bottom, 6)
         }
-        .padding(.horizontal, HexLayout.edge)
-        .background(OpenCodeColors.backgroundBase)
-        .animation(.easeOut(duration: 0.2), value: home.toast)
-        .animation(.easeOut(duration: 0.2), value: home.draft.isEmpty && !home.isRecording)
+        .padding(.horizontal, HexSpacing.screenHome)
+        .hexScreenBackground()
+        .animation(HexMotion.ease(HexMotion.fade), value: home.toast)
+        .animation(HexMotion.ease(HexMotion.fade), value: home.draft.isEmpty && !home.isRecording)
     }
 
     private var emptyHint: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(LocalizedStringResource("home.empty.title", defaultValue: "Say what you want done"))
-                .font(.system(size: 22, weight: .semibold))
-                .tracking(-0.4)
-                .foregroundStyle(OpenCodeColors.textStrong)
+                .hexFont(HexTextStyle.draft.weight(.semibold))
+                .foregroundStyle(HexColor.text1)
             Text(LocalizedStringResource(
                 "home.empty.body",
                 defaultValue: "Hold the button and talk. Text appears when you pause, and stays here: sending comes next."
             ))
-            .font(.system(size: 15))
-            .foregroundStyle(OpenCodeColors.textWeak)
+            .hexFont(.body)
+            .foregroundStyle(HexColor.text2)
         }
         .transition(.opacity)
     }
@@ -61,28 +59,9 @@ struct HomeTopBar: View {
     let onSettings: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Circle()
-                    .stroke(OpenCodeColors.textWeaker, lineWidth: 1.5)
-                    .frame(width: 11, height: 11)
-                Text(LocalizedStringResource("home.state.idle", defaultValue: "Idle"))
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(OpenCodeColors.textWeak)
-            }
-            Spacer()
-            Button(action: onSettings) {
-                OpenCodeIconImage(icon: .settings, size: 17)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                    .frame(width: 44, height: 44)
-                    .background(OpenCodeColors.surfaceRaisedBase, in: Circle())
-                    .overlay(Circle().stroke(OpenCodeColors.borderWeakBase, lineWidth: 1))
-            }
-            .buttonStyle(HexPressStyle())
-            .accessibilityLabel(Text(LocalizedStringResource("home.settings", defaultValue: "Settings")))
+        HexTopBar(state: HexTopBarState(tone: .idle, label: String(localized: "home.state.idle", defaultValue: "Idle"))) {
+            HexRoundButton(.gear, label: LocalizedStringResource("home.settings", defaultValue: "Settings"), action: onSettings)
         }
-        .frame(height: 44)
-        .padding(.top, 2)
     }
 }
 
@@ -105,31 +84,34 @@ struct DraftView: View {
                 .opacity(home.isRecording ? 0 : 1)
                 .allowsHitTesting(!home.isRecording)
         }
-        .animation(.easeOut(duration: 0.18), value: draft)
+        .animation(HexMotion.ease(HexMotion.fade), value: draft)
     }
 
     @ViewBuilder
     private var label: some View {
-        if home.isRecording {
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                HStack(spacing: 6) {
-                    Circle().fill(OpenCodeColors.error).frame(width: 7, height: 7)
-                    Text(verbatim: recordingLabel)
-                    if home.locked {
-                        OpenCodeIconImage(icon: .lock, size: 12)
+        Group {
+            if home.isRecording {
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    HStack(spacing: 6) {
+                        HexDot(tone: .red)
+                        Text(verbatim: recordingLabel)
+                        if home.locked {
+                            HexIconView(.lock, size: HexIconSize.small)
+                        }
                     }
                 }
+            } else if draft.isTranscribing {
+                HStack(spacing: 6) {
+                    HexSpinner(size: HexIconSize.small)
+                    Text(LocalizedStringResource("draft.transcribing", defaultValue: "Transcribing on this phone…"))
+                }
+            } else {
+                Text(verbatim: summary)
             }
-            .modifier(LabelStyle())
-        } else if draft.isTranscribing {
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.mini)
-                Text(LocalizedStringResource("draft.transcribing", defaultValue: "Transcribing on this phone…"))
-            }
-            .modifier(LabelStyle())
-        } else {
-            Text(verbatim: summary).modifier(LabelStyle())
         }
+        .hexFont(HexTextStyle.caption.weight(.medium))
+        .foregroundStyle(HexColor.text3)
+        .lineLimit(1)
     }
 
     private var recordingLabel: String {
@@ -155,56 +137,24 @@ struct DraftView: View {
         HStack(spacing: 8) {
             if let index = draft.selectedIndex {
                 Text(LocalizedStringResource("draft.chunk_label", defaultValue: "Chunk \(index + 1)"))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .hexFont(.caption)
+                    .foregroundStyle(HexColor.text2)
                 Spacer()
-                DraftButton(icon: .delete, title: LocalizedStringResource("draft.delete", defaultValue: "Delete"), tint: OpenCodeColors.error) {
+                HexButton(LocalizedStringResource("draft.delete", defaultValue: "Delete"), icon: .trash, style: .danger) {
                     home.deleteSelectedChunk()
                 }
-                DraftButton(icon: .mic, title: LocalizedStringResource("draft.rerecord", defaultValue: "Re-record")) {
+                HexButton(LocalizedStringResource("draft.rerecord", defaultValue: "Re-record"), icon: .mic) {
                     home.rerecordSelected()
                 }
-                DraftButton(icon: .close, title: nil) { home.deselectChunk() }
+                HexButton(icon: .x) { home.deselectChunk() }
                     .accessibilityLabel(Text(LocalizedStringResource("draft.deselect", defaultValue: "Deselect")))
             } else {
-                DraftButton(icon: .close, title: nil) { home.clearDraft() }
+                HexButton(icon: .x) { home.clearDraft() }
                     .accessibilityLabel(Text(LocalizedStringResource("draft.clear", defaultValue: "Clear the draft")))
                 Spacer()
             }
         }
-        .frame(height: 36)
-    }
-
-    private struct LabelStyle: ViewModifier {
-        func body(content: Content) -> some View {
-            content
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(OpenCodeColors.textWeaker)
-                .lineLimit(1)
-        }
-    }
-}
-
-/// Small bordered action under the draft.
-struct DraftButton: View {
-    let icon: OpenCodeIcon
-    let title: LocalizedStringResource?
-    var tint: Color = OpenCodeColors.textStrong
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                OpenCodeIconImage(icon: icon, size: 14)
-                if let title { Text(title).font(.system(size: 13.5, weight: .medium)) }
-            }
-            .foregroundStyle(tint)
-            .padding(.horizontal, title == nil ? 0 : 12)
-            .frame(minWidth: 36, minHeight: 36)
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(OpenCodeColors.borderWeakBase, lineWidth: 1))
-        }
-        .buttonStyle(HexPressStyle())
+        .frame(minHeight: 30)
     }
 }
 
@@ -212,58 +162,41 @@ struct DraftButton: View {
 struct DraftText: View {
     let home: HomeModel
 
-    private static let fontSize: CGFloat = 21
-    private static let lineHeight: CGFloat = 29
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(attributed)
-                .font(.system(size: Self.fontSize, weight: .medium))
-                .tracking(-0.2)
-                .lineSpacing(Self.lineHeight - Self.fontSize - 4)
-                .environment(\.openURL, OpenURLAction { url in
-                    if let id = url.host().flatMap(UUID.init(uuidString:)) { home.toggleChunk(id) }
-                    return .handled
-                })
-                .tint(OpenCodeColors.textStrong)
+        VStack(alignment: .leading, spacing: 8) {
+            HexChunk(
+                items: home.draft.chunks.map { Self.item($0) },
+                selectedID: home.draft.selectedID,
+                interactive: !home.isRecording,
+                onTap: { home.toggleChunk($0) }
+            )
             if home.isRecording, home.draft.chunks.count == 1, !home.draft.isRerecording {
                 Text(LocalizedStringResource("draft.first_take_hint", defaultValue: "Text appears when you pause"))
-                    .font(.system(size: 13))
-                    .foregroundStyle(OpenCodeColors.textWeaker)
+                    .hexFont(.row)
+                    .foregroundStyle(HexColor.text3)
             }
         }
         // Three lines of room, so the actions don't jump as text arrives.
-        .frame(maxWidth: .infinity, minHeight: Self.lineHeight * 3, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: DraftText.minHeight, alignment: .topLeading)
     }
 
-    private var attributed: AttributedString {
-        let draft = home.draft
-        let selected = draft.selectedID
-        var out = AttributedString()
-        for (index, chunk) in draft.chunks.enumerated() {
-            if index > 0 { out += AttributedString(" ") }
-            var span: AttributedString
-            switch chunk.state {
-            case .listening:
-                span = AttributedString(String(localized: "draft.listening", defaultValue: "Listening…"))
-                span.foregroundColor = OpenCodeColors.textWeaker
-            case .transcribing:
-                span = AttributedString(String(localized: "draft.transcribing_chunk", defaultValue: "Transcribing…"))
-                span.foregroundColor = OpenCodeColors.textWeaker
-            case let .text(text):
-                span = AttributedString(text)
-                span.foregroundColor = selected == nil || selected == chunk.id ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker
-                if !home.isRecording { span.link = URL(string: "chunk://\(chunk.id.uuidString)") }
-                if selected == chunk.id { span.backgroundColor = OpenCodeColors.surfaceBaseHover }
-            case let .failed(message):
-                span = AttributedString(message)
-                span.foregroundColor = OpenCodeColors.error
-                if !home.isRecording { span.link = URL(string: "chunk://\(chunk.id.uuidString)") }
-                if selected == chunk.id { span.backgroundColor = OpenCodeColors.surfaceBaseHover }
-            }
-            out += span
+    /// Three lines of the draft type, as in the prototype.
+    private static var minHeight: CGFloat {
+        let style = HexTextStyle.draft
+        return style.size * (style.lineHeight ?? 1.3) * 3 + 8
+    }
+
+    static func item(_ chunk: DraftChunk) -> HexChunkItem {
+        switch chunk.state {
+        case .listening:
+            HexChunkItem(id: chunk.id, text: String(localized: "draft.listening", defaultValue: "Listening…"), kind: .placeholder)
+        case .transcribing:
+            HexChunkItem(id: chunk.id, text: String(localized: "draft.transcribing_chunk", defaultValue: "Transcribing…"), kind: .placeholder)
+        case let .text(text):
+            HexChunkItem(id: chunk.id, text: text)
+        case let .failed(message):
+            HexChunkItem(id: chunk.id, text: message, kind: .failed)
         }
-        return out
     }
 }
 
@@ -303,8 +236,8 @@ struct ChunkListView: View {
     private func foldRow(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(verbatim: title)
-                .font(.system(size: 12))
-                .foregroundStyle(OpenCodeColors.textWeaker)
+                .hexFont(.footnote)
+                .foregroundStyle(HexColor.text3)
                 .frame(maxWidth: .infinity)
                 .padding(4)
         }
@@ -315,48 +248,21 @@ struct ChunkListView: View {
         let chunk = chunk ?? home.draft.chunks[index]
         let selected = home.draft.selectedID == chunk.id
         let dimmed = home.isRecording || (home.draft.selectedID != nil && !selected)
-        return Button {
-            home.toggleChunk(chunk.id)
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 9) {
-                Group {
-                    if live {
-                        Circle().fill(OpenCodeColors.error).frame(width: 6, height: 6)
-                    } else {
-                        Text(verbatim: "\(index + 1)")
-                    }
-                }
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(OpenCodeColors.textWeaker)
-                .frame(width: 16, alignment: .trailing)
-                Text(verbatim: rowText(chunk))
-                    .font(.system(size: 14.5, weight: live ? .medium : .regular))
-                    .foregroundStyle(dimmed || chunk.text == nil ? OpenCodeColors.textWeaker : OpenCodeColors.textStrong)
-                    .lineLimit(selected ? 4 : 1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(verbatim: live ? "" : DraftClock.format(chunk.duration))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(OpenCodeColors.textWeaker)
-            }
-            .padding(6)
-            .background(selected ? OpenCodeColors.surfaceBaseHover : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-        }
-        .buttonStyle(.plain)
+        return HexChunkRow(
+            number: "\(index + 1)",
+            text: DraftText.item(chunk).text,
+            duration: live ? "" : DraftClock.format(chunk.duration),
+            selected: selected,
+            dimmed: dimmed || chunk.text == nil,
+            live: live,
+            action: { home.toggleChunk(chunk.id) }
+        )
         .disabled(home.isRecording || chunk.text == nil && !isFailed(chunk))
     }
 
     private func isFailed(_ chunk: DraftChunk) -> Bool {
         if case .failed = chunk.state { return true }
         return false
-    }
-
-    private func rowText(_ chunk: DraftChunk) -> String {
-        switch chunk.state {
-        case .listening: String(localized: "draft.listening", defaultValue: "Listening…")
-        case .transcribing: String(localized: "draft.transcribing_chunk", defaultValue: "Transcribing…")
-        case let .text(text): text
-        case let .failed(message): message
-        }
     }
 }
 
@@ -374,37 +280,27 @@ struct HomeToastView: View {
     let onUndo: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: toast.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                if let subtitle = toast.subtitle {
-                    Text(verbatim: subtitle)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(OpenCodeColors.textWeak)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-            if toast.action == .undoDelete {
-                Button(action: onUndo) {
-                    HStack(spacing: 5) {
-                        OpenCodeIconImage(icon: .undo, size: 13)
-                        Text(LocalizedStringResource("common.undo", defaultValue: "Undo"))
-                            .font(.system(size: 13.5, weight: .semibold))
+        HexPanel(padding: 0) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: toast.title)
+                        .hexFont(.callout)
+                        .foregroundStyle(HexColor.text1)
+                    if let subtitle = toast.subtitle {
+                        Text(verbatim: subtitle)
+                            .hexFont(.caption)
+                            .foregroundStyle(HexColor.text2)
+                            .lineLimit(1)
                     }
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                    .padding(.horizontal, 12)
-                    .frame(height: 32)
-                    .background(OpenCodeColors.surfaceBaseHover, in: Capsule())
                 }
-                .buttonStyle(HexPressStyle())
+                Spacer(minLength: 0)
+                if toast.action == .undoDelete {
+                    HexButton(LocalizedStringResource("common.undo", defaultValue: "Undo"), icon: .undo, action: onUndo)
+                }
             }
+            .padding(.leading, 12)
+            .padding(.trailing, 10)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(OpenCodeColors.borderWeakBase, lineWidth: 1))
     }
 }

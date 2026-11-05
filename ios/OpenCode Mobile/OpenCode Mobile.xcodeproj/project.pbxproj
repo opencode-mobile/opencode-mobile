@@ -7,9 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		HXC000000000000000000021 /* LucideIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = HXC000000000000000000031 /* LucideIcons.xcassets */; };
-		HXC000000000000000000022 /* ThemePresets in Resources */ = {isa = PBXBuildFile; fileRef = HXC000000000000000000032 /* ThemePresets */; };
-		HXC000000000000000000023 /* SyntaxPresets in Resources */ = {isa = PBXBuildFile; fileRef = HXC000000000000000000033 /* SyntaxPresets */; };
 		OCK000000000000000000003 /* OpenCodeKit in Frameworks */ = {isa = PBXBuildFile; productRef = OCK000000000000000000002 /* OpenCodeKit */; };
 		OCK000000000000000000004 /* OpenCodeKit in Frameworks */ = {isa = PBXBuildFile; productRef = OCK000000000000000000005 /* OpenCodeKit */; };
 		HXC000000000000000000013 /* VoiceEngineKit in Frameworks */ = {isa = PBXBuildFile; productRef = HXC000000000000000000012 /* VoiceEngineKit */; };
@@ -46,9 +43,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		HXC000000000000000000031 /* LucideIcons.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = LucideIcons.xcassets; sourceTree = "<group>"; };
-		HXC000000000000000000032 /* ThemePresets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/ThemePresets; sourceTree = "<group>"; };
-		HXC000000000000000000033 /* SyntaxPresets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/SyntaxPresets; sourceTree = "<group>"; };
 		HXT000000000000000000001 /* Hex CodeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Hex CodeTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		HXC000000000000000000001 /* Hex Code.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Hex Code.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		63369C0F2FA933AE002BDFFC /* OpenCode Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "OpenCode Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -140,7 +134,6 @@
 				63369C2B2FA933AF002BDFFC /* OpenCode MobileUITests */,
 				HXC000000000000000000002 /* Hex Code */,
 				HXT000000000000000000002 /* Hex CodeTests */,
-				HXC000000000000000000030 /* Hex Code shared resources */,
 				63369C102FA933AE002BDFFC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -155,17 +148,6 @@
 				HXT000000000000000000001 /* Hex CodeTests.xctest */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		HXC000000000000000000030 /* Hex Code shared resources */ = {
-			isa = PBXGroup;
-			children = (
-				HXC000000000000000000031 /* LucideIcons.xcassets */,
-				HXC000000000000000000032 /* ThemePresets */,
-				HXC000000000000000000033 /* SyntaxPresets */,
-			);
-			name = "Hex Code shared resources";
-			path = "OpenCode Mobile";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -361,9 +343,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				HXC000000000000000000021 /* LucideIcons.xcassets in Resources */,
-				HXC000000000000000000022 /* ThemePresets in Resources */,
-				HXC000000000000000000023 /* SyntaxPresets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

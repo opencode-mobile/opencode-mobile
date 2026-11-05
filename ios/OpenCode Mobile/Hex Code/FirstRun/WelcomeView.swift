@@ -1,4 +1,3 @@
-import OpenCodeKit
 import SwiftUI
 
 /// First run, step 1: the one rule and how to connect.
@@ -7,66 +6,61 @@ struct WelcomeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HexCodeMark()
-                .frame(width: 52, height: 52)
-                .background(Color.black, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            HexIconView(.mark, size: HexSize.mark)
+                .foregroundStyle(HexColor.text1)
                 .padding(.top, 40)
-                .accessibilityHidden(true)
             HStack(spacing: 10) {
                 Text(LocalizedStringResource("welcome.title", defaultValue: "Hex Code"))
-                    .font(.system(size: 30, weight: .semibold))
-                    .tracking(-0.9)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                OpenCodeTag("welcome.badge", size: .small)
+                    .hexFont(.display)
+                    .foregroundStyle(HexColor.text1)
+                HexBadge(LocalizedStringResource("welcome.badge", defaultValue: "experiment"))
             }
             .padding(.top, 22)
             Text(LocalizedStringResource("welcome.tagline", defaultValue: "Talk to the coding agent on your computer, from your phone."))
-                .font(.system(size: 16))
-                .foregroundStyle(OpenCodeColors.textWeak)
+                .hexFont(.body)
+                .foregroundStyle(HexColor.text2)
                 .padding(.top, 10)
             VStack(alignment: .leading, spacing: 6) {
                 Text(LocalizedStringResource("welcome.rule.title", defaultValue: "There are no rules."))
-                    .font(.system(size: 21, weight: .semibold))
-                    .tracking(-0.4)
-                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .hexFont(.pageTitle)
+                    .foregroundStyle(HexColor.text1)
                 Text(LocalizedStringResource("welcome.rule.body", defaultValue: "Talk to it however you like. Try things, see where it goes."))
-                    .font(.system(size: 15))
-                    .lineSpacing(3)
-                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .hexFont(.body)
+                    .foregroundStyle(HexColor.text2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 16)
-            .overlay(alignment: .top) { Divider().overlay(OpenCodeColors.borderWeakBase) }
+            .overlay(alignment: .top) { HexColor.line.frame(height: 1) }
             .padding(.top, 30)
 
             Spacer(minLength: 24)
 
             howToConnect
                 .padding(.bottom, 16)
-            HexPrimaryButton(title: LocalizedStringResource("welcome.scan", defaultValue: "Scan the code"), action: onScan)
+            HexPrimaryButton(LocalizedStringResource("welcome.scan", defaultValue: "Scan the code"), action: onScan)
             Text(LocalizedStringResource("welcome.footer", defaultValue: "Needs OpenCode 2.2.5+"))
-                .font(.system(size: 12))
-                .foregroundStyle(OpenCodeColors.textWeaker)
+                .hexFont(.footnote)
+                .foregroundStyle(HexColor.text3)
                 .frame(maxWidth: .infinity)
                 .multilineTextAlignment(.center)
                 .padding(.top, 10)
                 .padding(.bottom, 6)
         }
-        .padding(.horizontal, HexLayout.edge)
+        .padding(.horizontal, HexSpacing.screen)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(OpenCodeColors.backgroundBase)
+        .hexScreenBackground()
     }
 
     private var howToConnect: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(LocalizedStringResource("welcome.connect.title", defaultValue: "To connect"))
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(OpenCodeColors.textWeaker)
+                .hexFont(HexTextStyle.caption.weight(.medium))
+                .foregroundStyle(HexColor.text3)
                 .padding(.bottom, 10)
             step(1) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(LocalizedStringResource("welcome.connect.step1", defaultValue: "On your computer, run"))
-                    HexCommand(command: "opencode pair")
+                    CommandChip(command: "opencode pair")
                 }
             }
             step(2) {
@@ -76,8 +70,8 @@ struct WelcomeView: View {
                 "welcome.connect.remote",
                 defaultValue: "Not on the same network? `opencode pair --remote` connects through the internet."
             ))
-            .font(.system(size: 12.5))
-            .foregroundStyle(OpenCodeColors.textWeaker)
+            .hexFont(.caption)
+            .foregroundStyle(HexColor.text3)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 6)
             .padding(.leading, 34)
@@ -87,14 +81,33 @@ struct WelcomeView: View {
     private func step<Content: View>(_ number: Int, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(verbatim: "\(number)")
-                .font(.system(size: 11.5, design: .monospaced))
-                .foregroundStyle(OpenCodeColors.textWeak)
+                .hexFont(.mono)
+                .foregroundStyle(HexColor.text2)
                 .frame(width: 22, height: 22)
-                .overlay(Circle().stroke(OpenCodeColors.borderWeakBase, lineWidth: 1))
+                .overlay(Circle().strokeBorder(HexColor.line2, lineWidth: 1))
             content()
-                .font(.system(size: 15))
-                .foregroundStyle(OpenCodeColors.textStrong)
+                .hexFont(.body)
+                .foregroundStyle(HexColor.text1)
         }
         .padding(.vertical, 7)
+    }
+}
+
+/// A command to type on the computer, as in "run `opencode pair`".
+private struct CommandChip: View {
+    let command: String
+
+    var body: some View {
+        Text(verbatim: command)
+            .hexFont(HexTextStyle.small.weight(.regular).monospaced())
+            .foregroundStyle(HexColor.text1)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(HexColor.panel2, in: RoundedRectangle(cornerRadius: HexRadius.s, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: HexRadius.s, style: .continuous)
+                    .strokeBorder(HexColor.line, lineWidth: 1)
+            )
+            .textSelection(.enabled)
     }
 }
