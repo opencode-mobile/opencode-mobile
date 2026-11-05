@@ -58,6 +58,8 @@ import dev.opencode.hexcode.designsystem.components.HexChunkRow
 import dev.opencode.hexcode.designsystem.components.HexChunkRowState
 import dev.opencode.hexcode.designsystem.components.HexDot
 import dev.opencode.hexcode.designsystem.components.HexDotTone
+import dev.opencode.hexcode.designsystem.components.HexIconButton
+import dev.opencode.hexcode.designsystem.components.HexIconButtonTone
 import dev.opencode.hexcode.designsystem.components.HexRoundButton
 import dev.opencode.hexcode.designsystem.components.HexSpinner
 import dev.opencode.hexcode.designsystem.components.HexTalkButton
@@ -139,27 +141,45 @@ fun HomeScreen(
                     !state.draft.isEmpty -> stringResource(R.string.talk_more)
                     else -> stringResource(R.string.talk_hold)
                 }
-            HexTalkButton(
-                state =
-                    when (state.talk) {
-                        TalkMode.Holding -> HexTalkState.Holding
-                        TalkMode.Locked -> HexTalkState.Locked
-                        TalkMode.Idle -> if (state.draft.isEmpty) HexTalkState.Idle else HexTalkState.Draft
-                    },
-                label = label,
-                accessibilityLabel =
-                    when (state.talk) {
-                        TalkMode.Locked -> stringResource(R.string.talk_a11y_locked)
-                        TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
-                        TalkMode.Idle -> label
-                    },
-                enabled = ready,
-                level = { vm.level },
-                onPress = { if (micAllowed) vm.press() else askMic.launch(Manifest.permission.RECORD_AUDIO) },
-                onRelease = { how -> vm.release(how.toTalkRelease()) },
-                onTapLocked = vm::tapLocked,
+            // The dock (`.fx-dock`): attach, the talk button filling the rest, stop, 8 dp apart. Attach comes with M3 and
+            // stop with M4: until then a tap says it isn't in this version yet. Stop is dimmed, and does nothing, unless
+            // the agent is working or needs input.
+            val agent = today.agent
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(start = edge, end = edge, top = 12.dp),
-            )
+            ) {
+                HexIconButton(HexIcons.clip, stringResource(R.string.home_attach), onClick = vm::notInThisVersion)
+                HexTalkButton(
+                    state =
+                        when (state.talk) {
+                            TalkMode.Holding -> HexTalkState.Holding
+                            TalkMode.Locked -> HexTalkState.Locked
+                            TalkMode.Idle -> if (state.draft.isEmpty) HexTalkState.Idle else HexTalkState.Draft
+                        },
+                    label = label,
+                    accessibilityLabel =
+                        when (state.talk) {
+                            TalkMode.Locked -> stringResource(R.string.talk_a11y_locked)
+                            TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
+                            TalkMode.Idle -> label
+                        },
+                    enabled = ready,
+                    level = { vm.level },
+                    onPress = { if (micAllowed) vm.press() else askMic.launch(Manifest.permission.RECORD_AUDIO) },
+                    onRelease = { how -> vm.release(how.toTalkRelease()) },
+                    onTapLocked = vm::tapLocked,
+                    modifier = Modifier.weight(1f),
+                )
+                HexIconButton(
+                    HexIcons.stop,
+                    stringResource(R.string.home_stop),
+                    onClick = vm::notInThisVersion,
+                    tone = HexIconButtonTone.Stop,
+                    enabled = agent is AgentStatus.Working || agent == AgentStatus.NeedsInput,
+                )
+            }
         }
         val micOffText = stringResource(R.string.home_mic_off)
         val deleted = stringResource(R.string.home_chunk_deleted)
@@ -167,6 +187,7 @@ fun HomeScreen(
         val newDayTitle = stringResource(R.string.home_newday_title)
         val newDayDetail = stringResource(R.string.home_newday_detail)
         val undo = stringResource(R.string.common_undo)
+        val notYet = stringResource(R.string.settings_soon)
         val notice =
             remember(state.notice, micOff) {
                 when (state.notice) {
@@ -174,6 +195,7 @@ fun HomeScreen(
                         HexToastMessage(deleted, HexToastTone.Undo, actionLabel = undo, actionIcon = HexIcons.undo, durationMs = 3_500)
                     HomeNotice.TakeDropped -> HexToastMessage(dropped, HexToastTone.Undo)
                     HomeNotice.NewDay -> HexToastMessage(newDayTitle, HexToastTone.Sun, newDayDetail, durationMs = NEW_DAY_NOTICE_MS)
+                    HomeNotice.NotInThisVersion -> HexToastMessage(notYet, HexToastTone.Info)
                     null -> if (micOff) HexToastMessage(micOffText, HexToastTone.Info) else null
                 }
             }

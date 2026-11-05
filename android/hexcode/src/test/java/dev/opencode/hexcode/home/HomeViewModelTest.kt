@@ -229,4 +229,14 @@ class HomeViewModelTest {
             assertEquals(SessionSetup.Failed(retrying = true), vm.uiState.value.today.setup)
             vm.viewModelScope.cancel()
         }
+
+    @Test
+    fun attachAndStopSayTheyAreNotInThisVersionYet() =
+        runTest(dispatcher) {
+            val vm = HomeViewModel(FakeDictation()) { now }
+            vm.notInThisVersion()
+            assertEquals(HomeNotice.NotInThisVersion, vm.uiState.value.notice)
+            vm.noticeShown()
+            assertEquals(null, vm.uiState.value.notice)
+        }
 }

@@ -59,7 +59,7 @@ enum class TalkMode {
 }
 
 /** One-line messages the home screen shows for a moment. */
-enum class HomeNotice { ChunkDeleted, TakeDropped, NewDay }
+enum class HomeNotice { ChunkDeleted, TakeDropped, NewDay, NotInThisVersion }
 
 data class HomeUiState(
     val draft: Draft = Draft(),
@@ -121,6 +121,9 @@ class HomeViewModel(
     fun projectChanged() {
         session?.open()
     }
+
+    /** Attach (M3) and Stop (M4) aren't built yet: a tap says so. */
+    fun notInThisVersion() = state.update { it.copy(notice = HomeNotice.NotInThisVersion) }
 
     /** Developer settings' "Drop event stream". */
     fun dropStream() {
