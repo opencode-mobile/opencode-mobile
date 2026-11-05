@@ -70,7 +70,7 @@ class SessionsApi private constructor(
     @Inject
     constructor(httpClient: OpencodeHttpClient, json: Json) : this(ClientProvider(httpClient::get), json)
 
-    internal constructor(httpClient: HttpClient, json: Json) : this(ClientProvider { httpClient }, json)
+    constructor(httpClient: HttpClient, json: Json) : this(ClientProvider { httpClient }, json)
 
     suspend fun listPendingPermissions(directory: String? = null): List<PermissionRequestDto> =
         httpClient

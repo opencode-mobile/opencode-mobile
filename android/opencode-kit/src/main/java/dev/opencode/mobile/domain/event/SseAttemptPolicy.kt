@@ -3,7 +3,7 @@ package dev.opencode.mobile.domain.event
 import dev.opencode.mobile.data.remote.SseAttemptOutcome
 import kotlin.random.Random
 
-internal sealed interface SseRetryDecision {
+sealed interface SseRetryDecision {
     data class Retry(
         val delayMs: Long,
     ) : SseRetryDecision
@@ -14,7 +14,7 @@ internal sealed interface SseRetryDecision {
     ) : SseRetryDecision
 }
 
-internal object SseAttemptPolicy {
+object SseAttemptPolicy {
     const val UNCONFIRMED_404_RETRY_MS = 1_000L
 
     fun decide(

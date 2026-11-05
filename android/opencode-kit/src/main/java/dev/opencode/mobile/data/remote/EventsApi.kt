@@ -36,7 +36,7 @@ class EventsApi private constructor(
         onEvict: () -> Unit,
     ) : this(sseClient = httpClient, onEvict = onEvict)
 
-    internal constructor(
+    constructor(
         httpClient: HttpClient,
         onEvict: () -> Unit = {},
         connectBudgetMs: Long = CONNECT_BUDGET_MS,
@@ -149,7 +149,7 @@ class EventsApi private constructor(
         }
     }
 
-    internal companion object {
+    companion object {
         const val CONNECT_BUDGET_MS = 5_000L
         const val CONNECT_BUDGET_EXCEEDED = "SSE connect budget exceeded"
     }
@@ -160,7 +160,7 @@ fun sessionEventsApi(
     rebuildRest: () -> Unit,
 ): EventsApi = EventsApi(sseHttpClient, onEvict = rebuildRest)
 
-internal fun sessionEventsApi(
+fun sessionEventsApi(
     sse: HttpClient,
     rebuildRest: () -> Unit,
     connectBudgetMs: Long = EventsApi.CONNECT_BUDGET_MS,
@@ -171,7 +171,7 @@ internal fun sessionEventsApi(
         connectBudgetMs = connectBudgetMs,
     )
 
-internal class SseConnectRace {
+class SseConnectRace {
     private val state = AtomicInteger(PENDING)
 
     /** True when headers won. A budget claim that already won leaves this false. */

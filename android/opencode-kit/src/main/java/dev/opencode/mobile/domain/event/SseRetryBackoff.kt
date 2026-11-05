@@ -6,7 +6,7 @@ import kotlin.random.Random
  * Exponential SSE reconnect delay: 1, 2, 4, 8s (attempt 4 onward stays at 8s) with ±25% jitter.
  * A rejected credential retries slower: 5, 10, 20, 30s (attempt 4 onward stays at 30s).
  */
-internal object SseRetryBackoff {
+object SseRetryBackoff {
     private const val BASE_MS = 1_000L
     private const val AUTH_BASE_MS = 5_000L
     private const val AUTH_CAP_MS = 30_000L

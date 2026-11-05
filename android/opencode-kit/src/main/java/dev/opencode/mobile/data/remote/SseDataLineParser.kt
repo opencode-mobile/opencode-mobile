@@ -6,7 +6,7 @@ import kotlinx.serialization.json.Json
  * SSE `data:` line parser matching iOS [SSEDataLineParser]: flush each complete JSON
  * payload without waiting for a blank event separator.
  */
-internal class SseDataLineParser {
+class SseDataLineParser {
     private val dataBuffer = StringBuilder()
 
     fun ingest(line: String): List<String> {
