@@ -8,14 +8,14 @@ import Foundation
 /// draw in the plain code text color. A syntax preset taken from an editor theme also gives the
 /// code surface (`syntax-background`, `syntax-foreground`); Match theme and presets without one
 /// keep the UI theme's code background and text color.
-public nonisolated enum OpenCodeCodeColors {
-    public static let backgroundToken = "syntax-background"
-    public static let foregroundToken = "syntax-foreground"
+nonisolated enum OpenCodeCodeColors {
+    static let backgroundToken = "syntax-background"
+    static let foregroundToken = "syntax-foreground"
     /// Plain code text when the syntax preset gives no foreground.
-    public static let fallbackTextToken = "text-strong"
+    static let fallbackTextToken = "text-strong"
 
     /// The token that colors `role`, or nil when the role draws in plain code text.
-    public static func token(for role: NativeCodeTokenRole) -> String? {
+    static func token(for role: NativeCodeTokenRole) -> String? {
         switch role {
         case .keyword, .tag:
             "syntax-keyword"
@@ -49,17 +49,17 @@ public nonisolated enum OpenCodeCodeColors {
     }
 
     /// Plain code text in `tokens`: the preset's foreground, else the UI theme's strong text.
-    public static func textHex(in tokens: [String: String]) -> String? {
+    static func textHex(in tokens: [String: String]) -> String? {
         tokens[foregroundToken] ?? tokens[fallbackTextToken]
     }
 
     /// The preset's code background in `tokens`, or nil to keep the surface's own background.
-    public static func backgroundHex(in tokens: [String: String]) -> String? {
+    static func backgroundHex(in tokens: [String: String]) -> String? {
         tokens[backgroundToken]
     }
 
     /// The color of `role` in `tokens`: its token, else plain code text.
-    public static func hex(for role: NativeCodeTokenRole, in tokens: [String: String]) -> String? {
+    static func hex(for role: NativeCodeTokenRole, in tokens: [String: String]) -> String? {
         if let token = token(for: role), let hex = tokens[token] {
             return hex
         }

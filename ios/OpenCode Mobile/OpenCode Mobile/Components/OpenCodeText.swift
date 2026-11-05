@@ -24,14 +24,14 @@ import SwiftUI
 /// Passing a plain `String` does not compile on purpose: decide whether it is
 /// app text (move it to the catalog), content (`.verbatim`), or app text not yet
 /// extracted (`.unlocalized`).
-public struct OpenCodeText: Hashable, Sendable, ExpressibleByStringInterpolation {
-    public enum Storage: Hashable, Sendable {
+struct OpenCodeText: Hashable, Sendable, ExpressibleByStringInterpolation {
+    enum Storage: Hashable, Sendable {
         case localized(LocalizedStringResource)
         case verbatim(String)
 
         // LocalizedStringResource is Equatable but not Hashable; its key is enough
         // to spread hashes.
-        public func hash(into hasher: inout Hasher) {
+        func hash(into hasher: inout Hasher) {
             switch self {
             case let .localized(resource):
                 hasher.combine(0)
@@ -43,31 +43,31 @@ public struct OpenCodeText: Hashable, Sendable, ExpressibleByStringInterpolation
         }
     }
 
-    public let storage: Storage
+    let storage: Storage
 
-    public init(_ resource: LocalizedStringResource) {
+    init(_ resource: LocalizedStringResource) {
         storage = .localized(resource)
     }
 
-    public init(verbatim string: String) {
+    init(verbatim string: String) {
         storage = .verbatim(string)
     }
 
     /// Server or session content, shown as is.
-    public static func verbatim(_ string: String) -> OpenCodeText {
+    static func verbatim(_ string: String) -> OpenCodeText {
         OpenCodeText(verbatim: string)
     }
 
-    public static let empty = OpenCodeText(verbatim: "")
+    static let empty = OpenCodeText(verbatim: "")
 
     /// Optional server or session content, shown as is; `nil` stays `nil`.
-    public static func verbatim(ifPresent string: String?) -> OpenCodeText? {
+    static func verbatim(ifPresent string: String?) -> OpenCodeText? {
         string.map(OpenCodeText.init(verbatim:))
     }
 
     /// Server content (such as an error message) shown verbatim when it is not
     /// blank, otherwise the localised `fallback`.
-    public static func verbatim(_ content: String?, fallback: OpenCodeText) -> OpenCodeText {
+    static func verbatim(_ content: String?, fallback: OpenCodeText) -> OpenCodeText {
         guard let content, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return fallback
         }
@@ -77,45 +77,45 @@ public struct OpenCodeText: Hashable, Sendable, ExpressibleByStringInterpolation
     /// App text already resolved from the String Catalog, such as a
     /// `String(localized:)` value built in shared code that must return a
     /// `String`. Shown as is; never looked up again. Not for English literals.
-    public static func localized(_ string: String) -> OpenCodeText {
+    static func localized(_ string: String) -> OpenCodeText {
         OpenCodeText(verbatim: string)
     }
 
     /// Optional form of `localized(_:)`; `nil` stays `nil`.
-    public static func localized(ifPresent string: String?) -> OpenCodeText? {
+    static func localized(ifPresent string: String?) -> OpenCodeText? {
         string.map(OpenCodeText.init(verbatim:))
     }
 
     /// App text that is still built as a `String` in code and not yet in the
     /// String Catalog. Shown as is, like `.verbatim`, but marks text to extract,
     /// so the hardcoded-text check counts it. Not for server or session content.
-    public static func unlocalized(_ string: String) -> OpenCodeText {
+    static func unlocalized(_ string: String) -> OpenCodeText {
         OpenCodeText(verbatim: string)
     }
 
     /// Optional form of `unlocalized(_:)`; `nil` stays `nil`.
-    public static func unlocalized(ifPresent string: String?) -> OpenCodeText? {
+    static func unlocalized(ifPresent string: String?) -> OpenCodeText? {
         string.map(OpenCodeText.init(verbatim:))
     }
 
-    public init(stringLiteral value: String) {
+    init(stringLiteral value: String) {
         storage = .localized(LocalizedStringResource(stringLiteral: value))
     }
 
-    public init(stringInterpolation: String.LocalizationValue.StringInterpolation) {
+    init(stringInterpolation: String.LocalizationValue.StringInterpolation) {
         storage = .localized(LocalizedStringResource(stringInterpolation: stringInterpolation))
     }
 
     /// The display string in the current locale, for code that needs a `String`
     /// (measuring, accessibility values, emptiness checks).
-    public var resolved: String {
+    var resolved: String {
         switch storage {
         case let .localized(resource): String(localized: resource)
         case let .verbatim(string): string
         }
     }
 
-    public var isEmpty: Bool { resolved.isEmpty }
+    var isEmpty: Bool { resolved.isEmpty }
 }
 
 // The helpers below are labelled on purpose. An unlabelled `Text(_: OpenCodeText)`
@@ -124,7 +124,7 @@ public struct OpenCodeText: Hashable, Sendable, ExpressibleByStringInterpolation
 
 extension Text {
     /// Localised for app text, verbatim for content.
-    public init(openCode text: OpenCodeText) {
+    init(openCode text: OpenCodeText) {
         switch text.storage {
         case let .localized(resource): self.init(resource)
         case let .verbatim(string): self.init(verbatim: string)
@@ -134,7 +134,7 @@ extension Text {
 
 extension View {
     /// Accessibility label from design-system text.
-    public func accessibilityLabel(openCode text: OpenCodeText) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
+    func accessibilityLabel(openCode text: OpenCodeText) -> ModifiedContent<Self, AccessibilityAttachmentModifier> {
         accessibilityLabel(Text(openCode: text))
     }
 }

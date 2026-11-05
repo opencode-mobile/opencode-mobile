@@ -1,6 +1,6 @@
 import SwiftUI
 
-public enum OpenCodeStatusStackStyle {
+enum OpenCodeStatusStackStyle {
     /// Neutral ring with a title and subtitle.
     case labeled
     /// Ring only, for inline and overlay loading.
@@ -8,13 +8,13 @@ public enum OpenCodeStatusStackStyle {
 }
 
 /// Centered mid-well indeterminate status: neutral ring + title + subtitle, or a ring alone.
-public struct OpenCodeStatusStack: View {
-    public var title: OpenCodeText
-    public var subtitle: OpenCodeText
-    public var style: OpenCodeStatusStackStyle
-    public var accessibilityIdentifier: String?
+struct OpenCodeStatusStack: View {
+    var title: OpenCodeText
+    var subtitle: OpenCodeText
+    var style: OpenCodeStatusStackStyle
+    var accessibilityIdentifier: String?
 
-    public init(title: OpenCodeText, subtitle: OpenCodeText, accessibilityIdentifier: String? = nil) {
+    init(title: OpenCodeText, subtitle: OpenCodeText, accessibilityIdentifier: String? = nil) {
         precondition(!title.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         precondition(!subtitle.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = title
@@ -23,7 +23,7 @@ public struct OpenCodeStatusStack: View {
         self.accessibilityIdentifier = accessibilityIdentifier
     }
 
-    public init(spinner accessibilityLabel: OpenCodeText = "Loading", accessibilityIdentifier: String? = nil) {
+    init(spinner accessibilityLabel: OpenCodeText = "Loading", accessibilityIdentifier: String? = nil) {
         precondition(!accessibilityLabel.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = accessibilityLabel
         self.subtitle = .empty
@@ -31,7 +31,7 @@ public struct OpenCodeStatusStack: View {
         self.accessibilityIdentifier = accessibilityIdentifier
     }
 
-    public var body: some View {
+    var body: some View {
         VStack(spacing: 14) {
             ProgressView()
                 .controlSize(.regular)
@@ -70,13 +70,13 @@ public struct OpenCodeStatusStack: View {
 }
 
 private struct OptionalAccessibilityIdentifier: ViewModifier {
-    public let id: String?
+    let id: String?
 
-    public init(_ id: String?) {
+    init(_ id: String?) {
         self.id = id
     }
 
-    public func body(content: Content) -> some View {
+    func body(content: Content) -> some View {
         if let id {
             content.accessibilityIdentifier(id)
         } else {

@@ -1,9 +1,9 @@
 import CoreGraphics
 import Foundation
 
-public struct ThemeResolver {
+struct ThemeResolver {
 
-    public static func resolve(variant: ThemeVariant, isDark: Bool) -> ResolvedTokens {
+    static func resolve(variant: ThemeVariant, isDark: Bool) -> ResolvedTokens {
         let p = variant.palette
         let overrides = variant.overrides ?? [:]
         let neutral = p.neutral.normalizedHex
@@ -109,7 +109,7 @@ public struct ThemeResolver {
         return ResolvedTokens(tokens: tokens)
     }
 
-    public static func overlaySyntax(_ base: ResolvedTokens, syntax: [String: String]) -> ResolvedTokens {
+    static func overlaySyntax(_ base: ResolvedTokens, syntax: [String: String]) -> ResolvedTokens {
         guard !syntax.isEmpty else { return base }
         var tokens = base.tokens
         for (key, value) in syntax where key.hasPrefix("syntax-") {
@@ -120,11 +120,11 @@ public struct ThemeResolver {
 
     // MARK: - Hex Utilities
 
-    public static func normalizeColor(_ value: String) -> String {
+    static func normalizeColor(_ value: String) -> String {
         value.normalizedHex
     }
 
-    public static func hexToRgb(_ hex: String) -> (r: CGFloat, g: CGFloat, b: CGFloat) {
+    static func hexToRgb(_ hex: String) -> (r: CGFloat, g: CGFloat, b: CGFloat) {
         let clean = normalizeColor(hex).replacingOccurrences(of: "#", with: "").prefix(6)
         guard clean.count == 6 else { return (128, 128, 128) }
         let scanner = Scanner(string: String(clean))
@@ -137,12 +137,12 @@ public struct ThemeResolver {
         )
     }
 
-    public static func rgbToHex(r: CGFloat, g: CGFloat, b: CGFloat) -> String {
+    static func rgbToHex(r: CGFloat, g: CGFloat, b: CGFloat) -> String {
         let clamp: (CGFloat) -> Int = { max(0, min(255, Int(round($0)))) }
         return String(format: "#%02X%02X%02X", clamp(r), clamp(g), clamp(b))
     }
 
-    public static func mix(_ a: String, _ b: String, _ amount: CGFloat) -> String {
+    static func mix(_ a: String, _ b: String, _ amount: CGFloat) -> String {
         let (r1, g1, b1) = hexToRgb(a)
         let (r2, g2, b2) = hexToRgb(b)
         return rgbToHex(
@@ -152,7 +152,7 @@ public struct ThemeResolver {
         )
     }
 
-    public static func readableText(fill: String) -> String {
+    static func readableText(fill: String) -> String {
         let (r, g, b) = hexToRgb(fill)
         let luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
         return luminance > 0.55 ? "#171311" : "#FFFFFF"
@@ -183,6 +183,4 @@ public struct ThemeResolver {
     private static func surfaceStatusBase(color: String, neutral: String, isDark: Bool) -> String {
         mix(color, isDark ? neutral : "#FFFFFF", isDark ? 0.82 : 0.86)
     }
-
-    public init() {}
 }

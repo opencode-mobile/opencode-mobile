@@ -1,26 +1,26 @@
 import SwiftUI
 import UIKit
 
-public enum OpenCodeHaptics {
+enum OpenCodeHaptics {
     fileprivate static weak var engineView: UIView?
 
     private static var selection: UISelectionFeedbackGenerator?
     private static var impact: UIImpactFeedbackGenerator?
     private static weak var boundView: UIView?
 
-    public static func prepareSelection() {
+    static func prepareSelection() {
         selectionGenerator().prepare()
     }
 
-    public static func selectionChanged() {
+    static func selectionChanged() {
         selectionGenerator().selectionChanged()
     }
 
-    public static func prepareContextAction() {
+    static func prepareContextAction() {
         impactGenerator().prepare()
     }
 
-    public static func contextAction() {
+    static func contextAction() {
         let generator = impactGenerator()
         generator.prepare()
         generator.impactOccurred(intensity: 0.9)
@@ -68,8 +68,8 @@ public enum OpenCodeHaptics {
     }
 }
 
-public struct OpenCodeHapticAnchor: UIViewRepresentable {
-    public func makeUIView(context: Context) -> UIView {
+struct OpenCodeHapticAnchor: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
         let view = UIView()
         view.isUserInteractionEnabled = false
         view.isAccessibilityElement = false
@@ -78,9 +78,7 @@ public struct OpenCodeHapticAnchor: UIViewRepresentable {
         return view
     }
 
-    public func updateUIView(_ uiView: UIView, context: Context) {
+    func updateUIView(_ uiView: UIView, context: Context) {
         OpenCodeHaptics.engineView = uiView
     }
-
-    public init() {}
 }

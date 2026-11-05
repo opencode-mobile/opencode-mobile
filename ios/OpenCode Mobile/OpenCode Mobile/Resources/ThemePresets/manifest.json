@@ -23,13 +23,5 @@
     "id": "phosphor",
     "name": "Phosphor",
     "blurb": "Neutral chrome, CRT green"
-  },
-  {
-    "id": "hex",
-    "name": "Hex",
-    "blurb": "Hex Code's quiet graphite",
-    "apps": [
-      "hexcode"
-    ]
   }
 ]

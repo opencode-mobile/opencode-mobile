@@ -1,7 +1,7 @@
 import Foundation
 
-public enum ThemeSupport {
-    public static func validate(_ theme: OpenCodeTheme) throws {
+enum ThemeSupport {
+    static func validate(_ theme: OpenCodeTheme) throws {
         let required = ["neutral", "ink", "primary", "success", "warning", "error", "info"]
         for variant in [theme.light, theme.dark] {
             let mirror = Mirror(reflecting: variant.palette)
@@ -18,26 +18,26 @@ public enum ThemeSupport {
     }
 }
 
-public enum ThemePersistence {
-    public static let importedThemesKey = "importedThemes"
-    public static let selectedThemeIDKey = "selectedThemeID"
-    public static let selectedSyntaxIDKey = "selectedSyntaxID"
+enum ThemePersistence {
+    static let importedThemesKey = "importedThemes"
+    static let selectedThemeIDKey = "selectedThemeID"
+    static let selectedSyntaxIDKey = "selectedSyntaxID"
 
-    public static func saveSelectedThemeID(
+    static func saveSelectedThemeID(
         _ id: String,
         defaults: UserDefaults
     ) {
         defaults.set(id, forKey: selectedThemeIDKey)
     }
 
-    public static func saveSelectedSyntaxID(
+    static func saveSelectedSyntaxID(
         _ id: String,
         defaults: UserDefaults
     ) {
         defaults.set(id, forKey: selectedSyntaxIDKey)
     }
 
-    public static func clear(defaults: UserDefaults) {
+    static func clear(defaults: UserDefaults) {
         defaults.removeObject(forKey: importedThemesKey)
         defaults.removeObject(forKey: selectedThemeIDKey)
         defaults.removeObject(forKey: selectedSyntaxIDKey)

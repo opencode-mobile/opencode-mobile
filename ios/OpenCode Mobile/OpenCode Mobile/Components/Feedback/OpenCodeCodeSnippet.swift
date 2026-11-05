@@ -1,6 +1,6 @@
 import SwiftUI
 
-public enum OpenCodeCodeSnippetSurface {
+enum OpenCodeCodeSnippetSurface {
     /// Raised fill for a snippet sitting on the page background.
     case raised
     /// Base fill for a snippet sitting on a raised card.
@@ -11,26 +11,26 @@ public enum OpenCodeCodeSnippetSurface {
 }
 
 /// Monospace command or code block. Syntax colors stay in an attributed string.
-public struct OpenCodeCodeSnippet: View {
+struct OpenCodeCodeSnippet: View {
     private let text: Text
     private let appliesForeground: Bool
-    public var surface: OpenCodeCodeSnippetSurface
+    var surface: OpenCodeCodeSnippetSurface
 
-    public init(_ code: String, surface: OpenCodeCodeSnippetSurface = .raised) {
+    init(_ code: String, surface: OpenCodeCodeSnippetSurface = .raised) {
         precondition(!code.isEmpty)
         self.text = Text(code)
         self.appliesForeground = true
         self.surface = surface
     }
 
-    public init(_ code: AttributedString, surface: OpenCodeCodeSnippetSurface = .base) {
+    init(_ code: AttributedString, surface: OpenCodeCodeSnippetSurface = .base) {
         precondition(!String(code.characters).isEmpty)
         self.text = Text(code)
         self.appliesForeground = false
         self.surface = surface
     }
 
-    public var body: some View {
+    var body: some View {
         text
             .font(OpenCodeTypography.code)
             .modifier(CodeSnippetForeground(applies: appliesForeground))
@@ -57,9 +57,9 @@ public struct OpenCodeCodeSnippet: View {
 }
 
 private struct CodeSnippetForeground: ViewModifier {
-    public let applies: Bool
+    let applies: Bool
 
-    public func body(content: Content) -> some View {
+    func body(content: Content) -> some View {
         if applies {
             content.foregroundStyle(OpenCodeColors.textStrong)
         } else {

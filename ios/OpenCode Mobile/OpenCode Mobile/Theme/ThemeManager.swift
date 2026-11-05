@@ -3,16 +3,12 @@ import Observation
 import SwiftUI
 
 @Observable
-public final class ThemeManager {
+final class ThemeManager {
 
-    public static let shared = ThemeManager()
-
-    /// The app whose theme picker this is: presets whose manifest `apps` leaves it out are not
-    /// offered. Hex Code sets `"hexcode"` before first use.
-    public static var appID = "opencode-mobile"
+    static let shared = ThemeManager()
 
     private enum StorageKeys {
-        public static let selectedThemeID = ThemePersistence.selectedThemeIDKey
+        static let selectedThemeID = ThemePersistence.selectedThemeIDKey
     }
 
     private static let defaultPresetID = "porcelain"
@@ -23,19 +19,19 @@ public final class ThemeManager {
         nil,
     ]
 
-    public private(set) var currentTheme: OpenCodeTheme
-    public private(set) var currentSyntaxPreset: SyntaxHighlightPreset
-    public private(set) var resolvedLight: ResolvedTokens
-    public private(set) var resolvedDark: ResolvedTokens
-    public private(set) var revision: UInt64 = 0
+    private(set) var currentTheme: OpenCodeTheme
+    private(set) var currentSyntaxPreset: SyntaxHighlightPreset
+    private(set) var resolvedLight: ResolvedTokens
+    private(set) var resolvedDark: ResolvedTokens
+    private(set) var revision: UInt64 = 0
     /// Why the last theme or syntax preset change failed; shown in Settings.
-    public private(set) var loadError: OpenCodeText?
+    private(set) var loadError: OpenCodeText?
 
     private let defaults: UserDefaults
     private var cachedManifestPresets: [ThemePreset]?
     private var cachedSyntaxPresets: [SyntaxHighlightPreset]?
 
-    public init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.resolvedLight = ResolvedTokens()
         self.resolvedDark = ResolvedTokens()
@@ -46,7 +42,7 @@ public final class ThemeManager {
 
     // MARK: - Resolution
 
-    public func resolve() {
+    func resolve() {
         let light = ThemeResolver.resolve(variant: currentTheme.light, isDark: false)
         let dark = ThemeResolver.resolve(variant: currentTheme.dark, isDark: true)
         resolvedLight = ThemeResolver.overlaySyntax(light, syntax: currentSyntaxPreset.light)
@@ -54,21 +50,21 @@ public final class ThemeManager {
         revision &+= 1
     }
 
-    public func tokens(for colorScheme: ColorScheme) -> ResolvedTokens {
+    func tokens(for colorScheme: ColorScheme) -> ResolvedTokens {
         colorScheme == .dark ? resolvedDark : resolvedLight
     }
 
     // MARK: - Presets
 
-    public func availablePresets() -> [ThemePreset] {
+    func availablePresets() -> [ThemePreset] {
         manifestPresets()
     }
 
-    public func availableSyntaxPresets() -> [SyntaxHighlightPreset] {
+    func availableSyntaxPresets() -> [SyntaxHighlightPreset] {
         syntaxPresets()
     }
 
-    public func resolvedPreview(themeId: String) -> (ResolvedTokens, ResolvedTokens)? {
+    func resolvedPreview(themeId: String) -> (ResolvedTokens, ResolvedTokens)? {
         guard let theme = Self.loadPreset(id: themeId) else { return nil }
         return (
             ThemeResolver.resolve(variant: theme.light, isDark: false),
@@ -76,7 +72,7 @@ public final class ThemeManager {
         )
     }
 
-    public func syntaxTokensForPreview(preset: SyntaxHighlightPreset, isDark: Bool) -> [String: String] {
+    func syntaxTokensForPreview(preset: SyntaxHighlightPreset, isDark: Bool) -> [String: String] {
         if preset.isMatch {
             let variant = isDark ? currentTheme.dark : currentTheme.light
             let tokens = ThemeResolver.resolve(variant: variant, isDark: isDark).tokens
@@ -85,7 +81,7 @@ public final class ThemeManager {
         return isDark ? preset.dark : preset.light
     }
 
-    public func applySyntaxPreset(id: String) {
+    func applySyntaxPreset(id: String) {
         guard let preset = syntaxPresets().first(where: { $0.id == id }) else {
             loadError = "theme.error.syntax_preset_not_found"
             return
@@ -96,7 +92,7 @@ public final class ThemeManager {
         loadError = nil
     }
 
-    public func applyPreset(id: String) {
+    func applyPreset(id: String) {
         guard let theme = Self.loadPreset(id: id) else {
             loadError = "theme.error.preset_not_found"
             return
@@ -117,7 +113,7 @@ public final class ThemeManager {
 
     // MARK: - Theme loading
 
-    public func loadBundledTheme() {
+    func loadBundledTheme() {
         currentTheme = Self.loadPreset(id: Self.defaultPresetID) ?? Self.bundledTheme()
         currentSyntaxPreset = .match
         resolve()
@@ -200,7 +196,7 @@ public final class ThemeManager {
         if let cachedManifestPresets {
             return cachedManifestPresets
         }
-        let presets = Self.loadPresetManifest().filter { $0.isOffered(in: Self.appID) }
+        let presets = Self.loadPresetManifest()
         cachedManifestPresets = presets
         return presets
     }
@@ -260,7 +256,7 @@ public final class ThemeManager {
         }
     }
 
-    public func clearAll() {
+    func clearAll() {
         ThemePersistence.clear(defaults: defaults)
         loadBundledTheme()
     }

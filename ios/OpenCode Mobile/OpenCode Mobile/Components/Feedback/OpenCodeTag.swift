@@ -1,13 +1,13 @@
 import SwiftUI
 
-public enum OpenCodeTagSize {
+enum OpenCodeTagSize {
     /// Standalone label, such as the onboarding "Unofficial" tag.
     case regular
     /// Inline metadata next to a title, such as a folder's "git" tag.
     case small
 }
 
-public enum OpenCodeTagTone {
+enum OpenCodeTagTone {
     /// Quiet surface label.
     case neutral
     /// Interactive tint, for a label that should stand out, such as "Recommended".
@@ -15,12 +15,12 @@ public enum OpenCodeTagTone {
 }
 
 /// Static capsule label.
-public struct OpenCodeTag: View {
-    public let title: OpenCodeText
-    public let size: OpenCodeTagSize
-    public let tone: OpenCodeTagTone
+struct OpenCodeTag: View {
+    let title: OpenCodeText
+    let size: OpenCodeTagSize
+    let tone: OpenCodeTagTone
 
-    public init(_ title: OpenCodeText, size: OpenCodeTagSize = .regular, tone: OpenCodeTagTone = .neutral) {
+    init(_ title: OpenCodeText, size: OpenCodeTagSize = .regular, tone: OpenCodeTagTone = .neutral) {
         precondition(!title.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = title
         self.size = size
@@ -41,7 +41,7 @@ public struct OpenCodeTag: View {
         }
     }
 
-    public var body: some View {
+    var body: some View {
         switch size {
         case .regular:
             Text(openCode: title)
