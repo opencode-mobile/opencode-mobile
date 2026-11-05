@@ -104,7 +104,7 @@ private struct HexGalleryContent: View {
         ("background", HexColor.background), ("panel", HexColor.panel), ("panel2", HexColor.panel2),
         ("panel3", HexColor.panel3), ("line", HexColor.line), ("line2", HexColor.line2), ("hover", HexColor.hover),
         ("text1", HexColor.text1), ("text2", HexColor.text2), ("text3", HexColor.text3), ("text4", HexColor.text4),
-        ("green", HexColor.green), ("amber", HexColor.amber), ("amberSoft", HexColor.amberSoft), ("red", HexColor.red),
+        ("green", HexColor.green), ("amber", HexColor.amber), ("amberSoft", HexColor.amberSoft), ("amberLine", HexColor.amberLine), ("red", HexColor.red),
         ("redSoft", HexColor.redSoft), ("indigo", HexColor.indigo), ("solid", HexColor.solid), ("onSolid", HexColor.onSolid),
         ("scrim", HexColor.scrim), ("stopBg", HexColor.stopBackground), ("shadow", HexColor.shadow),
         ("tint(4.5)", HexColor.tint(4.5)), ("tint(15)", HexColor.tint(15)),
@@ -172,7 +172,10 @@ private struct HexGalleryContent: View {
                     HexRoundButton(.gear, label: "Settings") {}
                 }
                 HexTopBar(state: HexTopBarState(tone: .needsYou, label: "Needs input"), onTitle: {}) {}
-                HexTopBar(state: HexTopBarState(tone: .reconnecting, label: "Reconnecting")) {}
+                HexTopBar(state: HexTopBarState(tone: .reconnecting, label: "Reconnecting…")) {}
+                HexTopBar(state: nil) {
+                    HexRoundButton(.gear, label: "Settings") {}
+                }
             }
             .padding(.horizontal, HexSpacing.screenHome)
             HexTopBar(verbatim: "Pick a model", subtitle: "Spry Seal · 12 models from OpenCode", onBack: {})
@@ -199,6 +202,10 @@ private struct HexGalleryContent: View {
                 HexButton("Off", style: .primary, enabled: false) {}
                 HexButton(icon: .send, size: .field) {}
                 HexButton(icon: .send, size: .field, enabled: false) {}
+            }
+            HStack(spacing: 8) {
+                HexButton("Try again", icon: .refresh, size: .regular) {}
+                HexButton("Try again", icon: .refresh, size: .regular, loading: true) {}
             }
             HStack(spacing: 8) {
                 HexButton("Cancel", size: .regular) {}

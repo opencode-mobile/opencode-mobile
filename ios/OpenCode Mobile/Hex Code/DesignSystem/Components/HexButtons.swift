@@ -44,6 +44,7 @@ struct HexPrimaryButton: View {
 }
 
 /// A 30 pt (small) or 38 pt (regular) button with an optional leading icon, or an icon alone.
+/// While `loading`, a spinner takes the icon's place and taps do nothing.
 struct HexButton: View {
     enum Size {
         /// 30 pt, radius `s`, `small` type (`.btn`).
@@ -68,6 +69,7 @@ struct HexButton: View {
     var size: Size = .small
     var style: Style = .secondary
     var enabled = true
+    var loading = false
     /// Stretches to the width it is offered, for a lone action at the bottom of a sheet.
     var fullWidth = false
     let action: () -> Void
@@ -78,10 +80,20 @@ struct HexButton: View {
         size: Size = .small,
         style: Style = .secondary,
         enabled: Bool = true,
+        loading: Bool = false,
         fullWidth: Bool = false,
         action: @escaping () -> Void
     ) {
-        self.init(text: title.map { Text($0) }, icon: icon, size: size, style: style, enabled: enabled, fullWidth: fullWidth, action: action)
+        self.init(
+            text: title.map { Text($0) },
+            icon: icon,
+            size: size,
+            style: style,
+            enabled: enabled,
+            loading: loading,
+            fullWidth: fullWidth,
+            action: action
+        )
     }
 
     /// A title already made, such as a toast's action.
@@ -91,9 +103,11 @@ struct HexButton: View {
         size: Size = .small,
         style: Style = .secondary,
         enabled: Bool = true,
+        loading: Bool = false,
         fullWidth: Bool = false,
         action: @escaping () -> Void
     ) {
+        self.loading = loading
         self.title = text
         self.icon = icon
         self.size = size
@@ -106,7 +120,9 @@ struct HexButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                if let icon {
+                if loading {
+                    HexSpinner(size: size == .small ? HexIconSize.small : HexIconSize.regular, color: style == .primary ? HexColor.onSolid : nil)
+                } else if let icon {
                     HexIconView(icon, size: size == .small ? HexIconSize.small : HexIconSize.regular)
                         .foregroundStyle(iconColor)
                 }
@@ -126,6 +142,7 @@ struct HexButton: View {
         }
         .buttonStyle(HexPressStyle(scale: 0.96))
         .disabled(!enabled)
+        .allowsHitTesting(!loading)
     }
 
     private var height: CGFloat {

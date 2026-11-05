@@ -205,18 +205,13 @@ struct SetupFailedView: View {
             Text(LocalizedStringResource("home.setup.failed", defaultValue: "Couldn’t open today’s session"))
                 .hexFont(.display)
                 .foregroundStyle(HexColor.text1)
-            HStack(spacing: 10) {
-                HexButton(
-                    LocalizedStringResource("home.setup.retry", defaultValue: "Try again"),
-                    icon: .refresh,
-                    size: .regular,
-                    enabled: !retrying,
-                    action: onRetry
-                )
-                if retrying {
-                    HexSpinner(size: HexIconSize.small)
-                }
-            }
+            HexButton(
+                LocalizedStringResource("home.setup.retry", defaultValue: "Try again"),
+                icon: .refresh,
+                size: .regular,
+                loading: retrying,
+                action: onRetry
+            )
         }
     }
 }
