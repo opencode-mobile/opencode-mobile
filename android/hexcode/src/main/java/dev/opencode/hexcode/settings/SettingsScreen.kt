@@ -26,12 +26,13 @@ import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.HexPrefs
-import dev.opencode.hexcode.app.NoticeHost
-import dev.opencode.hexcode.app.NoticeMessage
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.components.HexRow
 import dev.opencode.hexcode.designsystem.components.HexRowTrailing
 import dev.opencode.hexcode.designsystem.components.HexSectionLabel
+import dev.opencode.hexcode.designsystem.components.HexToastHost
+import dev.opencode.hexcode.designsystem.components.HexToastMessage
+import dev.opencode.hexcode.designsystem.components.HexToastTone
 import dev.opencode.hexcode.firstrun.PageTop
 import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
@@ -56,13 +57,15 @@ fun SettingsScreen(
     developerSettings: Boolean,
     onGallery: () -> Unit,
     onSpeechLab: () -> Unit,
+    sampleSession: String,
+    onSampleSession: () -> Unit,
     onHideDeveloperSettings: () -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
-    var notYet by remember { mutableStateOf<NoticeMessage?>(null) }
+    var notYet by remember { mutableStateOf<HexToastMessage?>(null) }
     val notYetText = stringResource(R.string.settings_soon)
-    val placeholder = { notYet = NoticeMessage(notYetText) }
+    val placeholder = { notYet = HexToastMessage(notYetText, HexToastTone.Info) }
     Box(Modifier.fillMaxSize().systemBarsPadding()) {
         Column(Modifier.fillMaxSize()) {
             PageTop(
@@ -132,20 +135,22 @@ fun SettingsScreen(
                     DeveloperSection(
                         onGallery,
                         onSpeechLab,
-                        { notYet = NoticeMessage(DeveloperCopy.BUILD_COPIED) },
+                        sampleSession,
+                        onSampleSession,
+                        { notYet = HexToastMessage(DeveloperCopy.BUILD_COPIED, HexToastTone.Steer) },
                         onHideDeveloperSettings,
                     )
                 }
             }
         }
-        val changed = remember(notice) { notice?.let { NoticeMessage(it) } }
-        NoticeHost(
+        val changed = remember(notice) { notice?.let { HexToastMessage(it, HexToastTone.Steer) } }
+        HexToastHost(
             message = notYet ?: changed,
             onDismissed = {
                 notYet = null
                 onNoticeShown()
             },
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
         )
     }
 }
@@ -155,6 +160,8 @@ fun SettingsScreen(
 private fun DeveloperSection(
     onGallery: () -> Unit,
     onSpeechLab: () -> Unit,
+    sampleSession: String,
+    onSampleSession: () -> Unit,
     onBuildCopied: () -> Unit,
     onHide: () -> Unit,
 ) {
@@ -162,6 +169,13 @@ private fun DeveloperSection(
     HexSectionLabel(DeveloperCopy.SECTION)
     Row(HexIcons.card, DeveloperCopy.GALLERY, null, DeveloperCopy.GALLERY_SUBTITLE, onGallery)
     Row(HexIcons.bars, DeveloperCopy.SPEECH_LAB, null, DeveloperCopy.SPEECH_LAB_SUBTITLE, onSpeechLab)
+    HexRow(
+        title = DeveloperCopy.SAMPLE_SESSION,
+        icon = HexIcons.doc,
+        value = sampleSession,
+        subtitle = DeveloperCopy.SAMPLE_SESSION_SUBTITLE,
+        onClick = onSampleSession,
+    )
     HexRow(
         title = DeveloperCopy.BUILD,
         icon = HexIcons.term,
@@ -191,6 +205,8 @@ private object DeveloperCopy {
     const val GALLERY_SUBTITLE = "Every Hex component in each of its states"
     const val SPEECH_LAB = "Speech lab"
     const val SPEECH_LAB_SUBTITLE = "Download, test and compare speech models"
+    const val SAMPLE_SESSION = "Sample session"
+    const val SAMPLE_SESSION_SUBTITLE = "Fake data on home until it talks to OpenCode. Tap for the next."
     const val BUILD = "Build"
     const val BUILD_COPIED = "Build copied"
     const val HIDE = "Hide developer settings"

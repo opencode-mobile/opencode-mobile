@@ -1,11 +1,15 @@
 package dev.opencode.hexcode.home
 
+import dev.opencode.hexcode.session.SessionSetup
+import dev.opencode.hexcode.session.StatusSummary
+import dev.opencode.hexcode.session.TodaySessionDemo
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -190,5 +194,30 @@ class HomeViewModelTest {
             advanceUntilIdle()
             vm.clearDraft()
             assertTrue(vm.uiState.value.draft.isEmpty)
+        }
+
+    @Test
+    fun aNewDayShowsTheNoticeOnceAndTheEmptyCard() =
+        runTest(dispatcher) {
+            val vm = HomeViewModel(FakeDictation(), makeSession = { TodaySessionDemo.NewDay.start(it) }) { now }
+            advanceUntilIdle()
+            val today = vm.uiState.value.today
+            assertTrue(today.setup is SessionSetup.Ready)
+            assertTrue(today.summary.summary is StatusSummary.Empty)
+            assertEquals(HomeNotice.NewDay, vm.uiState.value.notice)
+            vm.noticeShown()
+            advanceUntilIdle()
+            assertEquals(null, vm.uiState.value.notice)
+        }
+
+    @Test
+    fun aFailedSetupShowsTryAgain() =
+        runTest(dispatcher) {
+            val vm = HomeViewModel(FakeDictation(), makeSession = { TodaySessionDemo.Failed.start(it) }) { now }
+            advanceUntilIdle()
+            assertEquals(SessionSetup.Failed, vm.uiState.value.today.setup)
+            vm.retrySetup()
+            runCurrent()
+            assertEquals(SessionSetup.Opening, vm.uiState.value.today.setup)
         }
 }

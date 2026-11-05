@@ -7,6 +7,7 @@ import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.hexcode.firstrun.ServerName
 import dev.opencode.hexcode.firstrun.ServerNaming
 import dev.opencode.hexcode.firstrun.ServerRouteCheck
+import dev.opencode.hexcode.session.TodaySessionDemo
 import dev.opencode.mobile.data.local.DataStoreConnectionProfileStore
 import dev.opencode.mobile.data.local.EncryptedSecureCredentialStore
 import dev.opencode.mobile.data.remote.FilesystemApi
@@ -34,6 +35,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -73,6 +75,9 @@ class HexServices(
     val modelTester = ModelTester(json, httpClient::get)
     val pairing = PairingConnector(probing, PairingCodeRedeemService(json), OpenApiRouteCheck(json), ApiInfoNaming(json))
     val voice = VoiceEngine(appContext)
+
+    /** Home's fake session until it talks to OpenCode (round 2 of M2); Settings › Developer › Sample session picks it. */
+    val sampleSession = MutableStateFlow(TodaySessionDemo.Card)
 
     /** Folder listings Browse folders has seen this session, shared by first run and Settings. */
     val folderListings = ConcurrentHashMap<String, DirectoryListing>()

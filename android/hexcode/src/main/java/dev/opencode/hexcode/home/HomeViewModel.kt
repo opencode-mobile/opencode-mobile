@@ -3,9 +3,12 @@ package dev.opencode.hexcode.home
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.opencode.hexcode.session.TodaySession
+import dev.opencode.hexcode.session.TodayState
 import dev.opencode.voiceengine.SpeechModels
 import dev.opencode.voiceengine.VoiceEngine
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,7 +58,7 @@ enum class TalkMode {
 }
 
 /** One-line messages the home screen shows for a moment. */
-enum class HomeNotice { ChunkDeleted, TakeDropped }
+enum class HomeNotice { ChunkDeleted, TakeDropped, NewDay }
 
 data class HomeUiState(
     val draft: Draft = Draft(),
@@ -63,18 +66,45 @@ data class HomeUiState(
     /** When the current take started, for its clock. */
     val takeStartedAt: Long = 0,
     val notice: HomeNotice? = null,
+    /** Today's session: the status card, the top bar's state, the waiting line. */
+    val today: TodayState = TodayState(),
 )
 
 /**
- * The home screen until it is connected to the agent: hold to talk, lock or drop the take, and keep the text as a draft
- * of chunks. Releasing never sends, and there is no Send yet.
+ * The home screen: today's session ([TodaySession], made by [makeSession] in this model's scope) and dictation, where
+ * you hold to talk, lock or drop the take, and keep the text as a draft of chunks. Releasing never sends, and there is
+ * no Send yet.
  */
 class HomeViewModel(
     private val dictation: Dictation,
+    makeSession: ((CoroutineScope) -> TodaySession)? = null,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     private val state = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = state.asStateFlow()
+
+    private val session: TodaySession? = makeSession?.invoke(viewModelScope)
+
+    init {
+        session?.let { today ->
+            viewModelScope.launch {
+                today.state.collect { next ->
+                    state.update { it.copy(today = next, notice = if (next.newDayNotice) HomeNotice.NewDay else it.notice) }
+                    if (next.newDayNotice) today.newDayShown()
+                }
+            }
+        }
+    }
+
+    /** ↻ on the status card. */
+    fun refreshSummary() {
+        session?.refresh()
+    }
+
+    /** Try again, after "Couldn't open today's session". */
+    fun retrySetup() {
+        session?.retry()
+    }
 
     val level: Float get() = dictation.level
 

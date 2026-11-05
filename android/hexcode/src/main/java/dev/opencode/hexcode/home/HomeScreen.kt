@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -46,11 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.hexcode.R
-import dev.opencode.hexcode.app.NoticeHost
-import dev.opencode.hexcode.app.NoticeMessage
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexTheme
-import dev.opencode.hexcode.designsystem.components.HexAgentState
 import dev.opencode.hexcode.designsystem.components.HexButton
 import dev.opencode.hexcode.designsystem.components.HexButtonStyle
 import dev.opencode.hexcode.designsystem.components.HexChunk
@@ -65,14 +63,18 @@ import dev.opencode.hexcode.designsystem.components.HexSpinner
 import dev.opencode.hexcode.designsystem.components.HexTalkButton
 import dev.opencode.hexcode.designsystem.components.HexTalkRelease
 import dev.opencode.hexcode.designsystem.components.HexTalkState
-import dev.opencode.hexcode.designsystem.components.HexTopBar
+import dev.opencode.hexcode.designsystem.components.HexToastHost
+import dev.opencode.hexcode.designsystem.components.HexToastMessage
+import dev.opencode.hexcode.designsystem.components.HexToastTone
+import dev.opencode.hexcode.session.AgentStatus
 import dev.opencode.voiceengine.VoiceEngine
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /**
- * Home, until it talks to the agent: the top bar's state slot and settings, the draft, and the talk button. What you
- * dictate stays in the draft; there is no Send yet.
+ * Home: the top bar's state slot and settings, today's status card (or the draft while there is one, as the
+ * prototype's `viewFocus`), the waiting line, and the talk button. What you dictate stays in the draft; there is no
+ * Send yet.
  */
 @Composable
 fun HomeScreen(
@@ -100,21 +102,27 @@ fun HomeScreen(
             .systemBarsPadding(),
     ) {
         Column(Modifier.fillMaxSize().padding(top = 10.dp, bottom = 6.dp)) {
-            // The state slot shows Idle until the session is connected.
-            HexTopBar(
-                state = HexAgentState.Idle,
-                label = stringResource(R.string.home_state_idle),
-                modifier = Modifier.padding(start = edge, end = edge - 6.dp),
-            ) {
+            val today = state.today
+            val now = rememberNow(if (today.agent is AgentStatus.Working) 1_000 else 15_000)
+            HomeTopBar(today.agent, now, Modifier.padding(start = edge, end = edge - 6.dp)) {
                 HexRoundButton(HexIcons.gear, stringResource(R.string.home_settings), onClick = onSettings)
             }
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                val hang = maxHeight * 0.26f
-                // The draft hangs from a fixed line about a third down and grows downward, so nothing above it moves.
-                Column(Modifier.padding(horizontal = edge)) {
-                    Spacer(Modifier.height(hang))
-                    if (state.draft.isEmpty) EmptyHome() else DraftView(state, vm)
+            Crossfade(state.draft.isEmpty, Modifier.weight(1f).fillMaxWidth(), HexTheme.motion.fade(), label = "status-draft") { empty ->
+                if (empty) {
+                    StatusArea(today, now, vm, Modifier.padding(horizontal = edge))
+                } else {
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val hang = maxHeight * 0.26f
+                        // The draft hangs from a fixed line about a third down and grows downward, so nothing above it moves.
+                        Column(Modifier.padding(horizontal = edge)) {
+                            Spacer(Modifier.height(hang))
+                            DraftView(state, vm)
+                        }
+                    }
                 }
+            }
+            if (state.draft.isEmpty && today.waiting > 0) {
+                WaitingLine(today.waiting, onClick = {}, modifier = Modifier.padding(start = edge, end = edge, top = 10.dp))
             }
             val label =
                 when {
@@ -151,26 +159,33 @@ fun HomeScreen(
         val micOffText = stringResource(R.string.home_mic_off)
         val deleted = stringResource(R.string.home_chunk_deleted)
         val dropped = stringResource(R.string.home_take_dropped)
+        val newDayTitle = stringResource(R.string.home_newday_title)
+        val newDayDetail = stringResource(R.string.home_newday_detail)
         val undo = stringResource(R.string.common_undo)
         val notice =
             remember(state.notice, micOff) {
                 when (state.notice) {
-                    HomeNotice.ChunkDeleted -> NoticeMessage(deleted, actionLabel = undo)
-                    HomeNotice.TakeDropped -> NoticeMessage(dropped)
-                    null -> if (micOff) NoticeMessage(micOffText) else null
+                    HomeNotice.ChunkDeleted ->
+                        HexToastMessage(deleted, HexToastTone.Undo, actionLabel = undo, actionIcon = HexIcons.undo, durationMs = 3_500)
+                    HomeNotice.TakeDropped -> HexToastMessage(dropped, HexToastTone.Undo)
+                    HomeNotice.NewDay -> HexToastMessage(newDayTitle, HexToastTone.Sun, newDayDetail, durationMs = NEW_DAY_NOTICE_MS)
+                    null -> if (micOff) HexToastMessage(micOffText, HexToastTone.Info) else null
                 }
             }
-        NoticeHost(
+        HexToastHost(
             message = notice,
             onDismissed = {
                 vm.noticeShown()
                 micOff = false
             },
             onAction = { vm.undoDelete() },
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
         )
     }
 }
+
+/** How long the new-day notice shows (app-plan.md, The daily session). */
+private const val NEW_DAY_NOTICE_MS = 3_600L
 
 private fun HexTalkRelease.toTalkRelease(): TalkRelease =
     when (this) {
@@ -179,18 +194,6 @@ private fun HexTalkRelease.toTalkRelease(): TalkRelease =
         HexTalkRelease.End -> TalkRelease.End
         HexTalkRelease.Tap -> TalkRelease.Tap
     }
-
-/** Before the first take: what to do, in two lines. */
-@Composable
-private fun EmptyHome() {
-    Text(stringResource(R.string.home_empty_title), style = HexTheme.type.display, color = HexTheme.colors.text1)
-    Text(
-        stringResource(R.string.home_empty_body),
-        style = HexTheme.type.body,
-        color = HexTheme.colors.text2,
-        modifier = Modifier.padding(top = 14.dp),
-    )
-}
 
 @Composable
 private fun DraftView(

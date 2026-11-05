@@ -55,6 +55,7 @@ import dev.opencode.hexcode.home.ClipDictation
 import dev.opencode.hexcode.home.HomeScreen
 import dev.opencode.hexcode.home.HomeViewModel
 import dev.opencode.hexcode.home.VoiceEngineDictation
+import dev.opencode.hexcode.session.TodaySessionDemo
 import dev.opencode.hexcode.settings.SettingsScreen
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.voiceengine.EngineOptions
@@ -222,9 +223,14 @@ private fun AfterFirstRun(
             value = runCatching { services.filesystem.getPaths().home }.getOrNull()
         }
     }
+    val sample by services.sampleSession.collectAsStateWithLifecycle()
+    // A new sample is a new home: the fake session starts again from opening.
     val homeModel =
-        viewModel {
-            HomeViewModel(if (clips) ClipDictation(context, services.voice) else VoiceEngineDictation(services.voice))
+        viewModel(key = "home-$sample") {
+            HomeViewModel(
+                if (clips) ClipDictation(context, services.voice) else VoiceEngineDictation(services.voice),
+                makeSession = { scope -> sample.start(scope) },
+            )
         }
     val pages =
         viewModel(key = "settings-$visit") {
@@ -311,6 +317,10 @@ private fun AfterFirstRun(
                             page = Page.SettingsGallery
                         },
                         onSpeechLab = { page = Page.SettingsSpeechLab },
+                        sampleSession = sample.label,
+                        onSampleSession = {
+                            services.sampleSession.value = TodaySessionDemo.entries[(sample.ordinal + 1) % TodaySessionDemo.entries.size]
+                        },
                         onHideDeveloperSettings = { scope.launch { services.developer.hide() } },
                         onBack = { page = Page.Home },
                     )
