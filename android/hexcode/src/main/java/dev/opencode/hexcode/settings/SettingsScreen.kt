@@ -1,5 +1,8 @@
 package dev.opencode.hexcode.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.BuildConfig
@@ -124,7 +128,14 @@ fun SettingsScreen(
                     value = "${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE})",
                     onClick = onVersion,
                 )
-                if (developerSettings) DeveloperSection(onGallery, onSpeechLab, onHideDeveloperSettings)
+                if (developerSettings) {
+                    DeveloperSection(
+                        onGallery,
+                        onSpeechLab,
+                        { notYet = NoticeMessage(DeveloperCopy.BUILD_COPIED) },
+                        onHideDeveloperSettings,
+                    )
+                }
             }
         }
         val changed = remember(notice) { notice?.let { NoticeMessage(it) } }
@@ -144,8 +155,10 @@ fun SettingsScreen(
 private fun DeveloperSection(
     onGallery: () -> Unit,
     onSpeechLab: () -> Unit,
+    onBuildCopied: () -> Unit,
     onHide: () -> Unit,
 ) {
+    val context = LocalContext.current
     HexSectionLabel(DeveloperCopy.SECTION)
     Row(HexIcons.card, DeveloperCopy.GALLERY, null, DeveloperCopy.GALLERY_SUBTITLE, onGallery)
     Row(HexIcons.bars, DeveloperCopy.SPEECH_LAB, null, DeveloperCopy.SPEECH_LAB_SUBTITLE, onSpeechLab)
@@ -158,6 +171,15 @@ private fun DeveloperSection(
                 BuildConfig.BUILD_TYPE,
                 BuildConfig.GIT_COMMIT.ifEmpty { null },
             ).joinToString(" · "),
+        onClick = {
+            val summary =
+                listOfNotNull("Hex Code", BuildConfig.VERSION_NAME, "(${BuildConfig.BUILD_TYPE})", BuildConfig.GIT_COMMIT.ifEmpty { null })
+            context
+                .getSystemService(ClipboardManager::class.java)
+                ?.setPrimaryClip(ClipData.newPlainText(DeveloperCopy.BUILD, summary.joinToString(" ")))
+            // Android 13 and later confirm a copy themselves.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) onBuildCopied()
+        },
     )
     HexRow(title = DeveloperCopy.HIDE, icon = HexIcons.eye, onClick = onHide)
 }
@@ -170,6 +192,7 @@ private object DeveloperCopy {
     const val SPEECH_LAB = "Speech lab"
     const val SPEECH_LAB_SUBTITLE = "Download, test and compare speech models"
     const val BUILD = "Build"
+    const val BUILD_COPIED = "Build copied"
     const val HIDE = "Hide developer settings"
 }
 

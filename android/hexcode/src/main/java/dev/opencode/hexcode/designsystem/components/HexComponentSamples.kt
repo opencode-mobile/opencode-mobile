@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -587,6 +588,15 @@ internal fun SheetSample(open: Boolean = false) {
 @Composable
 private fun TalkButtonSample() {
     val level = sampleLevel()
+    // The samples only show the states: a cover takes their touches, so a drag over them scrolls the gallery.
+    Box {
+        TalkButtonStates(level)
+        Box(Modifier.matchParentSize().pointerInput(Unit) {})
+    }
+}
+
+@Composable
+private fun TalkButtonStates(level: () -> Float) {
     Edge {
         StateSample("idle") { HexTalkButton(HexTalkState.Idle, "Hold to talk", "Hold to talk", true, { 0f }, {}, {}, {}) }
         StateSample("draft") {
