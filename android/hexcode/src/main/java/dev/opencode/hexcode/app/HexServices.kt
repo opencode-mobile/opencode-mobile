@@ -1,20 +1,28 @@
 package dev.opencode.hexcode.app
 
 import android.content.Context
+import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.firstrun.ModelTester
 import dev.opencode.hexcode.firstrun.PairingConnector
 import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.hexcode.firstrun.ServerName
 import dev.opencode.hexcode.firstrun.ServerNaming
 import dev.opencode.hexcode.firstrun.ServerRouteCheck
+import dev.opencode.hexcode.session.DailySessionSetup
+import dev.opencode.hexcode.session.EventsApiTransport
+import dev.opencode.hexcode.session.OpenCodeTodayApi
+import dev.opencode.hexcode.session.TodaySession
 import dev.opencode.hexcode.session.TodaySessionDemo
 import dev.opencode.mobile.data.local.DataStoreConnectionProfileStore
 import dev.opencode.mobile.data.local.EncryptedSecureCredentialStore
+import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.ModelsApi
 import dev.opencode.mobile.data.remote.ProjectsApi
+import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.connection.ConnectionProbeService
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.connection.ConnectivityDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.PairingCodeRedeemService
 import dev.opencode.mobile.domain.connection.V2ServerContract
 import dev.opencode.mobile.domain.filesystem.DefaultFilesystemRepository
@@ -27,6 +35,7 @@ import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.KtorClientFactory
 import dev.opencode.mobile.network.OpencodeHttpClient
+import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.network.ServerConnection
 import dev.opencode.voiceengine.VoiceEngine
 import io.ktor.client.call.body
@@ -77,7 +86,30 @@ class HexServices(
     val voice = VoiceEngine(appContext)
 
     /** Home's fake session until it talks to OpenCode (round 2 of M2); Settings › Developer › Sample session picks it. */
-    val sampleSession = MutableStateFlow(TodaySessionDemo.Card)
+    val sampleSession = MutableStateFlow<TodaySessionDemo?>(null)
+
+    /** The event stream's own client: no read timeout, and its own connection pool. */
+    val sseClient = OpencodeSseHttpClient(json, connection)
+    val sessions = SessionsApi(httpClient, json)
+    private val events = EventsApi(sseClient)
+    val networkPath = ConnectivityDeviceNetworkPath(appContext)
+
+    /** Today's session on the paired computer, in [directory] with [model]. Home owns it, in its [scope]. */
+    fun todaySession(
+        scope: CoroutineScope,
+        directory: () -> String,
+        model: () -> ModelChoice?,
+    ): TodaySession {
+        val api = OpenCodeTodayApi(sessions, ready = { connectionLoaded.await() })
+        return TodaySession(
+            scope = scope,
+            setup = DailySessionSetup(api, settings),
+            api = api,
+            transport = EventsApiTransport({ events }, ready = { connectionLoaded.await() }),
+            directory = directory,
+            model = model,
+        )
+    }
 
     /** Folder listings Browse folders has seen this session, shared by first run and Settings. */
     val folderListings = ConcurrentHashMap<String, DirectoryListing>()
@@ -108,6 +140,7 @@ class HexServices(
         try {
             connection.ensureLoaded()
             httpClient.rebuild()
+            sseClient.rebuild()
         } finally {
             connectionLoaded.complete(Unit)
         }
@@ -122,6 +155,7 @@ class HexServices(
         profiles.saveProfile(profile.copy(id = existing?.id ?: profile.id, name = existing?.name ?: profile.name))
         connection.reloadFromStore()
         httpClient.rebuild()
+        sseClient.rebuild()
     }
 }
 
@@ -159,7 +193,7 @@ class OpenApiRouteCheck(
         /** The model test, and the status summary and Ask on the side the main screen builds on. */
         val REQUIRED_ROUTES =
             listOf(
-                "/api/experimental/generate",
+                "/api/experimental/generate/text",
                 "/api/session/{sessionID}/generate",
             )
     }

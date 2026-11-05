@@ -9,10 +9,12 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.firstrun.ProjectChoice
+import dev.opencode.hexcode.session.DailySessionMemory
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
+import java.time.LocalDate
 
 /** Light and dark follow the system unless one is pinned in Settings. */
 enum class Appearance { Auto, Light, Dark }
@@ -37,7 +39,8 @@ private val Context.hexDataStore: DataStore<Preferences> by preferencesDataStore
 class HexSettings(
     context: Context,
     private val json: Json,
-) : DeveloperSettingsStore {
+) : DeveloperSettingsStore,
+    DailySessionMemory {
     private val store = context.applicationContext.hexDataStore
 
     val prefs: Flow<HexPrefs> =
@@ -98,6 +101,16 @@ class HexSettings(
         store.edit { it[APPEARANCE] = appearance.name }
     }
 
+    /** The date of the last session the app opened (`2026-11-05`); null before the first. */
+    override suspend fun lastOpenedOn(): LocalDate? =
+        store.data
+            .first()[LAST_SESSION_DATE]
+            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+
+    override suspend fun setLastOpenedOn(date: LocalDate) {
+        store.edit { it[LAST_SESSION_DATE] = date.toString() }
+    }
+
     override suspend fun setDeveloperSettings(on: Boolean) {
         store.edit { if (on) it[DEVELOPER_SETTINGS] = true else it.remove(DEVELOPER_SETTINGS) }
     }
@@ -111,5 +124,6 @@ class HexSettings(
         val SERVER_HOME = stringPreferencesKey("server_home")
         val SERVER_VERSION = stringPreferencesKey("server_version")
         val DEVELOPER_SETTINGS = booleanPreferencesKey("developer_settings")
+        val LAST_SESSION_DATE = stringPreferencesKey("session_last_date")
     }
 }

@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.session
 
+import dev.opencode.hexcode.firstrun.ModelChoice
 import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 
@@ -7,19 +8,28 @@ import java.time.LocalDate
 data class SessionListing(
     val id: String,
     val title: String,
+    /** `location.directory`, exactly as the server keeps it. */
     val directory: String,
     /** When it last changed, in [System.currentTimeMillis] time. */
     val updatedAt: Long,
+    /** The start of its latest run (`time.busy`); null for a session that never ran. */
+    val busySince: Long? = null,
 )
 
-/** What to do on open, or on coming back to the foreground. */
+/** One page of the session list, and the cursor to the next. */
+data class SessionListingPage(
+    val sessions: List<SessionListing>,
+    val next: String?,
+)
+
+/** What to do on open, or on coming back to the foreground on a new date. */
 sealed interface DailySessionPlan {
     /** Today's session exists: open it as it is. */
     data class Reuse(
-        val sessionId: String,
+        val session: SessionListing,
     ) : DailySessionPlan
 
-    /** There is none: create one titled [title], add the message rules, and show the new-day notice when [newDay]. */
+    /** There is none: create one titled [title], and show the new-day notice when [newDay]. */
     data class Create(
         val title: String,
         val newDay: Boolean,
@@ -35,111 +45,139 @@ object DailySession {
     fun title(date: LocalDate): String = date.toString()
 
     /**
-     * Finds [today]'s session in [directory] among [sessions]: the most recently updated one titled with the date.
-     * When there is none, it is created, and the new-day notice shows only when the date changed since the session
-     * the app last opened ([lastOpenedOn]), so not on the first day after first run.
+     * Today's session among [sessions], in the server's order (newest update first): the first with exactly that
+     * title and directory. The server compares directories as exact strings, so the phone does too.
+     */
+    fun match(
+        today: LocalDate,
+        directory: String,
+        sessions: List<SessionListing>,
+    ): SessionListing? = sessions.firstOrNull { it.title == title(today) && it.directory == directory }
+
+    /** The app last opened a session on an earlier date than [today]. False before the first. */
+    fun isNewDay(
+        lastOpenedOn: LocalDate?,
+        today: LocalDate,
+    ): Boolean = lastOpenedOn != null && lastOpenedOn < today
+
+    /**
+     * Reuse today's session, or create it. The new-day notice shows only when a session is created and the app last
+     * opened one on an earlier date: not on the first day after first run, and not when today's session went missing
+     * and is created again.
      */
     fun plan(
         today: LocalDate,
         directory: String,
         lastOpenedOn: LocalDate?,
         sessions: List<SessionListing>,
-    ): DailySessionPlan {
-        val title = title(today)
-        val folder = normalise(directory)
-        val match = sessions.filter { it.title == title && normalise(it.directory) == folder }.maxByOrNull { it.updatedAt }
-        if (match != null) return DailySessionPlan.Reuse(match.id)
-        return DailySessionPlan.Create(title, newDay = lastOpenedOn != null && lastOpenedOn != today)
-    }
-
-    /**
-     * Whether coming back to the foreground needs a look at the sessions: the open session is from another day, or
-     * none is open. A date that changes while the app is in front waits for this.
-     */
-    fun needsCheck(
-        openedOn: LocalDate?,
-        today: LocalDate,
-    ): Boolean = openedOn != today
-
-    /** The same folder written with or without a trailing slash. */
-    private fun normalise(directory: String): String = directory.trimEnd('/').ifEmpty { directory }
+    ): DailySessionPlan =
+        match(today, directory, sessions)?.let { DailySessionPlan.Reuse(it) }
+            ?: DailySessionPlan.Create(title(today), newDay = isNewDay(lastOpenedOn, today))
 }
 
-/** The server calls the daily session needs. Round 2 implements them over OpenCode's API. */
+/** The server calls the daily session needs, over OpenCode's API in the app ([OpenCodeTodayApi]). */
 interface DailySessionApi {
-    /** The sessions in [directory]. */
-    suspend fun sessions(directory: String): List<SessionListing>
+    /**
+     * Root, unarchived sessions in [directory] whose title contains [search], newest update first; or the page
+     * after [cursor].
+     */
+    suspend fun sessionsPage(
+        directory: String,
+        search: String,
+        limit: Int,
+        cursor: String?,
+    ): SessionListingPage
 
-    /** Creates a session and returns its id. */
+    /** Creates a session in [directory] with the chosen [model] and level. */
     suspend fun create(
         title: String,
         directory: String,
-    ): String
+        model: ModelChoice?,
+    ): SessionListing
 
-    /** `PUT /api/experimental/session/{id}/instructions/entries/{entryId}`. */
-    suspend fun putInstruction(
-        sessionId: String,
-        entryId: String,
-        text: String,
-    )
+    /** Puts [SessionPrompts.MESSAGE_RULES] on the session. The same text again changes nothing. */
+    suspend fun putMessageRules(sessionId: String)
+}
+
+/** The last date the app opened a session on, saved on the phone. */
+interface DailySessionMemory {
+    suspend fun lastOpenedOn(): LocalDate?
+
+    suspend fun setLastOpenedOn(date: LocalDate)
 }
 
 /** How opening today's session went. */
 sealed interface DailySessionResult {
-    /** Open [sessionId] (the caller opens the event stream next, then saves today as the last date opened). */
+    /** Open [session]; the caller opens the event stream next. */
     data class Opened(
-        val sessionId: String,
+        val session: SessionListing,
         val created: Boolean,
         val newDay: Boolean,
     ) : DailySessionResult
 
-    /** Finding, creating or adding the rules failed: "Couldn't open today's session" with Try again. */
+    /** Finding, creating or putting the rules failed: "Couldn't open today's session" with Try again. */
     data object Failed : DailySessionResult
 }
 
 /**
- * Opens today's session: finds it, or creates it and adds the message rules ([SessionPrompts.MESSAGE_RULES]).
- * Silent: any failure is [DailySessionResult.Failed]. When the rules fail after the session was created, Try again
- * finds that session and adds them then, and still shows the new-day notice if it was due.
+ * Opens today's session: finds it, or creates it with the chosen model, and puts the message rules on it every time.
+ * Silent: any failure is [DailySessionResult.Failed]. Try again finds the session again, so it never makes a second
+ * one, and still shows the new-day notice when it was due. The date is saved as the last one opened once it worked.
  */
 class DailySessionSetup(
     private val api: DailySessionApi,
+    private val memory: DailySessionMemory,
 ) {
-    /** A session this created whose rules aren't in yet, and whether it was a new day. */
-    private var unfinished: DailySessionResult.Opened? = null
+    /** A session an earlier try created for a new day, before it failed. */
+    private var noticeDueFor: String? = null
 
     suspend fun open(
         today: LocalDate,
         directory: String,
-        lastOpenedOn: LocalDate?,
+        model: ModelChoice?,
     ): DailySessionResult =
         try {
-            when (val plan = DailySession.plan(today, directory, lastOpenedOn, api.sessions(directory))) {
-                is DailySessionPlan.Reuse -> {
-                    val pending = unfinished?.takeIf { it.sessionId == plan.sessionId }
-                    if (pending != null) {
-                        addRules(pending.sessionId)
-                        unfinished = null
-                        pending
-                    } else {
-                        DailySessionResult.Opened(plan.sessionId, created = false, newDay = false)
-                    }
+            val lastOpenedOn = memory.lastOpenedOn()
+            val found = find(today, directory)
+            val opened =
+                if (found != null) {
+                    val notice = noticeDueFor == found.id && DailySession.isNewDay(lastOpenedOn, today)
+                    DailySessionResult.Opened(found, created = false, newDay = notice)
+                } else {
+                    val session = api.create(DailySession.title(today), directory, model)
+                    val notice = DailySession.isNewDay(lastOpenedOn, today)
+                    if (notice) noticeDueFor = session.id
+                    DailySessionResult.Opened(session, created = true, newDay = notice)
                 }
-                is DailySessionPlan.Create -> {
-                    val id = api.create(plan.title, directory)
-                    val opened = DailySessionResult.Opened(id, created = true, newDay = plan.newDay)
-                    unfinished = opened
-                    addRules(id)
-                    unfinished = null
-                    opened
-                }
-            }
+            api.putMessageRules(opened.session.id)
+            noticeDueFor = null
+            memory.setLastOpenedOn(today)
+            opened
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
             DailySessionResult.Failed
         }
 
-    private suspend fun addRules(sessionId: String) =
-        api.putInstruction(sessionId, SessionPrompts.MESSAGE_RULES_ID, SessionPrompts.MESSAGE_RULES)
+    /** The first exact match, following the cursor only while a full page has none. An empty page is the end. */
+    private suspend fun find(
+        today: LocalDate,
+        directory: String,
+    ): SessionListing? {
+        var cursor: String? = null
+        repeat(MAX_PAGES) {
+            val page = api.sessionsPage(directory, DailySession.title(today), PAGE_SIZE, cursor)
+            DailySession.match(today, directory, page.sessions)?.let { return it }
+            if (page.sessions.size < PAGE_SIZE) return null
+            cursor = page.next ?: return null
+        }
+        return null
+    }
+
+    companion object {
+        const val PAGE_SIZE = 20
+
+        /** Pages followed at most while looking for today's session. */
+        const val MAX_PAGES = 25
+    }
 }

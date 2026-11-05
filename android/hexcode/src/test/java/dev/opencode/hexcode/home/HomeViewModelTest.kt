@@ -1,12 +1,15 @@
 package dev.opencode.hexcode.home
 
+import androidx.lifecycle.viewModelScope
 import dev.opencode.hexcode.session.SessionSetup
 import dev.opencode.hexcode.session.StatusSummary
 import dev.opencode.hexcode.session.TodaySessionDemo
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -200,24 +203,30 @@ class HomeViewModelTest {
     fun aNewDayShowsTheNoticeOnceAndTheEmptyCard() =
         runTest(dispatcher) {
             val vm = HomeViewModel(FakeDictation(), makeSession = { TodaySessionDemo.NewDay.start(it) }) { now }
-            advanceUntilIdle()
+            advanceTimeBy(2_000)
+            runCurrent()
             val today = vm.uiState.value.today
             assertTrue(today.setup is SessionSetup.Ready)
             assertTrue(today.summary.summary is StatusSummary.Empty)
             assertEquals(HomeNotice.NewDay, vm.uiState.value.notice)
             vm.noticeShown()
-            advanceUntilIdle()
+            advanceTimeBy(2_000)
+            runCurrent()
             assertEquals(null, vm.uiState.value.notice)
+            // The sample stream heartbeats forever.
+            vm.viewModelScope.cancel()
         }
 
     @Test
     fun aFailedSetupShowsTryAgain() =
         runTest(dispatcher) {
             val vm = HomeViewModel(FakeDictation(), makeSession = { TodaySessionDemo.Failed.start(it) }) { now }
-            advanceUntilIdle()
-            assertEquals(SessionSetup.Failed, vm.uiState.value.today.setup)
+            advanceTimeBy(2_000)
+            runCurrent()
+            assertEquals(SessionSetup.Failed(retrying = false), vm.uiState.value.today.setup)
             vm.retrySetup()
             runCurrent()
-            assertEquals(SessionSetup.Opening, vm.uiState.value.today.setup)
+            assertEquals(SessionSetup.Failed(retrying = true), vm.uiState.value.today.setup)
+            vm.viewModelScope.cancel()
         }
 }

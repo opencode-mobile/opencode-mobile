@@ -26,12 +26,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -57,10 +60,15 @@ import dev.opencode.hexcode.home.HomeViewModel
 import dev.opencode.hexcode.home.VoiceEngineDictation
 import dev.opencode.hexcode.session.TodaySessionDemo
 import dev.opencode.hexcode.settings.SettingsScreen
+import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.voiceengine.EngineOptions
 import dev.opencode.voiceengine.SpeechLab
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,6 +100,13 @@ class MainActivity : ComponentActivity() {
         val pinnedTheme = if (BuildConfig.DEBUG) intent.getStringExtra("HexCodeTheme") else null
         // debug builds: `--ez HexCodeClips true` makes each take the next bundled lab clip (an emulator has no voice)
         val clips = BuildConfig.DEBUG && intent.getBooleanExtra("HexCodeClips", false)
+        // debug builds: `--es HexCodeLastDate 2026-11-04` saves that as the last date a session was opened, before home
+        // opens, to try the new-day notice
+        if (BuildConfig.DEBUG) {
+            intent.getStringExtra("HexCodeLastDate")?.let { date ->
+                runBlocking { services.settings.setLastOpenedOn(LocalDate.parse(date)) }
+            }
+        }
         setContent {
             val prefs by services.settings.prefs.collectAsStateWithLifecycle(initialValue = null)
             val dark =
@@ -224,14 +239,38 @@ private fun AfterFirstRun(
         }
     }
     val sample by services.sampleSession.collectAsStateWithLifecycle()
-    // A new sample is a new home: the fake session starts again from opening.
+    // Today's session reads the latest choices when it opens, so a change made in Settings reaches the next open.
+    val latest by rememberUpdatedState(prefs)
+    // A new sample (or Off) is a new home: the session starts again from opening.
     val homeModel =
-        viewModel(key = "home-$sample") {
+        viewModel(key = "home-${sample?.label ?: "live"}") {
             HomeViewModel(
                 if (clips) ClipDictation(context, services.voice) else VoiceEngineDictation(services.voice),
-                makeSession = { scope -> sample.start(scope) },
+                makeSession = { scope ->
+                    sample?.start(scope)
+                        ?: services.todaySession(scope, directory = { latest.project?.path.orEmpty() }, model = { latest.model })
+                },
             )
         }
+    // In front, the date is checked and the stream reconnects; in the background it closes after a grace.
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { homeModel.enteredForeground() }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { homeModel.enteredBackground() }
+    LaunchedEffect(homeModel) {
+        services.networkPath.updates
+            .drop(1)
+            .filter { it == DeviceNetworkPathStatus.Ready }
+            .collect { homeModel.networkReturned() }
+    }
+    // Settings › Model and Project: the session follows a new model, and a new project opens a session there.
+    var seenModel by remember { mutableStateOf(prefs.model) }
+    var seenProject by remember { mutableStateOf(prefs.project?.path) }
+    LaunchedEffect(prefs.model, prefs.project?.path) {
+        val model = prefs.model
+        if (model != null && model != seenModel) homeModel.modelChanged(model)
+        if (prefs.project?.path != seenProject) homeModel.projectChanged()
+        seenModel = model
+        seenProject = prefs.project?.path
+    }
     val pages =
         viewModel(key = "settings-$visit") {
             FirstRunViewModel(
@@ -317,10 +356,14 @@ private fun AfterFirstRun(
                             page = Page.SettingsGallery
                         },
                         onSpeechLab = { page = Page.SettingsSpeechLab },
-                        sampleSession = sample.label,
+                        sampleSession = sample?.label ?: "Off",
                         onSampleSession = {
-                            services.sampleSession.value = TodaySessionDemo.entries[(sample.ordinal + 1) % TodaySessionDemo.entries.size]
+                            // Off, then each preset in turn, then Off again. Not saved: the app always starts on the real session.
+                            val presets = TodaySessionDemo.entries
+                            services.sampleSession.value =
+                                sample.let { if (it == null) presets.first() else presets.getOrNull(it.ordinal + 1) }
                         },
+                        onDropStream = if (BuildConfig.DEBUG) homeModel::dropStream else null,
                         onHideDeveloperSettings = { scope.launch { services.developer.hide() } },
                         onBack = { page = Page.Home },
                     )

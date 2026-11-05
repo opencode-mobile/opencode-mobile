@@ -126,7 +126,8 @@ fun HomeScreen(
             }
             val label =
                 when {
-                    speech is VoiceEngine.ModelState.Preparing ->
+                    // A download shows its share; loading the model after it is "Getting speech ready", with no share.
+                    speech is VoiceEngine.ModelState.Preparing && speech.fraction < 1.0 ->
                         stringResource(R.string.talk_preparing, (speech.fraction * 100).roundToInt())
                     speech is VoiceEngine.ModelState.Failed -> stringResource(R.string.talk_failed)
                     !ready -> stringResource(R.string.talk_waiting)

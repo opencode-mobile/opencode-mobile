@@ -51,7 +51,7 @@ import dev.opencode.hexcode.designsystem.components.HexStatusLine
 import dev.opencode.hexcode.designsystem.components.HexStatusTone
 import dev.opencode.hexcode.designsystem.components.HexTopBar
 import dev.opencode.hexcode.session.AgentStatus
-import dev.opencode.hexcode.session.PendingInput
+import dev.opencode.hexcode.session.PendingItem
 import dev.opencode.hexcode.session.RefreshLabel
 import dev.opencode.hexcode.session.SessionSetup
 import dev.opencode.hexcode.session.StatusSummary
@@ -74,7 +74,7 @@ internal fun rememberNow(periodMs: Long): Long {
 /** Home's top bar for the agent's [status]: Reconnecting…, Needs input, Working with the turn's clock, or Idle. */
 @Composable
 internal fun HomeTopBar(
-    status: AgentStatus,
+    status: AgentStatus?,
     now: Long,
     modifier: Modifier = Modifier,
     actions: @Composable RowScope.() -> Unit,
@@ -98,6 +98,8 @@ internal fun HomeTopBar(
                 actions = actions,
             )
         AgentStatus.Idle -> HexTopBar(HexAgentState.Idle, stringResource(R.string.home_state_idle), modifier, actions = actions)
+        // Today's session is being set up: the slot is empty.
+        null -> HexTopBar(null, "", modifier, actions = actions)
     }
 }
 
@@ -118,7 +120,7 @@ internal fun StatusArea(
     ) {
         when (today.setup) {
             SessionSetup.Opening -> Unit
-            SessionSetup.Failed -> SetupFailed(vm::retrySetup)
+            is SessionSetup.Failed -> SetupFailed(today.setup.retrying, vm::retrySetup)
             is SessionSetup.Ready -> {
                 val summary = today.summary
                 val label = summary.label(now)
@@ -282,15 +284,24 @@ private fun Refresh(
 
 /** "Couldn't open today's session", with Try again. */
 @Composable
-private fun SetupFailed(onRetry: () -> Unit) {
+private fun SetupFailed(
+    retrying: Boolean,
+    onRetry: () -> Unit,
+) {
     Text(stringResource(R.string.home_setup_failed), style = HexTheme.type.display, color = HexTheme.colors.text1)
-    HexButton(onClick = onRetry, text = stringResource(R.string.home_setup_retry), icon = HexIcons.refresh, size = HexButtonSize.Regular)
+    HexButton(
+        onClick = onRetry,
+        text = stringResource(R.string.home_setup_retry),
+        icon = HexIcons.refresh,
+        size = HexButtonSize.Regular,
+        loading = retrying,
+    )
 }
 
 /** The amber hint (`.needs-hint`) while a question or approval waits: what it is, and its text. */
 @Composable
 private fun NeedsHint(
-    input: PendingInput,
+    input: PendingItem,
     onClick: () -> Unit,
 ) {
     val colors = HexTheme.colors
@@ -304,14 +315,14 @@ private fun NeedsHint(
                 .clip(shape)
                 .background(colors.panel)
                 .background(colors.amberSoft)
-                .border(1.dp, colors.amber.copy(alpha = 0.3f), shape)
+                .border(1.dp, colors.amberLine, shape)
                 .clickable(role = Role.Button, onClick = onClick)
                 .padding(horizontal = 14.dp, vertical = 11.dp),
     ) {
         Icon(HexIcons.alert, null, tint = colors.amber, modifier = Modifier.size(HexTheme.size.icon))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(
-                stringResource(if (input.kind == PendingInput.Kind.Approval) R.string.home_needs_approval else R.string.home_needs_input),
+                stringResource(if (input.kind == PendingItem.Kind.Approval) R.string.home_needs_approval else R.string.home_needs_input),
                 style = HexTheme.type.button,
                 color = colors.text1,
             )

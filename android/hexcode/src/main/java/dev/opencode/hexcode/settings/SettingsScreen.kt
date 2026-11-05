@@ -59,6 +59,8 @@ fun SettingsScreen(
     onSpeechLab: () -> Unit,
     sampleSession: String,
     onSampleSession: () -> Unit,
+    /** Debug builds only: "Drop event stream". */
+    onDropStream: (() -> Unit)?,
     onHideDeveloperSettings: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -137,6 +139,7 @@ fun SettingsScreen(
                         onSpeechLab,
                         sampleSession,
                         onSampleSession,
+                        onDropStream,
                         { notYet = HexToastMessage(DeveloperCopy.BUILD_COPIED, HexToastTone.Steer) },
                         onHideDeveloperSettings,
                     )
@@ -162,6 +165,7 @@ private fun DeveloperSection(
     onSpeechLab: () -> Unit,
     sampleSession: String,
     onSampleSession: () -> Unit,
+    onDropStream: (() -> Unit)?,
     onBuildCopied: () -> Unit,
     onHide: () -> Unit,
 ) {
@@ -176,6 +180,14 @@ private fun DeveloperSection(
         subtitle = DeveloperCopy.SAMPLE_SESSION_SUBTITLE,
         onClick = onSampleSession,
     )
+    if (onDropStream != null) {
+        HexRow(
+            title = DeveloperCopy.DROP_STREAM,
+            icon = HexIcons.server,
+            subtitle = DeveloperCopy.DROP_STREAM_SUBTITLE,
+            onClick = onDropStream,
+        )
+    }
     HexRow(
         title = DeveloperCopy.BUILD,
         icon = HexIcons.term,
@@ -206,7 +218,9 @@ private object DeveloperCopy {
     const val SPEECH_LAB = "Speech lab"
     const val SPEECH_LAB_SUBTITLE = "Download, test and compare speech models"
     const val SAMPLE_SESSION = "Sample session"
-    const val SAMPLE_SESSION_SUBTITLE = "Fake data on home until it talks to OpenCode. Tap for the next."
+    const val SAMPLE_SESSION_SUBTITLE = "Home with a fake session, or Off for the real one. Tap for the next."
+    const val DROP_STREAM = "Drop event stream"
+    const val DROP_STREAM_SUBTITLE = "As if the network dropped, for 5 s. Debug builds only."
     const val BUILD = "Build"
     const val BUILD_COPIED = "Build copied"
     const val HIDE = "Hide developer settings"

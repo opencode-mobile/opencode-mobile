@@ -3,6 +3,7 @@ package dev.opencode.hexcode.home
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.session.TodaySession
 import dev.opencode.hexcode.session.TodayState
 import dev.opencode.voiceengine.SpeechModels
@@ -93,7 +94,37 @@ class HomeViewModel(
                     if (next.newDayNotice) today.newDayShown()
                 }
             }
+            today.open()
         }
+    }
+
+    /** The app came back to the foreground: checks the date, and reconnects at once. */
+    fun enteredForeground() {
+        session?.enteredForeground()
+    }
+
+    /** The app went to the background: the event stream closes after a short grace. */
+    fun enteredBackground() {
+        session?.enteredBackground()
+    }
+
+    fun networkReturned() {
+        session?.networkReturned()
+    }
+
+    /** Settings › Model changed: today's session follows it. */
+    fun modelChanged(model: ModelChoice) {
+        session?.switchModel(model)
+    }
+
+    /** Settings › Project changed: today's session is the one in the new project. */
+    fun projectChanged() {
+        session?.open()
+    }
+
+    /** Developer settings' "Drop event stream". */
+    fun dropStream() {
+        session?.dropStream()
     }
 
     /** ↻ on the status card. */
