@@ -84,15 +84,8 @@ struct SettingsView: View {
                 }
                 .padding(.bottom, 24)
             }
-            if let note = main.note {
-                HomeToastView(toast: note, onUndo: {})
-                    .padding(.horizontal, HexSpacing.screen)
-                    .padding(.bottom, 8)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
         }
         .hexScreenBackground()
-        .animation(HexMotion.ease(HexMotion.fade), value: main.note)
         .hexSheet(isPresented: $showsServer) {
             ServerDetailsView(setup: main.setup, onForget: {
                 showsServer = false
@@ -159,12 +152,13 @@ struct HexMainView: View {
 
     var body: some View {
         NavigationStack(path: $main.path) {
-            HomeView(home: main.home, voice: voice, onSettings: { main.openSettings() })
+            HomeView(home: main.home, session: main.session, voice: voice, onSettings: { main.openSettings() })
                 .hexPage()
                 .navigationDestination(for: HexMainModel.Route.self) { route in
                     page(route).hexPage()
                 }
         }
+        .hexToastHost(main.toasts)
     }
 
     @ViewBuilder

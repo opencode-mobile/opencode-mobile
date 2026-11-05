@@ -15,16 +15,6 @@ extension VoiceEngine: TakeRecording {
     var isReady: Bool { modelState == .ready }
 }
 
-/// A short note at the bottom of the home screen, some with Undo.
-struct HomeToast: Equatable, Identifiable {
-    enum Action: Equatable { case undoDelete }
-
-    let id = UUID()
-    let title: String
-    var subtitle: String?
-    var action: Action?
-}
-
 /// Home, not hooked up to the agent yet: hold to talk, lock or drop, chunks with delete and
 /// re-record, Clear. Releasing never sends; nothing here sends at all.
 @MainActor
@@ -41,7 +31,8 @@ final class HomeModel {
     /// How far the current hold is dragged: -1 (drop) … 1 (lock). Zero when not dragging.
     private(set) var drag: CGFloat = 0
     private(set) var takeStartedAt: Date?
-    private(set) var toast: HomeToast?
+    /// Notices at the top of the screen, shared with Settings and today's session.
+    let toasts: HexToaster
     /// Shows every earlier chunk in the long list instead of the newest ones.
     var showEarlier = false
 
@@ -50,12 +41,15 @@ final class HomeModel {
     @ObservationIgnored private var pressStartedAt: Date?
     @ObservationIgnored private var startTask: Task<Bool, Never>?
     @ObservationIgnored private var lastDeleted: (index: Int, chunk: DraftChunk)?
-    @ObservationIgnored private var toastTask: Task<Void, Never>?
 
-    init(recorder: any TakeRecording, now: @escaping () -> Date = Date.init) {
+    init(recorder: any TakeRecording, toasts: HexToaster? = nil, now: @escaping () -> Date = Date.init) {
         self.recorder = recorder
+        self.toasts = toasts ?? HexToaster()
         self.now = now
     }
+
+    /// The notice showing now.
+    var toast: HexToastItem? { toasts.current }
 
     var isRecording: Bool { draft.isListening }
     var isPressing: Bool { pressStartedAt != nil }
@@ -71,9 +65,10 @@ final class HomeModel {
             return
         }
         guard recorder.isReady else {
-            show(HomeToast(
+            toasts.show(HexToastItem(
+                tone: .info,
                 title: String(localized: "home.speech_not_ready", defaultValue: "Speech is almost ready"),
-                subtitle: String(localized: "home.speech_not_ready.sub", defaultValue: "The speech model is still downloading. It happens once.")
+                detail: String(localized: "home.speech_not_ready.sub", defaultValue: "The speech model is still downloading. It happens once.")
             ))
             return
         }
@@ -128,17 +123,19 @@ final class HomeModel {
             locked = true
         } else if armed <= -1 {
             await dropTake()
-            show(HomeToast(
+            toasts.show(HexToastItem(
+                tone: .undo,
                 title: String(localized: "home.take_dropped", defaultValue: "Take dropped"),
-                subtitle: draft.isEmpty
+                detail: draft.isEmpty
                     ? String(localized: "home.take_dropped.empty", defaultValue: "Nothing was recorded.")
                     : String(localized: "home.take_dropped.kept", defaultValue: "Earlier parts of the draft are kept.")
             ))
         } else if now().timeIntervalSince(started) < Self.minimumHold {
             await dropTake()
-            show(HomeToast(
+            toasts.show(HexToastItem(
+                tone: .info,
                 title: String(localized: "home.hold_to_talk", defaultValue: "Hold to talk"),
-                subtitle: String(localized: "home.hold_to_talk.sub", defaultValue: "Keep pressing while you speak, or drag right to lock.")
+                detail: String(localized: "home.hold_to_talk.sub", defaultValue: "Keep pressing while you speak, or drag right to lock.")
             ))
         } else {
             await endTake()
@@ -154,9 +151,10 @@ final class HomeModel {
             pressStartedAt = nil
             drag = 0
         }
-        show(HomeToast(
+        toasts.show(HexToastItem(
+            tone: .info,
             title: String(localized: "home.mic_off", defaultValue: "Microphone access is off"),
-            subtitle: String(localized: "home.mic_off.sub", defaultValue: "Turn it on in Settings › Hex Code.")
+            detail: String(localized: "home.mic_off.sub", defaultValue: "Turn it on in Settings › Hex Code.")
         ))
     }
 
@@ -190,18 +188,23 @@ final class HomeModel {
         guard let deleted = draft.deleteSelected() else { return }
         lastDeleted = deleted
         let text = deleted.chunk.text ?? ""
-        show(HomeToast(
-            title: String(localized: "home.chunk_deleted", defaultValue: "Chunk deleted"),
-            subtitle: text.count > 40 ? "“\(text.prefix(40))…”" : "“\(text)”",
-            action: .undoDelete
-        ), seconds: 3.5)
+        toasts.show(
+            HexToastItem(
+                tone: .undo,
+                title: String(localized: "home.chunk_deleted", defaultValue: "Chunk deleted"),
+                detail: text.count > 40 ? "“\(text.prefix(40))…”" : "“\(text)”",
+                action: .init(title: String(localized: "common.undo", defaultValue: "Undo"), icon: .undo),
+                duration: 3.5
+            ),
+            onAction: { [weak self] in self?.undoDelete() }
+        )
     }
 
     func undoDelete() {
         guard let deleted = lastDeleted else { return }
         lastDeleted = nil
         draft.restore(deleted.chunk, at: deleted.index)
-        toast = nil
+        toasts.dismiss()
     }
 
     func clearDraft() {
@@ -209,21 +212,10 @@ final class HomeModel {
         draft.clear()
         lastDeleted = nil
         showEarlier = false
-        show(HomeToast(
+        toasts.show(HexToastItem(
+            tone: .undo,
             title: String(localized: "home.draft_cleared", defaultValue: "Draft cleared"),
-            subtitle: String(localized: "home.draft_cleared.sub", defaultValue: "Nothing was sent.")
+            detail: String(localized: "home.draft_cleared.sub", defaultValue: "Nothing was sent.")
         ))
-    }
-
-    func dismissToast() { toast = nil }
-
-    private func show(_ next: HomeToast, seconds: Double = 2.4) {
-        toast = next
-        toastTask?.cancel()
-        toastTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(seconds))
-            guard !Task.isCancelled, self?.toast?.id == next.id else { return }
-            self?.toast = nil
-        }
     }
 }

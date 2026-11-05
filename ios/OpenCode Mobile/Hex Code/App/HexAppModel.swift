@@ -77,7 +77,17 @@ final class HexAppModel {
     }
 
     private func showMain(_ setup: HexSetup) {
-        main = HexMainModel(setup: setup, home: HomeModel(recorder: voice), store: store)
+        let toasts = HexToaster()
+        var session: TodaySession?
+        #if DEBUG
+        // `-HexCodeDemoSession <preset>` fills home with a fake session (see `TodaySessionDemo`).
+        if let preset = TodaySessionDemo.launchPreset {
+            let demo = preset.make(toasts: toasts)
+            session = demo
+            Task { await preset.start(demo) }
+        }
+        #endif
+        main = HexMainModel(setup: setup, home: HomeModel(recorder: voice, toasts: toasts), session: session, store: store)
         phase = .main
     }
 }

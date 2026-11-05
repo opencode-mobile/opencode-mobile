@@ -58,18 +58,19 @@ final class HexMainModel {
     private(set) var modelPage: ModelPageModel?
     private(set) var isSaving = false
     private(set) var saveError: String?
-    private(set) var note: HomeToast?
     let home: HomeModel
+    /// Today's session on home; nil until round 2 wires OpenCode in (and with no demo preset).
+    let session: TodaySession?
     let developer: DeveloperSettings
     let build: HexBuildInfo
 
     @ObservationIgnored private let services: any FirstRunServices
     @ObservationIgnored private let store: any HexSetupStoring
-    @ObservationIgnored private var noteTask: Task<Void, Never>?
 
     init(
         setup: HexSetup,
         home: HomeModel,
+        session: TodaySession? = nil,
         services: any FirstRunServices = LiveFirstRunServices(),
         store: any HexSetupStoring = HexSetupStore(),
         developer: DeveloperSettings? = nil,
@@ -77,6 +78,7 @@ final class HexMainModel {
     ) {
         self.setup = setup
         self.home = home
+        self.session = session
         self.developer = developer ?? DeveloperSettings()
         self.build = build ?? .current
         self.services = services
@@ -86,6 +88,9 @@ final class HexMainModel {
     private var connection: ServerConnection? { ServerConnection(profile: setup.profile, serverProtocol: .v2) }
 
     var serverLabel: String { setup.serverName }
+
+    /// Notices at the top of the screen, shared by home and every page over it.
+    var toasts: HexToaster { home.toasts }
 
     func openSettings() { path = [.settings] }
 
@@ -118,9 +123,10 @@ final class HexMainModel {
         next.project = project
         guard await save(next) else { return }
         path = [.settings]
-        show(HomeToast(
+        toasts.show(HexToastItem(
+            tone: .steer,
             title: String(localized: "settings.project_changed", defaultValue: "Now in \(project.name)"),
-            subtitle: String(localized: "settings.project_changed.sub", defaultValue: "The next session starts there.")
+            detail: String(localized: "settings.project_changed.sub", defaultValue: "The next session starts there.")
         ))
     }
 
@@ -155,7 +161,7 @@ final class HexMainModel {
     /// A tap on the Version row; the tenth quick one turns developer settings on.
     func tapVersion() {
         guard developer.tapVersion() else { return }
-        show(HomeToast(title: String(localized: "settings.developer.on", defaultValue: "Developer settings on")))
+        toasts.show(HexToastItem(tone: .steer, title: String(localized: "settings.developer.on", defaultValue: "Developer settings on")))
     }
 
     func openGallery() { path.append(.gallery) }
@@ -163,15 +169,16 @@ final class HexMainModel {
     /// Copies the build line, for a bug report. Developer copy: English only.
     func copyBuild() {
         UIPasteboard.general.string = build.summary
-        show(HomeToast(title: "Build copied", subtitle: build.summary))
+        toasts.show(HexToastItem(tone: .steer, title: "Build copied", detail: build.summary))
     }
 
     // MARK: Placeholders
 
     func showPlaceholder() {
-        show(HomeToast(
+        toasts.show(HexToastItem(
+            tone: .info,
             title: String(localized: "settings.soon", defaultValue: "Not in this version yet"),
-            subtitle: String(localized: "settings.soon.sub", defaultValue: "It comes with the session screen.")
+            detail: String(localized: "settings.soon.sub", defaultValue: "It comes with the session screen.")
         ))
     }
 
@@ -186,16 +193,6 @@ final class HexMainModel {
         } catch {
             saveError = String(localized: "settings.save_failed", defaultValue: "Couldn’t save this on the phone. Try again.")
             return false
-        }
-    }
-
-    private func show(_ next: HomeToast) {
-        note = next
-        noteTask?.cancel()
-        noteTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2.4))
-            guard !Task.isCancelled, self?.note?.id == next.id else { return }
-            self?.note = nil
         }
     }
 }
