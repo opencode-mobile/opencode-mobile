@@ -64,7 +64,7 @@ final class ModelPageModel {
         phase = .loaded(picker)
         let tester = tester
         testTask = Task { [weak self] in
-            let result = await tester.test(choice)
+            let result = await tester.test(choice, directory: directory)
             self?.update { $0.finishTest(choice, result: result) }
         }
     }

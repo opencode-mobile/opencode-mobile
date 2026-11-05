@@ -67,7 +67,7 @@ struct FakeModels: ModelRepository {
 
 struct FakeTester: ModelTesting {
     var result: ModelTestState
-    func test(_: ModelChoice) async -> ModelTestState { result }
+    func test(_: ModelChoice, directory _: String?) async -> ModelTestState { result }
 }
 
 final class FakeStore: HexSetupStoring, @unchecked Sendable {
