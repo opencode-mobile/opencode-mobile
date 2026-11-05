@@ -154,6 +154,7 @@ public nonisolated final class EventsAPIClient: @unchecked Sendable {
         connection: ServerConnection,
         path: String,
         directory: String?,
+        types: [String] = [],
         connectBudget: Duration = .seconds(5),
         sessionToken: UInt64 = 0,
         onHTTPResponse: (@Sendable (Int) async -> Void)?,
@@ -166,6 +167,15 @@ public nonisolated final class EventsAPIClient: @unchecked Sendable {
             var items = components?.queryItems ?? []
             items.append(URLQueryItem(name: "directory", value: directory))
             components?.queryItems = items
+            if let withQuery = components?.url {
+                url = withQuery
+            }
+        }
+        if !types.isEmpty {
+            // v2 takes each event type as its own `types=` parameter; no wildcards or lists.
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let items = components?.queryItems ?? []
+            components?.queryItems = items + types.map { URLQueryItem(name: "types", value: $0) }
             if let withQuery = components?.url {
                 url = withQuery
             }
@@ -338,10 +348,13 @@ public nonisolated final class EventsAPIClient: @unchecked Sendable {
         eventProtocol.wireValue
     }
 
+    /// `types` limits a v2 stream to those event types (each sent as its own `types=`); empty
+    /// subscribes to every event.
     @discardableResult
     public func streamEvents(
         path: String,
         directory: String?,
+        types: [String] = [],
         connectBudget: Duration = .seconds(5),
         sessionToken: UInt64 = 0,
         onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
@@ -355,6 +368,7 @@ public nonisolated final class EventsAPIClient: @unchecked Sendable {
             connection: connection,
             path: path,
             directory: directory,
+            types: types,
             connectBudget: connectBudget,
             sessionToken: sessionToken,
             onHTTPResponse: onHTTPResponse,
