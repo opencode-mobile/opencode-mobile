@@ -40,6 +40,7 @@ class FirstRunViewModelTest {
     ) : FirstRunEnvironment {
         val finished = mutableListOf<ModelChoice>()
         val savedProjects = mutableListOf<ProjectChoice>()
+        val listedPaths = mutableListOf<String>()
         val servers = mutableListOf<ConnectionProfile>()
         val modelDirectories = mutableListOf<String?>()
         var speechStarts = 0
@@ -79,7 +80,10 @@ class FirstRunViewModelTest {
             object : FilesystemRepository {
                 override suspend fun getPaths() = ServerPaths(home = home, directory = home, worktree = home)
 
-                override suspend fun listDirectory(path: String) = DirectoryListing(emptyList(), isGitRepository = false)
+                override suspend fun listDirectory(path: String): DirectoryListing {
+                    listedPaths += path
+                    return DirectoryListing(emptyList(), isGitRepository = false)
+                }
             }
         override val models =
             object : ModelRepository {
@@ -191,6 +195,30 @@ class FirstRunViewModelTest {
             vm.useFolder()
             advanceUntilIdle()
             assertEquals(listOf(ProjectChoice("Projects", "$home/Projects")), env.savedProjects)
+        }
+
+    @Test
+    fun browsingAgainStartsAtHomeAndKeepsListings() =
+        runTest(dispatcher) {
+            val env = env()
+            val vm = viewModel(env)
+            vm.openScanner()
+            vm.scanned("""{"code":"7Q4K9M","urls":["http://192.168.1.2:4096"]}""")
+            advanceUntilIdle()
+            vm.browseFolders()
+            advanceUntilIdle()
+            vm.openFolder("$home/Projects")
+            advanceUntilIdle()
+            vm.back()
+            vm.browseFolders()
+            advanceUntilIdle()
+            assertEquals(
+                home,
+                vm.uiState.value.browser
+                    ?.directory,
+            )
+            // The listings from the first visit are reused.
+            assertEquals(1, env.listedPaths.count { it == "$home/Projects" })
         }
 
     @Test

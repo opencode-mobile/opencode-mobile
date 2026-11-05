@@ -203,7 +203,10 @@ class FirstRunViewModel(
                 connectJob?.cancel()
                 state.update { it.copy(step = FirstRunStep.Scan, scan = ScanUi.Scanning, scanAttempt = it.scanAttempt + 1, browser = null) }
             }
-            FirstRunStep.Browse -> state.update { it.copy(step = FirstRunStep.Project) }
+            FirstRunStep.Browse -> {
+                browseJob?.cancel()
+                state.update { it.copy(step = FirstRunStep.Project, browser = null) }
+            }
             FirstRunStep.Model -> {
                 modelJob?.cancel()
                 testJob?.cancel()
@@ -244,10 +247,9 @@ class FirstRunViewModel(
         }
     }
 
+    /** Opens the browser at the server home every time; listings already fetched this session are reused. */
     fun browseFolders() {
-        val start =
-            state.value.browser
-                ?: FolderBrowserState(home = home, listings = listingCache.mapValues { FolderListing.Loaded(it.value) })
+        val start = FolderBrowserState(home = home, listings = listingCache.mapValues { FolderListing.Loaded(it.value) })
         state.update { it.copy(step = FirstRunStep.Browse, browser = start) }
         list(start.directory)
         if (!ServerPathPolicy.isWindows(home)) listVolumes()
