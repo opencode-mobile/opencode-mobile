@@ -6,8 +6,16 @@ import OpenCodeKit
 struct HexSetup: Equatable, Sendable {
     var profile: ConnectionProfile
     var serverVersion: String?
+    /// `hostname` from `GET /api/info` at pairing, the seed of the server's name.
+    var serverHostname: String?
     var project: ChosenProject
     var model: ModelChoice
+    /// The model's name as the server lists it, for Settings.
+    var modelName: String?
+
+    var serverName: String {
+        ServerName.name(hostname: serverHostname, fallbackAddress: ServerHost.firstAddress(of: profile))
+    }
 }
 
 protocol HexSetupStoring: Sendable {
@@ -19,8 +27,10 @@ protocol HexSetupStoring: Sendable {
 struct HexSetupStore: HexSetupStoring {
     private struct Stored: Codable {
         var serverVersion: String?
+        var serverHostname: String?
         var project: ChosenProject
         var model: ModelChoice
+        var modelName: String?
     }
 
     private static let key = "hexcode.setup.v1"
@@ -39,7 +49,14 @@ struct HexSetupStore: HexSetupStoring {
               let profile = await profiles.activeProfile(),
               !profile.password.isEmpty
         else { return nil }
-        return HexSetup(profile: profile, serverVersion: stored.serverVersion, project: stored.project, model: stored.model)
+        return HexSetup(
+            profile: profile,
+            serverVersion: stored.serverVersion,
+            serverHostname: stored.serverHostname,
+            project: stored.project,
+            model: stored.model,
+            modelName: stored.modelName
+        )
     }
 
     /// Hex Code keeps one server: pairing again replaces the previous one.
@@ -51,7 +68,13 @@ struct HexSetupStore: HexSetupStoring {
         if let saved = await profiles.listProfiles().first {
             await profiles.applyProfile(id: saved.id)
         }
-        let stored = Stored(serverVersion: setup.serverVersion, project: setup.project, model: setup.model)
+        let stored = Stored(
+            serverVersion: setup.serverVersion,
+            serverHostname: setup.serverHostname,
+            project: setup.project,
+            model: setup.model,
+            modelName: setup.modelName
+        )
         defaults.set(try JSONEncoder().encode(stored), forKey: Self.key)
     }
 

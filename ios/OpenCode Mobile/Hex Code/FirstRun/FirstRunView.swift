@@ -22,13 +22,22 @@ struct FirstRunView: View {
                 if let picker = model.projectPicker {
                     ProjectPickerView(
                         picker: picker,
-                        serverLabel: model.server?.hostLabel ?? "",
+                        serverLabel: model.server?.displayName ?? "",
                         onBack: { model.backFromProjects() },
                         onPick: { chosen in Task { await model.pickProject(chosen) } }
                     )
                 }
             case .model:
-                ModelPickerView(model: model, serverLabel: model.server?.hostLabel ?? "")
+                if let page = model.modelPage {
+                    ModelPickerView(
+                        page: page,
+                        serverLabel: model.server?.displayName ?? "",
+                        finishing: model.isStarting,
+                        finishError: model.startError,
+                        onBack: { model.backFromModels() },
+                        onFinish: { Task { await model.start() } }
+                    )
+                }
             }
         }
         .animation(.easeOut(duration: 0.2), value: model.step)

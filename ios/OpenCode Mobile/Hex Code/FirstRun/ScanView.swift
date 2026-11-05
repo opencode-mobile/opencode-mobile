@@ -68,22 +68,21 @@ struct ScanView: View {
                     ))
                     .modifier(PanelBody())
                 }
-            case let .connecting(host):
+            case .connecting:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small).tint(.white)
-                    Text(host.isEmpty
-                        ? LocalizedStringResource("scan.connecting", defaultValue: "Connecting")
-                        : LocalizedStringResource("scan.connecting_to", defaultValue: "Connecting to \(host)"))
+                    Text(LocalizedStringResource("scan.connecting", defaultValue: "Connecting to your computer"))
                         .font(.system(size: 16, weight: .semibold))
                 }
                 Text(LocalizedStringResource("scan.checking", defaultValue: "Checking the server can run this app."))
                     .modifier(PanelBody())
             case let .connected(server):
-                title(LocalizedStringResource("scan.connected", defaultValue: "Connected"), icon: .check, tint: OpenCodeColors.success)
-                Text(LocalizedStringResource(
-                    "scan.connected.detail",
-                    defaultValue: "OpenCode \(server.version ?? "2") on \(server.hostLabel)"
-                ))
+                title(
+                    LocalizedStringResource("scan.connected", defaultValue: "Connected to \(server.displayName)"),
+                    icon: .check,
+                    tint: OpenCodeColors.success
+                )
+                Text(LocalizedStringResource("scan.connected.detail", defaultValue: "OpenCode \(server.version ?? "2")"))
                 .modifier(PanelBody())
             case let .failed(failure):
                 title(PairingFailureCopy.title(failure), icon: .close, tint: OpenCodeColors.error)
@@ -132,8 +131,8 @@ enum PairingFailureCopy {
             LocalizedStringResource("pairing.not_a_code.title", defaultValue: "That isn’t a pairing code")
         case .onlyLocalAddresses:
             LocalizedStringResource("pairing.local_only.title", defaultValue: "Your computer isn’t reachable yet")
-        case let .unreachable(host):
-            LocalizedStringResource("pairing.unreachable.title", defaultValue: "Can’t reach \(host)")
+        case .unreachable:
+            LocalizedStringResource("pairing.unreachable.title", defaultValue: "Can’t reach your computer")
         case .codeExpired:
             LocalizedStringResource("pairing.expired.title", defaultValue: "This code was used or expired")
         case .notOpenCode2:

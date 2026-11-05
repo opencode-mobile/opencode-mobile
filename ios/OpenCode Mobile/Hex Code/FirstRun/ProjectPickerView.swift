@@ -5,12 +5,16 @@ import SwiftUI
 /// Taken from OpenCode Mobile's Add project sheet, on its shared Add project state.
 struct ProjectPickerView: View {
     let picker: ProjectPickerModel
+    var title = LocalizedStringResource("project.title", defaultValue: "Pick a project")
+    var note = LocalizedStringResource("project.note", defaultValue: "A new session starts there each day.")
     let serverLabel: String
     let onBack: () -> Void
     let onPick: (ChosenProject) -> Void
+    /// Pushes Browse folders as its own page. Without it the browser replaces the list in place.
+    var onBrowse: (() -> Void)?
 
     var body: some View {
-        if picker.isBrowsing {
+        if picker.isBrowsing, onBrowse == nil {
             FolderBrowserView(picker: picker, onPick: onPick)
                 .transition(.move(edge: .trailing))
         } else {
@@ -23,7 +27,7 @@ struct ProjectPickerView: View {
     private var list: some View {
         VStack(spacing: 0) {
             HexTopBar(
-                title: LocalizedStringResource("project.title", defaultValue: "Pick a project"),
+                title: title,
                 subtitle: serverLabel,
                 onBack: onBack
             )
@@ -34,14 +38,16 @@ struct ProjectPickerView: View {
                         title: String(localized: "project.browse", defaultValue: "Browse folders"),
                         subtitle: String(localized: "project.browse.subtitle", defaultValue: "Pick any folder on this computer"),
                         trailing: .chevron,
-                        action: { Task { await picker.browse() } }
+                        action: {
+                            if let onBrowse { onBrowse() } else { Task { await picker.browse() } }
+                        }
                     )
                     .disabled(sheet.homePath.isEmpty)
                     HexSectionLabel(title: OpenCodeText(LocalizedStringResource("project.on_this_computer", defaultValue: "On this computer")))
                     suggestions
                 }
             }
-            Text(LocalizedStringResource("project.note", defaultValue: "A new session starts there each day."))
+            Text(note)
                 .font(.system(size: 12.5))
                 .foregroundStyle(OpenCodeColors.textWeaker)
                 .frame(maxWidth: .infinity)
@@ -102,6 +108,8 @@ struct ProjectPickerView: View {
 struct FolderBrowserView: View {
     let picker: ProjectPickerModel
     let onPick: (ChosenProject) -> Void
+    /// Back from the browser; by default it returns to the project list in place.
+    var onBack: (() -> Void)?
 
     @FocusState private var editingPath: Bool
 
@@ -111,7 +119,7 @@ struct FolderBrowserView: View {
         VStack(spacing: 0) {
             HexTopBar(
                 title: LocalizedStringResource("browse.title", defaultValue: "Pick a folder"),
-                onBack: { picker.closeBrowser() }
+                onBack: { if let onBack { onBack() } else { picker.closeBrowser() } }
             )
             pathField
             roots
@@ -169,7 +177,7 @@ struct FolderBrowserView: View {
                         } label: {
                             Text(openCode: root.label)
                                 .font(.system(size: 13.5, weight: .medium))
-                                .foregroundStyle(root.selected ? OpenCodeColors.textOnBrandBase : OpenCodeColors.textWeak)
+                                .foregroundStyle(root.selected ? OpenCodeColors.iconInvertBase : OpenCodeColors.textWeak)
                                 .padding(.horizontal, 13)
                                 .frame(height: 32)
                                 .background(root.selected ? OpenCodeColors.buttonPrimaryBase : .clear, in: Capsule())
@@ -219,6 +227,7 @@ struct FolderBrowserView: View {
                     title: entry.name,
                     tag: entry.isGitRepository ? AddProjectSheetState.gitTag : nil,
                     subtitle: entry.subtitle?.resolved,
+                    reservesSubtitle: true,
                     trailing: .chevron,
                     action: { Task { await picker.openFolder(entry.path) } }
                 )

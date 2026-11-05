@@ -1,20 +1,23 @@
 import OpenCodeKit
 import SwiftUI
 
-/// First run, step 4: search, models grouped by provider, reasoning level, and the test that
-/// must pass before Start. Everything sits on one 18-point edge.
+/// The model page: search, models grouped by provider, reasoning level, and the test that must
+/// pass before the finish button (Start in first run, Save in Settings). Everything sits on one
+/// 18-point edge.
 struct ModelPickerView: View {
-    let model: FirstRunModel
+    let page: ModelPageModel
+    var title = LocalizedStringResource("model.title", defaultValue: "Pick a model")
     let serverLabel: String
+    var finishTitle = LocalizedStringResource("model.start", defaultValue: "Start")
+    var finishing = false
+    var finishError: String?
+    let onBack: () -> Void
+    let onFinish: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            HexTopBar(
-                title: LocalizedStringResource("model.title", defaultValue: "Pick a model"),
-                subtitle: subtitle,
-                onBack: { model.backFromModels() }
-            )
-            switch model.models {
+            HexTopBar(title: title, subtitle: subtitle, onBack: onBack)
+            switch page.phase {
             case .loading:
                 OpenCodeStatusStack(spinner: OpenCodeText(LocalizedStringResource("model.loading", defaultValue: "Loading models")))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -28,7 +31,7 @@ struct ModelPickerView: View {
     }
 
     private var subtitle: String {
-        guard case let .loaded(picker) = model.models else { return serverLabel }
+        guard let picker = page.picker else { return serverLabel }
         let count = picker.catalog.options.count
         return String(localized: "model.subtitle", defaultValue: "\(serverLabel) · \(count) models from OpenCode")
     }
@@ -39,7 +42,7 @@ struct ModelPickerView: View {
                 .font(.system(size: 14.5))
                 .foregroundStyle(OpenCodeColors.textWeak)
             Button {
-                Task { await model.loadModels() }
+                Task { await page.load() }
             } label: {
                 Text(LocalizedStringResource("common.retry", defaultValue: "Retry"))
                     .font(.system(size: 14, weight: .semibold))
@@ -84,7 +87,7 @@ struct ModelPickerView: View {
                                 subtitle: row.providerCaption,
                                 trailing: row.isSelected ? .check : .none,
                                 minHeight: 46,
-                                action: { model.select(row.option) }
+                                action: { page.select(row.option) }
                             )
                             .accessibilityAddTraits(row.isSelected ? .isSelected : [])
                         }
@@ -102,7 +105,7 @@ struct ModelPickerView: View {
                 .foregroundStyle(OpenCodeColors.textWeaker)
             TextField(
                 String(localized: "model.search", defaultValue: "Search models"),
-                text: Binding(get: { picker.query }, set: { model.setQuery($0) })
+                text: Binding(get: { picker.query }, set: { page.setQuery($0) })
             )
             .font(.system(size: 15.5))
             .textInputAutocapitalization(.never)
@@ -133,19 +136,15 @@ struct ModelPickerView: View {
             testStatus(picker)
                 .frame(minHeight: 40, alignment: .leading)
             if picker.canStart {
-                HexPrimaryButton(
-                    title: LocalizedStringResource("model.start", defaultValue: "Start"),
-                    busy: model.isStarting,
-                    action: { Task { await model.start() } }
-                )
+                HexPrimaryButton(title: finishTitle, busy: finishing, action: onFinish)
             } else {
                 HexPrimaryButton(
                     title: testButtonTitle(picker),
                     enabled: !picker.isTesting && picker.selectedOption != nil,
-                    action: { model.testModel() }
+                    action: { page.test() }
                 )
             }
-            if let error = model.startError {
+            if let error = finishError {
                 Text(verbatim: error)
                     .font(.system(size: 12.5))
                     .foregroundStyle(OpenCodeColors.error)
@@ -173,7 +172,7 @@ struct ModelPickerView: View {
                 ForEach(levels, id: \.self) { level in
                     let selected = picker.selectedLevel == level
                     Button {
-                        model.selectLevel(level)
+                        page.selectLevel(level)
                     } label: {
                         Text(verbatim: TitleCaseIdentifier.displayName(for: level))
                             .font(.system(size: 13.5, weight: .medium))

@@ -33,13 +33,13 @@ struct HexPrimaryButton: View {
             HStack(spacing: 8) {
                 if busy {
                     ProgressView()
-                        .tint(OpenCodeColors.textOnBrandBase)
+                        .tint(OpenCodeColors.iconInvertBase)
                 }
                 Text(openCode: title)
                     .font(.system(size: 15, weight: .semibold))
             }
             .frame(maxWidth: .infinity, minHeight: 50)
-            .foregroundStyle(OpenCodeColors.textOnBrandBase)
+            .foregroundStyle(OpenCodeColors.iconInvertBase)
             .background(OpenCodeColors.buttonPrimaryBase, in: RoundedRectangle(cornerRadius: OpenCodeRadius.medium, style: .continuous))
             .opacity(enabled ? 1 : 0.25)
         }
@@ -71,6 +71,9 @@ struct HexRow: View {
     var titleWeight: Font.Weight = .semibold
     var tag: OpenCodeText?
     var subtitle: String?
+    /// Keeps the subtitle line even while `subtitle` is nil, so rows don't change height when it
+    /// arrives; it then fades in.
+    var reservesSubtitle = false
     var trailing: Trailing = .none
     var minHeight: CGFloat = 62
     let action: () -> Void
@@ -91,14 +94,17 @@ struct HexRow: View {
                             .lineLimit(1)
                         if let tag {
                             OpenCodeTag(tag, size: .small)
+                                .transition(.opacity)
                         }
                     }
-                    if let subtitle {
-                        Text(verbatim: subtitle)
+                    .frame(minHeight: 20)
+                    if subtitle != nil || reservesSubtitle {
+                        Text(verbatim: subtitle ?? " ")
                             .font(.system(size: 13))
                             .foregroundStyle(OpenCodeColors.textWeak)
                             .lineLimit(1)
                             .truncationMode(.middle)
+                            .opacity(subtitle == nil ? 0 : 1)
                     }
                 }
                 Spacer(minLength: 8)
@@ -107,6 +113,8 @@ struct HexRow: View {
             .padding(.horizontal, HexLayout.edge)
             .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .leading)
             .contentShape(Rectangle())
+            .animation(.easeOut(duration: 0.25), value: subtitle)
+            .animation(.easeOut(duration: 0.25), value: tag)
         }
         .buttonStyle(HexRowStyle())
     }

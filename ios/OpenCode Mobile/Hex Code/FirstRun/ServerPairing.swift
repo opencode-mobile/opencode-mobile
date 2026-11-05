@@ -6,15 +6,26 @@ struct PairedServer: Equatable, Sendable {
     let profile: ConnectionProfile
     /// Health `version`, when the server sent one.
     let version: String?
+    /// `hostname` from `GET /api/info`, when the server sent one.
+    var hostname: String?
 
-    /// Host shown in the app, for example `mbp.local`.
-    var hostLabel: String { ServerHost.name(profile.baseURL) }
+    /// The friendly two-word name the app shows, for example "Rapid Bison".
+    var displayName: String {
+        ServerName.name(hostname: hostname, fallbackAddress: ServerHost.firstAddress(of: profile))
+    }
 }
 
 /// The host alone, without scheme or port, as the app names a server.
 enum ServerHost {
     static func name(_ baseURL: String) -> String {
         URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines))?.host() ?? ConnectionProfileIdentity.hostLabel(baseURL)
+    }
+
+    /// The first address from the pairing code, as an origin without a trailing slash.
+    static func firstAddress(of profile: ConnectionProfile) -> String {
+        var address = profile.serverURLs.first ?? profile.baseURL
+        while address.hasSuffix("/") { address.removeLast() }
+        return address
     }
 }
 
@@ -25,7 +36,7 @@ enum PairingFailure: Error, Equatable, Sendable {
     /// The code only lists addresses on the computer itself.
     case onlyLocalAddresses
     /// None of the code's addresses answered.
-    case unreachable(host: String)
+    case unreachable
     /// The code was already used or is older than 5 minutes.
     case codeExpired
     /// The server answered, but it is not an OpenCode 2 server.
@@ -37,8 +48,6 @@ enum PairingFailure: Error, Equatable, Sendable {
 }
 
 protocol ServerPairing: Sendable {
-    /// Host to name while connecting, read from the code without contacting anything.
-    func host(of payload: String) -> String?
     func pair(payload: String) async -> Result<PairedServer, PairingFailure>
 }
 
@@ -51,11 +60,8 @@ struct OpenCodeServerPairing: ServerPairing {
 
     var probing: any ConnectionProbing = ConnectionProbeService()
     var redeemer: any PairingCodeRedeeming = PairingCodeRedeemer()
-
-    func host(of payload: String) -> String? {
-        guard case let .success(credentials) = PairingQRPayload.parse(payload) else { return nil }
-        return ServerHost.name(credentials.baseURL)
-    }
+    /// Reads the server's hostname for its name; a failure only means the name comes from the address.
+    var hostname: @Sendable (ServerConnection) async -> String? = { await ServerInfoReader.hostname($0) }
 
     func pair(payload: String) async -> Result<PairedServer, PairingFailure> {
         let credentials: PairingQRCredentials
@@ -76,7 +82,7 @@ struct OpenCodeServerPairing: ServerPairing {
             probing: probing
         )
         guard let winner = resolution.chosen else {
-            return .failure(.unreachable(host: ServerHost.name(credentials.baseURL)))
+            return .failure(.unreachable)
         }
         var password = credentials.password
         if let code = credentials.code {
@@ -85,7 +91,7 @@ struct OpenCodeServerPairing: ServerPairing {
             } catch PairingCodeRedeemError.expired {
                 return .failure(.codeExpired)
             } catch {
-                return .failure(.unreachable(host: ServerHost.name(winner)))
+                return .failure(.unreachable)
             }
         }
         var profile = ConnectionProfile(
@@ -104,9 +110,9 @@ struct OpenCodeServerPairing: ServerPairing {
             if case let .http(status, _) = error, status == 401 || status == 403 {
                 return .failure(.codeExpired)
             }
-            return .failure(.unreachable(host: ServerHost.name(winner)))
+            return .failure(.unreachable)
         } catch {
-            return .failure(.unreachable(host: ServerHost.name(winner)))
+            return .failure(.unreachable)
         }
         guard outcome.serverProtocol == .v2 else { return .failure(.notOpenCode2) }
         if let version = outcome.serverVersion, !Self.meetsMinimum(version) {
@@ -117,7 +123,8 @@ struct OpenCodeServerPairing: ServerPairing {
             return .failure(.missingRoutes)
         }
         profile.serverProtocol = .v2
-        return .success(PairedServer(profile: profile, version: outcome.serverVersion))
+        let hostname = await hostname(connection)
+        return .success(PairedServer(profile: profile, version: outcome.serverVersion, hostname: hostname))
     }
 
     /// Compares dotted release numbers. A version that is not one (a local build) passes, since

@@ -61,15 +61,9 @@ final class FirstRunModel {
 
     enum ScanPhase: Equatable {
         case scanning
-        case connecting(host: String)
+        case connecting
         case connected(server: PairedServer)
         case failed(PairingFailure)
-    }
-
-    enum ModelsPhase: Equatable {
-        case loading
-        case loaded(ModelPickerState)
-        case failed
     }
 
     private(set) var step: Step = .welcome
@@ -79,7 +73,7 @@ final class FirstRunModel {
     private(set) var server: PairedServer?
     private(set) var projectPicker: ProjectPickerModel?
     private(set) var project: ChosenProject?
-    private(set) var models: ModelsPhase = .loading
+    private(set) var modelPage: ModelPageModel?
     private(set) var isStarting = false
     private(set) var startError: String?
 
@@ -89,7 +83,6 @@ final class FirstRunModel {
     @ObservationIgnored private let onFinished: (HexSetup) -> Void
     @ObservationIgnored private let connectedPause: Duration
     @ObservationIgnored private var pairingTask: Task<Void, Never>?
-    @ObservationIgnored private var testTask: Task<Void, Never>?
 
     init(
         services: any FirstRunServices = LiveFirstRunServices(),
@@ -132,7 +125,7 @@ final class FirstRunModel {
     func scanned(_ payload: String) {
         guard step == .scan, scan == .scanning else { return }
         let pairing = services.pairing
-        scan = .connecting(host: pairing.host(of: payload) ?? "")
+        scan = .connecting
         let attempt = scanAttempt
         pairingTask = Task { [weak self] in
             let result = await pairing.pair(payload: payload)
@@ -188,54 +181,33 @@ final class FirstRunModel {
 
     func loadModels() async {
         guard let connection, let project else { return }
-        models = .loading
-        do {
-            let catalog = try await services.models(connection).listModelOptions(directory: project.path)
-            guard step == .model else { return }
-            models = catalog.isEmpty ? .failed : .loaded(ModelPickerState(catalog: catalog))
-        } catch {
-            guard step == .model else { return }
-            models = .failed
-        }
+        let page = ModelPageModel(
+            repository: services.models(connection),
+            tester: services.tester(connection),
+            directory: project.path
+        )
+        modelPage = page
+        await page.load()
     }
 
     func backFromModels() {
-        testTask?.cancel()
+        modelPage?.cancel()
         step = .project
-    }
-
-    func updateModels(_ change: (inout ModelPickerState) -> Void) {
-        guard case var .loaded(picker) = models else { return }
-        change(&picker)
-        models = .loaded(picker)
-    }
-
-    func setQuery(_ query: String) { updateModels { $0.query = query } }
-
-    func select(_ option: ModelSelectionOption) { updateModels { $0.select(option) } }
-
-    func selectLevel(_ level: String) { updateModels { $0.selectLevel(level) } }
-
-    /// Sends the one-line test prompt with the current model and level.
-    func testModel() {
-        guard let connection, case var .loaded(picker) = models, let choice = picker.beginTest() else { return }
-        models = .loaded(picker)
-        let tester = services.tester(connection)
-        testTask = Task { [weak self] in
-            let result = await tester.test(choice)
-            guard let self else { return }
-            self.updateModels { $0.finishTest(choice, result: result) }
-        }
     }
 
     /// Saves the setup and leaves first run. Only offered after the model passed its test.
     func start() async {
-        guard let server, let project, case let .loaded(picker) = models, picker.canStart,
-              let choice = picker.choice, !isStarting
-        else { return }
+        guard let server, let project, let choice = modelPage?.passedChoice, !isStarting else { return }
         isStarting = true
         startError = nil
-        let setup = HexSetup(profile: server.profile, serverVersion: server.version, project: project, model: choice)
+        let setup = HexSetup(
+            profile: server.profile,
+            serverVersion: server.version,
+            serverHostname: server.hostname,
+            project: project,
+            model: choice,
+            modelName: modelPage?.selectedModelName
+        )
         do {
             try await store.save(setup)
             isStarting = false

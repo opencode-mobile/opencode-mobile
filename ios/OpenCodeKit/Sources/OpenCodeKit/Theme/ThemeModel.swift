@@ -4,11 +4,14 @@ public struct ThemePreset: Identifiable, Equatable, Codable {
     public let id: String
     public let name: String
     public var blurb: String
+    /// The apps that offer this preset (manifest `"apps"`, for example `["hexcode"]`). `nil`: every app.
+    public var apps: [String]?
 
-    public init(id: String, name: String, blurb: String = "") {
+    public init(id: String, name: String, blurb: String = "", apps: [String]? = nil) {
         self.id = id
         self.name = name
         self.blurb = blurb
+        self.apps = apps
     }
 
     public init(from decoder: Decoder) throws {
@@ -16,6 +19,12 @@ public struct ThemePreset: Identifiable, Equatable, Codable {
         id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         blurb = try container.decodeIfPresent(String.self, forKey: .blurb) ?? ""
+        apps = try container.decodeIfPresent([String].self, forKey: .apps)
+    }
+
+    /// Whether the app with this id lists the preset in its theme picker.
+    public func isOffered(in app: String) -> Bool {
+        apps.map { $0.contains(app) } ?? true
     }
 }
 

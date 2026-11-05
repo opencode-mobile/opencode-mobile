@@ -35,6 +35,7 @@ final class ProjectPickerModel {
     @ObservationIgnored private var summariesInFlight: Set<String> = []
     @ObservationIgnored private var summaryFailures: Set<String> = []
     @ObservationIgnored private let listingDebounce: Duration
+    @ObservationIgnored private var publishTask: Task<Void, Never>?
 
     init(projects: any ProjectListing, filesystem: any FilesystemRepository, listingDebounce: Duration = .milliseconds(250)) {
         self.projects = projects
@@ -240,7 +241,7 @@ final class ProjectPickerModel {
                 if let listing {
                     if self.inputs.listings[path] == nil {
                         self.store(listing, for: path)
-                        self.publish()
+                        self.publishSoon()
                     }
                 } else {
                     self.summaryFailures.insert(path)
@@ -250,7 +251,23 @@ final class ProjectPickerModel {
         }
     }
 
+    /// Folder summaries land one by one; apply what arrived in the last moment together, so the
+    /// list redraws a few times instead of once per folder.
+    private func publishSoon() {
+        guard publishTask == nil else { return }
+        publishTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.summaryBatch)
+            guard let self else { return }
+            self.publishTask = nil
+            self.publish()
+        }
+    }
+
+    static let summaryBatch: Duration = .milliseconds(100)
+
     private func publish() {
+        publishTask?.cancel()
+        publishTask = nil
         let next = AddProjectSheetState.make(inputs)
         if next != sheet { sheet = next }
     }

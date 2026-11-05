@@ -7,6 +7,10 @@ public final class ThemeManager {
 
     public static let shared = ThemeManager()
 
+    /// The app whose theme picker this is: presets whose manifest `apps` leaves it out are not
+    /// offered. Hex Code sets `"hexcode"` before first use.
+    public static var appID = "opencode-mobile"
+
     private enum StorageKeys {
         public static let selectedThemeID = ThemePersistence.selectedThemeIDKey
     }
@@ -196,7 +200,7 @@ public final class ThemeManager {
         if let cachedManifestPresets {
             return cachedManifestPresets
         }
-        let presets = Self.loadPresetManifest()
+        let presets = Self.loadPresetManifest().filter { $0.isOffered(in: Self.appID) }
         cachedManifestPresets = presets
         return presets
     }

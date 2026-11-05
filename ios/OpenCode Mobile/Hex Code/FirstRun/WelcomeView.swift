@@ -44,7 +44,7 @@ struct WelcomeView: View {
             howToConnect
                 .padding(.bottom, 16)
             HexPrimaryButton(title: LocalizedStringResource("welcome.scan", defaultValue: "Scan the code"), action: onScan)
-            Text(LocalizedStringResource("welcome.footer", defaultValue: "Speech is turned into text on this phone · Needs OpenCode 2.2.5+"))
+            Text(LocalizedStringResource("welcome.footer", defaultValue: "Needs OpenCode 2.2.5+"))
                 .font(.system(size: 12))
                 .foregroundStyle(OpenCodeColors.textWeaker)
                 .frame(maxWidth: .infinity)

@@ -38,7 +38,6 @@ final class FakeRedeemer: PairingCodeRedeeming, @unchecked Sendable {
 
 struct FakePairing: ServerPairing {
     var result: Result<PairedServer, PairingFailure>
-    func host(of _: String) -> String? { "mbp.local" }
     func pair(payload _: String) async -> Result<PairedServer, PairingFailure> { result }
 }
 
@@ -117,7 +116,8 @@ struct ServerPairingTests {
     @Test func redeemsOnTheTailscaleHostAndKeepsEveryAddress() async throws {
         let probing = FakeProbing()
         let redeemer = FakeRedeemer()
-        let pairing = OpenCodeServerPairing(probing: probing, redeemer: redeemer)
+        var pairing = OpenCodeServerPairing(probing: probing, redeemer: redeemer)
+        pairing.hostname = { _ in nil }
         let server = try await pairing.pair(payload: Self.payload).get()
         #expect(redeemer.redeemed.count == 1)
         #expect(redeemer.redeemed.first?.baseURL == "http://100.64.0.3:4096/")
@@ -132,9 +132,16 @@ struct ServerPairingTests {
         #expect(probing.passwordsSent.filter { $0 == "session-token" }.count == 1)
     }
 
-    @Test func readsTheHostWithoutContactingAnything() {
-        #expect(OpenCodeServerPairing().host(of: "http://mbp.local:4096/auth/connect/Abc123") == "mbp.local")
-        #expect(OpenCodeServerPairing().host(of: "hello") == nil)
+    @Test func namesTheServerFromItsHostname() async throws {
+        var pairing = OpenCodeServerPairing(probing: FakeProbing(), redeemer: FakeRedeemer())
+        pairing.hostname = { _ in "Example-MacBook-Pro.local" }
+        let server = try await pairing.pair(payload: Self.payload).get()
+        #expect(server.hostname == "Example-MacBook-Pro.local")
+        #expect(server.displayName == "Bold Quokka")
+        pairing.hostname = { _ in nil }
+        let unnamed = try await pairing.pair(payload: Self.payload).get()
+        // No hostname: the name comes from the code's first address.
+        #expect(unnamed.displayName == ServerName.name(seed: "http://192.168.1.2:4096"))
     }
 
     @Test func rejectsWhatIsNotAPairingCode() async {
@@ -154,7 +161,7 @@ struct ServerPairingTests {
         let probing = FakeProbing()
         probing.silentHosts = ["192.168.1.2", "100.64.0.3"]
         let pairing = OpenCodeServerPairing(probing: probing, redeemer: FakeRedeemer())
-        #expect(await pairing.pair(payload: Self.payload) == .failure(.unreachable(host: "100.64.0.3")))
+        #expect(await pairing.pair(payload: Self.payload) == .failure(.unreachable))
     }
 
     @Test func serverChecksShowOnlyOnFailure() async {
@@ -220,6 +227,32 @@ struct ProjectPickerModelTests {
         #expect(picker.folderToUse?.path == "/Users/example/Projects")
     }
 
+    @Test func rowSummariesArriveTogetherAndKeepTheRowOrder() async {
+        let filesystem = FakeFilesystem(
+            folders: [
+                "/Users/example": ["b", "a", "c"],
+                "/Users/example/a": ["x"],
+                "/Users/example/b": ["x", "y"],
+                "/Users/example/c": [],
+            ],
+            repositories: ["/Users/example/b"]
+        )
+        let picker = ProjectPickerModel(projects: FakeProjects(projects: []), filesystem: filesystem, listingDebounce: .zero)
+        await picker.load()
+        await picker.browse()
+        let order = picker.sheet.entries.map(\.name)
+        #expect(picker.sheet.entries.allSatisfy { $0.folderCount == nil })
+        for entry in picker.sheet.entries { picker.rowAppeared(entry.path) }
+        #expect(await waitUntil { picker.sheet.entries.allSatisfy { $0.folderCount != nil } })
+        #expect(picker.sheet.entries.map(\.name) == order)
+        let byName = Dictionary(uniqueKeysWithValues: picker.sheet.entries.map { ($0.name, $0) })
+        #expect(byName["a"]?.folderCount == 1)
+        #expect(byName["b"]?.folderCount == 2)
+        #expect(byName["c"]?.folderCount == 0)
+        #expect(byName["b"]?.isGitRepository == true)
+        #expect(byName["a"]?.isGitRepository == false)
+    }
+
     @Test func aMissingFolderCannotBeUsed() async {
         let filesystem = FakeFilesystem(folders: ["/Users/example": []])
         let picker = ProjectPickerModel(projects: FakeProjects(projects: []), filesystem: filesystem, listingDebounce: .zero)
@@ -260,25 +293,23 @@ struct FirstRunModelTests {
         #expect(model.step == .scan)
         #expect(scanStarted == 1)
         model.scanned("payload")
-        #expect(model.scan == .connecting(host: "mbp.local"))
+        #expect(model.scan == .connecting)
         #expect(await waitUntil { model.step == .project })
         let picker = try #require(model.projectPicker)
         #expect(await waitUntil { picker.sheet.suggestionsResolved })
         let chosen = try #require(picker.suggestion(at: "/Users/example/Projects/hexcode"))
         await model.pickProject(chosen)
         #expect(model.step == .model)
-        guard case let .loaded(models) = model.models else { Issue.record("models not loaded"); return }
+        let page = try #require(model.modelPage)
+        let models = try #require(page.picker)
         #expect(!models.canStart)
 
         // Start is not possible before the test passes.
         await model.start()
         #expect(finished == nil)
 
-        model.testModel()
-        #expect(await waitUntil {
-            if case let .loaded(picker) = model.models { return picker.canStart }
-            return false
-        })
+        page.test()
+        #expect(await waitUntil { page.picker?.canStart == true })
         await model.start()
         let setup = try #require(finished)
         #expect(setup.project == chosen)
@@ -287,19 +318,17 @@ struct FirstRunModelTests {
         #expect(store.saved == setup)
     }
 
-    @Test func aFailedTestKeepsStartAway() async {
+    @Test func aFailedTestKeepsStartAway() async throws {
         let services = FakeServices(pairing: FakePairing(result: .success(pairedServer)), testResult: .failed("No API key"))
         let model = FirstRunModel(services: services, store: FakeStore(), connectedPause: .zero)
         model.startScan()
         model.scanned("payload")
         #expect(await waitUntil { model.step == .project })
         await model.pickProject(ChosenProject(path: "/Users/example/p"))
-        model.testModel()
-        #expect(await waitUntil {
-            if case let .loaded(picker) = model.models { return picker.currentTest == .failed("No API key") }
-            return false
-        })
-        if case let .loaded(picker) = model.models { #expect(!picker.canStart) }
+        let page = try #require(model.modelPage)
+        page.test()
+        #expect(await waitUntil { page.picker?.currentTest == .failed("No API key") })
+        #expect(page.passedChoice == nil)
     }
 
     @Test func pairingFailureStaysOnScanUntilScanAgain() async {
@@ -315,5 +344,26 @@ struct FirstRunModelTests {
         model.scanAgain()
         #expect(model.scan == .scanning)
         #expect(model.scanAttempt == attempt + 1)
+    }
+}
+
+// MARK: - The server's name
+
+struct ServerNameTests {
+    @Test func knownHostnamesGiveKnownNames() {
+        #expect(ServerName.name(hostname: "Example-MacBook-Pro.local", fallbackAddress: "x") == "Bold Quokka")
+        #expect(ServerName.name(hostname: "mbp", fallbackAddress: "x") == "Spry Seal")
+        #expect(ServerName.name(hostname: "opencode-dev", fallbackAddress: "x") == "Quiet Lynx")
+    }
+
+    @Test func caseAndDotLocalDoNotChangeTheName() {
+        #expect(ServerName.name(hostname: "MBP.local", fallbackAddress: "x") == "Spry Seal")
+        #expect(ServerName.name(hostname: "  ", fallbackAddress: "mbp") == "Spry Seal")
+        #expect(ServerName.name(hostname: nil, fallbackAddress: "mbp") == "Spry Seal")
+    }
+
+    @Test func fnv1aMatchesTheReference() {
+        #expect(ServerName.fnv1a("") == 0x811C_9DC5)
+        #expect(ServerName.fnv1a("a") == 0xE40C_292C)
     }
 }
