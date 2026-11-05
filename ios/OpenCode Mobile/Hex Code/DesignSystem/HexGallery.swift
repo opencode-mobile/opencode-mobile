@@ -12,6 +12,7 @@ struct HexGallery: View {
     /// Nil follows the app.
     @State private var scheme: ColorScheme?
     @State private var showsSheet = false
+    @State private var toasts = HexToaster()
 
     var body: some View {
         let shown = scheme ?? appScheme
@@ -24,10 +25,11 @@ struct HexGallery: View {
                 .padding(.horizontal, HexSpacing.screen)
                 .padding(.bottom, 6)
             ScrollView {
-                HexGalleryContent(showsSheet: $showsSheet)
+                HexGalleryContent(showsSheet: $showsSheet, toasts: toasts)
             }
         }
         .hexScreenBackground()
+        .hexToastHost(toasts)
         // Inside the colour scheme override, so the sheet and its background take it too.
         .hexSheet(isPresented: $showsSheet) {
             HexGallerySheet(onClose: { showsSheet = false })
@@ -38,6 +40,7 @@ struct HexGallery: View {
 
 private struct HexGalleryContent: View {
     @Binding var showsSheet: Bool
+    let toasts: HexToaster
 
     @State private var level = "high"
     @State private var query = ""
@@ -68,6 +71,8 @@ private struct HexGalleryContent: View {
             fields
             draft
             talkButton
+            notices
+            progress
             surfaces
         }
         .padding(.bottom, 40)
@@ -303,6 +308,54 @@ private struct HexGalleryContent: View {
             caption("Idle · not ready · quiet · held · dragging to lock · armed · dragging to drop · locked")
         }
         .padding(.horizontal, HexSpacing.screenHome - HexSpacing.screen)
+    }
+
+    private var notices: some View {
+        section("Toast") {
+            ForEach(Self.toastSamples.indices, id: \.self) { index in
+                HexToast(item: Self.toastSamples[index])
+            }
+            caption("sun · info · stop · steer · undo with an action · title only · long detail")
+            HStack(spacing: 8) {
+                HexButton("Show at the top", size: .regular) {
+                    toasts.show(Self.toastSamples[0])
+                }
+                HexButton("With Undo", size: .regular) {
+                    toasts.show(Self.toastSamples[4]) { toasts.show(HexToastItem(tone: .steer, title: "Undone")) }
+                }
+            }
+        }
+    }
+
+    private static let toastSamples: [HexToastItem] = [
+        HexToastItem(tone: .sun, title: "New day, new session", detail: "Yesterday’s is kept on your computer.", duration: 3.6),
+        HexToastItem(tone: .info, title: "Speech is almost ready", detail: "The speech model is still downloading. It happens once."),
+        HexToastItem(tone: .stop, title: "Stopped", detail: "Queued prompts stay parked. Talk to start again."),
+        HexToastItem(tone: .steer, title: "Build copied", detail: "Hex Code 0.1.0 (debug) fdd8a45"),
+        HexToastItem(
+            tone: .undo,
+            title: "Chunk deleted",
+            detail: "“Rename the login screen’s helper to session…”",
+            action: .init(title: "Undo", icon: .undo),
+            duration: 3.5
+        ),
+        HexToastItem(tone: .steer, title: "Developer settings on"),
+        HexToastItem(
+            tone: .info,
+            title: "A notice with a long detail line",
+            detail: "The detail stays on one line and ends in an ellipsis when it runs out of room."
+        ),
+    ]
+
+    private var progress: some View {
+        section("Progress") {
+            HexProgress(steps: [false, false, false, false], label: "0/4 · details ›")
+            HexProgress(steps: [true, true, false, false], label: "2/4 · details ›")
+            HexProgress(steps: [true, true, true, true], label: "4/4 · details ›")
+            HexProgress(steps: [true], label: "1/1 · details ›")
+            HexProgress(steps: [true, true, true, true, true, false, false, false], label: "5/8 · details ›")
+            caption("None done · some · all · one step · eight steps (the most). The label lights while pressed")
+        }
     }
 
     private var surfaces: some View {

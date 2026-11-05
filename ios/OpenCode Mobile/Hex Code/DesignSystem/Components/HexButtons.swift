@@ -81,7 +81,20 @@ struct HexButton: View {
         fullWidth: Bool = false,
         action: @escaping () -> Void
     ) {
-        self.title = title.map { Text($0) }
+        self.init(text: title.map { Text($0) }, icon: icon, size: size, style: style, enabled: enabled, fullWidth: fullWidth, action: action)
+    }
+
+    /// A title already made, such as a toast's action.
+    init(
+        text: Text?,
+        icon: HexIcon? = nil,
+        size: Size = .small,
+        style: Style = .secondary,
+        enabled: Bool = true,
+        fullWidth: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.title = text
         self.icon = icon
         self.size = size
         self.style = style
