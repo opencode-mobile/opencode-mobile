@@ -41,7 +41,6 @@ struct WorktreesView: View {
                         .padding(.top, 8)
                 }
                 .padding(.bottom, 88)
-                .animation(.easeInOut(duration: 0.25), value: viewModel.groups)
             }
             .openCodeReadableColumn()
         }
@@ -138,7 +137,6 @@ struct WorktreesView: View {
         )
         ForEach(group.worktrees) { row in
             worktreeRow(row)
-                .transition(.opacity.combined(with: .move(edge: .leading)))
         }
         if group.worktrees.isEmpty {
             note("worktrees.none_in_project")
