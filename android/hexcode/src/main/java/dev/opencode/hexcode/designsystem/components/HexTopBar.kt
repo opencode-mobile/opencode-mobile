@@ -88,11 +88,11 @@ enum class HexAgentState { Idle, Working, NeedsInput, Reconnecting }
 
 /**
  * Home's top bar (`.tb`): the state slot (an icon, the [label] and an optional mono [timer]) on the left, round
- * buttons ([actions]) on the right.
+ * buttons ([actions]) on the right. A null [state] leaves the slot empty, as while today's session is being set up.
  */
 @Composable
 fun HexTopBar(
-    state: HexAgentState,
+    state: HexAgentState?,
     label: String,
     modifier: Modifier = Modifier,
     timer: String? = null,
@@ -101,7 +101,7 @@ fun HexTopBar(
     val colors = HexTheme.colors
     val headColor =
         when (state) {
-            HexAgentState.Idle -> colors.text2
+            HexAgentState.Idle, null -> colors.text2
             HexAgentState.Working -> colors.text1
             HexAgentState.NeedsInput, HexAgentState.Reconnecting -> colors.amber
         }
@@ -119,9 +119,11 @@ fun HexTopBar(
             horizontalArrangement = Arrangement.spacedBy(9.dp),
             modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {},
         ) {
-            Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { StateIcon(state) }
-            Text(label, style = HexTheme.type.headline, color = headColor, maxLines = 1)
-            if (timer != null) Text(timer, style = HexTheme.type.mono, color = colors.text3)
+            if (state != null) {
+                Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { StateIcon(state) }
+                Text(label, style = HexTheme.type.headline, color = headColor, maxLines = 1)
+                if (timer != null) Text(timer, style = HexTheme.type.mono, color = colors.text3)
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), content = actions)
     }

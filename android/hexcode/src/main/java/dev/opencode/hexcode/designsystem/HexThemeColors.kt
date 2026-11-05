@@ -39,6 +39,8 @@ class HexColors(
     val amber: Color,
     /** Needs-you background. */
     val amberSoft: Color,
+    /** Amber at 30 %: the Needs-you border. */
+    val amberLine: Color,
     /** Stop, errors, drop a take. */
     val red: Color,
     /** The stop hint. */
@@ -84,6 +86,7 @@ class HexColors(
                 green = Color(0xFF4CB782),
                 amber = Amber,
                 amberSoft = Amber.copy(alpha = 0.10f),
+                amberLine = Amber.copy(alpha = 0.30f),
                 red = Red,
                 redSoft = Red.copy(alpha = 0.12f),
                 indigo = Color(0xFF5E6AD2),
@@ -112,6 +115,7 @@ class HexColors(
                 green = Color(0xFF2C9A66),
                 amber = AmberLight,
                 amberSoft = AmberLight.copy(alpha = 0.09f),
+                amberLine = AmberLight.copy(alpha = 0.30f),
                 red = RedLight,
                 redSoft = RedLight.copy(alpha = 0.09f),
                 indigo = Color(0xFF5E6AD2),

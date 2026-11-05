@@ -79,6 +79,7 @@ enum class HexButtonSize { Small, Regular }
 /**
  * A small or regular button with a label, an optional leading icon, or only an icon (then [contentDescription] names
  * it and the button is square). A [Modifier] size can make the icon-only form bigger, to match a field beside it.
+ * While [loading], a spinner takes the icon's place and taps do nothing.
  */
 @Composable
 fun HexButton(
@@ -90,6 +91,7 @@ fun HexButton(
     style: HexButtonStyle = HexButtonStyle.Secondary,
     size: HexButtonSize = HexButtonSize.Small,
     enabled: Boolean = true,
+    loading: Boolean = false,
 ) {
     val colors = HexTheme.colors
     val type = HexTheme.type
@@ -141,7 +143,7 @@ fun HexButton(
                 .clip(shape)
                 .background(fill)
                 .border(BorderStroke(1.dp, border), shape)
-                .clickable(source, null, enabled = enabled, role = Role.Button, onClick = onClick)
+                .clickable(source, null, enabled = enabled && !loading, role = Role.Button, onClick = onClick)
                 .then(if (text != null) Modifier.padding(horizontal = if (size == HexButtonSize.Small) 11.dp else 16.dp) else Modifier)
                 .then(
                     if (text == null &&
@@ -153,8 +155,10 @@ fun HexButton(
                     },
                 ),
     ) {
-        if (icon != null) {
-            val iconSize = if (size == HexButtonSize.Small) HexTheme.size.iconSmall else HexTheme.size.icon
+        val iconSize = if (size == HexButtonSize.Small) HexTheme.size.iconSmall else HexTheme.size.icon
+        if (loading) {
+            HexSpinner(size = iconSize, tint = iconTint)
+        } else if (icon != null) {
             Icon(icon, null, tint = iconTint, modifier = Modifier.size(iconSize))
         }
         if (text != null) Text(text, style = textStyle, color = content, maxLines = 1, overflow = TextOverflow.Ellipsis)

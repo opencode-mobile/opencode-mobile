@@ -161,6 +161,7 @@ private fun ColoursSample() {
             "green" to c.green,
             "amber" to c.amber,
             "amberSoft" to c.amberSoft,
+            "amberLine" to c.amberLine,
             "red" to c.red,
             "redSoft" to c.redSoft,
             "indigo" to c.indigo,
@@ -396,6 +397,12 @@ private fun ButtonSample() {
                 HexButton(onClick = {}, Modifier.size(HexTheme.size.touch), icon = HexIcons.chevU, contentDescription = "Up")
             }
         }
+        StateSample("loading: the spinner in the icon's place") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HexButton(onClick = {}, text = "Try again", icon = HexIcons.refresh, size = HexButtonSize.Regular, loading = true)
+                HexButton(onClick = {}, text = "Retry", loading = true)
+            }
+        }
         StateSample("disabled") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HexButton(onClick = {}, text = "Cancel", enabled = false)
@@ -486,8 +493,10 @@ private fun TopBarSample() {
             HexRoundButton(HexIcons.target, "Goal", onClick = {})
             HexRoundButton(HexIcons.gear, "Settings", onClick = {})
         }
-        HexTopBar(HexAgentState.NeedsInput, "Needs you", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
-        HexTopBar(HexAgentState.Reconnecting, "Reconnecting", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
+        HexTopBar(HexAgentState.NeedsInput, "Needs input", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
+        HexTopBar(HexAgentState.Reconnecting, "Reconnecting…", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
+        StateName("home: empty state slot, while today's session is being set up")
+        HexTopBar(null, "", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
     }
 }
 
