@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated final class EventsAPIClient: @unchecked Sendable {
+public nonisolated final class EventsAPIClient: @unchecked Sendable {
     private static func makeStreamingSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = TimeInterval.infinity
@@ -22,7 +22,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
     private var retiredBefore: UInt64 = 0
 
     /// `streamingSessionFactory` and `beforeDial` are test seams for owned streaming sessions.
-    init(
+    public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         onConnectBudgetExceeded: @escaping @Sendable () -> Void = {},
         streamingSessionFactory: (@Sendable () -> URLSession)? = nil,
@@ -35,7 +35,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         self.beforeDial = beforeDial
     }
 
-    init(
+    public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         urlSession: URLSession,
         onConnectBudgetExceeded: @escaping @Sendable () -> Void = {}
@@ -56,7 +56,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
 
     /// Drops older owned pools and publishes `token`. Injected test sessions are untouched.
     /// Same-token dials stay so concurrent leases do not cancel each other.
-    func installFreshStreamingSession(token: UInt64) {
+    public func installFreshStreamingSession(token: UInt64) {
         guard injectedSession == nil else { return }
         let previous = installedTokenSnapshot()
         if previous < token {
@@ -78,7 +78,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
 
     /// Invalidates dials for `token` only while that token is still installed.
     /// A newer `start()` token therefore survives a late `stop()`.
-    func retireStreamingSession(token: UInt64) {
+    public func retireStreamingSession(token: UInt64) {
         guard injectedSession == nil else { return }
         let stale = mutateDials { dials, installed in
             guard installed == token else { return [] }
@@ -90,7 +90,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
     }
 
     /// `stop()` passes the generation it just published. Newer tokens survive.
-    func retireStreamingSessions(olderThan generation: UInt64) {
+    public func retireStreamingSessions(olderThan generation: UInt64) {
         guard injectedSession == nil else { return }
         let stale = mutateDials { dials, _ in
             if generation > retiredBefore {
@@ -104,7 +104,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
     }
 
     @discardableResult
-    func streamGlobalEvents(
+    public func streamGlobalEvents(
         onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
         onActivity: (@Sendable () async -> Void)? = nil,
         onDataLine: @escaping @Sendable (String) async -> Void
@@ -118,7 +118,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
     }
 
     @discardableResult
-    func streamSubscriptions(
+    public func streamSubscriptions(
         directories: [String],
         onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
         onActivity: (@Sendable () async -> Void)? = nil,
@@ -326,20 +326,20 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         }
     }
 
-    var eventSubscribePath: String {
+    public var eventSubscribePath: String {
         Self.subscribePath(for: connectionProvider()?.serverProtocol)
     }
 
-    var eventProtocol: ServerProtocol {
+    public var eventProtocol: ServerProtocol {
         connectionProvider()?.serverProtocol ?? .v1
     }
 
-    var eventProtocolWireValue: String {
+    public var eventProtocolWireValue: String {
         eventProtocol.wireValue
     }
 
     @discardableResult
-    func streamEvents(
+    public func streamEvents(
         path: String,
         directory: String?,
         connectBudget: Duration = .seconds(5),
@@ -365,7 +365,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
 
     /// Nil when `token` was already retired, so callers never dial a dead session.
     @discardableResult
-    func openStreamingSession(token: UInt64) -> URLSession? {
+    public func openStreamingSession(token: UInt64) -> URLSession? {
         openDial(token: token)?.session
     }
 
@@ -381,7 +381,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         return dial
     }
 
-    var ownedStreamingDialCount: Int {
+    public var ownedStreamingDialCount: Int {
         sessionLock.lock()
         defer { sessionLock.unlock() }
         return ownedDials.count
@@ -422,7 +422,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         return Int(seconds * 1_000 + attoseconds / 1_000_000_000_000_000)
     }
 
-    static func streamingSessionKey(for connection: ServerConnection) -> String {
+    public static func streamingSessionKey(for connection: ServerConnection) -> String {
         let fingerprint = ConnectionProfileIdentity.credentialFingerprint(
             username: connection.username,
             password: connection.password ?? ""
@@ -583,10 +583,12 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
     }
 }
 
-nonisolated struct SSEDataLineParser {
+public nonisolated struct SSEDataLineParser {
     private var dataBuffer = ""
 
-    mutating func ingest(_ line: String) -> [String] {
+    public init() {}
+
+    public mutating func ingest(_ line: String) -> [String] {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             return finish()
@@ -612,7 +614,7 @@ nonisolated struct SSEDataLineParser {
         return []
     }
 
-    mutating func finish() -> [String] {
+    public mutating func finish() -> [String] {
         guard !dataBuffer.isEmpty else { return [] }
         let payload = dataBuffer
         dataBuffer = ""
@@ -620,12 +622,12 @@ nonisolated struct SSEDataLineParser {
     }
 }
 
-nonisolated enum EventsAPIError: Error, LocalizedError {
+public nonisolated enum EventsAPIError: Error, LocalizedError {
     case invalidResponse
     case noActiveConnection
     case httpStatus(Int)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidResponse:
             "Invalid SSE response"

@@ -1,11 +1,16 @@
 import Foundation
 
-nonisolated enum SseSubscribeTargets {
-    struct Target: Equatable, Sendable {
-        let path: String
-        let directory: String?
+public nonisolated enum SseSubscribeTargets {
+    public struct Target: Equatable, Sendable {
+        public let path: String
+        public let directory: String?
 
-        var key: String {
+        public init(path: String, directory: String?) {
+            self.path = path
+            self.directory = directory
+        }
+
+        public var key: String {
             if let directory {
                 return "\(path):\(directory)"
             }
@@ -13,7 +18,7 @@ nonisolated enum SseSubscribeTargets {
         }
     }
 
-    static func targets(protocol serverProtocol: ServerProtocol, directories: [String] = []) -> [Target] {
+    public static func targets(protocol serverProtocol: ServerProtocol, directories: [String] = []) -> [Target] {
         switch serverProtocol {
         case .v2:
             [Target(path: "api/event", directory: nil)]

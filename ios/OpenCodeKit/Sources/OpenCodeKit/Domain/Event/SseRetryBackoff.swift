@@ -2,12 +2,12 @@ import Foundation
 
 /// Exponential SSE reconnect delay: 1, 2, 4, 8s (attempt 4 onward stays at 8s) with ±25% jitter.
 /// A rejected credential retries slower: 5, 10, 20, 30s (attempt 4 onward stays at 30s).
-nonisolated enum SseRetryBackoff {
-    static let baseMs = 1_000
-    static let authBaseMs = 5_000
-    static let authCapMs = 30_000
+public nonisolated enum SseRetryBackoff {
+    public static let baseMs = 1_000
+    public static let authBaseMs = 5_000
+    public static let authCapMs = 30_000
 
-    static func delayMs(
+    public static func delayMs(
         attempt: Int,
         randomInt: (Int, Int) -> Int = { Int.random(in: $0 ... $1) }
     ) -> Int {
@@ -15,7 +15,7 @@ nonisolated enum SseRetryBackoff {
         return jittered(baseMs << exponent, randomInt: randomInt)
     }
 
-    static func authDelayMs(
+    public static func authDelayMs(
         attempt: Int,
         randomInt: (Int, Int) -> Int = { Int.random(in: $0 ... $1) }
     ) -> Int {

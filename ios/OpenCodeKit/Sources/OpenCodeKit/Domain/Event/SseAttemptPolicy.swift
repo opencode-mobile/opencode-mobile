@@ -1,15 +1,15 @@
 import Foundation
 
-nonisolated enum SseAttemptPolicy {
-    enum Decision: Equatable, Sendable {
+public nonisolated enum SseAttemptPolicy {
+    public enum Decision: Equatable, Sendable {
         case retry(afterMs: Int)
         /// The server rejected the credential; show it, but keep retrying slowly in case auth recovers.
         case authFailed(retryAfterMs: Int)
     }
 
-    static let unconfirmedNotFoundRetryMs = 1_000
+    public static let unconfirmedNotFoundRetryMs = 1_000
 
-    static func decide(
+    public static func decide(
         outcome: SseAttemptOutcome,
         protocolConfirmed: Bool,
         attempt: Int,
