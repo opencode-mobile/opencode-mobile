@@ -86,11 +86,15 @@ class SessionsApi private constructor(
                 applyDirectory(directory)
             }.body()
 
-    /** [search] filters by title and [rootsOnly] drops child sessions (opencode 1.x; older servers ignore both). */
+    /**
+     * [search] filters by title, [rootsOnly] drops child sessions, and [limit] caps the newest
+     * rows (opencode 1.x; older servers ignore all three).
+     */
     suspend fun listSessions(
         directory: String? = null,
         search: String? = null,
         rootsOnly: Boolean = false,
+        limit: Int? = null,
     ): List<SessionDto> =
         httpClient
             .get()
@@ -98,6 +102,7 @@ class SessionsApi private constructor(
                 applyDirectory(directory)
                 search?.let { parameter("search", it) }
                 if (rootsOnly) parameter("roots", "true")
+                limit?.let { parameter("limit", it) }
             }.body()
 
     suspend fun createSession(
@@ -490,6 +495,31 @@ class SessionsApi private constructor(
         } while (cursor != null && pages < MAX_V2_SESSION_LIST_PAGES)
         return sessions
     }
+
+    /**
+     * One page of active root sessions, newest first, without following the cursor (#981). The
+     * server returns a next cursor even on its last page, so callers compare the row count with
+     * [limit] instead. Scoped like [listSessionsV2].
+     */
+    suspend fun listRootSessionPageV2(
+        directory: String? = null,
+        projectId: String? = null,
+        limit: Int,
+    ): List<V2SessionDto> =
+        httpClient
+            .get()
+            .get("api/session") {
+                if (projectId != null) {
+                    parameter("project", projectId)
+                } else {
+                    applyDirectory(directory)
+                }
+                parameter("parentID", "null")
+                parameter("archived", "false")
+                parameter("order", "desc")
+                parameter("limit", limit)
+            }.body<ApiListEnvelope<V2SessionDto>>()
+            .data
 
     /** A [parentId] creates a linked child at the parent's location, so no location is sent with it. */
     suspend fun createSessionV2(

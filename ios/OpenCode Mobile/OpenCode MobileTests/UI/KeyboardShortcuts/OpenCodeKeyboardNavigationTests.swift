@@ -604,9 +604,9 @@ import Testing
 @Suite struct HomeKeyboardShortcutContextTests {
     @Test func projectNumbers_skipAllAndWorktreeScopes() {
         let tabs: [SessionListFilterTab] = [
-            .all(projectCount: 2, sessionCount: 3),
-            .project(worktree: "/example/a", title: "alpha", count: 2),
-            .project(worktree: "/example/b", title: "beta", count: 1),
+            .all(projectCount: 2),
+            .project(worktree: "/example/a", title: "alpha"),
+            .project(worktree: "/example/b", title: "beta"),
         ]
         #expect(HomeKeyboardShortcutContext.projectTabs(tabs).map(\.title) == ["alpha", "beta"])
     }

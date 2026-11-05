@@ -541,8 +541,8 @@ private fun SessionListScopeIdentity(
 }
 
 /**
- * Trailing mark for a scope: its session count, a small spinner while its first load runs, or
- * nothing when that load failed (the subtitle says so).
+ * Trailing mark for a scope: a small spinner while its first load runs, else nothing (a failed
+ * load says so in the subtitle). Scopes show no session count: Home lists a window (#981).
  */
 @Composable
 fun SessionListScopeTrailing(
@@ -557,8 +557,7 @@ fun SessionListScopeTrailing(
                 color = openCodeColor("text-base"),
                 trackColor = openCodeColor("border-weaker-base"),
             )
-        SessionListScopeLoad.Failed -> Unit
-        null -> SessionListScopeCountBadge(count = tab.count, modifier = modifier)
+        SessionListScopeLoad.Failed, null -> Unit
     }
 }
 
@@ -603,23 +602,6 @@ fun SessionListScopeMark(
             )
         }
     }
-}
-
-@Composable
-fun SessionListScopeCountBadge(
-    count: Int,
-    modifier: Modifier = Modifier,
-) {
-    val textStrong = openCodeColor("text-strong")
-    Text(
-        text = count.toString(),
-        color = textStrong,
-        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-        modifier =
-            modifier
-                .background(textStrong.copy(alpha = 0.10f), RoundedCornerShape(percent = 50))
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-    )
 }
 
 /** One row of the project picker. */
@@ -922,12 +904,10 @@ private fun scopeControlSubtitle(tab: SessionListFilterTab): String =
 @Composable
 internal fun scopeControlDescription(tab: SessionListFilterTab): String {
     val subtitle = scopeControlSubtitle(tab)
-    val sessionCount = pluralStringResource(R.plurals.session_list_dock_session_count, tab.count, tab.count)
     val parts =
         buildList {
             add(scopeControlTitle(tab))
             if (subtitle.isNotEmpty()) add(subtitle)
-            if (tab.load == null) add(sessionCount)
         }
     return parts.joinToString(", ")
 }
@@ -1009,13 +989,13 @@ private fun OpenCodeSessionListDockPreview() {
             OpenCodeSessionListDock(
                 filterTabs =
                     listOf(
-                        SessionListFilterTab.all(projectCount = 3, sessionCount = 4),
+                        SessionListFilterTab.all(projectCount = 3, hasSessions = true),
                         SessionListFilterTab.project(
                             worktree = "/a",
                             title = "opencode-mobile",
-                            count = 2,
+                            hasSessions = true,
                         ),
-                        SessionListFilterTab.project(worktree = "/b", title = "playground", count = 1),
+                        SessionListFilterTab.project(worktree = "/b", title = "playground", hasSessions = true),
                     ),
                 selectedFilterId = SessionListFilterTab.ALL_ID,
                 onAddProject = {},

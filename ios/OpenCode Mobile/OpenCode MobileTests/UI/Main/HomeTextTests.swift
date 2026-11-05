@@ -27,7 +27,7 @@ struct HomeTextTests {
                 worktrees: [HomeWorktree(directory: path, branch: nil, isMain: true)]
             )
         }
-        let all = SessionListHomeChrome.filterTabs(projects: projects, sessions: []).first
+        let all = SessionListHomeChrome.filterTabs(projects: projects).first
         #expect(all?.title == "All")
         #expect(all?.pickerTitle == "All projects")
         #expect(all?.subtitle == "2 projects")

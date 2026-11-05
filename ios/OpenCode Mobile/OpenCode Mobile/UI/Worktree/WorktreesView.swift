@@ -83,7 +83,8 @@ struct WorktreesView: View {
             title: .verbatim(viewModel.actions?.name ?? ""),
             pinnedTop: {
                 if let actions = viewModel.actions {
-                    Text(WorktreesCopy.actionsSubtitle(project: actions.projectName, sessions: actions.sessionCount))
+                    // The project only: Home loads a window of sessions, so it has no count to show.
+                    Text(verbatim: actions.projectName)
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(OpenCodeColors.textWeak)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -147,7 +148,6 @@ struct WorktreesView: View {
     private func worktreeRow(_ row: WorktreeRowItem) -> some View {
         OpenCodeListItem(
             title: .verbatim(row.name),
-            subtitle: .verbatim(WorktreesCopy.sessions(row.sessionCount)),
             detailSegments: [OpenCodeListItemSubtitleSegment(text: row.directory, tone: .tertiary)],
             status: row.isRemoving
                 ? OpenCodeListItemStatus(text: "worktrees.removing", tone: .stale)
@@ -226,22 +226,12 @@ enum WorktreesCopy {
         return String(localized: LocalizedStringResource("worktrees.subtitle", defaultValue: "\(count) · \(projectCount)"))
     }
 
-    static func sessions(_ count: Int) -> String {
-        guard count > 0 else { return String(localized: "worktrees.no_sessions", defaultValue: "no sessions") }
-        return String(localized: LocalizedStringResource("worktrees.session_count", defaultValue: "\(count) sessions"))
-    }
-
     static func changed(_ count: Int) -> String {
         String(localized: LocalizedStringResource("worktrees.changed", defaultValue: "\(count) changed"))
     }
 
     static func more(_ name: String) -> String {
         String(localized: LocalizedStringResource("worktrees.more", defaultValue: "More actions for \(name)"))
-    }
-
-    static func actionsSubtitle(project: String, sessions count: Int) -> String {
-        let sessions = String(localized: LocalizedStringResource("worktrees.session_count", defaultValue: "\(count) sessions"))
-        return String(localized: LocalizedStringResource("worktrees.actions.subtitle", defaultValue: "\(project) · \(sessions)"))
     }
 
     static func removeTitle(_ dialog: WorktreeRemoveDialog?) -> String {
@@ -255,7 +245,7 @@ enum WorktreesCopy {
     }
 
     static func removeNotes(_ dialog: WorktreeRemoveDialog?) -> [OpenCodeDialogNote] {
-        guard case let .confirm(_, _, changeCount, changesUnknown, sessionCount, changesUnchecked)? = dialog else {
+        guard case let .confirm(_, _, changeCount, changesUnknown, hasSessions, changesUnchecked)? = dialog else {
             return []
         }
         var notes: [OpenCodeDialogNote] = []
@@ -272,11 +262,8 @@ enum WorktreesCopy {
         } else if changesUnchecked {
             notes.append(OpenCodeDialogNote(text: "worktrees.remove.changes_unchecked", tone: .warning))
         }
-        if sessionCount > 0 {
-            notes.append(OpenCodeDialogNote(text: OpenCodeText(LocalizedStringResource(
-                "worktrees.remove.sessions",
-                defaultValue: "\(sessionCount) sessions use this worktree. They stay on Home but can’t run here again."
-            ))))
+        if hasSessions {
+            notes.append(OpenCodeDialogNote(text: "worktrees.remove.sessions_stay"))
         }
         return notes
     }

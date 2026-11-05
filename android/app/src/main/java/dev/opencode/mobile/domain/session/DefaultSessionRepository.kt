@@ -37,6 +37,13 @@ class DefaultSessionRepository
             runCatching { remote.listSessions(directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
+        override suspend fun listRootSessionsWindow(
+            directory: String?,
+            limit: Int,
+        ): SessionWindow =
+            runCatching { remote.listRootSessionsWindow(directory, limit) }
+                .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun searchSessions(
             query: String,
             directory: String?,

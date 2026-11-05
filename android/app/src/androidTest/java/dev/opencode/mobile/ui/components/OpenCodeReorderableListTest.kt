@@ -30,9 +30,9 @@ class OpenCodeReorderableListTest {
 
     private val tabs =
         listOf(
-            SessionListFilterTab.all(projectCount = 2, sessionCount = 3),
-            SessionListFilterTab.project("/playground", "playground", count = 2),
-            SessionListFilterTab.project("/website", "website", count = 1),
+            SessionListFilterTab.all(projectCount = 2, hasSessions = true),
+            SessionListFilterTab.project("/playground", "playground", hasSessions = true),
+            SessionListFilterTab.project("/website", "website", hasSessions = true),
         )
 
     private var selected: String? = null

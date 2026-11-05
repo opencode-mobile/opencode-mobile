@@ -17,7 +17,8 @@ object SessionListHomeChrome {
         /** Primary added path: where project-level requests and single-worktree sessions go. */
         val worktree: String,
         val title: String,
-        val sessionCount: Int,
+        /** Home lists sessions of this project; Home shows no session counts (#981). */
+        val hasSessions: Boolean = false,
         val load: SessionListScopeLoad? = null,
         /** Scope id (the Home project key). */
         val id: String = worktree,
@@ -34,7 +35,7 @@ object SessionListHomeChrome {
 
     data class Worktree(
         val worktree: HomeWorktree,
-        val sessionCount: Int = 0,
+        val hasSessions: Boolean = false,
         val runningCount: Int = 0,
         /** Scope id; [HomeScope.worktreeId] of the project key and directory. */
         val scopeId: String = HomeScope.worktreeId("", worktree.directory),
@@ -90,7 +91,6 @@ object SessionListHomeChrome {
      */
     fun filterTabs(
         projects: List<Project>,
-        sessionCount: Int,
         text: UiTextLookup,
         worktreesEnabled: Boolean = true,
     ): List<SessionListFilterTab> {
@@ -102,7 +102,7 @@ object SessionListHomeChrome {
         val all =
             SessionListFilterTab.all(
                 projectCount = projects.size,
-                sessionCount = sessionCount,
+                hasSessions = projects.any { it.hasSessions },
                 load = loading.takeIf { it.isNotEmpty() }?.let { SessionListScopeLoad.Loading(isSlow = it.any { load -> load.isSlow }) },
             )
         return listOf(
@@ -124,7 +124,7 @@ object SessionListHomeChrome {
                 .project(
                     worktree = project.worktree,
                     title = project.title,
-                    count = project.sessionCount,
+                    hasSessions = project.hasSessions,
                     load = project.load,
                 ).copy(id = project.id)
         if (!worktreesEnabled || !project.hasManyWorktrees) return base
@@ -143,7 +143,7 @@ object SessionListHomeChrome {
             SessionListFilterTab(
                 id = worktree.scopeId,
                 title = worktree.title,
-                count = worktree.sessionCount,
+                hasSessions = worktree.hasSessions,
                 subtitle = worktree.subtitle.resolve(text),
                 letter = base.letter,
                 letterAccent = base.letterAccent,
@@ -168,7 +168,6 @@ object SessionListHomeChrome {
      */
     fun pickerRows(
         projects: List<Project>,
-        sessionCount: Int,
         state: HomeProjectPickerState,
         text: UiTextLookup,
         worktreesEnabled: Boolean = true,
@@ -176,7 +175,7 @@ object SessionListHomeChrome {
         val byId = projects.associateBy { it.id }
         return buildList {
             if (state.isEditing) add(SessionListProjectPickerRow.Note(HomeText.reorderNote.resolve(text)))
-            filterTabs(projects, sessionCount, text, worktreesEnabled).forEach { tab ->
+            filterTabs(projects, text, worktreesEnabled).forEach { tab ->
                 val project = byId[tab.id]
                 val worktreeCount = if (worktreesEnabled && project != null && project.hasManyWorktrees) project.worktrees.size else 0
                 val expanded = worktreeCount > 0 && state.isExpanded(tab.id)

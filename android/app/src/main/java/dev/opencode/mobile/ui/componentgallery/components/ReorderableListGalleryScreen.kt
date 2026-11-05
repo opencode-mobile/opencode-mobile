@@ -19,7 +19,6 @@ import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeReorderableList
 import dev.opencode.mobile.ui.components.ReorderableListMath
-import dev.opencode.mobile.ui.components.SessionListScopeCountBadge
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -28,7 +27,6 @@ private data class ReorderableGalleryProject(
     val title: String,
     val path: String,
     val accent: LetterAccent,
-    val count: Int,
 ) {
     val isAll: Boolean get() = id == "all"
 }
@@ -41,17 +39,16 @@ fun ReorderableListGalleryScreen(modifier: Modifier = Modifier) {
     var items by remember {
         mutableStateOf(
             listOf(
-                ReorderableGalleryProject("all", "All projects", "4 projects", LetterAccent.Violet, 12),
+                ReorderableGalleryProject("all", "All projects", "4 projects", LetterAccent.Violet),
                 ReorderableGalleryProject(
                     "/Users/me/Projects/opencode-mobile",
                     "opencode-mobile",
                     "~/Projects/opencode-mobile",
                     LetterAccent.Violet,
-                    6,
                 ),
-                ReorderableGalleryProject("/Users/me/Projects/playground", "playground", "~/Projects/playground", LetterAccent.Teal, 3),
-                ReorderableGalleryProject("/Users/me/Projects/website", "website", "~/Projects/website", LetterAccent.Amber, 2),
-                ReorderableGalleryProject("/Users/me/Projects/docs", "docs", "~/Projects/docs", LetterAccent.Blue, 1),
+                ReorderableGalleryProject("/Users/me/Projects/playground", "playground", "~/Projects/playground", LetterAccent.Teal),
+                ReorderableGalleryProject("/Users/me/Projects/website", "website", "~/Projects/website", LetterAccent.Amber),
+                ReorderableGalleryProject("/Users/me/Projects/docs", "docs", "~/Projects/docs", LetterAccent.Blue),
             ),
         )
     }
@@ -109,7 +106,6 @@ fun ReorderableListGalleryScreen(modifier: Modifier = Modifier) {
                     } else {
                         StartDecorator.Letter(item.title.first(), item.accent)
                     },
-                trailing = { SessionListScopeCountBadge(count = item.count) },
             )
         }
     }

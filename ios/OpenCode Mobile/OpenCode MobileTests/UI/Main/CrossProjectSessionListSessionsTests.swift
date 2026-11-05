@@ -80,7 +80,7 @@ struct CrossProjectSessionListSessionsTests {
         #expect(newerFirst.first?.updatedAtEpochMs == 30)
     }
 
-    @Test func projectCounts_followTheWinningWorktree() {
+    @Test func projectRows_followTheWinningWorktree() {
         let sections = [
             section(
                 worktree: "/earlier",
@@ -91,16 +91,12 @@ struct CrossProjectSessionListSessionsTests {
             section(worktree: "/empty-after-dedupe", session(id: "shared", title: "oldest", updatedAtEpochMs: 1)),
         ]
         let projects = HomeProjectGrouping.group(addedPaths: sections.map(\.worktree), resolutions: [:])
-        let tabs = SessionListHomeChrome.filterTabs(
-            projects: projects,
-            sessions: sections.crossProjectSessionListSessions(projects: projects)
-        )
-        let counts = Dictionary(uniqueKeysWithValues: tabs.map { ($0.id, $0.count) })
+        let sessions = sections.crossProjectSessionListSessions(projects: projects)
 
-        #expect(counts["path:/earlier"] == 1)
-        #expect(counts["path:/later"] == 1)
-        #expect(counts["path:/empty-after-dedupe"] == 0)
-        #expect(counts[SessionListFilterTab.allId] == 2)
+        #expect(sessions.visibleForFilter("path:/earlier").map(\.id) == ["local"])
+        #expect(sessions.visibleForFilter("path:/later").map(\.id) == ["shared"])
+        #expect(sessions.visibleForFilter("path:/empty-after-dedupe").isEmpty)
+        #expect(sessions.visibleForFilter(SessionListFilterTab.allId).count == 2)
     }
 
     @Test func worktreeSessionStaysInAddedProjectButOpensItsOwnDirectory() {
@@ -214,7 +210,7 @@ struct CrossProjectSessionListSessionsTests {
         #expect(off.map(\.location) == [nil, nil])
         #expect(off.map(\.subtitle) == ["/repo", "/repo"])
         #expect(off.visibleForFilter("prj").map(\.id) == ["a", "b"])
-        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessions: off, worktreesEnabled: false)
+        let tabs = SessionListHomeChrome.filterTabs(projects: projects, worktreesEnabled: false)
         #expect(tabs.map(\.id) == ["prj"])
 
         // Back on: branches and worktree scopes return from the same inputs.

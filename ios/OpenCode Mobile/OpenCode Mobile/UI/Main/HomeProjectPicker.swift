@@ -110,7 +110,6 @@ enum HomeProjectPickerRow: Identifiable, Hashable {
     static func rows(
         tabs: [SessionListFilterTab],
         projects: [HomeProject],
-        sessions: [SessionListSession],
         state: HomeProjectPickerState,
         worktreesEnabled: Bool = true
     ) -> [HomeProjectPickerRow] {
@@ -140,7 +139,7 @@ enum HomeProjectPickerRow: Identifiable, Hashable {
                 )
             )
             guard expanded else { continue }
-            let worktrees = SessionListHomeChrome.worktreeTabs(for: project, sessions: sessions)
+            let worktrees = SessionListHomeChrome.worktreeTabs(for: project)
             let limit = HomeProjectPickerState.collapsedWorktreeLimit
             let showsAll = state.showsAll(project.key)
             let visible = worktrees.count <= limit || showsAll ? worktrees : Array(worktrees.prefix(limit))

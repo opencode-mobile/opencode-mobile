@@ -223,7 +223,7 @@ struct SessionListScopeControl: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .geometryGroup()
-            SessionListScopeCountBadge(count: tab.count, load: tab.load)
+            SessionListScopeLoadIndicator(load: tab.load)
         }
         .padding(.trailing, 26)
     }
@@ -388,19 +388,14 @@ struct SessionListScopeControl: View {
             return String(localized: "session_list.dock.project_filter", defaultValue: "Project filter")
         }
         if let load = tab.load {
-            // Loading or failed replaces the session count, which is not known yet.
+            // Loading or failed replaces the subtitle.
             return "\(tab.dockTitle), \(load.subtitle)"
         }
-        let count = tab.count
-        let sessions = String(localized: LocalizedStringResource(
-            "session_list.dock.session_count",
-            defaultValue: "\(count) sessions"
-        ))
         let subtitle = displayedSubtitle(tab)
         if subtitle.isEmpty {
-            return "\(tab.dockTitle), \(sessions)"
+            return tab.dockTitle
         }
-        return "\(tab.dockTitle), \(subtitle), \(sessions)"
+        return "\(tab.dockTitle), \(subtitle)"
     }
 
     private var accessibilityHint: String {
@@ -435,30 +430,18 @@ struct SessionListScopeMark: View {
     }
 }
 
-/// Session count of a project scope. While the scope is loading a small spinner takes its
-/// place; a failed load hides it (the subtitle says what happened).
-struct SessionListScopeCountBadge: View {
-    let count: Int
-    var load: SessionListScopeLoad? = nil
+/// A small spinner while a project scope's first list loads; nothing otherwise (a failed load
+/// says what happened in the subtitle). Scopes show no session count: Home loads sessions a
+/// window at a time, so it does not know how many there are.
+struct SessionListScopeLoadIndicator: View {
+    var load: SessionListScopeLoad?
 
     var body: some View {
-        switch load {
-        case .loading:
+        if case .loading = load {
             ProgressView()
                 .controlSize(.small)
                 .accessibilityHidden(true)
                 .accessibilityIdentifier("sessionListScopeLoading")
-        case .failed:
-            EmptyView()
-        case nil:
-            Text("\(count)")
-                .font(OpenCodeTypography.caption.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(OpenCodeColors.textStrong.opacity(0.10), in: Capsule())
-                .accessibilityHidden(true)
         }
     }
 }
@@ -544,9 +527,9 @@ private struct NewSessionDockButton: View {
         OpenCodeColors.backgroundBase.ignoresSafeArea()
         OpenCodeSessionListDock(
             filterTabs: [
-                .all(projectCount: 3, sessionCount: 4),
-                .project(worktree: "/demo/a", title: "opencode-mobile", count: 2),
-                .project(worktree: "/demo/b", title: "playground", count: 1),
+                .all(projectCount: 3),
+                .project(worktree: "/demo/a", title: "opencode-mobile"),
+                .project(worktree: "/demo/b", title: "playground"),
             ],
             selectedFilterId: SessionListFilterTab.allId,
             onAddProject: {},

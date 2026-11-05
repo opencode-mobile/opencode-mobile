@@ -12,6 +12,8 @@ final class DefaultSessionLiveStore: SessionLiveStore {
     private let activeDirectories = ActiveDirectorySet()
     private let viewedWatermarks = SessionViewedWatermarks()
     private let loops = SessionListLoopRegistry()
+    private let windows = SessionWindowRegistry()
+    let ancestry: SessionAncestry
     private var cache: [String: SharedLiveObservation<SessionListSnapshot>] = [:]
 
     init(
@@ -34,6 +36,9 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         )
         self.invalidationAckTimeoutMs = invalidationAckTimeoutMs
         self.capabilities = capabilities
+        self.ancestry = SessionAncestry { sessionID, directory in
+            try await sessionRepository.getSession(id: sessionID, directory: directory)
+        }
     }
 
     func observeSessions(directory: String) -> AsyncStream<SessionListSnapshot> {
@@ -68,7 +73,16 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         let stale = Array(cache.values)
         cache.removeAll()
         viewedWatermarks.removeAll()
+        windows.removeAll()
+        ancestry.clear()
         stale.forEach { $0.finish() }
+    }
+
+    func loadMore(directory: String) async {
+        guard let reload = windows.beginLoadMore(directory: directory) else { return }
+        defer { windows.endLoadMore(directory: directory) }
+        // Off the main actor, like the loop's own loads: the reply decodes the whole window.
+        _ = try? await Task.detached { try await reload() }.value
     }
 
     func observeKnownSession(sessionId: String) -> AsyncStream<Session> {
@@ -92,6 +106,8 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         let capabilities = capabilities
         let viewedWatermarks = viewedWatermarks
         let loops = loops
+        let windows = windows
+        let ancestry = ancestry
         let observation = SharedLiveObservation<SessionListSnapshot> { yield in
             Task.detached {
                 await Self.runSessionLoop(
@@ -104,6 +120,8 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                     capabilities: capabilities,
                     viewedWatermarks: viewedWatermarks,
                     loops: loops,
+                    windows: windows,
+                    ancestry: ancestry,
                     yield: yield
                 )
             }
@@ -122,6 +140,8 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         capabilities: @escaping @Sendable () -> ServerCapabilities,
         viewedWatermarks: SessionViewedWatermarks,
         loops: SessionListLoopRegistry,
+        windows: SessionWindowRegistry,
+        ancestry: SessionAncestry,
         yield: @escaping @Sendable (SessionListSnapshot) -> Void
     ) async {
         activeDirectories.insert(directory)
@@ -136,26 +156,30 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         @Sendable func loadAndCommit() async throws {
             let generation = syncCoordinator.profileGeneration
             let outcome = await gate.refresh(
-                load: { () async -> [Session]? in
-                    await Self.loadSessions(
+                load: { () async -> LoadedSessionWindow? in
+                    // The current window size, in one request, for every refetch trigger.
+                    await Self.loadWindow(
                         directory: directory,
+                        limit: windows.limit(directory: directory),
                         sessionRepository: sessionRepository
                     )
                 },
                 commit: { loaded in
                     guard syncCoordinator.profileGeneration == generation else { return }
+                    ancestry.record(loaded.window.sessions + loaded.window.children)
+                    windows.committed(directory: directory, limit: loaded.limit, hasMore: loaded.window.hasMore)
                     // REST can race a `session.viewed`; the viewed watermark only moves forward.
-                    let sessions = viewedWatermarks.apply(to: loaded)
+                    let sessions = viewedWatermarks.apply(to: loaded.window.sessions)
                     await sessionCache.rememberSessions(worktree: directory, sessions: sessions)
                     // A view can land during the cache write; re-apply under the loop lock so the
                     // publish cannot overwrite it with the pre-await list.
                     loop.publish(
-                        SessionListSnapshot(sessions: sessions, isFromCache: false),
+                        SessionListSnapshot(sessions: sessions, isFromCache: false, hasMore: loaded.window.hasMore),
                         applying: viewedWatermarks
                     )
                     DiagnosticLog.info(
                         .session,
-                        "sessionLiveStore refresh directory=\(directory) count=\(sessions.count)"
+                        "sessionLiveStore refresh directory=\(directory) count=\(sessions.count) limit=\(loaded.limit) more=\(loaded.window.hasMore)"
                     )
                 }
             )
@@ -171,13 +195,16 @@ final class DefaultSessionLiveStore: SessionLiveStore {
 
         let registration = syncCoordinator.register(key: key, loader: loadAndCommit)
         syncCoordinator.visible(key, true)
+        let windowID = windows.attach(directory: directory, reload: loadAndCommit)
         defer {
+            windows.detach(directory: directory, id: windowID)
             syncCoordinator.visible(key, false)
             syncCoordinator.unregister(registration)
         }
 
         if let seeded = await sessionCache.seedSessions(worktree: directory) {
             ResumeTiming.shared.markCachePainted()
+            ancestry.record(seeded)
             loop.publish(SessionListSnapshot(sessions: seeded, isFromCache: true), applying: viewedWatermarks)
         }
         await syncCoordinator.ensureFresh(key)
@@ -214,11 +241,94 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         }
     }
 
-    private nonisolated static func loadSessions(
+    private nonisolated static func loadWindow(
         directory: String,
+        limit: Int,
         sessionRepository: any SessionRepository
-    ) async -> [Session]? {
-        try? await sessionRepository.listSessions(directory: directory)
+    ) async -> LoadedSessionWindow? {
+        guard let window = try? await sessionRepository.listRootSessionsWindow(directory: directory, limit: limit) else {
+            return nil
+        }
+        return LoadedSessionWindow(window: window, limit: limit)
+    }
+}
+
+/// One server window and the size it was asked for.
+nonisolated struct LoadedSessionWindow: Sendable {
+    let window: SessionWindow
+    let limit: Int
+}
+
+/// Window size and load more state of each directory a live session store lists. Sizes outlive
+/// an observation (Home leaving and coming back keeps its window) until the store clears.
+nonisolated final class SessionWindowRegistry: @unchecked Sendable {
+    typealias Reload = @Sendable () async throws -> Void
+
+    private struct Entry {
+        var limit = HomeSessionPaging.pageSize
+        /// Size of the last committed server load; nil before one.
+        var loadedLimit: Int?
+        var hasMore = false
+        var loadingMore = false
+        var reload: Reload?
+        var reloadID: UUID?
+    }
+
+    private let lock = NSLock()
+    private var entries: [String: Entry] = [:]
+
+    func limit(directory: String) -> Int {
+        lock.withLock { entries[directory]?.limit ?? HomeSessionPaging.pageSize }
+    }
+
+    func committed(directory: String, limit: Int, hasMore: Bool) {
+        lock.withLock {
+            var entry = entries[directory] ?? Entry()
+            entry.loadedLimit = limit
+            entry.hasMore = hasMore
+            entries[directory] = entry
+        }
+    }
+
+    func attach(directory: String, reload: @escaping Reload) -> UUID {
+        let id = UUID()
+        lock.withLock {
+            var entry = entries[directory] ?? Entry()
+            entry.reload = reload
+            entry.reloadID = id
+            entries[directory] = entry
+        }
+        return id
+    }
+
+    func detach(directory: String, id: UUID) {
+        lock.withLock {
+            guard entries[directory]?.reloadID == id else { return }
+            entries[directory]?.reload = nil
+            entries[directory]?.reloadID = nil
+        }
+    }
+
+    /// Grows the window one page past the last server load and returns its loader. Nil while a
+    /// load more runs, before the first server load, and when that load had nothing more.
+    func beginLoadMore(directory: String) -> Reload? {
+        lock.withLock {
+            guard var entry = entries[directory], let reload = entry.reload, let loaded = entry.loadedLimit,
+                  entry.hasMore, !entry.loadingMore
+            else { return nil }
+            entry.loadingMore = true
+            entry.limit = max(entry.limit, loaded + HomeSessionPaging.pageSize)
+            entries[directory] = entry
+            return reload
+        }
+    }
+
+    func endLoadMore(directory: String) {
+        lock.withLock { entries[directory]?.loadingMore = false }
+    }
+
+    func removeAll() {
+        lock.withLock { entries.removeAll() }
     }
 }
 
@@ -280,7 +390,8 @@ nonisolated final class SessionListLoopState: @unchecked Sendable {
             SessionListSnapshot(
                 sessions: $0.apply(to: snapshot.sessions),
                 isFromCache: snapshot.isFromCache,
-                loadFailed: snapshot.loadFailed
+                loadFailed: snapshot.loadFailed,
+                hasMore: snapshot.hasMore
             )
         } ?? snapshot
         latest = published
@@ -296,7 +407,8 @@ nonisolated final class SessionListLoopState: @unchecked Sendable {
         let failed = SessionListSnapshot(
             sessions: latest?.sessions ?? [],
             isFromCache: true,
-            loadFailed: true
+            loadFailed: true,
+            hasMore: latest?.hasMore ?? false
         )
         latest = failed
         yield(failed)
@@ -321,7 +433,7 @@ nonisolated final class SessionListLoopState: @unchecked Sendable {
         var sessions = current.sessions
         sessions[index] = patchedSession
         // The failure flag belongs to the publish that reported it, not to later patches.
-        let patched = SessionListSnapshot(sessions: sessions, isFromCache: current.isFromCache)
+        let patched = SessionListSnapshot(sessions: sessions, isFromCache: current.isFromCache, hasMore: current.hasMore)
         latest = patched
         yield(patched)
         onPublish(sessions)

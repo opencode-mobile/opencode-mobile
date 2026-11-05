@@ -133,7 +133,7 @@ struct SessionListProjectPickerRows: View {
     private func trailingContent(_ row: HomeProjectPickerRow) -> some View {
         switch row {
         case let .all(tab), let .worktree(tab):
-            countBadge(tab)
+            loadIndicator(tab)
         case let .project(tab, pill):
             HStack(spacing: 12) {
                 if let pill, let projectKey = row.tab?.id {
@@ -146,7 +146,7 @@ struct SessionListProjectPickerRows: View {
                     )
                     .accessibilityIdentifier("projectPickerWorktreesPill")
                 }
-                SessionListScopeCountBadge(count: tab.count, load: tab.load)
+                SessionListScopeLoadIndicator(load: tab.load)
             }
             .padding(.trailing, 16)
         case .note, .showAll:
@@ -154,8 +154,8 @@ struct SessionListProjectPickerRows: View {
         }
     }
 
-    private func countBadge(_ tab: SessionListFilterTab) -> some View {
-        SessionListScopeCountBadge(count: tab.count, load: tab.load)
+    private func loadIndicator(_ tab: SessionListFilterTab) -> some View {
+        SessionListScopeLoadIndicator(load: tab.load)
             .padding(.trailing, 16)
     }
 

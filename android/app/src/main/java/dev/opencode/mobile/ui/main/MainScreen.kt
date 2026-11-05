@@ -165,6 +165,8 @@ fun MainScreen(
     val worktreeCreateForm by viewModel.worktreeCreateForm.collectAsStateWithLifecycle()
     val worktreeServerCanCreate by viewModel.worktreeServerCanCreate.collectAsStateWithLifecycle()
     val archivedMenu by viewModel.archivedMenu.collectAsStateWithLifecycle()
+    val loadingMoreScopeId by viewModel.loadingMoreScopeId.collectAsStateWithLifecycle()
+    val moreSessionDirectories by viewModel.moreSessionDirectories.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
     }
@@ -181,6 +183,11 @@ fun MainScreen(
         pendingScopeRequest = pendingScopeRequest,
         onConsumePendingScopeRequest = viewModel::consumePendingScopeRequest,
         onRetryProjectLoad = viewModel::retryProjectLoad,
+        loadingMoreScopeId = loadingMoreScopeId,
+        onLoadMoreSessions = viewModel::loadMoreSessions,
+        canLoadMoreSessions = { scopeId, worktreesEnabled ->
+            viewModel.canLoadMoreSessions(moreSessionDirectories, scopeId, worktreesEnabled)
+        },
         serversChrome = serversChrome,
         sessionActionsCallbacks =
             HomeSessionActionsCallbacks(
@@ -319,6 +326,11 @@ internal fun MainScreen(
     pendingScopeRequest: HomeScopeRequest? = null,
     onConsumePendingScopeRequest: () -> Unit = {},
     onRetryProjectLoad: (String) -> Unit = {},
+    /** Scope whose older sessions are loading; its list shows a spinner at the end. */
+    loadingMoreScopeId: String? = null,
+    onLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Unit = { _, _ -> },
+    /** Whether a scope has older sessions to load; an empty scope keeps loading until it shows rows. */
+    canLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Boolean = { _, _ -> false },
     serversChrome: HomeServersChrome = HomeServersChrome(),
     onTitleClick: () -> Unit = {},
     onDismissServersSheet: () -> Unit = {},
@@ -641,6 +653,9 @@ internal fun MainScreen(
                         onConsumePendingScopeRequest = onConsumePendingScopeRequest,
                         selectedFilterId = selectedFilterId,
                         onSelectedFilterIdChange = { selectedFilterId = it },
+                        loadingMoreScopeId = loadingMoreScopeId,
+                        onLoadMoreSessions = onLoadMoreSessions,
+                        canLoadMoreSessions = canLoadMoreSessions,
                         selectedSessionId = selectedSessionId,
                         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
                         modifier = Modifier.fillMaxSize(),
@@ -1103,6 +1118,10 @@ private fun HomeProjectsContent(
     onConsumePendingScopeRequest: () -> Unit = {},
     selectedFilterId: String,
     onSelectedFilterIdChange: (String) -> Unit,
+    loadingMoreScopeId: String? = null,
+    onLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Unit = { _, _ -> },
+    /** Whether a scope has older sessions to load; an empty scope keeps loading until it shows rows. */
+    canLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Boolean = { _, _ -> false },
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
     worktreesEnabled: Boolean = true,
@@ -1149,7 +1168,6 @@ private fun HomeProjectsContent(
         val filterTabs =
             SessionListHomeChrome.filterTabs(
                 projects = chromeProjects,
-                sessionCount = sessions.size,
                 text = text,
                 worktreesEnabled = worktreesEnabled,
             )
@@ -1264,6 +1282,9 @@ private fun HomeProjectsContent(
             selectedSessionId = selectedSessionId,
             onRetryScopeLoad = onRetryProjectLoad,
             scopeTabs = worktreeTabs,
+            loadingMore = loadingMoreScopeId == resolvedFilterId,
+            canLoadMore = canLoadMoreSessions(resolvedFilterId, worktreesEnabled),
+            onNearEnd = { onLoadMoreSessions(resolvedFilterId, worktreesEnabled) },
             modifier = Modifier.fillMaxSize(),
             emptyContent =
                 if (sections.isEmpty()) {
@@ -1299,7 +1320,6 @@ private fun HomeProjectsContent(
                 rows =
                     SessionListHomeChrome.pickerRows(
                         projects = chromeProjects,
-                        sessionCount = sessions.size,
                         state = pickerState,
                         text = text,
                         worktreesEnabled = worktreesEnabled,
@@ -1453,14 +1473,17 @@ private data class HomeRowSource(
     }
 }
 
-/** Dock and picker projects: counts per project and per worktree, and unfinished first loads. */
+/**
+ * Dock and picker projects: which project and worktree lists sessions, running counts per
+ * worktree, and unfinished first loads. No session counts: Home lists a window (#981).
+ */
 internal fun homeChromeProjects(
     projects: List<HomeProject>,
     sessions: List<SessionListSession>,
     projectLoads: Map<String, ProjectFirstLoad> = emptyMap(),
 ): List<SessionListHomeChrome.Project> {
-    val counts = sessions.groupingBy { it.worktree }.eachCount()
-    val worktreeCounts = sessions.mapNotNull { it.worktreeScopeId }.groupingBy { it }.eachCount()
+    val projectsWithSessions = sessions.mapTo(HashSet()) { it.worktree }
+    val worktreesWithSessions = sessions.mapNotNullTo(HashSet()) { it.worktreeScopeId }
     val runningCounts =
         sessions
             .filter { it.status == SessionListStatus.Running || it.status == SessionListStatus.Retrying }
@@ -1473,7 +1496,7 @@ internal fun homeChromeProjects(
         SessionListHomeChrome.Project(
             worktree = project.primaryPath,
             title = project.displayName,
-            sessionCount = counts[project.key] ?: 0,
+            hasSessions = project.key in projectsWithSessions,
             load = loads.takeIf { all -> all.all { it != null } }?.firstOrNull()?.toScopeLoad(),
             id = project.key,
             worktrees =
@@ -1481,7 +1504,7 @@ internal fun homeChromeProjects(
                     val scopeId = HomeScope.worktreeId(project.key, worktree.directory)
                     SessionListHomeChrome.Worktree(
                         worktree = worktree,
-                        sessionCount = worktreeCounts[scopeId] ?: 0,
+                        hasSessions = scopeId in worktreesWithSessions,
                         runningCount = runningCounts[scopeId] ?: 0,
                         scopeId = scopeId,
                     )

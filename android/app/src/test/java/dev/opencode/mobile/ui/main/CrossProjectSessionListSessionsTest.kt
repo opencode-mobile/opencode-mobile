@@ -328,7 +328,7 @@ class CrossProjectSessionListSessionsTest {
     }
 
     @Test
-    fun chromeProjects_countProjectsWorktreesAndRunningSessions() {
+    fun chromeProjects_markProjectsAndWorktreesWithSessionsAndCountRunning() {
         val sections =
             listOf(
                 section(
@@ -346,14 +346,14 @@ class CrossProjectSessionListSessionsTest {
         assertEquals(SessionListStatus.Running, sessions.first { it.id == "wt" }.status)
         assertEquals("proj", chrome.id)
         assertEquals("/repo", chrome.worktree)
-        assertEquals(2, chrome.sessionCount)
+        assertTrue(chrome.hasSessions)
         assertEquals(listOf("/repo", "/repo-wt"), chrome.worktrees.map { it.directory })
-        assertEquals(listOf(1, 1), chrome.worktrees.map { it.sessionCount })
+        assertEquals(listOf(true, true), chrome.worktrees.map { it.hasSessions })
         assertEquals(listOf(0, 1), chrome.worktrees.map { it.runningCount })
     }
 
     @Test
-    fun projectCounts_followTheWinningWorktree() {
+    fun projectSessions_followTheWinningWorktree() {
         val sections =
             listOf(
                 section(
@@ -365,13 +365,13 @@ class CrossProjectSessionListSessionsTest {
                 section(worktree = "/empty-after-dedupe", session(id = "shared", title = "oldest", updatedAtEpochMs = 1L)),
             )
         val projects = HomeProjectGrouping.group(sections.map { it.worktree }, emptyMap())
-        val counts =
+        val hasSessions =
             homeChromeProjects(projects, sections.toCrossProjectSessionListSessions())
-                .associate { it.worktree to it.sessionCount }
+                .associate { it.worktree to it.hasSessions }
 
-        assertEquals(1, counts["/earlier"])
-        assertEquals(1, counts["/later"])
-        assertEquals(0, counts["/empty-after-dedupe"])
+        assertEquals(true, hasSessions["/earlier"])
+        assertEquals(true, hasSessions["/later"])
+        assertEquals(false, hasSessions["/empty-after-dedupe"])
     }
 
     private fun mergedProjects(branches: Map<String, String> = emptyMap()) =

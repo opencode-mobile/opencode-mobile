@@ -3,45 +3,30 @@ import Testing
 
 struct SessionListHomeChromeTests {
     @Test func filterTabs_zeroProjectsOmitsAllAndScopeControl() {
-        let tabs = SessionListHomeChrome.filterTabs(projects: [], sessions: [])
+        let tabs = SessionListHomeChrome.filterTabs(projects: [])
         #expect(tabs.isEmpty)
     }
 
     @Test func filterTabs_oneProjectShowsOnlyThatProject() {
-        let tabs = SessionListHomeChrome.filterTabs(projects: [mobile], sessions: [row("1", mobile.key), row("2", mobile.key)])
+        let tabs = SessionListHomeChrome.filterTabs(projects: [mobile])
         #expect(tabs.map(\.id) == ["path:/repo"])
         #expect(tabs.first?.title == "opencode-mobile")
         #expect(tabs.first?.subtitle == "/repo")
-        #expect(tabs.first?.count == 2)
     }
 
     @Test func filterTabs_twoProjectsPrependsAll() {
-        let tabs = SessionListHomeChrome.filterTabs(
-            projects: [mobile, playground],
-            sessions: [row("1", mobile.key), row("2", mobile.key), row("3", playground.key)]
-        )
+        let tabs = SessionListHomeChrome.filterTabs(projects: [mobile, playground])
         #expect(tabs.map(\.id) == [SessionListFilterTab.allId, "path:/repo", "path:/play"])
-        #expect(tabs.map(\.count) == [3, 2, 1])
         #expect(tabs.first?.title == "All")
         #expect(tabs.first?.pickerTitle == "All projects")
         #expect(tabs.first?.subtitle == "2 projects")
     }
 
     @Test func filterTabs_listsAllAndProjectsOnly() {
-        let main = "/src/repo"
-        let feature = "/src/repo-wt"
-        let tabs = SessionListHomeChrome.filterTabs(
-            projects: [repo, playground],
-            sessions: [
-                row("1", repo.key, directory: main, scope: HomeScope.worktreeID(projectKey: "prj", directory: main)),
-                row("2", repo.key, directory: feature, scope: HomeScope.worktreeID(projectKey: "prj", directory: feature)),
-                row("3", repo.key, directory: feature, scope: HomeScope.worktreeID(projectKey: "prj", directory: feature)),
-            ]
-        )
+        let tabs = SessionListHomeChrome.filterTabs(projects: [repo, playground])
 
         #expect(tabs.map(\.id) == [SessionListFilterTab.allId, "prj", "path:/play"])
         let project = tabs[1]
-        #expect(project.count == 3)
         #expect(project.title == "repo")
         #expect(project.subtitle == "All 2 worktrees")
         // The worktree pill carries the count; the row keeps the path.
@@ -50,17 +35,10 @@ struct SessionListHomeChromeTests {
         #expect(project.dockTitle == "repo")
     }
 
-    @Test func worktreeTabs_listEachWorktreeWithItsCount() {
+    @Test func worktreeTabs_listEachWorktree() {
         let main = "/src/repo"
         let feature = "/src/repo-wt"
-        let tabs = SessionListHomeChrome.worktreeTabs(
-            for: repo,
-            sessions: [
-                row("1", repo.key, directory: main, scope: HomeScope.worktreeID(projectKey: "prj", directory: main)),
-                row("2", repo.key, directory: feature, scope: HomeScope.worktreeID(projectKey: "prj", directory: feature)),
-                row("3", repo.key, directory: feature, scope: HomeScope.worktreeID(projectKey: "prj", directory: feature)),
-            ]
-        )
+        let tabs = SessionListHomeChrome.worktreeTabs(for: repo)
         #expect(tabs.map(\.id) == [
             HomeScope.worktreeID(projectKey: "prj", directory: main),
             HomeScope.worktreeID(projectKey: "prj", directory: feature),
@@ -69,20 +47,18 @@ struct SessionListHomeChromeTests {
         let mainTab = tabs[0]
         #expect(mainTab.isWorktree)
         #expect(mainTab.parentId == "prj")
-        #expect(mainTab.count == 1)
         #expect(mainTab.title == "repo")
         #expect(mainTab.subtitle == "main")
         #expect(mainTab.pickerTitle == "main")
         #expect(mainTab.pickerSubtitle == "main checkout")
 
         let featureTab = tabs[1]
-        #expect(featureTab.count == 2)
         #expect(featureTab.subtitle == "feature/x \u{00B7} repo-wt")
         #expect(featureTab.pickerTitle == "feature/x")
         #expect(featureTab.dockTitle == "repo")
         #expect(featureTab.pickerSubtitle == "repo-wt")
 
-        #expect(SessionListHomeChrome.worktreeTabs(for: playground, sessions: []).isEmpty)
+        #expect(SessionListHomeChrome.worktreeTabs(for: playground).isEmpty)
     }
 
     @Test func worktreeTabWithoutBranchReadsTheFolder() {
@@ -90,15 +66,15 @@ struct SessionListHomeChromeTests {
             addedPaths: ["/src/repo", "/src/repo-wt"],
             resolutions: ["/src/repo": resolution, "/src/repo-wt": resolution]
         )[0]
-        let tabs = SessionListHomeChrome.filterTabs(projects: [project], sessions: [])
+        let tabs = SessionListHomeChrome.filterTabs(projects: [project])
         #expect(tabs.map(\.subtitle) == ["All 2 worktrees"])
-        let worktrees = SessionListHomeChrome.worktreeTabs(for: project, sessions: [])
+        let worktrees = SessionListHomeChrome.worktreeTabs(for: project)
         #expect(worktrees.map(\.subtitle) == ["repo", "repo-wt"])
         #expect(worktrees.map(\.pickerTitle) == ["repo", "repo-wt"])
     }
 
     @Test func worktreesOff_projectTabReadsAsOneCheckout() {
-        let tabs = SessionListHomeChrome.filterTabs(projects: [repo, playground], sessions: [], worktreesEnabled: false)
+        let tabs = SessionListHomeChrome.filterTabs(projects: [repo, playground], worktreesEnabled: false)
         #expect(tabs.map(\.id) == [SessionListFilterTab.allId, "prj", "path:/play"])
         #expect(tabs[1].subtitle == "/src/repo")
         #expect(tabs[1].pickerSubtitle == "/src/repo")
@@ -106,14 +82,14 @@ struct SessionListHomeChromeTests {
 
     @Test func resolvedFilterId_keepsAWorktreeScopeWhileWorktreesAreOn() {
         let projects = [repo, playground]
-        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessions: [])
+        let tabs = SessionListHomeChrome.filterTabs(projects: projects)
         let scope = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-wt")
         #expect(SessionListHomeChrome.resolvedFilterId(selectedId: scope, tabs: tabs, projects: projects) == scope)
     }
 
     @Test func resolvedFilterId_mapsAWorktreeScopeToItsProjectWhileWorktreesAreOff() {
         let projects = [repo, playground]
-        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessions: [], worktreesEnabled: false)
+        let tabs = SessionListHomeChrome.filterTabs(projects: projects, worktreesEnabled: false)
         let scope = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-wt")
         #expect(
             SessionListHomeChrome.resolvedFilterId(selectedId: scope, tabs: tabs, projects: projects, worktreesEnabled: false)
@@ -125,40 +101,40 @@ struct SessionListHomeChromeTests {
 
     @Test func selectedScopeTab_describesAWorktreeScopeForTheDock() {
         let projects = [repo, playground]
-        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessions: [])
+        let tabs = SessionListHomeChrome.filterTabs(projects: projects)
         let scope = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-wt")
         let tab = SessionListHomeChrome.selectedScopeTab(
-            selectedId: scope, tabs: tabs, projects: projects, sessions: []
+            selectedId: scope, tabs: tabs, projects: projects
         )
         #expect(tab?.id == scope)
         #expect(tab?.dockTitle == "repo")
         #expect(tab?.subtitle == "feature/x \u{00B7} repo-wt")
         #expect(tab?.parentId == "prj")
         #expect(
-            SessionListHomeChrome.selectedScopeTab(selectedId: "prj", tabs: tabs, projects: projects, sessions: []) == nil
+            SessionListHomeChrome.selectedScopeTab(selectedId: "prj", tabs: tabs, projects: projects) == nil
         )
         #expect(
             SessionListHomeChrome.selectedScopeTab(
-                selectedId: scope, tabs: tabs, projects: projects, sessions: [], worktreesEnabled: false
+                selectedId: scope, tabs: tabs, projects: projects, worktreesEnabled: false
             ) == nil
         )
     }
 
     @Test func resolvedFilterId_fallsBackToSoleProjectWhenAllIsOmitted() {
-        let tabs = SessionListHomeChrome.filterTabs(projects: [mobile], sessions: [])
+        let tabs = SessionListHomeChrome.filterTabs(projects: [mobile])
         #expect(
             SessionListHomeChrome.resolvedFilterId(selectedId: SessionListFilterTab.allId, tabs: tabs) == "path:/repo"
         )
     }
 
     @Test func resolvedFilterId_keepsProjectWhenAllReappears() {
-        let tabs = SessionListHomeChrome.filterTabs(projects: [mobile, playground], sessions: [])
+        let tabs = SessionListHomeChrome.filterTabs(projects: [mobile, playground])
         #expect(SessionListHomeChrome.resolvedFilterId(selectedId: "path:/repo", tabs: tabs) == "path:/repo")
     }
 
     @Test func resolvedFilterId_mapsAnAddedPathToItsProject() {
         let projects = [repo, playground]
-        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessions: [])
+        let tabs = SessionListHomeChrome.filterTabs(projects: projects)
         #expect(
             SessionListHomeChrome.resolvedFilterId(selectedId: "/src/repo-wt", tabs: tabs, projects: projects) == "prj"
         )
@@ -168,7 +144,7 @@ struct SessionListHomeChromeTests {
     }
 
     @Test func resolvedFilterId_fallsBackToAllWhenTwoPlusAndSelectionMissing() {
-        let tabs = SessionListHomeChrome.filterTabs(projects: [mobile, playground], sessions: [])
+        let tabs = SessionListHomeChrome.filterTabs(projects: [mobile, playground])
         #expect(
             SessionListHomeChrome.resolvedFilterId(selectedId: "/gone", tabs: tabs, projects: [mobile, playground])
                 == SessionListFilterTab.allId
@@ -406,7 +382,7 @@ struct SessionListHomeChromeTests {
     }
 
     @Test func dockSwipe_walksAllAndProjectsOnly() {
-        let tabs = SessionListHomeChrome.filterTabs(projects: [repo, playground], sessions: []).map(\.id)
+        let tabs = SessionListHomeChrome.filterTabs(projects: [repo, playground]).map(\.id)
         #expect(tabs == [SessionListFilterTab.allId, "prj", "path:/play"])
         #expect(
             SessionListScopePaging.neighborID(selectedID: "prj", parentID: nil, tabIDs: tabs, direction: .next)
@@ -423,7 +399,7 @@ struct SessionListHomeChromeTests {
     }
 
     @Test func dockSwipe_fromAWorktreeScopeSitsInsideItsProject() {
-        let tabs = SessionListHomeChrome.filterTabs(projects: [repo, playground], sessions: []).map(\.id)
+        let tabs = SessionListHomeChrome.filterTabs(projects: [repo, playground]).map(\.id)
         let scope = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-wt")
         #expect(
             SessionListScopePaging.neighborID(selectedID: scope, parentID: "prj", tabIDs: tabs, direction: .previous)

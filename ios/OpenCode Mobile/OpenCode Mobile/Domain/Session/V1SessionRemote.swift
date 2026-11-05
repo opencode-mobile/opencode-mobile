@@ -21,6 +21,13 @@ struct V1SessionRemote: SessionRemote, Sendable {
         try await api.listSessions(directory: directory).map { adapter.session(from: $0) }
     }
 
+    /// `GET /session?roots=true&limit=`. Servers before those parameters list more, children too;
+    /// the reply is filtered again here and its children only seed the session ancestry.
+    func listRootSessionsWindow(directory: String, limit: Int) async throws -> SessionWindow {
+        let listed = try await api.listRootSessions(directory: directory, limit: limit).map { adapter.session(from: $0) }
+        return SessionWindow.fromReply(listed, limit: limit)
+    }
+
     /// `GET /session?search=&roots=true`. Servers before the search parameters list every
     /// session, so the reply is filtered again here.
     func searchSessions(query: String, directory: String?) async throws -> [Session] {

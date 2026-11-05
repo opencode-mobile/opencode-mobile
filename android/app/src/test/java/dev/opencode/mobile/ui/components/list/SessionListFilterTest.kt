@@ -62,7 +62,8 @@ class SessionListFilterTest {
         assertNull(worktree().worktreeFilterClear(broaderTabs = loading, visibleIsEmpty = true))
         assertNull(worktree().worktreeFilterClear(broaderTabs = broader(projectCount = 2, allCount = 2), visibleIsEmpty = false))
         assertNull(
-            SessionListFilterTab.project(worktree = "proj", title = "repo", count = 0)
+            SessionListFilterTab
+                .project(worktree = "proj", title = "repo")
                 .worktreeFilterClear(broaderTabs = broader(projectCount = 0, allCount = 2), visibleIsEmpty = true),
         )
     }
@@ -86,7 +87,6 @@ class SessionListFilterTest {
         SessionListFilterTab(
             id = "worktree:proj\u001F/repo-wt",
             title = "feature/x",
-            count = 0,
             parentId = "proj",
         )
 
@@ -96,8 +96,9 @@ class SessionListFilterTest {
         projectLoad: SessionListScopeLoad? = null,
     ): List<SessionListFilterTab> =
         listOf(
-            SessionListFilterTab.all(projectCount = 2, sessionCount = allCount),
-            SessionListFilterTab.project(worktree = "proj", title = "repo", count = projectCount, load = projectLoad)
+            SessionListFilterTab.all(projectCount = 2, hasSessions = allCount > 0),
+            SessionListFilterTab
+                .project(worktree = "proj", title = "repo", hasSessions = projectCount > 0, load = projectLoad)
                 .copy(id = "proj"),
         )
 }

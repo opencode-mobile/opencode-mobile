@@ -12,6 +12,13 @@ interface SessionLiveStore {
     suspend fun invalidate(directory: String?) {}
 
     /**
+     * Raises [directory]'s window by [HomeSessionPaging.PAGE_SIZE] and refetches it in one
+     * request; returns once that load settled. A no-op while a load-more for it runs or when
+     * its latest list has nothing more.
+     */
+    suspend fun loadMore(directory: String) {}
+
+    /**
      * Latest list copy of [sessionId] from any observed directory, or null when no
      * observed list carries it. Emits again when that session changes.
      */

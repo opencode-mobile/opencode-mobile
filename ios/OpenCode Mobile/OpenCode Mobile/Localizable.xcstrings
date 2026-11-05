@@ -9811,30 +9811,6 @@
         }
       }
     },
-    "session_list.dock.session_count" : {
-      "comment" : "Spoken after the project name in the dock.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld sessions"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld sessions"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "session_list.scope_load.failed_message" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13739,17 +13715,6 @@
         }
       }
     },
-    "worktrees.actions.subtitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ · %2$@"
-          }
-        }
-      }
-    },
     "worktrees.blocked.message" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13906,17 +13871,6 @@
         }
       }
     },
-    "worktrees.no_sessions" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "no sessions"
-          }
-        }
-      }
-    },
     "worktrees.none_in_project" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13995,25 +13949,13 @@
         }
       }
     },
-    "worktrees.remove.sessions" : {
+    "worktrees.remove.sessions_stay" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld session uses this worktree. It stays on Home but can’t run here again."
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld sessions use this worktree. They stay on Home but can’t run here again."
-                }
-              }
-            }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sessions that use this worktree stay on Home but can’t run here again."
           }
         }
       }
@@ -14069,29 +14011,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Removing…"
-          }
-        }
-      }
-    },
-    "worktrees.session_count" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld session"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld sessions"
-                }
-              }
-            }
           }
         }
       }
