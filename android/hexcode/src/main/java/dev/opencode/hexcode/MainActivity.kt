@@ -3,6 +3,7 @@ package dev.opencode.hexcode
 import android.app.Activity
 import android.graphics.Color.TRANSPARENT
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -38,6 +39,7 @@ import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.HexFirstRunEnvironment
 import dev.opencode.hexcode.app.HexPrefs
 import dev.opencode.hexcode.app.HexServices
+import dev.opencode.hexcode.designsystem.HexGallery
 import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.firstrun.BrowseScreen
 import dev.opencode.hexcode.firstrun.FirstRunFlow
@@ -123,7 +125,7 @@ class MainActivity : ComponentActivity() {
                         SystemBarIcons(darkScreen = true)
                         DictationScreen(services.voice, sampleFile = sample, onOpenLab = { tool = Tool.Lab })
                     }
-                    null -> prefs?.let { HexCodeRoot(services, it, pairLink, clips) }
+                    null -> prefs?.let { HexCodeRoot(services, lab, it, pairLink, clips) }
                 }
             }
         }
@@ -134,7 +136,8 @@ class MainActivity : ComponentActivity() {
 
 /**
  * What is on screen once first run is over: home at the root, Settings on top of it, and Settings' project (with
- * Browse folders) and model pages on top of Settings. [depth] orders them on that back stack.
+ * Browse folders) and model pages, and the Developer section's gallery and speech lab, on top of Settings. [depth]
+ * orders them on that back stack.
  */
 private enum class Page(
     val depth: Int,
@@ -144,12 +147,15 @@ private enum class Page(
     SettingsProject(2),
     SettingsBrowse(3),
     SettingsModel(2),
+    SettingsGallery(2),
+    SettingsSpeechLab(2),
 }
 
 /** First run until Start, then Home, with Settings and its project and model pages over it. */
 @Composable
 private fun HexCodeRoot(
     services: HexServices,
+    lab: SpeechLab,
     prefs: HexPrefs,
     pairLink: String?,
     clips: Boolean,
@@ -164,7 +170,7 @@ private fun HexCodeRoot(
             .background(HexTheme.colors.background),
     ) {
         if (prefs.firstRunDone) {
-            AfterFirstRun(services, prefs, clips)
+            AfterFirstRun(services, lab, prefs, clips)
         } else {
             val vm = viewModel { FirstRunViewModel(HexFirstRunEnvironment(services), listingCache = services.folderListings) }
             val state by vm.uiState.collectAsStateWithLifecycle()
@@ -184,6 +190,7 @@ private fun HexCodeRoot(
 @Composable
 private fun AfterFirstRun(
     services: HexServices,
+    lab: SpeechLab,
     prefs: HexPrefs,
     clips: Boolean,
 ) {
@@ -193,7 +200,18 @@ private fun AfterFirstRun(
     var visit by remember { mutableIntStateOf(0) }
     var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    SystemBarIcons(darkScreen = HexTheme.isDark)
+    // The gallery's own Light / Dark switch, which starts from the app's theme.
+    var galleryDark by remember { mutableStateOf(false) }
+    val appDark = HexTheme.isDark
+    SystemBarIcons(
+        darkScreen =
+            when (page) {
+                Page.SettingsGallery -> galleryDark
+                // The lab is dark in both themes.
+                Page.SettingsSpeechLab -> true
+                else -> appDark
+            },
+    )
     LaunchedEffect(Unit) { services.voice.prepare() }
     val server by produceState<ServerLabel?>(null, page) {
         value = services.serverLabel()?.let { it.copy(version = it.version ?: prefs.serverVersion) }
@@ -232,6 +250,7 @@ private fun AfterFirstRun(
             else -> page
         }
     val projectChanged = pageState.project?.let { stringResource(R.string.settings_project_changed, it.name) }
+    val developerOn = stringResource(R.string.settings_developer_on)
     LaunchedEffect(pageState.step) {
         if (pageState.step == FirstRunStep.Done && (page == Page.SettingsProject || page == Page.SettingsModel)) {
             if (page == Page.SettingsProject) notice = projectChanged
@@ -282,9 +301,22 @@ private fun AfterFirstRun(
                             val next = Appearance.entries[(prefs.appearance.ordinal + 1) % Appearance.entries.size]
                             scope.launch { services.settings.setAppearance(next) }
                         },
+                        onVersion = {
+                            val now = SystemClock.elapsedRealtime()
+                            scope.launch { if (services.developer.tapVersion(now)) notice = developerOn }
+                        },
+                        developerSettings = prefs.developerSettings,
+                        onGallery = {
+                            galleryDark = appDark
+                            page = Page.SettingsGallery
+                        },
+                        onSpeechLab = { page = Page.SettingsSpeechLab },
+                        onHideDeveloperSettings = { scope.launch { services.developer.hide() } },
                         onBack = { page = Page.Home },
                     )
                 Page.SettingsProject, Page.SettingsBrowse, Page.SettingsModel -> SettingsPage(pages, pageState, current)
+                Page.SettingsGallery -> HexGallery(galleryDark, { galleryDark = it }, onBack = { page = Page.Settings })
+                Page.SettingsSpeechLab -> LabScreen(services.voice, lab, onBack = { page = Page.Settings })
             }
         }
     }

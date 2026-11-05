@@ -1,3 +1,7 @@
+import com.android.build.api.variant.BuildConfigField
+import java.io.ByteArrayOutputStream
+import javax.inject.Inject
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -36,6 +40,41 @@ android {
 
 kotlin {
     jvmToolchain(17)
+}
+
+/** The checkout's short commit for Settings › Developer › Build, or nothing when git or the checkout is missing. */
+abstract class GitCommit : ValueSource<String, GitCommit.Params> {
+    interface Params : ValueSourceParameters {
+        val dir: Property<String>
+    }
+
+    @get:Inject
+    abstract val exec: ExecOperations
+
+    override fun obtain(): String? =
+        runCatching {
+            val out = ByteArrayOutputStream()
+            val result =
+                exec.exec {
+                    commandLine("git", "-C", parameters.dir.get(), "rev-parse", "--short", "HEAD")
+                    standardOutput = out
+                    errorOutput = ByteArrayOutputStream()
+                    isIgnoreExitValue = true
+                }
+            out.toString().trim().takeIf { result.exitValue == 0 && it.isNotEmpty() }
+        }.getOrNull()
+}
+
+val gitCommit = providers.of(GitCommit::class) { parameters.dir.set(rootDir.path) }.orElse("")
+
+// Set lazily, so a new commit doesn't invalidate the configuration cache; only BuildConfig regenerates.
+androidComponents {
+    onVariants { variant ->
+        variant.buildConfigFields?.put(
+            "GIT_COMMIT",
+            gitCommit.map { BuildConfigField("String", "\"$it\"", "Short git commit, empty when unknown") },
+        )
+    }
 }
 
 dependencies {

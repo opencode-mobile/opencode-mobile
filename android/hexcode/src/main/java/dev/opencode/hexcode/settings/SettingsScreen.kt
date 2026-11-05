@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.HexPrefs
@@ -33,7 +34,8 @@ import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 
 /**
  * Settings, the prototype's plain list. Project, Model, Reasoning and Appearance work; Start a new session, Server
- * and the three dictation rows are placeholders for now.
+ * and the three dictation rows are placeholders for now. Tapping Version 10 times unlocks the Developer section
+ * ([developerSettings]), for whoever builds and tests the app.
  */
 @Composable
 fun SettingsScreen(
@@ -46,6 +48,11 @@ fun SettingsScreen(
     onProject: () -> Unit,
     onModel: () -> Unit,
     onAppearance: () -> Unit,
+    onVersion: () -> Unit,
+    developerSettings: Boolean,
+    onGallery: () -> Unit,
+    onSpeechLab: () -> Unit,
+    onHideDeveloperSettings: () -> Unit,
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -111,6 +118,13 @@ fun SettingsScreen(
                     server?.let { serverDetails(it) },
                     placeholder,
                 )
+                HexRow(
+                    title = stringResource(R.string.settings_version),
+                    icon = HexIcons.info,
+                    value = "${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE})",
+                    onClick = onVersion,
+                )
+                if (developerSettings) DeveloperSection(onGallery, onSpeechLab, onHideDeveloperSettings)
             }
         }
         val changed = remember(notice) { notice?.let { NoticeMessage(it) } }
@@ -123,6 +137,40 @@ fun SettingsScreen(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
         )
     }
+}
+
+/** Settings › Developer, after App once unlocked. */
+@Composable
+private fun DeveloperSection(
+    onGallery: () -> Unit,
+    onSpeechLab: () -> Unit,
+    onHide: () -> Unit,
+) {
+    HexSectionLabel(DeveloperCopy.SECTION)
+    Row(HexIcons.card, DeveloperCopy.GALLERY, null, DeveloperCopy.GALLERY_SUBTITLE, onGallery)
+    Row(HexIcons.bars, DeveloperCopy.SPEECH_LAB, null, DeveloperCopy.SPEECH_LAB_SUBTITLE, onSpeechLab)
+    HexRow(
+        title = DeveloperCopy.BUILD,
+        icon = HexIcons.term,
+        subtitle =
+            listOfNotNull(
+                BuildConfig.VERSION_NAME,
+                BuildConfig.BUILD_TYPE,
+                BuildConfig.GIT_COMMIT.ifEmpty { null },
+            ).joinToString(" · "),
+    )
+    HexRow(title = DeveloperCopy.HIDE, icon = HexIcons.eye, onClick = onHide)
+}
+
+/** Settings › Developer is for whoever builds and tests the app: English only, not in the string resources. */
+private object DeveloperCopy {
+    const val SECTION = "Developer"
+    const val GALLERY = "Component gallery"
+    const val GALLERY_SUBTITLE = "Every Hex component in each of its states"
+    const val SPEECH_LAB = "Speech lab"
+    const val SPEECH_LAB_SUBTITLE = "Download, test and compare speech models"
+    const val BUILD = "Build"
+    const val HIDE = "Hide developer settings"
 }
 
 /** A settings row: what it is, its current value on the right, and a chevron. */

@@ -28,6 +28,8 @@ data class HexPrefs(
     /** The paired computer's home folder and OpenCode version, as pairing found them. */
     val serverHome: String? = null,
     val serverVersion: String? = null,
+    /** Settings › Developer is shown: the Version row was tapped 10 times. */
+    val developerSettings: Boolean = false,
 )
 
 private val Context.hexDataStore: DataStore<Preferences> by preferencesDataStore(name = "hexcode")
@@ -35,7 +37,7 @@ private val Context.hexDataStore: DataStore<Preferences> by preferencesDataStore
 class HexSettings(
     context: Context,
     private val json: Json,
-) {
+) : DeveloperSettingsStore {
     private val store = context.applicationContext.hexDataStore
 
     val prefs: Flow<HexPrefs> =
@@ -48,8 +50,11 @@ class HexSettings(
                 modelName = p[MODEL_NAME],
                 serverHome = p[SERVER_HOME],
                 serverVersion = p[SERVER_VERSION],
+                developerSettings = p[DEVELOPER_SETTINGS] ?: false,
             )
         }
+
+    override val developerSettings: Flow<Boolean> = prefs.map { it.developerSettings }
 
     suspend fun current(): HexPrefs = prefs.first()
 
@@ -93,6 +98,10 @@ class HexSettings(
         store.edit { it[APPEARANCE] = appearance.name }
     }
 
+    override suspend fun setDeveloperSettings(on: Boolean) {
+        store.edit { if (on) it[DEVELOPER_SETTINGS] = true else it.remove(DEVELOPER_SETTINGS) }
+    }
+
     private companion object {
         val PROJECT = stringPreferencesKey("project")
         val MODEL = stringPreferencesKey("model")
@@ -101,5 +110,6 @@ class HexSettings(
         val MODEL_NAME = stringPreferencesKey("model_name")
         val SERVER_HOME = stringPreferencesKey("server_home")
         val SERVER_VERSION = stringPreferencesKey("server_version")
+        val DEVELOPER_SETTINGS = booleanPreferencesKey("developer_settings")
     }
 }

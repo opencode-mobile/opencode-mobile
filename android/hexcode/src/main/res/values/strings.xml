@@ -165,6 +165,8 @@
     <string name="settings_server">Server</string>
     <string name="settings_server_details">%1$s · OpenCode %2$s</string>
     <string name="settings_server_version">OpenCode %1$s</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_developer_on">Developer settings on</string>
     <string name="settings_soon">Not in this version yet</string>
     <string name="settings_project_title">Change project</string>
     <string name="settings_project_note">The next session starts there.</string>
