@@ -10,8 +10,8 @@ const SHARED_DIR = join(REPO_ROOT, "shared/theme-presets");
 const SHARED_SYNTAX_DIR = join(REPO_ROOT, "shared/syntax-presets");
 const IOS_DIR = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Resources/ThemePresets");
 const IOS_SYNTAX_DIR = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Resources/SyntaxPresets");
-const ANDROID_DIR = join(REPO_ROOT, "android/opencode-kit/src/main/assets/theme-presets");
-const ANDROID_SYNTAX_DIR = join(REPO_ROOT, "android/opencode-kit/src/main/assets/syntax-presets");
+const ANDROID_DIR = join(REPO_ROOT, "android/app/src/main/assets/theme-presets");
+const ANDROID_SYNTAX_DIR = join(REPO_ROOT, "android/app/src/main/assets/syntax-presets");
 const IOS_FALLBACK = join(
   REPO_ROOT,
   "ios/OpenCode Mobile/OpenCode Mobile/Assets.xcassets/ThemeJson.dataset",

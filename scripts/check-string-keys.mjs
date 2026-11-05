@@ -3,7 +3,6 @@
 //
 // Sources:
 //   Android  android/app/src/main/res/values/strings.xml   (<string> and <plurals> names)
-//            android/opencode-kit/src/main/res/values/strings.xml   (the shared theme and components)
 //   iOS      ios/OpenCode Mobile/OpenCode Mobile/Localizable.xcstrings   (catalog keys)
 //
 // Key rule:
@@ -29,7 +28,7 @@
 //   iOS      ios/OpenCode Mobile/Hex Code/**/*.swift   (LocalizedStringResource("key", defaultValue: …) and
 //            String(localized: "key", defaultValue: …); Hex Code keeps its text in code)
 //            ios/OpenCode Mobile/Hex Code/Localizable.xcstrings
-//   Kit keys from the OpenCode Mobile catalog are left to that pair, unless Hex Code Android uses them too.
+//   Hex Code has its own UI and strings; it shares none with OpenCode Mobile.
 //   `--strict-hexcode` makes a Hex Code mismatch fail too.
 //
 // Usage: node scripts/check-string-keys.mjs [--strict-hexcode]
@@ -39,10 +38,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ANDROID_STRINGS = [
-  join(REPO_ROOT, "android/app/src/main/res/values/strings.xml"),
-  join(REPO_ROOT, "android/opencode-kit/src/main/res/values/strings.xml"),
-];
+const ANDROID_STRINGS = [join(REPO_ROOT, "android/app/src/main/res/values/strings.xml")];
 const IOS_CATALOG = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Localizable.xcstrings");
 const HEX_ANDROID_STRINGS = [join(REPO_ROOT, "android/hexcode/src/main/res/values/strings.xml")];
 const HEX_IOS_SOURCES = join(REPO_ROOT, "ios/OpenCode Mobile/Hex Code");
@@ -205,12 +201,6 @@ function checkHexCode(strict) {
   if (existsSync(HEX_IOS_CATALOG)) {
     for (const [key, entry] of readIos(HEX_IOS_CATALOG)) if (!ios.has(key)) ios.set(key, entry);
   }
-  // The shared kit's keys belong to the OpenCode Mobile pair, unless Hex Code Android uses the same one.
-  const shared = readIos();
-  for (const key of shared.keys()) {
-    if (!android.has(key.replaceAll(".", "_"))) ios.delete(key);
-  }
-
   const problems = [];
   for (const name of android.keys()) {
     if (HEX_ANDROID_ONLY.has(name)) continue;

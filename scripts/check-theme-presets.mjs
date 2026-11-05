@@ -9,7 +9,7 @@ import { REPO_ROOT } from "./lib/utils.mjs";
 
 const SHARED_DIR = join(REPO_ROOT, "shared/theme-presets");
 const IOS_DIR = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Resources/ThemePresets");
-const ANDROID_DIR = join(REPO_ROOT, "android/opencode-kit/src/main/assets/theme-presets");
+const ANDROID_DIR = join(REPO_ROOT, "android/app/src/main/assets/theme-presets");
 
 function sha256(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
@@ -36,23 +36,6 @@ function checkRaisedContrast(id, theme) {
       console.error(
         `Theme preset "${id}" ${mode} sets background-base and surface-raised-base to ${background}. Assistant cards have no hairline and need a luminance edge.`,
       );
-      process.exit(1);
-    }
-  }
-}
-
-/** App ids a manifest entry may name in `apps`. Without `apps`, a preset is offered in every app. */
-const APP_IDS = new Set(["opencode-mobile", "hexcode"]);
-
-function checkApps(entry) {
-  if (entry.apps === undefined) return;
-  if (!Array.isArray(entry.apps) || entry.apps.length === 0) {
-    console.error(`Theme preset "${entry.id}": "apps" must be a non-empty list of app ids`);
-    process.exit(1);
-  }
-  for (const app of entry.apps) {
-    if (!APP_IDS.has(app)) {
-      console.error(`Theme preset "${entry.id}": unknown app "${app}" in "apps" (known: ${[...APP_IDS].join(", ")})`);
       process.exit(1);
     }
   }
@@ -93,7 +76,6 @@ function main() {
       console.error("Manifest entry is missing id");
       process.exit(1);
     }
-    checkApps(entry);
     const sharedFile = join(SHARED_DIR, `${id}.json`);
     const iosFile = join(IOS_DIR, `${id}.json`);
     const androidFile = join(ANDROID_DIR, `${id}.json`);
@@ -133,7 +115,7 @@ function main() {
 function checkSyntaxPresets() {
   const sharedDir = join(REPO_ROOT, "shared/syntax-presets");
   const iosDir = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Resources/SyntaxPresets");
-  const androidDir = join(REPO_ROOT, "android/opencode-kit/src/main/assets/syntax-presets");
+  const androidDir = join(REPO_ROOT, "android/app/src/main/assets/syntax-presets");
   const manifestPath = join(sharedDir, "syntax-manifest.json");
   requireFile(manifestPath, "shared syntax manifest");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));

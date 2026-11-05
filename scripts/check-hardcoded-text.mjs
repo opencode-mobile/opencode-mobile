@@ -4,12 +4,9 @@
 //
 // Scanned:
 //   Android  android/app/src/main/java/dev/opencode/mobile/ui/**/*.kt
-//            android/opencode-kit/src/main/java/dev/opencode/mobile/ui/**/*.kt
 //            (feature UI and the design-system components in ui/components)
 //   iOS      ios/OpenCode Mobile/OpenCode Mobile/UI/**/*.swift
 //            ios/OpenCode Mobile/OpenCode Mobile/Components/**/*.swift
-//            ios/OpenCodeKit/Sources/OpenCodeKit/Components/**/*.swift
-//            ios/OpenCodeKit/Sources/OpenCodeKit/UI/**/*.swift
 // Skipped: the component gallery, developer tools (playground, highlighting
 // lab, diagnostics overlay, snapshot hosts), @Preview / #Preview blocks,
 // top-level preview and gallery sample declarations (a name containing
@@ -47,7 +44,7 @@ const TEXT_PARAMS =
 const PLATFORMS = [
   {
     name: "Android",
-    roots: ["android/app/src/main/java/dev/opencode/mobile/ui", "android/opencode-kit/src/main/java/dev/opencode/mobile/ui"],
+    roots: ["android/app/src/main/java/dev/opencode/mobile/ui"],
     extension: ".kt",
     skipDirs: ["componentgallery", "playground", "snapshot", "icons", "diagnostic"],
     preview: /^\s*@Preview\b/,
@@ -64,12 +61,7 @@ const PLATFORMS = [
   },
   {
     name: "iOS",
-    roots: [
-      "ios/OpenCode Mobile/OpenCode Mobile/UI",
-      "ios/OpenCode Mobile/OpenCode Mobile/Components",
-      "ios/OpenCodeKit/Sources/OpenCodeKit/Components",
-      "ios/OpenCodeKit/Sources/OpenCodeKit/UI",
-    ],
+    roots: ["ios/OpenCode Mobile/OpenCode Mobile/UI", "ios/OpenCode Mobile/OpenCode Mobile/Components"],
     extension: ".swift",
     skipDirs: ["Playground", "HighlightLab", "Diagnostic"],
     preview: /^\s*#Preview\b/,

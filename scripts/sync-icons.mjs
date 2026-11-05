@@ -12,14 +12,14 @@ const svgPackageRoot = dirname(require.resolve("lucide-static/package.json"));
 const CACHE_DIR = join(REPO_ROOT, "icons/cache/lucide");
 const ANDROID_OUTPUT = join(
   REPO_ROOT,
-  "android/opencode-kit/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt",
+  "android/app/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt",
 );
 const IOS_XCASSETS = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/LucideIcons.xcassets");
 const LEGACY_IOS_XCASSETS = join(
   REPO_ROOT,
   "ios/OpenCode Mobile/OpenCode Mobile/MaterialIcons.xcassets",
 );
-const IOS_ENUM_OUTPUT = join(REPO_ROOT, "ios/OpenCodeKit/Sources/OpenCodeKit/Icons/OpenCodeIcon.swift");
+const IOS_ENUM_OUTPUT = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Icons/OpenCodeIcon.swift");
 const MANIFEST_HASH_FILE = join(REPO_ROOT, "icons/.manifest-hash");
 
 function copyIconsToCache(icons) {
