@@ -54,6 +54,19 @@ struct HexTopBar<Trailing: View>: View {
         self.trailing = trailing()
     }
 
+    /// A page whose title is not translated, such as the English-only developer pages.
+    init(
+        verbatim title: String,
+        subtitle: String? = nil,
+        dot: HexDot.Tone = .green,
+        onBack: (() -> Void)?,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.title = .page(title: Text(verbatim: title), subtitle: subtitle, dot: dot)
+        self.onBack = onBack
+        self.trailing = trailing()
+    }
+
     var body: some View {
         switch title {
         case let .state(state):
@@ -152,5 +165,9 @@ struct HexTopBar<Trailing: View>: View {
 extension HexTopBar where Trailing == EmptyView {
     init(_ title: LocalizedStringResource, subtitle: String? = nil, dot: HexDot.Tone = .green, onBack: (() -> Void)?) {
         self.init(title, subtitle: subtitle, dot: dot, onBack: onBack) { EmptyView() }
+    }
+
+    init(verbatim title: String, subtitle: String? = nil, dot: HexDot.Tone = .green, onBack: (() -> Void)?) {
+        self.init(verbatim: title, subtitle: subtitle, dot: dot, onBack: onBack) { EmptyView() }
     }
 }

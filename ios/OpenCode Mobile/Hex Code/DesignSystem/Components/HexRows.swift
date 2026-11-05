@@ -27,8 +27,31 @@ struct HexRow: View {
         trailing: HexRowTrailing = .chevron,
         action: @escaping () -> Void
     ) {
+        self.init(icon: icon, text: Text(title), subtitle: subtitle, value: value, trailing: trailing, action: action)
+    }
+
+    /// Text that is not translated, such as Settings' English-only Developer section.
+    init(
+        icon: HexIcon? = nil,
+        verbatim title: String,
+        subtitle: String? = nil,
+        value: String? = nil,
+        trailing: HexRowTrailing = .chevron,
+        action: @escaping () -> Void
+    ) {
+        self.init(icon: icon, text: Text(verbatim: title), subtitle: subtitle, value: value, trailing: trailing, action: action)
+    }
+
+    init(
+        icon: HexIcon? = nil,
+        text title: Text,
+        subtitle: String? = nil,
+        value: String? = nil,
+        trailing: HexRowTrailing = .chevron,
+        action: @escaping () -> Void
+    ) {
         self.icon = icon
-        self.title = Text(title)
+        self.title = title
         self.subtitle = subtitle
         self.value = value
         self.trailing = trailing
