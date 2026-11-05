@@ -76,6 +76,8 @@ val HexComponentSamples: List<HexSampleSection> =
         HexSampleSection("HexMeter") { MeterSample() },
         HexSampleSection("HexChunk") { ChunkSample() },
         HexSampleSection("HexChunkRow") { ChunkRowSample() },
+        HexSampleSection("HexToast, HexToastHost") { ToastSample() },
+        HexSampleSection("HexProgress") { ProgressSample() },
     )
 
 /** A section's heading, in the gallery and the previews: component names, so not upper-cased like HexSectionLabel. */
@@ -653,6 +655,67 @@ private fun ChunkRowSample() {
             HexChunkRow(3, "then run the whole suite", "0:02", HexChunkRowState.Dim, onClick = {})
             HexChunkRow(4, "and tell me what broke", "0:03", HexChunkRowState.Past, onClick = {})
             HexChunkRow(5, "Not tappable", "0:01", HexChunkRowState.Normal, onClick = null)
+        }
+    }
+}
+
+@Composable
+private fun ToastSample() {
+    Edge {
+        StateSample("tones: stop, info, steer, sun, undo") {
+            HexToast("Stopped", HexToastTone.Stop, detail = "Queued prompts stay parked. Talk to start again.")
+            HexToast("Not in this version yet", HexToastTone.Info, detail = "This setting is a placeholder for now.")
+            HexToast("Build copied", HexToastTone.Steer)
+            HexToast("New day, new session", HexToastTone.Sun, detail = "Yesterday’s is kept on your computer.")
+            HexToast("Take dropped", HexToastTone.Undo, detail = "Earlier parts of the draft are kept.")
+        }
+        StateSample("with an action, a long detail on one line") {
+            HexToast(
+                "Chunk deleted",
+                HexToastTone.Undo,
+                detail = "“and keep the current error wording for the login screen”",
+                actionLabel = "Undo",
+                actionIcon = HexIcons.undo,
+            )
+        }
+        StateSample("HexToastHost: shown for its time, then gone (tap Show)") { ToastHostSample() }
+    }
+}
+
+@Composable
+private fun ToastHostSample() {
+    var message by remember { mutableStateOf<HexToastMessage?>(null) }
+    val shape = RoundedCornerShape(HexTheme.radius.l)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(120.dp)
+            .clip(shape)
+            .border(1.dp, HexTheme.colors.line, shape),
+    ) {
+        HexButton(
+            onClick = {
+                message =
+                    HexToastMessage("New day, new session", HexToastTone.Sun, "Yesterday’s is kept on your computer.", durationMs = 3_600)
+            },
+            text = "Show",
+            modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
+        )
+        HexToastHost(message, onDismissed = { message = null }, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
+@Composable
+private fun ProgressSample() {
+    Edge {
+        StateSample("none done, two of four, all done") {
+            HexProgress(listOf(false, false, false, false), "0/4 · details ›", onClick = {})
+            HexProgress(listOf(true, true, false, false), "2/4 · details ›", onClick = {})
+            HexProgress(listOf(true, true, true, true), "4/4 · details ›", onClick = {})
+        }
+        StateSample("one step, eight steps (the most)") {
+            HexProgress(listOf(false), "0/1 · details ›", onClick = {})
+            HexProgress(listOf(true, true, true, true, true, false, false, false), "5/8 · details ›", onClick = {})
         }
     }
 }
