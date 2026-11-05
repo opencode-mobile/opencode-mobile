@@ -71,7 +71,6 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.resolve
-import dev.opencode.kit.R as KitR
 
 /** Add project actions; each maps to one Screen Model action. */
 data class AddProjectSheetCallbacks(
@@ -224,7 +223,7 @@ private fun SuggestionFrame(
                 OpenCodeEmptyState(
                     title = stringResource(R.string.add_project_list_error_title),
                     message = (sheet.listError ?: AddProjectSheetUi.LIST_ERROR_MESSAGE).resolve(),
-                    primaryAction = OpenCodeEmptyStateAction(title = stringResource(KitR.string.common_retry), onClick = callbacks.onRetry),
+                    primaryAction = OpenCodeEmptyStateAction(title = stringResource(R.string.common_retry), onClick = callbacks.onRetry),
                     modifier = Modifier.align(Alignment.TopCenter).padding(20.dp),
                 )
             showsEmptySuggestions ->
@@ -431,7 +430,7 @@ private fun AddProjectFolderList(
                 OpenCodeEmptyState(
                     title = stringResource(R.string.add_project_list_error_title),
                     message = sheet.listError.resolve(),
-                    primaryAction = OpenCodeEmptyStateAction(title = stringResource(KitR.string.common_retry), onClick = callbacks.onRetry),
+                    primaryAction = OpenCodeEmptyStateAction(title = stringResource(R.string.common_retry), onClick = callbacks.onRetry),
                     modifier = Modifier.padding(OpenCodeLayout.ScreenGutter),
                 )
             }

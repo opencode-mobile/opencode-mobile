@@ -71,7 +71,6 @@ import java.io.File
 import java.text.DateFormat
 import java.util.Date
 import javax.inject.Inject
-import dev.opencode.kit.R as KitR
 
 private const val EXPORT_FILE_NAME = DiagnosticLogAttachment.FILENAME
 private const val EXPORT_MIME_TYPE = DiagnosticLogAttachment.MIME
@@ -448,7 +447,7 @@ fun DiagnosticLogsScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(KitR.string.common_cancel),
+                title = stringResource(R.string.common_cancel),
                 onClick = { showClearConfirmation = false },
             ),
         onDismissRequest = { showClearConfirmation = false },

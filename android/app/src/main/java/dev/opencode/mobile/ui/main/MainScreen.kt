@@ -115,7 +115,6 @@ import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import dev.opencode.mobile.ui.worktree.WorktreeCreateTags
 import dev.opencode.mobile.ui.worktree.worktreeCreateBackAction
 import dev.opencode.mobile.ui.worktrees.WorktreesTags
-import dev.opencode.kit.R as KitR
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
 data class HomeSessionActionsCallbacks(
@@ -758,7 +757,7 @@ internal fun MainScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(KitR.string.common_cancel),
+                title = stringResource(R.string.common_cancel),
                 onClick = onDismissProjectRemoval,
             ),
         onDismissRequest = onDismissProjectRemoval,
@@ -985,7 +984,7 @@ private fun HomeSessionActions(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(KitR.string.common_cancel),
+                title = stringResource(R.string.common_cancel),
                 enabled = !state.renameSubmitting,
                 onClick = callbacks.onCancelRename,
             ),
@@ -1015,7 +1014,7 @@ private fun HomeSessionActions(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(KitR.string.common_cancel),
+                title = stringResource(R.string.common_cancel),
                 enabled = !state.forkSubmitting,
                 onClick = callbacks.onCancelFork,
             ),
@@ -1056,7 +1055,7 @@ private fun HomeSessionActions(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(KitR.string.common_cancel),
+                title = stringResource(R.string.common_cancel),
                 enabled = !state.lifecycleInFlight,
                 onClick = callbacks.onDismissDeleteConfirm,
             ),
@@ -1074,7 +1073,7 @@ private fun ProbeFailedContent(
     OpenCodeEmptyState(
         title = stringResource(R.string.home_probe_failed_title),
         message = message.resolve().ifBlank { stringResource(R.string.home_probe_failed_message) },
-        primaryAction = OpenCodeEmptyStateAction(title = stringResource(KitR.string.common_retry), onClick = onRetry),
+        primaryAction = OpenCodeEmptyStateAction(title = stringResource(R.string.common_retry), onClick = onRetry),
         secondaryAction =
             OpenCodeEmptyStateAction(title = stringResource(R.string.home_probe_failed_edit_connection), onClick = onEditConnection),
         modifier = modifier,

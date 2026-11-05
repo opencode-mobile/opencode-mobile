@@ -59,7 +59,6 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import dev.opencode.kit.R as KitR
 
 private const val MAX_ZOOM = 5f
 private const val DOUBLE_TAP_ZOOM = 2.5f
@@ -169,7 +168,7 @@ private fun ViewerChrome(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-            Icon(OpenCodeIcons.Close, contentDescription = stringResource(KitR.string.component_close), tint = Color.White)
+            Icon(OpenCodeIcons.Close, contentDescription = stringResource(R.string.component_close), tint = Color.White)
         }
         Column(
             modifier = Modifier.weight(1f),

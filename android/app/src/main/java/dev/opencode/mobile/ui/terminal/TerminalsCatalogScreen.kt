@@ -51,7 +51,6 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import dev.opencode.kit.R as KitR
 
 @Composable
 fun TerminalsCatalogScreen(
@@ -240,7 +239,7 @@ private fun CatalogColumn(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(KitR.string.common_cancel),
+                title = stringResource(R.string.common_cancel),
                 onClick = viewModel::dismissClose,
             ),
         onDismissRequest = viewModel::dismissClose,

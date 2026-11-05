@@ -2,12 +2,11 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ktlint)
 }
 
-// OpenCode Kit: the plumbing OpenCode Mobile (:app) and Hex Code (:hexcode) share. Code moved here from :app keeps its
-// `dev.opencode.mobile.*` packages, so :app reads it as before.
+// OpenCode Kit: the data and domain code OpenCode Mobile (:app) and Hex Code (:hexcode) share. No UI lives here; each
+// app has its own UI kit. Code moved here from :app keeps its `dev.opencode.mobile.*` packages, so :app reads it as before.
 android {
     namespace = "dev.opencode.kit"
     compileSdk = 37
@@ -24,7 +23,6 @@ android {
     }
 
     buildFeatures {
-        compose = true
         // BuildConfig.DEBUG gates logcat output and the Ktor Logging plugin (#755).
         buildConfig = true
     }
@@ -36,14 +34,6 @@ android {
 
 kotlin {
     jvmToolchain(17)
-}
-
-ktlint {
-    android.set(true)
-    ignoreFailures.set(false)
-    filter {
-        exclude("**/OpenCodeIcons.kt")
-    }
 }
 
 dependencies {
@@ -63,20 +53,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
 
-    // Theme and components, and the pairing QR camera preview and decoder.
-    val composeBom = platform(libs.androidx.compose.bom)
-    api(composeBom)
-    api(libs.androidx.compose.ui)
-    api(libs.androidx.compose.material3)
-    // Code colours follow the Markdown highlighter's token roles.
-    implementation(project(":markdown-core"))
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    debugImplementation(libs.androidx.compose.ui.tooling)
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.camera.camera2)
-    implementation(libs.androidx.camera.lifecycle)
-    implementation(libs.androidx.camera.view)
+    // Decodes pairing QR codes from camera frames; each app draws its own camera preview.
     implementation(libs.zxing.core)
 
     testImplementation(libs.junit)

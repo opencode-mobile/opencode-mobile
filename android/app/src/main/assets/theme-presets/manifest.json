@@ -1,0 +1,27 @@
+[
+  {
+    "id": "porcelain",
+    "name": "Porcelain",
+    "blurb": "Near-white / near-black"
+  },
+  {
+    "id": "linen",
+    "name": "Linen",
+    "blurb": "Warm paper / espresso"
+  },
+  {
+    "id": "signal",
+    "name": "Signal",
+    "blurb": "True white / true black"
+  },
+  {
+    "id": "hotline",
+    "name": "Hotline",
+    "blurb": "Neutral chrome, loud pink"
+  },
+  {
+    "id": "phosphor",
+    "name": "Phosphor",
+    "blurb": "Neutral chrome, CRT green"
+  }
+]

@@ -1,0 +1,404 @@
+package dev.opencode.mobile.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onInterceptKeyBeforeSoftKeyboard
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
+import dev.opencode.mobile.theme.OpenCodeRadius
+import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
+
+internal val OpenCodeTextInputMinHeight = 48.dp
+internal val OpenCodeTextInputCornerRadius = OpenCodeRadius.small
+internal val OpenCodeTextInputPaddingHorizontal = 12.dp
+internal val OpenCodeTextInputMultilinePaddingVertical = 12.dp
+private val OpenCodeSearchInputIconSize = 18.dp
+private val OpenCodeSearchInputIconSpacing = 8.dp
+private val OpenCodeSearchInputClearTarget = 32.dp
+
+enum class OpenCodeTextInputKind {
+    Text,
+    Url,
+    Username,
+    Password,
+
+    /** Filter field: no sentence capitalization or autocorrect. */
+    Filter,
+
+    /**
+     * Search field: a Filter with a leading search mark and, while there is text, a clear button
+     * (a spinner instead while `busy`).
+     */
+    Search,
+}
+
+enum class OpenCodeTextInputSubmitAction {
+    Next,
+    Done,
+
+    /** Opens what the field names, such as a typed folder; keeps focus so typing continues. */
+    Go,
+}
+
+@Composable
+fun OpenCodeTextInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    hint: String = "",
+    accessibilityLabel: String? = null,
+    kind: OpenCodeTextInputKind = OpenCodeTextInputKind.Text,
+    enabled: Boolean = true,
+    errorMessage: String? = null,
+    submitAction: OpenCodeTextInputSubmitAction = OpenCodeTextInputSubmitAction.Done,
+    /** Called on Go, and on Done after the field loses focus. */
+    onSubmit: (() -> Unit)? = null,
+    /** Above 1, the field is multi-line: it starts this tall, Return adds a line, and [submitAction] is unused. */
+    minLines: Int = 1,
+    /** The field grows up to this many lines, then scrolls. */
+    maxLines: Int = minLines,
+    /** Multi-line inputs only: clips typed and pasted text to this many characters; an `N/max` count shows near the limit. */
+    maxLength: Int? = null,
+    /** Search inputs only: a request for the text is running; a spinner replaces the clear button. */
+    busy: Boolean = false,
+    /** Hardware Esc while the field has focus; without it Esc leaves the field. */
+    onEscape: (() -> Unit)? = null,
+) {
+    require(minLines in 1..maxLines) { "OpenCodeTextInput needs 1 <= minLines <= maxLines" }
+    val multiline = maxLines > 1
+    require(!multiline || kind == OpenCodeTextInputKind.Text) { "Only Text inputs can be multi-line" }
+    require(maxLength == null || multiline) { "maxLength needs a multi-line input" }
+    require(!busy || kind == OpenCodeTextInputKind.Search) { "busy needs a Search input" }
+    val resolvedAccessibilityLabel = resolveOpenCodeTextInputAccessibilityLabel(hint, accessibilityLabel)
+    requireNotNull(resolvedAccessibilityLabel) {
+        "OpenCodeTextInput requires a non-blank hint or accessibilityLabel"
+    }
+    val focusManager = LocalFocusManager.current
+    val leaveTextInput = rememberOpenCodeLeaveTextInput()
+    val hardwareKeyboard = rememberOpenCodeHardwareKeyboardConnected()
+    // Keep a local TextFieldValue so selection/cursor survive recomposition when the
+    // parent echoes the same text back. String-only fields can drop the
+    // empty-field text toolbar (Paste) after clearing on some devices.
+    var textFieldValue by remember {
+        mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length)))
+    }
+    LaunchedEffect(value) {
+        if (value != textFieldValue.text) {
+            textFieldValue =
+                TextFieldValue(
+                    text = value,
+                    selection = TextRange(value.length),
+                )
+        }
+    }
+    val autofillContentType =
+        when (kind) {
+            OpenCodeTextInputKind.Username -> ContentType.Username
+            OpenCodeTextInputKind.Password -> ContentType.Password
+            OpenCodeTextInputKind.Url, OpenCodeTextInputKind.Text, OpenCodeTextInputKind.Filter, OpenCodeTextInputKind.Search -> null
+        }
+    // Do not set contentDescription when the hint/placeholder already names the
+    // field. Overriding TextField semantics with contentDescription creates a
+    // competing node and can hide Paste on empty fields.
+    val explicitAccessibilityLabel = accessibilityLabel?.takeIf { it.isNotBlank() }
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
+    val reportFocus = rememberOpenCodeTextInputFocusReport(OpenCodeFocusedTextInput.Field)
+    val fieldShape = RoundedCornerShape(OpenCodeTextInputCornerRadius)
+    val borderColor =
+        when {
+            errorMessage != null -> openCodeColor("error")
+            focused -> openCodeColor("interactive")
+            else -> openCodeColor("border-weaker-base")
+        }
+    val borderWidth = if (errorMessage != null || focused) 2.dp else 1.dp
+    val textColor = openCodeColor("text-strong")
+    val hintColor = openCodeColor("text-weaker")
+    val surfaceRaised = openCodeColor("surface-raised-base")
+
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .alpha(if (enabled) 1f else 0.6f),
+    ) {
+        BasicTextField(
+            value = textFieldValue,
+            onValueChange = { edited ->
+                // Clip here: a parent that clamps would echo an unchanged value and leave the extra text on screen.
+                val next = clipOpenCodeTextInput(edited, maxLength)
+                textFieldValue = next
+                if (next.text != value) {
+                    onValueChange(next.text)
+                }
+            },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { reportFocus(it.isFocused) }
+                    .onInterceptKeyBeforeSoftKeyboard { event ->
+                        multiline && focusManager.moveFocusOnHardwareTab(event, hardwareKeyboard)
+                    }.onPreviewKeyEvent { event ->
+                        val escape = onEscape != null && event.key == Key.Escape
+                        if (escape && event.type == KeyEventType.KeyDown) onEscape()
+                        escape
+                    }.semantics {
+                        autofillContentType?.let { contentType = it }
+                        explicitAccessibilityLabel?.let { contentDescription = it }
+                    },
+            enabled = enabled,
+            singleLine = !multiline,
+            minLines = minLines,
+            maxLines = maxLines,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
+            cursorBrush = SolidColor(openCodeColor("interactive")),
+            visualTransformation =
+                if (kind == OpenCodeTextInputKind.Password) {
+                    PasswordVisualTransformation()
+                } else {
+                    VisualTransformation.None
+                },
+            keyboardOptions =
+                KeyboardOptions(
+                    capitalization =
+                        when (kind) {
+                            OpenCodeTextInputKind.Text -> KeyboardCapitalization.Sentences
+                            else -> KeyboardCapitalization.None
+                        },
+                    autoCorrectEnabled = kind == OpenCodeTextInputKind.Text,
+                    imeAction = openCodeTextInputImeAction(submitAction, multiline),
+                    keyboardType =
+                        when (kind) {
+                            // Ascii avoids URI-variation IME quirks that can drop Paste when empty.
+                            OpenCodeTextInputKind.Url -> KeyboardType.Ascii
+                            OpenCodeTextInputKind.Password -> KeyboardType.Password
+                            OpenCodeTextInputKind.Text,
+                            OpenCodeTextInputKind.Username,
+                            OpenCodeTextInputKind.Filter,
+                            OpenCodeTextInputKind.Search,
+                            ->
+                                KeyboardType.Text
+                        },
+                ),
+            keyboardActions =
+                KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Next) },
+                    onDone = {
+                        leaveTextInput()
+                        onSubmit?.invoke()
+                    },
+                    onGo = { onSubmit?.invoke() },
+                ),
+            interactionSource = interactionSource,
+            decorationBox = { innerTextField ->
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = OpenCodeTextInputMinHeight)
+                            .background(surfaceRaised, fieldShape)
+                            .border(borderWidth, borderColor, fieldShape)
+                            .padding(
+                                horizontal = OpenCodeTextInputPaddingHorizontal,
+                                vertical = if (multiline) OpenCodeTextInputMultilinePaddingVertical else 0.dp,
+                            ),
+                    contentAlignment = if (multiline) Alignment.TopStart else Alignment.CenterStart,
+                ) {
+                    val field: @Composable () -> Unit = {
+                        if (textFieldValue.text.isEmpty() && hint.isNotEmpty()) {
+                            Text(
+                                text = hint,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = hintColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        innerTextField()
+                    }
+                    if (kind == OpenCodeTextInputKind.Search) {
+                        OpenCodeSearchInputDecoration(
+                            busy = busy,
+                            showsClear = textFieldValue.text.isNotEmpty() && enabled,
+                            onClear = { onValueChange("") },
+                            field = field,
+                        )
+                    } else {
+                        field()
+                    }
+                }
+            },
+        )
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("error"),
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        openCodeTextInputLengthLabel(textFieldValue.text.length, maxLength)?.let { label ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-weak"),
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            )
+        }
+    }
+}
+
+/** Search mark, the field, then a spinner while busy or a clear button while there is text. */
+@Composable
+private fun OpenCodeSearchInputDecoration(
+    busy: Boolean,
+    showsClear: Boolean,
+    onClear: () -> Unit,
+    field: @Composable () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = OpenCodeIcons.Search,
+            contentDescription = null,
+            tint = openCodeColor("text-weak"),
+            modifier = Modifier.size(OpenCodeSearchInputIconSize),
+        )
+        Spacer(modifier = Modifier.width(OpenCodeSearchInputIconSpacing))
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            field()
+        }
+        when {
+            busy ->
+                CircularProgressIndicator(
+                    modifier =
+                        Modifier
+                            .padding(start = OpenCodeSearchInputIconSpacing)
+                            .size(OpenCodeSearchInputIconSize)
+                            .testTag(OpenCodeTextInputTags.SEARCH_BUSY),
+                    strokeWidth = 2.dp,
+                    color = openCodeColor("text-weak"),
+                )
+            showsClear ->
+                Box(
+                    modifier =
+                        Modifier
+                            .size(OpenCodeSearchInputClearTarget)
+                            .openCodeFocusRing(CircleShape)
+                            .clip(CircleShape)
+                            .clickable(role = Role.Button, onClick = onClear)
+                            .testTag(OpenCodeTextInputTags.SEARCH_CLEAR),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = OpenCodeIcons.Close,
+                        contentDescription = stringResource(R.string.session_search_clear),
+                        tint = openCodeColor("text-weak"),
+                        modifier = Modifier.size(OpenCodeSearchInputIconSize),
+                    )
+                }
+        }
+    }
+}
+
+object OpenCodeTextInputTags {
+    const val SEARCH_CLEAR = "openCodeTextInputSearchClear"
+    const val SEARCH_BUSY = "openCodeTextInputSearchBusy"
+}
+
+/** The keyboard's Return key: a new line when multi-line, else [submitAction]. */
+internal fun openCodeTextInputImeAction(
+    submitAction: OpenCodeTextInputSubmitAction,
+    multiline: Boolean,
+): ImeAction =
+    when {
+        multiline -> ImeAction.Default
+        else ->
+            when (submitAction) {
+                OpenCodeTextInputSubmitAction.Next -> ImeAction.Next
+                OpenCodeTextInputSubmitAction.Done -> ImeAction.Done
+                OpenCodeTextInputSubmitAction.Go -> ImeAction.Go
+            }
+    }
+
+/** Keeps the first [maxLength] characters, with the cursor inside them. */
+internal fun clipOpenCodeTextInput(
+    value: TextFieldValue,
+    maxLength: Int?,
+): TextFieldValue {
+    if (maxLength == null || value.text.length <= maxLength) return value
+    return value.copy(
+        text = value.text.take(maxLength),
+        selection = TextRange(value.selection.start.coerceAtMost(maxLength), value.selection.end.coerceAtMost(maxLength)),
+        composition = null,
+    )
+}
+
+/** `N/max` once the text reaches 90% of [maxLength], so the cap is never a surprise. */
+internal fun openCodeTextInputLengthLabel(
+    length: Int,
+    maxLength: Int?,
+): String? =
+    if (maxLength != null && length * 10 >= maxLength * 9) "$length/$maxLength" else null
+
+internal fun resolveOpenCodeTextInputAccessibilityLabel(
+    hint: String?,
+    accessibilityLabel: String?,
+): String? = accessibilityLabel?.takeIf { it.isNotBlank() } ?: hint?.takeIf { it.isNotBlank() }

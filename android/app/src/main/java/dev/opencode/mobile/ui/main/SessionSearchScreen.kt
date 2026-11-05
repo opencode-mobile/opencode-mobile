@@ -57,7 +57,6 @@ import dev.opencode.mobile.ui.components.SessionListRow
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.resolve
-import dev.opencode.kit.R as KitR
 
 object SessionSearchTags {
     const val SCREEN = "sessionSearch"
@@ -117,7 +116,7 @@ internal fun SessionSearchScreen(
             // Back points toward the leading edge, so it flips in right-to-left layouts.
             val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowBack, stringResource(KitR.string.top_bar_back)),
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowBack, stringResource(R.string.top_bar_back)),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = callbacks.onClose,
                 modifier = if (rtl) Modifier.graphicsLayer { scaleX = -1f } else Modifier,

@@ -129,7 +129,6 @@ import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.abs
-import dev.opencode.kit.R as KitR
 
 sealed interface OpenCodeSessionComposerState {
     data class Prompt(
@@ -1714,7 +1713,7 @@ private fun ColumnScope.QuestionRequestContent(
                 }
                 if (showBack) {
                     OpenCodeButton(
-                        OpenCodeButtonVariant.CompactText(stringResource(KitR.string.top_bar_back)),
+                        OpenCodeButtonVariant.CompactText(stringResource(R.string.top_bar_back)),
                         onClick = {
                             onAction(OpenCodeSessionComposerAction.QuestionBack(state.requestId, state.sessionId))
                         },
@@ -1931,7 +1930,7 @@ private fun FocusRequester.tryRequestFocus(): Boolean = runCatching { requestFoc
 private fun questionSelectionDecorator(selected: Boolean): StartDecorator =
     StartDecorator.Icon(
         imageVector = if (selected) OpenCodeIcons.RadioButtonChecked else OpenCodeIcons.RadioButtonUnchecked,
-        contentDescription = stringResource(if (selected) KitR.string.common_selected else R.string.component_composer_not_selected),
+        contentDescription = stringResource(if (selected) R.string.common_selected else R.string.component_composer_not_selected),
     )
 
 /** What the request pager steps through; names its Previous and Next buttons. */

@@ -43,7 +43,6 @@ import dev.opencode.mobile.ui.connection.listCaption
 import dev.opencode.mobile.ui.connection.listStatus
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.resolve
-import dev.opencode.kit.R as KitR
 
 @Composable
 fun ServersScreen(
@@ -156,7 +155,7 @@ fun ServersScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(KitR.string.common_cancel),
+                title = stringResource(R.string.common_cancel),
                 onClick = onDismissRemove,
             ),
         onDismissRequest = onDismissRemove,

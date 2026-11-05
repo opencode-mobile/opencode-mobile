@@ -53,7 +53,6 @@ import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.UiTextLookup
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.delay
-import dev.opencode.kit.R as KitR
 
 private val SessionListFallbackBottomSpacer = 168.dp
 private const val SCOPE_LOAD_CROSSFADE_MS = 220
@@ -183,7 +182,7 @@ sealed interface SessionListScopeLoad {
 
         @StringRes val FAILED_MESSAGE = R.string.session_list_scope_load_failed_message
 
-        @StringRes val RETRY_TITLE = KitR.string.common_retry
+        @StringRes val RETRY_TITLE = R.string.common_retry
 
         fun failedTitle(scopeTitle: String): UiText = UiText.resource(R.string.session_list_scope_load_failed_title, scopeTitle)
     }
@@ -911,7 +910,7 @@ private const val LOCATION_SEPARATOR = " · "
 internal fun SessionListStatus.label(retryAttempt: Int? = null): UiText =
     when (this) {
         SessionListStatus.Idle -> UiText.resource(R.string.session_list_status_idle)
-        SessionListStatus.Running -> UiText.resource(KitR.string.session_list_status_running)
+        SessionListStatus.Running -> UiText.resource(R.string.session_list_status_running)
         SessionListStatus.Retrying ->
             retryAttempt?.let { UiText.resource(R.string.session_list_status_retrying_attempt, it) }
                 ?: UiText.resource(R.string.session_list_status_retrying)

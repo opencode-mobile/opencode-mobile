@@ -81,7 +81,6 @@ import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.serialization.Serializable
-import dev.opencode.kit.R as KitR
 
 @Serializable
 private data object ChangedFilesRoute : NavKey
@@ -325,7 +324,7 @@ private fun ChangedFilesScreen(
                         title = stringResource(R.string.changes_error_title),
                         message = phase.message.resolve().ifBlank { stringResource(R.string.changes_error_fallback) },
                         primaryAction =
-                            OpenCodeEmptyStateAction(title = stringResource(KitR.string.common_retry)) {
+                            OpenCodeEmptyStateAction(title = stringResource(R.string.common_retry)) {
                                 logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
                                 viewModel.retry()
                             },
@@ -398,7 +397,7 @@ private fun ChangedFilesContent(
                     OpenCodeInlineNotice(
                         message = stringResource(R.string.changes_refresh_failed, error.resolve()),
                         action =
-                            OpenCodeInlineNoticeAction(title = stringResource(KitR.string.common_retry)) {
+                            OpenCodeInlineNoticeAction(title = stringResource(R.string.common_retry)) {
                                 logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
                                 viewModel.refresh()
                             },

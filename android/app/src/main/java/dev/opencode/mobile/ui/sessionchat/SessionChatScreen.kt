@@ -182,7 +182,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import dev.opencode.kit.R as KitR
 
 /**
  * A title that replaces the session title and opens a menu when tapped. The Session Chat
@@ -717,7 +716,7 @@ private fun SessionChatScreenBody(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(KitR.string.common_cancel),
+                title = stringResource(R.string.common_cancel),
                 enabled = lifecycleActionsEnabled,
                 onClick = {
                     ProductAnalytics.logUserAction(
@@ -1805,7 +1804,7 @@ private fun SessionChatScreenBody(
                 ),
             secondaryOption =
                 OpenCodeDialogOption(
-                    title = stringResource(KitR.string.common_cancel),
+                    title = stringResource(R.string.common_cancel),
                     enabled = !uiState.rename.isSubmitting,
                     onClick = viewModel::cancelRenameSession,
                 ),
@@ -1873,7 +1872,7 @@ private fun SessionChatScreenBody(
                 ),
             secondaryOption =
                 OpenCodeDialogOption(
-                    title = stringResource(KitR.string.common_cancel),
+                    title = stringResource(R.string.common_cancel),
                     enabled = !uiState.forkSubmitting,
                     onClick = viewModel::cancelForkDialog,
                 ),

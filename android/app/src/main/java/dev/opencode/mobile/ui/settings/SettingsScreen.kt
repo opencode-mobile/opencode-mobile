@@ -60,7 +60,6 @@ import dev.opencode.mobile.ui.components.openCodeBottomSheetScrollTarget
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
-import dev.opencode.kit.R as KitR
 
 @Composable
 fun SettingsScreen(
@@ -690,7 +689,7 @@ fun SettingsScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(KitR.string.common_cancel),
+                title = stringResource(R.string.common_cancel),
                 onClick = {
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_CACHE_CONFIRM,
@@ -721,7 +720,7 @@ fun SettingsScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(KitR.string.common_cancel),
+                title = stringResource(R.string.common_cancel),
                 onClick = {
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_ALL_DATA_CONFIRM,
