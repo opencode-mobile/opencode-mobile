@@ -117,17 +117,10 @@ class DraftTest {
     }
 
     @Test
-    fun moreThanThreeChunksIsALongDraft() {
-        assertFalse(draftOf("a", "b", "c").isLong)
-        assertTrue(draftOf("a", "b", "c", "d").isLong)
-        // The take being recorded counts as a chunk.
-        assertTrue(draftOf("a", "b", "c").startTake().isLong)
-    }
-
-    @Test
-    fun moreThan220CharactersIsALongDraft() {
-        assertFalse(draftOf("x".repeat(110), "y".repeat(109)).isLong)
-        assertTrue(draftOf("x".repeat(110), "y".repeat(110)).isLong)
+    fun theRunningTextCountsTheChunksAndTheSpacesBetween() {
+        assertEquals(7, draftOf("abc", "def").characters)
+        // The take being recorded is shown, though it has no text yet.
+        assertEquals(4, draftOf("abc").startTake().characters)
     }
 
     @Test

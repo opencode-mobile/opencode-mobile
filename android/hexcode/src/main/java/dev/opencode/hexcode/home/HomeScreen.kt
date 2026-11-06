@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,7 +27,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -46,10 +50,12 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -442,16 +448,69 @@ private fun HexTalkRelease.toTalkRelease(): TalkRelease =
     }
 
 @Composable
-private fun DraftView(
+private fun ColumnScope.DraftView(
     state: HomeUiState,
     vm: HomeViewModel,
 ) {
     val draft = state.draft
     DraftLabel(state)
-    Box(Modifier.padding(top = 14.dp)) {
-        if (draft.isLong) ChunkList(draft, vm::selectChunk) else DraftText(draft, vm::selectChunk)
-    }
+    // The draft takes the room between its line and the actions above the dock (app-plan.md, Long drafts).
+    DraftBody(draft, vm::selectChunk, Modifier.padding(top = 14.dp).weight(1f, fill = false))
     if (!draft.isListening) DraftActions(draft, state.busy, state.sendMode, vm)
+}
+
+/**
+ * The draft as running text as long as it can be (app-plan.md, Long drafts): its size steps down, `draft` (24), 21, 19,
+ * 17, each measured as drawn against the room it has. More than 3 chunks, or 2 or more that don't fit at 17, are one
+ * row per chunk; a single chunk too long even at 17 scrolls, kept at its newest words.
+ */
+@Composable
+private fun DraftBody(
+    draft: Draft,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier,
+) {
+    val type = HexTheme.type
+    val styles =
+        DraftSize.entries.associateWith { size ->
+            when (size) {
+                DraftSize.Draft -> type.draft
+                DraftSize.Medium -> type.nowMedium.copy(fontWeight = type.draft.fontWeight)
+                DraftSize.Small -> type.nowSmall.copy(fontWeight = type.draft.fontWeight)
+                DraftSize.Fit -> type.nowFit.copy(fontWeight = type.draft.fontWeight)
+            }
+        }
+    SubcomposeLayout(modifier) { constraints ->
+        val loose = constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity)
+        val room = if (constraints.hasBoundedHeight) constraints.maxHeight else Int.MAX_VALUE
+        val shape =
+            DraftShape.choose(draft.shown.size, draft.characters) { size ->
+                val measured = subcompose(size) { DraftText(draft, onSelect, styles.getValue(size)) }.first().measure(loose)
+                measured.height <= room
+            }
+        val shown =
+            subcompose("shown") {
+                when (shape) {
+                    is DraftShape.Running -> DraftText(draft, onSelect, styles.getValue(shape.size))
+                    DraftShape.Scrolling -> ScrollingDraft(draft, onSelect, styles.getValue(DraftSize.Fit))
+                    DraftShape.Rows -> ChunkList(draft, onSelect)
+                }
+            }.first().measure(constraints.copy(minHeight = 0))
+        layout(shown.width, shown.height) { shown.place(0, 0) }
+    }
+}
+
+/** A single chunk too long even at 17: it scrolls inside the draft's room, kept at its newest words as it grows. */
+@Composable
+private fun ScrollingDraft(
+    draft: Draft,
+    onSelect: (Int) -> Unit,
+    style: TextStyle,
+) {
+    val scroll = rememberScrollState()
+    LaunchedEffect(draft.characters) { scroll.scrollTo(scroll.maxValue) }
+    LaunchedEffect(scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
+    Box(Modifier.verticalScroll(scroll)) { DraftText(draft, onSelect, style) }
 }
 
 /** "● Recording 0:04", "Transcribing on this phone…", or "Draft · 2 chunks · 0:12". */
@@ -547,6 +606,7 @@ private fun DraftLabel(state: HomeUiState) {
 private fun DraftText(
     draft: Draft,
     onSelect: (Int) -> Unit,
+    style: TextStyle = HexTheme.type.draft,
 ) {
     val listening = stringResource(R.string.draft_listening)
     val transcribing = stringResource(R.string.draft_transcribing_chunk)
@@ -566,6 +626,8 @@ private fun DraftText(
         recording = draft.isListening,
         onSelect = onSelect,
         hint = if (draft.isListening && draft.chunks.isEmpty()) stringResource(R.string.draft_first_take_hint) else null,
+        maxLines = Int.MAX_VALUE,
+        style = style,
     )
 }
 

@@ -36,6 +36,7 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,9 +82,10 @@ fun HexChunk(
     modifier: Modifier = Modifier,
     hint: String? = null,
     maxLines: Int = 8,
+    /** `draft`, or a smaller size at the draft's weight as a long draft grows (app-plan.md, Long drafts). */
+    style: TextStyle = HexTheme.type.draft,
 ) {
     val colors = HexTheme.colors
-    val style = HexTheme.type.draft
     // Where each tappable chunk sits in the text, and how it is filled.
     val ranges = mutableListOf<Triple<IntRange, Color, Color?>>()
     val text =

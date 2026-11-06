@@ -85,9 +85,8 @@ data class Draft(
             return if (at != null && at in chunks.indices) chunks.toMutableList().also { it[at] = take } else chunks + take
         }
 
-    /** More than 3 chunks or 220 characters: one row per chunk instead of running text. */
-    val isLong: Boolean
-        get() = shown.size > LONG_CHUNKS || shown.sumOf { it.text?.length ?: 0 } + (shown.size - 1).coerceAtLeast(0) > LONG_CHARACTERS
+    /** The characters the running text shows: the chunks' text, a space between them. */
+    val characters: Int get() = shown.sumOf { it.text?.length ?: 0 } + (shown.size - 1).coerceAtLeast(0)
 
     val durationMs: Long get() = chunks.sumOf { it.durationMs }
 
@@ -209,9 +208,6 @@ data class Draft(
     fun clear(): Draft = if (canClear) Draft(nextId = nextId) else this
 
     companion object {
-        const val LONG_CHUNKS = 3
-        const val LONG_CHARACTERS = 220
-
         /** Rows a long draft shows at once; earlier ones fold into "↑ N earlier". */
         const val MAX_ROWS = 8
     }
