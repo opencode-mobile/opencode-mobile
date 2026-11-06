@@ -74,6 +74,7 @@ val HexComponentSamples: List<HexSampleSection> =
         HexSampleSection("HexSheet") { SheetSample() },
         HexSampleSection("HexTalkButton") { TalkButtonSample() },
         HexSampleSection("HexMeter") { MeterSample() },
+        HexSampleSection("HexHoldHint") { HoldHintSample() },
         HexSampleSection("HexChunk") { ChunkSample() },
         HexSampleSection("HexChunkRow") { ChunkRowSample() },
         HexSampleSection("HexToast, HexToastHost") { ToastSample() },
@@ -726,5 +727,21 @@ private fun ProgressSample() {
             HexProgress(listOf(false), "0/1 · details ›", onClick = {})
             HexProgress(listOf(true, true, true, true, true, false, false, false), "5/8 · details ›", onClick = {})
         }
+    }
+}
+
+@Composable
+private fun HoldHintSample() {
+    @Composable
+    fun hint(
+        lean: Float,
+        armed: HexTalkRelease?,
+    ) = HexHoldHint(lean, armed, "Drop", "Lock", "Release to drop", "Release to lock")
+    Edge {
+        StateSample("resting") { hint(0f, null) }
+        StateSample("leaning lock") { hint(0.55f, null) }
+        StateSample("leaning drop") { hint(-0.55f, null) }
+        StateSample("armed lock") { hint(1f, HexTalkRelease.Lock) }
+        StateSample("armed drop") { hint(-1f, HexTalkRelease.Drop) }
     }
 }

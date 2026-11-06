@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +61,7 @@ import dev.opencode.hexcode.designsystem.HexTheme
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sign
 
 /** What the talk button shows. */
 enum class HexTalkState {
@@ -140,6 +142,35 @@ object HexTalkDrag {
 }
 
 /**
+ * A hold on the talk button, shared with what shows it elsewhere ([HexHoldHint]): whether the finger is down (and not
+ * locked), the smoothed drag and what it has armed. The button writes it; anything else only reads it.
+ */
+@Stable
+class HexTalkHold {
+    internal val follow = Animatable(0f)
+    internal var deadZone = 1f
+    internal var armAt = 2f
+
+    /** Held down, not locked. */
+    var holding by mutableStateOf(false)
+        internal set
+
+    /** What letting go now would do: armed by the real finger, with hysteresis. */
+    var armed by mutableStateOf<HexTalkRelease?>(null)
+        internal set
+
+    /** How far the smoothed drag has come, from −1 (drop) to 1 (lock), after the dead zone. */
+    val lean: Float
+        get() {
+            val offset = follow.value
+            return sign(offset) * HexTalkDrag.look(offset, deadZone, armAt)
+        }
+}
+
+@Composable
+fun rememberHexTalkHold(): HexTalkHold = remember { HexTalkHold() }
+
+/**
  * The talk button (`.ptt`), the only voice meter on the screen: a 50 pt pill. Hold to talk; drag right to lock
  * (hands-free) or left to drop the take, then let go. The button answers the touch in the same frame with the
  * recording look and a light haptic; [onPress] starts the take and returns false when it doesn't.
@@ -160,6 +191,7 @@ fun HexTalkButton(
     onRelease: (HexTalkRelease) -> Unit,
     onTapLocked: () -> Unit,
     modifier: Modifier = Modifier,
+    hold: HexTalkHold = rememberHexTalkHold(),
 ) {
     val colors = HexTheme.colors
     val view = LocalView.current
@@ -174,12 +206,13 @@ fun HexTalkButton(
     // The take came back as Holding; if it leaves Holding while still held (the microphone failed), the look goes back.
     var confirmed by remember { mutableStateOf(false) }
     SideEffect { if (state == HexTalkState.Holding) confirmed = true }
-    var armed by remember { mutableStateOf<HexTalkRelease?>(null) }
-    val follow = remember { Animatable(0f) }
+    val follow = hold.follow
     val density = LocalDensity.current
     val armAt = with(density) { HexTalkButtonDefaults.DragDistance.toPx() }
     val disarmBelow = with(density) { HexTalkButtonDefaults.DisarmDistance.toPx() }
     val deadZone = with(density) { HexTalkButtonDefaults.DeadZone.toPx() }
+    hold.deadZone = deadZone
+    hold.armAt = armAt
     val listening = state == HexTalkState.Holding || state == HexTalkState.Locked || (held && !confirmed)
     val holding = listening && state != HexTalkState.Locked
     val solid = state == HexTalkState.Idle && !listening
@@ -187,7 +220,7 @@ fun HexTalkButton(
     val fillSpec = if (listening) snap<Color>() else HexTheme.motion.fade()
     val fill by animateColorAsState(if (solid) colors.solid else colors.panel, fillSpec, label = "talk-fill")
     val content by animateColorAsState(if (solid) colors.onSolid else colors.text1, fillSpec, label = "talk-content")
-    val meterAlpha by animateFloatAsState(if (armed != null) 0.25f else 1f, HexTheme.motion.press(), label = "talk-armed")
+    val meterAlpha by animateFloatAsState(if (hold.armed != null) 0.25f else 1f, HexTheme.motion.press(), label = "talk-armed")
     val shape = RoundedCornerShape(percent = 50)
     Box(
         contentAlignment = Alignment.Center,
@@ -218,6 +251,7 @@ fun HexTalkButton(
                             held = false
                             return@awaitEachGesture
                         }
+                        hold.holding = true
                         val startedAt = down.uptimeMillis
                         var dx = 0f
                         var lastUp = down.uptimeMillis
@@ -227,9 +261,9 @@ fun HexTalkButton(
                             dx += change.positionChange().x
                             change.consume()
                             lastUp = change.uptimeMillis
-                            val next = HexTalkDrag.arm(armed, dx, armAt, disarmBelow)
-                            if (next != null && next != armed) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                            armed = next
+                            val next = HexTalkDrag.arm(hold.armed, dx, armAt, disarmBelow)
+                            if (next != null && next != hold.armed) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            hold.armed = next
                             val target = dx
                             scope.launch {
                                 follow.animateTo(target, spring(dampingRatio = 1f, stiffness = HexTalkButtonDefaults.FOLLOW_STIFFNESS))
@@ -237,8 +271,9 @@ fun HexTalkButton(
                             if (!change.pressed) break
                         }
                         val how =
-                            armed ?: if (lastUp - startedAt < HexTalkButtonDefaults.TAP_MS) HexTalkRelease.Tap else HexTalkRelease.End
-                        armed = null
+                            hold.armed ?: if (lastUp - startedAt < HexTalkButtonDefaults.TAP_MS) HexTalkRelease.Tap else HexTalkRelease.End
+                        hold.armed = null
+                        hold.holding = false
                         held = false
                         scope.launch { follow.snapTo(0f) }
                         release(how)

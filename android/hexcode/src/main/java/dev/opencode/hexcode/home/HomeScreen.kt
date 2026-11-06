@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -58,16 +59,19 @@ import dev.opencode.hexcode.designsystem.components.HexChunkRow
 import dev.opencode.hexcode.designsystem.components.HexChunkRowState
 import dev.opencode.hexcode.designsystem.components.HexDot
 import dev.opencode.hexcode.designsystem.components.HexDotTone
+import dev.opencode.hexcode.designsystem.components.HexHoldHint
 import dev.opencode.hexcode.designsystem.components.HexIconButton
 import dev.opencode.hexcode.designsystem.components.HexIconButtonTone
 import dev.opencode.hexcode.designsystem.components.HexRoundButton
 import dev.opencode.hexcode.designsystem.components.HexSpinner
 import dev.opencode.hexcode.designsystem.components.HexTalkButton
+import dev.opencode.hexcode.designsystem.components.HexTalkHold
 import dev.opencode.hexcode.designsystem.components.HexTalkRelease
 import dev.opencode.hexcode.designsystem.components.HexTalkState
 import dev.opencode.hexcode.designsystem.components.HexToastHost
 import dev.opencode.hexcode.designsystem.components.HexToastMessage
 import dev.opencode.hexcode.designsystem.components.HexToastTone
+import dev.opencode.hexcode.designsystem.components.rememberHexTalkHold
 import dev.opencode.hexcode.session.AgentStatus
 import kotlinx.coroutines.delay
 
@@ -136,48 +140,64 @@ fun HomeScreen(
             // stop with M4: until then a tap says it isn't in this version yet. Stop is dimmed, and does nothing, unless
             // the agent is working or needs input.
             val agent = today.agent
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(start = edge, end = edge, top = 12.dp),
-            ) {
-                HexIconButton(HexIcons.clip, stringResource(R.string.home_attach), onClick = vm::notInThisVersion)
-                HexTalkButton(
-                    state =
-                        when (state.talk) {
-                            TalkMode.Holding -> HexTalkState.Holding
-                            TalkMode.Locked -> HexTalkState.Locked
-                            TalkMode.Idle -> if (state.draft.isEmpty) HexTalkState.Idle else HexTalkState.Draft
+            val hold = rememberHexTalkHold()
+            // The hold hint fades in a quarter second into a hold, so a quick take never shows it.
+            var hintShown by remember { mutableStateOf(false) }
+            LaunchedEffect(hold.holding) {
+                if (hold.holding) {
+                    delay(HOLD_HINT_DELAY_MS)
+                    hintShown = true
+                } else {
+                    hintShown = false
+                }
+            }
+            Box(Modifier.padding(start = edge, end = edge, top = 12.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HexIconButton(HexIcons.clip, stringResource(R.string.home_attach), onClick = vm::notInThisVersion)
+                    HexTalkButton(
+                        state =
+                            when (state.talk) {
+                                TalkMode.Holding -> HexTalkState.Holding
+                                TalkMode.Locked -> HexTalkState.Locked
+                                TalkMode.Idle -> if (state.draft.isEmpty) HexTalkState.Idle else HexTalkState.Draft
+                            },
+                        label = label,
+                        accessibilityLabel =
+                            when (state.talk) {
+                                TalkMode.Locked -> stringResource(R.string.talk_a11y_locked)
+                                TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
+                                TalkMode.Idle -> label
+                            },
+                        // Recording never waits for the speech model; only turning a take into text does.
+                        enabled = true,
+                        level = { vm.level },
+                        onPress = {
+                            if (micAllowed) {
+                                vm.press()
+                            } else {
+                                askMic.launch(Manifest.permission.RECORD_AUDIO)
+                                false
+                            }
                         },
-                    label = label,
-                    accessibilityLabel =
-                        when (state.talk) {
-                            TalkMode.Locked -> stringResource(R.string.talk_a11y_locked)
-                            TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
-                            TalkMode.Idle -> label
-                        },
-                    // Recording never waits for the speech model; only turning a take into text does.
-                    enabled = true,
-                    level = { vm.level },
-                    onPress = {
-                        if (micAllowed) {
-                            vm.press()
-                        } else {
-                            askMic.launch(Manifest.permission.RECORD_AUDIO)
-                            false
-                        }
-                    },
-                    onRelease = { how -> vm.release(how.toTalkRelease()) },
-                    onTapLocked = vm::tapLocked,
-                    modifier = Modifier.weight(1f),
-                )
-                HexIconButton(
-                    HexIcons.stop,
-                    stringResource(R.string.home_stop),
-                    onClick = vm::notInThisVersion,
-                    tone = HexIconButtonTone.Stop,
-                    enabled = agent is AgentStatus.Working || agent == AgentStatus.NeedsInput,
-                )
+                        onRelease = { how -> vm.release(how.toTalkRelease()) },
+                        onTapLocked = vm::tapLocked,
+                        modifier = Modifier.weight(1f),
+                        hold = hold,
+                    )
+                    HexIconButton(
+                        HexIcons.stop,
+                        stringResource(R.string.home_stop),
+                        onClick = vm::notInThisVersion,
+                        tone = HexIconButtonTone.Stop,
+                        enabled = agent is AgentStatus.Working || agent == AgentStatus.NeedsInput,
+                    )
+                }
+                // 10 dp above the talk button, over where the waiting line and the draft actions are (both hidden while
+                // a take records), so nothing moves.
+                HoldHintLine(hintShown, hold, Modifier.align(Alignment.TopCenter))
             }
         }
         val micOffText = stringResource(R.string.home_mic_off)
@@ -210,6 +230,37 @@ fun HomeScreen(
         )
     }
 }
+
+/** The hold hint, 10 dp above the talk button; it takes no room, so nothing moves when it shows. */
+@Composable
+private fun HoldHintLine(
+    shown: Boolean,
+    hold: HexTalkHold,
+    modifier: Modifier,
+) {
+    AnimatedVisibility(
+        shown,
+        enter = fadeIn(HexTheme.motion.fade()),
+        exit = fadeOut(HexTheme.motion.fade()),
+        modifier =
+            modifier.layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                layout(placeable.width, 0) { placeable.place(0, -placeable.height - 10.dp.roundToPx()) }
+            },
+    ) {
+        HexHoldHint(
+            lean = hold.lean,
+            armed = hold.armed,
+            dropLabel = stringResource(R.string.home_hold_drop),
+            lockLabel = stringResource(R.string.home_hold_lock),
+            releaseDropLabel = stringResource(R.string.home_hold_release_drop),
+            releaseLockLabel = stringResource(R.string.home_hold_release_lock),
+        )
+    }
+}
+
+/** A hold this long shows the hold hint (app-plan.md, Dictation › Hold hint). */
+private const val HOLD_HINT_DELAY_MS = 250L
 
 /** How long the new-day notice shows (app-plan.md, The daily session). */
 private const val NEW_DAY_NOTICE_MS = 3_600L

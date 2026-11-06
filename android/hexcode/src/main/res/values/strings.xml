@@ -142,6 +142,10 @@
     <string name="home_take_retry">Try again</string>
     <string name="home_transcribe_failed">Couldn’t turn this take into text</string>
     <string name="home_mic_off">Microphone access is off</string>
+    <string name="home_hold_drop">Drop</string>
+    <string name="home_hold_lock">Lock</string>
+    <string name="home_hold_release_drop">Release to drop</string>
+    <string name="home_hold_release_lock">Release to lock</string>
     <string name="talk_hold">Hold to talk</string>
     <string name="talk_more">Hold to keep talking</string>
     <string name="talk_rerecord">Hold to re-record</string>
