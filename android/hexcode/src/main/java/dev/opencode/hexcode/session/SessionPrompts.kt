@@ -9,9 +9,10 @@ object SessionPrompts {
     /**
      * Raised whenever [SUMMARY] changes. 2: Now is a TL;DR of the substance, up to 300 characters, with Link lines
      * and backticks. 3: no steps (the to-do row comes from the agent's own list). 4: a TL;DR of the latest request,
-     * with lines or a short list in Now, and Next in the user's words (status-summary-proposal.md).
+     * with lines or a short list in Now, and Next in the user's words (status-summary-proposal.md). 5: the second
+     * line always starts with "Now:".
      */
-    const val SUMMARY_VERSION = 4
+    const val SUMMARY_VERSION = 5
 
     /**
      * The status summary's prompt, exactly as app-plan.md (The status summary), sent to
@@ -19,7 +20,7 @@ object SessionPrompts {
      */
     val SUMMARY =
         """
-        Say where this session stands, for the user glancing at their phone instead of reading the chat. This message is not part of the session: leave it out when you decide what the latest request is. Don't call any tools. Reply in exactly this shape and nothing else:
+        Say where this session stands, for the user glancing at their phone instead of reading the chat. This message is not part of the session: leave it out when you decide what the latest request is. Don't call any tools. Reply in exactly this shape and nothing else, and always start the second line with "Now:":
         ## <the topic of the latest request, at most 5 words>
         Now: <the substance in one sentence, at most 140 characters>
         <optional: one more sentence, or 2 to 4 lines starting "- ">

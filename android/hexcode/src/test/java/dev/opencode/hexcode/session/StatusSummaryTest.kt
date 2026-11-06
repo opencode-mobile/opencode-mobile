@@ -1,7 +1,6 @@
 package dev.opencode.hexcode.session
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.util.Locale
@@ -57,42 +56,49 @@ class StatusSummaryTest {
     }
 
     @Test
-    fun noNowLineIsAFallback() {
+    fun noNowLineReadsTheLinesAfterTheTitle() {
         val reply = "## Token refresh\nI'm adding a refresh on 401.\n- [x] Find where tokens are stored"
         assertEquals(
-            StatusSummary.Fallback("## Token refresh I'm adding a refresh on 401. - [x] Find where tokens are stored"),
+            StatusSummary.Card(
+                "Token refresh",
+                listOf(NowLine("I'm adding a refresh on 401."), NowLine("[x] Find where tokens are stored", bullet = true)),
+                null,
+            ),
             StatusSummary.parse(reply),
         )
     }
 
     @Test
-    fun noTitleIsAFallback() {
-        assertTrue(StatusSummary.parse("Now: Reading the API client.\nNext: Add the refresh call") is StatusSummary.Fallback)
-    }
-
-    @Test
-    fun anEmptyTitleOrNowLineCountsAsMissing() {
-        assertTrue(StatusSummary.parse("## \nNow: Reading the API client.") is StatusSummary.Fallback)
-        assertTrue(StatusSummary.parse("## Token refresh\nNow:") is StatusSummary.Fallback)
-    }
-
-    @Test
-    fun theFallbackIsPlainTextOfAtMost300Characters() {
-        val long = "```\n" + "word ".repeat(100) + "\n```"
-        val fallback = StatusSummary.parse(long) as StatusSummary.Fallback
-        assertTrue(fallback.text.length <= 300)
-        assertTrue(fallback.text.endsWith("word…"))
-        assertTrue(!fallback.text.contains("```"))
-    }
-
-    @Test
-    fun theFirstOfEachLineWins() {
+    fun noTitleIsACardWithoutATitle() {
         val card =
             StatusSummary.parse(
-                "## First\n## Second\nNow: One.\nNow: Two.\nNext: A\nNext: B\n- [ ] 1\n- [X] 2\n- [x] 3",
+                "Now: Reading the API client in full, file by file, and noting every call.\nNext: Add the refresh call",
+            ) as StatusSummary.Card
+        assertEquals("", card.title)
+        assertEquals("Add the refresh call", card.next)
+    }
+
+    @Test
+    fun anEmptyHeadingOrNowSaysNothing() {
+        assertEquals("", (StatusSummary.parse("## \nNow: Reading the API client.") as StatusSummary.Card).title)
+        assertEquals(emptyList<NowLine>(), (StatusSummary.parse("## Token refresh\nNow:") as StatusSummary.Card).now)
+    }
+
+    @Test
+    fun aReplyWithNoShapeIsReadAsNowAndNotCut() {
+        val long = "```\n" + "word ".repeat(100) + "\n```"
+        val fallback = StatusSummary.parse(long) as StatusSummary.Fallback
+        assertEquals(listOf(NowLine("word ".repeat(100).trim())), fallback.now)
+    }
+
+    @Test
+    fun theFirstTitleAndNextWinAndLaterNowLinesAreKept() {
+        val card =
+            StatusSummary.parse(
+                "## First\n## Second\nNow: One.\nNow: Two.\nNext: A\nNext: B",
             ) as StatusSummary.Card
         assertEquals("First", card.title)
-        assertEquals("One.", card.nowText)
+        assertEquals(listOf("## Second", "One.", "Two."), card.now.map { it.text })
         assertEquals("A", card.next)
     }
 

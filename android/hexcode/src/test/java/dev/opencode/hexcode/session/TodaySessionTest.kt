@@ -496,12 +496,12 @@ class TodaySessionTest {
     fun aNewCardIsSavedForTodaysSessionAndReplacesTheSavedOneOnScreen() =
         runTest {
             val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
-            val store = Store(SavedSummary("s1", StatusSummary.Fallback("Earlier."), updatedAt = 0))
+            val store = Store(SavedSummary("s1", StatusSummary.Fallback(listOf(NowLine("Earlier."))), updatedAt = 0))
             val transport = Transport()
             val today = session(api, transport, Memory(date), store)
             today.open()
             runCurrent()
-            assertEquals(StatusSummary.Fallback("Earlier."), today.state.value.summary.summary)
+            assertEquals(StatusSummary.Fallback(listOf(NowLine("Earlier."))), today.state.value.summary.summary)
             transport.connected()
             runCurrent()
             val card = StatusSummary.parse("## Task\nNow: Working.")
@@ -516,7 +516,7 @@ class TodaySessionTest {
     fun aCardSavedForAnotherSessionIsNotShown() =
         runTest {
             val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
-            val store = Store(SavedSummary("s0", StatusSummary.Fallback("Yesterday."), updatedAt = 0))
+            val store = Store(SavedSummary("s0", StatusSummary.Fallback(listOf(NowLine("Yesterday."))), updatedAt = 0))
             val today = session(api, Transport(), Memory(date), store)
             today.open()
             runCurrent()
@@ -587,7 +587,7 @@ class TodaySessionTest {
         runTest {
             val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
             api.gate = CompletableDeferred()
-            val saved = SavedSummary("s1", StatusSummary.Fallback("Earlier."), -300_000, "2026-11-05", project)
+            val saved = SavedSummary("s1", StatusSummary.Fallback(listOf(NowLine("Earlier."))), -300_000, "2026-11-05", project)
             val today = session(api, Transport(), Memory(date), Store(saved))
             today.open()
             runCurrent()
@@ -609,8 +609,8 @@ class TodaySessionTest {
     fun aCardFromYesterdayOrAnotherProjectDoesNotShowBeforeSetup() =
         runTest {
             for (saved in listOf(
-                SavedSummary("s0", StatusSummary.Fallback("Yesterday."), 0, "2026-11-04", project),
-                SavedSummary("s9", StatusSummary.Fallback("Elsewhere."), 0, "2026-11-05", "/Users/me/Projects/other"),
+                SavedSummary("s0", StatusSummary.Fallback(listOf(NowLine("Yesterday."))), 0, "2026-11-04", project),
+                SavedSummary("s9", StatusSummary.Fallback(listOf(NowLine("Elsewhere."))), 0, "2026-11-05", "/Users/me/Projects/other"),
             )) {
                 val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
                 api.gate = CompletableDeferred()
@@ -629,7 +629,7 @@ class TodaySessionTest {
         runTest {
             val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
             api.gate = CompletableDeferred()
-            val saved = SavedSummary("s_old", StatusSummary.Fallback("Another session."), 0, "2026-11-05", project)
+            val saved = SavedSummary("s_old", StatusSummary.Fallback(listOf(NowLine("Another session."))), 0, "2026-11-05", project)
             val today = session(api, Transport(), Memory(date), Store(saved))
             today.open()
             runCurrent()

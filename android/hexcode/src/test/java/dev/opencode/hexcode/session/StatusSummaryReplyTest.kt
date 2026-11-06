@@ -156,7 +156,11 @@ class StatusSummaryReplyTest {
                 Chatter after the card.
                 """,
             )
-        assertEquals(listOf(plain("The lead comes on the next line."), plain("A second sentence.")), card.now)
+        assertEquals(
+            // A line after a Link line is kept rather than dropped (best effort).
+            listOf(plain("The lead comes on the next line."), plain("A second sentence."), plain("Not part of Now.")),
+            card.now,
+        )
         assertEquals("Commit it", card.next)
     }
 
@@ -194,8 +198,8 @@ class StatusSummaryReplyTest {
     }
 
     @Test
-    fun aNowLabelWithNothingAfterItIsAFallback() {
-        assertTrue(StatusSummary.parse("## T\nNow:\nNext: Something") is StatusSummary.Fallback)
+    fun aNowLabelWithNothingAfterItIsACardWithAnEmptyNow() {
+        assertEquals(emptyList<NowLine>(), (StatusSummary.parse("## T\nNow:\nNext: Something") as StatusSummary.Card).now)
     }
 
     /** The final v4 prompt on the kept fixture session `prompt-lab long`, on OpenCode v2.2.5 (beam-free). */

@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.session
 
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -262,7 +263,16 @@ class SummaryRefresher(
                     // Busy as the request started: that's what the reply describes.
                     val midRun = busyAtStart
                     // Mid-run the model suggests its own next step, not the user's: the card drops it (Mid-run card).
-                    val summary = StatusSummary.parse(reply).let { if (midRun && it is StatusSummary.Card) it.copy(next = null) else it }
+                    val parsed = StatusSummary.parse(reply)
+                    // No warning on the card for a reply with no shape (it still shows as one); the log keeps it.
+                    if (parsed is StatusSummary.Fallback) Log.i("HexCode.Summary", "the reply had no shape (no title, no Now:)")
+                    val summary =
+                        when {
+                            !midRun -> parsed
+                            parsed is StatusSummary.Card -> parsed.copy(next = null)
+                            parsed is StatusSummary.Fallback -> parsed.copy(next = null)
+                            else -> parsed
+                        }
                     val updatedAt = clock()
                     mutable.value = SummaryState(summary, updatedAt = updatedAt)
                     shownFor = sessionId

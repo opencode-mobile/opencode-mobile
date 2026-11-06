@@ -74,8 +74,6 @@ import dev.opencode.hexcode.designsystem.components.HexLinkKind
 import dev.opencode.hexcode.designsystem.components.HexLinkTile
 import dev.opencode.hexcode.designsystem.components.HexProgress
 import dev.opencode.hexcode.designsystem.components.HexProgressStep
-import dev.opencode.hexcode.designsystem.components.HexStatusLine
-import dev.opencode.hexcode.designsystem.components.HexStatusTone
 import dev.opencode.hexcode.designsystem.components.HexTileRow
 import dev.opencode.hexcode.designsystem.components.HexTopBar
 import dev.opencode.hexcode.session.AgentStatus
@@ -164,9 +162,14 @@ internal fun StatusArea(
             else -> null
         }
     val work = Work(today.todos, today.running(now), today.you, vm::addToDraft, phase)
-    val card = summary.summary as? StatusSummary.Card
-    val start = card?.let { NowSize.forLines(it.now) } ?: NowSize.Display
-    val count = card?.now?.size ?: 1
+    val nowLines =
+        when (val card = summary.summary) {
+            is StatusSummary.Card -> card.now
+            is StatusSummary.Fallback -> card.now
+            else -> null
+        }
+    val start = nowLines?.let { NowSize.forLines(it) } ?: NowSize.Display
+    val count = nowLines?.size ?: 1
     when (today.setup) {
         // The card saved for today's session shows while setup runs.
         SessionSetup.Opening ->
@@ -281,7 +284,22 @@ private fun Summary(
                 label,
                 vm::refreshSummary,
             )
-        is StatusSummary.Fallback -> Fallback(card.text, dim, label, vm::refreshSummary)
+        // A reply with no shape is still a card: labelled "Status", every line Now (app-plan.md, Fallback).
+        is StatusSummary.Fallback ->
+            Card(
+                stringResource(R.string.home_summary_fallback_title),
+                card.now,
+                card.next,
+                work,
+                dim,
+                label,
+                vm::refreshSummary,
+                size,
+                nowLines,
+                card.links,
+                links,
+                nextTappable = true,
+            )
         null -> Meta(label, vm::refreshSummary) {}
     }
 }
@@ -581,30 +599,7 @@ private fun DetailsLink(
     }
 }
 
-/** A reply that isn't in the card's shape, as plain text, with a note and ↻. */
-@Composable
-private fun Fallback(
-    text: String,
-    dim: Float,
-    label: RefreshLabel?,
-    onRefresh: () -> Unit,
-) {
-    val colors = HexTheme.colors
-    Label { Text(stringResource(R.string.home_summary_fallback_title), style = HexTheme.type.caption, color = colors.text3) }
-    Text(
-        text,
-        style = HexTheme.type.body,
-        color = colors.text2,
-        maxLines = 8,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.alpha(dim),
-    )
-    Meta(label, onRefresh) {
-        HexStatusLine(stringResource(R.string.home_summary_fallback_note), HexStatusTone.Warning)
-    }
-}
-
-/** The card's last line (`.fx-meta`): [leading] (progress, or the fallback's note), then ↻ on the right. */
+/** The card's last line (`.fx-meta`): [leading] (Details), then ↻ on the right. */
 @Composable
 private fun Meta(
     label: RefreshLabel?,

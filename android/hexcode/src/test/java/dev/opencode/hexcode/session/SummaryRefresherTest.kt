@@ -127,7 +127,7 @@ class SummaryRefresherTest {
 
     @Test
     fun theLabelSaysNowUnder45sThenMinutesAgo() {
-        val state = SummaryState(StatusSummary.Fallback("x"), updatedAt = 0)
+        val state = SummaryState(StatusSummary.Fallback(listOf(NowLine("x"))), updatedAt = 0)
         assertEquals(RefreshLabel.Now, state.label(0))
         assertEquals(RefreshLabel.Now, state.label(44_999))
         assertEquals(RefreshLabel.MinutesAgo(1), state.label(45_000))
@@ -139,7 +139,7 @@ class SummaryRefresherTest {
 
     @Test
     fun updatingBeatsFailedBeatsTheAge() {
-        val state = SummaryState(StatusSummary.Fallback("x"), updatedAt = 0, loading = true, failed = true)
+        val state = SummaryState(StatusSummary.Fallback(listOf(NowLine("x"))), updatedAt = 0, loading = true, failed = true)
         assertEquals(RefreshLabel.Updating, state.label(600_000))
         assertEquals(RefreshLabel.Failed, state.copy(loading = false).label(600_000))
         assertNull(SummaryState().label(0))
