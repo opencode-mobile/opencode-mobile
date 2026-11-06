@@ -609,13 +609,13 @@ private fun TalkButtonSample() {
 @Composable
 private fun TalkButtonStates(level: () -> Float) {
     Edge {
-        StateSample("idle") { HexTalkButton(HexTalkState.Idle, "Hold to talk", "Hold to talk", true, { 0f }, {}, {}, {}) }
+        StateSample("idle") { HexTalkButton(HexTalkState.Idle, "Hold to talk", "Hold to talk", true, { 0f }, { false }, {}, {}) }
         StateSample("draft") {
-            HexTalkButton(HexTalkState.Draft, "Hold to keep talking", "Hold to keep talking", true, { 0f }, {}, {}, {})
+            HexTalkButton(HexTalkState.Draft, "Hold to keep talking", "Hold to keep talking", true, { 0f }, { false }, {}, {})
         }
-        StateSample("holding") { HexTalkButton(HexTalkState.Holding, "", "Recording", true, level, {}, {}, {}) }
-        StateSample("locked") { HexTalkButton(HexTalkState.Locked, "", "Recording, hands-free", true, level, {}, {}, {}) }
-        StateSample("disabled") { HexTalkButton(HexTalkState.Idle, "Hold to talk", "Hold to talk", false, { 0f }, {}, {}, {}) }
+        StateSample("holding") { HexTalkButton(HexTalkState.Holding, "", "Recording", true, level, { false }, {}, {}) }
+        StateSample("locked") { HexTalkButton(HexTalkState.Locked, "", "Recording, hands-free", true, level, { false }, {}, {}) }
+        StateSample("disabled") { HexTalkButton(HexTalkState.Idle, "Hold to talk", "Hold to talk", false, { 0f }, { false }, {}, {}) }
     }
 }
 

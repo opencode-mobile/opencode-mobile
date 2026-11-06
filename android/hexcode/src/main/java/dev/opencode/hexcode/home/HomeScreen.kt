@@ -167,7 +167,14 @@ fun HomeScreen(
                         },
                     enabled = ready,
                     level = { vm.level },
-                    onPress = { if (micAllowed) vm.press() else askMic.launch(Manifest.permission.RECORD_AUDIO) },
+                    onPress = {
+                        if (micAllowed) {
+                            vm.press()
+                        } else {
+                            askMic.launch(Manifest.permission.RECORD_AUDIO)
+                            false
+                        }
+                    },
                     onRelease = { how -> vm.release(how.toTalkRelease()) },
                     onTapLocked = vm::tapLocked,
                     modifier = Modifier.weight(1f),
@@ -196,6 +203,7 @@ fun HomeScreen(
                     HomeNotice.TakeDropped -> HexToastMessage(dropped, HexToastTone.Undo)
                     HomeNotice.NewDay -> HexToastMessage(newDayTitle, HexToastTone.Sun, newDayDetail, durationMs = NEW_DAY_NOTICE_MS)
                     HomeNotice.NotInThisVersion -> HexToastMessage(notYet, HexToastTone.Info)
+                    HomeNotice.MicUnavailable -> HexToastMessage(micOffText, HexToastTone.Info)
                     null -> if (micOff) HexToastMessage(micOffText, HexToastTone.Info) else null
                 }
             }

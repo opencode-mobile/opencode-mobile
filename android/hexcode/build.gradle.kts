@@ -13,6 +13,11 @@ plugins {
 // Hex Code: the voice-first OpenCode app. It shares OpenCode Mobile's data and domain code through :opencode-kit, and
 // has its own UI kit (designsystem/).
 android {
+    testOptions {
+        // android.util.Log and friends return defaults in unit tests, as in :opencode-kit.
+        unitTests.isReturnDefaultValues = true
+    }
+
     namespace = "dev.opencode.hexcode"
     compileSdk = 37
 

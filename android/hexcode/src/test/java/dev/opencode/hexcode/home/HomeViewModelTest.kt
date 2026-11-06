@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -32,11 +33,17 @@ class HomeViewModelTest {
         val texts = ArrayDeque<String>()
         var gate: CompletableDeferred<Unit>? = null
 
-        override fun start() {
+        var failStart = false
+
+        override fun start(onFailed: (Throwable) -> Unit) {
+            if (failStart) {
+                onFailed(IllegalStateException("The microphone is busy."))
+                return
+            }
             recording = true
         }
 
-        override fun end(): FloatArray? {
+        override suspend fun end(): FloatArray? {
             if (!recording) return null
             recording = false
             return FloatArray(16_000)
@@ -65,6 +72,7 @@ class HomeViewModelTest {
     fun holdThenReleaseEndsTheTakeIntoTheDraft() =
         runTest(dispatcher) {
             val dictation = FakeDictation().apply { texts += "Add a remember-me checkbox" }
+            dictation.gate = CompletableDeferred()
             val vm = HomeViewModel(dictation) { now }
             vm.press()
             assertEquals(TalkMode.Holding, vm.uiState.value.talk)
@@ -78,6 +86,7 @@ class HomeViewModelTest {
                     .single()
                     .state,
             )
+            dictation.gate?.complete(Unit)
             advanceUntilIdle()
             assertEquals("Add a remember-me checkbox", vm.uiState.value.draft.text)
             assertEquals(4_000, vm.uiState.value.draft.durationMs)
@@ -238,5 +247,24 @@ class HomeViewModelTest {
             assertEquals(HomeNotice.NotInThisVersion, vm.uiState.value.notice)
             vm.noticeShown()
             assertEquals(null, vm.uiState.value.notice)
+        }
+
+    @Test
+    fun theTakeStartsAtOnceAndTheButtonGoesBackIfTheMicrophoneFails() =
+        runTest(dispatcher) {
+            val dictation = FakeDictation().apply { failStart = true }
+            val vm = HomeViewModel(dictation) { now }
+            vm.press()
+            assertEquals(TalkMode.Idle, vm.uiState.value.talk)
+            assertTrue(vm.uiState.value.draft.isEmpty)
+            assertEquals(HomeNotice.MicUnavailable, vm.uiState.value.notice)
+        }
+
+    @Test
+    fun aSecondPressWhileATakeRunsIsRefused() =
+        runTest(dispatcher) {
+            val vm = HomeViewModel(FakeDictation()) { now }
+            assertTrue(vm.press())
+            assertFalse(vm.press())
         }
 }
