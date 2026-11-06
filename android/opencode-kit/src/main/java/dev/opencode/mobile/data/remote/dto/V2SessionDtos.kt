@@ -84,6 +84,19 @@ data class V2MoveSessionRequestDto(
 data class V2TextPromptRequestDto(
     val text: String,
     val delivery: String,
+    /** Left out when there are none; the default isn't encoded. */
+    val files: List<V2PromptFileDto>? = null,
+)
+
+/**
+ * One file of a prompt: [uri] a `data:` URL whose base64 is canonical (no line breaks; the server rejects wrapped
+ * base64), with a [name] that the message, the inbox and the server's errors show. There is no mime field: the server
+ * works the type out from the bytes.
+ */
+@Serializable
+data class V2PromptFileDto(
+    val uri: String,
+    val name: String? = null,
 )
 
 /** `PUT /api/experimental/session/{id}/instructions/entries/{key}`: a string value is used as it is. */
@@ -170,4 +183,16 @@ data class V2InboxItemDto(
 data class V2InboxUserPayloadDto(
     val text: String = "",
     val metadata: JsonObject? = null,
+    /** The message's files, by name and type only. */
+    val files: List<V2InboxFileDto> = emptyList(),
+)
+
+/**
+ * A file of a waiting message. The server sends its whole stored `data` (base64, about 0.7 MB for a photo) in the
+ * inbox and in `session.inbox.enqueued`; it is deliberately not a field here, so decoding skips it and nothing keeps it.
+ */
+@Serializable
+data class V2InboxFileDto(
+    val name: String? = null,
+    val mime: String? = null,
 )

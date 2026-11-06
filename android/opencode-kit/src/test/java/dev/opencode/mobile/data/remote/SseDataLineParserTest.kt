@@ -43,4 +43,12 @@ class SseDataLineParserTest {
         assertEquals(emptyList<String>(), parser.ingest("data: $trailing"))
         assertEquals(listOf(trailing), parser.finish())
     }
+
+    @Test
+    fun aDataLineOfAboutAMegabyteIsOnePayload() {
+        // `session.inbox.enqueued` carries each image's whole base64: one photo makes a line of about 0.7 MB.
+        val event = """{"type":"session.inbox.enqueued","data":{"files":[{"data":"${"A".repeat(1_000_000)}","name":"a.jpg"}]}}"""
+        val parser = SseDataLineParser()
+        assertEquals(listOf(event), parser.ingest("data: $event"))
+    }
 }

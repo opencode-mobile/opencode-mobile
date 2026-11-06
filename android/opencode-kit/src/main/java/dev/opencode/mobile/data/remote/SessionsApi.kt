@@ -33,6 +33,7 @@ import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2MoveSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
 import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RevertStageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
@@ -568,18 +569,20 @@ class SessionsApi private constructor(
             }.bodyOnSuccess()
 
     /**
-     * `POST /api/session/{id}/prompt` with only [text] and [delivery]: every prompt goes through the session's inbox,
+     * `POST /api/session/{id}/prompt` with [text], [delivery] and optional [files]: every prompt goes through the session's inbox,
      * so the reply is the inbox item, whose id cancels it (`DELETE /api/session/{id}/inbox/{item}`) until delivered.
      */
     suspend fun promptTextV2(
         id: String,
         text: String,
         delivery: String,
+        /** Images and other files that go with the text, in the same request. */
+        files: List<V2PromptFileDto> = emptyList(),
     ): V2InboxItemDto =
         httpClient
             .get()
             .post("api/session/$id/prompt") {
-                setJsonBody(json, V2TextPromptRequestDto(text = text, delivery = delivery))
+                setJsonBody(json, V2TextPromptRequestDto(text = text, delivery = delivery, files = files.ifEmpty { null }))
             }.bodyOnSuccess<ApiDataEnvelope<V2InboxItemDto>>()
             .data
 

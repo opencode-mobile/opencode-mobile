@@ -266,4 +266,26 @@ class EventsApiTest {
             EventsApi(client).streamGlobalEvents(protocol = ServerProtocol.V2) { }
             assertEquals(emptySet<String>(), names)
         }
+
+    @Test
+    fun streamEvents_readsALineOfAboutAMegabyte() =
+        runBlocking {
+            // An inbox event with a photo's base64 in it, as `session.inbox.enqueued` sends it.
+            val big = "{\"type\":\"session.inbox.enqueued\",\"data\":{\"data\":\"${"A".repeat(1_200_000)}\"}}"
+            val small = "{\"type\":\"server.heartbeat\",\"data\":{}}"
+            val client =
+                HttpClient(
+                    MockEngine {
+                        respond(
+                            content = "data: $big\n\ndata: $small\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            val lines = mutableListOf<String>()
+            val outcome = EventsApi(client).streamEvents(path = "api/event") { lines += it }
+            assertEquals(SseAttemptOutcome.Ended, outcome)
+            assertEquals(listOf(big.length, small.length), lines.map { it.length })
+        }
 }

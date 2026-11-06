@@ -1,6 +1,8 @@
 package dev.opencode.mobile.data.remote
 
+import dev.opencode.mobile.data.remote.dto.V2InboxFileDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
+import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandler
@@ -15,6 +17,9 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -256,6 +261,71 @@ class SessionsApiDailySessionTest {
             val request = captured.single()
             assertTrue(request.url.encodedPath.endsWith("/api/session/ses_1/prompt"))
             assertEquals("""{"text":"Run ls","delivery":"queue"}""", request.body.readText())
+        }
+
+    @Test
+    fun aPromptWithImagesSendsThemAsDataUrlsWithNamesAndNoLineBreaks() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            val api =
+                api { request ->
+                    captured += request
+                    respond(
+                        """{"data":{"id":"msg_2","type":"user","payload":{"text":"What is this?","files":[{"data":"/9j/4AAQ","mime":"image/jpeg",
+                        "source":{"type":"inline"},"name":"Photo 1.jpg"}]},"delivery":"steer"}}""",
+                        HttpStatusCode.OK,
+                        jsonHeaders,
+                    )
+                }
+            // 3 000 bytes: base64 that a wrapping encoder would split into 76-character lines.
+            val b64 =
+                java.util.Base64
+                    .getEncoder()
+                    .encodeToString(ByteArray(3_000) { it.toByte() })
+            val files =
+                listOf(
+                    V2PromptFileDto(uri = "data:image/jpeg;base64,$b64", name = "Photo 1.jpg"),
+                    V2PromptFileDto(uri = "data:image/jpeg;base64,$b64", name = "Screenshot 1.jpg"),
+                )
+
+            val item = api.promptTextV2("ses_1", "What is this?", "steer", files)
+
+            val body = captured.single().body.readText()
+            assertTrue("no line breaks in the body", '\n' !in body && "\\n" !in body)
+            val sent = Json.parseToJsonElement(body).jsonObject
+            assertEquals("What is this?", sent["text"]?.jsonPrimitive?.content)
+            assertEquals("steer", sent["delivery"]?.jsonPrimitive?.content)
+            val sentFiles = sent["files"]!!.jsonArray.map { it.jsonObject }
+            assertEquals(listOf("Photo 1.jpg", "Screenshot 1.jpg"), sentFiles.map { it["name"]?.jsonPrimitive?.content })
+            assertEquals("data:image/jpeg;base64,$b64", sentFiles[0]["uri"]?.jsonPrimitive?.content)
+            assertEquals(setOf("uri", "name"), sentFiles[0].keys)
+            // The reply's file keeps its name and type, never its data.
+            assertEquals(listOf(V2InboxFileDto(name = "Photo 1.jpg", mime = "image/jpeg")), item.payload?.files)
+        }
+
+    @Test
+    fun theInboxReadsFileNamesAndTypesWithoutTheirData() =
+        runTest {
+            val data = "A".repeat(700_000)
+            val api =
+                api {
+                    respond(
+                        """{"data":[{"id":"msg_1","sessionID":"ses_1","time":{"created":5},"type":"user",
+                        "payload":{"text":"Queued: what letters?","files":[{"data":"$data","mime":"image/jpeg","source":{"type":"inline"},
+                        "name":"queued.jpg"},{"data":"iVBOR","mime":"image/png","name":"b.png"}]},"delivery":"queue"},
+                        {"id":"msg_2","type":"user","payload":{"text":"No files"},"delivery":"queue"}]}""",
+                        HttpStatusCode.OK,
+                        jsonHeaders,
+                    )
+                }
+
+            val inbox = api.listInboxV2("ses_1")
+
+            assertEquals(
+                listOf(V2InboxFileDto("queued.jpg", "image/jpeg"), V2InboxFileDto("b.png", "image/png")),
+                inbox[0].payload?.files,
+            )
+            assertEquals(emptyList<V2InboxFileDto>(), inbox[1].payload?.files)
         }
 
     private fun api(handler: MockRequestHandler): SessionsApi {
