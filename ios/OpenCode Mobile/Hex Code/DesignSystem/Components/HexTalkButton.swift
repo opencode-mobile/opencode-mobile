@@ -121,7 +121,10 @@ struct HexTalkButton: View {
                             .hexFont(.mono)
                             .foregroundStyle(HexColor.text3)
                             .monospacedDigit()
+                            .accessibilityHidden(true)
                     }
+                    // Screen readers hear it in the button's label, not as its own item.
+                    .accessibilityHidden(true)
                 }
                 .padding(.leading, 15)
                 .padding(.trailing, 16)

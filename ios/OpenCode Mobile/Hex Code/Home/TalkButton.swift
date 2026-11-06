@@ -8,6 +8,13 @@ struct TalkButton: View {
     let voice: VoiceEngine
 
     var body: some View {
+        // A locked take's label carries its clock, so it is read again each second.
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            button(at: context.date)
+        }
+    }
+
+    private func button(at date: Date) -> some View {
         HexTalkButton(
             phase: HexTalkButton.Phase(
                 label: label,
@@ -20,7 +27,7 @@ struct TalkButton: View {
                 arm: home.arm
             ),
             level: { Double(home.level) },
-            accessibilityText: accessibilityText,
+            accessibilityText: accessibilityText(at: date),
             onPressBegan: { home.pressBegan() },
             onPressMoved: { home.pressMoved(dx: $0) },
             onPressEnded: { Task { await home.pressEnded() } }
@@ -43,8 +50,12 @@ struct TalkButton: View {
             : String(localized: "talk.more", defaultValue: "Hold to keep talking")
     }
 
-    private var accessibilityText: String {
-        if home.locked { return String(localized: "talk.a11y.locked", defaultValue: "Recording, locked. Tap to pause.") }
+    /// "Recording · 0:03" for a locked take (the clock is part of the button, not its own item).
+    private func accessibilityText(at date: Date) -> String {
+        if home.locked, home.isRecording {
+            let clock = AgentState.clock(home.takeStartedAt.map { date.timeIntervalSince($0) } ?? 0)
+            return String(localized: "draft.recording", defaultValue: "Recording · \(clock)")
+        }
         if home.isRecording { return String(localized: "talk.a11y.recording", defaultValue: "Recording. Release to pause.") }
         return label
     }
