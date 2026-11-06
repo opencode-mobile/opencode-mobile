@@ -221,7 +221,13 @@ struct StatusSummaryTests {
         #expect(SessionPrompts.Summary.version == 1)
         #expect(SessionPrompts.Summary.text.hasPrefix("Summarise this session for a small phone screen."))
         #expect(SessionPrompts.Summary.text.split(separator: "\n").count == 7)
-        #expect(SessionPrompts.MessageRules.version == 1)
+        #expect(SessionPrompts.MessageRules.version == 2)
+        #expect(SessionPrompts.MessageRules.text == """
+        Messages come from a voice app and may arrive while you work.
+        - No label: more detail for the current task. Fold it into the plan.
+        - "[Correction]": the user changed a detail mid-task. Keep the work already done, change only what the correction affects (finished steps too), say so in one line, then carry on with the rest.
+        - The goal set with /goal is the plan for today. Keep it unless told otherwise.
+        """)
         #expect(SessionPrompts.MessageRules.entryID == "message-rules")
         #expect(SessionPrompts.MessageRules.text.split(separator: "\n").count == 4)
     }

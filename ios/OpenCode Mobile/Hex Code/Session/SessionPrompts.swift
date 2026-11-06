@@ -23,13 +23,14 @@ enum SessionPrompts {
     /// `PUT /api/experimental/session/{id}/instructions/entries/message-rules`.
     /// The wording may change after spike S1.
     enum MessageRules {
-        static let version = 1
+        /// 2: after spike S1, a correction keeps the work done and changes only what it affects.
+        static let version = 2
         static let entryID = "message-rules"
 
         static let text = """
         Messages come from a voice app and may arrive while you work.
-        - No label: extra detail, delivered after your turn. Fold it into the plan.
-        - "[Correction]": adjust what you are doing now. Do not restart the task.
+        - No label: more detail for the current task. Fold it into the plan.
+        - "[Correction]": the user changed a detail mid-task. Keep the work already done, change only what the correction affects (finished steps too), say so in one line, then carry on with the rest.
         - The goal set with /goal is the plan for today. Keep it unless told otherwise.
         """
     }
