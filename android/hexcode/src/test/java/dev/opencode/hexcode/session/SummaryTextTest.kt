@@ -144,4 +144,15 @@ class SummaryTextTest {
         assertEquals("http://[fd00::1]:3000/a", SummaryLinks.onComputer("http://0.0.0.0:3000/a", "fd00::1"))
         assertEquals("192.168.1.20:5173", SummaryLinks.host(SummaryLinks.onComputer("http://localhost:5173/login", "192.168.1.20")))
     }
+
+    @Test
+    fun aSavedCardKeepsItsLinks() {
+        val card = StatusSummary.parse("## Login\nNow: Done.\nLink: PR | https://github.com/o/r/pull/1")
+        val saved = SavedSummary("s1", card, 1, "2026-11-06", "/p")
+        val json = kotlinx.serialization.json.Json
+        assertEquals(saved, json.decodeFromString(SavedSummary.serializer(), json.encodeToString(SavedSummary.serializer(), saved)))
+        // A card saved before links existed still reads, with none.
+        val old = """{"sessionId":"s1","summary":{"type":"card","title":"T","now":"N","next":null,"steps":[]},"updatedAt":1}"""
+        assertEquals(emptyList<SummaryLink>(), (json.decodeFromString(SavedSummary.serializer(), old).summary as StatusSummary.Card).links)
+    }
 }
