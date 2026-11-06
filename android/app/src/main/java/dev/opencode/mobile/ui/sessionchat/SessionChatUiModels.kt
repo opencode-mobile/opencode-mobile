@@ -115,13 +115,14 @@ data class SessionChatComposerState(
     val canAttachFiles: Boolean
         get() = selectedModel?.option?.canAttachFiles == true || (attachmentUploadAvailable && selectedModel != null)
 
-    fun attachmentSources(developerToolsUnlocked: Boolean): ComposerAttachmentSources =
-        ComposerAttachmentSources(
-            photos = canAttachPhotos,
-            files = canAttachFiles,
-            logFile = developerToolsUnlocked,
-            acceptsAnyType = attachmentUploadAvailable,
-        )
+    val attachmentSources: ComposerAttachmentSources
+        get() =
+            ComposerAttachmentSources(
+                photos = canAttachPhotos,
+                files = canAttachFiles,
+                logFile = true,
+                acceptsAnyType = attachmentUploadAvailable,
+            )
 }
 
 data class ComposerAttachmentSources(

@@ -42,7 +42,6 @@ struct SessionChatView: View {
     @State private var childSessionTarget: ChildSessionNavigationTarget?
     @State private var terminalRoute: TerminalRoute?
     @State private var filesRoute: FilesRoute?
-    @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
     @State private var showAttachmentSources = false
     @State private var showFilesPicker = false
     @State private var showPhotosPicker = false
@@ -2192,9 +2191,7 @@ struct SessionChatView: View {
     }
 
     private var composerAttachmentSources: ComposerAttachmentSources {
-        viewModel.uiState.composer.attachmentSources(
-            developerToolsUnlocked: developerToolsPreferences.unlocked
-        )
+        viewModel.uiState.composer.attachmentSources
     }
 
     private func attachDiagnosticLog() {

@@ -13,7 +13,6 @@ import dev.opencode.mobile.domain.featureflags.FeatureFlags
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
-import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
@@ -38,7 +37,6 @@ class OpenCodeMobileApplication : Application() {
         AnalyticsConsentPreferences.initialize(this)
         AppLockPreferences.initialize(this)
         AppOnboardingPreferences.initialize(this)
-        DeveloperToolsPreferences.initialize(this)
         PerformanceOverlayPreferences.initialize(this)
         SessionChatDisplayPreferences.initialize(this)
         SplitPanePreferences.initialize(this)

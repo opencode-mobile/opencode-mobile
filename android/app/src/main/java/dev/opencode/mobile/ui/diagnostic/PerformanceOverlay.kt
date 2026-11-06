@@ -23,8 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.opencode.mobile.domain.diagnostic.FrameTimeSnapshot
 import dev.opencode.mobile.domain.diagnostic.FrameTimeTracker
-import dev.opencode.mobile.domain.diagnostic.PerformanceOverlayGate
-import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 
 private const val NORMAL_TEXT = Color.WHITE
@@ -36,14 +34,7 @@ private const val SPIKE_TEXT = 0xFFFFB847.toInt()
  */
 @Composable
 fun BoxScope.PerformanceOverlayHost() {
-    if (
-        !PerformanceOverlayGate.isVisible(
-            developerToolsUnlocked = DeveloperToolsPreferences.unlocked,
-            enabled = PerformanceOverlayPreferences.enabled,
-        )
-    ) {
-        return
-    }
+    if (!PerformanceOverlayPreferences.enabled) return
     AndroidView(
         factory = { PerformanceOverlayView(it) },
         modifier =

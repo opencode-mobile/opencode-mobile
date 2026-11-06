@@ -5,13 +5,9 @@ import UIKit
 /// SwiftUI does not rebuild on every frame.
 struct PerformanceOverlayHost: View {
     @State private var preferences = PerformanceOverlayPreferences.shared
-    @State private var developerTools = DeveloperToolsPreferences.shared
 
     var body: some View {
-        if PerformanceOverlayGate.isVisible(
-            developerToolsUnlocked: developerTools.unlocked,
-            enabled: preferences.enabled
-        ) {
+        if preferences.enabled {
             PerformanceOverlayRepresentable()
                 .fixedSize()
                 .allowsHitTesting(false)
