@@ -167,6 +167,7 @@ struct DictationDraftTests {
 @MainActor
 final class FakeRecorder: TakeRecording {
     var isReady = true
+    var level: Float = 0
     var startFails = false
     var transcript = "hello there"
     private(set) var started = 0
@@ -209,8 +210,8 @@ struct HomeModelTests {
         let (home, _, clock) = make()
         home.pressBegan()
         home.pressMoved(dx: 40)
-        #expect(home.drag > 0 && home.drag < 1)
-        home.pressMoved(dx: HomeModel.armDistance + HomeModel.deadZone)
+        #expect(home.dragOffset == 40 && !home.isArmed)
+        home.pressMoved(dx: TalkDrag.armDistance)
         #expect(home.isArmed)
         clock.now += 1
         await home.pressEnded()
@@ -228,7 +229,7 @@ struct HomeModelTests {
     @Test func dragLeftPastTheTraceDropsTheTake() async {
         let (home, recorder, clock) = make()
         home.pressBegan()
-        home.pressMoved(dx: -(HomeModel.armDistance + HomeModel.deadZone))
+        home.pressMoved(dx: -TalkDrag.armDistance)
         clock.now += 2
         await home.pressEnded()
         #expect(home.draft.isEmpty)
@@ -239,7 +240,7 @@ struct HomeModelTests {
     @Test func aShortDragDoesNothingSpecial() async {
         let (home, _, clock) = make()
         home.pressBegan()
-        home.pressMoved(dx: HomeModel.armDistance / 2)
+        home.pressMoved(dx: TalkDrag.armDistance / 2)
         clock.now += 1
         await home.pressEnded()
         #expect(!home.locked)
@@ -296,5 +297,58 @@ struct HomeModelTests {
         #expect(home.draft.chunks.count == 2)
         home.clearDraft()
         #expect(home.draft.isEmpty)
+    }
+}
+
+/// The drag's dead zone, look and arming (app plan, "Dictation": Drag feedback and Arming).
+struct TalkDragTests {
+    @Test func nothingShowsInTheFirst12Points() {
+        #expect(TalkDrag.progress(0) == 0)
+        #expect(TalkDrag.progress(12) == 0)
+        #expect(TalkDrag.progress(-12) == 0)
+        #expect(TalkDrag.progress(38) == 0.5)
+        #expect(TalkDrag.progress(-38) == -0.5)
+        #expect(TalkDrag.progress(64) == 1)
+        #expect(TalkDrag.progress(-200) == -1)
+    }
+
+    @Test func armsAt64AndDisarmsOnlyBelow52() {
+        #expect(TalkDrag.arm(nil, offset: 63.9) == nil)
+        #expect(TalkDrag.arm(nil, offset: 64) == .lock)
+        #expect(TalkDrag.arm(.lock, offset: 55) == .lock)
+        #expect(TalkDrag.arm(.lock, offset: 52) == .lock)
+        #expect(TalkDrag.arm(.lock, offset: 51.9) == nil)
+        #expect(TalkDrag.arm(nil, offset: -64) == .drop)
+        #expect(TalkDrag.arm(.drop, offset: -53) == .drop)
+        #expect(TalkDrag.arm(.drop, offset: -51) == nil)
+    }
+
+    @Test func aShakyFingerAtTheThresholdDoesNotFlip() {
+        var arm: TalkDrag.Arm?
+        var ticks = 0
+        for offset: CGFloat in [60, 64, 61, 65, 58, 63, 66, 53, 64] {
+            let next = TalkDrag.arm(arm, offset: offset)
+            if next != nil, arm == nil { ticks += 1 }
+            arm = next
+        }
+        #expect(arm == .lock)
+        #expect(ticks == 1)
+    }
+
+    @Test func crossingStraightToTheOtherSideSwitchesTheArm() {
+        #expect(TalkDrag.arm(.lock, offset: -70) == .drop)
+        #expect(TalkDrag.arm(.drop, offset: 70) == .lock)
+    }
+
+    @Test func releaseActsOnTheArmNotTheLook() async {
+        let recorder = FakeRecorder()
+        let home = HomeModel(recorder: recorder)
+        home.pressBegan()
+        home.pressMoved(dx: 70)
+        // Back to 55: inside the hysteresis, still armed.
+        home.pressMoved(dx: 55)
+        #expect(home.arm == .lock)
+        await home.pressEnded()
+        #expect(home.locked)
     }
 }

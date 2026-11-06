@@ -308,9 +308,9 @@ private struct HexGalleryContent: View {
             talk(HexTalkButton.Phase(label: "Getting speech ready…", ready: false))
             talk(HexTalkButton.Phase(label: "Hold to keep talking", quiet: true))
             talk(HexTalkButton.Phase(label: "", recording: true, pressing: true))
-            talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, drag: 0.6))
-            talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, drag: 1, armed: true))
-            talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, drag: -0.8))
+            talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, offset: 43))
+            talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, offset: 70, arm: .lock))
+            talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, offset: -54))
             talk(HexTalkButton.Phase(label: "", recording: true, locked: true))
             caption("Idle · not ready · quiet · held · dragging to lock · armed · dragging to drop · locked")
         }

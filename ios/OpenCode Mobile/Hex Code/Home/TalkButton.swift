@@ -16,10 +16,10 @@ struct TalkButton: View {
                 recording: home.isRecording,
                 pressing: home.isPressing,
                 locked: home.locked,
-                drag: home.drag,
-                armed: home.isArmed
+                offset: home.dragOffset,
+                arm: home.arm
             ),
-            level: { Double(voice.level) },
+            level: { Double(home.level) },
             accessibilityText: accessibilityText,
             onPressBegan: { home.pressBegan() },
             onPressMoved: { home.pressMoved(dx: $0) },

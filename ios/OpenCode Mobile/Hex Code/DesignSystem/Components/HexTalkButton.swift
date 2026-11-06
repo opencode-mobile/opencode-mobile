@@ -2,8 +2,13 @@ import SwiftUI
 
 /// The talk button: a 50 pt pill. Idle it is `solid` with the mic and its label; with a draft it
 /// turns quiet (`panel`, `line2` border). Held it is just the level meter; dragging sideways
-/// traces round its edge, builds a glow from that side and fades in a lock (right) or ✕ (left).
-/// The button never moves. Locked shows a small lock.
+/// traces round its edge from the side it is dragged to, builds a glow from that side and fades
+/// in a lock (right) or ✕ (left). The button never moves. Locked shows a small lock.
+///
+/// The press answers in the same frame as the touch (no fade in), with a light haptic. The drag
+/// look follows a spring-smoothed copy of the finger (about 120 ms, no overshoot), so a shaky
+/// finger gives a steady trace; the red and white tints fade with that smoothed distance and
+/// never switch on and off. Arming is decided by the caller on the real finger, and ticks once.
 struct HexTalkButton: View {
     struct Phase: Equatable {
         /// Shown while not recording.
@@ -15,11 +20,14 @@ struct HexTalkButton: View {
         var recording = false
         var pressing = false
         var locked = false
-        /// −1 (drop) … 1 (lock): how far the drag has gone.
-        var drag: CGFloat = 0
-        /// The drag has gone far enough that release locks or drops.
-        var armed = false
+        /// The finger's sideways distance from where it touched down, in points (right positive).
+        var offset: CGFloat = 0
+        /// What release does now; set when the drag has gone far enough.
+        var arm: TalkDrag.Arm?
     }
+
+    /// The spring the look follows the finger with.
+    static let follow = Animation.spring(duration: 0.12, bounce: 0)
 
     let phase: Phase
     /// The live input level, 0…1, read for the meter while recording.
@@ -38,8 +46,10 @@ struct HexTalkButton: View {
             background
             if phase.recording {
                 recordingContent
+                    .background(FirstFrameProbe())
             } else {
                 idleContent
+                    .transition(.opacity.animation(HexMotion.ease(HexMotion.fade)))
             }
         }
         .frame(maxWidth: .infinity)
@@ -58,9 +68,10 @@ struct HexTalkButton: View {
                     onPressEnded()
                 }
         )
-        .sensoryFeedback(.impact(weight: .light), trigger: phase.armed) { _, armed in armed }
-        .sensoryFeedback(.impact(weight: .medium), trigger: phase.recording) { _, recording in recording }
-        .animation(HexMotion.ease(HexMotion.fade), value: phase.recording)
+        .sensoryFeedback(.impact(weight: .light), trigger: phase.recording) { _, recording in recording }
+        .sensoryFeedback(.selection, trigger: phase.arm) { _, arm in arm != nil }
+        // Going into the recording look is instant; only the way back fades.
+        .animation(phase.recording ? nil : HexMotion.ease(HexMotion.fade), value: phase.recording)
         .animation(HexMotion.ease(HexMotion.fade), value: phase.quiet)
         .accessibilityElement()
         .accessibilityLabel(Text(verbatim: accessibilityText))
@@ -68,7 +79,6 @@ struct HexTalkButton: View {
     }
 
     private var isQuiet: Bool { phase.recording || phase.quiet }
-    private var dropping: Bool { phase.drag < 0 }
 
     @ViewBuilder
     private var background: some View {
@@ -78,22 +88,7 @@ struct HexTalkButton: View {
         } else {
             shape.fill(HexColor.solid)
         }
-        if phase.pressing, phase.recording, !phase.locked {
-            // The glow builds inside the button from the side it is dragged to.
-            let k = abs(phase.drag)
-            LinearGradient(
-                stops: [
-                    .init(color: dropping ? HexColor.red.opacity(0.24 * k) : HexColor.tint(16 * k), location: 0),
-                    .init(color: dropping ? HexColor.red.opacity(0.06 * k) : HexColor.tint(4 * k), location: 0.45),
-                    .init(color: .clear, location: 0.75),
-                ],
-                startPoint: dropping ? .leading : .trailing,
-                endPoint: dropping ? .trailing : .leading
-            )
-        }
     }
-
-    private var tint: Color { dropping ? HexColor.red : HexColor.text1 }
 
     private var idleContent: some View {
         HStack(spacing: 8) {
@@ -106,47 +101,140 @@ struct HexTalkButton: View {
         .opacity(phase.ready ? 1 : 0.6)
     }
 
+    @ViewBuilder
     private var recordingContent: some View {
-        ZStack {
-            HexMeter(level: level)
-                .padding(.leading, phase.locked ? 40 : 14)
-                .padding(.trailing, phase.locked ? 16 : 14)
-                .opacity(phase.pressing && abs(phase.drag) > 0.05 ? 0.25 + 0.75 * (1 - abs(phase.drag)) : 1)
-                .offset(x: phase.drag * 6)
-            if phase.locked {
+        if phase.locked {
+            ZStack {
+                HexMeter(level: level)
+                    .padding(.leading, 40)
+                    .padding(.trailing, 16)
                 HStack {
                     HexIconView(.lock, size: HexIconSize.regular)
                         .foregroundStyle(HexColor.text2)
                     Spacer()
                 }
                 .padding(.horizontal, 15)
-            } else if phase.pressing {
-                trace
-                HStack {
-                    armIcon(.x, shown: dropping)
-                    Spacer()
-                    armIcon(.lock, shown: phase.drag > 0)
-                }
-                .padding(.horizontal, 15)
             }
+        } else {
+            TalkDragLook(
+                offset: phase.pressing ? phase.offset : 0,
+                armed: phase.arm != nil,
+                shape: shape,
+                height: height,
+                level: level
+            )
+            .animation(Self.follow, value: phase.pressing ? phase.offset : 0)
+        }
+    }
+}
+
+/// The held look, drawn from one smoothed offset: SwiftUI's spring animates `offset` itself, and
+/// every tint, the ring and the icons are worked out from it each frame, so they move together
+/// and fade instead of switching.
+private struct TalkDragLook: View, Animatable {
+    var offset: CGFloat
+    let armed: Bool
+    let shape: RoundedRectangle
+    let height: CGFloat
+    let level: () -> Double
+
+    var animatableData: CGFloat {
+        get { offset }
+        set { offset = newValue }
+    }
+
+    var body: some View {
+        let progress = TalkDrag.progress(offset)
+        let lock = max(0, progress)
+        let drop = max(0, -progress)
+        ZStack {
+            // The glow builds inside the button from the side it is dragged to.
+            glow(HexColor.red, strength: (0.24, 0.06), amount: drop, from: .leading)
+            glow(HexColor.text1, strength: (0.16, 0.04), amount: lock, from: .trailing)
+            HexMeter(level: level)
+                .padding(.horizontal, 14)
+                .opacity(1 - 0.75 * abs(progress))
+                .offset(x: progress * 6)
+            EdgeTrace(fromTrailing: false, progress: drop)
+                .stroke(HexColor.red, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .opacity(drop > 0 ? 1 : 0)
+            EdgeTrace(fromTrailing: true, progress: lock)
+                .stroke(HexColor.text1, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .opacity(lock > 0 ? 1 : 0)
+            HStack {
+                armIcon(.x, color: HexColor.red, amount: drop)
+                Spacer()
+                armIcon(.lock, color: HexColor.text1, amount: lock)
+            }
+            .padding(.horizontal, 15)
         }
     }
 
-    /// Progress round the button's edge; complete means release will lock or drop.
-    private var trace: some View {
-        shape
-            .inset(by: 1)
-            .trim(from: 0, to: abs(phase.drag))
-            .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-            .scaleEffect(x: dropping ? -1 : 1, y: 1)
-            .animation(.linear(duration: 0.05), value: phase.drag)
+    private func glow(_ color: Color, strength: (CGFloat, CGFloat), amount: CGFloat, from side: UnitPoint) -> some View {
+        LinearGradient(
+            stops: [
+                .init(color: color.opacity(strength.0), location: 0),
+                .init(color: color.opacity(strength.1), location: 0.45),
+                .init(color: color.opacity(0), location: 0.75),
+            ],
+            startPoint: side,
+            endPoint: side == .leading ? .trailing : .leading
+        )
+        .opacity(amount)
     }
 
-    private func armIcon(_ icon: HexIcon, shown: Bool) -> some View {
-        let k = shown ? abs(phase.drag) : 0
-        return HexIconView(icon, size: HexIconSize.regular)
-            .foregroundStyle(icon == .x ? HexColor.red : HexColor.text1)
-            .opacity(k)
-            .scaleEffect(0.7 + 0.3 * k)
+    private func armIcon(_ icon: HexIcon, color: Color, amount: CGFloat) -> some View {
+        HexIconView(icon, size: HexIconSize.regular)
+            .foregroundStyle(color)
+            .opacity(amount)
+            .scaleEffect(0.7 + 0.3 * amount)
+    }
+}
+
+/// Progress round the pill's edge, growing from the middle of one end along the top and bottom at
+/// once, until the two meet at the middle of the other end (complete: release will act).
+struct EdgeTrace: Shape {
+    /// Starts at the right end (lock); otherwise the left (drop).
+    var fromTrailing: Bool
+    var progress: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        guard progress > 0 else { return Path() }
+        let frame = rect.insetBy(dx: 1, dy: 1)
+        let radius = frame.height / 2
+        let near = fromTrailing ? frame.maxX : frame.minX
+        let far = fromTrailing ? frame.minX : frame.maxX
+        let inward: CGFloat = fromTrailing ? -1 : 1
+        // One half: from the near end's middle round its corner, along the top (or bottom) edge,
+        // round the far corner to the far end's middle.
+        func half(edgeY: CGFloat) -> Path {
+            var path = Path()
+            path.move(to: CGPoint(x: near, y: frame.midY))
+            path.addArc(
+                tangent1End: CGPoint(x: near, y: edgeY),
+                tangent2End: CGPoint(x: near + inward * radius, y: edgeY),
+                radius: radius
+            )
+            path.addLine(to: CGPoint(x: far - inward * radius, y: edgeY))
+            path.addArc(
+                tangent1End: CGPoint(x: far, y: edgeY),
+                tangent2End: CGPoint(x: far, y: frame.midY),
+                radius: radius
+            )
+            return path
+        }
+        var path = Path()
+        path.addPath(half(edgeY: frame.minY).trimmedPath(from: 0, to: progress))
+        path.addPath(half(edgeY: frame.maxY).trimmedPath(from: 0, to: progress))
+        return path
+    }
+}
+
+/// Reports the first frame the recording look is drawn in.
+private struct FirstFrameProbe: View {
+    var body: some View {
+        Color.clear.onAppear {
+            DispatchQueue.main.async { PressTiming.recordingLookDrawn() }
+        }
     }
 }

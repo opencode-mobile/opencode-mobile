@@ -94,7 +94,7 @@ final class HexAppModel {
         // `-HexCodeDemoSession <preset>` starts on a sample session (debug builds; see `TodaySessionDemo`).
         main = HexMainModel(
             setup: setup,
-            home: HomeModel(recorder: voice),
+            home: HomeModel(recorder: TakeCapture(voice: voice)),
             samplePreset: TodaySessionDemo.launchPreset,
             store: store
         )

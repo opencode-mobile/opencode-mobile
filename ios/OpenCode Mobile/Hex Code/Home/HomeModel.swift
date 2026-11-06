@@ -6,6 +6,8 @@ import VoiceEngineKit
 @MainActor
 protocol TakeRecording: AnyObject {
     var isReady: Bool { get }
+    /// Loudness of the take now, 0 to 1; 0 until audio arrives.
+    var level: Float { get }
     func startRecording() async throws
     func stopAndTranscribe() async throws -> String
     func cancelRecording()
@@ -20,16 +22,16 @@ extension VoiceEngine: TakeRecording {
 @MainActor
 @Observable
 final class HomeModel {
-    /// Drag sideways this far (after a small dead zone) to lock or drop the take.
-    static let armDistance: CGFloat = 64
-    static let deadZone: CGFloat = 8
     /// A press shorter than this is a tap, not a take.
     static let minimumHold: TimeInterval = 0.38
 
     private(set) var draft = DictationDraft()
     private(set) var locked = false
-    /// How far the current hold is dragged: -1 (drop) … 1 (lock). Zero when not dragging.
-    private(set) var drag: CGFloat = 0
+    /// How far the finger is from where it touched down, sideways, in points (right positive).
+    /// Zero when not dragging. The talk button smooths it for its look.
+    private(set) var dragOffset: CGFloat = 0
+    /// What release does now, decided on the real finger with hysteresis (`TalkDrag.arm`).
+    private(set) var arm: TalkDrag.Arm?
     private(set) var takeStartedAt: Date?
     /// Notices at the top of the screen, shared with Settings and today's session.
     let toasts: HexToaster
@@ -53,12 +55,14 @@ final class HomeModel {
 
     var isRecording: Bool { draft.isListening }
     var isPressing: Bool { pressStartedAt != nil }
-    var isArmed: Bool { abs(drag) >= 1 }
+    var isArmed: Bool { arm != nil }
+    var level: Float { recorder.level }
 
     // MARK: Talk button
 
     /// Finger down on the talk button. While locked, a press is the tap that pauses.
     func pressBegan() {
+        PressTiming.began()
         guard pressStartedAt == nil else { return }
         if locked {
             pressStartedAt = now()
@@ -86,7 +90,8 @@ final class HomeModel {
     private func startTake() -> Bool {
         guard draft.beginTake() != nil else { return false }
         takeStartedAt = now()
-        drag = 0
+        dragOffset = 0
+        arm = nil
         let recorder = recorder
         startTask = Task {
             do {
@@ -103,8 +108,8 @@ final class HomeModel {
     /// The finger moved while holding: sideways distance in points, right positive.
     func pressMoved(dx: CGFloat) {
         guard pressStartedAt != nil, isRecording, !locked else { return }
-        let reach = max(0, abs(dx) - Self.deadZone) / Self.armDistance
-        drag = (dx < 0 ? -1 : 1) * min(1, reach)
+        dragOffset = dx
+        arm = TalkDrag.arm(arm, offset: dx)
     }
 
     /// Finger up: lock, drop, end the take, or (while locked) pause.
@@ -116,12 +121,13 @@ final class HomeModel {
             await endTake()
             return
         }
-        let armed = drag
-        drag = 0
+        let armed = arm
+        dragOffset = 0
+        arm = nil
         guard isRecording else { return }
-        if armed >= 1 {
+        if armed == .lock {
             locked = true
-        } else if armed <= -1 {
+        } else if armed == .drop {
             await dropTake()
             toasts.show(HexToastItem(
                 tone: .undo,
@@ -149,7 +155,8 @@ final class HomeModel {
             draft.dropTake()
             locked = false
             pressStartedAt = nil
-            drag = 0
+            dragOffset = 0
+            arm = nil
         }
         toasts.show(HexToastItem(
             tone: .info,
