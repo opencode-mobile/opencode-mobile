@@ -97,6 +97,9 @@ class HexServices(
     /** Debug builds: the first load counts as failed (`--ez HexCodeSpeechFail`). */
     var speechFailOnce = false
 
+    /** Debug builds: home runs this many press, hold 1 s, release cycles once it shows (`--ei HexCodePressProbe`). */
+    var pressProbe = 0
+
     /**
      * At process start (app-plan.md, The speech model): loads the speech model, once per process, when it's on the
      * phone or first run is done. Before that, first run's scan step starts the download ([loadSpeech]).

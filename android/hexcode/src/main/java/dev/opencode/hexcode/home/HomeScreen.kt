@@ -53,6 +53,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.designsystem.HexIcons
@@ -113,7 +114,13 @@ fun HomeScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             micAllowed = it
             micOff = !it
+            if (it) vm.homeShown()
         }
+    // While home is on screen and the app in front, the microphone is ready for a press (not on: that's the press).
+    LifecycleStartEffect(vm) {
+        vm.homeShown()
+        onStopOrDispose { vm.homeHidden() }
+    }
     val edge = HexTheme.space.screenHome
     Box(
         Modifier
@@ -205,7 +212,7 @@ fun HomeScreen(
                             },
                         // Recording never waits for the speech model; only turning a take into text does.
                         enabled = true,
-                        level = { vm.level },
+                        level = { vm.level ?: 0f },
                         onPress = {
                             if (micAllowed) {
                                 vm.press()

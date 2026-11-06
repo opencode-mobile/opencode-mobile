@@ -1,6 +1,8 @@
 package dev.opencode.hexcode
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.graphics.Color.TRANSPARENT
 import android.os.Bundle
 import android.os.SystemClock
@@ -32,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -58,6 +61,7 @@ import dev.opencode.hexcode.home.ClipDictation
 import dev.opencode.hexcode.home.FileTakeStore
 import dev.opencode.hexcode.home.HomeScreen
 import dev.opencode.hexcode.home.HomeViewModel
+import dev.opencode.hexcode.home.MicRecorder
 import dev.opencode.hexcode.home.VoiceEngineDictation
 import dev.opencode.hexcode.session.TodaySessionDemo
 import dev.opencode.hexcode.settings.SettingsScreen
@@ -108,6 +112,9 @@ class MainActivity : ComponentActivity() {
             services.speechHoldMs = intent.getIntExtra("HexCodeSpeechDelay", 0) * 1_000L
             services.speechFailOnce = intent.getBooleanExtra("HexCodeSpeechFail", false)
         }
+        // debug builds: `--ei HexCodePressProbe 5` runs 5 press, hold 1 s and release cycles of the talk button through
+        // the real code path once home shows, to time the microphone from logcat on a phone nobody is touching
+        if (BuildConfig.DEBUG) services.pressProbe = intent.getIntExtra("HexCodePressProbe", 0)
         // debug builds: `--es HexCodeLastDate 2026-11-04` saves that as the last date a session was opened, before home
         // opens, to try the new-day notice
         if (BuildConfig.DEBUG) {
@@ -255,7 +262,16 @@ private fun AfterFirstRun(
                 if (clips) {
                     ClipDictation(context, services.voice, services::reloadSpeech, services.speechHoldMs, services.speechFailOnce)
                 } else {
-                    VoiceEngineDictation(services.voice, services::reloadSpeech, services.speechHoldMs, services.speechFailOnce)
+                    val app = context.applicationContext
+                    VoiceEngineDictation(
+                        services.voice,
+                        MicRecorder {
+                            ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                        },
+                        services::reloadSpeech,
+                        services.speechHoldMs,
+                        services.speechFailOnce,
+                    )
                 },
                 takes = FileTakeStore(File(context.filesDir, "takes")),
                 makeSession = { scope ->
@@ -267,6 +283,11 @@ private fun AfterFirstRun(
     // In front, the date is checked and the stream reconnects; in the background it closes after a grace.
     LifecycleEventEffect(Lifecycle.Event.ON_START) { homeModel.enteredForeground() }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { homeModel.enteredBackground() }
+    LaunchedEffect(homeModel) {
+        val cycles = services.pressProbe
+        services.pressProbe = 0
+        if (cycles > 0) homeModel.pressProbe(cycles)
+    }
     LaunchedEffect(homeModel) {
         services.networkPath.updates
             .drop(1)

@@ -36,8 +36,14 @@ import kotlin.math.sqrt
 
 /** The phone's side of dictation: record a take, end it, turn its samples into text. [VoiceEngine] in the app. */
 interface Dictation {
-    /** Loudness of the take, 0 to 1, for the meter. */
-    val level: Float
+    /** Loudness of the take, 0 to 1, for the meter; null while a take waits for its first audio. */
+    val level: Float?
+
+    /** Home is on screen: get the microphone ready, so a press only has to start it. */
+    fun warmUp() = Unit
+
+    /** Home left the screen: let go of what [warmUp] got ready. */
+    fun coolDown() = Unit
 
     /**
      * Starts recording without waiting for the microphone, so the button can answer the touch at once. [onFailed] runs
@@ -70,11 +76,12 @@ fun speechStatus(model: VoiceEngine.ModelState): SpeechStatus =
     }
 
 /**
- * [VoiceEngine]'s recorder on a thread of its own: opening the microphone takes 30 to 250 ms, which the main thread
- * must not wait for. Start, end and drop run there in order, so a take never ends before it started.
+ * Takes from [mic] on a thread of its own, turned into text by [engine]: starting the microphone takes time the main
+ * thread must not wait for. Warm-up, start, end and drop run there in order, so a take never ends before it started.
  */
 class VoiceEngineDictation(
     private val engine: VoiceEngine,
+    private val mic: MicRecorder,
     loadModel: () -> Unit,
     /** Debug builds (`--ei HexCodeSpeechDelay`): the model counts as ready only this long after launch. */
     holdMs: Long = 0,
@@ -87,13 +94,28 @@ class VoiceEngineDictation(
 
     private var loggedAt = 0L
 
-    /** The engine reports RMS × 6 (capped at 1, well above full); the meter shows it in dBFS ([MeterLevel]). */
-    override val level: Float
+    /** Home is on screen: after a take ends, the next recorder is made ahead too. */
+    @Volatile
+    private var warm = false
+
+    /** The take's RMS in dBFS ([MeterLevel]); null until its first audio, so the meter runs its listening wave. */
+    override val level: Float?
         get() {
-            val rms = engine.level / 6f
-            if (BuildConfig.DEBUG && engine.isRecording) logLevel(rms)
+            if (!mic.hasAudio) return null
+            val rms = mic.rms
+            if (BuildConfig.DEBUG) logLevel(rms)
             return MeterLevel.fromRms(rms)
         }
+
+    override fun warmUp() {
+        warm = true
+        scope.launch { if (warm) mic.prepare() }
+    }
+
+    override fun coolDown() {
+        warm = false
+        scope.launch { if (!warm) mic.release() }
+    }
 
     /** Debug builds: the take's loudness every quarter second, to tune the meter's mapping on the phone. */
     private fun logLevel(rms: Float) {
@@ -111,8 +133,7 @@ class VoiceEngineDictation(
         val asked = SystemClock.uptimeMillis()
         scope.launch {
             try {
-                engine.startRecording()
-                Log.i(TalkLog.TAG, "microphone running ${SystemClock.uptimeMillis() - asked} ms after it was asked for")
+                mic.start(pressedAt = asked)
             } catch (error: Throwable) {
                 Log.w(TalkLog.TAG, "microphone didn't start", error)
                 withContext(Dispatchers.Main) { onFailed(error) }
@@ -120,10 +141,21 @@ class VoiceEngineDictation(
         }
     }
 
-    override suspend fun end(): FloatArray? = withContext(audio) { engine.endTake() }
+    override suspend fun end(): FloatArray? =
+        withContext(audio) {
+            mic.end().also { readyForNext() }
+        }
 
     override fun drop() {
-        scope.launch { engine.cancelRecording() }
+        scope.launch {
+            mic.end()
+            readyForNext()
+        }
+    }
+
+    /** Made ahead for the next press, after this take's work on the audio thread. */
+    private fun readyForNext() {
+        scope.launch { if (warm) mic.prepare() }
     }
 
     override suspend fun transcribe(samples: FloatArray): String = transcribeWith(engine, samples)
@@ -338,7 +370,13 @@ class HomeViewModel(
         session?.retry()
     }
 
-    val level: Float get() = dictation.level
+    val level: Float? get() = dictation.level
+
+    /** Home is on screen (and the app in front): the microphone gets ready for a press. */
+    fun homeShown() = dictation.warmUp()
+
+    /** Home left the screen, or the app went to the background. */
+    fun homeHidden() = dictation.coolDown()
 
     /** One chunk is transcribed at a time; takes keep recording meanwhile. */
     private val transcribing = Mutex()
@@ -354,6 +392,22 @@ class HomeViewModel(
         state.update { it.copy(draft = it.draft.startTake(), talk = TalkMode.Holding, takeStartedAt = clock()) }
         dictation.start { microphoneFailed() }
         return true
+    }
+
+    /**
+     * Debug builds (`--ei HexCodePressProbe`): [cycles] times, the talk button goes down, is held 1 s and comes up,
+     * through [press] and [release] as a finger would, 1.5 s apart. Dictation logs how soon audio came after each press.
+     */
+    suspend fun pressProbe(cycles: Int) {
+        repeat(cycles) { i ->
+            Log.i(TalkLog.TAG, "press probe ${i + 1}/$cycles")
+            if (press()) {
+                delay(PROBE_HOLD_MS)
+                release(TalkRelease.End)
+            }
+            delay(PROBE_GAP_MS)
+        }
+        Log.i(TalkLog.TAG, "press probe done")
     }
 
     /** The microphone didn't start: the button goes back, and the notice says so. */
@@ -646,6 +700,10 @@ class HomeViewModel(
 
 /** 0.3 s at 16 kHz: a shorter take leaves the draft quietly. */
 private const val MIN_SAMPLES = 4_800
+
+/** The press probe holds the button this long, and waits this long between presses. */
+private const val PROBE_HOLD_MS = 1_000L
+private const val PROBE_GAP_MS = 1_500L
 
 /** How a hold of the talk button ended. */
 enum class TalkRelease {
