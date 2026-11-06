@@ -78,7 +78,7 @@ enum class TodaySessionDemo(
         val existing = SessionListing(SESSION, DailySession.title(today), DIRECTORY, now, busySince = now - 600_000)
         val api = DemoApi(if (fresh) emptyList() else listOf(existing), fails = this == Failed)
         val memory = DemoMemory(if (this == Empty) null else today.minusDays(1))
-        val live = DemoLive(reply(), snapshot(now))
+        val live = DemoLive(reply(), snapshot(now), now)
         val transport = if (this == Reconnecting) DemoTransport(up = false) else DemoTransport(up = true)
         // While the session is busy, open asks for nothing (the run's end does): the card saved 2 minutes ago shows. The
         // Reconnecting stream never comes up, so its card is 4 minutes old.
@@ -113,7 +113,15 @@ enum class TodaySessionDemo(
     }
 
     private fun snapshot(now: Long): LiveSnapshot {
-        val busy = LiveSnapshot(now - 252_000, hasRun = true, children = emptyList(), pending = emptyList(), inbox = emptyList())
+        val busy =
+            LiveSnapshot(
+                now - 252_000,
+                hasRun = true,
+                children = emptyList(),
+                pending = emptyList(),
+                inbox = emptyList(),
+                projectId = "demo-project",
+            )
         val idle = busy.copy(busySince = null)
         return when (this) {
             // Working, with a subagent running, a message waiting and the agent's list half done.
@@ -121,17 +129,36 @@ enum class TodaySessionDemo(
                 busy.copy(
                     children = listOf(CHILD),
                     runningChildren = listOf(CHILD),
+                    childInfo = mapOf(CHILD to ChildInfo("Check the auth tests", "general", now - 72_000)),
                     inbox = listOf(InboxEntry("msg_demo", "queue", "Also keep the old error messages")),
                     todos = todos(DONE, DONE, NOW, TODO),
                 )
             Needs ->
                 busy.copy(
-                    pending = listOf(pending("frm_demo", PendingItem.Kind.Question, "2 questions · login length and remember-me")),
+                    pending =
+                        listOf(
+                            PendingItem(
+                                "frm_demo",
+                                SESSION,
+                                PendingItem.Kind.Question,
+                                "How long should a login last?",
+                                form = QUESTIONS,
+                            ),
+                        ),
                     todos = todos(DONE, DONE, DONE, TODO),
                 )
             Approval ->
                 busy.copy(
-                    pending = listOf(pending("per_demo", PendingItem.Kind.Approval, "Run bun run db:reset on the dev database")),
+                    pending =
+                        listOf(
+                            PendingItem(
+                                "per_demo",
+                                SESSION,
+                                PendingItem.Kind.Approval,
+                                "bun run db:reset",
+                                approval = ApprovalRequest("shell", listOf("bun run db:reset"), save = listOf("bun *")),
+                            ),
+                        ),
                     todos = todos(DONE, DONE, DONE, TODO),
                 )
             Reconnecting -> busy.copy(todos = todos(DONE, NOW, TODO, TODO))
@@ -157,12 +184,6 @@ enum class TodaySessionDemo(
     private fun todos(vararg statuses: TodoItem.Status): List<TodoItem> =
         listOf("Remove old session helper", "New login form", "Token refresh", "Auth tests")
             .zip(statuses.toList()) { content, status -> TodoItem(content, status) }
-
-    private fun pending(
-        id: String,
-        kind: PendingItem.Kind,
-        text: String,
-    ) = PendingItem(id, SESSION, kind, text)
 
     private fun reply(): String =
         when (this) {
@@ -220,6 +241,30 @@ enum class TodaySessionDemo(
                 "still lean on the old session helper, so I am rewriting those to use the new client first, which should not " +
                 "take long, and after that I will run the whole suite again and see what else is left over."
 
+        /** The Needs sample's questions: one choice, then any. */
+        private val QUESTIONS =
+            QuestionForm(
+                "Questions",
+                listOf(
+                    QuestionField(
+                        "q0",
+                        "Login length",
+                        "How long should a login last?",
+                        QuestionField.SINGLE,
+                        listOf(QuestionOption("1 day", "1 day", "Safer on shared computers"), QuestionOption("30 days", "30 days")),
+                        custom = true,
+                    ),
+                    QuestionField(
+                        "q1",
+                        "Remember me",
+                        "Where should remember-me show?",
+                        QuestionField.MULTIPLE,
+                        listOf(QuestionOption("Login form", "Login form"), QuestionOption("Settings", "Settings")),
+                        custom = true,
+                    ),
+                ),
+            )
+
         private const val DIRECTORY = "/Users/example/Projects/hexcode"
         private const val SESSION = "ses_demo"
         private const val CHILD = "ses_demo_child"
@@ -263,10 +308,11 @@ private class DemoMemory(
     }
 }
 
-/** Answers after 0.6 s; a null [reply] fails, and [hangs] never answers. */
+/** Answers after 0.6 s; a null [reply] fails, and [hangs] never answers. Replies and Stop always work. */
 private class DemoLive(
     var reply: String?,
     private val snapshot: LiveSnapshot,
+    private val now: Long,
 ) : LiveSessionApi {
     var hangs = false
 
@@ -297,6 +343,46 @@ private class DemoLive(
         sessionId: String,
         itemId: String,
     ) = Unit
+
+    override suspend fun replyPermission(
+        sessionId: String,
+        requestId: String,
+        decision: ApprovalDecision,
+        message: String?,
+    ) = delay(400)
+
+    override suspend fun replyForm(
+        sessionId: String,
+        formId: String,
+        answer: kotlinx.serialization.json.JsonObject,
+    ) = delay(400)
+
+    override suspend fun dismissForm(
+        sessionId: String,
+        formId: String,
+        message: String,
+    ) = delay(400)
+
+    override suspend fun interrupt(sessionId: String): Boolean {
+        delay(300)
+        return snapshot.busySince != null
+    }
+
+    override suspend fun running(
+        rootId: String,
+        directory: String,
+    ) = RunningRead(
+        snapshot.childInfo,
+        snapshot.runningChildren.toSet(),
+        if (snapshot.busySince != null) listOf(ShellRun("sh_demo", "bun dev --port 5173", now - 243_000)) else emptyList(),
+    )
+
+    override suspend fun recent(sessionId: String) =
+        listOf(
+            RecentStep(RecentStep.Kind.Edit, "src/auth/client.ts", RecentOutcome.Edited(12, 3), now - 60_000),
+            RecentStep(RecentStep.Kind.Command, "bun test auth", RecentOutcome.Failed(1), now - 180_000),
+            RecentStep(RecentStep.Kind.Subagent, "Check the auth tests", RecentOutcome.Subagent("general"), now - 240_000),
+        )
 }
 
 /** Says it connected and then stays open; or, when not [up], fails every attempt. */

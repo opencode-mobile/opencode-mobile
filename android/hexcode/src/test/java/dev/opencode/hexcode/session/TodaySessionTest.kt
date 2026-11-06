@@ -260,7 +260,11 @@ class TodaySessionTest {
             )
             runCurrent()
             assertEquals(AgentStatus.NeedsInput, today.state.value.agent)
-            assertEquals(PendingItem("per_1", "new1", PendingItem.Kind.Approval, "ls"), today.state.value.pendingInput)
+            assertEquals(
+                PendingItem("per_1", "new1", PendingItem.Kind.Approval, "ls"),
+                today.state.value.pendingInput
+                    ?.copy(approval = null),
+            )
             transport.send(event("permission.replied", """{"sessionID":"new1","requestID":"per_1","reply":"once"}"""))
             runCurrent()
             assertNull(today.state.value.pendingInput)

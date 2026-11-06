@@ -59,4 +59,17 @@ object SessionPrompts {
         - "[Correction]": the user changed a detail mid-task. Keep the work already done, change only what the correction affects (finished steps too), say so in one line, then carry on with the rest.
         - The goal set with /goal is the plan for today. Keep it unless told otherwise.
         """.trimIndent()
+
+    /** Raised whenever [DENY_NOTE] or [DISMISS_NOTE] changes. Version 1 is M4's (app-plan.md, Needs you and control). */
+    const val NOTES_VERSION = 1
+
+    /**
+     * Deny's note when nothing was said (app-plan.md, Approvals › Deny): a reject always carries a note, so the agent
+     * carries on another way instead of the run ending. Stop is the way to halt.
+     */
+    const val DENY_NOTE = "The user denied this request. Don't try it again; carry on another way, or ask if you're stuck."
+
+    /** Dismiss's note (app-plan.md, Questions › Dismiss): the form is closed with it, so the run goes on. */
+    const val DISMISS_NOTE =
+        "The user dismissed these questions without answering. Carry on with your best judgement and say what you chose."
 }

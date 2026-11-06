@@ -19,6 +19,31 @@ data class InboxFile(
     val mime: String?,
 )
 
+/** A subagent of today's session: its task ([title]), its agent, and since when it has been running. */
+data class ChildInfo(
+    val title: String = "",
+    val agent: String? = null,
+    /** When its current run started; null when it isn't known or it isn't running. */
+    val busySince: Long? = null,
+)
+
+/** An agent shell running now: its command and when it started. */
+data class ShellRun(
+    val id: String,
+    val command: String,
+    val startedAt: Long,
+)
+
+/** What Running now reads when Details opens (app-plan.md, Details › Reading Running now). */
+data class RunningRead(
+    /** Today's subagents, running or not, with their titles, agents and `time.busy`. */
+    val children: Map<String, ChildInfo>,
+    /** The subagents in `GET /api/session/active`. */
+    val runningChildren: Set<String>,
+    /** Agent shells of the session and its subagents. */
+    val shells: List<ShellRun>,
+)
+
 /** The state read back on every (re)connect (app-plan.md, Today's session on screen). */
 data class LiveSnapshot(
     /** When the current run started; null when today's session isn't running. */
@@ -37,6 +62,10 @@ data class LiveSnapshot(
     val todosRead: Boolean = true,
     /** The session's `time.updated`: what the saved card's basis is checked against (app-plan.md, Nothing new). */
     val updatedAt: Long? = null,
+    /** The subagents' titles, agents and `time.busy`. */
+    val childInfo: Map<String, ChildInfo> = emptyMap(),
+    /** The session's project: `global` for a folder that isn't a git repository (no Always there). */
+    val projectId: String? = null,
 )
 
 /** What an event asks of the summary. */
@@ -66,6 +95,14 @@ data class LiveSessionState(
     val inbox: List<InboxEntry> = emptyList(),
     /** The agent's to-do list; empty when it keeps none. */
     val todos: List<TodoItem> = emptyList(),
+    /** What each subagent is doing, by id. */
+    val childInfo: Map<String, ChildInfo> = emptyMap(),
+    /** Each agent shell's command, by id. */
+    val shellCommands: Map<String, String> = emptyMap(),
+    /** The session's project id; null until the first read-back. */
+    val projectId: String? = null,
+    /** Counts today's session's finished tools, so Details can read Recent again after each. */
+    val toolEvents: Int = 0,
 ) {
     /** Messages that send after this turn. */
     val waiting: Int get() = queued.size
@@ -94,7 +131,32 @@ data class LiveSessionState(
             pending = snapshot.pending,
             inbox = snapshot.inbox,
             todos = if (snapshot.todosRead) snapshot.todos else todos,
+            childInfo = childInfo + snapshot.childInfo,
+            projectId = snapshot.projectId ?: projectId,
         )
+
+    /** Takes what Details read for Running now: the subagents and the agent shells, as they are now. */
+    fun apply(running: RunningRead): LiveSessionState =
+        copy(
+            children = children + running.children.keys,
+            childInfo = childInfo + running.children,
+            runningChildren = running.runningChildren,
+            shells = running.shells.associate { it.id to it.startedAt },
+            shellCommands = running.shells.associate { it.id to it.command },
+        )
+
+    /** Without pending item [id], once it was answered from this phone: it leaves the queue before the event comes. */
+    fun withoutPending(id: String): LiveSessionState = copy(pending = pending.filterNot { it.id == id })
+
+    /**
+     * After a reject on [sessionId]: the server rejects that session's other pending approvals with the same note, so
+     * they go too.
+     */
+    fun withoutApprovals(sessionId: String): LiveSessionState =
+        copy(pending = pending.filterNot { it.sessionId == sessionId && it.kind == PendingItem.Kind.Approval })
+
+    /** Agent shells running now, with their commands. */
+    val shellRuns: List<ShellRun> get() = shells.map { (id, at) -> ShellRun(id, shellCommands[id].orEmpty(), at) }
 
     /** Without inbox item [id], once a DELETE took it back: the row goes before the event says so. */
     fun withoutInbox(id: String): LiveSessionState = copy(inbox = inbox.filterNot { it.id == id })
@@ -110,21 +172,31 @@ data class LiveSessionState(
                 when (event.sessionId) {
                     // One run includes the queued messages delivered during it: the first start is kept.
                     rootId -> copy(busySince = busySince ?: event.at ?: now, hasRun = true) to null
-                    in children -> copy(runningChildren = runningChildren + event.sessionId) to null
+                    in children -> {
+                        val info = childInfo[event.sessionId] ?: ChildInfo()
+                        val since = if (event.sessionId in runningChildren) info.busySince ?: event.at ?: now else event.at ?: now
+                        copy(
+                            runningChildren = runningChildren + event.sessionId,
+                            childInfo = childInfo + (event.sessionId to info.copy(busySince = since)),
+                        ) to null
+                    }
                     else -> this to null
                 }
+            // Pending ends with the run: Stop takes a pending approval away without `permission.replied`.
             is SessionEvent.ExecutionEnded ->
                 when (event.sessionId) {
-                    rootId -> copy(busySince = null, hasRun = true) to LiveEffect.RunEnded
-                    in children -> copy(runningChildren = runningChildren - event.sessionId) to null
+                    rootId -> copy(busySince = null, hasRun = true, pending = pendingWithout(event.sessionId)) to LiveEffect.RunEnded
+                    in children ->
+                        copy(runningChildren = runningChildren - event.sessionId, pending = pendingWithout(event.sessionId)) to null
                     else -> this to null
                 }
             is SessionEvent.PermissionAsked -> addPending(event.item) to null
             is SessionEvent.FormCreated -> addPending(event.item) to null
             is SessionEvent.PermissionReplied -> removePending(event.sessionId, event.id) to null
             is SessionEvent.FormClosed -> removePending(event.sessionId, event.id) to null
+            // A server note (a subagent's `<subagent …>`) isn't a message from the user: it never waits to send.
             is SessionEvent.InboxEnqueued ->
-                if (event.sessionId != rootId || inbox.any { it.id == event.id }) {
+                if (event.sessionId != rootId || event.synthetic || inbox.any { it.id == event.id }) {
                     this to null
                 } else {
                     copy(inbox = inbox + InboxEntry(event.id, event.delivery, event.text, event.files)) to null
@@ -137,13 +209,27 @@ data class LiveSessionState(
                 } else {
                     copy(inbox = inbox.map { if (it.id == event.id) it.copy(delivery = event.delivery) else it }) to null
                 }
-            is SessionEvent.SessionCreated -> (if (event.parentId == rootId) copy(children = children + event.id) else this) to null
+            is SessionEvent.SessionCreated ->
+                if (event.parentId == rootId) {
+                    copy(children = children + event.id, childInfo = childInfo + (event.id to ChildInfo(event.title, event.agent))) to null
+                } else {
+                    this to null
+                }
             is SessionEvent.ShellCreated ->
-                (if (owns(event.sessionId)) copy(shells = shells + (event.id to (event.at ?: now))) else this) to null
-            is SessionEvent.ShellExited -> copy(shells = shells - event.id) to null
+                if (owns(event.sessionId)) {
+                    copy(shells = shells + (event.id to (event.at ?: now)), shellCommands = shellCommands + (event.id to event.command)) to
+                        null
+                } else {
+                    this to null
+                }
+            is SessionEvent.ShellExited -> copy(shells = shells - event.id, shellCommands = shellCommands - event.id) to null
             // Only today's session's own list; a subagent keeps its own.
-            is SessionEvent.TodosUpdated -> (if (event.sessionId == rootId) copy(todos = event.items) else this) to null
+            is SessionEvent.TodosUpdated ->
+                (if (event.sessionId == rootId) copy(todos = event.items, toolEvents = toolEvents + 1) else this) to null
+            is SessionEvent.ToolFinished -> (if (event.sessionId == rootId) copy(toolEvents = toolEvents + 1) else this) to null
         }
+
+    private fun pendingWithout(sessionId: String): List<PendingItem> = pending.filterNot { it.sessionId == sessionId }
 
     private fun addPending(item: PendingItem): LiveSessionState =
         if (!owns(item.sessionId) || pending.any { it.id == item.id }) this else copy(pending = pending + item)

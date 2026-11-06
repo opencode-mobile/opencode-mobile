@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import java.time.LocalDate
 
 /** How far opening today's session got. */
@@ -57,6 +58,22 @@ data class TodayState(
      * the card made after that run ends.
      */
     val you: String? = null,
+    /** Every question and approval waiting, oldest first: one queue for the sheets and Details' Needs you. */
+    val pending: List<PendingItem> = emptyList(),
+    /** Today's session's id once it's open. */
+    val rootId: String? = null,
+    /** Today's subagents, by id: their tasks and agents. */
+    val children: Map<String, ChildInfo> = emptyMap(),
+    /** The subagents running now. */
+    val runningChildren: List<String> = emptyList(),
+    /** The agent shells running now, with their commands. */
+    val shells: List<ShellRun> = emptyList(),
+    /** Every message in the inbox, queued or steering, oldest first, for Details' Waiting to send. */
+    val inbox: List<InboxEntry> = emptyList(),
+    /** The session's project; `global` has no Always. Null until it's read. */
+    val projectId: String? = null,
+    /** Goes up with each tool today's session finishes: Details reads Recent again. */
+    val toolEvents: Int = 0,
 ) {
     /** What runs besides the session at [now], for "N running · Details ›": subagents, and shells after 10 s. */
     fun running(now: Long): Int = subagentsRunning + shellStarts.count { now - it >= SHELL_SHOWN_MS }
@@ -102,6 +119,68 @@ interface LiveSessionApi {
 
     /** The session's `time.updated` (`GET /api/session/{id}`), the summary card's basis; null when it isn't known. */
     suspend fun updatedAt(sessionId: String): Long? = null
+
+    /**
+     * `POST /api/session/{id}/permission/{request}/reply` with [decision] and, for a reject, [message]. Throws
+     * [RequestGoneException] when the request is no longer there (`404`).
+     */
+    suspend fun replyPermission(
+        sessionId: String,
+        requestId: String,
+        decision: ApprovalDecision,
+        message: String?,
+    ): Unit = throw UnsupportedOperationException("No approvals here")
+
+    /** `POST /api/session/{id}/form/{form}/reply` with `{"answer": …}`; [RequestGoneException] on `404` or `409`. */
+    suspend fun replyForm(
+        sessionId: String,
+        formId: String,
+        answer: JsonObject,
+    ): Unit = throw UnsupportedOperationException("No questions here")
+
+    /** `DELETE /api/session/{id}/form/{form}?message=…`; [RequestGoneException] on `404` or `409`. */
+    suspend fun dismissForm(
+        sessionId: String,
+        formId: String,
+        message: String,
+    ): Unit = throw UnsupportedOperationException("No questions here")
+
+    /** `POST /api/session/{id}/interrupt`: true when a run was stopped. */
+    suspend fun interrupt(sessionId: String): Boolean = throw UnsupportedOperationException("No stop here")
+
+    /** The sessions running now (`GET /api/session/active`), any project's. */
+    suspend fun activeSessions(): Set<String> = emptySet()
+
+    /** Running now's read: today's subagents, which of them run, and the agent shells of [rootId] and its subagents. */
+    suspend fun running(
+        rootId: String,
+        directory: String,
+    ): RunningRead = RunningRead(emptyMap(), emptySet(), emptyList())
+
+    /** Recent's steps, from the session's newest assistant messages. */
+    suspend fun recent(sessionId: String): List<RecentStep> = emptyList()
+}
+
+/**
+ * The approval or question is no longer there: answered elsewhere, or its run ended (`404`, or `409
+ * FormAlreadySettledError`). The sheet closes with "No longer needed".
+ */
+class RequestGoneException(
+    message: String? = null,
+) : Exception(message)
+
+/** How Stop went (app-plan.md, Stop › Notice). */
+sealed interface StopOutcome {
+    /** A run was stopped; [waiting] when messages are still queued, which send after the next one. */
+    data class Stopped(
+        val waiting: Boolean,
+    ) : StopOutcome
+
+    /** Nothing was running: the agent had already finished. */
+    data object NothingToStop : StopOutcome
+
+    /** The interrupt didn't reach the server. */
+    data object Failed : StopOutcome
 }
 
 /**
@@ -277,6 +356,144 @@ class TodaySession(
         stream?.drop()
     }
 
+    /**
+     * Answers approval [item] on its own session's route (a subagent's child id): [ApprovalDecision.Reject] always
+     * with a note, [note] when one was said, else [SessionPrompts.DENY_NOTE], so the agent carries on another way. Once
+     * it worked the item leaves the queue; a reject takes the session's other approvals with it, as the server does.
+     * Throws [RequestGoneException] when it was no longer there (and it leaves the queue too), or the server's error.
+     */
+    suspend fun reply(
+        item: PendingItem,
+        decision: ApprovalDecision,
+        note: String? = null,
+    ) {
+        val message = if (decision == ApprovalDecision.Reject) note?.trim()?.ifEmpty { null } ?: SessionPrompts.DENY_NOTE else null
+        settle(item) { api.replyPermission(item.sessionId, item.id, decision, message) }
+        if (decision == ApprovalDecision.Reject) changeLive { it.withoutApprovals(item.sessionId) }
+    }
+
+    /** Answers question [item] with [answer] (`{"q0": "Red", "q1": ["Apple"]}`); as [reply] otherwise. */
+    suspend fun answer(
+        item: PendingItem,
+        answer: JsonObject,
+    ) = settle(item) { api.replyForm(item.sessionId, item.id, answer) }
+
+    /** Dismisses question [item] with [SessionPrompts.DISMISS_NOTE], so the run goes on; as [reply] otherwise. */
+    suspend fun dismiss(item: PendingItem) = settle(item) { api.dismissForm(item.sessionId, item.id, SessionPrompts.DISMISS_NOTE) }
+
+    private suspend fun settle(
+        item: PendingItem,
+        call: suspend () -> Unit,
+    ) {
+        try {
+            call()
+        } catch (gone: RequestGoneException) {
+            changeLive { it.withoutPending(item.id) }
+            throw gone
+        }
+        changeLive { it.withoutPending(item.id) }
+    }
+
+    private fun changeLive(change: (LiveSessionState) -> LiveSessionState) {
+        live = live?.let(change)
+        publish()
+    }
+
+    /** Watches for a subagent's note waking today's session just after Stop (app-plan.md, Stop › At 3 s). */
+    private class StopWatch(
+        val root: String,
+        val until: Long,
+    ) {
+        var noteSeen = false
+    }
+
+    @Volatile
+    private var stopWatch: StopWatch? = null
+
+    /**
+     * Stop, after the 3 s hold (app-plan.md, Stop › At 3 s): interrupts today's session, then each of its subagents
+     * that is running ([LiveSessionApi.activeSessions]). For [STOP_RETRY_MS] after, if a subagent's `<subagent …>` note
+     * starts the session again, it's interrupted once more. Background shells are left running.
+     */
+    suspend fun stop(): StopOutcome {
+        val root = sessionId ?: return StopOutcome.Failed
+        val stopped =
+            try {
+                api.interrupt(root)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(STOP_TAG, "couldn't stop $root: ${error.message}")
+                return StopOutcome.Failed
+            }
+        stopWatch = StopWatch(root, clock() + STOP_RETRY_MS)
+        val children = live?.children.orEmpty()
+        val active =
+            if (children.isEmpty()) {
+                emptySet()
+            } else {
+                try {
+                    api.activeSessions()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(STOP_TAG, "couldn't read the running subagents: ${error.message}")
+                    // The ones known to run are stopped anyway.
+                    live?.runningChildren.orEmpty()
+                }
+            }
+        var child = false
+        for (id in children.filter { it in active }.sorted()) {
+            try {
+                child = api.interrupt(id) || child
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(STOP_TAG, "couldn't stop subagent $id: ${error.message}")
+            }
+        }
+        Log.i(STOP_TAG, "stopped $root: interrupted=$stopped, subagents ${children.filter { it in active }}")
+        return if (stopped || child) StopOutcome.Stopped(waiting = (live?.waiting ?: 0) > 0) else StopOutcome.NothingToStop
+    }
+
+    /** The one retry after Stop: a subagent's note woke today's session within [STOP_RETRY_MS]. */
+    private fun watchStop(event: SessionEvent) {
+        val watch = stopWatch ?: return
+        if (clock() > watch.until) {
+            stopWatch = null
+            return
+        }
+        when {
+            event is SessionEvent.InboxEnqueued &&
+                event.sessionId == watch.root &&
+                event.synthetic &&
+                event.text.trimStart().startsWith("<subagent") -> watch.noteSeen = true
+            event is SessionEvent.ExecutionStarted && event.sessionId == watch.root && watch.noteSeen -> {
+                stopWatch = null
+                Log.i(STOP_TAG, "a subagent's note started ${watch.root} again: interrupting it once more")
+                scope.launch {
+                    try {
+                        api.interrupt(watch.root)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        Log.w(STOP_TAG, "the second stop failed: ${error.message}")
+                    }
+                }
+            }
+        }
+    }
+
+    /** Details opened, or reconnected while open: reads Running now (subagents and agent shells) again. */
+    suspend fun readRunning() {
+        val root = sessionId ?: return
+        val read = api.running(root, directory())
+        if (live?.rootId == root) changeLive { it.apply(read) }
+    }
+
+    /** Details' Recent: the session's latest edits, commands and subagent starts. */
+    suspend fun recent(): List<RecentStep> = api.recent(sessionId ?: return emptyList())
+
     private suspend fun openNow() {
         own.update {
             it.copy(setup = if (it.setup is SessionSetup.Failed) SessionSetup.Failed(retrying = true) else SessionSetup.Opening)
@@ -344,6 +561,7 @@ class TodaySession(
                 youRunEnded = false
             }
         }
+        watchStop(event)
         val (next, effect) = current.apply(event, clock())
         live = next
         if (effect == LiveEffect.RunEnded && you != null) youRunEnded = true
@@ -362,6 +580,14 @@ class TodaySession(
                 queued = state?.queued.orEmpty(),
                 todos = state?.todos.orEmpty(),
                 you = you,
+                pending = state?.pending.orEmpty(),
+                rootId = state?.rootId,
+                children = state?.childInfo.orEmpty(),
+                runningChildren = state?.runningChildren?.toList().orEmpty(),
+                shells = state?.shellRuns.orEmpty(),
+                inbox = state?.inbox.orEmpty(),
+                projectId = state?.projectId,
+                toolEvents = state?.toolEvents ?: 0,
                 subagentsRunning = state?.runningChildren?.size ?: 0,
                 shellStarts =
                     state
@@ -399,5 +625,10 @@ class TodaySession(
 
         /** The stream closes this long after the app goes to the background. */
         const val BACKGROUND_GRACE_MS = 5_000L
+
+        /** After Stop, a subagent's note that starts the session again within this long gets one more interrupt. */
+        const val STOP_RETRY_MS = 5_000L
+
+        private const val STOP_TAG = "HexCode.Stop"
     }
 }

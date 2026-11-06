@@ -13,6 +13,10 @@ data class PendingItem(
     val kind: Kind,
     /** The question's text, or the command or action to approve. */
     val text: String,
+    /** The whole request, for the approval sheet; null for a question. */
+    val approval: ApprovalRequest? = null,
+    /** The whole form, for the question sheet; null for an approval. */
+    val form: QuestionForm? = null,
 ) {
     enum class Kind { Question, Approval }
 
@@ -78,6 +82,11 @@ sealed interface SessionEvent {
         val text: String = "",
         /** The message's files by name and type; their base64, which the event carries in full, is dropped. */
         val files: List<InboxFile> = emptyList(),
+        /**
+         * Put there by the server, not the user (`item.type: "synthetic"`), such as a subagent's `<subagent …>` note
+         * that wakes the session when it finishes.
+         */
+        val synthetic: Boolean = false,
     ) : SessionEvent
 
     /** `session.inbox.delivered` or `.cancelled`. */
@@ -94,9 +103,12 @@ sealed interface SessionEvent {
         val delivery: String,
     ) : SessionEvent
 
+    /** A session was made; with [parentId] today's, it's a subagent, [title] being its task and [agent] its agent. */
     data class SessionCreated(
         val id: String,
         val parentId: String?,
+        val title: String = "",
+        val agent: String? = null,
     ) : SessionEvent
 
     /** [at] is the envelope's `created`: when the shell started. */
@@ -104,6 +116,7 @@ sealed interface SessionEvent {
         val id: String,
         val sessionId: String,
         val at: Long? = null,
+        val command: String = "",
     ) : SessionEvent
 
     /** Carries no session id: it counts when its shell came from a counted [ShellCreated]. */
@@ -115,6 +128,11 @@ sealed interface SessionEvent {
     data class TodosUpdated(
         val sessionId: String,
         val items: List<TodoItem>,
+    ) : SessionEvent
+
+    /** Any other `session.tool.success`, or a `session.tool.failed`: Details reads Recent again. */
+    data class ToolFinished(
+        val sessionId: String,
     ) : SessionEvent
 
     companion object {
@@ -137,7 +155,8 @@ sealed interface SessionEvent {
                 "session.created",
                 "shell.created",
                 "shell.exited",
-                // Only for the to-do list: one whose `metadata.todos` is a list.
+                // Details' Recent; for the to-do list, one whose `metadata.todos` is a list.
+                "session.tool.failed",
                 "session.tool.success",
             )
 
@@ -158,7 +177,7 @@ sealed interface SessionEvent {
                     val id = data.string("id") ?: return null
                     sessionId ?: return null
                     val text = PendingItem.approvalText(data.string("action").orEmpty(), data.strings("resources"), data.string("message"))
-                    PermissionAsked(PendingItem(id, sessionId, PendingItem.Kind.Approval, text))
+                    PermissionAsked(PendingItem(id, sessionId, PendingItem.Kind.Approval, text, approval = ApprovalRequest.read(data)))
                 }
                 "permission.replied" -> {
                     val id = data.string("requestID") ?: return null
@@ -170,7 +189,7 @@ sealed interface SessionEvent {
                     val formSession = form.string("sessionID") ?: return null
                     val first = (form["fields"] as? JsonArray)?.firstOrNull() as? JsonObject
                     val text = PendingItem.questionText(form.string("title"), first?.string("title"), first?.string("description"))
-                    FormCreated(PendingItem(id, formSession, PendingItem.Kind.Question, text))
+                    FormCreated(PendingItem(id, formSession, PendingItem.Kind.Question, text, form = QuestionForm.read(form)))
                 }
                 "form.replied", "form.cancelled" -> {
                     val id = data.string("id") ?: return null
@@ -187,7 +206,8 @@ sealed interface SessionEvent {
                             ?.mapNotNull { it as? JsonObject }
                             ?.map { InboxFile(it.string("name"), it.string("mime")) }
                             .orEmpty()
-                    sessionId?.let { InboxEnqueued(it, id, delivery, text, files) }
+                    val synthetic = item?.string("type") == "synthetic"
+                    sessionId?.let { InboxEnqueued(it, id, delivery, text, files, synthetic) }
                 }
                 "session.inbox.delivered", "session.inbox.cancelled" -> {
                     val id = data.string("inboxID") ?: return null
@@ -198,22 +218,25 @@ sealed interface SessionEvent {
                     val delivery = data.string("delivery") ?: return null
                     sessionId?.let { InboxDeliveryChanged(it, id, delivery) }
                 }
+                // v2.2.5 sends the session's fields flat in `data` (`sessionID`, `parentID`, `title`, `agent`); an older
+                // shape nested them in `info`.
                 "session.created" -> {
-                    val info = data["info"] as? JsonObject
-                    val id = info?.string("id") ?: sessionId ?: return null
-                    SessionCreated(id, info?.string("parentID"))
+                    val info = data["info"] as? JsonObject ?: data
+                    val id = info.string("id") ?: sessionId ?: return null
+                    SessionCreated(id, info.string("parentID"), info.string("title").orEmpty(), info.string("agent"))
                 }
                 "shell.created" -> {
                     val info = data["info"] as? JsonObject ?: return null
                     val id = info.string("id") ?: return null
                     val shellSession = (info["metadata"] as? JsonObject)?.string("sessionID") ?: return null
-                    ShellCreated(id, shellSession, (envelope["created"] as? JsonPrimitive)?.longOrNull)
+                    ShellCreated(id, shellSession, (envelope["created"] as? JsonPrimitive)?.longOrNull, info.string("command").orEmpty())
                 }
                 "shell.exited" -> data.string("id")?.let { ShellExited(it) }
                 "session.tool.success" -> {
                     sessionId ?: return null
-                    TodoList.fromToolSuccess(data)?.let { TodosUpdated(sessionId, it) }
+                    TodoList.fromToolSuccess(data)?.let { TodosUpdated(sessionId, it) } ?: ToolFinished(sessionId)
                 }
+                "session.tool.failed" -> sessionId?.let { ToolFinished(it) }
                 else -> null
             }
         }

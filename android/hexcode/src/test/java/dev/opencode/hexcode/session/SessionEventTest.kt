@@ -8,8 +8,8 @@ import org.junit.Test
 /** Payloads as OpenCode v2.2.5 sends them (m2-api-notes.md, §4, captured live). */
 class SessionEventTest {
     @Test
-    fun theTypesAreTheExactSeventeenThePlanLists() {
-        assertEquals(17, SessionEvent.TYPES.size)
+    fun theTypesAreTheExactEighteenThePlanLists() {
+        assertEquals(18, SessionEvent.TYPES.size)
         assertEquals(SessionEvent.TYPES.distinct(), SessionEvent.TYPES)
         assertEquals(listOf<String>(), SessionEvent.TYPES.filter { '*' in it || ',' in it })
     }
@@ -36,7 +36,11 @@ class SessionEventTest {
                 """{"type":"permission.asked","data":{"id":"per_1","sessionID":"ses_1","action":"shell","resources":["ls"],
                 "save":["ls *"],"source":{"type":"tool","messageID":"m","id":"c"}}}""",
             )
-        assertEquals(SessionEvent.PermissionAsked(PendingItem("per_1", "ses_1", PendingItem.Kind.Approval, "ls")), asked)
+        val approval = ApprovalRequest("shell", listOf("ls"), listOf("ls *"))
+        assertEquals(
+            SessionEvent.PermissionAsked(PendingItem("per_1", "ses_1", PendingItem.Kind.Approval, "ls", approval = approval)),
+            asked,
+        )
         assertEquals("Edit the config", PendingItem.approvalText("edit", emptyList(), "Edit the config"))
         assertEquals("edit", PendingItem.approvalText("edit", listOf(""), null))
         assertEquals(
@@ -53,7 +57,9 @@ class SessionEventTest {
                 "metadata":{"kind":"question"},"fields":[{"key":"q0","title":"Database","description":"Which database?"},
                 {"key":"q1","title":"Other"}]}}}""",
             )
-        assertEquals(SessionEvent.FormCreated(PendingItem("frm_1", "ses_child", PendingItem.Kind.Question, "Which database?")), created)
+        val item = (created as SessionEvent.FormCreated).item
+        assertEquals(PendingItem("frm_1", "ses_child", PendingItem.Kind.Question, "Which database?"), item.copy(form = null))
+        assertEquals(listOf("q0", "q1"), item.form?.fields?.map { it.key })
         assertEquals("Database", PendingItem.questionText("Questions", "Database", null))
         assertEquals("Questions", PendingItem.questionText("Questions", null, ""))
         for (closed in listOf("replied", "cancelled")) {
@@ -98,7 +104,7 @@ class SessionEventTest {
             ),
         )
         assertEquals(
-            SessionEvent.ShellCreated("sh_1", "ses_1"),
+            SessionEvent.ShellCreated("sh_1", "ses_1", command = "ls"),
             SessionEvent.decode(
                 """{"type":"shell.created","data":{"info":{"id":"sh_1","status":"running","command":"ls","metadata":{"sessionID":"ses_1"},"time":{"started":1}}}}""",
             ),
@@ -134,7 +140,15 @@ class SessionEventTest {
     @Test
     fun anApprovalWithoutResourcesUsesItsMessage() {
         assertEquals(
-            SessionEvent.PermissionAsked(PendingItem("per_2", "ses_1", PendingItem.Kind.Approval, "Edit the config")),
+            SessionEvent.PermissionAsked(
+                PendingItem(
+                    "per_2",
+                    "ses_1",
+                    PendingItem.Kind.Approval,
+                    "Edit the config",
+                    approval = ApprovalRequest("edit", message = "Edit the config"),
+                ),
+            ),
             SessionEvent.decode(
                 """{"type":"permission.asked","data":{"id":"per_2","sessionID":"ses_1","action":"edit","resources":[],"message":"Edit the config"}}""",
             ),
@@ -154,10 +168,10 @@ class SessionEventTest {
     }
 
     @Test
-    fun anotherToolsSuccessIsIgnored() {
+    fun anotherToolsSuccessOnlyCountsForRecent() {
         val line =
             """{"type":"session.tool.success","data":{"sessionID":"ses_1","id":"call-2","content":[],"metadata":{"truncated":false}}}"""
-        assertEquals(null, SessionEvent.decode(line))
+        assertEquals(SessionEvent.ToolFinished("ses_1"), SessionEvent.decode(line))
     }
 
     @Test
