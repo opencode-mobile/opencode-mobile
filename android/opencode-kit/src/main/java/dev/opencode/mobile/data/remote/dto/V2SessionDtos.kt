@@ -140,6 +140,33 @@ data class V2PermissionSourceDto(
 @Serializable
 data class V2PermissionReplyRequestDto(
     val decision: String,
+    /**
+     * With `reject` only: the server hands it to the agent as the tool's error, and the run goes on; a reject without
+     * it ends the run. Left out when null (OpenCode v2.2.5 ignores it with `once` and `always`).
+     */
+    val message: String? = null,
+)
+
+/** `POST /api/session/{id}/interrupt`: whether a run was stopped (`false` when the session was already idle). */
+@Serializable
+data class V2InterruptResultDto(
+    val interrupted: Boolean = false,
+)
+
+/** v2 `ShellInfo` from `GET /api/shell`: one agent-run shell command; [metadata] carries its `sessionID`. */
+@Serializable
+data class V2ShellDto(
+    val id: String,
+    val status: String = "",
+    val command: String = "",
+    val metadata: JsonObject? = null,
+    val time: V2ShellTimeDto? = null,
+)
+
+@Serializable
+data class V2ShellTimeDto(
+    val started: Double? = null,
+    val completed: Double? = null,
 )
 
 @Serializable

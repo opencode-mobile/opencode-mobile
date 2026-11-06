@@ -27,6 +27,7 @@ import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxDeliveryRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2InstructionEntryRequestDto
+import dev.opencode.mobile.data.remote.dto.V2InterruptResultDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
 import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
@@ -40,6 +41,7 @@ import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2SessionGenerateRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionGenerateResponseDto
 import dev.opencode.mobile.data.remote.dto.V2SessionViewRequestDto
+import dev.opencode.mobile.data.remote.dto.V2ShellDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
 import dev.opencode.mobile.data.remote.dto.V2TextPromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
@@ -215,6 +217,31 @@ class SessionsApi private constructor(
             .get()
             .post("api/session/$id/interrupt")
             .ensureSuccess()
+
+    /**
+     * `POST /api/session/{id}/interrupt`, reading its answer: true when a run was stopped, false when the session was
+     * already idle (`{"interrupted": false}`). It answers at once; the run's cleanup and
+     * `session.execution.interrupted` follow.
+     */
+    suspend fun interruptSessionResultV2(id: String): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/interrupt")
+            .bodyOnSuccess<V2InterruptResultDto>()
+            .interrupted
+
+    /**
+     * `GET /api/shell?location[directory]=…`: the agent shells running in [directory] (exited ones aren't listed),
+     * for every session there; each one's `metadata.sessionID` says whose it is.
+     */
+    suspend fun listShellsV2(directory: String): List<V2ShellDto> =
+        json.decodeDataEnvelope(
+            httpClient
+                .get()
+                .get("api/shell") {
+                    applyLocationDirectory(directory)
+                }.bodyOnSuccess<JsonElement>(),
+        )
 
     suspend fun listInboxV2(sessionId: String): List<V2InboxItemDto> =
         httpClient
@@ -435,14 +462,20 @@ class SessionsApi private constructor(
                 setJsonBody(json, body)
             }.ensureSuccess()
 
+    /**
+     * `DELETE /api/session/{id}/form/{form}`. With a [message] (`?message=`) the agent reads it as the question tool's
+     * error and carries on; without one the run ends (OpenCode v2.2.5).
+     */
     suspend fun cancelFormV2(
         sessionId: String,
         formId: String,
+        message: String? = null,
     ): Boolean =
         httpClient
             .get()
-            .delete("api/session/$sessionId/form/$formId")
-            .ensureSuccess()
+            .delete("api/session/$sessionId/form/$formId") {
+                message?.let { parameter("message", it) }
+            }.ensureSuccess()
 
     // --- V2 home / session CRUD ---
 
