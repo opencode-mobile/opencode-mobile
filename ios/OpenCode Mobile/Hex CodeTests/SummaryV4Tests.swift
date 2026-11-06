@@ -210,6 +210,11 @@ struct SummaryReplyTests {
         #expect(CardLabel.text(title: "Login fix", state: .waiting) == "Waiting for you · Login fix")
         #expect(CardLabel.text(title: "", state: .working) == "Still working")
         #expect(CardLabel.text(title: "", state: .waiting) == "Waiting for you")
+        // With Reduce Motion the status words (the label's start) are text2.
+        #expect(CardLabel.text(title: "Login fix", state: .working).hasPrefix(CardLabel.statusWords(.working)))
+        #expect(CardLabel.text(title: "Login fix", state: .waiting).hasPrefix(CardLabel.statusWords(.waiting)))
+        #expect(CardLabel.statusWords(.plain) == "")
+        #expect(CardLabel.period == 2.4)
     }
 }
 

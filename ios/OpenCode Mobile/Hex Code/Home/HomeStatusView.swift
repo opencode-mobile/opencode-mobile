@@ -215,29 +215,92 @@ enum CardLabelState: Equatable, Sendable {
     case waiting
 }
 
-/// The small label above Now: the card's title; while the session is busy "Still working ·
-/// <title>" behind the top bar's green arc; while a question or approval waits "Waiting for you ·
-/// <title>" behind the amber dot. The new card's plain title replaces it when the run ends.
+/// The small label above Now (app plan, "Card label while working"): the card's title; while the
+/// session is busy "Still working · <title>", while a question or approval waits "Waiting for you ·
+/// <title>". No icon (the top bar already has the spinner): a slow light sweeps across the words,
+/// left to right every 2.4 s, `text3` with a band of `text1` (or `amber` while waiting), as the
+/// prototype's `.lab-shine`. With Reduce Motion it is still, the status words in `text2`. The new
+/// card's plain title replaces it when the run ends.
 struct CardLabel: View {
     let title: String
     let state: CardLabelState
 
+    /// One sweep, in seconds.
+    static let period: TimeInterval = 2.4
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 100
+
+    private let style = HexTextStyle.caption.weight(.medium)
+
     var body: some View {
-        HStack(spacing: 7) {
+        Group {
             switch state {
             case .plain:
-                EmptyView()
-            case .working:
-                HexSpinner(size: 12, color: HexColor.green, period: 1.6)
-            case .waiting:
-                HexDot(tone: .amber)
+                SummaryText(text: title, style: style)
+                    .foregroundStyle(HexColor.text3)
+            case .working, .waiting:
+                if reduceMotion {
+                    still
+                } else {
+                    // The phase comes from the clock, so a re-render doesn't restart the sweep.
+                    TimelineView(.animation) { context in
+                        label(SummaryText.text(Self.text(title: title, state: state), style: style, scale: scale))
+                            .foregroundStyle(sweep(at: context.date))
+                    }
+                }
             }
-            SummaryText(text: Self.text(title: title, state: state), style: HexTextStyle.caption.weight(.medium))
-                .foregroundStyle(HexColor.text3)
-                .lineLimit(1)
         }
+        .lineLimit(1)
         .frame(height: HomeLabel.height)
-        .animation(HexMotion.ease(HexMotion.fade), value: state)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: InlineMarkdown.plain(Self.text(title: title, state: state))))
+    }
+
+    private func label(_ text: Text) -> some View {
+        text
+            .hexFont(style)
+            .hexInlineCode()
+    }
+
+    /// Reduce Motion: the status words in `text2`, the title in `text3`.
+    private var still: some View {
+        let full = Self.text(title: title, state: state)
+        let words = Self.statusWords(state)
+        let text: Text = if full.hasPrefix(words) {
+            Text(verbatim: words).foregroundStyle(HexColor.text2)
+                + SummaryText.text(String(full.dropFirst(words.count)), style: style, scale: scale)
+        } else {
+            SummaryText.text(full, style: style, scale: scale)
+        }
+        return label(text).foregroundStyle(HexColor.text3)
+    }
+
+    /// A gradient three times the label's width, `text3` with a band in the middle, moving from
+    /// left of the words to right of them: the prototype's `background-position` 100 % → 0 %.
+    private func sweep(at date: Date) -> LinearGradient {
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.period) / Self.period
+        let band = state == .waiting ? HexColor.amber : HexColor.text1
+        return LinearGradient(
+            stops: [
+                .init(color: HexColor.text3, location: 0),
+                .init(color: HexColor.text3, location: 0.4),
+                .init(color: band, location: 0.5),
+                .init(color: HexColor.text3, location: 0.6),
+                .init(color: HexColor.text3, location: 1),
+            ],
+            startPoint: UnitPoint(x: -2 + 2 * phase, y: 0.5),
+            endPoint: UnitPoint(x: 1 + 2 * phase, y: 0.5)
+        )
+    }
+
+    /// "Still working" or "Waiting for you": the words before the title.
+    static func statusWords(_ state: CardLabelState) -> String {
+        switch state {
+        case .plain: ""
+        case .working: String(localized: "home.summary.working.bare", defaultValue: "Still working")
+        case .waiting: String(localized: "home.summary.waiting.bare", defaultValue: "Waiting for you")
+        }
     }
 
     static func text(title: String, state: CardLabelState) -> String {
