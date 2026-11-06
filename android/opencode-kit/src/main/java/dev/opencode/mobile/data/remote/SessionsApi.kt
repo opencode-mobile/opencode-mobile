@@ -548,7 +548,8 @@ class SessionsApi private constructor(
     /**
      * `GET /api/session/{id}/message` (v2): a page of the session's messages as the server sends them (each with its
      * `content` parts), only [type] messages (`assistant`), in [order] (`desc`: newest first). A later page sends
-     * [cursor] with the same filters, which the cursor doesn't carry.
+     * [cursor] with [type] and [limit] again, which the cursor doesn't carry, but never [order]: the cursor carries
+     * that, and the server refuses the two together (`InvalidCursorError`, OpenCode v2.2.5).
      */
     suspend fun listSessionMessagesPageV2(
         sessionId: String,
@@ -562,7 +563,7 @@ class SessionsApi private constructor(
             .get("api/session/$sessionId/message") {
                 cursor?.let { parameter("cursor", it) }
                 type?.let { parameter("type", it) }
-                order?.let { parameter("order", it) }
+                if (cursor == null) order?.let { parameter("order", it) }
                 limit?.let { parameter("limit", it) }
             }.bodyOnSuccess()
 

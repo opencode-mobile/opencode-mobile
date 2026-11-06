@@ -58,7 +58,7 @@ class SessionsApiDailySessionTest {
         }
 
     @Test
-    fun messagesArePagedWithTheirFiltersAndReadRaw() =
+    fun messagesArePagedAndALaterPageLeavesOrderToTheCursor() =
         runTest {
             val captured = mutableListOf<HttpRequestData>()
             val api =
@@ -73,14 +73,18 @@ class SessionsApiDailySessionTest {
                     )
                 }
 
-            val page = api.listSessionMessagesPageV2("ses_1", type = "assistant", order = "desc", limit = 50, cursor = "c")
+            val page = api.listSessionMessagesPageV2("ses_1", type = "assistant", order = "desc", limit = 50)
+            api.listSessionMessagesPageV2("ses_1", type = "assistant", order = "desc", limit = 50, cursor = "c")
 
-            val url = captured.single().url
+            val url = captured[0].url
             assertTrue(url.encodedPath.endsWith("/api/session/ses_1/message"))
             assertEquals("assistant", url.parameters["type"])
             assertEquals("desc", url.parameters["order"])
             assertEquals("50", url.parameters["limit"])
-            assertEquals("c", url.parameters["cursor"])
+            // A later page sends type and limit again, but never order: the server refuses it with a cursor.
+            val later = captured[1].url
+            assertEquals(setOf("cursor", "type", "limit"), later.parameters.names())
+            assertEquals("c", later.parameters["cursor"])
             assertEquals(
                 "msg_2",
                 page.data

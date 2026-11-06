@@ -38,7 +38,10 @@ object TodoList {
     /** An item's text is clipped to this many characters shown on the to-do row. */
     const val ITEM_MAX = 40
 
-    /** [todos] (`[{content, status}]`) as items, cancelled ones left out; null when it isn't a list. */
+    /**
+     * [todos] (`[{content, status}]`) as items, cancelled ones left out and an unknown status counted as pending; null
+     * when it isn't a list. An empty list is a list: it clears the row.
+     */
     fun read(todos: JsonElement?): List<TodoItem>? {
         val list = todos as? JsonArray ?: return null
         return list.mapNotNull { element ->
@@ -46,10 +49,11 @@ object TodoList {
             val content = item.string("content")?.trim().orEmpty()
             val status =
                 when (item.string("status")) {
-                    "pending" -> TodoItem.Status.Pending
+                    "cancelled" -> return@mapNotNull null
                     "in_progress" -> TodoItem.Status.InProgress
                     "completed" -> TodoItem.Status.Completed
-                    else -> return@mapNotNull null
+                    // Pending, and any status this version doesn't know.
+                    else -> TodoItem.Status.Pending
                 }
             if (content.isEmpty()) null else TodoItem(content, status)
         }

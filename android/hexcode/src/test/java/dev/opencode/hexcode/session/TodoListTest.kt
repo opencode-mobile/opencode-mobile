@@ -121,4 +121,21 @@ class TodoListTest {
     }
 
     private fun item(status: TodoItem.Status) = TodoItem("x", status)
+
+    @Test
+    fun anUnknownStatusCountsAsPending() {
+        val todos = Json.parseToJsonElement("""[{"content":"a","status":"blocked"},{"content":"b"}]""") as JsonArray
+        assertEquals(listOf(TodoItem("a", Pending), TodoItem("b", Pending)), TodoList.read(todos))
+    }
+
+    @Test
+    fun anEmptyTodowriteListClearsTheRow() {
+        // The newest call wrote an empty list: that's the list, not "none here, look further back".
+        val newer = message(todowrite("[]"))
+        val older = message(todowrite("""[{"content":"old","status":"pending"}]"""))
+        assertEquals(emptyList<TodoItem>(), TodoList.fromMessages(listOf(newer, older)))
+        val event = obj("""{"sessionID":"ses_1","metadata":{"todos":[],"truncated":false}}""")
+        assertEquals(emptyList<TodoItem>(), TodoList.fromToolSuccess(event))
+        assertNull(TodoList.label(emptyList()))
+    }
 }

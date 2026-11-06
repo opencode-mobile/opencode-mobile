@@ -23,6 +23,8 @@ import org.junit.Test
 class OpenCodeTodayApiTest {
     private val headers = headersOf(HttpHeaders.ContentType, "application/json")
     private val requests = mutableListOf<String>()
+    private val messageOrders = mutableListOf<String?>()
+    private val messageCursors = mutableListOf<String?>()
 
     private fun api(routes: (String) -> String?): OpenCodeTodayApi {
         val json = Json { ignoreUnknownKeys = true }
@@ -32,6 +34,10 @@ class OpenCodeTodayApiTest {
                     val key = "${request.method.value} ${request.url.encodedPath}"
                     val body = (request.body as? TextContent)?.text
                     requests += if (body != null) "$key $body" else key
+                    if (request.url.encodedPath.endsWith("/message")) {
+                        messageOrders += request.url.parameters["order"]
+                        messageCursors += request.url.parameters["cursor"]
+                    }
                     val reply =
                         routes(
                             request.url.encodedPath +
@@ -173,6 +179,9 @@ class OpenCodeTodayApiTest {
             assertEquals(listOf(TodoItem("a", TodoItem.Status.Completed)), snapshot.todos)
             assertTrue(snapshot.todosRead)
             assertEquals(2, requests.count { it.endsWith("/message") })
+            // The later page leaves the order to its cursor: the server refuses the two together.
+            assertEquals(listOf("desc", null), messageOrders)
+            assertEquals(listOf(null, "c2"), messageCursors)
         }
 
     @Test
