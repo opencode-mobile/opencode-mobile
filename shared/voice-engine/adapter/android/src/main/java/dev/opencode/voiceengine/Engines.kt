@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.Process
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -17,6 +18,7 @@ import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.io.OutputStream
 import java.util.concurrent.CountDownLatch
@@ -111,7 +113,7 @@ private class SherpaOnnxEngine(
     }
 
     override suspend fun transcribe(pcm: FloatArray): String =
-        withContext(Dispatchers.Default) {
+        withContext(EngineThread.dispatcher) {
             onCores(mask) {
                 val stream = recognizer.createStream()
                 try {
@@ -125,6 +127,22 @@ private class SherpaOnnxEngine(
         }
 
     override fun close() = recognizer.release()
+}
+
+/**
+ * The engine's own thread: sherpa-onnx turns one stretch of audio into text at a time, in the order asked, here. It runs
+ * at the normal priority, below the microphone's reading thread (`THREAD_PRIORITY_URGENT_AUDIO`), so a recording never
+ * waits for a part being transcribed (spike S3, §4).
+ */
+internal object EngineThread {
+    val dispatcher =
+        Executors
+            .newSingleThreadExecutor { task ->
+                Thread({
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_DEFAULT)
+                    task.run()
+                }, "speech-engine")
+            }.asCoroutineDispatcher()
 }
 
 /** Runs [block] with the calling thread (and the threads it starts) on [mask]'s cores; 0 means any core. */
