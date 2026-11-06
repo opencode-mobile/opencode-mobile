@@ -54,6 +54,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -349,7 +350,8 @@ fun HexTalkButton(
                     style = HexTheme.type.mono,
                     color = colors.text3,
                     maxLines = 1,
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp),
+                    // Screen readers hear it in the button's label instead.
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).semantics { hideFromAccessibility() },
                 )
             }
             if (locked) {

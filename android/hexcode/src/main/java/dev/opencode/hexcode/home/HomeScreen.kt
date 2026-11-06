@@ -176,7 +176,8 @@ fun HomeScreen(
                         label = label,
                         accessibilityLabel =
                             when (state.talk) {
-                                TalkMode.Locked -> stringResource(R.string.talk_a11y_locked)
+                                // The clock is part of the button's label, not an item of its own.
+                                TalkMode.Locked -> stringResource(R.string.draft_recording, clock(lockedNow - state.takeStartedAt))
                                 TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
                                 TalkMode.Idle -> label
                             },
