@@ -30,6 +30,8 @@ enum TodaySessionDemo: String, CaseIterable {
     case long
     /// A Now of about 300 characters, the most the prompt asks for.
     case longest
+    /// Code, bold, a `Link:` line and a localhost link: formatting and link tiles.
+    case formatted
 
     static var launchPreset: TodaySessionDemo? {
         #if DEBUG
@@ -54,6 +56,18 @@ enum TodaySessionDemo: String, CaseIterable {
     - [x] New login form
     - [ ] Token refresh
     - [ ] Auth tests
+    """
+
+    static let formattedReply = """
+    ## Login screen `v2`
+    Now: Moved token refresh into `AuthClient`, so an **expired session** renews quietly. Preview it at http://localhost:5173/login.
+    Next: Run `npm test`, then read the [refresh docs](https://developer.mozilla.org/docs/Web/HTTP/Authentication).
+    - [x] Remove `SessionHelper`
+    - [x] New login form
+    - [ ] **Token refresh**
+    - [ ] Auth tests
+    Link: Login preview | http://localhost:5173/login
+    Link: https://github.com/sst/opencode/pull/42
     """
 
     static let fallbackReply = """
@@ -123,6 +137,7 @@ enum TodaySessionDemo: String, CaseIterable {
         case .plain: "## Login screen rewrite\nNow: Reading the auth tests to see what the old helper covers."
         case .long: "## Login screen rewrite\nNow: Wiring the new token refresh into the API client, then checking that an expired session renews quietly instead of signing you out.\nNext: Run the auth tests, then fix whatever breaks.\n- [x] Remove old session helper\n- [x] New login form\n- [ ] Token refresh\n- [ ] Auth tests"
         case .longest: "## Login screen rewrite\nNow: Wiring the new token refresh into the API client. Two auth tests still lean on the old session helper, so I am rewriting those to use the new client first. After that the expired-session case should renew quietly, and the remember-me flag keeps its 30 day login.\nNext: Run the whole auth suite, then fix what breaks.\n- [x] Remove old session helper\n- [x] New login form\n- [ ] Token refresh\n- [ ] Auth tests"
+        case .formatted: Self.formattedReply
         case .needs: "## Login screen rewrite\nNow: Token refresh is done. Paused before changing login length.\nNext: Your answers, then the auth tests.\n- [x] Remove old session helper\n- [x] New login form\n- [x] Token refresh\n- [ ] Auth tests"
         case .approval: "## Login screen rewrite\nNow: The auth tests need a clean database. Waiting for your approval.\nNext: Then run the auth tests.\n- [x] Remove old session helper\n- [x] New login form\n- [x] Token refresh\n- [ ] Auth tests"
         default: Self.reply

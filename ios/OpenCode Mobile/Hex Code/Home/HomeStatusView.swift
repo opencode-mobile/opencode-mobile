@@ -5,6 +5,8 @@ import SwiftUI
 /// the room between the top bar and the talk button.
 struct HomeStatusView: View {
     let session: TodaySession
+    /// A tile was tapped.
+    var onOpenLink: (CardLinks.Destination) -> Void = { _ in }
 
     var body: some View {
         Group {
@@ -32,7 +34,14 @@ struct HomeStatusView: View {
             ViewThatFits(in: .vertical) {
                 ForEach(NowSize.candidates(for: card.now), id: \.self) { size in
                     VStack(alignment: .leading, spacing: 14) {
-                        StatusCardView(card: card, nowSize: size, summary: session.summary, onDetails: { session.openDetails() })
+                        StatusCardView(
+                            card: card,
+                            nowSize: size,
+                            summary: session.summary,
+                            computerHost: session.computerHost,
+                            onDetails: { session.openDetails() },
+                            onOpenLink: onOpenLink
+                        )
                         hintCard(hint)
                     }
                 }
@@ -69,25 +78,31 @@ struct StatusCardView: View {
     let card: StatusCard
     var nowSize: NowSize = .display
     let summary: StatusSummaryModel
+    var computerHost: String?
     let onDetails: () -> Void
+    var onOpenLink: (CardLinks.Destination) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(verbatim: card.title)
-                .hexFont(HexTextStyle.caption.weight(.medium))
+            SummaryText(text: card.title, style: HexTextStyle.caption.weight(.medium))
                 .foregroundStyle(HexColor.text3)
                 .lineLimit(1)
                 .frame(height: HomeLabel.height)
-            Text(verbatim: card.now)
-                .hexFont(nowSize.style)
+            SummaryText(text: card.now, style: nowSize.style)
                 .foregroundStyle(HexColor.text1)
                 .truncationMode(.tail)
                 .opacity(summary.isUpdating ? 0.35 : 1)
             if let next = card.next {
-                Text(verbatim: String(localized: "home.summary.next", defaultValue: "Next: \(next)"))
-                    .hexFont(.body)
+                SummaryText(text: String(localized: "home.summary.next", defaultValue: "Next: \(next)"), style: .body)
                     .foregroundStyle(HexColor.text2)
                     .opacity(summary.isUpdating ? 0.35 : 1)
+            }
+            if !card.links.isEmpty {
+                HexTileRow {
+                    ForEach(card.links, id: \.url) { link in
+                        tile(link)
+                    }
+                }
             }
             // One 10 pt gap between the progress and ↻, however wide (the prototype's `.fx-meta`).
             HStack(spacing: 0) {
@@ -101,6 +116,20 @@ struct StatusCardView: View {
             .frame(minHeight: 30)
         }
         .animation(HexMotion.ease(HexMotion.fade), value: summary.isUpdating)
+    }
+
+    @ViewBuilder
+    private func tile(_ link: CardLink) -> some View {
+        if let destination = CardLinks.destination(for: link, computerHost: computerHost) {
+            // The label shows as given, ellipsised at the tile's width.
+            HexLinkTile(
+                icon: destination.inApp ? .monitor : .globe,
+                label: link.label,
+                detail: destination.shownHost,
+                detailIcon: destination.inApp ? .monitor : .out,
+                accessibilityText: String(localized: "home.link.open", defaultValue: "Open \(link.label)")
+            ) { onOpenLink(destination) }
+        }
     }
 
     private var progressLabel: String {
@@ -275,4 +304,39 @@ struct WaitingLine: View {
 /// height, so it sits on the same line in each.
 enum HomeLabel {
     static let height: CGFloat = 18
+}
+
+/// Summary text with its inline formatting: code in the system monospace at 0.84 of the size on a
+/// faint tint, `**bold**` in semibold (bold where the text is already semibold, as at `display`
+/// and `nowLarge`). Clipping and sizes already count only the characters shown.
+struct SummaryText: View {
+    let text: String
+    let style: HexTextStyle
+
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 100
+
+    var body: some View {
+        Text(attributed)
+            .hexFont(style)
+    }
+
+    private var attributed: AttributedString {
+        let size = style.size * scale / 100
+        var out = AttributedString()
+        for run in InlineMarkdown.runs(text) {
+            var part = AttributedString(run.text)
+            switch run.style {
+            case .plain:
+                break
+            case .bold:
+                part.font = .system(size: size, weight: style.weight == .semibold ? .bold : .semibold)
+            case .code:
+                part.font = .system(size: size * 0.84, weight: .medium, design: .monospaced)
+                part.backgroundColor = HexColor.tint(7)
+                part.tracking = 0
+            }
+            out += part
+        }
+        return out
+    }
 }

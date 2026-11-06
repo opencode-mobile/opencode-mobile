@@ -656,6 +656,17 @@
         }
       }
     },
+    "home.link.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open %@"
+          }
+        }
+      }
+    },
     "home.needs.input": {
       "extractionState": "manual",
       "localizations": {

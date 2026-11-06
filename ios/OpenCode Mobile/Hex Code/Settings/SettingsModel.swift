@@ -106,7 +106,7 @@ final class HexMainModel {
         let service = connection.map(OpenCodeSessionService.init(connection:))
         let stream = connection.map { LiveEventStream(transport: OpenCodeEventTransport(connection: $0)) }
         stream?.watchNetwork()
-        return TodaySession(
+        let session = TodaySession(
             setup: DailySessionSetup(service: service ?? UnpairedSessionService(), memory: DailySessionDefaults()),
             summary: StatusSummaryModel(store: SummaryDefaults()),
             directory: { current.setup.project.path },
@@ -115,6 +115,8 @@ final class HexMainModel {
             api: service,
             stream: stream
         )
+        session.computerHost = URL(string: current.setup.profile.baseURL)?.host
+        return session
     }
 
     /// The Sample session row: the next preset, then Off.
@@ -130,6 +132,7 @@ final class HexMainModel {
             return
         }
         let sample = preset.make(toasts: toasts)
+        sample.computerHost = realSession.computerHost ?? "192.168.1.2"
         sampleSession = sample
         home.sender = sample
         Task { await preset.start(sample) }

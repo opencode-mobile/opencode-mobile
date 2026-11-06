@@ -1,3 +1,4 @@
+import SafariServices
 import SwiftUI
 import VoiceEngineKit
 
@@ -12,6 +13,9 @@ struct HomeView: View {
     var onNotYet: () -> Void = {}
 
     @State private var showsWaiting = false
+    /// A page on the computer, open in the in-app browser.
+    @State private var browserPage: BrowserPage?
+    @Environment(\.openURL) private var openURL
 
     private var drafting: Bool { home.isRecording || !home.draft.isEmpty }
 
@@ -25,7 +29,7 @@ struct HomeView: View {
                     DraftView(home: home)
                         .transition(.opacity)
                 } else {
-                    HomeStatusView(session: session)
+                    HomeStatusView(session: session, onOpenLink: open)
                         .transition(.opacity)
                 }
             }
@@ -63,8 +67,21 @@ struct HomeView: View {
             EdgeDeferral.report()
         }
         #endif
+        .fullScreenCover(item: $browserPage) { page in
+            InAppBrowser(url: page.url).ignoresSafeArea()
+        }
         .hexSheet(isPresented: $showsWaiting, detents: [.medium]) {
             WaitingSheet(session: session) { showsWaiting = false }
+        }
+    }
+
+    /// A tile: a page on the computer opens in the in-app browser, anything else in the system
+    /// browser.
+    private func open(_ destination: CardLinks.Destination) {
+        if destination.inApp {
+            browserPage = BrowserPage(url: destination.url)
+        } else {
+            openURL(destination.url)
         }
     }
 
@@ -534,3 +551,20 @@ enum EdgeDeferral {
     }
 }
 #endif
+
+/// A page shown in the in-app browser.
+struct BrowserPage: Identifiable {
+    let url: URL
+    var id: URL { url }
+}
+
+/// The system's in-app browser (`SFSafariViewController`).
+struct InAppBrowser: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+}

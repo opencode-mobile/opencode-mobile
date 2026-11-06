@@ -33,6 +33,8 @@ final class TodaySession {
     var busySince: Date?
     /// Messages queued in the inbox, sent after this turn.
     var waitingCount = 0
+    /// The paired computer's address: a tile's `localhost` link opens there.
+    var computerHost: String?
     /// Those messages, in order, for the Waiting to send sheet.
     var waitingMessages: [InboxEntry] = []
     let summary: StatusSummaryModel
