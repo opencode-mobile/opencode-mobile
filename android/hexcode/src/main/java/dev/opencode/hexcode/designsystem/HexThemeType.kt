@@ -19,8 +19,16 @@ import androidx.compose.ui.unit.sp
  */
 @Immutable
 class HexTypography(
-    /** 30 / semibold, line 1.18, −0.028 em: the status sentence, the welcome title. */
+    /** 30 / semibold, line 1.18, −0.028 em: the status sentence (Now up to 90 characters), the welcome title. */
     val display: TextStyle,
+    /** 25 / semibold, line 1.22, −0.022 em: a Now sentence up to 150 characters (`.fx-now.n1`). */
+    val nowLarge: TextStyle,
+    /** 21 / medium, line 1.28, −0.016 em: a Now sentence up to 220 characters (`.fx-now.n2`). */
+    val nowMedium: TextStyle,
+    /** 19 / medium, line 1.32, −0.012 em: a Now sentence up to 300 characters (`.fx-now.n3`). */
+    val nowSmall: TextStyle,
+    /** 17 / medium, line 1.36, −0.008 em: a Now sentence only when the card doesn't fit otherwise (`.fx-now.n4`). */
+    val nowFit: TextStyle,
     /** 26 / semibold, −0.025 em: first-run headings. */
     val title: TextStyle,
     /** 20 / semibold, −0.02 em: page titles (pickers, Settings), the welcome rule. */
@@ -75,6 +83,10 @@ class HexTypography(
         val Default =
             HexTypography(
                 display = style(30f, FontWeight.SemiBold, (-0.028).em, 1.18.em),
+                nowLarge = style(25f, FontWeight.SemiBold, (-0.022).em, 1.22.em),
+                nowMedium = style(21f, FontWeight.Medium, (-0.016).em, 1.28.em),
+                nowSmall = style(19f, FontWeight.Medium, (-0.012).em, 1.32.em),
+                nowFit = style(17f, FontWeight.Medium, (-0.008).em, 1.36.em),
                 title = style(26f, FontWeight.SemiBold, (-0.025).em),
                 pageTitle = style(20f, FontWeight.SemiBold, (-0.02).em),
                 draft = style(24f, FontWeight.Medium, (-0.015).em, 1.3.em),

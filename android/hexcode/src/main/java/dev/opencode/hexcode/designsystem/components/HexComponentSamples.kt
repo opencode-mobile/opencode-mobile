@@ -207,6 +207,10 @@ private fun TypeSample() {
     val styles =
         listOf(
             "display" to t.display,
+            "nowLarge" to t.nowLarge,
+            "nowMedium" to t.nowMedium,
+            "nowSmall" to t.nowSmall,
+            "nowFit" to t.nowFit,
             "title" to t.title,
             "pageTitle" to t.pageTitle,
             "draft" to t.draft,
