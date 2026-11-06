@@ -67,6 +67,16 @@ struct DictationDraft: Equatable, Sendable {
 
     func index(of id: UUID) -> Int? { chunks.firstIndex { $0.id == id } }
 
+    // MARK: Text
+
+    /// Adds a chunk that already has its text (a tapped Next), after the others.
+    mutating func addText(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        chunks.append(DraftChunk(id: UUID(), state: .text(trimmed)))
+        selectedID = nil
+    }
+
     // MARK: Takes
 
     /// Starts a take. With a chunk selected the take re-records it; otherwise it adds a new chunk.

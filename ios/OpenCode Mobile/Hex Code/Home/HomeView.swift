@@ -29,7 +29,7 @@ struct HomeView: View {
                     DraftView(home: home)
                         .transition(.opacity)
                 } else {
-                    HomeStatusView(session: session, onOpenLink: open)
+                    HomeStatusView(session: session, onOpenLink: open, onNext: { home.addSuggestion($0) })
                         .transition(.opacity)
                 }
             }

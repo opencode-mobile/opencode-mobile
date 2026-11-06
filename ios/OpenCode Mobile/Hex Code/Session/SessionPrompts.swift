@@ -9,16 +9,34 @@ enum SessionPrompts {
         /// 2: a TL;DR of the substance (the answer, finding or outcome, what's in progress, or
         /// what the user needs to do), Now up to 300 characters, Link lines, backticks for code.
         /// 3: no step lines; the to-do row is the agent's own `todowrite` list.
-        static let version = 3
+        /// 4: the latest request, not the whole session; Now may span lines or a short list; Next is
+        /// what the user might say next, or "none" (status-summary-proposal.md).
+        static let version = 4
 
         static let text = """
-        Summarise this session for someone glancing at their phone. Reply in exactly this shape and nothing else:
-        ## <the topic, at most 5 words>
-        Now: <the TL;DR, in plain words, at most 300 characters. Lead with the substance, not with what you did. If you have just answered, found or decided something, give that itself: the key facts, names, numbers or outcome ("Three apps share one API client: …", never "Explained the repo"). If you are still working, say what you are on and anything already found. If you need the user, say exactly what you need from them.>
-        Next: <what happens next, or what the user could do, one sentence, at most 60 characters>
-        Link: <a short label> | <a URL the user may want to open>
-        Add at most 2 Link lines, only for URLs from this session, and none if there are none. Never put a URL in Now or Next.
-        Put file names, commands and code in backticks. Use no other formatting.
+        Say where this session stands, for the user glancing at their phone instead of reading the chat. This message is not part of the session: leave it out when you decide what the latest request is. Don't call any tools. Reply in exactly this shape and nothing else:
+        ## <the topic of the latest request, at most 5 words>
+        Now: <the substance in one sentence, at most 140 characters>
+        <optional: one more sentence, or 2 to 4 lines starting "- ">
+        Next: <what the user might say next, at most 60 characters, or "none">
+        Link: <a short label> | <a URL>
+
+        The latest request is the user's last message, together with the messages it continues or corrects. If the last message is only "ok", "thanks" or similar, take the one before it. Cover that request and what has happened since, and use the rest of the session only to make sense of it. Only if the latest request asks for a summary or recap of the session, cover the whole session.
+
+        Now:
+        - If the request is done, give the result itself: the key facts, names, numbers or outcome ("`remove_item` now rejects missing items; 4 tests pass", never "Updated the code"). If something failed or was stopped, say what and why.
+        - If it is still in progress, say what is being done for it and anything found so far.
+        - If you need the user, say exactly what you need.
+        - Lead with the substance. Don't start with "I".
+        - Put separate points on separate lines instead of one long sentence: the lead, then at most 2 more lines or the list.
+        - Name things in plain words. Use backticks only for one or two short file names or commands that matter, never for lists of names (say "four branches" and list them as "- " lines if they matter).
+        - Use "- " lines only when the content is a list (items, files, options, findings, steps done), each at most 50 characters. Then the first sentence says what the list is ("Four ways to make `remove_item` safer:"), not what you did, and doesn't repeat the items.
+        - At most 300 characters in all. Shorter is better: this is read at a glance.
+
+        Next is a suggested follow-up: what the user would most likely say to you next, in their words ("Commit it", "Try variant A"). If you asked them something, their most likely answer. Write "Next: none" only while the work is still in progress or when the request was trivial.
+
+        Add at most 2 Link lines, for URLs from the latest request or since that the user may want to open (a preview, a pull request, a page you found). Leave Link lines out when there are none. Never put a URL in Now or Next.
+        Use no other formatting.
         """
     }
 

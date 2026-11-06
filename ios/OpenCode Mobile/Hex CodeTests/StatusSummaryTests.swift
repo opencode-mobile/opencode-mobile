@@ -25,8 +25,8 @@ struct StatusSummaryTests {
         #expect(StatusSummary.parse(fullReply) == .card(expected))
     }
 
-    @Test func stepLinesAreIgnored() {
-        let withSteps = "## Login screen rewrite\nNow: Reading the auth tests.\n- [x] Done\n- [ ] Not yet\n- [X] Also done\nNext: Fix the first failure."
+    @Test func linesAfterNextAreIgnored() {
+        let withSteps = "## Login screen rewrite\nNow: Reading the auth tests.\nNext: Fix the first failure.\n- [x] Done\n- [ ] Not yet\nSome chatter after the card."
         let without = "## Login screen rewrite\nNow: Reading the auth tests.\nNext: Fix the first failure."
         #expect(StatusSummary.parse(withSteps) == StatusSummary.parse(without))
     }
@@ -203,11 +203,11 @@ struct StatusSummaryTests {
     }
 
     @Test func thePromptAndRulesAreVersioned() {
-        #expect(SessionPrompts.Summary.version == 3)
-        #expect(SessionPrompts.Summary.text.hasPrefix("Summarise this session for someone glancing at their phone."))
-        #expect(SessionPrompts.Summary.text.contains("Link: <a short label> | <a URL the user may want to open>"))
-        #expect(!SessionPrompts.Summary.text.contains("- [ ]"))
-        #expect(SessionPrompts.Summary.text.split(separator: "\n").count == 7)
+        #expect(SessionPrompts.Summary.version == 4)
+        #expect(SessionPrompts.Summary.text.hasPrefix("Say where this session stands, for the user glancing at their phone instead of reading the chat."))
+        #expect(SessionPrompts.Summary.text.contains("Next: <what the user might say next, at most 60 characters, or \"none\">"))
+        #expect(SessionPrompts.Summary.text.contains("At most 300 characters in all. Shorter is better: this is read at a glance."))
+        #expect(SessionPrompts.Summary.text.hasSuffix("Never put a URL in Now or Next.\nUse no other formatting."))
         #expect(SessionPrompts.MessageRules.version == 2)
         #expect(SessionPrompts.MessageRules.text == """
         Messages come from a voice app and may arrive while you work.
@@ -397,13 +397,51 @@ struct NowSizeTests {
         #expect(NowSize.forText(String(repeating: "🇬🇧", count: 91)) == .large)
     }
 
-    @Test func itStepsDownUntilTheCardFits() {
-        let text = String(repeating: "a", count: 120) // starts at large
-        #expect(NowSize.candidates(for: text) == [.large, .medium, .small, .fit])
-        #expect(NowSize.choose(for: text) { _ in true } == .large)
-        #expect(NowSize.choose(for: text) { $0 >= .small } == .small)
-        // Nothing fits: the smallest, where the sentence ends in "…".
-        #expect(NowSize.choose(for: text) { _ in false } == .fit)
+    private func line(_ count: Int, bullet: Bool = false) -> NowLine {
+        NowLine(text: String(repeating: "a", count: count), isBullet: bullet)
+    }
+
+    @Test func eachLineAfterTheFirstCountsTwentyMore() {
+        // 80 + 20 = 100: past display.
+        #expect(NowSize.forLines([line(80)]) == .display)
+        #expect(NowSize.forLines([line(40), line(40)]) == .large)
+        // 3 lines of 40 + 2 × 20 = 160.
+        #expect(NowSize.forLines([line(40), line(40), line(40)]) == .medium)
+    }
+
+    @Test func bulletsAreAtMostNowMedium() {
+        #expect(NowSize.forLines([line(20), line(10, bullet: true), line(10, bullet: true)]) == .medium)
+        #expect(NowSize.forLines([line(100), line(60, bullet: true), line(60, bullet: true)]) == .small)
+    }
+
+    @Test func formattingSymbolsDontCount() {
+        let code = NowLine(text: "`" + String(repeating: "a", count: 90) + "`")
+        #expect(NowSize.forLines([code]) == .display)
+    }
+
+    @Test func itStepsDownUntilTheCardFitsThenDropsLines() {
+        let lines = [line(60), line(30, bullet: true), line(30, bullet: true)] // 120 + 40 = 160, bullets: medium
+        let layouts = NowSize.layouts(for: lines)
+        #expect(layouts == [
+            NowLayout(size: .medium, lineCount: 3),
+            NowLayout(size: .small, lineCount: 3),
+            NowLayout(size: .fit, lineCount: 3),
+            NowLayout(size: .fit, lineCount: 2),
+            NowLayout(size: .fit, lineCount: 1),
+        ] + [8, 6, 4, 3, 2, 1].map { NowLayout(size: .fit, lineCount: 1, rowLimit: $0) })
+        #expect(NowSize.choose(for: lines) { _ in true } == NowLayout(size: .medium, lineCount: 3))
+        #expect(NowSize.choose(for: lines) { $0.size == .fit } == NowLayout(size: .fit, lineCount: 3))
+        #expect(NowSize.choose(for: lines) { $0.lineCount <= 2 } == NowLayout(size: .fit, lineCount: 2))
+        // Then one line in fewer rows; nothing fits: one row.
+        #expect(NowSize.choose(for: lines) { ($0.rowLimit ?? 99) <= 4 } == NowLayout(size: .fit, lineCount: 1, rowLimit: 4))
+        #expect(NowSize.choose(for: lines) { _ in false } == NowLayout(size: .fit, lineCount: 1, rowLimit: 1))
+    }
+
+    @Test func droppedLinesEndTheLastKeptInAnEllipsis() {
+        let lines = [NowLine(text: "Four ways to make it safer:"), NowLine(text: "Validate `qty`.", isBullet: true), NowLine(text: "Clamp", isBullet: true)]
+        #expect(NowLayout(size: .fit, lineCount: 2).shown(lines) == [lines[0], NowLine(text: "Validate `qty`…", isBullet: true)])
+        #expect(NowLayout(size: .fit, lineCount: 1).shown(lines) == [NowLine(text: "Four ways to make it safer…")])
+        #expect(NowLayout(size: .small, lineCount: 3).shown(lines) == lines)
     }
 
     @Test func eachSizeUsesItsToken() {

@@ -579,6 +579,61 @@
         }
       }
     },
+    "home.summary.working": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Still working · %@"
+          }
+        }
+      }
+    },
+    "home.summary.working.bare": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Still working"
+          }
+        }
+      }
+    },
+    "home.summary.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for you · %@"
+          }
+        }
+      }
+    },
+    "home.summary.waiting.bare": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for you"
+          }
+        }
+      }
+    },
+    "home.summary.you": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You: “%@”"
+          }
+        }
+      }
+    },
     "home.summary.fallback.title": {
       "extractionState": "manual",
       "localizations": {

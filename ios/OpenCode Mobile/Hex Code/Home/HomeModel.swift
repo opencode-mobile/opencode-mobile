@@ -498,6 +498,13 @@ final class HomeModel {
         toasts.dismiss()
     }
 
+    /// Next was tapped: its text joins the draft as a chunk (opening the draft when there is
+    /// none). It never sends. Not while a take is recording.
+    func addSuggestion(_ text: String) {
+        guard !isRecording else { return }
+        draft.addText(text)
+    }
+
     func clearDraft() {
         guard !draft.isEmpty, !isRecording else { return }
         draft.clear()

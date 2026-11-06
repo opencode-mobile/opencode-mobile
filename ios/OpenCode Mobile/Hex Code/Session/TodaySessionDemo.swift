@@ -33,6 +33,12 @@ enum TodaySessionDemo: String, CaseIterable {
     /// Idle, with code, bold, a `Link:` line and a localhost link in Now: formatting and link
     /// tiles; code in a to-do item.
     case formatted
+    /// A list answer: a lead line and four bullets (a real v4 reply).
+    case bullets
+    /// A long Now full of code (branch names), as a real phone showed it, working with an approval
+    /// waiting and a to-do row: the card steps down in size by what is drawn, not by its character
+    /// count.
+    case branches
 
     static var launchPreset: TodaySessionDemo? {
         #if DEBUG
@@ -67,6 +73,23 @@ enum TodaySessionDemo: String, CaseIterable {
     static let formattedReply = "## Login `401` fix\nNow: The **token refresh** in `client.ts` now retries once; the login page at "
         + "http://localhost:5173/login no longer shows a 401.\nNext: Run `bun test auth`, then open a PR.\n"
         + "Link: Issue 412 | https://github.com/example/app/issues/412"
+
+    static let bulletsReply = """
+    ## Safer remove_item ideas
+    Now: Four one-line ways to make `remove_item` safer, without changing code.
+    - Validate non-negative `qty`
+    - Treat missing item as zero
+    - Clamp result to zero
+    - Return a copy of stock
+    Next: Apply one of these
+    """
+
+    static let branchesReply = "## Mobile apps: evidence hunt\nNow: Found real mobile work across branches: `origin/ios-pwa-shell`, "
+        + "`origin/ios-titlebar-safe-area`, `origin/mobile-bottom-nav`, `origin/pwa-push`, plus a since-deleted "
+        + "`packages/mobile-voice` (iOS `Info.plist`) and Capacitor-style Android/iOS icon sets under "
+        + "`packages/desktop/icons`. No mobile app source in…\n"
+        + "Next: Finish sweeping branches, then publish the findings page.\n"
+        + "Link: Prototype | http://Ivans-MacBook-Pro.local:8787/2026-11-06/mobile-apps/"
 
     static let fallbackReply = """
     Okay, I finished the token refresh and now I am going through the auth tests one at a time. Two of them \
@@ -111,6 +134,9 @@ enum TodaySessionDemo: String, CaseIterable {
             session.pendingInput = PendingItem(id: "frm_demo", sessionID: "ses_demo", kind: .question, text: "2 questions · login length and remember-me")
         case .approval:
             session.pendingInput = PendingItem(id: "per_demo", sessionID: "ses_demo", kind: .approval, text: "Run bun run db:reset on the dev database")
+        case .branches:
+            session.busySince = now.addingTimeInterval(-90)
+            session.pendingInput = PendingItem(id: "per_demo", sessionID: "ses_demo", kind: .approval, text: "git fetch --all")
         case .reconnecting:
             session.streamUp = false
             session.busySince = now.addingTimeInterval(-252)
@@ -138,6 +164,8 @@ enum TodaySessionDemo: String, CaseIterable {
         case .long: "## API client\nNow: \(Self.longNow)\nNext: Fix token refresh in the shared client."
         case .longest: "## Read-only mode first\nNow: \(Self.longestNow)\nNext: Add a read-only flag to the router."
         case .formatted: Self.formattedReply
+        case .bullets: Self.bulletsReply
+        case .branches: Self.branchesReply
         case .needs: "## Login screen rewrite\nNow: Token refresh is done. Paused before changing login length.\nNext: Your answers, then the auth tests."
         case .approval: "## Login screen rewrite\nNow: The auth tests need a clean database. Waiting for your approval.\nNext: Then run the auth tests."
         default: Self.reply
@@ -152,6 +180,11 @@ enum TodaySessionDemo: String, CaseIterable {
         case .reconnecting: Self.loginTodos(.completed, .inProgress, .pending, .pending)
         case .updating, .updatefailed: Self.loginTodos(.completed, .completed, .inProgress, .pending)
         case .long: Self.loginTodos(.completed, .completed, .completed, .completed)
+        case .branches: [
+                TodoItem(content: "List remote branches", status: .completed),
+                TodoItem(content: "Search `packages/` for mobile code", status: .inProgress),
+                TodoItem(content: "Publish the findings page", status: .pending),
+            ]
         case .formatted: [
                 TodoItem(content: "Find the 401", status: .completed),
                 TodoItem(content: "Retry once in `client.ts`", status: .inProgress),

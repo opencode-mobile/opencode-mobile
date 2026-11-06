@@ -1,32 +1,61 @@
 import Foundation
 
-/// The status card on home: the task, what the agent does now, what comes next, and links. The
-/// to-do row isn't the summary's: it is the agent's own list (`TodoList`).
+/// One line of Now: a paragraph, or a bullet (its marker removed). The text keeps its formatting
+/// (backticks, `**`).
+struct NowLine: Equatable, Sendable, Codable {
+    var text: String
+    var isBullet = false
+}
+
+/// The status card on home: the latest request's topic, what was answered, found or done for it
+/// (lines and bullets), what the user might say next, and links. The to-do row isn't the
+/// summary's: it is the agent's own list (`TodoList`).
 struct StatusCard: Equatable, Sendable, Codable {
     var title: String
-    var now: String
-    /// Nil when the reply had no `Next:` line.
+    /// Now, line by line; never empty.
+    var lines: [NowLine]
+    /// Nil when the reply had no `Next:` line, or said there is none.
     var next: String?
     /// The tiles under Next: the reply's `Link:` lines, then links left in Now and Next.
     var links: [CardLink] = []
 
-    private enum CodingKeys: String, CodingKey { case title, now, next, links }
+    /// Now's lines, one per line of text.
+    var now: String { lines.map(\.text).joined(separator: "\n") }
+    var hasBullets: Bool { lines.contains(where: \.isBullet) }
+
+    private enum CodingKeys: String, CodingKey { case title, now, lines, next, links }
 
     init(title: String, now: String, next: String? = nil, links: [CardLink] = []) {
+        self.init(title: title, lines: [NowLine(text: now)], next: next, links: links)
+    }
+
+    init(title: String, lines: [NowLine], next: String? = nil, links: [CardLink] = []) {
         self.title = title
-        self.now = now
+        self.lines = lines
         self.next = next
         self.links = links
     }
 
-    /// Cards saved before links were kept read without them; steps saved by older versions are
-    /// ignored.
+    /// Cards saved before Now had lines read their sentence as one line, and those saved before
+    /// links were kept read without them; steps saved by older versions are ignored.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         title = try container.decode(String.self, forKey: .title)
-        now = try container.decode(String.self, forKey: .now)
+        if let lines = try container.decodeIfPresent([NowLine].self, forKey: .lines), !lines.isEmpty {
+            self.lines = lines
+        } else {
+            lines = [NowLine(text: try container.decode(String.self, forKey: .now))]
+        }
         next = try container.decodeIfPresent(String.self, forKey: .next)
         links = try container.decodeIfPresent([CardLink].self, forKey: .links) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(title, forKey: .title)
+        try container.encode(lines, forKey: .lines)
+        try container.encodeIfPresent(next, forKey: .next)
+        try container.encode(links, forKey: .links)
     }
 
     /// A session that never ran: no request. The title is today's long date in English, day before
@@ -64,61 +93,115 @@ enum StatusSummary: Equatable, Sendable, Codable {
     case card(StatusCard)
     case fallback(String)
 
-    /// Clipping, as the prototype: title 40, Now 300, Next 60, fallback 300 characters (grapheme
-    /// clusters). To-do items clip at `TodoList.itemLimit`.
+    /// Clipping (app plan, "Clipping"), in characters shown (grapheme clusters, formatting's
+    /// symbols not counted). To-do items clip at `TodoList.itemLimit`.
     static let titleLimit = 40
-    static let nowLimit = 300
     static let nextLimit = 60
     static let fallbackLimit = 300
+    /// Now isn't cut by characters (the prompt keeps it short, and Now size makes it fit): at most
+    /// 5 lines, 4 of them bullets; extra ones are dropped.
+    static let maxNowLines = 5
+    static let maxBullets = 4
 
-    /// Reads a reply to `SessionPrompts.Summary`. Each line is trimmed; code fences and blank lines
-    /// are ignored, and so is any other line (such as text before the title). The first line
-    /// starting `## ` is the title, the first lines starting `Now:` and `Next:` (in any case) the
-    /// sentence and what follows, and lines starting `Link:` links. Other lines, step lines
-    /// (`- [x]`, `- [ ]`) among them, are ignored. A label with nothing after it counts as
-    /// missing. Without a title or a `Now:` line it is a fallback: the lines joined with spaces,
-    /// runs of spaces collapsed.
+    /// What a `Next:` line says when there is nothing to suggest (any case, optional full stop).
+    static let noNextWords: Set<String> = ["", "none", "n/a", "-", "—", "(none)"]
+
+    /// Reads a reply to `SessionPrompts.Summary` (app plan, "Reading the reply"). Each line is
+    /// trimmed; code fences and blank lines are ignored. The first line starting `## ` is the
+    /// title. The first line starting `Now:` (any case) and the lines after it, up to the next
+    /// `Next:`, `Link:` or `## ` line, are Now: a line starting `- `, `* `, `• `, `1. ` or `1) `
+    /// is a bullet (marker removed), any other a plain line. The first `Next:` line is the
+    /// follow-up; the "none" words mean no Next. `Link:` lines with an http(s) URL are links.
+    /// Other lines are ignored. Without a title or a `Now:` line (with something in it) it is a
+    /// fallback: the lines joined with spaces, runs of spaces collapsed.
     static func parse(_ reply: String) -> StatusSummary {
-        var title: String?
-        var now: String?
-        var next: String?
-        let linkLines = reply
+        let lines = reply
             .split(whereSeparator: \.isNewline)
-            .compactMap { $0.trimmingCharacters(in: .whitespaces).value(afterLabel: "link:") }
-            .compactMap(CardLinks.fromLinkLine)
-            .prefix(CardLinks.maxLinkLines)
-        let lines = meaningfulLines(reply)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("```") }
+        var title: String?
+        var nowLines: [String]?
+        var inNow = false
+        var next: String?
+        var sawNext = false
+        var linkLines: [CardLink] = []
         for line in lines {
             if let value = line.value(after: "## ") {
                 if title == nil, !value.isEmpty { title = value }
+                inNow = false
             } else if let value = line.value(afterLabel: "now:") {
-                if now == nil, !value.isEmpty { now = value }
+                if nowLines == nil {
+                    nowLines = value.isEmpty ? [] : [value]
+                    inNow = true
+                } else {
+                    inNow = false
+                }
             } else if let value = line.value(afterLabel: "next:") {
-                if next == nil, !value.isEmpty { next = value }
+                if !sawNext {
+                    sawNext = true
+                    next = value
+                }
+                inNow = false
+            } else if let value = line.value(afterLabel: "link:") {
+                if let link = CardLinks.fromLinkLine(value) { linkLines.append(link) }
+                inNow = false
+            } else if inNow {
+                nowLines?.append(line)
             }
         }
-        guard let title, let now else {
-            let text = lines.joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard let title, let nowLines, !nowLines.isEmpty else {
+            let text = lines
+                .filter { $0.value(afterLabel: "link:") == nil }
+                .joined(separator: " ")
+                .split(whereSeparator: \.isWhitespace)
+                .joined(separator: " ")
             return .fallback(clip(text, fallbackLimit))
         }
-        // Links left in Now or Next become tiles and read as their label (or host) in the sentence.
-        let pulledNow = CardLinks.pull(from: now)
-        let pulledNext = next.map(CardLinks.pull(from:))
+        // Links left in Now or Next become tiles and read as their label (or host) in the line.
+        var links = Array(linkLines.prefix(CardLinks.maxLinkLines))
+        var now: [NowLine] = []
+        for raw in nowLines {
+            let line = nowLine(raw)
+            let pulled = CardLinks.pull(from: line.text)
+            links += pulled.links
+            now.append(NowLine(text: pulled.text, isBullet: line.isBullet))
+        }
+        let pulledNext = next.flatMap { isNoNext($0) ? nil : CardLinks.pull(from: $0) }
+        links += pulledNext?.links ?? []
         return .card(StatusCard(
             title: InlineMarkdown.clip(title, titleLimit),
-            now: InlineMarkdown.clip(pulledNow.text, nowLimit),
+            lines: limitNow(now),
             next: pulledNext.map { InlineMarkdown.clip($0.text, nextLimit) },
-            links: CardLinks.unique(Array(linkLines) + pulledNow.links + (pulledNext?.links ?? []))
+            links: CardLinks.unique(links)
         ))
     }
 
-    /// The reply's lines, trimmed, without blank lines, code fences and `Link:` lines (those are
-    /// read separately for the link tiles; they never make a reply fall back).
-    private static func meaningfulLines(_ reply: String) -> [String] {
-        reply
-            .split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && !$0.hasPrefix("```") && $0.value(afterLabel: "link:") == nil }
+    /// A Now line: a bullet when it starts with a marker, else a plain line.
+    static func nowLine(_ line: String) -> NowLine {
+        for marker in ["- ", "* ", "• "] where line.hasPrefix(marker) {
+            return NowLine(text: line.dropFirst(marker.count).trimmingCharacters(in: .whitespaces), isBullet: true)
+        }
+        if let marker = line.range(of: #"^\d+[.)]\s+"#, options: .regularExpression) {
+            return NowLine(text: String(line[marker.upperBound...]), isBullet: true)
+        }
+        return NowLine(text: line)
+    }
+
+    static func isNoNext(_ value: String) -> Bool {
+        var word = value.trimmingCharacters(in: .whitespaces).lowercased()
+        if word.hasSuffix(".") { word.removeLast() }
+        return noNextWords.contains(word)
+    }
+
+    /// Now's limits: bullets after the fourth dropped, then lines after the fifth.
+    static func limitNow(_ lines: [NowLine]) -> [NowLine] {
+        var bullets = 0
+        let kept = lines.filter { line in
+            guard line.isBullet else { return true }
+            bullets += 1
+            return bullets <= maxBullets
+        }
+        return Array(kept.prefix(maxNowLines))
     }
 
     /// The prototype's `clip`: at most `limit` characters, cut at the last space past half way when
