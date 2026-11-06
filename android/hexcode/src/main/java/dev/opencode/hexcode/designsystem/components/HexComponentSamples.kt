@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -763,15 +764,18 @@ private fun LinkTileSample() {
 
 @Composable
 private fun ProgressSample() {
+    val p = HexProgressStep.Pending
+    val c = HexProgressStep.Current
+    val d = HexProgressStep.Done
     Edge {
-        StateSample("none done, two of four, all done") {
-            HexProgress(listOf(false, false, false, false), "0/4 · details ›", onClick = {})
-            HexProgress(listOf(true, true, false, false), "2/4 · details ›", onClick = {})
-            HexProgress(listOf(true, true, true, true), "4/4 · details ›", onClick = {})
+        StateSample("pending, in progress (Current), completed (Done)") {
+            HexProgress(listOf(p, p, p, p), AnnotatedString("1 of 4 · Read the auth tests"), onClick = {})
+            HexProgress(listOf(d, d, c, p), AnnotatedString("3 of 4 · Retry in client.ts"), onClick = {})
+            HexProgress(listOf(d, d, d, d), AnnotatedString("All 4 done"), onClick = {})
         }
-        StateSample("one step, eight steps (the most)") {
-            HexProgress(listOf(false), "0/1 · details ›", onClick = {})
-            HexProgress(listOf(true, true, true, true, true, false, false, false), "5/8 · details ›", onClick = {})
+        StateSample("one item, eight items, a long item") {
+            HexProgress(listOf(c), AnnotatedString("1 of 1 · Fix the build"), onClick = {})
+            HexProgress(listOf(d, d, d, d, c, p, p, p), AnnotatedString("5 of 8 · Rewrite every test that leans on the…"), onClick = {})
         }
     }
 }

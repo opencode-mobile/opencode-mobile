@@ -43,6 +43,8 @@ import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -53,9 +55,12 @@ import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.designsystem.components.HexAgentState
 import dev.opencode.hexcode.designsystem.components.HexButton
 import dev.opencode.hexcode.designsystem.components.HexButtonSize
+import dev.opencode.hexcode.designsystem.components.HexDot
+import dev.opencode.hexcode.designsystem.components.HexDotTone
 import dev.opencode.hexcode.designsystem.components.HexLinkKind
 import dev.opencode.hexcode.designsystem.components.HexLinkTile
 import dev.opencode.hexcode.designsystem.components.HexProgress
+import dev.opencode.hexcode.designsystem.components.HexProgressStep
 import dev.opencode.hexcode.designsystem.components.HexStatusLine
 import dev.opencode.hexcode.designsystem.components.HexStatusTone
 import dev.opencode.hexcode.designsystem.components.HexTileRow
@@ -69,6 +74,9 @@ import dev.opencode.hexcode.session.SummaryLink
 import dev.opencode.hexcode.session.SummaryLinks
 import dev.opencode.hexcode.session.SummaryState
 import dev.opencode.hexcode.session.TodayState
+import dev.opencode.hexcode.session.TodoItem
+import dev.opencode.hexcode.session.TodoLabel
+import dev.opencode.hexcode.session.TodoList
 import kotlinx.coroutines.delay
 
 /** The wall clock, read again every [periodMs]: for the turn's timer and ↻'s age. */
@@ -134,15 +142,16 @@ internal fun StatusArea(
 ) {
     val summary = today.summary
     val links = Links(computer, onOpenLink)
+    val work = Work(today.todos, today.running(now))
     val start = (summary.summary as? StatusSummary.Card)?.let { NowSize.forText(it.now) } ?: NowSize.Display
     when (today.setup) {
         // The card saved for today's session shows while setup runs.
         SessionSetup.Opening ->
-            if (summary.summary != null) CentredFit(start, modifier) { size, lines -> Summary(summary, now, vm, size, lines, links) }
+            if (summary.summary != null) CentredFit(start, modifier) { size, lines -> Summary(summary, now, vm, size, lines, links, work) }
         is SessionSetup.Failed -> CentredFit(NowSize.Display, modifier) { _, _ -> SetupFailed(today.setup.retrying, vm::retrySetup) }
         is SessionSetup.Ready ->
             CentredFit(start, modifier) { size, lines ->
-                Summary(summary, now, vm, size, lines, links)
+                Summary(summary, now, vm, size, lines, links, work)
                 today.pendingInput?.let { NeedsHint(it, onClick = {}) }
             }
     }
@@ -202,6 +211,7 @@ private fun Summary(
     size: NowSize,
     nowLines: Int,
     links: Links,
+    work: Work,
 ) {
     val label = summary.label(now)
     val dim by animateFloatAsState(if (summary.loading) 0.35f else 1f, HexTheme.motion.fade(), label = "loading")
@@ -211,7 +221,7 @@ private fun Summary(
                 card.title,
                 card.now,
                 card.next,
-                card.steps.map { it.done },
+                work,
                 dim,
                 label,
                 vm::refreshSummary,
@@ -225,7 +235,7 @@ private fun Summary(
                 card.title,
                 stringResource(R.string.home_summary_empty_now),
                 stringResource(R.string.home_summary_empty_next),
-                emptyList(),
+                work,
                 dim,
                 label,
                 vm::refreshSummary,
@@ -235,7 +245,7 @@ private fun Summary(
                 card.title,
                 stringResource(R.string.home_summary_working_now),
                 stringResource(R.string.home_summary_working_next),
-                emptyList(),
+                work,
                 dim,
                 label,
                 vm::refreshSummary,
@@ -251,6 +261,12 @@ private fun Label(content: @Composable () -> Unit) {
     Box(Modifier.heightIn(min = 18.dp), contentAlignment = Alignment.CenterStart) { content() }
 }
 
+/** The agent's to-do list (no row when empty), and how many subagents and shells run besides it. */
+private class Work(
+    val todos: List<TodoItem>,
+    val running: Int,
+)
+
 /** Where link tiles open: the paired [computer]'s address for `localhost` links, and [open] for a tap. */
 private class Links(
     val computer: String?,
@@ -258,15 +274,15 @@ private class Links(
 )
 
 /**
- * The card: the task as a label, what it's doing now in large type, what's next, its link tiles, and the plan's
- * progress. The texts keep their inline Markdown ([summaryText]).
+ * The card: the task as a label, what it's doing now in large type, what's next, its link tiles, the agent's to-do
+ * row, then Details and ↻. The texts keep their inline Markdown ([summaryText]).
  */
 @Composable
 private fun Card(
     title: String,
     now: String,
     next: String?,
-    steps: List<Boolean>,
+    work: Work,
     dim: Float,
     label: RefreshLabel?,
     onRefresh: () -> Unit,
@@ -317,11 +333,60 @@ private fun Card(
             }
         }
     }
-    Meta(label, onRefresh) {
-        if (steps.isNotEmpty()) {
-            // Details comes with M4; until then the progress does nothing.
-            HexProgress(steps, stringResource(R.string.home_summary_progress, steps.count { it }, steps.size), onClick = {})
+    TodoRow(work.todos)
+    // Details comes with M4; until then the link does nothing.
+    Meta(label, onRefresh) { DetailsLink(work.running, onClick = {}) }
+}
+
+/**
+ * The agent's to-do row (`HexProgress`): a segment per item, then "3 of 4 · <the item in progress>" or "All 4 done",
+ * and "›". No row without a list. Tapping opens Details from M4; until then it does nothing.
+ */
+@Composable
+private fun TodoRow(todos: List<TodoItem>) {
+    val label = TodoList.label(todos) ?: return
+    val text =
+        when (label) {
+            is TodoLabel.AllDone -> AnnotatedString(stringResource(R.string.home_todo_all_done, label.count))
+            is TodoLabel.Current ->
+                summaryTextIn(stringResource(R.string.home_todo_progress, label.position, label.count, SUMMARY_MARK), label.text)
         }
+    HexProgress(
+        todos.map {
+            when (it.status) {
+                TodoItem.Status.Pending -> HexProgressStep.Pending
+                TodoItem.Status.InProgress -> HexProgressStep.Current
+                TodoItem.Status.Completed -> HexProgressStep.Done
+            }
+        },
+        text,
+        onClick = {},
+    )
+}
+
+/** "Details ›" (`.fx-det`) in `mono`, with a green dot and "N running · " in front while subagents or shells run. */
+@Composable
+private fun DetailsLink(
+    running: Int,
+    onClick: () -> Unit,
+) {
+    val colors = HexTheme.colors
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val color = if (pressed) colors.text1 else colors.text3
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier =
+            Modifier
+                .semantics(mergeDescendants = true) {}
+                .clickable(source, null, role = Role.Button, onClick = onClick)
+                .padding(vertical = 6.dp),
+    ) {
+        if (running > 0) HexDot(HexDotTone.Green)
+        val text =
+            (if (running > 0) stringResource(R.string.home_details_running, running) else "") + stringResource(R.string.home_details)
+        Text(text, style = HexTheme.type.mono, color = color, maxLines = 1)
     }
 }
 
