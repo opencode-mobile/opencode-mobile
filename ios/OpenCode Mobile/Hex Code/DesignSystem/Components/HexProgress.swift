@@ -15,7 +15,7 @@ enum HexProgressSegment: Equatable, Sendable {
 /// `text3`. Tappable; the label and "›" light to `text1` while pressed.
 struct HexProgress: View {
     let segments: [HexProgressSegment]
-    /// The label, which may carry formatting (code runs).
+    /// The label, which may carry formatting (code runs built with `HexInlineCode`).
     let label: Text
     /// VoiceOver's label, the label's words without formatting.
     let accessibilityText: String
@@ -39,6 +39,7 @@ struct HexProgress: View {
                     .foregroundStyle(pressed ? HexColor.text1 : HexColor.text2)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .hexInlineCode()
                 Text(verbatim: "›")
                     .hexFont(.caption)
                     .foregroundStyle(pressed ? HexColor.text1 : HexColor.text3)

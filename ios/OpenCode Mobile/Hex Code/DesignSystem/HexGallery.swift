@@ -74,6 +74,7 @@ private struct HexGalleryContent: View {
             holdHints
             notices
             progress
+            inlineCode
             linkTiles
             surfaces
         }
@@ -382,6 +383,19 @@ private struct HexGalleryContent: View {
             progressSample([.done, .done, .done, .done], "All 4 done")
             progressSample([.inProgress], "1 of 1 · One item")
             caption("None started · one in progress · ten items, a long item · all done · one item. The label and › light while pressed")
+        }
+    }
+
+    private var inlineCode: some View {
+        section("Inline code") {
+            ForEach([HexTextStyle.display, .nowSmall, .body, .caption], id: \.size) { style in
+                (Text(verbatim: "Run") + HexInlineCode.text("bun test auth", size: style.size) + Text(verbatim: "in")
+                    + HexInlineCode.text("packages/desktop/icons", size: style.size) + Text(verbatim: "."))
+                    .hexFont(style)
+                    .foregroundStyle(HexColor.text1)
+                    .hexInlineCode()
+            }
+            caption("display · nowSmall · body · caption. Monospace at 0.82, in a box that hugs the glyphs; code moves to the next line whole")
         }
     }
 
