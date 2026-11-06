@@ -34,4 +34,25 @@ enum HexMeterLevel {
         let unit = x - x.rounded(.down)
         return 0.88 + 0.24 * unit
     }
+
+    // MARK: Before audio arrives
+
+    /// Real levels blend in over this long once audio arrives.
+    static let blendTime: TimeInterval = 0.08
+
+    /// The "listening" wave the bars run from the touch until audio arrives: about a third of the
+    /// height, a crest travelling left to right.
+    static func listening(bar: Int, at time: TimeInterval) -> Double {
+        let phase = 2 * Double.pi * (time * 1.1 - Double(bar) / 14)
+        return 0.32 + 0.1 * sin(phase)
+    }
+
+    /// A bar's height: the listening wave until audio arrives (`sinceAudio` nil), then the real
+    /// level blending in over `blendTime`.
+    static func blend(listening: Double, real: Double, sinceAudio: TimeInterval?) -> Double {
+        guard let sinceAudio else { return listening }
+        let t = max(0, sinceAudio / blendTime)
+        guard t < 1 else { return real }
+        return listening + (real - listening) * t
+    }
 }

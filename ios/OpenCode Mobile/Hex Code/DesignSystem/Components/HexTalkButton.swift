@@ -34,7 +34,7 @@ struct HexTalkButton: View {
 
     let phase: Phase
     /// The live input level, 0…1, read for the meter while recording.
-    let level: () -> Double
+    let level: () -> Double?
     let accessibilityText: String
     let onPressBegan: () -> Void
     /// The horizontal drag since the press began, in points.
@@ -150,7 +150,7 @@ private struct TalkDragLook: View, Animatable {
     let armed: Bool
     let shape: RoundedRectangle
     let height: CGFloat
-    let level: () -> Double
+    let level: () -> Double?
 
     var animatableData: CGFloat {
         get { offset }

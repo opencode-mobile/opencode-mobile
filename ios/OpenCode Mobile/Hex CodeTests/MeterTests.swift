@@ -115,3 +115,32 @@ struct DockTests {
         #expect(home.dock == .lockedTake)
     }
 }
+
+/// From the touch the bars run a listening wave; real levels blend in over 80 ms (app plan, Press).
+struct MeterBlendTests {
+    @Test func theListeningWaveIsAboutAThirdOfTheHeightAndNeverStill() {
+        let values = (0 ..< 36).map { HexMeterLevel.listening(bar: $0, at: 0.4) }
+        #expect(values.allSatisfy { $0 >= 0.2 && $0 <= 0.45 })
+        #expect(abs(values.reduce(0, +) / 36 - 0.32) < 0.03)
+        // It moves: the same bar a moment later is somewhere else.
+        #expect(HexMeterLevel.listening(bar: 5, at: 0.4) != HexMeterLevel.listening(bar: 5, at: 0.6))
+    }
+
+    @Test func theWaveTravelsLeftToRight() {
+        // What bar 3 shows now, bar 4 shows a little later.
+        let now = HexMeterLevel.listening(bar: 3, at: 1.0)
+        let later = HexMeterLevel.listening(bar: 4, at: 1.0 + 1.0 / (14 * 1.1))
+        #expect(abs(now - later) < 0.0001)
+    }
+
+    @Test func beforeAudioOnlyTheWaveShows() {
+        #expect(HexMeterLevel.blend(listening: 0.3, real: 0.9, sinceAudio: nil) == 0.3)
+    }
+
+    @Test func realLevelsBlendInOver80Milliseconds() {
+        #expect(HexMeterLevel.blend(listening: 0.3, real: 0.9, sinceAudio: 0) == 0.3)
+        #expect(abs(HexMeterLevel.blend(listening: 0.3, real: 0.9, sinceAudio: 0.04) - 0.6) < 0.0001)
+        #expect(HexMeterLevel.blend(listening: 0.3, real: 0.9, sinceAudio: 0.08) == 0.9)
+        #expect(HexMeterLevel.blend(listening: 0.3, real: 0.9, sinceAudio: 2) == 0.9)
+    }
+}
