@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.home
 
+import dev.opencode.voiceengine.Detected
 import dev.opencode.voiceengine.PauseDetector
 import dev.opencode.voiceengine.SpeechSpan
 import org.junit.Assert.assertEquals
@@ -10,6 +11,7 @@ import org.junit.Test
 /** app-plan.md, Dictation › Locked takes, with synthetic spans in place of the pause detector (spike S3, §5). */
 class TakePartsTest {
     private val second = 16_000
+    private val window = PauseDetector.WINDOW
 
     /** Speech from [start] to [end] seconds, closed when the detector had heard [heard] seconds. */
     private fun span(
@@ -18,29 +20,42 @@ class TakePartsTest {
         heard: Double,
     ) = SpeechSpan((start * second).toLong(), (end * second).toLong(), (heard * second).toLong())
 
-    /** A detector that closes the spans it's given once it has been fed up to their [SpeechSpan.heard]. */
+    /** Probabilities for [seconds] of windows: speech (0.9) where [speech] says so, else 0.1. */
+    private fun probabilities(
+        seconds: Double,
+        speech: (Double) -> Boolean,
+    ) = FloatArray((seconds * second).toInt() / window) { if (speech(it * window.toDouble() / second)) 0.9f else 0.1f }
+
+    /** A cutter that has heard [seconds] of windows, speech where [speech] says so. */
+    private fun cutter(
+        seconds: Double,
+        speech: (Double) -> Boolean = { true },
+    ) = PartCutter().apply { listen(probabilities(seconds, speech)) }
+
+    /**
+     * A detector that closes the spans it's given once it has been fed up to their [SpeechSpan.heard], and calls each
+     * window speech where [speech] says so.
+     */
     private class ScriptedPauses(
         private val spans: List<SpeechSpan>,
-        /** Whether speech is still open at the end. */
-        private val speechAtEnd: Boolean,
+        private val speech: (Double) -> Boolean = { true },
     ) : Pauses {
         var heard = 0L
-        var closed = 0
-        var finished = false
+        private var closed = 0
+        private var windows = 0
 
-        override fun accept(samples: FloatArray): List<SpeechSpan> {
+        override fun accept(samples: FloatArray): Detected {
             heard += samples.size
             val ready = spans.drop(closed).takeWhile { it.heard <= heard }
             closed += ready.size
-            return ready
+            val whole = (heard / PauseDetector.WINDOW).toInt()
+            val probabilities =
+                FloatArray(whole - windows) { i ->
+                    if (speech((windows + i) * PauseDetector.WINDOW / 16_000.0)) 0.9f else 0.1f
+                }
+            windows = whole
+            return Detected(ready, probabilities)
         }
-
-        override fun finish(): List<SpeechSpan> {
-            finished = true
-            return if (speechAtEnd) listOf(SpeechSpan(heard - 100, heard, heard)) else emptyList()
-        }
-
-        override fun close() = Unit
     }
 
     /** Records [seconds] of audio whose samples are their own index, so a part shows where it came from. */
@@ -48,7 +63,7 @@ class TakePartsTest {
 
     @Test
     fun aPartIsCutInTheMiddleOfThePause() {
-        val cutter = PartCutter()
+        val cutter = cutter(6.0)
         // Speech ends at 4.0 s; the 1.0 s pause is known at 5.1 s: the cut is at 4.55 s.
         val part = cutter.cut(span(0.3, 4.0, 5.1))
         assertEquals(0 until (4.55 * second).toInt(), part)
@@ -57,11 +72,11 @@ class TakePartsTest {
 
     @Test
     fun partsTouchSoNoAudioIsDropped() {
-        val cutter = PartCutter()
+        val cutter = cutter(11.0)
         val first = cutter.cut(span(0.0, 4.0, 5.1))!!
         val second = cutter.cut(span(5.6, 9.0, 10.1))!!
         assertEquals(first.last + 1, second.first)
-        val rest = cutter.rest(total = 11 * this.second, speech = true)!!
+        val rest = cutter.rest(total = 11 * this.second)!!
         assertEquals(second.last + 1, rest.first)
         assertEquals(11 * this.second - 1, rest.last)
     }
@@ -71,12 +86,50 @@ class TakePartsTest {
         // sherpa-onnx closes a stretch of speech past maxSpeechDuration at the next short dip, with hardly any pause:
         // the cut is there, and the next part starts right after it.
         assertEquals(12f, PauseDetector.MAX_SPEECH_S)
-        val cutter = PartCutter()
+        val cutter = cutter(22.0)
         val forced = cutter.cut(span(0.2, 12.4, 12.45))!!
         assertTrue(forced.last + 1 in (12.4 * second).toInt()..(12.45 * second).toInt())
         // A span that started before that cut (the detector's lead-in) still makes the next part start at the cut.
         val next = cutter.cut(span(12.3, 20.0, 21.1))!!
         assertEquals(forced.last + 1, next.first)
+    }
+
+    @Test
+    fun withNoDipBy15sAPartEndsAtTheQuietestMomentAfter12s() {
+        val cutter = cutter(16.0)
+        assertNull(cutter.capped(14 * second) { error("not yet") })
+        var asked: IntRange? = null
+        val part =
+            cutter.capped(15 * second) { within ->
+                asked = within
+                (13.5 * second).toInt()
+            }
+        assertEquals(12 * second until 15 * second, asked)
+        assertEquals(0 until (13.5 * second).toInt(), part)
+        // The next part counts from that cut.
+        assertNull(cutter.capped(16 * second) { error("too soon") })
+    }
+
+    @Test
+    fun theQuietestMomentIsTheMiddleOfTheQuietestWindow() {
+        val samples = FloatArray(window * 10) { 0.5f }
+        for (i in window * 6 until window * 7) samples[i] = 0.01f
+        assertEquals(window * 6 + window / 2, quietest(samples))
+    }
+
+    @Test
+    fun theSplitterCutsRunOnSpeechAt15s() {
+        // 20 s of speech with no pause, a quiet moment of 0.1 s at 13 s.
+        val quiet = 13 * second until 13 * second + second / 10
+        val take = SampleBuffer().apply { add(FloatArray(20 * second) { if (it in quiet) 0f else 0.3f }) }
+        val parts = mutableListOf<TakePart>()
+        val splitter = TakeSplitter(take, ScriptedPauses(emptyList()), { parts += it }, clock = { 0 })
+        splitter.step()
+        assertEquals(1, parts.size)
+        assertTrue(parts.single().samples.size in quiet)
+        splitter.finish()
+        assertEquals(listOf(1, 2), parts.map { it.number })
+        assertEquals(20 * second, parts.last().start + parts.last().samples.size)
     }
 
     @Test
@@ -88,32 +141,53 @@ class TakePartsTest {
 
     @Test
     fun aCutNeverGoesBackOrPastWhatWasHeard() {
-        val cutter = PartCutter()
+        val cutter = cutter(6.0)
         cutter.cut(span(0.0, 4.0, 5.0))
         // A span closing behind the last cut gives no part.
         assertNull(cutter.cut(span(0.0, 3.0, 4.0)))
     }
 
     @Test
+    fun noCutIsMadeWithoutSpeechHeard() {
+        // A span over windows that are all under 0.5: no part, and the audio stays with the next one.
+        val cutter = cutter(8.0) { false }
+        assertNull(cutter.cut(span(1.0, 2.0, 3.0)))
+        assertNull(cutter.capped(16 * second) { error("no speech to cut") })
+        assertEquals(0, cutter.lastCut)
+    }
+
+    @Test
     fun afterReleaseOnlyTheAudioSinceTheLastCutIsLeft() {
-        val cutter = PartCutter()
+        val cutter = cutter(8.0)
         cutter.cut(span(0.0, 4.0, 5.0))
-        assertEquals((4.5 * second).toInt() until 8 * second, cutter.rest(8 * second, speech = true))
+        assertEquals((4.5 * second).toInt() until 8 * second, cutter.rest(8 * second))
     }
 
     @Test
     fun releaseWithNoSpeechSinceTheLastCutLeavesNothing() {
-        val cutter = PartCutter()
+        val cutter = cutter(8.0) { it < 4.0 }
         cutter.cut(span(0.0, 4.0, 5.0))
-        assertNull(cutter.rest(8 * second, speech = false))
-        // Nor does a take with no speech at all.
-        assertNull(PartCutter().rest(8 * second, speech = false))
+        assertNull(cutter.rest(8 * second))
+    }
+
+    @Test
+    fun oneQuietWordIsSpeechHeard() {
+        // A single window at 0.5 or above after the last cut, shorter than the detector's minimum speech, still counts.
+        val cutter = cutter(8.0) { it < 4.0 || it in 6.0..6.03 }
+        cutter.cut(span(0.0, 4.0, 5.0))
+        assertEquals((4.5 * second).toInt() until 8 * second, cutter.rest(8 * second))
+    }
+
+    @Test
+    fun aTakeWithNoCutLeavesNoPartAfterRelease() {
+        // It's turned into text whole instead.
+        assertNull(cutter(8.0).rest(8 * second))
     }
 
     @Test
     fun theSplitterSendsPartsInOrderAsTheyClose() {
         val take = audio(12.0)
-        val pauses = ScriptedPauses(listOf(span(0.0, 3.0, 4.0), span(4.5, 7.0, 8.0)), speechAtEnd = true)
+        val pauses = ScriptedPauses(listOf(span(0.0, 3.0, 4.0), span(4.5, 7.0, 8.0)))
         val parts = mutableListOf<TakePart>()
         val splitter = TakeSplitter(take, pauses, { parts += it }, clock = { 100_000 })
         splitter.step()
@@ -124,7 +198,6 @@ class TakePartsTest {
         // Each part is the take's own audio from its start.
         assertEquals(parts[1].start.toFloat(), parts[1].samples.first())
         splitter.finish()
-        assertTrue(pauses.finished)
         val last = parts.last()
         assertEquals(3, last.number)
         assertTrue(last.last)
@@ -135,7 +208,7 @@ class TakePartsTest {
     @Test
     fun theSplitterOnlyFeedsWhatIsNew() {
         val take = SampleBuffer()
-        val pauses = ScriptedPauses(listOf(span(0.0, 1.0, 2.0)), speechAtEnd = false)
+        val pauses = ScriptedPauses(listOf(span(0.0, 1.0, 2.0))) { it < 1.0 }
         val parts = mutableListOf<TakePart>()
         val splitter = TakeSplitter(take, pauses, { parts += it }, clock = { 0 })
         take.add(FloatArray(second))
@@ -155,9 +228,8 @@ class TakePartsTest {
     @Test
     fun aPartKnowsWhenItsSpeechEnded() {
         val take = audio(6.0)
-        val pauses = ScriptedPauses(listOf(span(0.0, 4.0, 5.0)), speechAtEnd = false)
         val parts = mutableListOf<TakePart>()
-        TakeSplitter(take, pauses, { parts += it }, clock = { 50_000 }).step()
+        TakeSplitter(take, ScriptedPauses(listOf(span(0.0, 4.0, 5.0))), { parts += it }, clock = { 50_000 }).step()
         // Heard up to 6.0 s at 50 000 ms: the speech ended 2 s before.
         assertEquals(48_000, parts.single().speechEndedAt)
         assertEquals(50_000, parts.single().cutAt)
