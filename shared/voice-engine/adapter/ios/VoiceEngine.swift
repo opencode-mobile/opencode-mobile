@@ -1,8 +1,11 @@
+import FluidAudio
 import Foundation
 import Observation
+import os
 
-/// The voice engine as Hex Code sees it: get the speech model ready, record one take, turn it into text.
-/// Parakeet through FluidAudio and the 16 kHz recorder stay behind this type.
+/// The voice engine as Hex Code sees it: get the speech model ready, record one take, turn it into text, and find
+/// the pauses in a take as it records. Parakeet and the VAD through FluidAudio, and the 16 kHz recorder, stay behind
+/// this type.
 @MainActor
 @Observable
 public final class VoiceEngine {
@@ -33,13 +36,17 @@ public final class VoiceEngine {
 
     private let transcriber = ParakeetTranscriber()
     private var capture: TakeRecorder?
+    /// The VAD, once loaded. Without it takes aren't split at pauses; nothing else waits for it.
+    private var vad: VadManager?
+    private static let log = Logger(subsystem: "dev.opencode.hexcode", category: "dictation")
 
     public init() {}
 
     /// True when the model is already on the phone, so preparing only loads it.
     public nonisolated static var hasDownloadedModel: Bool { ParakeetTranscriber.hasCachedModel }
 
-    /// Downloads (once) and loads the speech model. Safe to call again.
+    /// Downloads (once) and loads the speech model, then the VAD that finds pauses. Safe to call again. The VAD is
+    /// part of the download and of getting ready, but if it fails the model is still ready: takes then aren't split.
     public func prepare() async {
         if modelState == .ready { return }
         modelState = .preparing(fraction: 0, detail: "Starting")
@@ -47,13 +54,38 @@ public final class VoiceEngine {
             try await transcriber.prepare { progress in
                 Task { @MainActor [weak self] in
                     guard let self, self.modelState != .ready else { return }
-                    self.modelState = .preparing(fraction: progress.fractionCompleted, detail: progress.detail)
+                    self.modelState = .preparing(fraction: progress.fractionCompleted * Self.speechShare, detail: progress.detail)
                 }
             }
-            modelState = .ready
         } catch {
             modelState = .failed(error.localizedDescription)
+            return
         }
+        if vad == nil {
+            do {
+                vad = try await PauseFinder.load { progress in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.modelState != .ready else { return }
+                        let fraction = Self.speechShare + progress.fractionCompleted * (1 - Self.speechShare)
+                        self.modelState = .preparing(fraction: fraction, detail: ParakeetTranscriber.detail(for: progress.phase))
+                    }
+                }
+            } catch {
+                Self.log.error("speech: the VAD didn't load, so takes won't be split at pauses: \(String(describing: error), privacy: .public)")
+            }
+        }
+        modelState = .ready
+    }
+
+    /// The speech model is about 600 MB and the VAD under 2 MB: the download's share of each.
+    private static let speechShare = 0.99
+
+    /// True when the VAD is loaded, so a take can be split at its pauses.
+    public var canFindPauses: Bool { vad != nil }
+
+    /// A pause finder for one new take; nil until the VAD is loaded.
+    public func makePauseFinder() -> PauseFinder? {
+        vad.map { PauseFinder(vad: $0) }
     }
 
     /// Loudness of the current take, 0 to 1, for a meter.
@@ -87,6 +119,11 @@ public final class VoiceEngine {
     /// Transcribes an existing 16 kHz recording, for checks and tests.
     public func transcribe(fileAt url: URL) async throws -> String {
         try await transcriber.transcribe(url)
+    }
+
+    /// Transcribes 16 kHz mono samples: one part of a locked take.
+    public func transcribe(samples: [Float]) async throws -> String {
+        try await transcriber.transcribe(samples: samples)
     }
 
     /// Drops the take without transcribing it.

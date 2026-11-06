@@ -51,6 +51,23 @@ actor ParakeetTranscriber {
         return text
     }
 
+    /// Transcribes 16 kHz mono samples (a part of a locked take). Audio shorter than half a second is padded with
+    /// silence, since Parakeet won't read under 0.3 s.
+    func transcribe(samples: [Float]) async throws -> String {
+        guard let manager else { throw TranscriberError.notPrepared }
+        var audio = samples
+        if audio.count < Self.minimumSamples {
+            audio.append(contentsOf: [Float](repeating: 0, count: Self.minimumSamples - audio.count))
+        }
+        var decoderState = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
+        let result = try await manager.transcribe(audio, decoderState: &decoderState)
+        let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw TranscriberError.emptyTranscript }
+        return text
+    }
+
+    private static let minimumSamples = 8_000
+
     /// The model can always be downloaded again, so it stays out of iCloud and device backups.
     /// FluidAudio doesn't mark its folder; this does, once it exists.
     nonisolated static func excludeModelFromBackup() {
@@ -61,7 +78,7 @@ actor ParakeetTranscriber {
         try? folder.setResourceValues(values)
     }
 
-    private static func detail(for phase: DownloadPhase) -> String {
+    static func detail(for phase: DownloadPhase) -> String {
         switch phase {
         case .listing: "Checking model files"
         case let .downloading(completedFiles, totalFiles): "Downloading file \(min(completedFiles + 1, totalFiles)) of \(totalFiles)"
