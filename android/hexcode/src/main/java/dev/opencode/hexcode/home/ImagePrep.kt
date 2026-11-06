@@ -9,7 +9,6 @@ import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
-import android.provider.OpenableColumns
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
@@ -76,9 +75,15 @@ object ImageFit {
             else -> Upright(0, false)
         }
 
-    /** A screenshot by its file name (`Screenshot_20261106-101500.png`); anything else counts as a photo. */
-    fun kindOf(displayName: String?): ImageKind =
-        if (displayName?.contains("screenshot", ignoreCase = true) == true) ImageKind.Screenshot else ImageKind.Photo
+    /**
+     * A picked PNG is a screenshot: that's how phones save them, while cameras write JPEG or HEIC. (The Photo Picker
+     * hides the file's own name, `Screenshot_….png` becoming `40.png`.) Anything else, and anything from the camera,
+     * is a photo. [mime] is the type the decoder found in the image itself.
+     */
+    fun kindOf(
+        mime: String?,
+        fromCamera: Boolean = false,
+    ): ImageKind = if (!fromCamera && mime == "image/png") ImageKind.Screenshot else ImageKind.Photo
 }
 
 /**
@@ -101,8 +106,8 @@ class AndroidImagePreparer(
     override suspend fun prepare(source: String): PreparedImage =
         withContext(Dispatchers.IO) {
             val uri = Uri.parse(source)
-            val kind = ImageFit.kindOf(displayName(uri))
-            val bitmap = if (Build.VERSION.SDK_INT >= 28) decodeWithImageDecoder(uri) else decodeWithBitmapFactory(uri)
+            val (bitmap, mime) = if (Build.VERSION.SDK_INT >= 28) decodeWithImageDecoder(uri) else decodeWithBitmapFactory(uri)
+            val kind = ImageFit.kindOf(mime, fromCamera = cameraFile(uri) != null)
             try {
                 dir.mkdirs()
                 val out = File(dir, "${UUID.randomUUID()}.jpg")
@@ -125,30 +130,28 @@ class AndroidImagePreparer(
             Unit
         }
 
-    private fun displayName(uri: Uri): String? =
-        runCatching {
-            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
-            }
-        }.getOrNull() ?: uri.lastPathSegment
-
-    private fun decodeWithImageDecoder(uri: Uri): Bitmap {
+    /** The image upright and scaled, with the type found in its own bytes (`image/png`, `image/heif`). */
+    private fun decodeWithImageDecoder(uri: Uri): Pair<Bitmap, String?> {
         val source =
             if (decodeFromMemory) {
                 ImageDecoder.createSource(java.nio.ByteBuffer.wrap(open(uri).use { it.readBytes() }))
             } else {
                 ImageDecoder.createSource(resolver, uri)
             }
-        return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-            // Software, 8-bit sRGB: what the JPEG encoder takes, whatever the photo's colour space (Display P3, HDR).
-            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-            decoder.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
-            val (width, height) = ImageFit.size(info.size.width, info.size.height)
-            if (width != info.size.width) decoder.setTargetSize(width, height)
-        }
+        var mime: String? = null
+        val bitmap =
+            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                mime = info.mimeType
+                // Software, 8-bit sRGB: what the JPEG encoder takes, whatever the photo's colour space (Display P3, HDR).
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                decoder.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
+                val (width, height) = ImageFit.size(info.size.width, info.size.height)
+                if (width != info.size.width) decoder.setTargetSize(width, height)
+            }
+        return bitmap to mime
     }
 
-    private fun decodeWithBitmapFactory(uri: Uri): Bitmap {
+    private fun decodeWithBitmapFactory(uri: Uri): Pair<Bitmap, String?> {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         open(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Not an image")
@@ -163,7 +166,7 @@ class AndroidImagePreparer(
             runCatching {
                 open(uri).use { ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }
             }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
-        return upright(decoded, ImageFit.upright(orientation))
+        return upright(decoded, ImageFit.upright(orientation)) to bounds.outMimeType
     }
 
     private fun open(uri: Uri) = resolver.openInputStream(uri) ?: throw IOException("Can't open $uri")

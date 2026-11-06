@@ -73,10 +73,12 @@ class AttachDraftTest {
     }
 
     @Test
-    fun aScreenshotIsKnownByItsFileName() {
-        assertEquals(ImageKind.Screenshot, ImageFit.kindOf("Screenshot_20261106-101500.png"))
-        assertEquals(ImageKind.Photo, ImageFit.kindOf("PXL_20261106_101500123.jpg"))
+    fun aPickedPngIsAScreenshotAndEverythingElseAPhoto() {
+        assertEquals(ImageKind.Screenshot, ImageFit.kindOf("image/png"))
+        assertEquals(ImageKind.Photo, ImageFit.kindOf("image/jpeg"))
+        assertEquals(ImageKind.Photo, ImageFit.kindOf("image/heif"))
         assertEquals(ImageKind.Photo, ImageFit.kindOf(null))
+        assertEquals("the camera's pictures are photos", ImageKind.Photo, ImageFit.kindOf("image/png", fromCamera = true))
     }
 
     @Test

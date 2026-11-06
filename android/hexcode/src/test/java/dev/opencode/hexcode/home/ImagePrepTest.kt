@@ -101,9 +101,9 @@ class ImagePrepTest {
         }
 
     @Test
-    fun aScreenshotBecomesAJpegScaledTo2000() =
+    fun aPngIsAScreenshotWhateverItsNameAndBecomesAJpegScaledTo2000() =
         runBlocking {
-            val shot = save(picture(1080, 2424), "Screenshot_20261106-101500.png", Bitmap.CompressFormat.PNG)
+            val shot = save(picture(1080, 2424), "40.png", Bitmap.CompressFormat.PNG)
 
             val prepared = preparer().prepare(Uri.fromFile(shot).toString())
 
