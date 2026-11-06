@@ -22,7 +22,7 @@ data class SummaryStep(
  */
 @Serializable
 sealed interface StatusSummary {
-    /** The reply in the card's shape, clipped to fit: [title] 40, [now] 90, [next] 60 and each step 40 characters. */
+    /** The reply in the card's shape, clipped to fit: [title] 40, [now] 300, [next] 60 and each step 40 characters. */
     @Serializable
     @SerialName("card")
     data class Card(
@@ -59,7 +59,7 @@ sealed interface StatusSummary {
 
     companion object {
         const val TITLE_MAX = 40
-        const val NOW_MAX = 90
+        const val NOW_MAX = 300
         const val NEXT_MAX = 60
         const val FALLBACK_MAX = 300
         const val STEP_MAX = 40

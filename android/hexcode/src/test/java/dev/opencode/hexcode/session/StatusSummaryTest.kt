@@ -112,15 +112,35 @@ class StatusSummaryTest {
     }
 
     @Test
-    fun theCardIsClippedToTitle40Now90Next60() {
+    fun theCardIsClippedToTitle40Now300Next60() {
         val title = "A title that runs on far longer than forty characters allow"
-        val now = "Now I am doing something that takes a very long sentence to describe, longer than the ninety characters"
+        val sentence = "Now I am doing something that takes a very long sentence to describe, longer than ninety characters. "
+        val now = sentence.repeat(4).trim()
         val next = "Then something else that also takes more than sixty characters to say"
         val card = StatusSummary.parse("## $title\nNow: $now\nNext: $next") as StatusSummary.Card
         assertEquals("A title that runs on far longer than…", card.title)
-        assertEquals("Now I am doing something that takes a very long sentence to describe, longer than the…", card.now)
+        assertTrue(card.now.length <= 300 && card.now.endsWith("…"))
+        assertTrue(card.now.startsWith(sentence.repeat(2)))
         assertEquals("Then something else that also takes more than sixty…", card.next)
-        assertTrue(card.title.length <= 40 && card.now.length <= 90 && card.next!!.length <= 60)
+        assertTrue(card.title.length <= 40 && card.next!!.length <= 60)
+    }
+
+    @Test
+    fun aNowOf300CharactersIsKeptWhole() {
+        val now = "x".repeat(299) + "."
+        val card = StatusSummary.parse("## Long\nNow: $now") as StatusSummary.Card
+        assertEquals(now, card.now)
+    }
+
+    @Test
+    fun linkLinesAreIgnoredAndDoNotMakeAFallback() {
+        val reply =
+            "## Login rewrite\nNow: Three apps share one API client.\nNext: Run the tests.\n- [x] Read the code\n" +
+                "Link: Dev server | http://localhost:5173/login\nLink: PR | https://github.com/o/r/pull/1"
+        val card = StatusSummary.parse(reply) as StatusSummary.Card
+        assertEquals("Three apps share one API client.", card.now)
+        assertEquals("Run the tests.", card.next)
+        assertEquals(listOf("Read the code"), card.steps.map { it.text })
     }
 
     @Test
