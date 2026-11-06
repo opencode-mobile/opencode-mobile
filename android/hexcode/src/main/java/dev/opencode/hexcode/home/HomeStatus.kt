@@ -145,6 +145,16 @@ internal fun StatusArea(
                             label,
                             vm::refreshSummary,
                         )
+                    is StatusSummary.Working ->
+                        Card(
+                            card.title,
+                            stringResource(R.string.home_summary_working_now),
+                            stringResource(R.string.home_summary_working_next),
+                            emptyList(),
+                            dim,
+                            label,
+                            vm::refreshSummary,
+                        )
                     is StatusSummary.Fallback -> Fallback(card.text, dim, label, vm::refreshSummary)
                     null -> Meta(label, vm::refreshSummary) {}
                 }

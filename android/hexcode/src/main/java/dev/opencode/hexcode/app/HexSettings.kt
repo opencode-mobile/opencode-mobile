@@ -10,6 +10,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.firstrun.ProjectChoice
 import dev.opencode.hexcode.session.DailySessionMemory
+import dev.opencode.hexcode.session.SavedSummary
+import dev.opencode.hexcode.session.SummaryStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -40,7 +42,8 @@ class HexSettings(
     context: Context,
     private val json: Json,
 ) : DeveloperSettingsStore,
-    DailySessionMemory {
+    DailySessionMemory,
+    SummaryStore {
     private val store = context.applicationContext.hexDataStore
 
     val prefs: Flow<HexPrefs> =
@@ -111,6 +114,16 @@ class HexSettings(
         store.edit { it[LAST_SESSION_DATE] = date.toString() }
     }
 
+    /** The last summary card, for today's session only: saving one replaces the one before. */
+    override suspend fun loadSummary(): SavedSummary? =
+        store.data
+            .first()[LAST_SUMMARY]
+            ?.let { runCatching { json.decodeFromString(SavedSummary.serializer(), it) }.getOrNull() }
+
+    override suspend fun saveSummary(saved: SavedSummary) {
+        store.edit { it[LAST_SUMMARY] = json.encodeToString(SavedSummary.serializer(), saved) }
+    }
+
     override suspend fun setDeveloperSettings(on: Boolean) {
         store.edit { if (on) it[DEVELOPER_SETTINGS] = true else it.remove(DEVELOPER_SETTINGS) }
     }
@@ -125,5 +138,6 @@ class HexSettings(
         val SERVER_VERSION = stringPreferencesKey("server_version")
         val DEVELOPER_SETTINGS = booleanPreferencesKey("developer_settings")
         val LAST_SESSION_DATE = stringPreferencesKey("session_last_date")
+        val LAST_SUMMARY = stringPreferencesKey("summary_last")
     }
 }

@@ -42,7 +42,7 @@ enum class TodaySessionDemo(
     /** A new day: the empty card and the notice. */
     NewDay("newday"),
 
-    /** The event stream is down. */
+    /** The event stream is down: the card saved on the last launch. */
     Reconnecting("reconnecting"),
 
     /** A summary request on its way. */
@@ -65,7 +65,20 @@ enum class TodaySessionDemo(
         val memory = DemoMemory(if (this == Empty) null else today.minusDays(1))
         val live = DemoLive(reply(), snapshot(now))
         val transport = if (this == Reconnecting) DemoTransport(up = false) else DemoTransport(up = true)
-        val session = TodaySession(scope, DailySessionSetup(api, memory), live, transport, { DIRECTORY }, { null }, { today }, clock)
+        // The stream never comes up, so the summary is never asked for: the card saved 4 minutes ago shows.
+        val saved = if (this == Reconnecting) SavedSummary(SESSION, StatusSummary.parse(REPLY), now - 240_000) else null
+        val session =
+            TodaySession(
+                scope,
+                DailySessionSetup(api, memory),
+                live,
+                transport,
+                { DIRECTORY },
+                { null },
+                { today },
+                clock,
+                summaryStore = DemoSummaryStore(saved),
+            )
         // The card first, then a second request that hangs or fails.
         if (this == Updating || this == UpdateFailed) {
             scope.launch {
@@ -204,6 +217,16 @@ private class DemoLive(
 }
 
 /** Says it connected and then stays open; or, when not [up], fails every attempt. */
+private class DemoSummaryStore(
+    private var saved: SavedSummary?,
+) : SummaryStore {
+    override suspend fun loadSummary(): SavedSummary? = saved
+
+    override suspend fun saveSummary(saved: SavedSummary) {
+        this.saved = saved
+    }
+}
+
 private class DemoTransport(
     private val up: Boolean,
 ) : EventTransport {

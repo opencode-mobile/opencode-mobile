@@ -85,8 +85,9 @@ interface LiveSessionApi {
 /**
  * Today's session for home (app-plan.md, The daily session and Today's session on screen). On open, on Try again, and
  * back in front on a new date it finds or creates today's session and puts the message rules ([DailySessionSetup]),
- * then opens the event stream. On every (re)connect it reads the state again; after the first it refreshes the
- * summary, and so does the end of a run. A session that never ran shows the empty card and asks for nothing.
+ * then opens the event stream. On every (re)connect it reads the state again and then refreshes the summary (the
+ * saved card shows until then), and so does the end of a run. A session that never ran shows the empty card and asks
+ * for nothing. Without a stream the summary is asked for on open.
  *
  * The sample sessions ([TodaySessionDemo]) run the same code with fakes behind [setup], [api] and [transport].
  */
@@ -100,6 +101,8 @@ class TodaySession(
     private val today: () -> LocalDate = LocalDate::now,
     private val clock: () -> Long = System::currentTimeMillis,
     summaryTimeoutMs: Long = SummaryRefresher.TIMEOUT_MS,
+    /** Keeps the last card across launches. */
+    summaryStore: SummaryStore? = null,
 ) {
     private val own = MutableStateFlow(TodayState())
 
@@ -114,6 +117,8 @@ class TodaySession(
             clock,
             summaryTimeoutMs,
             busy = { live?.busySince != null },
+            store = summaryStore,
+            today = today,
         )
 
     private val stream = transport?.let { LiveEventStream(scope, it) }
@@ -126,7 +131,6 @@ class TodaySession(
 
     /** The local date today's session was opened for. */
     private var day: LocalDate? = null
-    private var connectedOnce = false
     private var opening: Job? = null
     private var backgroundStop: Job? = null
 
@@ -219,7 +223,6 @@ class TodaySession(
         }
     }
 
-
     /** Waits until the event stream is up, as after a reconnect. */
     suspend fun awaitStream() {
         state.first { it.streamUp }
@@ -243,12 +246,14 @@ class TodaySession(
                 day = date
                 sessionId = session.id
                 live = LiveSessionState(session.id, hasRun = session.busySince != null)
-                connectedOnce = false
-                summary.clear()
+                summary.open(session.id)
                 publish(streamUp = true)
                 own.update { it.copy(setup = SessionSetup.Ready(session.id), newDayNotice = result.newDay) }
                 stream?.start()
-                refreshSummary()
+                // With a stream, the first summary waits for its read-back, which says whether the agent is working
+                // (an empty reply then isn't a failure); the saved card shows meanwhile. A session that never ran
+                // shows its empty card now.
+                if (stream == null || live?.hasRun == false) refreshSummary()
             }
         }
     }
@@ -267,8 +272,7 @@ class TodaySession(
         } catch (_: Exception) {
             // The stream is up; the next event or reconnect brings the rest.
         }
-        if (connectedOnce) refreshSummary()
-        connectedOnce = true
+        refreshSummary()
     }
 
     private fun received(event: SessionEvent) {

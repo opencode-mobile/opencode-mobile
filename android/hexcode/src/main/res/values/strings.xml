@@ -123,6 +123,8 @@
     <string name="home_setup_retry">Try again</string>
     <string name="home_summary_empty_now">New session. Nothing running yet.</string>
     <string name="home_summary_empty_next">Say what to do.</string>
+    <string name="home_summary_working_now">The agent is working.</string>
+    <string name="home_summary_working_next">The summary updates when this run ends.</string>
     <string name="home_summary_next">Next: %1$s</string>
     <string name="home_summary_fallback_title">Status</string>
     <string name="home_summary_fallback_note">Reply didn’t match the card shape.</string>

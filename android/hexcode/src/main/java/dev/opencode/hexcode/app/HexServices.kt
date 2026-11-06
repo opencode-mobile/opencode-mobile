@@ -160,6 +160,7 @@ class HexServices(
             transport = EventsApiTransport({ events }, ready = { connectionLoaded.await() }),
             directory = directory,
             model = model,
+            summaryStore = settings,
         )
     }
 

@@ -1,11 +1,14 @@
 package dev.opencode.hexcode.session
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import java.text.BreakIterator
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** One line of the summary's plan. */
+@Serializable
 data class SummaryStep(
     val text: String,
     val done: Boolean,
@@ -13,11 +16,15 @@ data class SummaryStep(
 
 /**
  * What the home screen's status card shows (app-plan.md, Today's session on screen): a [Card] read from the
- * summary's reply, the reply as plain text when it isn't in the card's shape ([Fallback]), or a new session's card
- * ([Empty]), which needs no request.
+ * summary's reply, the reply as plain text when it isn't in the card's shape ([Fallback]), a new session's card
+ * ([Empty]), which needs no request, or, with no card yet, [Working] for an empty reply while the agent works. Cards are
+ * serializable so the last one can be kept on the phone ([SavedSummary]).
  */
+@Serializable
 sealed interface StatusSummary {
     /** The reply in the card's shape, clipped to fit: [title] 40, [now] 90, [next] 60 and each step 40 characters. */
+    @Serializable
+    @SerialName("card")
     data class Card(
         val title: String,
         val now: String,
@@ -27,12 +34,26 @@ sealed interface StatusSummary {
     ) : StatusSummary
 
     /** A reply that isn't in the card's shape, as one line of plain text, at most 300 characters. */
+    @Serializable
+    @SerialName("fallback")
     data class Fallback(
         val text: String,
     ) : StatusSummary
 
     /** A session with nothing in it yet: [title] is the long date; Now and Next are the screen's own copy. */
+    @Serializable
+    @SerialName("empty")
     data class Empty(
+        val title: String,
+    ) : StatusSummary
+
+    /**
+     * No card yet, and the summary came back empty because the agent is working: [title] is the long date; Now ("The
+     * agent is working.") and Next ("The summary updates when this run ends.") are the screen's own copy.
+     */
+    @Serializable
+    @SerialName("working")
+    data class Working(
         val title: String,
     ) : StatusSummary
 
@@ -101,6 +122,9 @@ sealed interface StatusSummary {
 
         /** A new session's card, titled with [date] in full. */
         fun empty(date: LocalDate): Empty = Empty(longDate(date))
+
+        /** The card for an empty reply while the agent works, before any other card, titled with [date] in full. */
+        fun working(date: LocalDate): Working = Working(longDate(date))
 
         /** "Thursday 5 November". */
         fun longDate(date: LocalDate): String = LONG_DATE.format(date)

@@ -100,6 +100,17 @@ class TodaySessionTest {
         }
     }
 
+    /** The phone's saved card: one session's at a time. */
+    private class Store(
+        var saved: SavedSummary? = null,
+    ) : SummaryStore {
+        override suspend fun loadSummary() = saved
+
+        override suspend fun saveSummary(saved: SavedSummary) {
+            this.saved = saved
+        }
+    }
+
     private class Memory(
         var last: LocalDate?,
     ) : DailySessionMemory {
@@ -141,6 +152,7 @@ class TodaySessionTest {
         api: Api,
         transport: Transport?,
         memory: Memory = Memory(date.minusDays(1)),
+        store: SummaryStore? = null,
     ) = TodaySession(
         scope = backgroundScope,
         setup = DailySessionSetup(api, memory),
@@ -150,6 +162,7 @@ class TodaySessionTest {
         model = { model },
         today = { date },
         clock = { testScheduler.currentTime },
+        summaryStore = store,
     )
 
     private fun event(
@@ -187,7 +200,7 @@ class TodaySessionTest {
         }
 
     @Test
-    fun aSessionThatRanIsSummarisedOnOpenAndTheStateReadOnConnect() =
+    fun aSessionThatRanIsSummarisedOnceTheStreamHasReadTheStateBack() =
         runTest {
             val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
             api.snapshot = api.snapshot.copy(busySince = 50, inbox = listOf(InboxEntry("m1", "queue"), InboxEntry("m2", "steer")))
@@ -197,7 +210,8 @@ class TodaySessionTest {
             runCurrent()
             transport.connected()
             runCurrent()
-            assertEquals(listOf("list", "rules s1", "summary s1", "stream", "snapshot s1"), log)
+            // The summary waits for the read-back, which says whether the agent is working.
+            assertEquals(listOf("list", "rules s1", "stream", "snapshot s1", "summary s1"), log)
             assertEquals(AgentStatus.Working(50), today.state.value.agent)
             assertEquals(1, today.state.value.waiting)
             assertFalse(today.state.value.newDayNotice)
@@ -207,6 +221,7 @@ class TodaySessionTest {
     fun aRunStartingAndEndingRefreshesTheSummaryOnce() =
         runTest {
             val api = Api()
+            api.snapshot = api.snapshot.copy(hasRun = false)
             val transport = Transport()
             val today = session(api, transport)
             today.open()
@@ -434,6 +449,94 @@ class TodaySessionTest {
             today.refresh()
             runCurrent()
             assertTrue(today.state.value.summary.failed)
+        }
+
+    @Test
+    fun aRelaunchMidRunShowsTheSavedCardAndAnEmptyReplyIsNotAFailure() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            api.snapshot = api.snapshot.copy(busySince = 50)
+            api.reply = ""
+            val saved = SavedSummary("s1", StatusSummary.parse("## Task\nNow: Reading the tests."), updatedAt = -720_000)
+            val transport = Transport()
+            val today = session(api, transport, Memory(date), Store(saved))
+            today.open()
+            runCurrent()
+            // At once, before the stream is up, with its age.
+            assertEquals(saved.summary, today.state.value.summary.summary)
+            assertEquals(
+                RefreshLabel.MinutesAgo(12),
+                today.state.value.summary
+                    .label(0),
+            )
+            assertEquals(0, log.count { it.startsWith("summary") })
+            transport.connected()
+            runCurrent()
+            assertEquals(listOf("list", "rules s1", "stream", "snapshot s1", "summary s1"), log)
+            assertEquals(saved.summary, today.state.value.summary.summary)
+            assertFalse(today.state.value.summary.failed)
+            assertEquals(
+                RefreshLabel.MinutesAgo(12),
+                today.state.value.summary
+                    .label(0),
+            )
+        }
+
+    @Test
+    fun aNewCardIsSavedForTodaysSessionAndReplacesTheSavedOneOnScreen() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val store = Store(SavedSummary("s1", StatusSummary.Fallback("Earlier."), updatedAt = 0))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date), store)
+            today.open()
+            runCurrent()
+            assertEquals(StatusSummary.Fallback("Earlier."), today.state.value.summary.summary)
+            transport.connected()
+            runCurrent()
+            val card = StatusSummary.parse("## Task\nNow: Working.")
+            assertEquals(card, today.state.value.summary.summary)
+            assertEquals(SavedSummary("s1", card, testScheduler.currentTime), store.saved)
+        }
+
+    @Test
+    fun aCardSavedForAnotherSessionIsNotShown() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val store = Store(SavedSummary("s0", StatusSummary.Fallback("Yesterday."), updatedAt = 0))
+            val today = session(api, Transport(), Memory(date), store)
+            today.open()
+            runCurrent()
+            assertNull(today.state.value.summary.summary)
+        }
+
+    @Test
+    fun withNoCardAnEmptyReplyWhileWorkingSaysTheAgentIsWorking() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            api.snapshot = api.snapshot.copy(busySince = 50)
+            api.reply = ""
+            val store = Store()
+            val transport = Transport()
+            val today = session(api, transport, Memory(date), store)
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            assertEquals(StatusSummary.Working("Thursday 5 November"), today.state.value.summary.summary)
+            assertFalse(today.state.value.summary.failed)
+            // Only real cards are kept for the next launch.
+            assertNull(store.saved)
+        }
+
+    @Test
+    fun withoutAStreamTheSummaryIsAskedForOnOpen() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val today = session(api, null, Memory(date))
+            today.open()
+            runCurrent()
+            assertEquals(listOf("list", "rules s1", "summary s1"), log)
         }
 
     @Test
