@@ -15,9 +15,12 @@ protocol TakeRecording: AnyObject {
     /// Home left the foreground: let go of what `prepare()` holds.
     func release()
     func startRecording() async throws
-    /// Ends the take and hands over its audio file; nil when nothing was recording.
+    /// Ends the take and hands over its audio file (and, with the pause finder on, the audio after its last
+    /// part); nil when nothing was recording. Every part is handed over before this returns.
     func stopRecording() async -> RecordedTake?
     func cancelRecording()
+    /// Each part of the take being recorded, cut at a pause, as it is found. Only while the VAD is ready.
+    var onPart: ((TakePart) -> Void)? { get set }
 }
 
 /// Home, not hooked up to the agent yet: hold to talk, lock or drop, chunks with delete and
@@ -55,8 +58,16 @@ final class HomeModel {
     @ObservationIgnored private let now: () -> Date
     /// Each take's audio, kept until it has text (or the draft is cleared).
     @ObservationIgnored private var audio: [UUID: RecordedTake] = [:]
-    /// Takes to transcribe, in the order they were recorded.
+    /// Takes to transcribe, in the order they were recorded. A locked take is in it while a part waits.
     @ObservationIgnored private var queue: [UUID] = []
+    /// Locked takes split at pauses, by chunk, until they have all their text (or after a failure, until
+    /// Try again). A held take's parts are kept here only until release, then forgotten.
+    @ObservationIgnored private var parts: [UUID: TakeParts] = [:]
+    /// The take whose recording is stopping: parts found in its last blocks still belong to it, even if
+    /// a new take has started (a new take's first part is at least a second away).
+    @ObservationIgnored private var stoppingID: UUID?
+    /// When each take was released (system uptime), for the release-to-text time in the log.
+    @ObservationIgnored private var releasedAt: [UUID: TimeInterval] = [:]
     @ObservationIgnored private var isDraining = false
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private var holdTask: Task<Void, Never>?
@@ -81,6 +92,7 @@ final class HomeModel {
         self.speech = speech
         self.toasts = toasts ?? HexToaster()
         self.now = now
+        recorder.onPart = { [weak self] part in self?.receivePart(part) }
     }
 
     /// The notice showing now.
@@ -90,6 +102,10 @@ final class HomeModel {
     var isPressing: Bool { pressStartedAt != nil }
     var isArmed: Bool { arm != nil }
     var level: Float? { recorder.level }
+    #if DEBUG
+    /// The recorder, for the locked-take probe.
+    var probeRecorder: any TakeRecording { recorder }
+    #endif
 
     /// Home is on screen: the recorder gets ready, so a press starts the microphone fast.
     func prepareRecorder() { recorder.prepare() }
@@ -118,11 +134,23 @@ final class HomeModel {
     /// the talk button ends it.
     func rerecordSelected() {
         guard draft.selectedIndex != nil, startTake() else { return }
+        lock()
+    }
+
+    /// The take is now hands-free: its parts are transcribed as they come.
+    private func lock() {
         locked = true
+        guard let id = draft.recordingID, parts[id] != nil else { return }
+        parts[id]?.lock()
+        enqueuePart(id)
     }
 
     private func startTake() -> Bool {
-        guard draft.beginTake() != nil else { return false }
+        guard let id = draft.beginTake() else { return false }
+        // A re-recorded chunk starts over.
+        parts[id] = nil
+        releasedAt[id] = nil
+        queue.removeAll { $0 == id }
         takeStartedAt = now()
         dragOffset = 0
         arm = nil
@@ -146,7 +174,7 @@ final class HomeModel {
             pressStartedAt = now()
             await pressEnded()
         } else if startTake() {
-            locked = true
+            lock()
         }
     }
 
@@ -195,7 +223,7 @@ final class HomeModel {
         pressStartedAt = nil
         if locked {
             locked = false
-            await endTake()
+            await endTake(locked: true)
             return
         }
         let armed = arm
@@ -203,7 +231,7 @@ final class HomeModel {
         arm = nil
         guard isRecording else { return }
         if armed == .lock {
-            locked = true
+            lock()
         } else if armed == .drop {
             await dropTake()
             showTakeDropped()
@@ -215,7 +243,7 @@ final class HomeModel {
                 detail: String(localized: "home.hold_to_talk.sub", defaultValue: "Keep pressing while you speak, or drag right to lock.")
             ))
         } else {
-            await endTake()
+            await endTake(locked: false)
         }
     }
 
@@ -246,15 +274,33 @@ final class HomeModel {
         ))
     }
 
-    private func endTake() async {
+    private func endTake(locked: Bool) async {
         guard let id = draft.recordingIndex.map({ draft.chunks[$0].id }) else { return }
         guard await startTask?.value == true else { return }
+        releasedAt[id] = ProcessInfo.processInfo.systemUptime
         draft.endTake(duration: takeStartedAt.map { now().timeIntervalSince($0) } ?? 0)
         takeStartedAt = nil
-        guard let take = await recorder.stopRecording() else {
+        stoppingID = id
+        let stopped = await recorder.stopRecording()
+        if stoppingID == id { stoppingID = nil }
+        guard let take = stopped else {
+            parts[id] = nil
             draft.failTranscription(id, message: Self.failedText)
             return
         }
+        // A locked take cut at pauses: only the audio after the last cut is left. A held take, or one with no
+        // pause, is transcribed whole, as before.
+        if locked, let split = take.split, var taken = parts[id], !taken.parts.isEmpty {
+            taken.lock()
+            taken.end(tail: split.tail)
+            parts[id] = taken
+            if let earlier = audio[id] { try? FileManager.default.removeItem(at: earlier.url) }
+            audio[id] = take
+            HexLog.dictation.info("parts: released after \(taken.parts.count - (split.tail == nil ? 0 : 1)) parts; \(split.tail == nil ? "no speech after the last pause" : "the last part is left", privacy: .public)")
+            await enqueue(id)
+            return
+        }
+        parts[id] = nil
         guard take.duration >= TakeCapture.minimumAudio else {
             HexLog.dictation.info("take: \(take.duration, format: .fixed(precision: 2)) s of audio, too short to read; dropped")
             try? FileManager.default.removeItem(at: take.url)
@@ -272,11 +318,12 @@ final class HomeModel {
 
     // MARK: Transcription
 
-    /// A finished take: transcribed at once when the model is ready, else it waits for speech.
+    /// A finished take: transcribed at once when the model is ready, else it waits for speech. A locked
+    /// take whose parts all have text already needs no model.
     private func enqueue(_ id: UUID) async {
         queue.removeAll { $0 == id }
         queue.append(id)
-        if speech.status == .ready {
+        if speech.status == .ready || parts[id].map({ $0.next == nil }) == true {
             await drain()
         } else {
             draft.markWaiting(id)
@@ -284,17 +331,45 @@ final class HomeModel {
         }
     }
 
-    /// Transcribes queued takes in recording order once the model is ready. If it fails, every
-    /// waiting take reads "Couldn't turn this take into text" with Try again; its audio is kept.
+    /// A part of the take being recorded, found at a pause. A locked take's parts are transcribed at once,
+    /// in order; a held take's are kept in case it is locked before release.
+    private func receivePart(_ part: TakePart) {
+        // A stopping take's last part: kept for its release, which locks it if it was locked.
+        if let id = stoppingID {
+            parts[id, default: TakeParts()].add(part)
+            return
+        }
+        guard let id = draft.recordingID else { return }
+        var taken = parts[id] ?? TakeParts()
+        taken.add(part)
+        if locked { taken.lock() }
+        parts[id] = taken
+        HexLog.dictation.info("parts: part \(taken.parts.count) cut at \(Double(part.range.upperBound) / 16_000, format: .fixed(precision: 2)) s, \(Double(part.range.count) / 16_000, format: .fixed(precision: 2)) s long, \(part.atPause ? "\(Int(part.sinceSpeech * 1000)) ms after the speech ended" : "at a dip past 12 s", privacy: .public)")
+        if locked { enqueuePart(id) }
+    }
+
+    /// The take being recorded has a part to transcribe: it goes in the queue (behind earlier takes) once.
+    private func enqueuePart(_ id: UUID) {
+        guard parts[id]?.next != nil else { return }
+        if !queue.contains(id) { queue.append(id) }
+        Task { await drain() }
+    }
+
+    /// Transcribes queued takes in recording order once the model is ready, one at a time; a locked take
+    /// part by part, in order. If the model fails, every waiting take reads "Couldn't turn this take into
+    /// text" with Try again; its audio is kept.
     private func drain() async {
         guard !isDraining else { return }
         isDraining = true
         defer { isDraining = false }
         while let id = queue.first {
+            if parts[id] != nil {
+                await transcribeNextPart(of: id)
+                continue
+            }
             if speech.status != .ready {
                 guard await speech.waitUntilReady() else {
-                    for waiting in queue { draft.failTranscription(waiting, message: Self.failedText) }
-                    queue.removeAll()
+                    failQueued()
                     return
                 }
             }
@@ -304,12 +379,104 @@ final class HomeModel {
                 let text = try await speech.transcribe(take)
                 guard audio[id]?.url == take.url else { continue }
                 draft.finishTranscription(id, text: text)
+                logReleaseToText(id, parts: 1)
                 try? FileManager.default.removeItem(at: take.url)
                 audio[id] = nil
             } catch {
                 draft.failTranscription(id, message: Self.failedText)
             }
         }
+    }
+
+    /// The model didn't load: every queued take fails; a locked take still recording keeps going, and
+    /// fails at release.
+    private func failQueued() {
+        for waiting in queue {
+            if parts[waiting] != nil {
+                parts[waiting]?.failPending()
+                if parts[waiting]?.recording == false { settleParts(of: waiting) }
+            } else {
+                draft.failTranscription(waiting, message: Self.failedText)
+            }
+        }
+        queue.removeAll()
+    }
+
+    /// One step of a locked take: its next part, or once released with every part done, its text.
+    private func transcribeNextPart(of id: UUID) async {
+        guard let waiting = parts[id] else { return }
+        guard waiting.next != nil else {
+            queue.removeAll { $0 == id }
+            if !waiting.recording { settleParts(of: id) }
+            return
+        }
+        if speech.status != .ready {
+            guard await speech.waitUntilReady() else {
+                failQueued()
+                return
+            }
+        }
+        // It may have been released, dropped or tried again meanwhile.
+        guard let taken = parts[id], let index = taken.next else { return }
+        // After release the chunk reads Transcribing; while recording it stays Listening.
+        if !taken.recording, !draft.beginTranscribing(id) {
+            parts[id] = nil
+            queue.removeAll { $0 == id }
+            return
+        }
+        let part = taken.parts[index].audio
+        let begun = ProcessInfo.processInfo.systemUptime
+        let result: Result<String, Error>
+        do {
+            result = .success(try await speech.transcribe(part: part))
+        } catch {
+            result = .failure(error)
+        }
+        // Dropped, re-recorded or cleared meanwhile: this part's text is thrown away.
+        guard parts[id]?.parts.indices.contains(index) == true, parts[id]?.parts[index].audio == part else { return }
+        let done = ProcessInfo.processInfo.systemUptime
+        switch result {
+        case let .success(text):
+            parts[id]?.finish(index, text: text)
+            draft.updatePartial(id, text: parts[id]?.text ?? "")
+            let found = part.foundAt == 0 ? " · after release"
+                : part.atPause ? " · \(hexMilliseconds(from: part.foundAt, to: done)) ms after the pause was found, \(hexMilliseconds(from: part.foundAt - part.sinceSpeech, to: done)) ms after the speech ended"
+                : " · \(hexMilliseconds(from: part.foundAt, to: done)) ms after the cut at a dip"
+            HexLog.dictation.info("parts: part \(index + 1) text in \(hexMilliseconds(from: begun, to: done)) ms\(found, privacy: .public)")
+            #if DEBUG
+            print("HEXPROBE part \(index + 1): \(String(format: "%.2f", Double(part.range.count) / 16_000)) s transcribed in \(hexMilliseconds(from: begun, to: done)) ms\(found)")
+            #endif
+        case let .failure(error):
+            parts[id]?.fail(index)
+            HexLog.dictation.error("parts: part \(index + 1) failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// A released locked take with nothing left to transcribe: its text, or the failure with its audio kept.
+    private func settleParts(of id: UUID) {
+        guard let taken = parts[id], taken.isSettled else { return }
+        queue.removeAll { $0 == id }
+        guard draft.beginTranscribing(id) else {
+            parts[id] = nil
+            return
+        }
+        if taken.hasFailed {
+            draft.failTranscription(id, message: Self.failedText)
+            return
+        }
+        parts[id] = nil
+        draft.finishTranscription(id, text: taken.text)
+        logReleaseToText(id, parts: taken.parts.count)
+        if let take = audio.removeValue(forKey: id) { try? FileManager.default.removeItem(at: take.url) }
+    }
+
+    private func logReleaseToText(_ id: UUID, parts count: Int) {
+        guard let released = releasedAt.removeValue(forKey: id) else { return }
+        let ms = hexMilliseconds(from: released, to: ProcessInfo.processInfo.systemUptime)
+        HexLog.dictation.info("take: release to text in \(ms) ms (\(count) parts)")
+        #if DEBUG
+        print("HEXPROBE release: text \(ms) ms after release (\(count) parts)")
+        #endif
     }
 
     /// Try again: failed takes whose audio is kept go back in the queue, in draft order; a model
@@ -320,6 +487,10 @@ final class HomeModel {
         if speech.status == .failed { speech.reload() }
         for chunk in failed {
             draft.markWaiting(chunk.id)
+            if parts[chunk.id] != nil {
+                parts[chunk.id]?.retry()
+                draft.updatePartial(chunk.id, text: parts[chunk.id]?.text ?? "")
+            }
             queue.removeAll { $0 == chunk.id }
             queue.append(chunk.id)
         }
@@ -334,6 +505,12 @@ final class HomeModel {
     private func dropTake() async {
         _ = await startTask?.value
         recorder.cancelRecording()
+        // Its parts go too: one being transcribed now has its text thrown away.
+        if let id = draft.recordingID {
+            parts[id] = nil
+            releasedAt[id] = nil
+            queue.removeAll { $0 == id }
+        }
         draft.dropTake()
         takeStartedAt = nil
     }
@@ -559,6 +736,8 @@ final class HomeModel {
         for take in audio.values { try? FileManager.default.removeItem(at: take.url) }
         audio.removeAll()
         queue.removeAll()
+        parts.removeAll()
+        releasedAt.removeAll()
         lastDeleted = nil
         showEarlier = false
         toasts.show(HexToastItem(

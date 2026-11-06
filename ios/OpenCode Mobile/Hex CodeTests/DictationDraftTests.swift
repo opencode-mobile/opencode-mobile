@@ -178,6 +178,11 @@ final class FakeRecorder: TakeRecording {
     private(set) var started = 0
     private(set) var cancelled = 0
     private(set) var takes: [URL] = []
+    var onPart: ((TakePart) -> Void)?
+    /// How the next take ends when split (the pause finder was on); nil: it wasn't.
+    var split: TakeSplit?
+    /// Parts the splitter finds in the take's last blocks, while it stops.
+    var partsAtStop: [TakePart] = []
 
     func startRecording() async throws {
         started += 1
@@ -187,7 +192,10 @@ final class FakeRecorder: TakeRecording {
     func stopRecording() async -> RecordedTake? {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("fake-take-\(takes.count)-\(UUID().uuidString).wav")
         takes.append(url)
-        return RecordedTake(url: url, duration: duration)
+        await Task.yield()
+        partsAtStop.forEach { onPart?($0) }
+        partsAtStop = []
+        return RecordedTake(url: url, duration: duration, split: split)
     }
 
     func cancelRecording() { cancelled += 1 }
@@ -234,6 +242,33 @@ final class FakeSpeech: SpeechTranscribing {
         if failsTranscription { throw CancellationError() }
         return transcripts.isEmpty ? transcript : transcripts.removeFirst()
     }
+
+    /// Parts transcribed, in order (their ranges).
+    private(set) var transcribedParts: [Range<Int>] = []
+    /// Each part's text is its range's lower bound in seconds ("part 3") unless given here, by range start.
+    var partTexts: [Int: String] = [:]
+    /// Parts at these starts fail.
+    var failingParts: Set<Int> = []
+    /// While set, part transcriptions wait until `releaseParts()`.
+    var holdsParts = false
+    private var heldParts: [CheckedContinuation<Void, Never>] = []
+
+    func transcribe(part: TakePart) async throws -> String {
+        transcribedParts.append(part.range)
+        if holdsParts { await withCheckedContinuation { heldParts.append($0) } }
+        if failsTranscription || failingParts.contains(part.range.lowerBound) { throw CancellationError() }
+        return partTexts[part.range.lowerBound] ?? "part \(part.range.lowerBound / 16_000)"
+    }
+
+    /// Lets held part transcriptions finish.
+    func releaseParts() {
+        holdsParts = false
+        let held = heldParts
+        heldParts = []
+        held.forEach { $0.resume() }
+    }
+
+    var partsHeld: Int { heldParts.count }
 }
 
 @MainActor

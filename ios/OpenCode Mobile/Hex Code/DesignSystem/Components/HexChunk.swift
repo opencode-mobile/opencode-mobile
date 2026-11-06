@@ -14,6 +14,11 @@ struct HexChunkItem: Identifiable, Equatable {
     let id: UUID
     let text: String
     var kind: Kind = .text
+    /// Faint words after the text, like a placeholder: a locked take's "Listening…" after its text so far.
+    var trailing: String?
+
+    /// The text and its trailing words, as one line of plain text (a chunk row).
+    var plainText: String { [text, trailing].compactMap { $0 }.joined(separator: " ") }
 }
 
 /// Draft text with tappable chunks, as running text. Each chunk has a faint `tint(4.5)` fill;
@@ -67,6 +72,11 @@ struct HexChunk: View {
                 }
             }
             out += span
+            if let trailing = item.trailing {
+                var faint = AttributedString(" " + trailing)
+                faint.foregroundColor = HexColor.text3
+                out += faint
+            }
         }
         return out
     }
@@ -101,6 +111,8 @@ struct HexChunkRow: View {
                     .hexFont(HexTextStyle.row.weight(live ? .medium : .regular))
                     .foregroundStyle(dimmed ? HexColor.text3 : HexColor.text1)
                     .lineLimit(selected ? 4 : (live ? 3 : 1))
+                    // The take being recorded keeps its newest words in view.
+                    .truncationMode(live ? .head : .tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(verbatim: duration)
                     .hexFont(.mono)

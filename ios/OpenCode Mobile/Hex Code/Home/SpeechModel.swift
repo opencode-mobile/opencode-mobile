@@ -23,6 +23,8 @@ protocol SpeechTranscribing: AnyObject {
     func reload()
     /// The take's text; "" when it held no speech.
     func transcribe(_ take: RecordedTake) async throws -> String
+    /// One part of a locked take; "" when it held no speech.
+    func transcribe(part: TakePart) async throws -> String
 }
 
 /// The speech model on this phone (Parakeet V2 through `VoiceEngine`). It starts loading when the
@@ -168,6 +170,28 @@ final class SpeechModel: SpeechTranscribing {
                 return ""
             }
             HexLog.dictation.error("take: \(take.duration, format: .fixed(precision: 2)) s, transcription failed: \(String(describing: error), privacy: .public)")
+            throw error
+        }
+    }
+
+    func transcribe(part: TakePart) async throws -> String {
+        let seconds = Double(part.samples.count) / 16_000
+        #if DEBUG
+        if let text = UserDefaults.standard.string(forKey: "HexCodeTakeText") {
+            HexLog.dictation.info("part: \(seconds, format: .fixed(precision: 2)) s → -HexCodeTakeText")
+            return text
+        }
+        #endif
+        do {
+            let text = try await voice.transcribe(samples: part.samples)
+            HexLog.dictation.info("part: \(seconds, format: .fixed(precision: 2)) s → \(text.count) characters")
+            return text
+        } catch {
+            if TakeCapture.isNoSpeech(error) {
+                HexLog.dictation.info("part: \(seconds, format: .fixed(precision: 2)) s, no speech heard")
+                return ""
+            }
+            HexLog.dictation.error("part: \(seconds, format: .fixed(precision: 2)) s, transcription failed: \(String(describing: error), privacy: .public)")
             throw error
         }
     }

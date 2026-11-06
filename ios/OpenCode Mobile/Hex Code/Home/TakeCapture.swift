@@ -8,15 +8,23 @@ import VoiceEngineKit
 /// audio session: the button answers the touch in the same frame and the microphone starts
 /// alongside. While home is on screen the engine is created and prepared (`prepare()`), so a press
 /// only activates the session and starts it; the microphone and the system's recording indicator
-/// only come on at the press. The speech engine only transcribes the finished file.
+/// only come on at the press. When the VAD is ready, each take also runs through a `TakeSplitter`, which hands
+/// back a part at every pause (`onPart`), so a locked take can be transcribed while it records.
 @MainActor
 final class TakeCapture: TakeRecording {
     /// Takes shorter than this hold no speech Parakeet can read (FluidAudio needs 0.3 s).
     static let minimumAudio: TimeInterval = 0.3
 
     private let audio = TakeAudio()
+    /// A pause finder for a new take; nil while the VAD isn't ready.
+    private let pauses: () -> PauseFinder?
+    private var splitter: TakeSplitter?
+    /// The last take's splitter while it looks at its last blocks after the take stopped.
+    private var finishing: TakeSplitter?
+    var onPart: ((TakePart) -> Void)?
 
-    init() {
+    init(pauses: @escaping () -> PauseFinder? = { nil }) {
+        self.pauses = pauses
         // Setting the category doesn't take the microphone or stop other audio; doing it now keeps
         // it out of the first press.
         audio.prepare()
@@ -62,9 +70,25 @@ final class TakeCapture: TakeRecording {
                 throw VoiceEngine.EngineError.microphoneDenied
             }
         }
+        splitter?.cancel()
+        splitter = nil
+        #if DEBUG
+        let noPauses = UserDefaults.standard.bool(forKey: "HexCodeNoPauses")
+        #else
+        let noPauses = false
+        #endif
+        if !noPauses, let finder = pauses() {
+            splitter = TakeSplitter(finder: finder) { [weak self] source, part in
+                await self?.deliver(part, from: source)
+            }
+        } else {
+            HexLog.dictation.info("parts: the VAD isn't ready, so this take is transcribed whole after release")
+        }
         do {
-            try await audio.start()
+            try await audio.start(splitter: splitter)
         } catch {
+            splitter?.cancel()
+            splitter = nil
             HexLog.dictation.error("take: the microphone didn't start: \(String(describing: error), privacy: .public)")
             throw VoiceEngine.EngineError.microphoneUnavailable
         }
@@ -74,8 +98,19 @@ final class TakeCapture: TakeRecording {
         #if DEBUG
         logLevels()
         #endif
-        let take = await audio.stop()
-        if take == nil { HexLog.dictation.error("take: stopped, but nothing was recording") }
+        // Taken before waiting: a new take may start while this one stops. A part cut in its last blocks is
+        // still delivered.
+        let current = splitter
+        splitter = nil
+        finishing = current
+        var take = await audio.stop()
+        if take == nil {
+            HexLog.dictation.error("take: stopped, but nothing was recording")
+            current?.cancel()
+        } else if let current {
+            take?.split = await current.finish()
+        }
+        if finishing === current { finishing = nil }
         #if DEBUG
         if let take { print("HEXPROBE take: \(String(format: "%.2f", take.duration)) s of audio written") }
         #endif
@@ -86,8 +121,25 @@ final class TakeCapture: TakeRecording {
         #if DEBUG
         levels = []
         #endif
+        splitter?.cancel()
+        splitter = nil
         audio.cancel()
     }
+
+    /// A part found by this take's splitter (not an earlier, dropped one).
+    private func deliver(_ part: TakePart, from source: TakeSplitter) {
+        guard source === splitter || source === finishing else { return }
+        onPart?(part)
+    }
+
+    #if DEBUG
+    /// With `-HexCodeTakeAudio`: once the clip has played to the end in the take being recorded.
+    func clipPlayed() async {
+        while !audio.clipEnded {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+    #endif
 
     /// Parakeet's "no speech was detected" (an empty transcript), which isn't a failure: the take was
     /// silent. VoiceEngineKit keeps the error type internal, so it is matched by its case name.
@@ -96,14 +148,21 @@ final class TakeCapture: TakeRecording {
     }
 }
 
-/// One take's audio file and how long it ran.
+/// One take's audio file and how long it ran; with the pause finder on, how it was split.
 struct RecordedTake: Sendable {
     let url: URL
     let duration: TimeInterval
+    /// Nil when the take wasn't run through the VAD (it wasn't ready).
+    var split: TakeSplit?
 }
 
 /// The audio session and an `AVAudioEngine`, driven on one serial queue. The input tap measures
-/// each buffer's loudness (RMS, dBFS) and writes it, converted to 16 kHz mono, to the take's file.
+/// each buffer's loudness (RMS, dBFS) and writes it, converted to 16 kHz mono, to the take's file and
+/// to the take's splitter.
+///
+/// Debug builds: `-HexCodeTakeAudio <wav>` (a path, or a file in Documents; 16 kHz mono) plays that clip as the
+/// microphone, in real time, then quiet, instead of starting the microphone (a simulator has none, and a phone on a
+/// desk can't be spoken to).
 private nonisolated final class TakeAudio: @unchecked Sendable {
     private static let fileSettings: [String: Any] = [
         AVFormatIDKey: kAudioFormatLinearPCM,
@@ -131,6 +190,10 @@ private nonisolated final class TakeAudio: @unchecked Sendable {
     private var framesWritten: AVAudioFramePosition = 0
     private var latestDecibels: Double?
     private var heard = false
+    private var splitter: TakeSplitter?
+    #if DEBUG
+    private var clip: ClipMicrophone?
+    #endif
 
     /// Loudness of the last buffer, RMS in dBFS; nil until audio arrives.
     var decibels: Double? {
@@ -176,11 +239,12 @@ private nonisolated final class TakeAudio: @unchecked Sendable {
         }
     }
 
-    func start() async throws {
+    /// Starts a take; its 16 kHz audio also goes to `splitter`.
+    func start(splitter: TakeSplitter?) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             queue.async {
                 do {
-                    try self.startNow()
+                    try self.startNow(splitter: splitter)
                     continuation.resume()
                 } catch {
                     self.finish(keep: false)
@@ -191,7 +255,13 @@ private nonisolated final class TakeAudio: @unchecked Sendable {
         await PressTiming.microphoneRunning()
     }
 
-    private func startNow() throws {
+    private func startNow(splitter: TakeSplitter?) throws {
+        #if DEBUG
+        if let path = UserDefaults.standard.string(forKey: "HexCodeTakeAudio") {
+            try startClip(path, splitter: splitter)
+            return
+        }
+        #endif
         let begun = ProcessInfo.processInfo.systemUptime
         prepareNow()
         if !sessionActive {
@@ -224,6 +294,7 @@ private nonisolated final class TakeAudio: @unchecked Sendable {
         framesWritten = 0
         latestDecibels = nil
         heard = false
+        self.splitter = splitter
         lock.unlock()
         input.installTap(onBus: 0, bufferSize: 512, format: format) { [weak self] buffer, _ in
             self?.receive(buffer)
@@ -261,12 +332,21 @@ private nonisolated final class TakeAudio: @unchecked Sendable {
                 status.pointee = .haveData
                 return buffer
             }
-            if error == nil, output.frameLength > 0, (try? file.write(from: output)) != nil {
-                framesWritten += AVAudioFramePosition(output.frameLength)
+            if error == nil, output.frameLength > 0 {
+                write(output, to: file)
             }
         }
         lock.unlock()
         if first { onFirstAudio() }
+    }
+
+    /// Under `lock`: 16 kHz audio to the file and the splitter.
+    private func write(_ output: AVAudioPCMBuffer, to file: AVAudioFile) {
+        guard (try? file.write(from: output)) != nil else { return }
+        framesWritten += AVAudioFramePosition(output.frameLength)
+        if let samples = output.floatChannelData?[0] {
+            splitter?.append(samples, count: Int(output.frameLength))
+        }
     }
 
     private static func rmsDecibels(_ buffer: AVAudioPCMBuffer) -> Double {
@@ -294,6 +374,10 @@ private nonisolated final class TakeAudio: @unchecked Sendable {
     private func finish(keep: Bool) -> RecordedTake? {
         let wasRecording = recording
         recording = false
+        #if DEBUG
+        clip?.stop()
+        clip = nil
+        #endif
         if let engine {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
@@ -309,6 +393,7 @@ private nonisolated final class TakeAudio: @unchecked Sendable {
         self.file = nil
         converter = nil
         latestDecibels = nil
+        splitter = nil
         lock.unlock()
         guard wasRecording, let file else { return nil }
         let url = file.url
@@ -326,3 +411,102 @@ private nonisolated final class TakeAudio: @unchecked Sendable {
         sessionActive = false
     }
 }
+
+#if DEBUG
+extension TakeAudio {
+    /// True once the playing clip has reached its end (then quiet follows).
+    nonisolated var clipEnded: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return clip?.ended ?? false
+    }
+
+    /// `-HexCodeTakeAudio`: the clip stands in for the microphone, fed in real time on the queue.
+    nonisolated fileprivate func startClip(_ path: String, splitter: TakeSplitter?) throws {
+        let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : URL.documentsDirectory.appending(path: path)
+        let source = try AVAudioFile(forReading: url)
+        let format = source.processingFormat
+        guard format.sampleRate == 16_000, format.channelCount == 1,
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(source.length)) else {
+            print("HEXPROBE clip: -HexCodeTakeAudio needs a 16 kHz mono file")
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        try source.read(into: buffer)
+        let samples = Array(UnsafeBufferPointer(start: buffer.floatChannelData![0], count: Int(buffer.frameLength)))
+        let takeURL = FileManager.default.temporaryDirectory.appendingPathComponent("take-\(UUID().uuidString).wav")
+        let file = try AVAudioFile(forWriting: takeURL, settings: Self.fileSettings, commonFormat: .pcmFormatFloat32, interleaved: false)
+        let clip = ClipMicrophone(samples: samples, queue: queue) { [weak self] chunk in self?.receiveClip(chunk) }
+        lock.lock()
+        self.file = file
+        converter = nil
+        framesWritten = 0
+        latestDecibels = nil
+        heard = false
+        self.splitter = splitter
+        self.clip = clip
+        lock.unlock()
+        recording = true
+        clip.start()
+        print("HEXPROBE clip: playing \(url.lastPathComponent) as the microphone, \(String(format: "%.2f", Double(samples.count) / 16_000)) s")
+    }
+
+    /// On the queue: one stretch of the clip, as if the microphone had just delivered it.
+    nonisolated private func receiveClip(_ chunk: [Float]) {
+        lock.lock()
+        guard let file, let output = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(chunk.count)) else {
+            lock.unlock()
+            return
+        }
+        output.frameLength = AVAudioFrameCount(chunk.count)
+        chunk.withUnsafeBufferPointer { output.floatChannelData![0].update(from: $0.baseAddress!, count: chunk.count) }
+        let first = !heard
+        heard = true
+        latestDecibels = Self.rmsDecibels(output)
+        write(output, to: file)
+        lock.unlock()
+        if first { onFirstAudio() }
+    }
+}
+
+/// Plays samples as a microphone would deliver them: every 20 ms, what is due by the clock; after the end, quiet.
+private nonisolated final class ClipMicrophone: @unchecked Sendable {
+    private let samples: [Float]
+    private let timer: DispatchSourceTimer
+    private let deliver: ([Float]) -> Void
+    private var startedAt: TimeInterval = 0
+    private var sent = 0
+    /// Read under TakeAudio's lock; written on the queue.
+    private(set) var ended = false
+
+    init(samples: [Float], queue: DispatchQueue, deliver: @escaping ([Float]) -> Void) {
+        self.samples = samples
+        self.deliver = deliver
+        timer = DispatchSource.makeTimerSource(queue: queue)
+    }
+
+    func start() {
+        startedAt = ProcessInfo.processInfo.systemUptime
+        timer.schedule(deadline: .now(), repeating: .milliseconds(20), leeway: .milliseconds(2))
+        timer.setEventHandler { [weak self] in self?.tick() }
+        timer.resume()
+    }
+
+    func stop() { timer.cancel() }
+
+    private func tick() {
+        let due = Int((ProcessInfo.processInfo.systemUptime - startedAt) * 16_000)
+        guard due > sent else { return }
+        var chunk = [Float](repeating: 0, count: due - sent)
+        if sent < samples.count {
+            let end = min(due, samples.count)
+            chunk.replaceSubrange(0 ..< end - sent, with: samples[sent ..< end])
+            if end == samples.count {
+                ended = true
+                print("HEXPROBE clip: ended")
+            }
+        }
+        sent = due
+        deliver(chunk)
+    }
+}
+#endif

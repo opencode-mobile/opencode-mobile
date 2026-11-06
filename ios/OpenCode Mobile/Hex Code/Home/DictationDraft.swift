@@ -1,8 +1,9 @@
 import Foundation
 
-/// One take in the draft. A take is transcribed once it ends, so it moves
-/// Listening → (Waiting for speech, while the model loads) → Transcribing → text, and Send (later)
-/// waits for every chunk to have text.
+/// One take in the draft. It moves Listening → (Waiting for speech, while the model loads) →
+/// Transcribing → text, and Send waits for every chunk to have text. A locked take is transcribed in
+/// parts while it records: its text so far (`partial`) grows while it is still Listening, and only the
+/// part after the last pause is left after release.
 struct DraftChunk: Identifiable, Equatable, Sendable {
     enum State: Equatable, Sendable {
         case listening
@@ -19,6 +20,8 @@ struct DraftChunk: Identifiable, Equatable, Sendable {
     var duration: TimeInterval = 0
     /// While a chunk is re-recorded, its earlier text, kept until the new take lands.
     var previous: (text: String, duration: TimeInterval)?
+    /// A locked take's text so far, from the parts transcribed while it records; nil until the first.
+    var partial: String?
 
     var text: String? {
         if case let .text(text) = state { return text }
@@ -28,6 +31,7 @@ struct DraftChunk: Identifiable, Equatable, Sendable {
     static func == (lhs: DraftChunk, rhs: DraftChunk) -> Bool {
         lhs.id == rhs.id && lhs.state == rhs.state && lhs.duration == rhs.duration
             && lhs.previous?.text == rhs.previous?.text && lhs.previous?.duration == rhs.previous?.duration
+            && lhs.partial == rhs.partial
     }
 }
 
@@ -93,6 +97,10 @@ struct DictationDraft: Equatable, Sendable {
 
     var totalDuration: TimeInterval { chunks.reduce(0) { $0 + $1.duration } }
     var text: String { chunks.compactMap(\.text).joined(separator: " ") }
+    /// How many characters show: the text, with locked takes' text so far.
+    var shownCharacters: Int {
+        chunks.compactMap { $0.text ?? $0.partial }.joined(separator: " ").count
+    }
     var wordCount: Int { text.split(whereSeparator: \.isWhitespace).count }
 
     /// Long enough for the word count in the label. Rows are `DraftLayout`'s call.
@@ -123,6 +131,7 @@ struct DictationDraft: Equatable, Sendable {
             let chunk = chunks[selected]
             chunks[selected].previous = chunk.text.map { ($0, chunk.duration) } ?? chunk.previous
             chunks[selected].state = .listening
+            chunks[selected].partial = nil
             recordingID = chunk.id
             isRerecording = true
         } else {
@@ -152,10 +161,17 @@ struct DictationDraft: Equatable, Sendable {
         isRerecording = false
     }
 
+    /// A locked take's text so far: its parts transcribed until now, joined.
+    mutating func updatePartial(_ id: UUID, text: String) {
+        guard let index = index(of: id), [.listening, .waiting, .transcribing].contains(chunks[index].state) else { return }
+        chunks[index].partial = text.isEmpty ? nil : text
+    }
+
     /// The take's text arrived. Silence (no text) removes a new chunk and keeps a re-recorded one's earlier text.
     mutating func finishTranscription(_ id: UUID, text: String) {
         guard let index = index(of: id), chunks[index].state == .transcribing else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        chunks[index].partial = nil
         if trimmed.isEmpty {
             restoreOrRemove(at: index)
         } else {
@@ -167,6 +183,7 @@ struct DictationDraft: Equatable, Sendable {
     mutating func failTranscription(_ id: UUID, message: String) {
         guard let index = index(of: id), [.transcribing, .waiting].contains(chunks[index].state) else { return }
         chunks[index].state = .failed(message)
+        chunks[index].partial = nil
     }
 
     /// The take waits for the speech model (from Transcribing, or a failed take tried again).
@@ -270,6 +287,7 @@ struct DictationDraft: Equatable, Sendable {
     }
 
     private mutating func restoreOrRemove(at index: Int) {
+        chunks[index].partial = nil
         if let previous = chunks[index].previous {
             chunks[index].state = .text(previous.text)
             chunks[index].duration = previous.duration

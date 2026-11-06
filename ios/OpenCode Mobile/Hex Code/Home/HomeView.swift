@@ -67,6 +67,7 @@ struct HomeView: View {
         .onAppear { home.prepareRecorder() }
         #if DEBUG
         .task { await PressProbe.run(home) }
+        .task { await LockedProbe.run(home) }
         .task {
             try? await Task.sleep(for: .seconds(2))
             EdgeDeferral.report()
@@ -198,7 +199,7 @@ struct DraftView: View {
                 // Running text, stepping down in size until the draft (label, text and actions),
                 // as drawn, fits between its line and the dock; then rows, or a scrolling chunk.
                 ViewThatFits(in: .vertical) {
-                    ForEach(DraftSize.candidates(forCharacters: draft.text.count), id: \.self) { size in
+                    ForEach(DraftSize.candidates(forCharacters: draft.shownCharacters), id: \.self) { size in
                         layout { DraftText(home: home, style: size.style) }
                     }
                     switch DraftLayout.whenTooLong(chunkCount: draft.chunks.count) {
@@ -376,7 +377,7 @@ struct DraftText: View {
                 onTap: { home.toggleChunk($0) }
             )
             .fixedSize(horizontal: false, vertical: true)
-            if home.isRecording, home.draft.chunks.count == 1, !home.draft.isRerecording {
+            if home.isRecording, home.draft.chunks.count == 1, !home.draft.isRerecording, home.draft.chunks[0].partial == nil {
                 Text(LocalizedStringResource("draft.first_take_hint", defaultValue: "Text appears when you pause"))
                     .hexFont(.row)
                     .foregroundStyle(HexColor.text3)
@@ -395,14 +396,23 @@ struct DraftText: View {
     static func item(_ chunk: DraftChunk) -> HexChunkItem {
         switch chunk.state {
         case .listening:
-            HexChunkItem(id: chunk.id, text: String(localized: "draft.listening", defaultValue: "Listening…"), kind: .placeholder)
+            let listening = String(localized: "draft.listening", defaultValue: "Listening…")
+            // A locked take's text so far, from the parts done while it records.
+            if let partial = chunk.partial {
+                return HexChunkItem(id: chunk.id, text: partial, trailing: listening)
+            }
+            return HexChunkItem(id: chunk.id, text: listening, kind: .placeholder)
         case .transcribing, .waiting:
             // A waiting take looks like one being transcribed; the label line says why it waits.
-            HexChunkItem(id: chunk.id, text: String(localized: "draft.transcribing_chunk", defaultValue: "Transcribing…"), kind: .placeholder)
+            let transcribing = String(localized: "draft.transcribing_chunk", defaultValue: "Transcribing…")
+            if let partial = chunk.partial {
+                return HexChunkItem(id: chunk.id, text: partial, trailing: transcribing)
+            }
+            return HexChunkItem(id: chunk.id, text: transcribing, kind: .placeholder)
         case let .text(text):
-            HexChunkItem(id: chunk.id, text: text)
+            return HexChunkItem(id: chunk.id, text: text)
         case let .failed(message):
-            HexChunkItem(id: chunk.id, text: message, kind: .failed)
+            return HexChunkItem(id: chunk.id, text: message, kind: .failed)
         }
     }
 }
@@ -483,7 +493,7 @@ struct ChunkListView: View {
         let dimmed = home.isRecording || (home.draft.selectedID != nil && !selected)
         return HexChunkRow(
             number: "\(index + 1)",
-            text: DraftText.item(chunk).text,
+            text: DraftText.item(chunk).plainText,
             duration: live ? "" : DraftClock.format(chunk.duration),
             selected: selected,
             dimmed: dimmed || chunk.text == nil,
@@ -684,6 +694,40 @@ enum PressProbe {
 #endif
 
 #if DEBUG
+/// `-HexCodeLockedProbe <n>` with `-HexCodeTakeAudio <wav>`: once the speech model is ready, n locked takes of
+/// the clip, each finished (✓) as soon as the clip has played, printing when each part's text came and the wait
+/// from release to the take's text (read them with `devicectl device process launch --console`). The draft is
+/// cleared between takes. Debug builds only.
+@MainActor
+enum LockedProbe {
+    private static var ran = false
+
+    static func run(_ home: HomeModel) async {
+        let count = UserDefaults.standard.integer(forKey: "HexCodeLockedProbe")
+        guard count > 0, !ran, let capture = home.probeRecorder as? TakeCapture else { return }
+        ran = true
+        guard await home.speech.waitUntilReady() else {
+            print("HEXPROBE locked: the speech model didn't load")
+            return
+        }
+        try? await Task.sleep(for: .seconds(4))
+        for cycle in 1 ... count {
+            print("HEXPROBE locked take \(cycle)")
+            await home.toggleHandsFreeTake()
+            await capture.clipPlayed()
+            await home.finishLockedTake()
+            for _ in 0 ..< 600 where !home.draft.isComplete {
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            print("HEXPROBE text: \(home.draft.text)")
+            try? await Task.sleep(for: .seconds(4))
+            if cycle < count { home.clearDraft() }
+            try? await Task.sleep(for: .seconds(1))
+        }
+        print("HEXPROBE done")
+    }
+}
+
 /// Prints the bottom edge deferral UIKit actually sees, following its child view controller chain
 /// from the window's root, to check `.defersSystemGestures(on: .bottom)` reaches it.
 @MainActor
