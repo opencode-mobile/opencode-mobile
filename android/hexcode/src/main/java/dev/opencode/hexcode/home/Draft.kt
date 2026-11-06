@@ -155,6 +155,9 @@ data class Draft(
                 },
         )
 
+    /** [earlier] back as it was before Send, followed by anything recorded since. */
+    fun restored(earlier: Draft): Draft = copy(chunks = earlier.chunks + chunks, selected = null)
+
     /** Try again: failed takes with their audio wait for the model again. */
     fun retryFailed(): Draft =
         copy(

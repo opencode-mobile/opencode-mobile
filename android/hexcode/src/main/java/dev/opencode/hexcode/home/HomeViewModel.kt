@@ -204,7 +204,34 @@ enum class TalkMode {
 }
 
 /** One-line messages the home screen shows for a moment. */
-enum class HomeNotice { ChunkDeleted, TakeDropped, NewDay, NotInThisVersion, MicUnavailable }
+enum class HomeNotice {
+    ChunkDeleted,
+    TakeDropped,
+    NewDay,
+    NotInThisVersion,
+    MicUnavailable,
+
+    /** "Queued · sends after this turn", with Undo. */
+    Queued,
+
+    /** "Sent · starting now". */
+    SentIdle,
+
+    /** "Sending now…" with the text and Undo, for the 3 s a Now is held. */
+    SendingNow,
+
+    /** "Sent · lands at the next step". */
+    SentNow,
+
+    /** "Not sent · It never left the phone.": a held Now undone. */
+    Unsent,
+
+    /** "Taken back · It never reached the agent.": a queued message undone. */
+    TakenBack,
+
+    /** "Couldn't send · Your draft is kept." */
+    SendFailed,
+}
 
 data class HomeUiState(
     val draft: Draft = Draft(),
@@ -216,7 +243,14 @@ data class HomeUiState(
     val today: TodayState = TodayState(),
     /** Whether takes can be turned into text yet. */
     val speech: SpeechStatus = SpeechStatus.Loading(),
-)
+    /** The After turn / Now switch, back to After turn after every send. */
+    val sendMode: SendMode = SendMode.AfterTurn,
+    /** The notice's second line when it shows the message, such as "Sending now…". */
+    val noticeDetail: String? = null,
+) {
+    /** The agent runs or waits for an answer, so Send has a choice to make. */
+    val busy: Boolean get() = today.busySince != null || today.pendingInput != null
+}
 
 /**
  * The home screen: today's session ([TodaySession], made by [makeSession] in this model's scope) and dictation, where
@@ -420,6 +454,137 @@ class HomeViewModel(
             }
     }
 
+    /** What Undo on the current notice takes back: a Now held on the phone, or a message queued in the inbox. */
+    private sealed interface Undoable {
+        val draft: Draft
+
+        data class Held(
+            val job: Job,
+            override val draft: Draft,
+        ) : Undoable
+
+        data class Queued(
+            val itemId: String,
+            override val draft: Draft,
+        ) : Undoable
+    }
+
+    private var undoable: Undoable? = null
+
+    fun setSendMode(mode: SendMode) = state.update { it.copy(sendMode = mode) }
+
+    /**
+     * Send (app-plan.md, Sending): the draft clears at once. An idle agent gets it now (`steer`); a working one after
+     * this turn (`queue`), or, with Now, after 3 s held on the phone with Undo, as a correction (`steer`). The switch
+     * goes back to After turn. If sending fails, the draft comes back as it was.
+     */
+    fun send() {
+        val current = state.value
+        val draft = current.draft
+        if (!draft.isSettled || draft.text.isBlank()) return
+        val plan = Sending.plan(current.busy, current.sendMode)
+        val text = draft.text
+        state.update { it.copy(draft = it.draft.clear(), sendMode = SendMode.AfterTurn) }
+        when (plan) {
+            SendPlan.Idle ->
+                viewModelScope.launch {
+                    if (deliver(plan, text, draft) != null) notify(HomeNotice.SentIdle, text)
+                }
+            SendPlan.Queue ->
+                viewModelScope.launch {
+                    val id = deliver(plan, text, draft) ?: return@launch
+                    undoable = Undoable.Queued(id, draft)
+                    notify(HomeNotice.Queued, null)
+                }
+            SendPlan.Now -> {
+                val job =
+                    viewModelScope.launch {
+                        delay(Sending.HOLD_MS)
+                        undoable = null
+                        // Held through a reconnect, it goes once the stream is back.
+                        session?.awaitStream()
+                        if (deliver(plan, text, draft) != null) notify(HomeNotice.SentNow, text)
+                    }
+                undoable = Undoable.Held(job, draft)
+                notify(HomeNotice.SendingNow, text)
+            }
+        }
+    }
+
+    /** Sends [text] as [plan] says; on failure the [draft] comes back with "Couldn't send". Returns the inbox item's id. */
+    private suspend fun deliver(
+        plan: SendPlan,
+        text: String,
+        draft: Draft,
+    ): String? {
+        val today = session
+        return try {
+            today ?: error("No session to send to")
+            today.send(Sending.text(plan, text), Sending.delivery(plan))
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w(TalkLog.TAG, "couldn't send: ${error.message}", error)
+            restore(draft)
+            notify(HomeNotice.SendFailed, null)
+            null
+        }
+    }
+
+    /** The draft as it was before Send, unless a new one has started meanwhile, which then follows it. */
+    private fun restore(draft: Draft) = state.update { it.copy(draft = it.draft.restored(draft)) }
+
+    private fun notify(
+        notice: HomeNotice,
+        detail: String?,
+    ) = state.update { it.copy(notice = notice, noticeDetail = detail) }
+
+    /** The notice's action: Undo a deleted chunk, a held Now, or a queued message. */
+    fun noticeAction() {
+        when (state.value.notice) {
+            HomeNotice.ChunkDeleted -> undoDelete()
+            HomeNotice.SendingNow, HomeNotice.Queued -> undoSend()
+            else -> Unit
+        }
+    }
+
+    private fun undoSend() {
+        when (val taking = undoable) {
+            is Undoable.Held -> {
+                taking.job.cancel()
+                restore(taking.draft)
+                notify(HomeNotice.Unsent, null)
+            }
+            is Undoable.Queued ->
+                viewModelScope.launch {
+                    try {
+                        session?.cancelQueued(taking.itemId)
+                        restore(taking.draft)
+                        notify(HomeNotice.TakenBack, null)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        Log.w(TalkLog.TAG, "couldn't take back ${taking.itemId}: ${error.message}", error)
+                    }
+                }
+            null -> Unit
+        }
+        undoable = null
+    }
+
+    /** Cancel, in the Waiting to send sheet: the message leaves once the server says so. */
+    fun cancelQueued(itemId: String) {
+        viewModelScope.launch {
+            try {
+                session?.cancelQueued(itemId)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(TalkLog.TAG, "couldn't cancel $itemId: ${error.message}", error)
+            }
+        }
+    }
+
     /** Try again, on takes that couldn't be turned into text: the model loads again if it has to. */
     fun retryTakes() {
         state.update { it.copy(draft = it.draft.retryFailed()) }
@@ -455,7 +620,7 @@ class HomeViewModel(
         if (state.value.draft.isEmpty) viewModelScope.launch { takes.clear() }
     }
 
-    fun noticeShown() = state.update { it.copy(notice = null) }
+    fun noticeShown() = state.update { it.copy(notice = null, noticeDetail = null) }
 
     override fun onCleared() {
         if (state.value.draft.isListening) dictation.drop()

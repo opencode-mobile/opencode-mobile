@@ -133,6 +133,26 @@
     <string name="home_summary_progress">%1$d/%2$d · details ›</string>
     <string name="home_needs_input">Needs your input</string>
     <string name="home_needs_approval">Approval needed</string>
+    <string name="home_send">Send</string>
+    <string name="home_send_transcribing">Transcribing</string>
+    <string name="home_mode_after">After turn</string>
+    <string name="home_mode_now">Now</string>
+    <string name="home_mode_queue">Queue · sends after this turn</string>
+    <string name="home_mode_steer">Steer · lands at the next step</string>
+    <string name="home_mode_idle">Sends now</string>
+    <string name="home_sent_queued">Queued · sends after this turn</string>
+    <string name="home_sent_queued_sub">Cancel it from the waiting line until then</string>
+    <string name="home_sent_idle">Sent · starting now</string>
+    <string name="home_sent_now">Sent · lands at the next step</string>
+    <string name="home_sending_now">Sending now…</string>
+    <string name="home_unsent">Not sent</string>
+    <string name="home_unsent_sub">It never left the phone.</string>
+    <string name="home_taken_back">Taken back</string>
+    <string name="home_taken_back_sub">It never reached the agent.</string>
+    <string name="home_send_failed">Couldn’t send</string>
+    <string name="home_send_failed_sub">Your draft is kept.</string>
+    <string name="home_waiting_title">Waiting to send</string>
+    <string name="home_waiting_cancel">Cancel</string>
     <string name="home_waiting">%1$d waiting · sends after this turn ›</string>
 
     <!-- home: dictation -->

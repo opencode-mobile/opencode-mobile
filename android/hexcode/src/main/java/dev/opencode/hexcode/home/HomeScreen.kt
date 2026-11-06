@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,7 +43,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -63,6 +68,11 @@ import dev.opencode.hexcode.designsystem.components.HexHoldHint
 import dev.opencode.hexcode.designsystem.components.HexIconButton
 import dev.opencode.hexcode.designsystem.components.HexIconButtonTone
 import dev.opencode.hexcode.designsystem.components.HexRoundButton
+import dev.opencode.hexcode.designsystem.components.HexSegment
+import dev.opencode.hexcode.designsystem.components.HexSegmented
+import dev.opencode.hexcode.designsystem.components.HexSegmentedSize
+import dev.opencode.hexcode.designsystem.components.HexSheet
+import dev.opencode.hexcode.designsystem.components.HexSheetAction
 import dev.opencode.hexcode.designsystem.components.HexSpinner
 import dev.opencode.hexcode.designsystem.components.HexTalkButton
 import dev.opencode.hexcode.designsystem.components.HexTalkHold
@@ -73,6 +83,7 @@ import dev.opencode.hexcode.designsystem.components.HexToastMessage
 import dev.opencode.hexcode.designsystem.components.HexToastTone
 import dev.opencode.hexcode.designsystem.components.rememberHexTalkHold
 import dev.opencode.hexcode.session.AgentStatus
+import dev.opencode.hexcode.session.InboxEntry
 import kotlinx.coroutines.delay
 
 /**
@@ -91,6 +102,7 @@ fun HomeScreen(
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
     }
     var micOff by remember { mutableStateOf(false) }
+    var waitingOpen by remember { mutableStateOf(false) }
     val askMic =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             micAllowed = it
@@ -126,7 +138,11 @@ fun HomeScreen(
                         }
                     }
                     if (state.draft.isEmpty && today.waiting > 0) {
-                        WaitingLine(today.waiting, onClick = {}, modifier = Modifier.padding(start = edge, end = edge, top = 10.dp))
+                        WaitingLine(
+                            today.waiting,
+                            onClick = { waitingOpen = true },
+                            modifier = Modifier.padding(start = edge, end = edge, top = 10.dp),
+                        )
                     }
                 }
             }
@@ -214,8 +230,19 @@ fun HomeScreen(
         val newDayDetail = stringResource(R.string.home_newday_detail)
         val undo = stringResource(R.string.common_undo)
         val notYet = stringResource(R.string.settings_soon)
+        val queued = stringResource(R.string.home_sent_queued)
+        val queuedSub = stringResource(R.string.home_sent_queued_sub)
+        val sentIdle = stringResource(R.string.home_sent_idle)
+        val sendingNow = stringResource(R.string.home_sending_now)
+        val sentNow = stringResource(R.string.home_sent_now)
+        val unsent = stringResource(R.string.home_unsent)
+        val unsentSub = stringResource(R.string.home_unsent_sub)
+        val takenBack = stringResource(R.string.home_taken_back)
+        val takenBackSub = stringResource(R.string.home_taken_back_sub)
+        val sendFailed = stringResource(R.string.home_send_failed)
+        val sendFailedSub = stringResource(R.string.home_send_failed_sub)
         val notice =
-            remember(state.notice, micOff) {
+            remember(state.notice, state.noticeDetail, micOff) {
                 when (state.notice) {
                     HomeNotice.ChunkDeleted ->
                         HexToastMessage(deleted, HexToastTone.Undo, actionLabel = undo, actionIcon = HexIcons.undo, durationMs = 3_500)
@@ -223,6 +250,29 @@ fun HomeScreen(
                     HomeNotice.NewDay -> HexToastMessage(newDayTitle, HexToastTone.Sun, newDayDetail, durationMs = NEW_DAY_NOTICE_MS)
                     HomeNotice.NotInThisVersion -> HexToastMessage(notYet, HexToastTone.Info)
                     HomeNotice.MicUnavailable -> HexToastMessage(micOffText, HexToastTone.Info)
+                    HomeNotice.Queued ->
+                        HexToastMessage(
+                            queued,
+                            HexToastTone.Steer,
+                            queuedSub,
+                            actionLabel = undo,
+                            actionIcon = HexIcons.undo,
+                            durationMs = 3_200,
+                        )
+                    HomeNotice.SentIdle -> HexToastMessage(sentIdle, HexToastTone.Steer, quoted(state.noticeDetail), durationMs = 2_600)
+                    HomeNotice.SendingNow ->
+                        HexToastMessage(
+                            sendingNow,
+                            HexToastTone.Steer,
+                            quoted(state.noticeDetail),
+                            actionLabel = undo,
+                            actionIcon = HexIcons.undo,
+                            durationMs = Sending.HOLD_MS,
+                        )
+                    HomeNotice.SentNow -> HexToastMessage(sentNow, HexToastTone.Steer, quoted(state.noticeDetail), durationMs = 2_600)
+                    HomeNotice.Unsent -> HexToastMessage(unsent, HexToastTone.Undo, unsentSub, durationMs = 2_200)
+                    HomeNotice.TakenBack -> HexToastMessage(takenBack, HexToastTone.Undo, takenBackSub, durationMs = 2_200)
+                    HomeNotice.SendFailed -> HexToastMessage(sendFailed, HexToastTone.Stop, sendFailedSub, durationMs = 3_200)
                     null -> if (micOff) HexToastMessage(micOffText, HexToastTone.Info) else null
                 }
             }
@@ -232,9 +282,50 @@ fun HomeScreen(
                 vm.noticeShown()
                 micOff = false
             },
-            onAction = { vm.undoDelete() },
+            onAction = vm::noticeAction,
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
         )
+        WaitingSheet(waitingOpen, state.today.queued, onCancel = vm::cancelQueued, onClose = { waitingOpen = false })
+    }
+}
+
+/** A message's text as a notice's second line: “in quotes”. */
+private fun quoted(text: String?): String? = text?.let { "“$it”" }
+
+/**
+ * Waiting to send (app-plan.md, Sending): the queued messages, oldest first, each with Cancel. A message delivered or
+ * cancelled elsewhere leaves the list as the events say so.
+ */
+@Composable
+private fun BoxScope.WaitingSheet(
+    open: Boolean,
+    queued: List<InboxEntry>,
+    onCancel: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    HexSheet(
+        visible = open,
+        onDismiss = onClose,
+        title = stringResource(R.string.home_waiting_title),
+        trailing = HexSheetAction(stringResource(R.string.common_close), onClose),
+    ) {
+        queued.forEach { item ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            ) {
+                Text(
+                    item.text,
+                    style = HexTheme.type.row,
+                    color = HexTheme.colors.text1,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                HexButton(onClick = { onCancel(item.id) }, text = stringResource(R.string.home_waiting_cancel))
+            }
+        }
     }
 }
 
@@ -323,7 +414,7 @@ private fun DraftView(
     Box(Modifier.padding(top = 14.dp)) {
         if (draft.isLong) ChunkList(draft, vm::selectChunk) else DraftText(draft, vm::selectChunk)
     }
-    if (!draft.isListening) DraftActions(draft, vm)
+    if (!draft.isListening) DraftActions(draft, state.busy, state.sendMode, vm)
 }
 
 /** "● Recording 0:04", "Transcribing on this phone…", or "Draft · 2 chunks · 0:12". */
@@ -377,20 +468,38 @@ private fun DraftLabel(state: HomeUiState) {
                 }
                 DraftLabel.SpeechFailed ->
                     Text(stringResource(R.string.home_speech_failed), style = style, color = HexTheme.colors.amber)
-                DraftLabel.Summary ->
-                    Text(
-                        listOf(
-                            stringResource(R.string.draft_title),
-                            if (draft.chunks.size == 1) {
-                                stringResource(R.string.draft_one_chunk)
-                            } else {
-                                stringResource(R.string.draft_chunks, draft.chunks.size)
+                DraftLabel.Summary -> {
+                    // What Send will do, at the end of the line: queue, steer (amber) or send now.
+                    val steer = state.busy && state.sendMode == SendMode.Now
+                    val caption =
+                        stringResource(
+                            when {
+                                !state.busy -> R.string.home_mode_idle
+                                steer -> R.string.home_mode_steer
+                                else -> R.string.home_mode_queue
                             },
-                            clock(draft.durationMs),
-                        ).joinToString(" · "),
+                        )
+                    Text(
+                        buildAnnotatedString {
+                            append(
+                                listOf(
+                                    stringResource(R.string.draft_title),
+                                    if (draft.chunks.size == 1) {
+                                        stringResource(R.string.draft_one_chunk)
+                                    } else {
+                                        stringResource(R.string.draft_chunks, draft.chunks.size)
+                                    },
+                                    clock(draft.durationMs),
+                                ).joinToString(" · ", postfix = " · "),
+                            )
+                            if (steer) withStyle(SpanStyle(color = HexTheme.colors.amber)) { append(caption) } else append(caption)
+                        },
                         style = style,
                         color = color,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
+                }
             }
         }
     }
@@ -478,6 +587,8 @@ private fun ChunkList(
 @Composable
 private fun DraftActions(
     draft: Draft,
+    busy: Boolean,
+    mode: SendMode,
     vm: HomeViewModel,
 ) {
     Row(
@@ -501,16 +612,37 @@ private fun DraftActions(
             HexButton(onClick = vm::rerecord, text = stringResource(R.string.draft_rerecord), icon = HexIcons.mic)
             HexButton(onClick = vm::deselectChunk, icon = HexIcons.x, contentDescription = stringResource(R.string.draft_deselect))
         } else {
-            if (draft.canRetry) {
-                // Takes that couldn't be turned into text, with their audio kept.
-                HexButton(onClick = vm::retryTakes, text = stringResource(R.string.home_take_retry), icon = HexIcons.refresh)
-                Spacer(Modifier.weight(1f))
-            }
             HexButton(
                 onClick = vm::clearDraft,
                 icon = HexIcons.x,
                 contentDescription = stringResource(R.string.draft_clear),
                 enabled = draft.canClear,
+            )
+            if (draft.canRetry) {
+                // Takes that couldn't be turned into text, with their audio kept.
+                HexButton(onClick = vm::retryTakes, text = stringResource(R.string.home_take_retry), icon = HexIcons.refresh)
+            }
+            Spacer(Modifier.weight(1f))
+            if (busy) {
+                HexSegmented(
+                    listOf(
+                        HexSegment(SendMode.AfterTurn.name, stringResource(R.string.home_mode_after)),
+                        HexSegment(SendMode.Now.name, stringResource(R.string.home_mode_now), warning = true),
+                    ),
+                    mode.name,
+                    { vm.setSendMode(SendMode.valueOf(it)) },
+                    size = HexSegmentedSize.Small,
+                )
+            }
+            // Send waits for every chunk's text: it reads "Transcribing" while any is still on its way.
+            val pending = draft.isListening || draft.isTranscribing || draft.isWaiting
+            HexButton(
+                onClick = vm::send,
+                text = stringResource(if (pending) R.string.home_send_transcribing else R.string.home_send),
+                icon = if (pending) null else HexIcons.send,
+                style = HexButtonStyle.Primary,
+                enabled = !pending && draft.text.isNotBlank(),
+                iconAfter = true,
             )
         }
     }
