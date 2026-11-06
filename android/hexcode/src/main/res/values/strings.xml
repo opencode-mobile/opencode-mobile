@@ -136,6 +136,10 @@
     <!-- home: dictation -->
     <string name="home_chunk_deleted">Chunk deleted</string>
     <string name="home_take_dropped">Take dropped</string>
+    <string name="home_speech_loading">Speech model loading…</string>
+    <string name="home_speech_downloading">Downloading the speech model · %1$d%%</string>
+    <string name="home_speech_failed">Speech model didn’t load</string>
+    <string name="home_take_retry">Try again</string>
     <string name="home_transcribe_failed">Couldn’t turn this take into text</string>
     <string name="home_mic_off">Microphone access is off</string>
     <string name="talk_hold">Hold to talk</string>
@@ -143,9 +147,6 @@
     <string name="talk_rerecord">Hold to re-record</string>
     <string name="talk_a11y_locked">Recording, locked. Tap to pause.</string>
     <string name="talk_a11y_recording">Recording. Release to pause.</string>
-    <string name="talk_preparing">Getting speech ready · %1$d%%</string>
-    <string name="talk_waiting">Getting speech ready</string>
-    <string name="talk_failed">Speech isn’t available</string>
     <string name="draft_title">Draft</string>
     <string name="draft_one_chunk">1 chunk</string>
     <string name="draft_chunks">%1$d chunks</string>

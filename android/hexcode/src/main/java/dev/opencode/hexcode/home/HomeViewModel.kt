@@ -8,17 +8,23 @@ import androidx.lifecycle.viewModelScope
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.session.TodaySession
 import dev.opencode.hexcode.session.TodayState
+import dev.opencode.voiceengine.NoSpeechException
 import dev.opencode.voiceengine.SpeechModels
 import dev.opencode.voiceengine.VoiceEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -44,7 +50,22 @@ interface Dictation {
 
     /** The take's text; empty when there was no speech. Throws when the engine fails on it. */
     suspend fun transcribe(samples: FloatArray): String
+
+    /** Whether takes can be turned into text yet. Recording never waits for it. */
+    val speech: StateFlow<SpeechStatus>
+
+    /** Try again: loads the speech model again. */
+    fun reload()
 }
+
+/** The engine's model state as dictation sees it. */
+fun speechStatus(model: VoiceEngine.ModelState): SpeechStatus =
+    when (model) {
+        VoiceEngine.ModelState.NotLoaded -> SpeechStatus.Loading()
+        is VoiceEngine.ModelState.Preparing -> SpeechStatus.Loading(model.fraction.takeIf { it < 1.0 })
+        VoiceEngine.ModelState.Ready -> SpeechStatus.Ready
+        is VoiceEngine.ModelState.Failed -> SpeechStatus.Failed
+    }
 
 /**
  * [VoiceEngine]'s recorder on a thread of its own: opening the microphone takes 30 to 250 ms, which the main thread
@@ -52,11 +73,21 @@ interface Dictation {
  */
 class VoiceEngineDictation(
     private val engine: VoiceEngine,
+    loadModel: () -> Unit,
+    /** Debug builds (`--ei HexCodeSpeechDelay`): the model counts as ready only this long after launch. */
+    holdMs: Long = 0,
+    /** Debug builds (`--ez HexCodeSpeechFail`): the first load counts as failed, until Try again. */
+    failOnce: Boolean = false,
 ) : Dictation {
     private val audio = Executors.newSingleThreadExecutor { Thread(it, "hex-audio") }.asCoroutineDispatcher()
     private val scope = CoroutineScope(SupervisorJob() + audio)
+    private val gate = SpeechGate(engine, loadModel, holdMs, failOnce, scope)
 
     override val level: Float get() = engine.level
+
+    override val speech: StateFlow<SpeechStatus> get() = gate.speech
+
+    override fun reload() = gate.reload()
 
     override fun start(onFailed: (Throwable) -> Unit) {
         val asked = SystemClock.uptimeMillis()
@@ -87,12 +118,56 @@ private suspend fun transcribeWith(
 ): String =
     try {
         engine.transcribe(samples)
-    } catch (error: IllegalStateException) {
-        // The engine reports a take with no speech as this error; anything else is a real failure.
-        if (error.message == NO_SPEECH) "" else throw error
+    } catch (_: NoSpeechException) {
+        ""
     }
 
-private const val NO_SPEECH = "No speech was detected."
+/**
+ * The engine's readiness as dictation sees it. Debug builds can hold it back: [holdMs] after it's made, the model only
+ * then counts as ready (`--ei HexCodeSpeechDelay`), and with [failOnce] its first load counts as failed until Try again
+ * (`--ez HexCodeSpeechFail`).
+ */
+class SpeechGate(
+    engine: VoiceEngine,
+    private val loadModel: () -> Unit,
+    holdMs: Long,
+    failOnce: Boolean,
+    scope: CoroutineScope,
+) {
+    private val released = MutableStateFlow(holdMs <= 0)
+    private val failing = MutableStateFlow(failOnce)
+
+    init {
+        if (holdMs > 0) scope.launch { delay(holdMs).also { released.value = true } }
+    }
+
+    val speech: StateFlow<SpeechStatus> =
+        combine(engine.modelState, released, failing) { model, ready, failed ->
+            when {
+                model == VoiceEngine.ModelState.Ready && failed -> SpeechStatus.Failed
+                model == VoiceEngine.ModelState.Ready && !ready -> SpeechStatus.Loading()
+                else -> speechStatus(model)
+            }
+        }.stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            speechStatus(engine.modelState.value).let {
+                if (failOnce ||
+                    holdMs > 0
+                ) {
+                    SpeechStatus.Loading()
+                } else {
+                    it
+                }
+            },
+        )
+
+    /** Try again: clears a held-back failure, and loads the model again. */
+    fun reload() {
+        failing.value = false
+        loadModel()
+    }
+}
 
 /** Where dictation logs why a take didn't become text, and how long the microphone took. */
 object TalkLog {
@@ -121,6 +196,8 @@ data class HomeUiState(
     val notice: HomeNotice? = null,
     /** Today's session: the status card, the top bar's state, the waiting line. */
     val today: TodayState = TodayState(),
+    /** Whether takes can be turned into text yet. */
+    val speech: SpeechStatus = SpeechStatus.Loading(),
 )
 
 /**
@@ -131,14 +208,29 @@ data class HomeUiState(
 class HomeViewModel(
     private val dictation: Dictation,
     makeSession: ((CoroutineScope) -> TodaySession)? = null,
+    /** Keeps a take's audio until it has text. */
+    private val takes: TakeStore = MemoryTakeStore(),
     private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
-    private val state = MutableStateFlow(HomeUiState())
+    private val state = MutableStateFlow(HomeUiState(speech = dictation.speech.value))
     val uiState: StateFlow<HomeUiState> = state.asStateFlow()
 
     private val session: TodaySession? = makeSession?.invoke(viewModelScope)
 
+    /** Turning waiting takes into text, oldest first, once the model is ready. */
+    private var draining: Job? = null
+
     init {
+        viewModelScope.launch {
+            dictation.speech.collect { speech ->
+                state.update { it.copy(speech = speech) }
+                when (speech) {
+                    SpeechStatus.Ready -> drainWaiting()
+                    SpeechStatus.Failed -> state.update { it.copy(draft = it.draft.waitingFailed()) }
+                    is SpeechStatus.Loading -> Unit
+                }
+            }
+        }
         session?.let { today ->
             viewModelScope.launch {
                 today.state.collect { next ->
@@ -246,21 +338,69 @@ class HomeViewModel(
                 state.update { it.copy(draft = it.draft.transcribed(take.id, null)) }
                 return@launch
             }
-            transcribing.withLock {
-                try {
-                    val text = dictation.transcribe(samples)
-                    // A silent take leaves quietly too.
-                    if (text.isBlank()) Log.i(TalkLog.TAG, "take ${take.id} left the draft: no speech in ${samples.size} samples")
-                    state.update { it.copy(draft = it.draft.transcribed(take.id, text)) }
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    // The engine failed: the take stays, reading "Couldn't turn this take into text".
-                    Log.w(TalkLog.TAG, "take ${take.id} failed: ${samples.size} samples didn't become text: ${error.message}", error)
-                    state.update { it.copy(draft = it.draft.failed(take.id)) }
+            if (state.value.speech != SpeechStatus.Ready) {
+                // The model isn't ready: the take waits, its audio kept in a file, and nothing said is lost.
+                takes.save(take.id, samples)
+                state.update { it.copy(draft = it.draft.waiting(take.id)) }
+                when (state.value.speech) {
+                    SpeechStatus.Ready -> drainWaiting()
+                    SpeechStatus.Failed -> state.update { it.copy(draft = it.draft.waitingFailed()) }
+                    is SpeechStatus.Loading -> Unit
                 }
+                return@launch
+            }
+            transcribe(take.id, samples)
+        }
+    }
+
+    /** Turns take [id]'s [samples] into text; a failure keeps the chunk, and its audio for Try again. */
+    private suspend fun transcribe(
+        id: Long,
+        samples: FloatArray,
+    ) {
+        transcribing.withLock {
+            try {
+                val text = dictation.transcribe(samples)
+                // A silent take leaves quietly too.
+                if (text.isBlank()) Log.i(TalkLog.TAG, "take $id left the draft: no speech in ${samples.size} samples")
+                state.update { it.copy(draft = it.draft.transcribed(id, text)) }
+                takes.delete(id)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                // The engine failed: the take stays, reading "Couldn't turn this take into text".
+                Log.w(TalkLog.TAG, "take $id failed: ${samples.size} samples didn't become text: ${error.message}", error)
+                takes.save(id, samples)
+                state.update { it.copy(draft = it.draft.failed(id, retry = true)) }
             }
         }
+    }
+
+    /** The model is ready: the waiting takes are turned into text in the order they were recorded. */
+    private fun drainWaiting() {
+        if (draining?.isActive == true) return
+        draining =
+            viewModelScope.launch {
+                while (state.value.speech == SpeechStatus.Ready) {
+                    val id =
+                        state.value.draft.waitingIds
+                            .firstOrNull() ?: break
+                    state.update { it.copy(draft = it.draft.transcribing(id)) }
+                    val samples = takes.load(id)
+                    if (samples == null) {
+                        Log.w(TalkLog.TAG, "take $id left the draft: its audio wasn't kept")
+                        state.update { it.copy(draft = it.draft.transcribed(id, null)) }
+                    } else {
+                        transcribe(id, samples)
+                    }
+                }
+            }
+    }
+
+    /** Try again, on takes that couldn't be turned into text: the model loads again if it has to. */
+    fun retryTakes() {
+        state.update { it.copy(draft = it.draft.retryFailed()) }
+        if (state.value.speech == SpeechStatus.Ready) drainWaiting() else dictation.reload()
     }
 
     private fun dropTake() {
@@ -287,7 +427,10 @@ class HomeViewModel(
         if (state.value.talk == TalkMode.Holding) state.update { it.copy(talk = TalkMode.Locked) }
     }
 
-    fun clearDraft() = state.update { it.copy(draft = it.draft.clear()) }
+    fun clearDraft() {
+        state.update { it.copy(draft = it.draft.clear()) }
+        if (state.value.draft.isEmpty) viewModelScope.launch { takes.clear() }
+    }
 
     fun noticeShown() = state.update { it.copy(notice = null) }
 
@@ -318,6 +461,9 @@ enum class TalkRelease {
 class ClipDictation(
     private val context: Context,
     private val engine: VoiceEngine,
+    loadModel: () -> Unit,
+    holdMs: Long = 0,
+    failOnce: Boolean = false,
 ) : Dictation {
     private val clips = SpeechModels.clips(context)
     private var next = 0
@@ -341,4 +487,10 @@ class ClipDictation(
     }
 
     override suspend fun transcribe(samples: FloatArray): String = transcribeWith(engine, samples)
+
+    private val gate = SpeechGate(engine, loadModel, holdMs, failOnce, CoroutineScope(SupervisorJob()))
+
+    override val speech: StateFlow<SpeechStatus> get() = gate.speech
+
+    override fun reload() = gate.reload()
 }

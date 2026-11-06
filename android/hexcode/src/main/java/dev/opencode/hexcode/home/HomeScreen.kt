@@ -69,9 +69,7 @@ import dev.opencode.hexcode.designsystem.components.HexToastHost
 import dev.opencode.hexcode.designsystem.components.HexToastMessage
 import dev.opencode.hexcode.designsystem.components.HexToastTone
 import dev.opencode.hexcode.session.AgentStatus
-import dev.opencode.voiceengine.VoiceEngine
 import kotlinx.coroutines.delay
-import kotlin.math.roundToInt
 
 /**
  * Home: the top bar's state slot and settings, today's status card (or the draft while there is one, as the
@@ -81,7 +79,6 @@ import kotlin.math.roundToInt
 @Composable
 fun HomeScreen(
     vm: HomeViewModel,
-    speech: VoiceEngine.ModelState,
     onSettings: () -> Unit,
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -95,7 +92,6 @@ fun HomeScreen(
             micAllowed = it
             micOff = !it
         }
-    val ready = speech == VoiceEngine.ModelState.Ready
     val edge = HexTheme.space.screenHome
     Box(
         Modifier
@@ -132,11 +128,6 @@ fun HomeScreen(
             }
             val label =
                 when {
-                    // A download shows its share; loading the model after it is "Getting speech ready", with no share.
-                    speech is VoiceEngine.ModelState.Preparing && speech.fraction < 1.0 ->
-                        stringResource(R.string.talk_preparing, (speech.fraction * 100).roundToInt())
-                    speech is VoiceEngine.ModelState.Failed -> stringResource(R.string.talk_failed)
-                    !ready -> stringResource(R.string.talk_waiting)
                     state.draft.selected != null -> stringResource(R.string.talk_rerecord)
                     !state.draft.isEmpty -> stringResource(R.string.talk_more)
                     else -> stringResource(R.string.talk_hold)
@@ -165,7 +156,8 @@ fun HomeScreen(
                             TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
                             TalkMode.Idle -> label
                         },
-                    enabled = ready,
+                    // Recording never waits for the speech model; only turning a take into text does.
+                    enabled = true,
                     level = { vm.level },
                     onPress = {
                         if (micAllowed) {
@@ -256,15 +248,10 @@ private fun DraftLabel(state: HomeUiState) {
             delay(250)
         }
     }
+    val label = DraftLabel.of(draft, state.speech)
     AnimatedContent(
-        targetState =
-            if (draft.isListening) {
-                0
-            } else if (draft.isTranscribing) {
-                1
-            } else {
-                2
-            },
+        // The download's share changes without animating the whole line.
+        targetState = if (label is DraftLabel.SpeechDownloading) DraftLabel.SpeechDownloading(0) else label,
         transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) },
         label = "draft-label",
     ) { kind ->
@@ -274,7 +261,7 @@ private fun DraftLabel(state: HomeUiState) {
             modifier = Modifier.height(18.dp).semantics { liveRegion = LiveRegionMode.Polite },
         ) {
             when (kind) {
-                0 -> {
+                DraftLabel.Recording -> {
                     HexDot(HexDotTone.Red)
                     val elapsed = clock(now - state.takeStartedAt)
                     Text(
@@ -284,11 +271,22 @@ private fun DraftLabel(state: HomeUiState) {
                         color = color,
                     )
                 }
-                1 -> {
+                DraftLabel.Transcribing -> {
                     HexSpinner(size = HexTheme.size.iconSmall)
                     Text(stringResource(R.string.draft_transcribing), style = style, color = color)
                 }
-                else ->
+                DraftLabel.SpeechLoading -> {
+                    HexSpinner(size = HexTheme.size.iconSmall)
+                    Text(stringResource(R.string.home_speech_loading), style = style, color = color)
+                }
+                is DraftLabel.SpeechDownloading -> {
+                    HexSpinner(size = HexTheme.size.iconSmall)
+                    val percent = (label as? DraftLabel.SpeechDownloading)?.percent ?: 0
+                    Text(stringResource(R.string.home_speech_downloading, percent), style = style, color = color)
+                }
+                DraftLabel.SpeechFailed ->
+                    Text(stringResource(R.string.home_speech_failed), style = style, color = HexTheme.colors.amber)
+                DraftLabel.Summary ->
                     Text(
                         listOf(
                             stringResource(R.string.draft_title),
@@ -321,9 +319,10 @@ private fun DraftText(
             draft.shown.map { chunk ->
                 when (val s = chunk.state) {
                     ChunkState.Listening -> HexChunkItem(listening, HexChunkKind.Listening)
-                    ChunkState.Transcribing -> HexChunkItem(transcribing, HexChunkKind.Transcribing)
+                    // A take waiting for the speech model looks like one being transcribed; the label line says why.
+                    ChunkState.Waiting, ChunkState.Transcribing -> HexChunkItem(transcribing, HexChunkKind.Transcribing)
                     is ChunkState.Text -> HexChunkItem(s.text, HexChunkKind.Text)
-                    ChunkState.Failed -> HexChunkItem(failed, HexChunkKind.Text)
+                    is ChunkState.Failed -> HexChunkItem(failed, HexChunkKind.Text)
                 }
             },
         selected = draft.selected,
@@ -366,9 +365,9 @@ private fun ChunkList(
                 text =
                     when (chunk.state) {
                         ChunkState.Listening -> stringResource(R.string.draft_listening)
-                        ChunkState.Transcribing -> stringResource(R.string.draft_transcribing_chunk)
+                        ChunkState.Waiting, ChunkState.Transcribing -> stringResource(R.string.draft_transcribing_chunk)
                         is ChunkState.Text -> chunk.state.text
-                        ChunkState.Failed -> stringResource(R.string.home_transcribe_failed)
+                        is ChunkState.Failed -> stringResource(R.string.home_transcribe_failed)
                     },
                 duration = clock(chunk.durationMs),
                 state =
@@ -411,11 +410,16 @@ private fun DraftActions(
             HexButton(onClick = vm::rerecord, text = stringResource(R.string.draft_rerecord), icon = HexIcons.mic)
             HexButton(onClick = vm::deselectChunk, icon = HexIcons.x, contentDescription = stringResource(R.string.draft_deselect))
         } else {
+            if (draft.canRetry) {
+                // Takes that couldn't be turned into text, with their audio kept.
+                HexButton(onClick = vm::retryTakes, text = stringResource(R.string.home_take_retry), icon = HexIcons.refresh)
+                Spacer(Modifier.weight(1f))
+            }
             HexButton(
                 onClick = vm::clearDraft,
                 icon = HexIcons.x,
                 contentDescription = stringResource(R.string.draft_clear),
-                enabled = draft.isSettled,
+                enabled = draft.canClear,
             )
         }
     }

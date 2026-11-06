@@ -55,6 +55,7 @@ import dev.opencode.hexcode.firstrun.ProjectPicker
 import dev.opencode.hexcode.firstrun.ProjectScreen
 import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.hexcode.home.ClipDictation
+import dev.opencode.hexcode.home.FileTakeStore
 import dev.opencode.hexcode.home.HomeScreen
 import dev.opencode.hexcode.home.HomeViewModel
 import dev.opencode.hexcode.home.VoiceEngineDictation
@@ -68,6 +69,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.io.File
 import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
@@ -100,6 +102,12 @@ class MainActivity : ComponentActivity() {
         val pinnedTheme = if (BuildConfig.DEBUG) intent.getStringExtra("HexCodeTheme") else null
         // debug builds: `--ez HexCodeClips true` makes each take the next bundled lab clip (an emulator has no voice)
         val clips = BuildConfig.DEBUG && intent.getBooleanExtra("HexCodeClips", false)
+        // debug builds: `--ei HexCodeSpeechDelay 8` makes the speech model count as ready only 8 s after launch, and
+        // `--ez HexCodeSpeechFail true` makes its first load count as failed, to see takes waiting for it
+        if (BuildConfig.DEBUG) {
+            services.speechHoldMs = intent.getIntExtra("HexCodeSpeechDelay", 0) * 1_000L
+            services.speechFailOnce = intent.getBooleanExtra("HexCodeSpeechFail", false)
+        }
         // debug builds: `--es HexCodeLastDate 2026-11-04` saves that as the last date a session was opened, before home
         // opens, to try the new-day notice
         if (BuildConfig.DEBUG) {
@@ -228,7 +236,6 @@ private fun AfterFirstRun(
                 else -> appDark
             },
     )
-    LaunchedEffect(Unit) { services.voice.prepare() }
     val server by produceState<ServerLabel?>(null, page) {
         value = services.serverLabel()?.let { it.copy(version = it.version ?: prefs.serverVersion) }
     }
@@ -245,7 +252,12 @@ private fun AfterFirstRun(
     val homeModel =
         viewModel(key = "home-${sample?.label ?: "live"}") {
             HomeViewModel(
-                if (clips) ClipDictation(context, services.voice) else VoiceEngineDictation(services.voice),
+                if (clips) {
+                    ClipDictation(context, services.voice, services::reloadSpeech, services.speechHoldMs, services.speechFailOnce)
+                } else {
+                    VoiceEngineDictation(services.voice, services::reloadSpeech, services.speechHoldMs, services.speechFailOnce)
+                },
+                takes = FileTakeStore(File(context.filesDir, "takes")),
                 makeSession = { scope ->
                     sample?.start(scope)
                         ?: services.todaySession(scope, directory = { latest.project?.path.orEmpty() }, model = { latest.model })
@@ -323,8 +335,7 @@ private fun AfterFirstRun(
         Box(Modifier.fillMaxSize().background(HexTheme.colors.background)) {
             when (current) {
                 Page.Home -> {
-                    val speech by services.voice.modelState.collectAsStateWithLifecycle()
-                    HomeScreen(homeModel, speech, onSettings = { page = Page.Settings })
+                    HomeScreen(homeModel, onSettings = { page = Page.Settings })
                 }
                 Page.Settings ->
                     SettingsScreen(

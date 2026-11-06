@@ -9,7 +9,6 @@ import dev.opencode.hexcode.firstrun.ProjectChoice
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.project.ProjectRepository
-import kotlinx.coroutines.launch
 
 /** First run on the app's real services. In Settings ([forSettings]) the model page saves the model and nothing else. */
 class HexFirstRunEnvironment(
@@ -38,6 +37,6 @@ class HexFirstRunEnvironment(
     override suspend fun savedModel(): ModelChoice? = services.settings.current().model
 
     override fun getSpeechModel() {
-        services.appScope.launch { services.voice.prepare() }
+        services.loadSpeech()
     }
 }

@@ -1,6 +1,8 @@
 package dev.opencode.hexcode.app
 
 import android.content.Context
+import android.os.SystemClock
+import android.util.Log
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.firstrun.ModelTester
 import dev.opencode.hexcode.firstrun.PairingConnector
@@ -8,6 +10,7 @@ import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.hexcode.firstrun.ServerName
 import dev.opencode.hexcode.firstrun.ServerNaming
 import dev.opencode.hexcode.firstrun.ServerRouteCheck
+import dev.opencode.hexcode.home.TalkLog
 import dev.opencode.hexcode.session.DailySessionSetup
 import dev.opencode.hexcode.session.EventsApiTransport
 import dev.opencode.hexcode.session.OpenCodeTodayApi
@@ -37,6 +40,7 @@ import dev.opencode.mobile.network.KtorClientFactory
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.network.ServerConnection
+import dev.opencode.voiceengine.NoSpeechException
 import dev.opencode.voiceengine.VoiceEngine
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -50,6 +54,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Hex Code's objects, built once per process from OpenCode Kit the way OpenCode Mobile's Hilt modules build them.
@@ -84,6 +89,53 @@ class HexServices(
     val modelTester = ModelTester(json, httpClient::get)
     val pairing = PairingConnector(probing, PairingCodeRedeemService(json), OpenApiRouteCheck(json), ApiInfoNaming(json))
     val voice = VoiceEngine(appContext)
+    private val speechStarted = AtomicBoolean(false)
+
+    /** Debug builds: how long after launch the speech model counts as ready (`--ei HexCodeSpeechDelay`). */
+    var speechHoldMs = 0L
+
+    /** Debug builds: the first load counts as failed (`--ez HexCodeSpeechFail`). */
+    var speechFailOnce = false
+
+    /**
+     * At process start (app-plan.md, The speech model): loads the speech model, once per process, when it's on the
+     * phone or first run is done. Before that, first run's scan step starts the download ([loadSpeech]).
+     */
+    fun loadSpeechAtLaunch() {
+        appScope.launch {
+            val installed = voice.store.isInstalled(voice.activeModel.value)
+            if (installed || settings.current().firstRunDone) loadSpeech()
+        }
+    }
+
+    /** Downloads the speech model if needed and loads it, once per process; then warms it up. */
+    fun loadSpeech() {
+        if (speechStarted.compareAndSet(false, true)) appScope.launch { prepareSpeech() }
+    }
+
+    /** Try again, after the model failed to download or load. */
+    fun reloadSpeech() {
+        appScope.launch { prepareSpeech() }
+    }
+
+    /** Loads the model, then turns half a second of silence into text so the first real take is as fast as the rest. */
+    private suspend fun prepareSpeech() {
+        val started = SystemClock.elapsedRealtime()
+        voice.prepare()
+        val loaded = SystemClock.elapsedRealtime()
+        if (voice.modelState.value != VoiceEngine.ModelState.Ready) {
+            Log.w(TalkLog.TAG, "speech model didn't load after ${loaded - started} ms: ${voice.modelState.value}")
+            return
+        }
+        try {
+            voice.transcribe(FloatArray(VoiceEngine.SAMPLE_RATE / 2))
+        } catch (_: NoSpeechException) {
+            // Silence has no text; the engine has run once, which is the point.
+        } catch (error: Exception) {
+            Log.w(TalkLog.TAG, "speech warm-up failed", error)
+        }
+        Log.i(TalkLog.TAG, "speech model loaded in ${loaded - started} ms, warmed up in ${SystemClock.elapsedRealtime() - loaded} ms")
+    }
 
     /** Home's fake session until it talks to OpenCode (round 2 of M2); Settings › Developer › Sample session picks it. */
     val sampleSession = MutableStateFlow<TodaySessionDemo?>(null)

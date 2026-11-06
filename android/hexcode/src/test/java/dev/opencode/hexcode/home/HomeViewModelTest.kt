@@ -8,6 +8,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -28,6 +29,10 @@ class HomeViewModelTest {
 
     private class FakeDictation : Dictation {
         override val level = 0f
+        override val speech = MutableStateFlow<SpeechStatus>(SpeechStatus.Ready)
+
+        override fun reload() = Unit
+
         var recording = false
         var drops = 0
         val texts = ArrayDeque<String>()
@@ -283,7 +288,7 @@ class HomeViewModelTest {
             val chunk =
                 vm.uiState.value.draft.chunks
                     .single()
-            assertEquals(ChunkState.Failed, chunk.state)
+            assertEquals(ChunkState.Failed(retry = true), chunk.state)
             vm.selectChunk(0)
             assertEquals(0, vm.uiState.value.draft.selected)
             vm.deleteChunk()

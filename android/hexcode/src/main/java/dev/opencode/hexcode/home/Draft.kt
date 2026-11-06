@@ -1,8 +1,14 @@
 package dev.opencode.hexcode.home
 
-/** Where one chunk of the draft is: its take is still recording, the phone is turning it into text, or it has text. */
+/**
+ * Where one chunk of the draft is: its take is still recording, it waits for the speech model, the phone is turning it
+ * into text, or it has text.
+ */
 sealed interface ChunkState {
     data object Listening : ChunkState
+
+    /** Waiting for speech: the take ended before the speech model was ready; its audio is kept until then. */
+    data object Waiting : ChunkState
 
     data object Transcribing : ChunkState
 
@@ -10,8 +16,13 @@ sealed interface ChunkState {
         val text: String,
     ) : ChunkState
 
-    /** The engine failed on the take: "Couldn't turn this take into text", kept to re-record or delete. */
-    data object Failed : ChunkState
+    /**
+     * "Couldn't turn this take into text": the engine failed on the take, or the speech model didn't load. Kept to
+     * re-record or delete; with its audio kept, Try again ([retry]) turns the same audio into text.
+     */
+    data class Failed(
+        val retry: Boolean = false,
+    ) : ChunkState
 }
 
 /** One take in the draft. [id] stays the same while the chunk moves from Listening to text. */
@@ -23,7 +34,7 @@ data class Chunk(
     val text: String? get() = (state as? ChunkState.Text)?.text
 
     /** It can be tapped to re-record or delete it: it has its text, or the engine failed on it. */
-    val selectable: Boolean get() = state is ChunkState.Text || state == ChunkState.Failed
+    val selectable: Boolean get() = state is ChunkState.Text || state is ChunkState.Failed
 }
 
 /** A chunk deleted moments ago, kept so Undo can put it back where it was. */
@@ -54,8 +65,17 @@ data class Draft(
 
     val isTranscribing: Boolean get() = chunks.any { it.state == ChunkState.Transcribing }
 
+    /** A take waits for the speech model. */
+    val isWaiting: Boolean get() = chunks.any { it.state == ChunkState.Waiting }
+
+    /** A chunk failed with its audio kept, so Try again can turn it into text. */
+    val canRetry: Boolean get() = chunks.any { (it.state as? ChunkState.Failed)?.retry == true }
+
     /** Every chunk has its text, so the draft could be sent, asked or set as a goal. */
-    val isSettled: Boolean get() = !isListening && !isTranscribing
+    val isSettled: Boolean get() = !isListening && !isTranscribing && !isWaiting
+
+    /** Clear can empty the draft: nothing records or is being turned into text (takes waiting for the model can go). */
+    val canClear: Boolean get() = !isListening && !isTranscribing
 
     /** The chunks as shown, with the live take in place of the chunk it re-records, or after the others. */
     val shown: List<Chunk>
@@ -108,11 +128,50 @@ data class Draft(
         return copy(chunks = chunks.toMutableList().also { it[index] = it[index].copy(state = ChunkState.Text(words)) })
     }
 
-    /** The engine failed on take [id]: it stays, as a failed chunk, to re-record or delete. */
-    fun failed(id: Long): Draft {
+    /** The engine failed on take [id]: it stays, as a failed chunk, to re-record or delete; [retry] when its audio is kept. */
+    fun failed(
+        id: Long,
+        retry: Boolean = false,
+    ): Draft = withState(id, ChunkState.Failed(retry))
+
+    /** Take [id] waits for the speech model. */
+    fun waiting(id: Long): Draft = withState(id, ChunkState.Waiting)
+
+    /** Take [id] is being turned into text. */
+    fun transcribing(id: Long): Draft = withState(id, ChunkState.Transcribing)
+
+    /** The speech model didn't load: every waiting take fails, keeping its audio for Try again. */
+    fun waitingFailed(): Draft =
+        copy(
+            chunks =
+                chunks.map {
+                    if (it.state ==
+                        ChunkState.Waiting
+                    ) {
+                        it.copy(state = ChunkState.Failed(retry = true))
+                    } else {
+                        it
+                    }
+                },
+        )
+
+    /** Try again: failed takes with their audio wait for the model again. */
+    fun retryFailed(): Draft =
+        copy(
+            chunks = chunks.map { if ((it.state as? ChunkState.Failed)?.retry == true) it.copy(state = ChunkState.Waiting) else it },
+            selected = null,
+        )
+
+    /** The waiting takes, oldest first: the order they're turned into text. */
+    val waitingIds: List<Long> get() = chunks.filter { it.state == ChunkState.Waiting }.map { it.id }.sorted()
+
+    private fun withState(
+        id: Long,
+        state: ChunkState,
+    ): Draft {
         val index = chunks.indexOfFirst { it.id == id }
         if (index < 0) return this
-        return copy(chunks = chunks.toMutableList().also { it[index] = it[index].copy(state = ChunkState.Failed) })
+        return copy(chunks = chunks.toMutableList().also { it[index] = it[index].copy(state = state) })
     }
 
     /** Selects a chunk that has its text (or failed), or clears the selection when it is tapped again. */
@@ -137,7 +196,7 @@ data class Draft(
     }
 
     /** Empties the draft. Not while a take records or a chunk waits for its text. */
-    fun clear(): Draft = if (isSettled) Draft(nextId = nextId) else this
+    fun clear(): Draft = if (canClear) Draft(nextId = nextId) else this
 
     companion object {
         const val LONG_CHUNKS = 3
@@ -146,4 +205,58 @@ data class Draft(
         /** Rows a long draft shows at once; earlier ones fold into "↑ N earlier". */
         const val MAX_ROWS = 8
     }
+}
+
+/** What the draft's label line says (app-plan.md, Dictation and The speech model). */
+sealed interface DraftLabel {
+    /** "Recording · 0:04". */
+    data object Recording : DraftLabel
+
+    /** "Transcribing on this phone…". */
+    data object Transcribing : DraftLabel
+
+    /** "Speech model loading…": a take waits. */
+    data object SpeechLoading : DraftLabel
+
+    /** "Downloading the speech model · 45%": a take waits for the first download. */
+    data class SpeechDownloading(
+        val percent: Int,
+    ) : DraftLabel
+
+    /** "Speech model didn't load": takes failed for it and can be tried again. */
+    data object SpeechFailed : DraftLabel
+
+    /** "Draft · 2 chunks · 0:12". */
+    data object Summary : DraftLabel
+
+    companion object {
+        /** The first that applies: recording, transcribing, waiting for the model, the model failed, else the summary. */
+        fun of(
+            draft: Draft,
+            speech: SpeechStatus,
+        ): DraftLabel =
+            when {
+                draft.isListening -> Recording
+                draft.isTranscribing -> Transcribing
+                draft.isWaiting -> {
+                    val downloaded = (speech as? SpeechStatus.Loading)?.downloaded
+                    if (downloaded != null) SpeechDownloading((downloaded * 100).toInt().coerceIn(0, 99)) else SpeechLoading
+                }
+                draft.canRetry && speech == SpeechStatus.Failed -> SpeechFailed
+                else -> Summary
+            }
+    }
+}
+
+/** Whether takes can be turned into text yet (app-plan.md, The speech model). */
+sealed interface SpeechStatus {
+    /** Loading, or downloading for the first time with [downloaded] (0 to 1) of it on the phone. */
+    data class Loading(
+        val downloaded: Double? = null,
+    ) : SpeechStatus
+
+    data object Ready : SpeechStatus
+
+    /** The model didn't download or load. */
+    data object Failed : SpeechStatus
 }
