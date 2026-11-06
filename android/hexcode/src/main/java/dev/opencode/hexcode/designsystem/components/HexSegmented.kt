@@ -34,7 +34,7 @@ data class HexSegment(
     val warning: Boolean = false,
 )
 
-/** 36 pt and full width (a setting), or small and as wide as its labels (`.mode`, beside Send). */
+/** 36 dp and full width (a setting), or 30 dp, `caption` medium and as wide as its labels (`.mode`, beside Send). */
 enum class HexSegmentedSize { Regular, Small }
 
 /**
@@ -58,7 +58,7 @@ fun HexSegmented(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
             modifier
-                .then(if (small) Modifier.height(32.dp) else Modifier.fillMaxWidth().height(36.dp))
+                .then(if (small) Modifier.height(30.dp) else Modifier.fillMaxWidth().height(36.dp))
                 .clip(track)
                 .then(
                     if (small) {
