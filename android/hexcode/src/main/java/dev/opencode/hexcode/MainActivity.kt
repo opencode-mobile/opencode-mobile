@@ -107,6 +107,12 @@ class MainActivity : ComponentActivity() {
         val pinnedTheme = if (BuildConfig.DEBUG) intent.getStringExtra("HexCodeTheme") else null
         // debug builds: `--ez HexCodeClips true` makes each take the next bundled lab clip (an emulator has no voice)
         val clips = BuildConfig.DEBUG && intent.getBooleanExtra("HexCodeClips", false)
+        // debug builds: `--es HexCodeDraft "What letters are in this image?"` opens home with that text in the draft, as
+        // a tapped Next would put it, to send typed questions from an emulator
+        val draftText = if (BuildConfig.DEBUG) intent.getStringExtra("HexCodeDraft") else null
+        // debug builds: `--ez HexCodeNoVision true` makes today's model count as unable to see images (app-plan.md,
+        // Attach), whatever the server says
+        if (BuildConfig.DEBUG) services.noVision = intent.getBooleanExtra("HexCodeNoVision", false)
         // debug builds: `--ei HexCodeSpeechDelay 8` makes the speech model count as ready only 8 s after launch, and
         // `--ez HexCodeSpeechFail true` makes its first load count as failed, to see takes waiting for it
         if (BuildConfig.DEBUG) {
@@ -163,7 +169,7 @@ class MainActivity : ComponentActivity() {
                         SystemBarIcons(darkScreen = true)
                         DictationScreen(services.voice, sampleFile = sample, onOpenLab = { tool = Tool.Lab })
                     }
-                    null -> prefs?.let { HexCodeRoot(services, lab, it, pairLink, clips) }
+                    null -> prefs?.let { HexCodeRoot(services, lab, it, pairLink, clips, draftText) }
                 }
             }
         }
@@ -197,6 +203,7 @@ private fun HexCodeRoot(
     prefs: HexPrefs,
     pairLink: String?,
     clips: Boolean,
+    draftText: String?,
 ) {
     LaunchedEffect(Unit) {
         // The saved server's address check can take seconds; nothing on screen waits for it.
@@ -208,7 +215,7 @@ private fun HexCodeRoot(
             .background(HexTheme.colors.background),
     ) {
         if (prefs.firstRunDone) {
-            AfterFirstRun(services, lab, prefs, clips)
+            AfterFirstRun(services, lab, prefs, clips, draftText)
         } else {
             val vm = viewModel { FirstRunViewModel(HexFirstRunEnvironment(services), listingCache = services.folderListings) }
             val state by vm.uiState.collectAsStateWithLifecycle()
@@ -231,6 +238,7 @@ private fun AfterFirstRun(
     lab: SpeechLab,
     prefs: HexPrefs,
     clips: Boolean,
+    draftText: String?,
 ) {
     val context = LocalContext.current
     var page by remember { mutableStateOf(Page.Home) }
@@ -294,6 +302,7 @@ private fun AfterFirstRun(
     // In front, the date is checked and the stream reconnects; in the background it closes after a grace.
     LifecycleEventEffect(Lifecycle.Event.ON_START) { homeModel.enteredForeground() }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { homeModel.enteredBackground() }
+    LaunchedEffect(homeModel) { draftText?.let(homeModel::addToDraft) }
     LaunchedEffect(homeModel) {
         val cycles = services.pressProbe
         services.pressProbe = 0

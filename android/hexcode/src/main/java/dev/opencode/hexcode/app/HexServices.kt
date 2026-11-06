@@ -168,6 +168,9 @@ class HexServices(
         )
     }
 
+    /** Debug builds: the model counts as unable to see images (`--ez HexCodeNoVision true`). */
+    var noVision = false
+
     /**
      * Whether [model] can see images (app-plan.md, Attach): `capabilities.input` from `GET /api/model`, read into
      * `supportsImageInput` by the kit. Null for no model, or one the server doesn't list, which counts as yes.
@@ -179,7 +182,9 @@ class HexServices(
     ): ImageInput? {
         model ?: return null
         connectionLoaded.await()
-        val option = models.listModelOptions(directory?.ifEmpty { null }).option(model.providerId, model.modelId) ?: return null
+        val option = models.listModelOptions(directory?.ifEmpty { null }).option(model.providerId, model.modelId)
+        if (noVision) return ImageInput(name ?: option?.modelLabel ?: model.modelId, sees = false)
+        option ?: return null
         return ImageInput(name ?: option.modelLabel, option.supportsImageInput)
     }
 
