@@ -38,8 +38,8 @@ data class HexSegment(
 enum class HexSegmentedSize { Regular, Small }
 
 /**
- * A segmented choice (`.mp-seg`): segments in a 36 pt `tint(6)` track, the selected one raised on `panel3`. Without
- * [segments] it shows [emptyText] in the track instead (a model with no reasoning levels).
+ * A segmented choice (`.mp-seg`): segments in a `tint(6)` track (36 dp, or 30 dp small), the selected one raised on
+ * `panel3`. Without [segments] it shows [emptyText] in the track instead (a model with no reasoning levels).
  */
 @Composable
 fun HexSegmented(
@@ -60,16 +60,8 @@ fun HexSegmented(
             modifier
                 .then(if (small) Modifier.height(30.dp) else Modifier.fillMaxWidth().height(36.dp))
                 .clip(track)
-                .then(
-                    if (small) {
-                        Modifier
-                            .background(
-                                colors.background,
-                            ).border(1.dp, colors.line, track)
-                    } else {
-                        Modifier.background(colors.tint(6f))
-                    },
-                ).padding(if (small) 2.dp else 3.dp)
+                .background(colors.tint(6f))
+                .padding(if (small) 2.dp else 3.dp)
                 .selectableGroup(),
     ) {
         if (segments.isEmpty()) {
