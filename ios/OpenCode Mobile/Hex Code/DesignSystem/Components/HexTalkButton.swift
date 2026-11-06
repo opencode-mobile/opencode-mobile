@@ -1,5 +1,6 @@
 import os
 import SwiftUI
+import UIKit
 
 /// The talk button: a 50 pt pill. Idle it is `solid` with the mic and its label; with a draft it
 /// turns quiet (`panel`, `line2` border). Held it is just the level meter; dragging sideways
@@ -60,24 +61,23 @@ struct HexTalkButton: View {
         .frame(height: height)
         .clipShape(shape)
         .contentShape(shape)
-        .gesture(
-            // Global coordinates: the translation is the same, and the location says how close to
-            // the screen's bottom edge the touch is.
-            DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                .onChanged { value in
-                    if !phase.pressing {
-                        #if DEBUG
-                        TouchDelay.report(touchedAt: value.time, location: value.location)
-                        #endif
-                        onPressBegan()
-                    }
-                    onPressMoved(value.translation.width)
-                }
-                .onEnded { _ in
-                    // A very quick tap can end the gesture before it reported a change.
+        // A UIKit touch surface rather than a SwiftUI gesture: touchesBegan starts the press the
+        // moment UIKit delivers the touch (a DragGesture reached the button about 0.75 s late on a
+        // hold), and the sideways drag follows from there.
+        .overlay(
+            TalkTouchSurface(
+                onBegan: { touchedAt, fromBottom in
+                    #if DEBUG
+                    TouchDelay.report(touchedAt: touchedAt, fromBottom: fromBottom)
+                    #endif
+                    if !phase.pressing { onPressBegan() }
+                },
+                onMoved: { onPressMoved($0) },
+                onEnded: {
                     if !phase.pressing { onPressBegan() }
                     onPressEnded()
                 }
+            )
         )
         .sensoryFeedback(.impact(weight: .light), trigger: phase.recording) { _, recording in recording }
         .sensoryFeedback(.selection, trigger: phase.arm) { _, arm in arm != nil }
@@ -268,12 +268,72 @@ private struct FirstFrameProbe: View {
 /// `devicectl device process launch --console` shows it.
 @MainActor
 enum TouchDelay {
-    static func report(touchedAt: Date, location: CGPoint) {
-        let delay = Int((Date().timeIntervalSince(touchedAt) * 1000).rounded())
-        let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.height ?? 0
-        let fromBottom = Int((screen - location.y).rounded())
+    /// `touchedAt` is the touch's `UITouch.timestamp` (seconds of system uptime).
+    static func report(touchedAt: TimeInterval, fromBottom: CGFloat) {
+        let delay = Int(((ProcessInfo.processInfo.systemUptime - touchedAt) * 1000).rounded())
+        let fromBottom = Int(fromBottom.rounded())
         print("HEXTOUCH press reached the button \(delay) ms after the touch, \(fromBottom) pt from the bottom edge")
         HexLog.dictation.info("touch: press reached the button \(delay) ms after the touch, \(fromBottom) pt from the bottom")
     }
 }
 #endif
+
+/// The talk button's touches, straight from UIKit: began (with the touch's timestamp and its
+/// distance from the screen's bottom edge), the sideways distance since then, and ended
+/// (or cancelled). Invisible, and hidden from VoiceOver, which uses the button's own actions.
+struct TalkTouchSurface: UIViewRepresentable {
+    var onBegan: (TimeInterval, CGFloat) -> Void
+    var onMoved: (CGFloat) -> Void
+    var onEnded: () -> Void
+
+    func makeUIView(context: Context) -> TalkTouchView {
+        let view = TalkTouchView()
+        view.backgroundColor = .clear
+        view.isMultipleTouchEnabled = false
+        view.isAccessibilityElement = false
+        view.accessibilityElementsHidden = true
+        return view
+    }
+
+    func updateUIView(_ view: TalkTouchView, context: Context) {
+        view.onBegan = onBegan
+        view.onMoved = onMoved
+        view.onEnded = onEnded
+    }
+}
+
+final class TalkTouchView: UIView {
+    var onBegan: (TimeInterval, CGFloat) -> Void = { _, _ in }
+    var onMoved: (CGFloat) -> Void = { _ in }
+    var onEnded: () -> Void = {}
+    private var tracked: UITouch?
+    private var startX: CGFloat = 0
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard tracked == nil, let touch = touches.first else { return }
+        tracked = touch
+        let inWindow = touch.location(in: nil)
+        startX = inWindow.x
+        let height = window?.bounds.height ?? 0
+        onBegan(touch.timestamp, height - inWindow.y)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let tracked, touches.contains(tracked) else { return }
+        onMoved(tracked.location(in: nil).x - startX)
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        finish(touches)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        finish(touches)
+    }
+
+    private func finish(_ touches: Set<UITouch>) {
+        guard let tracked, touches.contains(tracked) else { return }
+        self.tracked = nil
+        onEnded()
+    }
+}
