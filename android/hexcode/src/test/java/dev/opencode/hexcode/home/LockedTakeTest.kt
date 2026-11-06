@@ -20,8 +20,8 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * app-plan.md, Dictation › Locked takes and States per chunk: a locked take is transcribed in parts at the speaker's
- * pauses while it records, and stays one chunk.
+ * app-plan.md, Dictation › Locked takes and States per chunk: a take's pauses are found from its start, a locked take is
+ * transcribed in parts while it records, and it stays one chunk.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LockedTakeTest {
@@ -192,15 +192,52 @@ class LockedTakeTest {
         }
 
     @Test
-    fun aLockedTakeWithNoSpeechLeavesTheDraft() =
+    fun aLockedTakeWithNoCutIsTranscribedWhole() =
         runTest(dispatcher) {
             val dictation = Cutting()
             val vm = HomeViewModel(dictation, takes = store)
             vm.lock()
             vm.tapLocked()
             advanceUntilIdle()
-            assertTrue(vm.draft.chunks.isEmpty())
+            assertEquals("The whole take.", vm.draft.text)
+            assertEquals(listOf(0), dictation.transcribed)
+        }
+
+    @Test
+    fun pausesAreFoundFromTheStartOfEveryTake() =
+        runTest(dispatcher) {
+            val dictation = Cutting()
+            val vm = HomeViewModel(dictation, takes = store)
+            vm.press()
+            assertEquals(1, dictation.splits)
+            // Cut while held: not transcribed yet.
+            dictation.cut(1)
+            dictation.cut(2)
+            advanceUntilIdle()
             assertTrue(dictation.transcribed.isEmpty())
+            // Locked a few seconds in, the take keeps those cuts and transcribes them now.
+            vm.release(TalkRelease.Lock)
+            advanceUntilIdle()
+            assertEquals(listOf(1, 2), dictation.transcribed)
+            assertEquals("Part 1. Part 2.", vm.draft.live?.soFar)
+            dictation.rest = 3
+            vm.tapLocked()
+            advanceUntilIdle()
+            assertEquals("Part 1. Part 2. Part 3.", vm.draft.text)
+        }
+
+    @Test
+    fun aTakeReleasedWhileHeldIsTranscribedWholeAndItsCutsAreLetGo() =
+        runTest(dispatcher) {
+            val dictation = Cutting().apply { rest = 3 }
+            val vm = HomeViewModel(dictation, takes = store)
+            vm.press()
+            dictation.cut(1)
+            dictation.cut(2)
+            vm.release(TalkRelease.End)
+            advanceUntilIdle()
+            assertEquals("The whole take.", vm.draft.text)
+            assertEquals(listOf(0), dictation.transcribed)
         }
 
     @Test
@@ -244,24 +281,13 @@ class LockedTakeTest {
         }
 
     @Test
-    fun aHeldTakeIsNotCut() =
-        runTest(dispatcher) {
-            val dictation = Cutting()
-            val vm = HomeViewModel(dictation, takes = store)
-            vm.press()
-            vm.release(TalkRelease.End)
-            advanceUntilIdle()
-            assertEquals(0, dictation.splits)
-            assertEquals("The whole take.", vm.draft.text)
-        }
-
-    @Test
     fun aTakeLockedBeforeTheModelIsReadyWaitsWhole() =
         runTest(dispatcher) {
             val dictation = Cutting().apply { speech.value = SpeechStatus.Loading() }
             val vm = HomeViewModel(dictation, takes = store)
             vm.lock()
-            assertEquals(0, dictation.splits)
+            dictation.cut(1)
+            dictation.rest = 2
             vm.tapLocked()
             advanceUntilIdle()
             assertEquals(
@@ -270,28 +296,62 @@ class LockedTakeTest {
                     .single()
                     .state,
             )
+            dictation.speech.value = SpeechStatus.Ready
+            advanceUntilIdle()
+            assertEquals("The whole take.", vm.draft.text)
+            assertEquals(listOf(0), dictation.transcribed)
         }
 
     @Test
-    fun aFailedPartKeepsTheWholeTakeForTryAgain() =
+    fun aFailedPartDoesNotStopTheOthersAndTryAgainRedoesOnlyIt() =
         runTest(dispatcher) {
-            val dictation = Cutting().apply { failOn = 1 }
+            val dictation = Cutting().apply { failOn = 2 }
             val vm = HomeViewModel(dictation, takes = store)
             vm.lock()
             dictation.cut(1)
             dictation.cut(2)
+            dictation.cut(3)
             advanceUntilIdle()
+            // Part 3 has its text, but it only shows once part 2 has its own.
+            assertEquals(listOf(1, 2, 3), dictation.transcribed)
+            assertEquals("Part 1.", vm.draft.live?.soFar)
+            dictation.rest = 4
             vm.tapLocked()
             advanceUntilIdle()
             val chunk = vm.draft.chunks.single()
             assertEquals(ChunkState.Failed(retry = true), chunk.state)
             assertEquals("", chunk.soFar)
-            // The parts after the failed one weren't tried; the whole take's audio is kept.
-            assertEquals(listOf(1), dictation.transcribed)
-            assertEquals(16_000 * 10, store.load(chunk.id)?.size)
+            assertTrue(vm.draft.canRetry)
+            dictation.failOn = null
+            dictation.transcribed.clear()
             vm.retryTakes()
             advanceUntilIdle()
-            assertEquals("The whole take.", vm.draft.text)
+            assertEquals(listOf(2), dictation.transcribed)
+            assertEquals("Part 1. Part 2. Part 3. Part 4.", vm.draft.text)
+        }
+
+    @Test
+    fun aPartThatFailsAgainKeepsTheTakeFailed() =
+        runTest(dispatcher) {
+            val dictation = Cutting().apply { failOn = 1 }
+            val vm = HomeViewModel(dictation, takes = store)
+            vm.lock()
+            dictation.cut(1)
+            dictation.rest = 2
+            vm.tapLocked()
+            advanceUntilIdle()
+            vm.retryTakes()
+            advanceUntilIdle()
+            assertEquals(
+                ChunkState.Failed(retry = true),
+                vm.draft.chunks
+                    .single()
+                    .state,
+            )
+            dictation.failOn = null
+            vm.retryTakes()
+            advanceUntilIdle()
+            assertEquals("Part 1. Part 2.", vm.draft.text)
         }
 
     @Test
@@ -344,7 +404,7 @@ class LockedTakeTest {
 
     @Test
     fun theDraftCountsTheTextSoFarAsItGrows() {
-        val draft = Draft().startTake().let { it.heard(it.live!!.id, "Rename the login screen.") }
+        val draft = Draft().startTake().let { it.withSoFar(it.live!!.id, "Rename the login screen.") }
         assertEquals("Rename the login screen.".length, draft.characters)
     }
 }

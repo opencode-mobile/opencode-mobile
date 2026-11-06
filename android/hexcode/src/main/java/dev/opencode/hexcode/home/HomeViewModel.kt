@@ -62,11 +62,11 @@ interface Dictation {
     fun drop()
 
     /**
-     * The take went hands-free (app-plan.md, Dictation › Locked takes): from now on it is cut at the speaker's pauses
-     * while it records, and each part goes to [parts], in order. When the take ends, the audio since the last cut goes
-     * too (unless there was no speech in it), and then [parts] closes; it closes with an error if the cutting broke.
-     * A dropped take's [parts] are left to the caller. False when pauses can't be found yet: the take is then turned
-     * into text whole after release.
+     * Finds the pauses in the take just started (app-plan.md, Dictation › Locked takes): it is cut at the speaker's
+     * pauses while it records, and each part goes to [parts], in order. When the take ends, the audio since the last
+     * cut goes too (if the take was cut, and there was speech in it), and then [parts] closes; it closes with an error
+     * if the cutting broke. A dropped take's [parts] are left to the caller. False when pauses can't be found yet: the
+     * take is then turned into text whole after release.
      */
     fun split(parts: SendChannel<TakePart>): Boolean = false
 
@@ -638,26 +638,45 @@ class HomeViewModel(
     private val transcribing = Mutex()
 
     /**
-     * The locked take being cut at pauses (app-plan.md, Dictation › Locked takes): its parts as they're cut, and the
-     * job turning them into text, one at a time, in order.
+     * A take's parts (app-plan.md, Dictation › Locked takes). The pause detector listens from the start of every take,
+     * so a take locked after a few seconds keeps the cuts already found; its parts are only turned into text once it's
+     * locked, one at a time, in order. A take released while held is turned into text whole, and its cuts are let go.
      */
     private class Split(
         val id: Long,
-        val parts: Channel<TakePart>,
+        val incoming: Channel<TakePart>,
     ) {
-        lateinit var job: Job
+        class Part(
+            val audio: TakePart,
+            var text: String? = null,
+            var failed: Boolean = false,
+        )
 
-        /** A part failed: the rest aren't transcribed, and the take keeps its audio for Try again. */
-        var failed = false
+        /** The parts received since the take was locked, in order, with their text once they have it. */
+        val parts = mutableListOf<Part>()
+
+        /** Turning the parts into text, from the lock on. */
+        var job: Job? = null
 
         /** The cutting broke: the take is turned into text whole after release, as one not cut. */
         var broken = false
 
-        /** Parts that have their text. */
-        var done = 0
+        val failed: Boolean get() = parts.any { it.failed }
+
+        /** The text so far: a part's text only shows once every part before it has text. */
+        val soFar: String get() = joinParts(parts.takeWhile { it.text != null }.map { it.text.orEmpty() })
+
+        fun stop() {
+            job?.cancel()
+            incoming.cancel()
+        }
     }
 
+    /** The take recording now, while its pauses are found. */
     private var split: Split? = null
+
+    /** Takes whose parts failed, by chunk, kept until Try again gives every part its text. */
+    private val failedParts = mutableMapOf<Long, Split>()
 
     /**
      * The talk button went down: the take starts at once, and the microphone alongside it. Returns false when a take
@@ -669,7 +688,16 @@ class HomeViewModel(
         if (current.draft.isListening) return false
         state.update { it.copy(draft = it.draft.startTake(), talk = TalkMode.Holding, takeStartedAt = clock()) }
         dictation.start { microphoneFailed() }
+        listenForPauses()
         return true
+    }
+
+    /** From the start of every take, its pauses are found as it records (app-plan.md, Dictation › Locked takes). */
+    private fun listenForPauses() {
+        val take = state.value.draft.live ?: return
+        split?.stop()
+        val incoming = Channel<TakePart>(Channel.UNLIMITED)
+        split = if (dictation.split(incoming)) Split(take.id, incoming) else null
     }
 
     /**
@@ -722,7 +750,7 @@ class HomeViewModel(
         when (how) {
             TalkRelease.Lock, TalkRelease.Tap -> {
                 state.update { it.copy(talk = TalkMode.Locked) }
-                splitTake()
+                transcribeParts()
             }
             TalkRelease.Drop -> dropTake()
             TalkRelease.End -> endTake()
@@ -740,27 +768,32 @@ class HomeViewModel(
     }
 
     /**
-     * The take went hands-free: it's cut at pauses while it records, if the speech model and the pause detector are
-     * ready (app-plan.md, Dictation › Locked takes). Otherwise it's turned into text whole after release, as before.
-     * Only locked takes are cut; a held one stays whole.
+     * The take went hands-free: its parts are turned into text from now on, the ones cut before the lock first, if the
+     * speech model is ready (app-plan.md, Dictation › Locked takes). Otherwise, or without the pause detector, it's
+     * turned into text whole after release, as before.
      */
-    private fun splitTake() {
+    private fun transcribeParts() {
         val take = state.value.draft.live ?: return
-        if (split != null) return
-        if (state.value.speech != SpeechStatus.Ready) {
-            Log.i(TalkLog.TAG, "take ${take.id} is locked before the speech model is ready: it waits whole")
-            return
-        }
-        val parts = Channel<TakePart>(Channel.UNLIMITED)
-        if (!dictation.split(parts)) {
+        val cutting = split?.takeIf { it.id == take.id }
+        if (cutting == null) {
             Log.i(TalkLog.TAG, "take ${take.id} is locked, but pauses can't be found yet: it's transcribed whole")
             return
         }
-        val cutting = Split(take.id, parts)
+        if (cutting.job != null) return
+        if (state.value.speech != SpeechStatus.Ready) {
+            Log.i(TalkLog.TAG, "take ${take.id} is locked before the speech model is ready: it waits whole")
+            cutting.stop()
+            split = null
+            return
+        }
         cutting.job =
             viewModelScope.launch {
                 try {
-                    for (part in parts) transcribePart(cutting, part)
+                    for (audio in cutting.incoming) {
+                        val part = Split.Part(audio)
+                        cutting.parts += part
+                        transcribePart(cutting, part)
+                    }
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Throwable) {
@@ -768,34 +801,36 @@ class HomeViewModel(
                     cutting.broken = true
                 }
             }
-        split = cutting
     }
 
-    /** Turns one part of a locked take into text and adds it to the take's text so far; a failure stops the rest. */
+    /**
+     * Turns one part of a locked take into text, and shows the take's text so far. A part that fails keeps its audio
+     * for Try again; the parts after it still go on.
+     */
     private suspend fun transcribePart(
         cutting: Split,
-        part: TakePart,
+        part: Split.Part,
     ) {
-        if (cutting.failed) return
+        val audio = part.audio
         transcribing.withLock {
             val began = SystemClock.uptimeMillis()
             try {
-                val text = dictation.transcribe(part.samples)
-                state.update { it.copy(draft = it.draft.heard(cutting.id, text)) }
-                cutting.done += 1
+                part.text = dictation.transcribe(audio.samples)
+                part.failed = false
+                state.update { it.copy(draft = it.draft.withSoFar(cutting.id, cutting.soFar)) }
                 val now = SystemClock.uptimeMillis()
                 Log.i(
                     TalkLog.TAG,
-                    "take ${cutting.id} part ${part.number}${if (part.last) " (after release)" else ""}: %.1f s of audio, "
-                        .format(part.seconds) +
+                    "take ${cutting.id} part ${audio.number}${if (audio.last) " (after release)" else ""}: %.1f s of audio, "
+                        .format(audio.seconds) +
                         "text %d ms after its speech ended, %d ms after the cut, transcribed in %d ms"
-                            .format(now - part.speechEndedAt, now - part.cutAt, now - began),
+                            .format(now - audio.speechEndedAt, now - audio.cutAt, now - began),
                 )
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Log.w(TalkLog.TAG, "take ${cutting.id} part ${part.number} failed: ${error.message}", error)
-                cutting.failed = true
+                Log.w(TalkLog.TAG, "take ${cutting.id} part ${audio.number} failed: ${error.message}", error)
+                part.failed = true
             }
         }
     }
@@ -804,9 +839,8 @@ class HomeViewModel(
     private fun stopSplit() {
         val cutting = split ?: return
         split = null
-        cutting.job.cancel()
-        cutting.parts.cancel()
-        Log.i(TalkLog.TAG, "take ${cutting.id} dropped after ${cutting.done} parts had text; the rest stopped")
+        cutting.stop()
+        Log.i(TalkLog.TAG, "take ${cutting.id} dropped after ${cutting.parts.count { it.text != null }} parts had text")
     }
 
     private fun endTake() {
@@ -815,14 +849,17 @@ class HomeViewModel(
         val take = state.value.draft.live
         state.update { it.copy(draft = it.draft.endTake(durationMs = clock() - started), talk = TalkMode.Idle) }
         if (take == null) return
-        val cutting = split?.takeIf { it.id == take.id }
+        val found = split?.takeIf { it.id == take.id }
         split = null
+        // Only a locked take's parts are used; a take released while held is turned into text whole.
+        val cutting = found?.takeIf { it.job != null }
+        if (cutting == null) found?.stop()
         // Undispatched, so the end is queued behind this take's start now, before a next press can start another.
         viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
             val samples = dictation.end()
             // A take with no audio, or under 0.3 s, leaves the draft quietly.
             if (samples == null || samples.size < MIN_SAMPLES) {
-                cutting?.job?.cancel()
+                cutting?.stop()
                 val why = if (samples == null) "nothing was recording" else "${samples.size} samples, under 0.3 s"
                 Log.i(TalkLog.TAG, "take ${take.id} left the draft: $why")
                 state.update { it.copy(draft = it.draft.transcribed(take.id, null)) }
@@ -848,33 +885,53 @@ class HomeViewModel(
     }
 
     /**
-     * A locked take cut at pauses ended: once its last part has text, the take has its parts' text, joined. Send waits
-     * for that, as the chunk is Transcribing until then. If a part failed, the take keeps its whole audio for Try
-     * again; if the cutting broke, the whole take is turned into text instead.
+     * A locked take ended: once its last part has text, the take has its parts' text, joined. Send waits for that, as
+     * the chunk is Transcribing until then. A take with no cut at all, or whose cutting broke, is turned into text
+     * whole. If a part failed, the chunk reads "Couldn't turn this take into text", and Try again redoes only the
+     * failed parts.
      */
     private suspend fun finishSplit(
         cutting: Split,
         samples: FloatArray,
         releasedAt: Long,
     ) {
-        cutting.job.join()
+        cutting.job?.join()
         val id = cutting.id
         when {
-            cutting.broken -> transcribe(id, samples, releasedAt)
+            cutting.broken || cutting.parts.isEmpty() -> {
+                if (cutting.broken) Log.i(TalkLog.TAG, "take $id: the cutting broke, so it's transcribed whole")
+                transcribe(id, samples, releasedAt)
+            }
             cutting.failed -> {
-                takes.save(id, samples)
+                failedParts[id] = cutting
                 state.update { it.copy(draft = it.draft.failed(id, retry = true)) }
             }
             else -> {
-                val text = state.value.draft.soFar(id)
-                if (text.isBlank()) Log.i(TalkLog.TAG, "take $id left the draft: no speech in ${samples.size} samples")
-                state.update { it.copy(draft = it.draft.transcribed(id, text)) }
+                partsDone(cutting)
                 Log.i(
                     TalkLog.TAG,
                     "take $id: text %d ms after release, %d parts, %.1f s in all"
-                        .format(SystemClock.uptimeMillis() - releasedAt, cutting.done, samples.size / 16_000.0),
+                        .format(SystemClock.uptimeMillis() - releasedAt, cutting.parts.size, samples.size / 16_000.0),
                 )
             }
+        }
+    }
+
+    /** Every part of take [cutting] has text: the chunk has their text, joined (or leaves, with no words). */
+    private fun partsDone(cutting: Split) {
+        val text = cutting.soFar
+        if (text.isBlank()) Log.i(TalkLog.TAG, "take ${cutting.id} left the draft: no speech in its parts")
+        failedParts -= cutting.id
+        state.update { it.copy(draft = it.draft.transcribed(cutting.id, text)) }
+    }
+
+    /** Try again on a take whose parts failed: only those parts are turned into text again, in order. */
+    private suspend fun retryParts(cutting: Split) {
+        for (part in cutting.parts) if (part.failed) transcribePart(cutting, part)
+        if (cutting.failed) {
+            state.update { it.copy(draft = it.draft.failed(cutting.id, retry = true)) }
+        } else {
+            partsDone(cutting)
         }
     }
 
@@ -919,6 +976,11 @@ class HomeViewModel(
                         state.value.draft.waitingIds
                             .firstOrNull() ?: break
                     state.update { it.copy(draft = it.draft.transcribing(id)) }
+                    val cutting = failedParts[id]
+                    if (cutting != null) {
+                        retryParts(cutting)
+                        continue
+                    }
                     val samples = takes.load(id)
                     if (samples == null) {
                         Log.w(TalkLog.TAG, "take $id left the draft: its audio wasn't kept")
@@ -1116,12 +1178,17 @@ class HomeViewModel(
         press()
         if (state.value.talk == TalkMode.Holding) {
             state.update { it.copy(talk = TalkMode.Locked) }
-            splitTake()
+            transcribeParts()
         }
     }
 
     fun clearDraft() {
         state.update { it.copy(draft = it.draft.clear()) }
+        failedParts.keys.retainAll(
+            state.value.draft.chunks
+                .map { it.id }
+                .toSet(),
+        )
         if (state.value.draft.isEmpty) viewModelScope.launch { takes.clear() }
         sweepImages()
     }

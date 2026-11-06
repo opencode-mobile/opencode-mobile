@@ -176,23 +176,20 @@ data class Draft(
     }
 
     /**
-     * One more part of locked take [id] has its [text]: it joins the take's text so far, with a space, while the take
-     * records or, after release, waits for its last part. A take dropped meanwhile is gone, and so is the text.
+     * Locked take [id]'s text so far: the text of its parts that have it, each part only once every part before it has
+     * its text. Shown while the take records or, after release, waits for its last part. A take dropped meanwhile is
+     * gone, and so is the text.
      */
-    fun heard(
+    fun withSoFar(
         id: Long,
         text: String,
     ): Draft {
-        fun Chunk.plus() = copy(soFar = joinParts(listOf(soFar, text)))
         val take = live
-        if (take?.id == id) return copy(live = take.plus())
+        if (take?.id == id) return copy(live = take.copy(soFar = text))
         val index = chunks.indexOfFirst { it.id == id && it.state == ChunkState.Transcribing }
         if (index < 0) return this
-        return copy(chunks = chunks.toMutableList().also { it[index] = it[index].plus() })
+        return copy(chunks = chunks.toMutableList().also { it[index] = it[index].copy(soFar = text) })
     }
-
-    /** The text of locked take [id]'s parts so far, recording or not. */
-    fun soFar(id: Long): String = (live?.takeIf { it.id == id } ?: chunks.firstOrNull { it.id == id })?.soFar.orEmpty()
 
     /** The engine failed on take [id]: it stays, as a failed chunk, to re-record or delete; [retry] when its audio is kept. */
     fun failed(
