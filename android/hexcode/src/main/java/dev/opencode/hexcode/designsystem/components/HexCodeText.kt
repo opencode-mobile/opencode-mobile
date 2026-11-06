@@ -14,6 +14,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -56,6 +58,7 @@ fun HexCodeText(
     val fill = HexTheme.colors.tint(4.5f)
     val edge = HexTheme.colors.tint(7f)
     val ranges = remember(text) { text.getStringAnnotations(HEX_CODE_TAG, 0, text.length) }
+    val spoken = remember(text) { text.text.replace("\u2005", "").replace("\u2060", "") }
     Text(
         text,
         style = style,
@@ -64,12 +67,15 @@ fun HexCodeText(
         overflow = overflow,
         onTextLayout = { layout = it },
         modifier =
-            modifier.drawBehind {
-                val result = layout ?: return@drawBehind
-                if (result.layoutInput.text != text) return@drawBehind
-                val em = style.fontSize.toPx()
-                ranges.forEach { drawCodeBoxes(result, it.start, it.end, em, fill, edge) }
-            },
+            modifier
+                // Screen readers get the plain words, without the spaces and joiners added for the boxes.
+                .clearAndSetSemantics { this.text = AnnotatedString(spoken) }
+                .drawBehind {
+                    val result = layout ?: return@drawBehind
+                    if (result.layoutInput.text != text) return@drawBehind
+                    val em = style.fontSize.toPx()
+                    ranges.forEach { drawCodeBoxes(result, it.start, it.end, em, fill, edge) }
+                },
     )
 }
 

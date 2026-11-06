@@ -54,7 +54,7 @@ private fun formatted(
                 SummaryRun.Style.Code -> {
                     // Room either side for the box (HexCodeText), which hugs the glyphs with 0.26 em of padding.
                     append(CODE_GAP)
-                    withAnnotation(HEX_CODE_TAG, "") { withStyle(code) { append(run.text) } }
+                    withAnnotation(HEX_CODE_TAG, "") { withStyle(code) { append(unbroken(run.text)) } }
                     append(CODE_GAP)
                 }
                 SummaryRun.Style.Bold -> withStyle(SpanStyle(fontWeight = bold, color = strong)) { append(run.text) }
@@ -76,6 +76,20 @@ internal fun summaryTextIn(
     if (at < 0) return summaryText(text)
     return summaryText(text, prefix = template.substring(0, at), suffix = template.substring(at + SUMMARY_MARK.length))
 }
+
+/**
+ * [code] with a word joiner after each punctuation mark, so a name like `origin/ios-pwa-shell` moves to the next line
+ * whole instead of breaking at `-` or `/`. Spaces still break, and code longer than a line still wraps.
+ */
+internal fun unbroken(code: String): String =
+    buildString {
+        code.forEach { c ->
+            append(c)
+            if (!c.isLetterOrDigit() && !c.isWhitespace()) append(WORD_JOINER)
+        }
+    }
+
+private const val WORD_JOINER = "\u2060"
 
 /** A four-per-em space either side of inline code, so its box doesn't touch the text around it. */
 private const val CODE_GAP = "\u2005"

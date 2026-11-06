@@ -184,20 +184,21 @@ private fun CentredFit(
     start: NowSize,
     nowCount: Int,
     modifier: Modifier,
-    content: @Composable ColumnScope.(size: NowSize, nowLines: Int) -> Unit,
+    content: @Composable ColumnScope.(size: NowSize, nowLines: NowLines) -> Unit,
 ) {
     SubcomposeLayout(modifier.fillMaxSize()) { constraints ->
         val loose = constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity)
         val room = if (constraints.hasBoundedHeight) constraints.maxHeight else Int.MAX_VALUE
-        val measured = HashMap<Pair<NowSize, Int>, Placeable>()
+        val measured = HashMap<Triple<NowSize, Int, Int>, Placeable>()
 
         fun measure(
             size: NowSize,
             lines: Int,
+            rows: Int = Int.MAX_VALUE,
         ): Placeable =
-            measured.getOrPut(size to lines) {
-                subcompose(size to lines) {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { content(size, lines) }
+            measured.getOrPut(Triple(size, lines, rows)) {
+                subcompose(Triple(size, lines, rows)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { content(size, NowLines(lines, rows)) }
                 }.first().measure(loose)
             }
         val fitted = NowSize.fit(start) { measure(it, Int.MAX_VALUE).height <= room }
@@ -211,6 +212,11 @@ private fun CentredFit(
                 if (measure(NowSize.Fit, mid).height <= room) low = mid else high = mid - 1
             }
             card = measure(NowSize.Fit, low)
+            // Last resort (the largest text sizes): one paragraph left that still doesn't fit is capped in rows, measured
+            // each time, ending in "…".
+            if (low == 1 && card.height > room) {
+                card = LAST_RESORT_ROWS.map { measure(NowSize.Fit, 1, it) }.firstOrNull { it.height <= room } ?: measure(NowSize.Fit, 1, 1)
+            }
         }
         val height = if (constraints.hasBoundedHeight) constraints.maxHeight else card.height
         layout(constraints.maxWidth, height) { card.place(0, ((height - card.height) / 2).coerceAtLeast(0)) }
@@ -224,7 +230,7 @@ private fun Summary(
     now: Long,
     vm: HomeViewModel,
     size: NowSize,
-    nowLines: Int,
+    nowLines: NowLines,
     links: Links,
     work: Work,
 ) {
@@ -277,6 +283,15 @@ private fun Label(content: @Composable () -> Unit) {
     Box(Modifier.heightIn(min = 18.dp), contentAlignment = Alignment.CenterStart) { content() }
 }
 
+/** How much of Now shows: its first [lines] lines, and at most [rows] rows of text when only one is left. */
+private data class NowLines(
+    val lines: Int,
+    val rows: Int = Int.MAX_VALUE,
+)
+
+/** The row caps tried, in order, when one paragraph of Now still doesn't fit at nowFit. */
+private val LAST_RESORT_ROWS = listOf(8, 6, 4, 3, 2, 1)
+
 /**
  * What the card shows besides the summary: the agent's to-do list (no row when empty), how many subagents and shells
  * run besides it, the message just sent ([you], in place of Next), and where a tapped Next goes ([onNext]).
@@ -319,7 +334,7 @@ private fun Card(
     label: RefreshLabel?,
     onRefresh: () -> Unit,
     size: NowSize = NowSize.Display,
-    nowLines: Int = Int.MAX_VALUE,
+    nowLines: NowLines = NowLines(Int.MAX_VALUE),
     tiles: List<SummaryLink> = emptyList(),
     links: Links? = null,
     /** Next is the reply's suggestion, which a tap puts into the draft; the screen's own Next copy isn't. */
@@ -412,13 +427,14 @@ private fun CardLabel(
 /**
  * Now (app-plan.md, Formatting): plain lines are paragraphs 0.35 em apart; bullets a list with a hanging "•" in `text3`
  * and a 0.9 em indent, 0.15 em between items and 0.25 em above the list. Each line keeps its inline Markdown. Only the
- * first [kept] lines show, the last of them ending in "…" when some were left out to fit.
+ * first [kept] lines show, the last of them ending in "…" when some were left out to fit, and its rows are capped
+ * when one paragraph is all that's left and it still doesn't fit.
  */
 @Composable
 private fun NowText(
     lines: List<NowLine>,
     size: NowSize,
-    kept: Int,
+    kept: NowLines,
     modifier: Modifier = Modifier,
 ) {
     val type = HexTheme.type
@@ -432,7 +448,8 @@ private fun NowText(
         }
     // Bold is bold at the two largest sizes, semibold below (`.md-b`).
     val bold = if (size <= NowSize.Large) FontWeight.Bold else FontWeight.SemiBold
-    val shown = lines.take(kept.coerceAtLeast(1))
+    val shown = lines.take(kept.lines.coerceAtLeast(1))
+    val rows = if (shown.size == 1) kept.rows else Int.MAX_VALUE
     val cut = shown.size < lines.size
     val em = with(LocalDensity.current) { style.fontSize.toDp() }
     Column(modifier) {
@@ -453,7 +470,7 @@ private fun NowText(
                     HexCodeText(text, style = style, color = HexTheme.colors.text1, modifier = Modifier.weight(1f))
                 }
             } else {
-                HexCodeText(text, style = style, color = HexTheme.colors.text1)
+                HexCodeText(text, style = style, color = HexTheme.colors.text1, maxLines = rows, overflow = TextOverflow.Ellipsis)
             }
         }
     }
