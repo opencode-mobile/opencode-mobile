@@ -54,9 +54,13 @@ class HomeViewModelTest {
             drops += 1
         }
 
+        var failure: Exception? = null
+
         override suspend fun transcribe(samples: FloatArray): String {
             gate?.await()
-            return texts.removeFirstOrNull() ?: error("No speech was detected.")
+            failure?.let { throw it }
+            // No text left: a silent take.
+            return texts.removeFirstOrNull() ?: ""
         }
     }
 
@@ -266,5 +270,43 @@ class HomeViewModelTest {
             val vm = HomeViewModel(FakeDictation()) { now }
             assertTrue(vm.press())
             assertFalse(vm.press())
+        }
+
+    @Test
+    fun aTakeTheEngineFailsOnStaysAsAFailedChunkToReRecordOrDelete() =
+        runTest(dispatcher) {
+            val dictation = FakeDictation().apply { failure = IllegalStateException("Parakeet V2 is not ready.") }
+            val vm = HomeViewModel(dictation) { now }
+            vm.press()
+            vm.release(TalkRelease.End)
+            advanceUntilIdle()
+            val chunk =
+                vm.uiState.value.draft.chunks
+                    .single()
+            assertEquals(ChunkState.Failed, chunk.state)
+            vm.selectChunk(0)
+            assertEquals(0, vm.uiState.value.draft.selected)
+            vm.deleteChunk()
+            assertTrue(
+                vm.uiState.value.draft.chunks
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun aFailedChunkCanBeReRecorded() =
+        runTest(dispatcher) {
+            val dictation = FakeDictation().apply { failure = IllegalStateException("Model file is damaged.") }
+            val vm = HomeViewModel(dictation) { now }
+            vm.press()
+            vm.release(TalkRelease.End)
+            advanceUntilIdle()
+            dictation.failure = null
+            dictation.texts += "Second try"
+            vm.selectChunk(0)
+            vm.rerecord()
+            vm.tapLocked()
+            advanceUntilIdle()
+            assertEquals("Second try", vm.uiState.value.draft.text)
         }
 }

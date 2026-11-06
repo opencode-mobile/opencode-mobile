@@ -136,6 +136,7 @@
     <!-- home: dictation -->
     <string name="home_chunk_deleted">Chunk deleted</string>
     <string name="home_take_dropped">Take dropped</string>
+    <string name="home_transcribe_failed">Couldn’t turn this take into text</string>
     <string name="home_mic_off">Microphone access is off</string>
     <string name="talk_hold">Hold to talk</string>
     <string name="talk_more">Hold to keep talking</string>

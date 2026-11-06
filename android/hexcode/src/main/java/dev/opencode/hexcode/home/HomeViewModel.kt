@@ -42,6 +42,7 @@ interface Dictation {
 
     fun drop()
 
+    /** The take's text; empty when there was no speech. Throws when the engine fails on it. */
     suspend fun transcribe(samples: FloatArray): String
 }
 
@@ -76,8 +77,22 @@ class VoiceEngineDictation(
         scope.launch { engine.cancelRecording() }
     }
 
-    override suspend fun transcribe(samples: FloatArray): String = engine.transcribe(samples)
+    override suspend fun transcribe(samples: FloatArray): String = transcribeWith(engine, samples)
 }
+
+/** [VoiceEngine.transcribe], with "no speech" as empty text rather than a failure. */
+private suspend fun transcribeWith(
+    engine: VoiceEngine,
+    samples: FloatArray,
+): String =
+    try {
+        engine.transcribe(samples)
+    } catch (error: IllegalStateException) {
+        // The engine reports a take with no speech as this error; anything else is a real failure.
+        if (error.message == NO_SPEECH) "" else throw error
+    }
+
+private const val NO_SPEECH = "No speech was detected."
 
 /** Where dictation logs why a take didn't become text, and how long the microphone took. */
 object TalkLog {
@@ -224,31 +239,27 @@ class HomeViewModel(
         // Undispatched, so the end is queued behind this take's start now, before a next press can start another.
         viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
             val samples = dictation.end()
-            if (samples == null || samples.isEmpty()) {
-                Log.w(
-                    TalkLog.TAG,
-                    "take ${take.id} left the draft: ${if (samples == null) "nothing was recording" else "no audio was recorded"}",
-                )
+            // A take with no audio, or under 0.3 s, leaves the draft quietly.
+            if (samples == null || samples.size < MIN_SAMPLES) {
+                val why = if (samples == null) "nothing was recording" else "${samples.size} samples, under 0.3 s"
+                Log.i(TalkLog.TAG, "take ${take.id} left the draft: $why")
                 state.update { it.copy(draft = it.draft.transcribed(take.id, null)) }
                 return@launch
             }
-            val text =
-                transcribing.withLock {
-                    try {
-                        dictation.transcribe(samples)
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Exception) {
-                        // "No speech was detected" and engine failures alike: the take leaves the draft.
-                        Log.w(
-                            TalkLog.TAG,
-                            "take ${take.id} left the draft: ${samples.size} samples didn't become text: ${error.message}",
-                            error,
-                        )
-                        null
-                    }
+            transcribing.withLock {
+                try {
+                    val text = dictation.transcribe(samples)
+                    // A silent take leaves quietly too.
+                    if (text.isBlank()) Log.i(TalkLog.TAG, "take ${take.id} left the draft: no speech in ${samples.size} samples")
+                    state.update { it.copy(draft = it.draft.transcribed(take.id, text)) }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    // The engine failed: the take stays, reading "Couldn't turn this take into text".
+                    Log.w(TalkLog.TAG, "take ${take.id} failed: ${samples.size} samples didn't become text: ${error.message}", error)
+                    state.update { it.copy(draft = it.draft.failed(take.id)) }
                 }
-            state.update { it.copy(draft = it.draft.transcribed(take.id, text)) }
+            }
         }
     }
 
@@ -284,6 +295,9 @@ class HomeViewModel(
         if (state.value.draft.isListening) dictation.drop()
     }
 }
+
+/** 0.3 s at 16 kHz: a shorter take leaves the draft quietly. */
+private const val MIN_SAMPLES = 4_800
 
 /** How a hold of the talk button ended. */
 enum class TalkRelease {
@@ -326,5 +340,5 @@ class ClipDictation(
         recording = false
     }
 
-    override suspend fun transcribe(samples: FloatArray): String = engine.transcribe(samples)
+    override suspend fun transcribe(samples: FloatArray): String = transcribeWith(engine, samples)
 }

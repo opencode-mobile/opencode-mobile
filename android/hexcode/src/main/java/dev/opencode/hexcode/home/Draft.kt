@@ -9,6 +9,9 @@ sealed interface ChunkState {
     data class Text(
         val text: String,
     ) : ChunkState
+
+    /** The engine failed on the take: "Couldn't turn this take into text", kept to re-record or delete. */
+    data object Failed : ChunkState
 }
 
 /** One take in the draft. [id] stays the same while the chunk moves from Listening to text. */
@@ -18,6 +21,9 @@ data class Chunk(
     val durationMs: Long = 0,
 ) {
     val text: String? get() = (state as? ChunkState.Text)?.text
+
+    /** It can be tapped to re-record or delete it: it has its text, or the engine failed on it. */
+    val selectable: Boolean get() = state is ChunkState.Text || state == ChunkState.Failed
 }
 
 /** A chunk deleted moments ago, kept so Undo can put it back where it was. */
@@ -102,9 +108,16 @@ data class Draft(
         return copy(chunks = chunks.toMutableList().also { it[index] = it[index].copy(state = ChunkState.Text(words)) })
     }
 
-    /** Selects a chunk that has its text, or clears the selection when it is tapped again. */
+    /** The engine failed on take [id]: it stays, as a failed chunk, to re-record or delete. */
+    fun failed(id: Long): Draft {
+        val index = chunks.indexOfFirst { it.id == id }
+        if (index < 0) return this
+        return copy(chunks = chunks.toMutableList().also { it[index] = it[index].copy(state = ChunkState.Failed) })
+    }
+
+    /** Selects a chunk that has its text (or failed), or clears the selection when it is tapped again. */
     fun select(index: Int): Draft {
-        if (live != null || chunks.getOrNull(index)?.text == null) return this
+        if (live != null || chunks.getOrNull(index)?.selectable != true) return this
         return copy(selected = if (selected == index) null else index)
     }
 

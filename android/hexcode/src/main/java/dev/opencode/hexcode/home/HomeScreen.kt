@@ -315,6 +315,7 @@ private fun DraftText(
 ) {
     val listening = stringResource(R.string.draft_listening)
     val transcribing = stringResource(R.string.draft_transcribing_chunk)
+    val failed = stringResource(R.string.home_transcribe_failed)
     HexChunk(
         chunks =
             draft.shown.map { chunk ->
@@ -322,6 +323,7 @@ private fun DraftText(
                     ChunkState.Listening -> HexChunkItem(listening, HexChunkKind.Listening)
                     ChunkState.Transcribing -> HexChunkItem(transcribing, HexChunkKind.Transcribing)
                     is ChunkState.Text -> HexChunkItem(s.text, HexChunkKind.Text)
+                    ChunkState.Failed -> HexChunkItem(failed, HexChunkKind.Text)
                 }
             },
         selected = draft.selected,
@@ -358,7 +360,7 @@ private fun ChunkList(
         }
         shown.drop(start).forEachIndexed { offset, chunk ->
             val index = start + offset
-            val tappable = chunk.text != null && !draft.isListening
+            val tappable = chunk.selectable && !draft.isListening
             HexChunkRow(
                 number = index + 1,
                 text =
@@ -366,12 +368,13 @@ private fun ChunkList(
                         ChunkState.Listening -> stringResource(R.string.draft_listening)
                         ChunkState.Transcribing -> stringResource(R.string.draft_transcribing_chunk)
                         is ChunkState.Text -> chunk.state.text
+                        ChunkState.Failed -> stringResource(R.string.home_transcribe_failed)
                     },
                 duration = clock(chunk.durationMs),
                 state =
                     when {
                         draft.selected == index -> HexChunkRowState.Selected
-                        draft.isListening || chunk.text == null -> HexChunkRowState.Past
+                        draft.isListening || !chunk.selectable -> HexChunkRowState.Past
                         draft.selected != null -> HexChunkRowState.Dim
                         else -> HexChunkRowState.Normal
                     },
