@@ -74,6 +74,7 @@ private struct HexGalleryContent: View {
             holdHints
             notices
             progress
+            linkTiles
             surfaces
         }
         .padding(.bottom, 40)
@@ -381,6 +382,25 @@ private struct HexGalleryContent: View {
             HexProgress(steps: [true], label: "1/1 · details ›")
             HexProgress(steps: [true, true, true, true, true, false, false, false], label: "5/8 · details ›")
             caption("None done · some · all · one step · eight steps (the most). The label lights while pressed")
+        }
+    }
+
+    private var linkTiles: some View {
+        section("Link tiles") {
+            HexLinkTile(icon: .globe, label: "Refresh docs", detail: "developer.mozilla.org", detailIcon: .out) {}
+            HexLinkTile(icon: .monitor, label: "Login preview", detail: "192.168.1.2:5173", detailIcon: .monitor) {}
+            HexLinkTile(icon: .globe, label: "A label long enough to be cut short", detail: "github.com", detailIcon: .out) {}
+            caption("Web · a page on your computer · a long label")
+            HexTileRow {
+                HexLinkTile(icon: .monitor, label: "Login preview", detail: "192.168.1.2:5173", detailIcon: .monitor) {}
+                HexLinkTile(icon: .globe, label: "Refresh docs", detail: "developer.mozilla.org", detailIcon: .out) {}
+                HexLinkTile(icon: .globe, label: "Pull request", detail: "github.com", detailIcon: .out) {}
+            }
+            caption("A row with more than fits: it scrolls sideways and fades at the right edge while there is more")
+            HexTileRow {
+                HexLinkTile(icon: .globe, label: "Refresh docs", detail: "developer.mozilla.org", detailIcon: .out) {}
+            }
+            caption("A row that fits: no fade")
         }
     }
 

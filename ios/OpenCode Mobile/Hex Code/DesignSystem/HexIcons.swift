@@ -8,7 +8,7 @@ enum HexIcon: String, CaseIterable, Sendable {
     case chevR, chevD, chevL, chevU
     case lock, pause, share, compass, book, folder, cpu, server, bars, card, steer, send, trash
     case spark, target, ask, play, speaker, copy, gear, search, more, pencil, term, eye, info
-    case img, scan, alert, moon, sun
+    case img, scan, alert, moon, sun, globe, monitor
     /// Hex Code's mark: a rounded square with three bars (stroke 1.9).
     case mark
 
