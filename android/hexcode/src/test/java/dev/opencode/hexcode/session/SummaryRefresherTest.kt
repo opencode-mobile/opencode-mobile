@@ -163,4 +163,49 @@ class SummaryRefresherTest {
             assertEquals(card, summary.state.value.summary)
             source.gate?.complete(Unit)
         }
+
+    @Test
+    fun busyIsTakenAsTheRequestStarts() =
+        runTest {
+            // Idle at the start, busy by the reply: an idle card, which keeps its Next.
+            var busy = false
+            val source =
+                FakeSource().apply {
+                    replies += "## Task\nNow: Done.\nNext: Commit it"
+                    gate = CompletableDeferred()
+                }
+            val summary = SummaryRefresher(this, source, clock = { now }, busy = { busy })
+            summary.refresh()
+            runCurrent()
+            busy = true
+            source.gate?.complete(Unit)
+            advanceUntilIdle()
+            assertEquals("Commit it", (summary.state.value.summary as StatusSummary.Card).next)
+            // Busy at the start, idle by the reply: a mid-run card, which drops it.
+            source.replies += "## Task\nNow: Working.\nNext: Run the tests"
+            source.gate = CompletableDeferred()
+            summary.refresh()
+            runCurrent()
+            busy = false
+            source.gate?.complete(Unit)
+            advanceUntilIdle()
+            assertNull((summary.state.value.summary as StatusSummary.Card).next)
+        }
+
+    @Test
+    fun withoutABasisTheCardIsNeverCurrent() =
+        runTest {
+            val source =
+                object : SummarySource {
+                    override suspend fun summarise(prompt: String) = "## Task\nNow: Done."
+
+                    override suspend fun updatedAt(): Long? = error("unreachable")
+                }
+            val summary = SummaryRefresher(this, source, clock = { now })
+            summary.refresh()
+            advanceUntilIdle()
+            assertTrue(summary.state.value.summary is StatusSummary.Card)
+            assertFalse(summary.isUpToDate(null))
+            assertFalse(summary.isUpToDate(100))
+        }
 }

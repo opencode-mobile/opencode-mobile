@@ -63,8 +63,11 @@ class TodaySessionTest {
             log += "rules $sessionId"
         }
 
+        var snapshotFails = false
+
         override suspend fun snapshot(rootId: String): LiveSnapshot {
             log += "snapshot $rootId"
+            if (snapshotFails) error("HTTP 500")
             return snapshot.copy(updatedAt = updated)
         }
 
@@ -757,5 +760,26 @@ class TodaySessionTest {
             transport.send("""{"type":"session.inbox.delivered","data":{"sessionID":"s1","inboxID":"$id"}}""")
             runCurrent()
             assertEquals("Rename it", today.state.value.you)
+        }
+
+    @Test
+    fun aFailedReadBackOnReconnectAsksForTheSummary() =
+        runTest {
+            val store = Store()
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport()
+            session(api, transport, Memory(date), store).open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            assertEquals(1, log.count { it.startsWith("summary") })
+            // The card is current, but without the read-back nothing says so.
+            api.snapshotFails = true
+            transport.end()
+            runCurrent()
+            advanceTimeBy(1_300)
+            transport.connected()
+            runCurrent()
+            assertEquals(2, log.count { it.startsWith("summary") })
         }
 }

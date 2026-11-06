@@ -329,4 +329,15 @@ class HomeViewModelTest {
             assertEquals(1, dictation.drops)
             assertTrue(vm.uiState.value.draft.isEmpty)
         }
+
+    @Test
+    fun aTappedNextGoesIntoTheDraftButNotWhileATakeRecords() =
+        runTest(dispatcher) {
+            val vm = HomeViewModel(FakeDictation()) { now }
+            vm.addToDraft("Commit it")
+            assertEquals("Commit it", vm.uiState.value.draft.text)
+            vm.press()
+            vm.addToDraft("Push it")
+            assertEquals("Commit it", vm.uiState.value.draft.text)
+        }
 }

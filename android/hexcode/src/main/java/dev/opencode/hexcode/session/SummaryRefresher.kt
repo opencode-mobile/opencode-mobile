@@ -259,7 +259,8 @@ class SummaryRefresher(
                         return@launch
                     }
                     if (reply.isNullOrBlank()) throw IllegalStateException("The summary timed out or came back empty.")
-                    val midRun = busyAtStart || busy()
+                    // Busy as the request started: that's what the reply describes.
+                    val midRun = busyAtStart
                     // Mid-run the model suggests its own next step, not the user's: the card drops it (Mid-run card).
                     val summary = StatusSummary.parse(reply).let { if (midRun && it is StatusSummary.Card) it.copy(next = null) else it }
                     val updatedAt = clock()

@@ -317,7 +317,10 @@ class TodaySession(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            // The stream is up; the next event or reconnect brings the rest.
+            // The stream is up; the next event or reconnect brings the rest. Without the read-back nothing says the
+            // card is current, so it's asked for.
+            if (live?.hasRun == false) summary.showEmpty(day ?: today()) else summary.refresh()
+            return
         }
         refreshSummary(updatedAt)
     }

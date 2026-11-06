@@ -651,7 +651,11 @@ class HomeViewModel(
     }
 
     /** Tapping the card's Next: its text becomes a chunk of the draft, opening the draft if there's none. Never sends. */
-    fun addToDraft(text: String) = state.update { it.copy(draft = it.draft.withText(text)) }
+    fun addToDraft(text: String) {
+        // While a take records, the tap does nothing: the draft is busy taking that take.
+        if (state.value.draft.isListening) return
+        state.update { it.copy(draft = it.draft.withText(text)) }
+    }
 
     /** Try again, on takes that couldn't be turned into text: the model loads again if it has to. */
     fun retryTakes() {
