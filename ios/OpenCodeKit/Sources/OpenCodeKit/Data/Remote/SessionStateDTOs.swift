@@ -161,29 +161,58 @@ public nonisolated struct PendingFormV2: Decodable, Sendable, Equatable {
     }
 }
 
-/// A message waiting in a session's inbox (`GET /api/session/{id}/inbox`).
+/// A message waiting in a session's inbox (`GET /api/session/{id}/inbox`, and the item of a
+/// `session.inbox.enqueued` event).
 public nonisolated struct InboxItemV2: Decodable, Sendable, Equatable {
     public var id: String
     public var sessionID: String?
     /// `queue` (after this turn) or `steer`.
     public var delivery: String?
     public var text: String?
+    /// The message's files, without their contents.
+    public var files: [InboxFileV2]
 
-    public init(id: String, sessionID: String? = nil, delivery: String? = nil, text: String? = nil) {
+    public init(id: String, sessionID: String? = nil, delivery: String? = nil, text: String? = nil, files: [InboxFileV2] = []) {
         self.id = id
         self.sessionID = sessionID
         self.delivery = delivery
         self.text = text
+        self.files = files
     }
 
     private enum CodingKeys: String, CodingKey { case id, sessionID, delivery, payload }
-    private nonisolated struct Payload: Decodable { let text: String? }
+    private nonisolated struct Payload: Decodable {
+        let text: String?
+        let files: [InboxFileV2]?
+    }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         sessionID = try? container.decodeIfPresent(String.self, forKey: .sessionID)
         delivery = try? container.decodeIfPresent(String.self, forKey: .delivery)
-        text = (try? container.decodeIfPresent(Payload.self, forKey: .payload))?.text
+        let payload = try? container.decodeIfPresent(Payload.self, forKey: .payload)
+        text = payload?.text
+        files = payload?.files ?? []
+    }
+}
+
+/// A file in an inbox message: its name and type only. The stored contents (`data`, base64, about
+/// 0.7 MB for a photo) are never decoded into it.
+public nonisolated struct InboxFileV2: Decodable, Sendable, Equatable {
+    public var name: String?
+    public var mime: String?
+
+    public init(name: String? = nil, mime: String? = nil) {
+        self.name = name
+        self.mime = mime
+    }
+
+    private enum CodingKeys: String, CodingKey { case name, mime }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try? container.decodeIfPresent(String.self, forKey: .name)
+        mime = try? container.decodeIfPresent(String.self, forKey: .mime)
     }
 }

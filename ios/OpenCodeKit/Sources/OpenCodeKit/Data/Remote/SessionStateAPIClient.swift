@@ -145,17 +145,38 @@ public nonisolated struct SessionStateAPIClient: Sendable {
         case steer
     }
 
-    /// `POST /api/session/{id}/prompt` with `text` and `delivery`. Every prompt goes through the
-    /// inbox; the answer is that inbox item, whose id `cancelInbox` takes.
-    public func prompt(sessionID: String, text: String, delivery: Delivery) async throws -> InboxItemV2 {
+    /// A file sent with a prompt (`files[]` of `POST /api/session/{id}/prompt`).
+    public nonisolated struct PromptFile: Encodable, Sendable, Equatable {
+        /// A `data:` URL (canonical base64, no line breaks), a `file://` URL on the server, or a
+        /// `media:` ref. The server works out the type from the bytes.
+        public var uri: String
+        /// Shown back in the message and the inbox, and named in errors.
+        public var name: String?
+
+        public init(uri: String, name: String? = nil) {
+            self.uri = uri
+            self.name = name
+        }
+
+        /// A `data:` URL for these bytes.
+        public static func dataURL(_ data: Data, mime: String) -> String {
+            "data:\(mime);base64,\(data.base64EncodedString())"
+        }
+    }
+
+    /// `POST /api/session/{id}/prompt` with `text`, `delivery`, and `files` when there are any.
+    /// Every prompt goes through the inbox; the answer is that inbox item, whose id `cancelInbox`
+    /// takes. A file the server refuses fails the whole prompt (`400`, `field: "files"`).
+    public func prompt(sessionID: String, text: String, delivery: Delivery, files: [PromptFile] = []) async throws -> InboxItemV2 {
         nonisolated struct Body: Encodable {
             let text: String
+            let files: [PromptFile]?
             let delivery: String
         }
         let envelope: APIDataEnvelope<InboxItemV2> = try await send(
             path: "api/session/\(sessionID)/prompt",
             method: "POST",
-            body: Body(text: text, delivery: delivery.rawValue)
+            body: Body(text: text, files: files.isEmpty ? nil : files, delivery: delivery.rawValue)
         )
         return envelope.data
     }
