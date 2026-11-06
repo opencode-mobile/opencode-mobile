@@ -70,6 +70,7 @@ private struct HexGalleryContent: View {
             rows
             fields
             draft
+            thumbnails
             talkButton
             holdHints
             notices
@@ -303,6 +304,45 @@ private struct HexGalleryContent: View {
             }
         }
         .padding(.horizontal, HexSpacing.screenHome - HexSpacing.screen)
+    }
+
+    private var thumbnails: some View {
+        section("Thumbnails") {
+            HStack(spacing: 8) {
+                HexThumbnail(image: Self.sampleShot, onRemove: {})
+                HexThumbnail(image: nil, onRemove: {})
+                HexThumbnail(image: Self.samplePhoto, dimmed: true, onRemove: {})
+                Text(verbatim: "3 images · go with your next message")
+                    .hexFont(.caption)
+                    .foregroundStyle(HexColor.text3)
+                    .lineLimit(2)
+                    .padding(.leading, 4)
+            }
+            .padding(.top, 5)
+            caption("Ready · preparing · dimmed (the model can't see images), each with ✕")
+            HStack(spacing: 6) {
+                HexThumbnail(image: Self.sampleShot, size: .small)
+                HexThumbnail(image: Self.samplePhoto, size: .small)
+                HexThumbnail(image: nil, size: .small)
+            }
+            caption("Small (24 pt), in Waiting to send")
+        }
+    }
+
+    /// Stand-ins for a screenshot and a photo.
+    private static let sampleShot = sampleImage(top: HexColor.indigo, bottom: HexColor.green)
+    private static let samplePhoto = sampleImage(top: HexColor.amber, bottom: HexColor.red)
+
+    private static func sampleImage(top: Color, bottom: Color) -> UIImage {
+        UIGraphicsImageRenderer(size: CGSize(width: 120, height: 120)).image { context in
+            let colors = [UIColor(top).cgColor, UIColor(bottom).cgColor] as CFArray
+            let gradient = CGGradient(colorsSpace: nil, colors: colors, locations: [0, 1])!
+            context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 60, y: 120), options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+            UIColor.white.withAlphaComponent(0.7).setFill()
+            UIRectFill(CGRect(x: 14, y: 18, width: 56, height: 9))
+            UIColor.white.withAlphaComponent(0.85).setFill()
+            UIBezierPath(roundedRect: CGRect(x: 28, y: 92, width: 64, height: 11), cornerRadius: 5.5).fill()
+        }
     }
 
     private var talkButton: some View {

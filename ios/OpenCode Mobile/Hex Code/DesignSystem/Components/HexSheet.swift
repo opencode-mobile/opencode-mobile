@@ -47,13 +47,15 @@ extension HexSheet where Leading == EmptyView, Trailing == EmptyView {
 }
 
 extension View {
-    /// Presents a `HexSheet` on the system sheet, with Hex's panel and radius.
+    /// Presents a `HexSheet` on the system sheet, with Hex's panel and radius. `onDismiss` runs
+    /// once it has gone, for what opens next.
     func hexSheet<SheetContent: View>(
         isPresented: Binding<Bool>,
         detents: Set<PresentationDetent> = [.medium, .large],
+        onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> SheetContent
     ) -> some View {
-        sheet(isPresented: isPresented) {
+        sheet(isPresented: isPresented, onDismiss: onDismiss) {
             content()
                 .presentationDetents(detents)
                 .presentationDragIndicator(.hidden)
