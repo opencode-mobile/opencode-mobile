@@ -4,16 +4,16 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import dev.opencode.hexcode.designsystem.HexTheme
 
 /**
  * The one quiet label over the talk button while it's held (app-plan.md, Dictation › Hold hint), since the finger
- * covers the button: "Slide to lock", in `text3` at 70 %. As the drag [lean]s right (towards 1) it brightens towards
- * `text1`; leaning left (towards −1) it fades out. Once [armed] it reads "Release to lock" (`text1`) or "Release to
- * drop" (`red`), crossfading over 0.2 s.
+ * covers the button: "Slide to lock", in `text3` at 70 %. It is only an instruction, so it stays subtle all the way and
+ * the button's own animation is what you notice: leaning right ([lean] towards 1) it keeps its colour, leaning left
+ * (towards −1) it fades out. Once [armed] it reads "Release to lock" in the same quiet colour, or "Release to drop" in
+ * `red` at 55 %, crossfading over 0.2 s.
  */
 @Composable
 fun HexHoldHint(
@@ -30,12 +30,11 @@ fun HexHoldHint(
     Crossfade(armed, modifier.semantics { hideFromAccessibility() }, HexTheme.motion.fade(), label = "hold-hint") { side ->
         val style = HexTheme.type.caption
         when (side) {
-            HexTalkRelease.Lock -> Text(releaseLockLabel, style = style, color = colors.text1, maxLines = 1)
-            HexTalkRelease.Drop -> Text(releaseDropLabel, style = style, color = colors.red, maxLines = 1)
+            HexTalkRelease.Lock -> Text(releaseLockLabel, style = style, color = quiet, maxLines = 1)
+            HexTalkRelease.Drop -> Text(releaseDropLabel, style = style, color = colors.red.copy(alpha = 0.55f), maxLines = 1)
             else -> {
-                val towardsLock = lerp(quiet, colors.text1, lean.coerceIn(0f, 1f))
-                val faded = towardsLock.copy(alpha = towardsLock.alpha * (1f - (-lean).coerceIn(0f, 1f)))
-                Text(slideLabel, style = style, color = faded, maxLines = 1)
+                val fading = quiet.copy(alpha = quiet.alpha * (1f - (-lean).coerceIn(0f, 1f)))
+                Text(slideLabel, style = style, color = fading, maxLines = 1)
             }
         }
     }
