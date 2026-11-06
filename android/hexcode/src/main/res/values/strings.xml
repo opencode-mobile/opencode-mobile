@@ -143,7 +143,7 @@
     <string name="home_transcribe_failed">Couldn’t turn this take into text</string>
     <string name="home_mic_off">Microphone access is off</string>
     <string name="home_hold_drop">Drop</string>
-    <string name="home_hold_lock">Lock</string>
+    <string name="home_hold_slide_lock">Slide to lock</string>
     <string name="home_hold_release_drop">Release to drop</string>
     <string name="home_hold_release_lock">Release to lock</string>
     <string name="talk_hold">Hold to talk</string>

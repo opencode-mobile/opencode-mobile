@@ -736,7 +736,7 @@ private fun HoldHintSample() {
     fun hint(
         lean: Float,
         armed: HexTalkRelease?,
-    ) = HexHoldHint(lean, armed, "Drop", "Lock", "Release to drop", "Release to lock")
+    ) = HexHoldHint(lean, armed, "Slide to lock", "Release to lock", "Release to drop")
     Edge {
         StateSample("resting") { hint(0f, null) }
         StateSample("leaning lock") { hint(0.55f, null) }

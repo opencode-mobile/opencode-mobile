@@ -253,10 +253,9 @@ private fun HoldHintLine(
         HexHoldHint(
             lean = hold.lean,
             armed = hold.armed,
-            dropLabel = stringResource(R.string.home_hold_drop),
-            lockLabel = stringResource(R.string.home_hold_lock),
-            releaseDropLabel = stringResource(R.string.home_hold_release_drop),
+            slideLabel = stringResource(R.string.home_hold_slide_lock),
             releaseLockLabel = stringResource(R.string.home_hold_release_lock),
+            releaseDropLabel = stringResource(R.string.home_hold_release_drop),
         )
     }
 }
