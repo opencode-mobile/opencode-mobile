@@ -212,14 +212,14 @@ class VoiceEngine(
         val live = stream
         val pcm = stop() ?: error("Nothing is being recorded.")
         stream = null
-        if (live != null) return live.finish().trim().ifEmpty { error("No speech was detected.") }
+        if (live != null) return live.finish().trim().ifEmpty { throw NoSpeechException() }
         return transcribe(pcm)
     }
 
     /** Transcribes 16 kHz mono samples, for takes, checks and tests. */
     suspend fun transcribe(pcm: FloatArray): String {
         val e = engine ?: error("${active.value.title} is not ready.")
-        return e.transcribe(pcm).trim().ifEmpty { error("No speech was detected.") }
+        return e.transcribe(pcm).trim().ifEmpty { throw NoSpeechException() }
     }
 
     /**
@@ -337,3 +337,6 @@ internal object CpuAffinity {
     /** Moves the calling thread to the CPUs in [mask] and returns its previous mask (0 if that failed). */
     external fun set(mask: Long): Long
 }
+
+/** A take with no speech in it: not a failure of the engine. */
+class NoSpeechException : IllegalStateException("No speech was detected.")
