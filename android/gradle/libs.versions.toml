@@ -30,12 +30,16 @@ firebaseBom = "34.16.0"
 firebaseCrashlyticsPlugin = "3.0.8"
 googleServicesPlugin = "4.5.0"
 camera = "1.4.2"
+exifinterface = "1.4.2"
+robolectric = "4.17"
 zxing = "3.5.4"
 paparazzi = "2.0.0-alpha05.1"
 
 [libraries]
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "androidxSplashscreen" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "androidxBiometric" }
