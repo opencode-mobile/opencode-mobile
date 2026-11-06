@@ -70,6 +70,8 @@ struct HexButton: View {
     var style: Style = .secondary
     var enabled = true
     var loading = false
+    /// The icon after the title instead of before it (Send).
+    var iconAfter = false
     /// Stretches to the width it is offered, for a lone action at the bottom of a sheet.
     var fullWidth = false
     let action: () -> Void
@@ -81,6 +83,7 @@ struct HexButton: View {
         style: Style = .secondary,
         enabled: Bool = true,
         loading: Bool = false,
+        iconAfter: Bool = false,
         fullWidth: Bool = false,
         action: @escaping () -> Void
     ) {
@@ -91,6 +94,7 @@ struct HexButton: View {
             style: style,
             enabled: enabled,
             loading: loading,
+            iconAfter: iconAfter,
             fullWidth: fullWidth,
             action: action
         )
@@ -104,10 +108,12 @@ struct HexButton: View {
         style: Style = .secondary,
         enabled: Bool = true,
         loading: Bool = false,
+        iconAfter: Bool = false,
         fullWidth: Bool = false,
         action: @escaping () -> Void
     ) {
         self.loading = loading
+        self.iconAfter = iconAfter
         self.title = text
         self.icon = icon
         self.size = size
@@ -120,17 +126,13 @@ struct HexButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                if loading {
-                    HexSpinner(size: size == .small ? HexIconSize.small : HexIconSize.regular, color: style == .primary ? HexColor.onSolid : nil)
-                } else if let icon {
-                    HexIconView(icon, size: size == .small ? HexIconSize.small : HexIconSize.regular)
-                        .foregroundStyle(iconColor)
-                }
+                if !iconAfter { mark }
                 if let title {
                     title
                         .hexFont(size == .small ? .small : .button)
                         .lineLimit(1)
                 }
+                if iconAfter { mark }
             }
             .foregroundStyle(textColor)
             .padding(.horizontal, title == nil ? 0 : (size == .small ? 11 : 16))
@@ -143,6 +145,16 @@ struct HexButton: View {
         .buttonStyle(HexPressStyle(scale: 0.96))
         .disabled(!enabled)
         .allowsHitTesting(!loading)
+    }
+
+    @ViewBuilder
+    private var mark: some View {
+        if loading {
+            HexSpinner(size: size == .small ? HexIconSize.small : HexIconSize.regular, color: style == .primary ? HexColor.onSolid : nil)
+        } else if let icon {
+            HexIconView(icon, size: size == .small ? HexIconSize.small : HexIconSize.regular)
+                .foregroundStyle(iconColor)
+        }
     }
 
     private var height: CGFloat {

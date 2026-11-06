@@ -93,6 +93,7 @@ final class HexMainModel {
         self.build = build ?? .current
         self.services = services
         self.store = store
+        home.sender = realSession
         if let samplePreset { showSample(samplePreset) }
     }
 
@@ -125,10 +126,12 @@ final class HexMainModel {
         samplePreset = preset
         guard let preset else {
             sampleSession = nil
+            home.sender = realSession
             return
         }
         let sample = preset.make(toasts: toasts)
         sampleSession = sample
+        home.sender = sample
         Task { await preset.start(sample) }
     }
 

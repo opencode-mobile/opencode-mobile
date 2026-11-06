@@ -11,6 +11,8 @@ struct HomeView: View {
     /// Attach (M3) and Stop (M4) aren't built yet: the "Not in this version yet" notice.
     var onNotYet: () -> Void = {}
 
+    @State private var showsWaiting = false
+
     private var drafting: Bool { home.isRecording || !home.draft.isEmpty }
 
     var body: some View {
@@ -29,7 +31,7 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             if !drafting, session.waitingCount > 0 {
-                WaitingLine(count: session.waitingCount) { session.openDetails() }
+                WaitingLine(count: session.waitingCount) { showsWaiting = true }
                     .padding(.bottom, 10)
                     .transition(.opacity)
             } else {
@@ -52,6 +54,9 @@ struct HomeView: View {
         .hexScreenBackground()
         .animation(HexMotion.ease(HexMotion.fade), value: drafting)
         .animation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
+        .hexSheet(isPresented: $showsWaiting, detents: [.medium]) {
+            WaitingSheet(session: session) { showsWaiting = false }
+        }
     }
 
     /// The prototype's `.fx-dock`: attach, the talk button filling the rest, stop. Stop is dimmed
@@ -175,7 +180,8 @@ struct DraftView: View {
                         Text(LocalizedStringResource("draft.transcribing", defaultValue: "Transcribing on this phone…"))
                     }
                 case .recording, .summary:
-                    Text(verbatim: summary)
+                    // The draft, then what Send will do (the prototype's mode caption).
+                    Text(verbatim: summary + " · ") + modeCaption
                 }
             }
         }
@@ -191,6 +197,21 @@ struct DraftView: View {
             return String(localized: "draft.rerecording", defaultValue: "Re-recording chunk \(index + 1) · \(clock)")
         }
         return String(localized: "draft.recording", defaultValue: "Recording · \(clock)")
+    }
+
+    /// "Sends now" while the agent is idle; "Queue · sends after this turn" or, in amber, "Steer ·
+    /// lands at the next step" while it works.
+    private var modeCaption: Text {
+        guard home.agentBusy else {
+            return Text(LocalizedStringResource("home.mode.idle", defaultValue: "Sends now"))
+        }
+        switch home.sendMode {
+        case .afterTurn:
+            return Text(LocalizedStringResource("home.mode.queue", defaultValue: "Queue · sends after this turn"))
+        case .now:
+            return Text(LocalizedStringResource("home.mode.steer", defaultValue: "Steer · lands at the next step"))
+                .foregroundStyle(HexColor.amber)
+        }
     }
 
     private var summary: String {
@@ -227,6 +248,28 @@ struct DraftView: View {
                         home.retryFailedTakes()
                     }
                 }
+                if home.agentBusy {
+                    HexSegmented(
+                        [SendMode.afterTurn, .now],
+                        selection: Binding(get: { home.sendMode }, set: { home.sendMode = $0 }),
+                        size: .small,
+                        selectedColor: { $0 == .now ? HexColor.amber : HexColor.text1 }
+                    ) { mode in
+                        mode == .now
+                            ? String(localized: "home.mode.now", defaultValue: "Now")
+                            : String(localized: "home.mode.after", defaultValue: "After turn")
+                    }
+                    .fixedSize()
+                }
+                HexButton(
+                    home.takesPending
+                        ? LocalizedStringResource("home.send.transcribing", defaultValue: "Transcribing")
+                        : LocalizedStringResource("home.send", defaultValue: "Send"),
+                    icon: .send,
+                    style: .primary,
+                    enabled: home.canSend,
+                    iconAfter: true
+                ) { home.send() }
             }
         }
         .frame(minHeight: 30)
@@ -368,6 +411,56 @@ struct HangingLayout: Layout {
                 anchor: .topLeading,
                 proposal: ProposedViewSize(width: bounds.width, height: bounds.height - top)
             )
+        }
+    }
+}
+
+/// "Waiting to send": each message queued for after this turn, with Cancel. One delivered or
+/// cancelled elsewhere leaves the list (through the inbox events); the sheet closes when it's empty.
+struct WaitingSheet: View {
+    let session: TodaySession
+    let onClose: () -> Void
+
+    @State private var cancelling: Set<String> = []
+
+    var body: some View {
+        HexSheet(LocalizedStringResource("home.waiting.title", defaultValue: "Waiting to send")) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(session.waitingMessages) { message in
+                        HStack(alignment: .top, spacing: 12) {
+                            HexIconView(.send, size: HexIconSize.small)
+                                .foregroundStyle(HexColor.text3)
+                                .padding(.top, 3)
+                            Text(verbatim: message.text)
+                                .hexFont(.row)
+                                .foregroundStyle(HexColor.text1)
+                                .lineLimit(2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            HexButton(
+                                LocalizedStringResource("home.waiting.cancel", defaultValue: "Cancel"),
+                                loading: cancelling.contains(message.id)
+                            ) {
+                                cancel(message.id)
+                            }
+                        }
+                        .padding(.vertical, 12)
+                        .transition(.opacity)
+                    }
+                }
+                .animation(HexMotion.ease(HexMotion.fade), value: session.waitingMessages)
+            }
+        }
+        .onChange(of: session.waitingMessages.isEmpty) { _, empty in
+            if empty { onClose() }
+        }
+    }
+
+    private func cancel(_ id: String) {
+        cancelling.insert(id)
+        Task {
+            try? await session.cancelWaiting(id)
+            cancelling.remove(id)
         }
     }
 }

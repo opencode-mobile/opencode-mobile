@@ -87,13 +87,32 @@ struct HexTextField: View {
 
 /// A segmented choice in a `tint(6)` track; the selected segment sits on `panel3`.
 struct HexSegmented<Value: Hashable>: View {
+    enum Size {
+        /// 36 pt, `callout`: a choice on its own row.
+        case regular
+        /// 30 pt, `caption` medium, hugging its labels: a switch beside other buttons (the
+        /// prototype's `.mode`).
+        case small
+    }
+
     let options: [Value]
     @Binding var selection: Value
     let label: (Value) -> String
+    var size: Size = .regular
+    /// The selected label's colour; `text1` unless an option needs to stand out (Now in `amber`).
+    var selectedColor: (Value) -> Color = { _ in HexColor.text1 }
 
-    init(_ options: [Value], selection: Binding<Value>, label: @escaping (Value) -> String) {
+    init(
+        _ options: [Value],
+        selection: Binding<Value>,
+        size: Size = .regular,
+        selectedColor: @escaping (Value) -> Color = { _ in HexColor.text1 },
+        label: @escaping (Value) -> String
+    ) {
         self.options = options
         _selection = selection
+        self.size = size
+        self.selectedColor = selectedColor
         self.label = label
     }
 
@@ -105,11 +124,12 @@ struct HexSegmented<Value: Hashable>: View {
                     selection = option
                 } label: {
                     Text(verbatim: label(option))
-                        .hexFont(.callout)
-                        .foregroundStyle(selected ? HexColor.text1 : HexColor.text2)
+                        .hexFont(size == .small ? HexTextStyle.caption.weight(.medium) : .callout)
+                        .foregroundStyle(selected ? selectedColor(option) : (size == .small ? HexColor.text3 : HexColor.text2))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, size == .small ? 10 : 0)
+                        .frame(maxWidth: size == .small ? nil : .infinity, maxHeight: .infinity)
                         .background {
                             if selected {
                                 RoundedRectangle(cornerRadius: HexRadius.s, style: .continuous)
@@ -127,8 +147,8 @@ struct HexSegmented<Value: Hashable>: View {
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
-        .padding(3)
-        .frame(height: 36)
+        .padding(size == .small ? 2 : 3)
+        .frame(height: size == .small ? 30 : 36)
         .background(HexColor.tint(6), in: RoundedRectangle(cornerRadius: HexRadius.m, style: .continuous))
         .animation(HexMotion.ease(HexMotion.fade), value: selection)
     }

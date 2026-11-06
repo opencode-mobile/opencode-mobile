@@ -33,6 +33,8 @@ final class TodaySession {
     var busySince: Date?
     /// Messages queued in the inbox, sent after this turn.
     var waitingCount = 0
+    /// Those messages, in order, for the Waiting to send sheet.
+    var waitingMessages: [InboxEntry] = []
     let summary: StatusSummaryModel
 
     @ObservationIgnored private let dailySetup: DailySessionSetup
@@ -204,6 +206,7 @@ final class TodaySession {
         busySince = live?.busySince
         pendingInput = live?.firstPending
         waitingCount = live?.waitingCount ?? 0
+        waitingMessages = live?.waiting ?? []
     }
 
     /// The empty card for a session that never ran; else a new summary.
@@ -221,6 +224,35 @@ final class TodaySession {
         stream?.drop(holdFor: 10)
     }
     #endif
+
+    // MARK: Sending
+
+    struct NotOpen: Error {}
+
+    /// The agent is working (or waiting on you): a message can go after this turn or now.
+    var agentBusy: Bool { busySince != nil || pendingInput != nil }
+
+    /// Sends a message to today's session; returns its inbox id.
+    func send(_ text: String, delivery: Delivery) async throws -> String {
+        guard let api, let sessionID else { throw NotOpen() }
+        return try await api.prompt(sessionID: sessionID, text: text, delivery: delivery)
+    }
+
+    /// Takes back a message still waiting to send.
+    func cancelWaiting(_ itemID: String) async throws {
+        guard let api, let sessionID else { throw NotOpen() }
+        try await api.cancelInbox(sessionID: sessionID, itemID: itemID)
+        // The cancelled event removes it too; this doesn't wait for it.
+        _ = live?.apply(.inboxRemoved(sessionID: sessionID, id: itemID))
+        publish()
+    }
+
+    /// Returns once the event stream is up (at once when it is).
+    func waitForConnection() async {
+        while !streamUp, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+    }
 
     // MARK: Taps that open M4's sheets
 

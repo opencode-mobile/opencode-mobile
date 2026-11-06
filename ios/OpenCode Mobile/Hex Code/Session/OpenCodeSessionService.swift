@@ -7,6 +7,16 @@ protocol LiveSessionAPI: Sendable {
     func snapshot(rootID: String) async throws -> LiveSnapshot
     func generate(sessionID: String, prompt: String) async throws -> String
     func switchModel(sessionID: String, model: ModelChoice) async throws
+    /// Sends a message; returns its inbox id.
+    func prompt(sessionID: String, text: String, delivery: Delivery) async throws -> String
+    /// Takes back a message not delivered yet.
+    func cancelInbox(sessionID: String, itemID: String) async throws
+}
+
+/// How a message reaches the agent: after this turn, or at the next step (and at once when idle).
+enum Delivery: String, Equatable, Sendable {
+    case queue
+    case steer
 }
 
 /// The event stream's transport: one connection, until it ends or is cancelled.
@@ -78,7 +88,7 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
             hasRun: session.busyMs != nil,
             children: childIDs,
             pending: PendingItem.oldestFirst(pending),
-            inbox: try await inbox.map { ($0.id, $0.delivery ?? "queue") }
+            inbox: try await inbox.map { InboxEntry(id: $0.id, delivery: $0.delivery ?? "queue", text: $0.text ?? "") }
         )
     }
 
@@ -88,6 +98,14 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
 
     func switchModel(sessionID: String, model: ModelChoice) async throws {
         try await client.switchModel(sessionID: sessionID, model: Self.ref(model))
+    }
+
+    func prompt(sessionID: String, text: String, delivery: Delivery) async throws -> String {
+        try await client.prompt(sessionID: sessionID, text: text, delivery: delivery == .queue ? .queue : .steer).id
+    }
+
+    func cancelInbox(sessionID: String, itemID: String) async throws {
+        try await client.cancelInbox(sessionID: sessionID, itemID: itemID)
     }
 
     // MARK: Mapping

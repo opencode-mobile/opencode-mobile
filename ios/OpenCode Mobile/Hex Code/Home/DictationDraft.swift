@@ -168,6 +168,12 @@ struct DictationDraft: Equatable, Sendable {
         chunks.insert(chunk, at: min(max(0, index), chunks.count))
     }
 
+    /// Puts a draft that didn't go back, ahead of anything said since.
+    mutating func restore(contentsOf saved: DictationDraft) {
+        chunks = saved.chunks + chunks
+        selectedID = nil
+    }
+
     /// Empties the draft. Not while a take is running.
     mutating func clear() {
         guard !isListening else { return }

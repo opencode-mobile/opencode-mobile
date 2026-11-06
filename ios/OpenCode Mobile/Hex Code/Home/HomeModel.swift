@@ -35,6 +35,12 @@ final class HomeModel {
     let toasts: HexToaster
     /// Shows every earlier chunk in the long list instead of the newest ones.
     var showEarlier = false
+    /// The After turn / Now switch; back to After turn after every send.
+    var sendMode: SendMode = .afterTurn
+    /// A Now held on the phone for its 3 s.
+    private(set) var held: HeldMessage?
+    /// Today's session, where Send goes.
+    @ObservationIgnored weak var sender: (any MessageSending)?
 
     @ObservationIgnored private let recorder: any TakeRecording
     /// The speech model. Recording never waits for it.
@@ -45,12 +51,21 @@ final class HomeModel {
     /// Takes to transcribe, in the order they were recorded.
     @ObservationIgnored private var queue: [UUID] = []
     @ObservationIgnored private var isDraining = false
+    @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
+    @ObservationIgnored private var holdTask: Task<Void, Never>?
     @ObservationIgnored private var pressStartedAt: Date?
     @ObservationIgnored private var startTask: Task<Bool, Never>?
     @ObservationIgnored private var lastDeleted: (index: Int, chunk: DraftChunk)?
 
-    init(recorder: any TakeRecording, speech: any SpeechTranscribing, toasts: HexToaster? = nil, now: @escaping () -> Date = Date.init) {
+    init(
+        recorder: any TakeRecording,
+        speech: any SpeechTranscribing,
+        toasts: HexToaster? = nil,
+        now: @escaping () -> Date = Date.init,
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    ) {
         self.recorder = recorder
+        self.sleep = sleep
         self.speech = speech
         self.toasts = toasts ?? HexToaster()
         self.now = now
@@ -300,6 +315,145 @@ final class HomeModel {
         recorder.cancelRecording()
         draft.dropTake()
         takeStartedAt = nil
+    }
+
+    // MARK: Sending
+
+    /// A Now waits this long on the phone, with Undo, before it goes.
+    static let holdTime: Duration = .seconds(3)
+    /// What a Now starts with.
+    static let correctionPrefix = "[Correction] "
+
+    /// Every chunk has text and nothing records: Send is on.
+    var canSend: Bool { draft.isComplete && !isRecording }
+    /// A take still turning into text: Send reads "Transcribing".
+    var takesPending: Bool { isRecording || draft.isWaiting || draft.isTranscribing }
+    var agentBusy: Bool { sender?.agentBusy ?? false }
+
+    /// Send: the draft clears at once and goes out. An idle agent gets it at once (`steer`, which
+    /// starts a run); a working one after this turn (`queue`), or with Now held 3 s on the phone,
+    /// then `steer` starting "[Correction] ". The switch goes back to After turn.
+    func send() {
+        guard canSend, let sender else { return }
+        let saved = draft
+        let text = saved.text
+        let mode = sendMode
+        sendMode = .afterTurn
+        draft = DictationDraft()
+        showEarlier = false
+        lastDeleted = nil
+        if !sender.agentBusy {
+            Task { await post(text, delivery: .steer, saved: saved, notice: .idle) }
+        } else if mode == .afterTurn {
+            Task { await post(text, delivery: .queue, saved: saved, notice: .queued) }
+        } else {
+            hold(text, saved: saved)
+        }
+    }
+
+    private enum SentNotice { case idle, queued, now }
+
+    private func post(_ text: String, delivery: Delivery, saved: DictationDraft, notice: SentNotice) async {
+        guard let sender else { return restoreAfterFailure(saved) }
+        let id: String
+        do {
+            id = try await sender.send(text, delivery: delivery)
+        } catch {
+            HexLog.dictation.error("send: failed: \(String(describing: error), privacy: .public)")
+            return restoreAfterFailure(saved)
+        }
+        switch notice {
+        case .idle:
+            toasts.show(HexToastItem(
+                tone: .steer,
+                title: String(localized: "home.sent.idle", defaultValue: "Sent · starting now"),
+                detail: "“\(text)”",
+                duration: 2.6
+            ))
+        case .now:
+            toasts.show(HexToastItem(
+                tone: .steer,
+                title: String(localized: "home.sent.now", defaultValue: "Sent · lands at the next step"),
+                detail: "“\(text)”",
+                duration: 2.6
+            ))
+        case .queued:
+            toasts.show(
+                HexToastItem(
+                    tone: .steer,
+                    title: String(localized: "home.sent.queued", defaultValue: "Queued · sends after this turn"),
+                    detail: String(localized: "home.sent.queued.sub", defaultValue: "Cancel it from the waiting line until then"),
+                    action: .init(title: String(localized: "common.undo", defaultValue: "Undo"), icon: .undo),
+                    duration: 3.2
+                ),
+                onAction: { [weak self] in Task { await self?.takeBack(id, saved: saved) } }
+            )
+        }
+    }
+
+    /// Undo of a queued message: cancelled from the inbox, and the draft comes back.
+    private func takeBack(_ id: String, saved: DictationDraft) async {
+        do {
+            try await sender?.cancelWaiting(id)
+        } catch {
+            HexLog.dictation.error("send: couldn't take back \(id, privacy: .public): \(String(describing: error), privacy: .public)")
+            return
+        }
+        draft.restore(contentsOf: saved)
+        toasts.show(HexToastItem(
+            tone: .undo,
+            title: String(localized: "home.taken_back", defaultValue: "Taken back"),
+            detail: String(localized: "home.taken_back.sub", defaultValue: "It never reached the agent.")
+        ))
+    }
+
+    /// Now: held on the phone for 3 s with Undo. If the stream is down when the time is up, it waits
+    /// for the reconnect, then goes.
+    private func hold(_ text: String, saved: DictationDraft) {
+        let message = HeldMessage(text: text, draft: saved)
+        held = message
+        toasts.show(
+            HexToastItem(
+                tone: .steer,
+                title: String(localized: "home.sending.now", defaultValue: "Sending now…"),
+                detail: "“\(text)”",
+                action: .init(title: String(localized: "common.undo", defaultValue: "Undo"), icon: .undo),
+                duration: 3
+            ),
+            onAction: { [weak self] in self?.undoHeld() }
+        )
+        holdTask?.cancel()
+        let sleep = sleep
+        holdTask = Task { [weak self] in
+            guard (try? await sleep(Self.holdTime)) != nil, let self, self.held?.id == message.id else { return }
+            await self.sender?.waitForConnection()
+            guard self.held?.id == message.id else { return }
+            self.held = nil
+            await self.post(Self.correctionPrefix + text, delivery: .steer, saved: saved, notice: .now)
+        }
+    }
+
+    /// Undo during the 3 s: nothing is sent, and the draft comes back.
+    func undoHeld() {
+        guard let message = held else { return }
+        held = nil
+        holdTask?.cancel()
+        draft.restore(contentsOf: message.draft)
+        toasts.show(HexToastItem(
+            tone: .undo,
+            title: String(localized: "home.unsent", defaultValue: "Not sent"),
+            detail: String(localized: "home.unsent.sub", defaultValue: "It never left the phone.")
+        ))
+    }
+
+    private func restoreAfterFailure(_ saved: DictationDraft) {
+        draft.restore(contentsOf: saved)
+        toasts.show(HexToastItem(
+            tone: .stop,
+            title: String(localized: "home.send.failed", defaultValue: "Couldn’t send"),
+            detail: String(localized: "home.send.failed.sub", defaultValue: "Your draft is kept."),
+            duration: 3.2
+        ))
     }
 
     // MARK: Draft

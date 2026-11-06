@@ -155,6 +155,18 @@ final class FakeSessionServer: DailySessionService, LiveSessionAPI, @unchecked S
     func switchModel(sessionID: String, model: ModelChoice) async throws {
         calls.append(.model(sessionID, model))
     }
+
+    var prompts: [(text: String, delivery: Delivery)] = []
+    var cancelled: [String] = []
+
+    func prompt(sessionID: String, text: String, delivery: Delivery) async throws -> String {
+        prompts.append((text, delivery))
+        return "msg_\(prompts.count)"
+    }
+
+    func cancelInbox(sessionID: String, itemID: String) async throws {
+        cancelled.append(itemID)
+    }
 }
 
 @MainActor

@@ -78,7 +78,7 @@ struct LiveSessionStateTests {
         #expect(SessionEvent.decode(EventLines.form("ses_a")) == .formCreated(
             PendingItem(id: "frm_1", sessionID: "ses_a", kind: .question, text: "Run the tests now?")
         ))
-        #expect(SessionEvent.decode(EventLines.enqueued("ses_a", id: "msg_1")) == .inboxEnqueued(sessionID: "ses_a", id: "msg_1", delivery: "queue"))
+        #expect(SessionEvent.decode(EventLines.enqueued("ses_a", id: "msg_1")) == .inboxEnqueued(sessionID: "ses_a", id: "msg_1", delivery: "queue", text: "hi"))
         #expect(SessionEvent.decode(EventLines.child("ses_c", parent: "ses_a")) == .sessionCreated(id: "ses_c", parentID: "ses_a"))
         #expect(SessionEvent.decode(EventLines.shellCreated("sh_1", session: "ses_a")) == .shellCreated(id: "sh_1", sessionID: "ses_a"))
         #expect(SessionEvent.decode(EventLines.shellExited("sh_1")) == .shellExited(id: "sh_1"))
@@ -171,7 +171,7 @@ struct LiveSessionStateTests {
             hasRun: true,
             children: ["ses_c"],
             pending: [PendingItem(id: "frm_9", sessionID: "ses_c", kind: .question, text: "Which one?")],
-            inbox: [("msg_1", "queue")]
+            inbox: [InboxEntry(id: "msg_1", delivery: "queue")]
         ))
         #expect(state.busySince == since)
         #expect(state.children == ["ses_c"])
@@ -327,7 +327,7 @@ struct TodaySessionLiveTests {
             hasRun: true,
             children: [],
             pending: [PendingItem(id: "per_1", sessionID: "ses_a", kind: .approval, text: "ls")],
-            inbox: [("msg_1", "queue")]
+            inbox: [InboxEntry(id: "msg_1", delivery: "queue")]
         )
         let (session, transport, _) = make(server)
         await session.open()
@@ -376,7 +376,7 @@ struct TodaySessionLiveTests {
         await eventually { session.agentState == .reconnecting }
         #expect(session.agentState == .reconnecting)
         await eventually { transport.connections == 2 }
-        server.snapshot = LiveSnapshot(busySince: nil, hasRun: true, children: [], pending: [], inbox: [("msg_9", "queue")])
+        server.snapshot = LiveSnapshot(busySince: nil, hasRun: true, children: [], pending: [], inbox: [InboxEntry(id: "msg_9", delivery: "queue")])
         transport.send(EventLines.connected)
         await eventually { session.waitingCount == 1 }
         #expect(session.agentState == .idle)

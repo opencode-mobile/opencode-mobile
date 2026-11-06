@@ -39,7 +39,7 @@ enum SessionEvent: Equatable, Sendable {
     case formCreated(PendingItem)
     /// `form.replied` or `form.cancelled`.
     case formClosed(sessionID: String, id: String)
-    case inboxEnqueued(sessionID: String, id: String, delivery: String)
+    case inboxEnqueued(sessionID: String, id: String, delivery: String, text: String)
     /// `session.inbox.delivered` or `.cancelled`.
     case inboxRemoved(sessionID: String, id: String)
     case inboxDeliveryChanged(sessionID: String, id: String, delivery: String)
@@ -110,7 +110,8 @@ enum SessionEvent: Equatable, Sendable {
         case "session.inbox.enqueued":
             guard let sessionID, let id = data["inboxID"] as? String else { return nil }
             let item = data["item"] as? [String: Any]
-            return .inboxEnqueued(sessionID: sessionID, id: id, delivery: item?["delivery"] as? String ?? "queue")
+            let text = (item?["payload"] as? [String: Any])?["text"] as? String ?? ""
+            return .inboxEnqueued(sessionID: sessionID, id: id, delivery: item?["delivery"] as? String ?? "queue", text: text)
         case "session.inbox.delivered", "session.inbox.cancelled":
             guard let sessionID, let id = data["inboxID"] as? String else { return nil }
             return .inboxRemoved(sessionID: sessionID, id: id)
@@ -168,6 +169,14 @@ struct PendingQuestionText {
     }
 }
 
+/// A message in today's session's inbox, not delivered yet.
+struct InboxEntry: Equatable, Sendable, Identifiable {
+    var id: String
+    /// `queue` (after this turn) or `steer`.
+    var delivery: String
+    var text: String = ""
+}
+
 /// The state read back on every (re)connect.
 struct LiveSnapshot: Equatable, Sendable {
     /// Nil when today's session isn't running.
@@ -176,14 +185,8 @@ struct LiveSnapshot: Equatable, Sendable {
     var hasRun: Bool
     var children: [String]
     var pending: [PendingItem]
-    /// Waiting messages: inbox id and delivery (`queue` or `steer`).
-    var inbox: [(id: String, delivery: String)]
-
-    static func == (lhs: LiveSnapshot, rhs: LiveSnapshot) -> Bool {
-        lhs.busySince == rhs.busySince && lhs.hasRun == rhs.hasRun && lhs.children == rhs.children
-            && lhs.pending == rhs.pending && lhs.inbox.map(\.id) == rhs.inbox.map(\.id)
-            && lhs.inbox.map(\.delivery) == rhs.inbox.map(\.delivery)
-    }
+    /// Messages not delivered yet, in order.
+    var inbox: [InboxEntry]
 }
 
 /// Today's session as the stream tells it: busy since when, the subagents and agent shells it owns,
@@ -205,22 +208,20 @@ struct LiveSessionState: Equatable, Sendable {
     var shells: Set<String> = []
     /// Oldest first.
     var pending: [PendingItem] = []
-    /// Inbox id → delivery, in arrival order.
-    var inbox: [(id: String, delivery: String)] = []
+    /// Messages not delivered yet, in arrival order.
+    var inbox: [InboxEntry] = []
 
     init(rootID: String, hasRun: Bool = false) {
         self.rootID = rootID
         self.hasRun = hasRun
     }
 
-    static func == (lhs: LiveSessionState, rhs: LiveSessionState) -> Bool {
-        lhs.rootID == rhs.rootID && lhs.busySince == rhs.busySince && lhs.hasRun == rhs.hasRun
-            && lhs.children == rhs.children && lhs.shells == rhs.shells && lhs.pending == rhs.pending
-            && lhs.inbox.map(\.id) == rhs.inbox.map(\.id) && lhs.inbox.map(\.delivery) == rhs.inbox.map(\.delivery)
-    }
 
     /// Messages that send after this turn.
-    var waitingCount: Int { inbox.filter { $0.delivery == "queue" }.count }
+    var waitingCount: Int { waiting.count }
+
+    /// Messages that send after this turn, in order.
+    var waiting: [InboxEntry] { inbox.filter { $0.delivery == "queue" } }
 
     /// The question or approval the hint card shows: the oldest.
     var firstPending: PendingItem? { pending.first }
@@ -263,9 +264,9 @@ struct LiveSessionState: Equatable, Sendable {
             guard owns(sessionID) else { return nil }
             pending.removeAll { $0.id == id }
             return nil
-        case let .inboxEnqueued(sessionID, id, delivery):
+        case let .inboxEnqueued(sessionID, id, delivery, text):
             guard sessionID == rootID, !inbox.contains(where: { $0.id == id }) else { return nil }
-            inbox.append((id, delivery))
+            inbox.append(InboxEntry(id: id, delivery: delivery, text: text))
             return nil
         case let .inboxRemoved(sessionID, id):
             guard sessionID == rootID else { return nil }
