@@ -496,7 +496,7 @@ class TodaySessionTest {
             runCurrent()
             val card = StatusSummary.parse("## Task\nNow: Working.")
             assertEquals(card, today.state.value.summary.summary)
-            assertEquals(SavedSummary("s1", card, testScheduler.currentTime), store.saved)
+            assertEquals(SavedSummary("s1", card, testScheduler.currentTime, "2026-11-05", project), store.saved)
         }
 
     @Test
@@ -567,5 +567,63 @@ class TodaySessionTest {
                 today.state.value.queued
                     .map { it.id },
             )
+        }
+
+    @Test
+    fun aCardSavedForTodayInThisProjectShowsBeforeSetupFindsTheSession() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            api.gate = CompletableDeferred()
+            val saved = SavedSummary("s1", StatusSummary.Fallback("Earlier."), -300_000, "2026-11-05", project)
+            val today = session(api, Transport(), Memory(date), Store(saved))
+            today.open()
+            runCurrent()
+            assertEquals(SessionSetup.Opening, today.state.value.setup)
+            assertEquals(saved.summary, today.state.value.summary.summary)
+            assertEquals(
+                RefreshLabel.MinutesAgo(5),
+                today.state.value.summary
+                    .label(0),
+            )
+            api.gate?.complete(Unit)
+            runCurrent()
+            // Setup found that session: the card stays.
+            assertEquals(SessionSetup.Ready("s1"), today.state.value.setup)
+            assertEquals(saved.summary, today.state.value.summary.summary)
+        }
+
+    @Test
+    fun aCardFromYesterdayOrAnotherProjectDoesNotShowBeforeSetup() =
+        runTest {
+            for (saved in listOf(
+                SavedSummary("s0", StatusSummary.Fallback("Yesterday."), 0, "2026-11-04", project),
+                SavedSummary("s9", StatusSummary.Fallback("Elsewhere."), 0, "2026-11-05", "/Users/me/Projects/other"),
+            )) {
+                val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+                api.gate = CompletableDeferred()
+                val today = session(api, Transport(), Memory(date), Store(saved))
+                today.open()
+                runCurrent()
+                assertNull(today.state.value.summary.summary)
+                api.gate?.complete(Unit)
+                runCurrent()
+                assertNull(today.state.value.summary.summary)
+            }
+        }
+
+    @Test
+    fun aCardShownBeforeSetupGoesWhenSetupFindsADifferentSession() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            api.gate = CompletableDeferred()
+            val saved = SavedSummary("s_old", StatusSummary.Fallback("Another session."), 0, "2026-11-05", project)
+            val today = session(api, Transport(), Memory(date), Store(saved))
+            today.open()
+            runCurrent()
+            assertEquals(saved.summary, today.state.value.summary.summary)
+            api.gate?.complete(Unit)
+            runCurrent()
+            assertEquals(SessionSetup.Ready("s1"), today.state.value.setup)
+            assertNull(today.state.value.summary.summary)
         }
 }

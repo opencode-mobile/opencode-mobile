@@ -56,6 +56,7 @@ import dev.opencode.hexcode.session.PendingItem
 import dev.opencode.hexcode.session.RefreshLabel
 import dev.opencode.hexcode.session.SessionSetup
 import dev.opencode.hexcode.session.StatusSummary
+import dev.opencode.hexcode.session.SummaryState
 import dev.opencode.hexcode.session.TodayState
 import kotlinx.coroutines.delay
 
@@ -106,7 +107,8 @@ internal fun HomeTopBar(
 
 /**
  * The status area (`.fx-body`): the status card, the fallback, or "Couldn't open today's session" with Try again, and
- * the Needs-you hint under the card. Home starts it at the same line as the draft.
+ * the Needs-you hint under the card. While setup runs it shows only the card saved for today's session, if there is
+ * one. Home starts it at the same line as the draft.
  */
 @Composable
 internal fun StatusArea(
@@ -118,49 +120,59 @@ internal fun StatusArea(
     // Starts at the top of what it's given: home puts it at the same line as the draft.
     Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         when (today.setup) {
-            SessionSetup.Opening -> Unit
+            // The card saved for today's session shows while setup runs.
+            SessionSetup.Opening -> if (today.summary.summary != null) Summary(today.summary, now, vm)
             is SessionSetup.Failed -> SetupFailed(today.setup.retrying, vm::retrySetup)
             is SessionSetup.Ready -> {
-                val summary = today.summary
-                val label = summary.label(now)
-                val dim by animateFloatAsState(if (summary.loading) 0.35f else 1f, HexTheme.motion.fade(), label = "loading")
-                when (val card = summary.summary) {
-                    is StatusSummary.Card ->
-                        Card(
-                            card.title,
-                            card.now,
-                            card.next,
-                            card.steps.map { it.done },
-                            dim,
-                            label,
-                            vm::refreshSummary,
-                        )
-                    is StatusSummary.Empty ->
-                        Card(
-                            card.title,
-                            stringResource(R.string.home_summary_empty_now),
-                            stringResource(R.string.home_summary_empty_next),
-                            emptyList(),
-                            dim,
-                            label,
-                            vm::refreshSummary,
-                        )
-                    is StatusSummary.Working ->
-                        Card(
-                            card.title,
-                            stringResource(R.string.home_summary_working_now),
-                            stringResource(R.string.home_summary_working_next),
-                            emptyList(),
-                            dim,
-                            label,
-                            vm::refreshSummary,
-                        )
-                    is StatusSummary.Fallback -> Fallback(card.text, dim, label, vm::refreshSummary)
-                    null -> Meta(label, vm::refreshSummary) {}
-                }
+                Summary(today.summary, now, vm)
                 today.pendingInput?.let { NeedsHint(it, onClick = {}) }
             }
         }
+    }
+}
+
+/** The status card, its fallback or just ↻, with the card's age. */
+@Composable
+private fun Summary(
+    summary: SummaryState,
+    now: Long,
+    vm: HomeViewModel,
+) {
+    val label = summary.label(now)
+    val dim by animateFloatAsState(if (summary.loading) 0.35f else 1f, HexTheme.motion.fade(), label = "loading")
+    when (val card = summary.summary) {
+        is StatusSummary.Card ->
+            Card(
+                card.title,
+                card.now,
+                card.next,
+                card.steps.map { it.done },
+                dim,
+                label,
+                vm::refreshSummary,
+            )
+        is StatusSummary.Empty ->
+            Card(
+                card.title,
+                stringResource(R.string.home_summary_empty_now),
+                stringResource(R.string.home_summary_empty_next),
+                emptyList(),
+                dim,
+                label,
+                vm::refreshSummary,
+            )
+        is StatusSummary.Working ->
+            Card(
+                card.title,
+                stringResource(R.string.home_summary_working_now),
+                stringResource(R.string.home_summary_working_next),
+                emptyList(),
+                dim,
+                label,
+                vm::refreshSummary,
+            )
+        is StatusSummary.Fallback -> Fallback(card.text, dim, label, vm::refreshSummary)
+        null -> Meta(label, vm::refreshSummary) {}
     }
 }
 

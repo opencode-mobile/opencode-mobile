@@ -239,14 +239,17 @@ class TodaySession(
         }
         stream?.stop()
         val date = today()
-        when (val result = setup.open(date, directory(), model())) {
+        val directory = directory()
+        // The card saved for today's session in this project shows while setup runs.
+        summary.preload(date, directory)
+        when (val result = setup.open(date, directory, model())) {
             DailySessionResult.Failed -> own.update { it.copy(setup = SessionSetup.Failed()) }
             is DailySessionResult.Opened -> {
                 val session = result.session
                 day = date
                 sessionId = session.id
                 live = LiveSessionState(session.id, hasRun = session.busySince != null)
-                summary.open(session.id)
+                summary.open(session.id, date, directory)
                 publish(streamUp = true)
                 own.update { it.copy(setup = SessionSetup.Ready(session.id), newDayNotice = result.newDay) }
                 stream?.start()

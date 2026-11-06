@@ -18,13 +18,18 @@ fun interface SummarySource {
     suspend fun summarise(prompt: String): String
 }
 
-/** The last card of today's session, kept on the phone so it survives the app being closed. */
+/**
+ * The last card of today's session, kept on the phone so it survives the app being closed. [date] (`2026-11-06`) and
+ * [directory] say which day's session in which project it belongs to, so it can show before setup finds the session.
+ */
 @Serializable
 data class SavedSummary(
     val sessionId: String,
     val summary: StatusSummary,
     /** When the card was made, in [System.currentTimeMillis] time. */
     val updatedAt: Long,
+    val date: String = "",
+    val directory: String = "",
 )
 
 /** Where the last card is kept: one session's (today's) at a time, so saving forgets the one before. */
@@ -81,8 +86,9 @@ data class SummaryState(
  * [StatusSummary.parse]. Never two requests at once: a refresh while one runs is dropped, as the prototype's
  * `refreshCard`. A failed request, an empty reply or no reply within [TIMEOUT_MS] keeps the last card and marks it
  * [SummaryState.failed]; an empty reply while the agent is [busy] keeps it without the mark, or with no card yet shows
- * [StatusSummary.Working]. Each new card (parsed or fallback) is saved in [store] for its session, and [open] shows it at
- * once, with its age, the next time that session opens, until a refresh succeeds.
+ * [StatusSummary.Working]. Each new card (parsed or fallback) is saved in [store] for its session, with its date and
+ * project; the next launch shows it at once, with its age, until a refresh succeeds: [preload] before setup when the
+ * date and project match, [open] once setup has found the session (which drops a card saved for another).
  *
  * The caller decides when (app-plan.md: on open and reconnect, when the turn ends, on ↻; never on a timer).
  */
@@ -101,37 +107,73 @@ class SummaryRefresher(
 
     private var job: Job? = null
 
-    /** The session whose cards are saved; set by [open]. */
+    /** The session whose cards are saved, its date and project; set by [open]. */
     @Volatile
     private var sessionId: String? = null
+    private var date: LocalDate? = null
+    private var directory: String? = null
 
-    /** Today's session opened: its saved card shows at once, with its age. A card saved for another session doesn't. */
-    suspend fun open(sessionId: String) {
+    /** The session the card on screen was saved for, or null when there is none. */
+    @Volatile
+    private var shownFor: String? = null
+
+    /**
+     * The app opens, before setup has found today's session: the saved card shows at once, with its age, if it was
+     * saved for a session of [date] in [directory]. Anything else on screen goes.
+     */
+    suspend fun preload(
+        date: LocalDate,
+        directory: String,
+    ) {
         clear()
+        val saved = load() ?: return
+        if (saved.date == date.toString() && saved.directory == directory) show(saved)
+    }
+
+    /**
+     * Setup found today's session: a card already shown for it stays; one shown for a different session goes, and
+     * this session's saved card, if any, shows instead. New cards are saved for it.
+     */
+    suspend fun open(
+        sessionId: String,
+        date: LocalDate,
+        directory: String,
+    ) {
         this.sessionId = sessionId
-        val saved =
-            try {
-                store?.loadSummary()
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                null
-            }
-        if (saved != null && saved.sessionId == sessionId && this.sessionId == sessionId) {
-            mutable.update { if (it.summary == null) it.copy(summary = saved.summary, updatedAt = saved.updatedAt) else it }
+        this.date = date
+        this.directory = directory
+        if (shownFor == sessionId && mutable.value.summary != null) return
+        clear()
+        val saved = load() ?: return
+        if (saved.sessionId == sessionId && this.sessionId == sessionId) show(saved)
+    }
+
+    private suspend fun load(): SavedSummary? =
+        try {
+            store?.loadSummary()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
         }
+
+    private fun show(saved: SavedSummary) {
+        mutable.update { if (it.summary == null) it.copy(summary = saved.summary, updatedAt = saved.updatedAt) else it }
+        shownFor = saved.sessionId
     }
 
     /** No card, before a session opens or when another session takes its place. A request still running is dropped. */
     fun clear() {
         job?.cancel()
         mutable.value = SummaryState()
+        shownFor = null
     }
 
     /** A new session's card, without a request. A request still running is dropped. */
     fun showEmpty(date: LocalDate) {
         job?.cancel()
         mutable.value = SummaryState(StatusSummary.empty(date), updatedAt = clock())
+        shownFor = sessionId
     }
 
     /** Asks for a new summary, unless one is on its way. Returns whether this call started a request. */
@@ -151,6 +193,7 @@ class SummaryRefresher(
                         // a card says the agent is working); the run's end refreshes it.
                         mutable.update {
                             if (it.summary == null) {
+                                shownFor = sessionId
                                 SummaryState(StatusSummary.working(today()), updatedAt = clock())
                             } else {
                                 it.copy(loading = false, failed = false)
@@ -162,6 +205,7 @@ class SummaryRefresher(
                     val summary = StatusSummary.parse(reply)
                     val updatedAt = clock()
                     mutable.value = SummaryState(summary, updatedAt = updatedAt)
+                    shownFor = sessionId
                     save(summary, updatedAt)
                 } catch (error: CancellationException) {
                     mutable.update { it.copy(loading = false) }
@@ -179,7 +223,7 @@ class SummaryRefresher(
     ) {
         val id = sessionId ?: return
         try {
-            store?.saveSummary(SavedSummary(id, summary, updatedAt))
+            store?.saveSummary(SavedSummary(id, summary, updatedAt, date?.toString().orEmpty(), directory.orEmpty()))
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {

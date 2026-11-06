@@ -66,7 +66,12 @@ enum class TodaySessionDemo(
         val live = DemoLive(reply(), snapshot(now))
         val transport = if (this == Reconnecting) DemoTransport(up = false) else DemoTransport(up = true)
         // The stream never comes up, so the summary is never asked for: the card saved 4 minutes ago shows.
-        val saved = if (this == Reconnecting) SavedSummary(SESSION, StatusSummary.parse(REPLY), now - 240_000) else null
+        val saved =
+            if (this == Reconnecting) {
+                SavedSummary(SESSION, StatusSummary.parse(REPLY), now - 240_000, today.toString(), DIRECTORY)
+            } else {
+                null
+            }
         val session =
             TodaySession(
                 scope,
