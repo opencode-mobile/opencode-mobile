@@ -297,6 +297,8 @@ data class HomeUiState(
     val sendMode: SendMode = SendMode.AfterTurn,
     /** The notice's second line when it shows the message, such as "Sending now…". */
     val noticeDetail: String? = null,
+    /** A message of only images: the notice's second line says how many ("2 images") in place of its text. */
+    val noticeImages: Int = 0,
     /** Waiting to send rows whose Cancel (the DELETE) is running: their Cancel shows a spinner. */
     val cancelling: Set<String> = emptySet(),
     /** Whether today's session's model can see images; null until known, which counts as yes. */
@@ -428,14 +430,13 @@ class HomeViewModel(
 
     /**
      * The paperclip: opens the Attach sheet (true), or with [Draft.MAX_IMAGES] on the draft shows "4 images is the most
-     * per message" (false). Whether the model sees images is asked again meanwhile.
+     * per message" (false).
      */
     fun openAttach(): Boolean {
         if (state.value.draft.roomForImages == 0) {
             notify(HomeNotice.AttachLimit, null)
             return false
         }
-        checkImageInput()
         return true
     }
 
@@ -486,15 +487,14 @@ class HomeViewModel(
      * not waiting to send.
      */
     private fun sweepImages() {
-        viewModelScope.launch {
-            val current = state.value
-            val drafts = listOf(current.draft) + inFlight + listOfNotNull(undoable?.draft)
-            val files =
-                (drafts.flatMap { it.images } + current.queuedImages.values.flatten())
-                    .mapNotNull { it.file }
-                    .toSet()
-            images.keepOnly(files)
-        }
+        // What's kept is decided now, as things stand at the call, not when the deleting runs.
+        val current = state.value
+        val drafts = listOf(current.draft) + inFlight + listOfNotNull(undoable?.draft)
+        val files =
+            (drafts.flatMap { it.images } + current.queuedImages.values.flatten())
+                .mapNotNull { it.file }
+                .toSet()
+        viewModelScope.launch { images.keepOnly(files) }
     }
 
     /** The app came back to the foreground: checks the date, and reconnects at once. */
@@ -703,7 +703,8 @@ class HomeViewModel(
             SendPlan.Idle ->
                 viewModelScope.launch {
                     if (deliver(plan, text, withImages, draft) != null) {
-                        notify(if (dropped) HomeNotice.SentNoImages else HomeNotice.SentIdle, text)
+                        notify(if (dropped) HomeNotice.SentNoImages else HomeNotice.SentIdle, text, withImages.size)
+                        sweepImages()
                     }
                 }
             SendPlan.Queue ->
@@ -714,6 +715,8 @@ class HomeViewModel(
                     }
                     undoable = Undoable.Queued(id, draft)
                     notify(if (dropped) HomeNotice.QueuedNoImages else HomeNotice.Queued, null)
+                    // Held for Waiting to send and for Undo; anything else can go.
+                    sweepImages()
                 }
             SendPlan.Now -> {
                 val job =
@@ -723,18 +726,19 @@ class HomeViewModel(
                         // Held through a reconnect, it goes once the stream is back.
                         session?.awaitStream()
                         if (deliver(plan, text, withImages, draft) != null) {
-                            notify(if (dropped) HomeNotice.SentNoImages else HomeNotice.SentNow, text)
+                            notify(if (dropped) HomeNotice.SentNoImages else HomeNotice.SentNow, text, withImages.size)
+                            sweepImages()
                         }
                     }
                 undoable = Undoable.Held(job, draft)
-                notify(HomeNotice.SendingNow, text)
+                notify(HomeNotice.SendingNow, text, withImages.size)
             }
         }
     }
 
     /**
      * Sends [text] and [images] as [plan] says; on failure the [draft] comes back with "Couldn't send". Returns the inbox
-     * item's id. Once it's sent, images nothing else holds are deleted.
+     * item's id. The caller lets the images go ([sweepImages]) once it has kept what it needs of them.
      */
     private suspend fun deliver(
         plan: SendPlan,
@@ -756,7 +760,6 @@ class HomeViewModel(
             null
         } finally {
             inFlight -= draft
-            sweepImages()
         }
     }
 
@@ -766,7 +769,8 @@ class HomeViewModel(
     private fun notify(
         notice: HomeNotice,
         detail: String?,
-    ) = state.update { it.copy(notice = notice, noticeDetail = detail) }
+        images: Int = 0,
+    ) = state.update { it.copy(notice = notice, noticeDetail = detail?.ifBlank { null }, noticeImages = images) }
 
     /** The notice whose action just ran: its dismissal mustn't clear the notice the action put up instead. */
     private var actioned: HomeNotice? = null
@@ -878,7 +882,7 @@ class HomeViewModel(
             undoable = null
             sweepImages()
         }
-        state.update { it.copy(notice = null, noticeDetail = null) }
+        state.update { it.copy(notice = null, noticeDetail = null, noticeImages = 0) }
     }
 
     override fun onCleared() {

@@ -169,7 +169,16 @@ class SendingTest {
     /** Prepares each source when its gate (if any) opens; a source starting "bad" can't be read. */
     private class Images : ImagePreparer {
         val gates = mutableMapOf<String, CompletableDeferred<Unit>>()
-        var kept: Set<File>? = null
+
+        /** Every set [keepOnly] was given, oldest first: each sweep deletes every other prepared file. */
+        val sweeps = mutableListOf<Set<File>>()
+        val kept: Set<File>? get() = sweeps.lastOrNull()
+
+        /** Whether a sweep since the [from]th deleted [file]. */
+        fun deleted(
+            file: File,
+            from: Int,
+        ): Boolean = sweeps.drop(from).any { file !in it }
 
         override suspend fun prepare(source: String): PreparedImage {
             gates[source]?.await()
@@ -179,7 +188,7 @@ class SendingTest {
         }
 
         override suspend fun keepOnly(files: Set<File>) {
-            kept = files
+            sweeps += files
         }
     }
 
@@ -494,6 +503,10 @@ class SendingTest {
             runCurrent()
             assertEquals(listOf("" to "steer"), server.sent)
             assertEquals(listOf(listOf("Photo 1.jpg")), server.sentImages)
+            // The notice says "1 image" in place of the (empty) text.
+            assertEquals(HomeNotice.SentIdle, vm.uiState.value.notice)
+            assertNull(vm.uiState.value.noticeDetail)
+            assertEquals(1, vm.uiState.value.noticeImages)
             done(vm)
         }
 
@@ -591,8 +604,8 @@ class SendingTest {
                 vm.uiState.value.queuedImages
                     .isEmpty(),
             )
-            // Their files are kept: they're on the draft again.
-            assertEquals(before.mapNotNull { it.file }.toSet(), images.kept)
+            // Their files were never deleted: held for Waiting to send and Undo, then on the draft again.
+            assertTrue(before.mapNotNull { it.file }.none { images.deleted(it, 1) })
             done(vm)
         }
 
@@ -609,7 +622,7 @@ class SendingTest {
             runCurrent()
             assertEquals(before, vm.uiState.value.draft.images)
             assertEquals(HomeNotice.SendFailed, vm.uiState.value.notice)
-            assertEquals(setOf(File("/cache/attach/photo.jpg")), images.kept)
+            assertFalse(images.deleted(File("/cache/attach/photo.jpg"), 1))
             done(vm)
         }
 
@@ -643,7 +656,8 @@ class SendingTest {
                     .single()
                     .images,
             )
-            assertEquals(setOf(File("/cache/attach/photo.jpg")), images.kept)
+            // Kept for Waiting to send from the moment it was sent (the launch's sweep came before it existed).
+            assertFalse(images.deleted(File("/cache/attach/photo.jpg"), 1))
             stream.lines.trySend("""{"type":"session.inbox.delivered","data":{"sessionID":"ses_1","inboxID":"msg_1"}}""")
             runCurrent()
             assertTrue(

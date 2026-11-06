@@ -43,6 +43,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
@@ -283,8 +284,12 @@ fun HomeScreen(
         val attachFailed = stringResource(R.string.home_attach_failed)
         val sentNoImages = stringResource(R.string.home_sent_no_images)
         val sentNoImagesSub = stringResource(R.string.home_sent_no_images_sub, state.imageInput?.model.orEmpty())
+        // A message of only images says how many in place of its text.
+        val messageDetail =
+            quoted(state.noticeDetail)
+                ?: state.noticeImages.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.home_waiting_images, it, it) }
         val notice =
-            remember(state.notice, state.noticeDetail, micOff, sentNoImagesSub) {
+            remember(state.notice, messageDetail, micOff, sentNoImagesSub) {
                 when (state.notice) {
                     HomeNotice.ChunkDeleted ->
                         HexToastMessage(deleted, HexToastTone.Undo, actionLabel = undo, actionIcon = HexIcons.undo, durationMs = 3_500)
@@ -301,23 +306,23 @@ fun HomeScreen(
                             actionIcon = HexIcons.undo,
                             durationMs = 3_200,
                         )
-                    HomeNotice.SentIdle -> HexToastMessage(sentIdle, HexToastTone.Steer, quoted(state.noticeDetail), durationMs = 2_600)
+                    HomeNotice.SentIdle -> HexToastMessage(sentIdle, HexToastTone.Steer, messageDetail, durationMs = 2_600)
                     HomeNotice.SendingNow ->
                         HexToastMessage(
                             sendingNow,
                             HexToastTone.Steer,
-                            quoted(state.noticeDetail),
+                            messageDetail,
                             actionLabel = undo,
                             actionIcon = HexIcons.undo,
                             durationMs = Sending.HOLD_MS,
                         )
-                    HomeNotice.SentNow -> HexToastMessage(sentNow, HexToastTone.Steer, quoted(state.noticeDetail), durationMs = 2_600)
+                    HomeNotice.SentNow -> HexToastMessage(sentNow, HexToastTone.Steer, messageDetail, durationMs = 2_600)
                     HomeNotice.Unsent -> HexToastMessage(unsent, HexToastTone.Undo, unsentSub, durationMs = 2_200)
                     HomeNotice.TakenBack -> HexToastMessage(takenBack, HexToastTone.Undo, takenBackSub, durationMs = 2_200)
                     HomeNotice.SendFailed -> HexToastMessage(sendFailed, HexToastTone.Stop, sendFailedSub, durationMs = 3_200)
                     HomeNotice.AttachLimit -> HexToastMessage(attachLimit, HexToastTone.Info)
                     HomeNotice.AttachFailed -> HexToastMessage(attachFailed, HexToastTone.Stop)
-                    HomeNotice.SentNoImages -> HexToastMessage(sentNoImages, HexToastTone.Info, sentNoImagesSub, durationMs = 3_200)
+                    HomeNotice.SentNoImages -> HexToastMessage(sentNoImages, HexToastTone.Info, sentNoImagesSub, durationMs = 2_600)
                     HomeNotice.QueuedNoImages ->
                         HexToastMessage(
                             sentNoImages,
@@ -363,7 +368,7 @@ fun HomeScreen(
 }
 
 /** A message's text as a notice's second line: “in quotes”. */
-private fun quoted(text: String?): String? = text?.let { "“$it”" }
+private fun quoted(text: String?): String? = text?.takeIf { it.isNotBlank() }?.let { "“$it”" }
 
 /**
  * Waiting to send (app-plan.md, Sending): the queued messages, oldest first, each with Cancel, which shows a spinner
@@ -802,7 +807,14 @@ private fun BoxScope.AttachSheet(
         trailing = HexSheetAction(stringResource(R.string.common_close), onClose),
     ) {
         HexRow(stringResource(R.string.home_attach_photos), icon = HexIcons.img, onClick = onPhotos)
-        HexRow(stringResource(R.string.home_attach_camera), icon = HexIcons.scan, onClick = onCamera)
+        // Dimmed, and doing nothing, on a device without a camera.
+        val camera = LocalContext.current.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
+        HexRow(
+            stringResource(R.string.home_attach_camera),
+            icon = HexIcons.scan,
+            onClick = if (camera) onCamera else null,
+            modifier = Modifier.alpha(if (camera) 1f else 0.35f),
+        )
     }
 }
 
