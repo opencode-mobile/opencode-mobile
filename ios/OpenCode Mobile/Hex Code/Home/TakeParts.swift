@@ -8,7 +8,7 @@ nonisolated struct TakePart: Sendable, Equatable {
     /// When the cut was found (system uptime), and how long the speech before it had ended by then.
     var foundAt: TimeInterval = 0
     var sinceSpeech: TimeInterval = 0
-    /// Cut at a pause; false for a part over 12 s cut at a dip, or the audio after the last cut.
+    /// Cut at a pause; false for a part cut past 12 s (at a dip, or its quietest block by 15 s), or the audio after the last cut.
     var atPause = false
 }
 
@@ -25,13 +25,17 @@ nonisolated struct TakeSplit: Sendable, Equatable {
 /// - A pause (FluidAudio's speech end, four silent 256 ms blocks) cuts in its middle: halfway between the end of
 ///   speech and the end of the block that completed the pause. With 4096-sample blocks that is the start of the
 ///   pause's third block. Parts touch; nothing is dropped.
-/// - A part longer than 12 s ends at the first block below 0.9, cut in the middle of that block.
+/// - A part longer than 12 s ends at the first block below 0.9, cut in the middle of that block. If none comes by
+///   15 s (run-on speech, where the VAD can stay at 1.00), it ends in the middle of the quietest block between 12 and
+///   15 s (the earliest, on a tie).
 /// - A cut is only made when speech was heard since the last one (some block at or above 0.5 overlaps the part);
 ///   otherwise the audio stays with the next part.
 nonisolated struct PauseCutter: Equatable, Sendable {
     static let sampleRate = 16_000
     /// A part longer than this ends at the next dip.
     static let maxPart = 12 * sampleRate
+    /// A part that reaches this without a dip ends at its quietest block after `maxPart`.
+    static let hardMaxPart = 15 * sampleRate
     /// Below this, a block of a part over `maxPart` is a dip to cut at.
     static let dip: Float = 0.9
     /// From this, a block counts as speech heard (Silero's usual threshold; lower than the VAD's 0.85 for starting
@@ -42,24 +46,26 @@ nonisolated struct PauseCutter: Equatable, Sendable {
     private(set) var lastCut = 0
     /// Samples seen so far.
     private(set) var position = 0
-    /// The blocks since the last cut, and whether each was speech.
-    private var blocks: [(range: Range<Int>, spoken: Bool)] = []
+    /// The blocks since the last cut, with their probability.
+    private var blocks: [(range: Range<Int>, probability: Float)] = []
 
     static func == (lhs: PauseCutter, rhs: PauseCutter) -> Bool {
         lhs.lastCut == rhs.lastCut && lhs.position == rhs.position && lhs.blocks.map(\.range) == rhs.blocks.map(\.range)
-            && lhs.blocks.map(\.spoken) == rhs.blocks.map(\.spoken)
+            && lhs.blocks.map(\.probability) == rhs.blocks.map(\.probability)
     }
 
     /// The next block. Returns the part it ends, if it ends one.
     mutating func add(count: Int, probability: Float, pauseStart: Int?) -> Range<Int>? {
         let block = position ..< position + count
         position += count
-        blocks.append((block, probability >= Self.speech))
+        blocks.append((block, probability))
         let cut: Int
         if let pauseStart {
             cut = (pauseStart + position) / 2
         } else if position - lastCut > Self.maxPart, probability < Self.dip {
             cut = block.lowerBound + count / 2
+        } else if position - lastCut >= Self.hardMaxPart, let quietest = quietestLateBlock {
+            cut = quietest
         } else {
             return nil
         }
@@ -78,7 +84,19 @@ nonisolated struct PauseCutter: Equatable, Sendable {
     }
 
     private func heard(in range: Range<Int>) -> Bool {
-        !range.isEmpty && blocks.contains { $0.spoken && $0.range.overlaps(range) }
+        !range.isEmpty && blocks.contains { $0.probability >= Self.speech && $0.range.overlaps(range) }
+    }
+
+    /// The middle of the quietest block whose middle lies between 12 and 15 s into the part (the earliest on a tie).
+    private var quietestLateBlock: Int? {
+        let late = (lastCut + Self.maxPart) ... (lastCut + Self.hardMaxPart)
+        var best: (middle: Int, probability: Float)?
+        for block in blocks {
+            let middle = (block.range.lowerBound + block.range.upperBound) / 2
+            guard late.contains(middle) else { continue }
+            if best == nil || block.probability < best!.probability { best = (middle, block.probability) }
+        }
+        return best?.middle
     }
 }
 

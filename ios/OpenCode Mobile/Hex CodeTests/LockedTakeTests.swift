@@ -57,6 +57,35 @@ struct PauseCutterTests {
         #expect(feed(&cutter, 40, 0.6).isEmpty)
     }
 
+    @Test func runOnSpeechWithNoDipEndsAtTheEarliestQuietestBlockBetween12And15s() {
+        var cutter = PauseCutter()
+        // The VAD stays sure of speech: 1.00 on every block. Nothing cuts until the part reaches 15 s.
+        #expect(feed(&cutter, 58, 1.0).isEmpty)
+        #expect(cutter.position < PauseCutter.hardMaxPart)
+        // The block that reaches 15 s cuts, back at the first block whose middle is past 12 s (all tie at 1.00).
+        let part = cutter.add(count: Self.block, probability: 1.0, pauseStart: nil)
+        #expect(part == 0 ..< 47 * Self.block + Self.block / 2)
+        #expect(Double(part!.upperBound) / 16_000 > 12 && Double(part!.upperBound) / 16_000 < 12.3)
+        // The next part counts from that cut: another 15 s of run-on speech before the next one.
+        let next = cutter.lastCut
+        var more: [Range<Int>] = []
+        while more.isEmpty { more += feed(&cutter, 1, 1.0) }
+        #expect(more.first?.lowerBound == next)
+        #expect(more.first!.count >= PauseCutter.maxPart && more.first!.count <= PauseCutter.hardMaxPart)
+    }
+
+    @Test func withoutADipThePartEndsAtItsQuietestBlockBetween12And15s() {
+        var cutter = PauseCutter()
+        _ = feed(&cutter, 50, 1.0)
+        // Over 12 s but never below 0.9: no dip.
+        #expect(cutter.add(count: Self.block, probability: 0.95, pauseStart: nil) == nil)
+        _ = feed(&cutter, 3, 1.0)
+        #expect(cutter.add(count: Self.block, probability: 0.92, pauseStart: nil) == nil)
+        let quietest = cutter.position - Self.block / 2
+        // The block that reaches 15 s cuts in the middle of the 0.92 block.
+        #expect(feed(&cutter, 4, 0.99) == [0 ..< quietest])
+    }
+
     @Test func aPauseWithNoSpeechSinceTheLastCutDoesNotCut() {
         var cutter = PauseCutter()
         _ = feed(&cutter, 6, Self.speech)

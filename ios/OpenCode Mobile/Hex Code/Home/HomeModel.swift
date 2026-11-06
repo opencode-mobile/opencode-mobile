@@ -344,7 +344,7 @@ final class HomeModel {
         taken.add(part)
         if locked { taken.lock() }
         parts[id] = taken
-        HexLog.dictation.info("parts: part \(taken.parts.count) cut at \(Double(part.range.upperBound) / 16_000, format: .fixed(precision: 2)) s, \(Double(part.range.count) / 16_000, format: .fixed(precision: 2)) s long, \(part.atPause ? "\(Int(part.sinceSpeech * 1000)) ms after the speech ended" : "at a dip past 12 s", privacy: .public)")
+        HexLog.dictation.info("parts: part \(taken.parts.count) cut at \(Double(part.range.upperBound) / 16_000, format: .fixed(precision: 2)) s, \(Double(part.range.count) / 16_000, format: .fixed(precision: 2)) s long, \(part.atPause ? "\(Int(part.sinceSpeech * 1000)) ms after the speech ended" : "past 12 s without a pause", privacy: .public)")
         if locked { enqueuePart(id) }
     }
 
@@ -441,7 +441,7 @@ final class HomeModel {
             draft.updatePartial(id, text: parts[id]?.text ?? "")
             let found = part.foundAt == 0 ? " · after release"
                 : part.atPause ? " · \(hexMilliseconds(from: part.foundAt, to: done)) ms after the pause was found, \(hexMilliseconds(from: part.foundAt - part.sinceSpeech, to: done)) ms after the speech ended"
-                : " · \(hexMilliseconds(from: part.foundAt, to: done)) ms after the cut at a dip"
+                : " · \(hexMilliseconds(from: part.foundAt, to: done)) ms after the cut past 12 s"
             HexLog.dictation.info("parts: part \(index + 1) text in \(hexMilliseconds(from: begun, to: done)) ms\(found, privacy: .public)")
             #if DEBUG
             print("HEXPROBE part \(index + 1): \(String(format: "%.2f", Double(part.range.count) / 16_000)) s transcribed in \(hexMilliseconds(from: begun, to: done)) ms\(found)")
