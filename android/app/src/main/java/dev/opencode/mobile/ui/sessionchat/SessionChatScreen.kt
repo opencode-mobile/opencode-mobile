@@ -1482,10 +1482,7 @@ private fun SessionChatScreenBody(
                                         logChatAction(ProductAnalytics.Action.COMPOSER_ATTACH)
                                         when {
                                             attachmentSources.showsSourceSheet -> showAttachmentSource = true
-                                            attachmentSources.photos ->
-                                                photoPicker.launch(
-                                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                                )
+                                            attachmentSources.photos -> photoPicker.launch(attachmentSources.galleryRequest())
                                             attachmentSources.files -> documentPicker.launch(arrayOf("*/*"))
                                         }
                                     }
@@ -1725,12 +1722,19 @@ private fun SessionChatScreenBody(
         ) {
             if (attachmentSources.photos) {
                 OpenCodeBottomSheetEntry(
-                    title = stringResource(R.string.session_chat_attachment_source_photos),
+                    title =
+                        stringResource(
+                            if (attachmentSources.acceptsAnyType) {
+                                R.string.session_chat_attachment_source_media
+                            } else {
+                                R.string.session_chat_attachment_source_photos
+                            },
+                        ),
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
                     onClick = {
                         logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PICK_PHOTOS)
                         showAttachmentSource = false
-                        photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        photoPicker.launch(attachmentSources.galleryRequest())
                     },
                 )
             }
@@ -2211,3 +2215,13 @@ internal fun sessionChatActivityItems(
 
 /** Test tag of Session Chat's archived banner. */
 internal const val SessionChatArchivedBannerTag = "sessionChatArchivedBanner"
+
+/** The gallery adds videos once streamed uploads take any file. */
+private fun ComposerAttachmentSources.galleryRequest(): PickVisualMediaRequest =
+    PickVisualMediaRequest(
+        if (acceptsAnyType) {
+            ActivityResultContracts.PickVisualMedia.ImageAndVideo
+        } else {
+            ActivityResultContracts.PickVisualMedia.ImageOnly
+        },
+    )

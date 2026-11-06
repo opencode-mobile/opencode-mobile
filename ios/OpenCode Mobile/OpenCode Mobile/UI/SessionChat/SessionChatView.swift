@@ -798,7 +798,9 @@ struct SessionChatView: View {
                 let sources = composerAttachmentSources
                 if sources.photos {
                     OpenCodeBottomSheetEntry(
-                        title: "session_chat.attachment_source.photos",
+                        title: sources.acceptsAnyType
+                            ? "session_chat.attachment_source.media"
+                            : "session_chat.attachment_source.photos",
                         startDecorator: .icon(.description),
                         action: {
                             logAttachmentSourceAction(ProductAnalytics.Action.attachPickPhotos)
@@ -855,11 +857,13 @@ struct SessionChatView: View {
             .photosPicker(
                 isPresented: $showPhotosPicker,
                 selection: $selectedPhotoItems,
-                matching: .images
+                matching: composerAttachmentSources.acceptsAnyType ? .any(of: [.images, .videos]) : .images
             )
             .fileImporter(
                 isPresented: $showFilesPicker,
-                allowedContentTypes: [.image, .pdf, .text, .sourceCode],
+                allowedContentTypes: composerAttachmentSources.acceptsAnyType
+                    ? [.item]
+                    : [.image, .pdf, .text, .sourceCode],
                 allowsMultipleSelection: true
             ) { result in
                 guard case let .success(urls) = result else { return }
@@ -1400,6 +1404,10 @@ struct SessionChatView: View {
     private func importPhotos(_ items: [PhotosPickerItem]) async {
         defer { selectedPhotoItems = [] }
         for (index, item) in items.enumerated() {
+            if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) {
+                await importVideo(item)
+                continue
+            }
             guard let data = try? await item.loadTransferable(type: Data.self) else {
                 viewModel.reportAttachmentReadFailure()
                 continue
@@ -1412,6 +1420,16 @@ struct SessionChatView: View {
                 declaredMime: type?.preferredMIMEType
             )
         }
+    }
+
+    /// Videos come in as files, so a long clip is copied rather than held in memory.
+    private func importVideo(_ item: PhotosPickerItem) async {
+        guard let video = try? await item.loadTransferable(type: PickedVideoFile.self) else {
+            viewModel.reportAttachmentReadFailure()
+            return
+        }
+        await viewModel.addAttachmentFiles([video.url])
+        try? FileManager.default.removeItem(at: video.url.deletingLastPathComponent())
     }
 
     // MARK: Move to worktree
@@ -2424,5 +2442,21 @@ private struct SessionChatPromptChordPublisher: ViewModifier {
 
     func body(content: Content) -> some View {
         content.openCodeKeyboardShortcut(shortcut, title: title, action: action)
+    }
+}
+
+/// A video from the photo library, copied into its own temporary directory under its library name.
+private struct PickedVideoFile: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .movie) { received in
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let copy = directory.appendingPathComponent(received.file.lastPathComponent)
+            try FileManager.default.copyItem(at: received.file, to: copy)
+            return PickedVideoFile(url: copy)
+        }
     }
 }

@@ -190,7 +190,8 @@ struct SessionChatComposerState: Equatable {
         ComposerAttachmentSources(
             photos: canAttachPhotos,
             files: canAttachFiles,
-            logFile: developerToolsUnlocked
+            logFile: developerToolsUnlocked,
+            acceptsAnyType: streamedUploadAvailable
         )
     }
 }
@@ -199,6 +200,8 @@ struct ComposerAttachmentSources: Equatable {
     let photos: Bool
     let files: Bool
     let logFile: Bool
+    /// Streamed uploads take any file, so the gallery offers videos too and Files takes every type.
+    var acceptsAnyType = false
 
     var isAttachEnabled: Bool { photos || files || logFile }
     var showsSourceSheet: Bool { logFile || (photos && files) }

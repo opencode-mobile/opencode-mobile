@@ -35,4 +35,12 @@ import Testing
         #expect(sources.photos)
         #expect(sources.logFile)
     }
+
+    @Test func streamedUploads_acceptAnyType() {
+        var composer = SessionChatComposerState(text: "", modelOptions: [], selectedMode: "build")
+        #expect(!composer.attachmentSources(developerToolsUnlocked: false).acceptsAnyType)
+
+        composer.streamedUploadAvailable = true
+        #expect(composer.attachmentSources(developerToolsUnlocked: false).acceptsAnyType)
+    }
 }
