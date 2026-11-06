@@ -157,19 +157,37 @@ struct DraftView: View {
     private var draft: DictationDraft { home.draft }
 
     var body: some View {
+        Group {
+            if DraftLayout.of(chunkCount: draft.chunks.count, fitsAtSmallest: true) == .rows {
+                layout { ChunkListView(home: home) }
+            } else {
+                // Running text, stepping down in size until the draft (label, text and actions),
+                // as drawn, fits between its line and the dock; then rows, or a scrolling chunk.
+                ViewThatFits(in: .vertical) {
+                    ForEach(DraftSize.candidates(forCharacters: draft.text.count), id: \.self) { size in
+                        layout { DraftText(home: home, style: size.style) }
+                    }
+                    switch DraftLayout.whenTooLong(chunkCount: draft.chunks.count) {
+                    case .rows:
+                        layout { ChunkListView(home: home) }
+                    default:
+                        layout { ScrollingDraftText(home: home) }
+                    }
+                }
+            }
+        }
+        .animation(HexMotion.ease(HexMotion.fade), value: draft)
+    }
+
+    private func layout(@ViewBuilder _ content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             label
                 .frame(height: HomeLabel.height)
-            if draft.isLong {
-                ChunkListView(home: home)
-            } else {
-                DraftText(home: home)
-            }
+            content()
             actions
                 .opacity(home.isRecording ? 0 : 1)
                 .allowsHitTesting(!home.isRecording)
         }
-        .animation(HexMotion.ease(HexMotion.fade), value: draft)
     }
 
     @ViewBuilder
@@ -305,6 +323,7 @@ struct DraftView: View {
 /// Short drafts read as running text; each chunk is a tappable span.
 struct DraftText: View {
     let home: HomeModel
+    var style: HexTextStyle = .draft
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -312,8 +331,10 @@ struct DraftText: View {
                 items: home.draft.chunks.map { Self.item($0) },
                 selectedID: home.draft.selectedID,
                 interactive: !home.isRecording,
+                style: style,
                 onTap: { home.toggleChunk($0) }
             )
+            .fixedSize(horizontal: false, vertical: true)
             if home.isRecording, home.draft.chunks.count == 1, !home.draft.isRerecording {
                 Text(LocalizedStringResource("draft.first_take_hint", defaultValue: "Text appears when you pause"))
                     .hexFont(.row)
@@ -321,11 +342,11 @@ struct DraftText: View {
             }
         }
         // Three lines of room, so the actions don't jump as text arrives.
-        .frame(maxWidth: .infinity, minHeight: DraftText.minHeight, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: Self.minHeight, alignment: .topLeading)
     }
 
     /// Three lines of the draft type, as in the prototype.
-    private static var minHeight: CGFloat {
+    static var minHeight: CGFloat {
         let style = HexTextStyle.draft
         return style.size * (style.lineHeight ?? 1.3) * 3 + 8
     }
@@ -341,6 +362,32 @@ struct DraftText: View {
             HexChunkItem(id: chunk.id, text: text)
         case let .failed(message):
             HexChunkItem(id: chunk.id, text: message, kind: .failed)
+        }
+    }
+}
+
+/// A single chunk too long for the smallest size: its text scrolls inside the draft area, kept
+/// at the newest words.
+struct ScrollingDraftText: View {
+    let home: HomeModel
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            DraftText(home: home, style: DraftSize.fit.style)
+        }
+        .defaultScrollAnchor(.bottom)
+        .defaultScrollAnchor(.bottom, for: .sizeChanges)
+        .frame(minHeight: DraftText.minHeight)
+    }
+}
+
+extension DraftSize {
+    var style: HexTextStyle {
+        switch self {
+        case .regular: .draft
+        case .medium: .nowMedium
+        case .small: .nowSmall
+        case .fit: .nowFit
         }
     }
 }
@@ -441,7 +488,10 @@ struct HangingLayout: Layout {
             return
         }
         for subview in subviews {
-            let height = min(subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height, bounds.height)
+            // Measured against the room under its line, so a draft that steps down in size to fit
+            // there stays on the line; one that can't moves up.
+            let room = bounds.height * (1 - fraction)
+            let height = min(subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: room)).height, bounds.height)
             let top = min(bounds.height * fraction, max(0, bounds.height - height))
             subview.place(
                 at: CGPoint(x: bounds.minX, y: bounds.minY + top),

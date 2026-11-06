@@ -535,3 +535,34 @@ struct WaitingTakeTests {
         #expect(home.draft.isEmpty)
     }
 }
+
+/// Long drafts stay running text as long as they can (app plan, "Long drafts").
+struct DraftLayoutTests {
+    @Test func moreThanThreeChunksAreAlwaysRows() {
+        #expect(DraftLayout.of(chunkCount: 4, fitsAtSmallest: true) == .rows)
+        #expect(DraftLayout.of(chunkCount: 9, fitsAtSmallest: false) == .rows)
+    }
+
+    @Test func upToThreeChunksStayTextWhileTheyFit() {
+        for count in 1 ... 3 {
+            #expect(DraftLayout.of(chunkCount: count, fitsAtSmallest: true) == .text)
+        }
+    }
+
+    @Test func twoOrMoreThatDontFitBecomeRows() {
+        #expect(DraftLayout.of(chunkCount: 2, fitsAtSmallest: false) == .rows)
+        #expect(DraftLayout.of(chunkCount: 3, fitsAtSmallest: false) == .rows)
+    }
+
+    @Test func aSingleChunkNeverBecomesAList() {
+        #expect(DraftLayout.of(chunkCount: 1, fitsAtSmallest: false) == .scrolling)
+        #expect(DraftLayout.whenTooLong(chunkCount: 1) == .scrolling)
+        #expect(DraftLayout.whenTooLong(chunkCount: 2) == .rows)
+    }
+
+    @Test func theTypeStartsAt24UpTo150CharactersThenStepsDown() {
+        #expect(DraftSize.candidates(forCharacters: 0) == [.regular, .medium, .small, .fit])
+        #expect(DraftSize.candidates(forCharacters: 150) == [.regular, .medium, .small, .fit])
+        #expect(DraftSize.candidates(forCharacters: 151) == [.medium, .small, .fit])
+    }
+}

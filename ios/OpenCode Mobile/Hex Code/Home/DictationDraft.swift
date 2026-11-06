@@ -34,8 +34,9 @@ struct DraftChunk: Identifiable, Equatable, Sendable {
 /// The dictation draft on the home screen: takes become chunks; a chunk can be selected to
 /// delete or re-record it; Clear empties it. Nothing here sends anything.
 struct DictationDraft: Equatable, Sendable {
-    /// More chunks than this, or more text than `longCharacters`, shows one row per chunk.
+    /// More chunks than this always shows one row per chunk (app plan, "Long drafts").
     static let longChunks = 3
+    /// More text than this adds the word count to the draft's label.
     static let longCharacters = 220
     /// Rows the long list shows at most.
     static let maxRows = 8
@@ -61,6 +62,7 @@ struct DictationDraft: Equatable, Sendable {
     var text: String { chunks.compactMap(\.text).joined(separator: " ") }
     var wordCount: Int { text.split(whereSeparator: \.isWhitespace).count }
 
+    /// Long enough for the word count in the label. Rows are `DraftLayout`'s call.
     var isLong: Bool {
         chunks.count > Self.longChunks || chunks.compactMap(\.text).joined(separator: " ").count > Self.longCharacters
     }
@@ -242,5 +244,45 @@ enum DraftStatusLine: Equatable, Sendable {
         if speech == .failed, draft.hasFailed { return .speechFailed }
         if draft.isTranscribing { return .transcribing }
         return .summary
+    }
+}
+
+/// The draft's type as it grows (app plan, "Long drafts"): `draft` (24) up to 150 characters,
+/// then 21, 19 and 17 (`nowMedium`, `nowSmall`, `nowFit`, the draft's medium weight), each step
+/// chosen by measuring the draft as drawn.
+enum DraftSize: Int, CaseIterable, Comparable, Sendable {
+    case regular
+    case medium
+    case small
+    case fit
+
+    static let regularCharacters = 150
+
+    static func < (lhs: DraftSize, rhs: DraftSize) -> Bool { lhs.rawValue < rhs.rawValue }
+
+    /// The sizes to try, largest first.
+    static func candidates(forCharacters count: Int) -> [DraftSize] {
+        let start: DraftSize = count <= regularCharacters ? .regular : .medium
+        return allCases.filter { $0 >= start }
+    }
+}
+
+/// How the draft shows (app plan, "Long drafts"): running text as long as it can, one row per
+/// chunk only with more than 3 chunks, or with 2 or more whose text no longer fits at the smallest
+/// size. A single chunk never becomes a list: it scrolls, kept at the newest words.
+enum DraftLayout: Equatable, Sendable {
+    case text
+    case rows
+    case scrolling
+
+    /// What shows when the text doesn't fit at the smallest size (or before measuring, with
+    /// more than 3 chunks).
+    static func whenTooLong(chunkCount: Int) -> DraftLayout {
+        chunkCount >= 2 ? .rows : .scrolling
+    }
+
+    static func of(chunkCount: Int, fitsAtSmallest: Bool) -> DraftLayout {
+        if chunkCount > DictationDraft.longChunks { return .rows }
+        return fitsAtSmallest ? .text : whenTooLong(chunkCount: chunkCount)
     }
 }
