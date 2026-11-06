@@ -55,7 +55,6 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
-import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.security.AppLockAvailability
@@ -161,6 +160,7 @@ import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.archived.ArchivedSessionsScreen
 import dev.opencode.mobile.ui.settings.AppearanceSettingsScreen
+import dev.opencode.mobile.ui.settings.DeveloperToolsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
 import dev.opencode.mobile.ui.settings.FeatureFlagsRoute
@@ -182,6 +182,13 @@ import dev.opencode.mobile.ui.worktrees.WorktreesScreen
 internal fun <T> MutableList<T>.popRouteUnlessRoot() {
     if (size > 1) {
         removeAt(lastIndex)
+    }
+}
+
+/** Pushes [route] unless it is already on top, so a double tap does not stack it twice. */
+private fun <T> MutableList<T>.addRouteUnlessTop(route: T) {
+    if (lastOrNull() != route) {
+        add(route)
     }
 }
 
@@ -296,17 +303,6 @@ fun MainNavigation() {
                         },
                     )
                 }
-                SettingsDetail.ComponentGallery ->
-                    ComponentGalleryScreen(
-                        onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) },
-                        onNavigateBack = onNavigateBack,
-                        detailControl = detailControl,
-                    )
-                SettingsDetail.FeatureFlags ->
-                    FeatureFlagsRoute(
-                        onNavigateBack = onNavigateBack,
-                        detailControl = detailControl,
-                    )
                 SettingsDetail.DiagnosticLogs -> {
                     val diagnosticLogsViewModel: DiagnosticLogsViewModel = hiltViewModel()
                     val diagnosticLogsState by diagnosticLogsViewModel.state.collectAsStateWithLifecycle()
@@ -328,6 +324,18 @@ fun MainNavigation() {
                         onExportWindowChange = diagnosticLogsViewModel::setExportWindow,
                     )
                 }
+                // Each tool opens as a full-screen route, also on wide windows.
+                SettingsDetail.DeveloperTools ->
+                    DeveloperToolsScreen(
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                        onComponentGalleryClick = { backStack.addRouteUnlessTop(ComponentGalleryHome) },
+                        onSessionChatPlaygroundClick = { backStack.addRouteUnlessTop(SessionChatPlaygroundHome) },
+                        onFeatureFlagsClick = { backStack.addRouteUnlessTop(FeatureFlagsHome) },
+                        // Null in release builds.
+                        onHighlightingLabClick =
+                            HighlightingLabSeam.homeRoute?.let { route -> { backStack.addRouteUnlessTop(route) } },
+                    )
             }
         }
     var themeMode by rememberSaveable { mutableStateOf(ComponentGalleryThemeMode.System) }
@@ -488,8 +496,7 @@ fun MainNavigation() {
                                             val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
                                             val useSplitLayout = currentOpenCodeUsesSplitLayout()
                                             var settingsDetail by rememberSaveable { mutableStateOf(SettingsDetail.Servers) }
-                                            val visibleSettingsDetail =
-                                                settingsDetail.resolved(DeveloperToolsPreferences.unlocked)
+                                            val visibleSettingsDetail = settingsDetail
                                             // Last layout this entry rendered, so only a split -> compact
                                             // transition (not first composition) hands off the detail.
                                             var settingsRenderedSplit by rememberSaveable { mutableStateOf(useSplitLayout) }
@@ -521,20 +528,8 @@ fun MainNavigation() {
                                             val settings: @Composable () -> Unit = {
                                                 SettingsScreen(
                                                     onSendFeedbackClick = feedbackSheet::open,
-                                                    onComponentGalleryClick = {
-                                                        openSettingsDetail(SettingsDetail.ComponentGallery)
-                                                    },
-                                                    onFeatureFlagsClick = {
-                                                        openSettingsDetail(SettingsDetail.FeatureFlags)
-                                                    },
-                                                    // A full-screen route, also on wide windows; null in release builds.
-                                                    onHighlightingLabClick =
-                                                        HighlightingLabSeam.homeRoute?.let { route -> { backStack.add(route) } },
-                                                    // A full-screen route, also on wide windows.
-                                                    onSessionChatPlaygroundClick = {
-                                                        if (backStack.lastOrNull() != SessionChatPlaygroundHome) {
-                                                            backStack.add(SessionChatPlaygroundHome)
-                                                        }
+                                                    onDeveloperToolsClick = {
+                                                        openSettingsDetail(SettingsDetail.DeveloperTools)
                                                     },
                                                     onDiagnosticLogsClick = {
                                                         openSettingsDetail(SettingsDetail.DiagnosticLogs)
@@ -691,11 +686,16 @@ fun MainNavigation() {
                                             )
                                         }
                                     }
-                                    entry<FeatureFlagsHome> {
+                                    entry<DeveloperToolsHome> {
                                         RouteSurface {
-                                            settingsDetailContent(SettingsDetail.FeatureFlags, null) {
+                                            settingsDetailContent(SettingsDetail.DeveloperTools, null) {
                                                 backStack.popRouteUnlessRoot()
                                             }
+                                        }
+                                    }
+                                    entry<FeatureFlagsHome> {
+                                        RouteSurface {
+                                            FeatureFlagsRoute(onNavigateBack = { backStack.popRouteUnlessRoot() })
                                         }
                                     }
                                     entry<DiagnosticLogsHome> {
@@ -712,9 +712,10 @@ fun MainNavigation() {
                                     }
                                     entry<ComponentGalleryHome> {
                                         RouteSurface {
-                                            settingsDetailContent(SettingsDetail.ComponentGallery, null) {
-                                                backStack.popRouteUnlessRoot()
-                                            }
+                                            ComponentGalleryScreen(
+                                                onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
+                                            )
                                         }
                                     }
                                     entry<ComponentGalleryDetail> { key ->
@@ -950,9 +951,8 @@ private val SettingsDetail.route: NavKey
         when (this) {
             SettingsDetail.Servers -> ServersHome
             SettingsDetail.Appearance -> AppearanceHome
-            SettingsDetail.ComponentGallery -> ComponentGalleryHome
-            SettingsDetail.FeatureFlags -> FeatureFlagsHome
             SettingsDetail.DiagnosticLogs -> DiagnosticLogsHome
+            SettingsDetail.DeveloperTools -> DeveloperToolsHome
         }
 
 /**

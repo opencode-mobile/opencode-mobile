@@ -21,6 +21,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object DiagnosticLogsHome : NavKey
 
+@Serializable data object DeveloperToolsHome : NavKey
+
 @Serializable data object FeatureFlagsHome : NavKey
 
 @Serializable data object ComponentGalleryHome : NavKey

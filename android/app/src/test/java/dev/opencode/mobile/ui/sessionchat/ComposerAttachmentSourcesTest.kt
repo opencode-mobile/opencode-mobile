@@ -7,7 +7,7 @@ import org.junit.Test
 
 class ComposerAttachmentSourcesTest {
     @Test
-    fun locked_photosAndFiles_showsSheetWithoutLogFile() {
+    fun noLogFile_photosAndFiles_showsSheet() {
         val sources = ComposerAttachmentSources(photos = true, files = true, logFile = false)
 
         assertTrue(sources.isAttachEnabled)
@@ -16,7 +16,7 @@ class ComposerAttachmentSourcesTest {
     }
 
     @Test
-    fun locked_photosOnly_skipsSheet() {
+    fun noLogFile_photosOnly_skipsSheet() {
         val sources = ComposerAttachmentSources(photos = true, files = false, logFile = false)
 
         assertTrue(sources.isAttachEnabled)
@@ -24,7 +24,7 @@ class ComposerAttachmentSourcesTest {
     }
 
     @Test
-    fun locked_nothing_disablesAttach() {
+    fun noLogFile_nothing_disablesAttach() {
         val sources = ComposerAttachmentSources(photos = false, files = false, logFile = false)
 
         assertFalse(sources.isAttachEnabled)
@@ -32,7 +32,7 @@ class ComposerAttachmentSourcesTest {
     }
 
     @Test
-    fun unlocked_textOnly_enablesAttachAndShowsLogFile() {
+    fun logFile_textOnly_enablesAttachAndShowsLogFile() {
         val sources = ComposerAttachmentSources(photos = false, files = false, logFile = true)
 
         assertTrue(sources.isAttachEnabled)
@@ -41,7 +41,7 @@ class ComposerAttachmentSourcesTest {
     }
 
     @Test
-    fun unlocked_photosOnly_showsSheetSoLogFileIsReachable() {
+    fun logFile_photosOnly_showsSheetSoLogFileIsReachable() {
         val sources = ComposerAttachmentSources(photos = true, files = false, logFile = true)
 
         assertTrue(sources.isAttachEnabled)
@@ -51,12 +51,16 @@ class ComposerAttachmentSourcesTest {
     }
 
     @Test
+    fun composer_alwaysOffersLogFile() {
+        val sources = SessionChatComposerState().attachmentSources
+
+        assertTrue(sources.logFile)
+        assertTrue(sources.isAttachEnabled)
+    }
+
+    @Test
     fun streamedUploads_acceptAnyType() {
-        assertFalse(SessionChatComposerState().attachmentSources(developerToolsUnlocked = false).acceptsAnyType)
-        assertTrue(
-            SessionChatComposerState(attachmentUploadAvailable = true)
-                .attachmentSources(developerToolsUnlocked = false)
-                .acceptsAnyType,
-        )
+        assertFalse(SessionChatComposerState().attachmentSources.acceptsAnyType)
+        assertTrue(SessionChatComposerState(attachmentUploadAvailable = true).attachmentSources.acceptsAnyType)
     }
 }

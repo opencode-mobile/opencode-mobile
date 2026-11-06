@@ -73,7 +73,6 @@ import dev.opencode.mobile.domain.message.AttachmentDropSummary
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.session.SideQuestion
@@ -295,7 +294,7 @@ private fun SessionChatScreenBody(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // After `session.moved` the route still names the old directory; actions follow the session.
     val currentWorktree = uiState.worktree.ifEmpty { worktree }
-    val attachmentSources = uiState.composer.attachmentSources(DeveloperToolsPreferences.unlocked)
+    val attachmentSources = uiState.composer.attachmentSources
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     val feedbackSheet = rememberFeedbackSheetState()

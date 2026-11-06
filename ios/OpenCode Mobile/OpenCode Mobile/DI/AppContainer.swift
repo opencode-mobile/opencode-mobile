@@ -898,7 +898,6 @@ extension Container {
             )
             AppLockPreferences.shared.clear()
             AppOnboardingPreferences.shared.clear()
-            DeveloperToolsPreferences.shared.clear()
             PerformanceOverlayPreferences.shared.clear()
             await codeHighlighter.trim(.critical)
             SessionChatDisplayPreferences.shared.clear()

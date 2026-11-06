@@ -186,11 +186,11 @@ struct SessionChatComposerState: Equatable {
         selectedModel?.option.canAttachFiles == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
-    func attachmentSources(developerToolsUnlocked: Bool) -> ComposerAttachmentSources {
+    var attachmentSources: ComposerAttachmentSources {
         ComposerAttachmentSources(
             photos: canAttachPhotos,
             files: canAttachFiles,
-            logFile: developerToolsUnlocked,
+            logFile: true,
             acceptsAnyType: streamedUploadAvailable
         )
     }

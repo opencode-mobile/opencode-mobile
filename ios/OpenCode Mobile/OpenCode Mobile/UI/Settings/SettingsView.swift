@@ -6,31 +6,8 @@ import UIKit
 enum SettingsDetail: Hashable {
     case servers
     case appearance
-    case componentGallery
-    case featureFlags
     case diagnosticLogs
-    #if HIGHLIGHT_LAB
-    case highlightLab
-    #endif
-
-    /// Whether the screen lives in the Developer Tools section that Clear All Data locks.
-    var requiresDeveloperTools: Bool {
-        switch self {
-        case .servers, .appearance, .diagnosticLogs:
-            false
-        case .componentGallery, .featureFlags:
-            true
-        #if HIGHLIGHT_LAB
-        case .highlightLab:
-            true
-        #endif
-        }
-    }
-
-    /// The detail to show: a locked Developer Tools screen falls back to Servers.
-    func resolved(developerToolsUnlocked: Bool) -> SettingsDetail {
-        requiresDeveloperTools && !developerToolsUnlocked ? .servers : self
-    }
+    case developerTools
 }
 
 struct SettingsView: View {
@@ -44,17 +21,8 @@ struct SettingsView: View {
     var splitGate = OpenCodeSplitLayoutGate()
     /// Trailing-pane sub-screen in the regular-width split view. Unused on compact.
     @State private var selectedDetail: SettingsDetail = .servers
-    @State private var showComponentGallery = false
-    /// The presented Session Chat Playground; SwiftUI clears it when the cover is dismissed.
-    @State private var sessionChatPlayground: SessionChatPlaygroundModel?
-    /// The same playground, kept until `onDismiss` closes it: teardown follows the cover's
-    /// dismissal, not any disappear (a cover the chat shows over it fires those too).
-    @State private var openSessionChatPlayground: SessionChatPlaygroundModel?
     @State private var showDiagnosticLogs = false
-    @State private var showFeatureFlags = false
-    #if HIGHLIGHT_LAB
-    @State private var showHighlightLab = false
-    #endif
+    @State private var showDeveloperTools = false
     @State private var showClearConfirmation = false
     @State private var showClearSessionCacheConfirmation = false
     @State private var sessionCacheSizeLabel = String(localized: "settings.session_cache.empty", defaultValue: "Empty")
@@ -69,8 +37,6 @@ struct SettingsView: View {
     @State private var appLockPreferences = AppLockPreferences.shared
     private let appLockAuthenticator: any AppLockAuthenticating = LocalAuthenticationAppLockAuthenticator()
     @State private var sessionChatDisplayPreferences = SessionChatDisplayPreferences.shared
-    @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
-    @State private var performanceOverlayPreferences = PerformanceOverlayPreferences.shared
     @State private var showServers = false
     @State private var serversSubtitleState: OpenCodeText = "settings.servers_summary.none"
     @State private var serversLetter: Character = "S"
@@ -103,21 +69,9 @@ struct SettingsView: View {
         .feedbackSheet(model: $feedbackModel)
         .onAppear { isOnScreen = true }
         .onDisappear { isOnScreen = false }
-        .navigationDestination(isPresented: $showComponentGallery) {
-            ComponentGalleryHomeView()
+        .navigationDestination(isPresented: $showDeveloperTools) {
+            DeveloperToolsView()
         }
-        // Full screen, also in the split layout: it hosts the whole Session Chat screen.
-        .fullScreenCover(item: $sessionChatPlayground, onDismiss: closeSessionChatPlayground) { model in
-            SessionChatPlaygroundView(model: model)
-        }
-        .navigationDestination(isPresented: $showFeatureFlags) {
-            FeatureFlagsView()
-        }
-        #if HIGHLIGHT_LAB
-        .navigationDestination(isPresented: $showHighlightLab) {
-            HighlightLabHomeView()
-        }
-        #endif
         .navigationDestination(isPresented: $showDiagnosticLogs) {
             DiagnosticLogsView()
         }
@@ -273,7 +227,7 @@ struct SettingsView: View {
                 Task { await refreshServersSubtitle() }
             }
         }
-        .onChange(of: visibleDetail) { previous, _ in
+        .onChange(of: selectedDetail) { previous, _ in
             if previous == .servers {
                 Task { await refreshServersSubtitle() }
             }
@@ -282,7 +236,7 @@ struct SettingsView: View {
             // Keep the open sub-screen when the window narrows to compact. The
             // selection stays so widening again shows the same detail.
             if !split {
-                push(visibleDetail)
+                push(selectedDetail)
             }
         }
     }
@@ -632,79 +586,19 @@ struct SettingsView: View {
                 action: { openURL(SourceCode.url) }
             )
             .padding(.horizontal, 16)
-        }
-        .typeErased()
-    }
 
-    private var developerToolsSection: some View {
-        Group {
-            if developerToolsPreferences.unlocked {
-                // Developer Tools rows are developer-only and stay English.
-                OpenCodeSectionHeader(title: .verbatim("Developer Tools"))
-
-                OpenCodeListItem(
-                    title: .verbatim("Component Gallery"),
-                    subtitle: .verbatim("Design-system foundations and reusable components"),
-                    selected: isDetailSelected(.componentGallery),
-                    style: .card,
-                    startDecorator: .icon(.architecture, accessibilityLabel: .verbatim("Component Gallery")),
-                    action: { open(.componentGallery) }
-                )
-                .padding(.horizontal, 16)
-
-                OpenCodeListItem(
-                    title: .verbatim("Session Chat Playground"),
-                    subtitle: .verbatim("The real chat over fake scenarios, no server"),
-                    style: .card,
-                    startDecorator: .icon(.widgets, accessibilityLabel: .verbatim("Session Chat Playground")),
-                    accessory: .disclosure,
-                    action: {
-                        let model = SessionChatPlaygroundModel()
-                        openSessionChatPlayground = model
-                        sessionChatPlayground = model
-                    }
-                )
-                .padding(.horizontal, 16)
-                .accessibilityIdentifier("settings.sessionChatPlayground")
-
-                #if HIGHLIGHT_LAB
-                OpenCodeListItem(
-                    title: .verbatim("Highlighting Lab"),
-                    subtitle: .verbatim("Data sets and on-device benchmarks"),
-                    selected: isDetailSelected(.highlightLab),
-                    style: .card,
-                    startDecorator: .icon(.code, accessibilityLabel: .verbatim("Highlighting Lab")),
-                    action: { open(.highlightLab) }
-                )
-                .padding(.horizontal, 16)
-                .accessibilityIdentifier("settings.highlightLab")
-                #endif
-
-                OpenCodeListItem(
-                    title: .verbatim("Feature Flags"),
-                    subtitle: .verbatim("Remote flags with device overrides"),
-                    selected: isDetailSelected(.featureFlags),
-                    style: .card,
-                    startDecorator: .icon(.settings, accessibilityLabel: .verbatim("Feature Flags")),
-                    action: { open(.featureFlags) }
-                )
-                .padding(.horizontal, 16)
-
-                OpenCodeListItem(
-                    title: .verbatim("Performance Overlay"),
-                    subtitle: .verbatim("Live FPS and frame-time spikes"),
-                    style: .card,
-                    startDecorator: .icon(.settings, accessibilityLabel: .verbatim("Performance Overlay")),
-                    accessory: .toggle(
-                        isOn: Binding(
-                            get: { performanceOverlayPreferences.enabled },
-                            set: { performanceOverlayPreferences.setEnabled($0) }
-                        ),
-                        accessibilityLabel: .verbatim("Performance Overlay")
-                    )
-                )
-                .padding(.horizontal, 16)
-            }
+            // Developer Tools rows are developer-only and stay English.
+            OpenCodeListItem(
+                title: .verbatim("Developer Tools"),
+                subtitle: .verbatim("Gallery, playground, and flags"),
+                selected: isDetailSelected(.developerTools),
+                style: .card,
+                startDecorator: .icon(.terminal, accessibilityLabel: .verbatim("Developer Tools")),
+                accessory: .disclosure,
+                action: { open(.developerTools) }
+            )
+            .padding(.horizontal, 16)
+            .accessibilityIdentifier("settings.developerTools")
         }
         .typeErased()
     }
@@ -730,7 +624,6 @@ struct SettingsView: View {
                     homeSection
                     privacySection
                     aboutSection
-                    developerToolsSection
                 }
             }
             .openCodeFocusGroup(.vertical)
@@ -745,18 +638,8 @@ struct SettingsView: View {
         splitGate.usesSplitLayout
     }
 
-    /// Selected detail after the Developer Tools lock; what the trailing pane renders.
-    private var visibleDetail: SettingsDetail {
-        selectedDetail.resolved(developerToolsUnlocked: developerToolsPreferences.unlocked)
-    }
-
     private func isDetailSelected(_ detail: SettingsDetail) -> Bool {
-        isSplitLayout && visibleDetail == detail
-    }
-
-    private func closeSessionChatPlayground() {
-        openSessionChatPlayground?.close()
-        openSessionChatPlayground = nil
+        isSplitLayout && selectedDetail == detail
     }
 
     /// The split swaps the trailing pane; stacked pushes as before.
@@ -772,12 +655,8 @@ struct SettingsView: View {
         switch detail {
         case .servers: showServers = true
         case .appearance: showAppearance = true
-        case .componentGallery: showComponentGallery = true
-        case .featureFlags: showFeatureFlags = true
         case .diagnosticLogs: showDiagnosticLogs = true
-        #if HIGHLIGHT_LAB
-        case .highlightLab: showHighlightLab = true
-        #endif
+        case .developerTools: showDeveloperTools = true
         }
     }
 
@@ -788,13 +667,13 @@ struct SettingsView: View {
             settingsDetail(control)
                 .toolbar(.hidden, for: .navigationBar)
         }
-        .id(visibleDetail)
+        .id(selectedDetail)
         .openCodeKeyboardShortcut(.toggleSidebar, action: isOnScreen ? control.toggle : nil)
     }
 
     @ViewBuilder
     private func settingsDetail(_ control: OpenCodeSplitPaneDetailControl) -> some View {
-        switch visibleDetail {
+        switch selectedDetail {
         case .servers:
             ServersView(
                 onAddServer: onAddServer,
@@ -804,16 +683,10 @@ struct SettingsView: View {
             )
         case .appearance:
             AppearanceSettingsView(detailControl: control)
-        case .componentGallery:
-            ComponentGalleryHomeView(detailControl: control)
-        case .featureFlags:
-            FeatureFlagsView(detailControl: control)
         case .diagnosticLogs:
             DiagnosticLogsView(detailControl: control)
-        #if HIGHLIGHT_LAB
-        case .highlightLab:
-            HighlightLabHomeView(detailControl: control)
-        #endif
+        case .developerTools:
+            DeveloperToolsView(detailControl: control)
         }
     }
 
