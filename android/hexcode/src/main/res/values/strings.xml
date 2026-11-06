@@ -151,7 +151,6 @@
     <string name="talk_hold">Hold to talk</string>
     <string name="talk_more">Hold to keep talking</string>
     <string name="talk_rerecord">Hold to re-record</string>
-    <string name="talk_a11y_locked">Recording, locked. Tap to pause.</string>
     <string name="talk_a11y_recording">Recording. Release to pause.</string>
     <string name="draft_title">Draft</string>
     <string name="draft_one_chunk">1 chunk</string>
