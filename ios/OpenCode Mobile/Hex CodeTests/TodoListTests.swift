@@ -144,7 +144,7 @@ struct TodoListTests {
         #expect(progress?.text == "All 4 done")
     }
 
-    @Test func theItemKeepsItsFormattingAndClipsAt40Shown() {
+    @Test func theItemKeepsItsFormattingAndIsNeverCut() {
         let progress = TodoProgress([TodoItem(content: "Retry once in `client.ts`", status: .inProgress)])
         #expect(progress?.text == "1 of 1 · Retry once in `client.ts`")
         let long = TodoProgress([TodoItem(content: "Rewrite `AuthClient` so the token refresh runs once per expired session", status: .pending)])
@@ -152,9 +152,7 @@ struct TodoListTests {
             Issue.record("expected an item label")
             return
         }
-        #expect(InlineMarkdown.plain(text).count <= 40)
-        #expect(text.hasPrefix("Rewrite `AuthClient`"))
-        #expect(text.hasSuffix("…"))
+        #expect(text == "Rewrite `AuthClient` so the token refresh runs once per expired session")
     }
 
     // MARK: Running now

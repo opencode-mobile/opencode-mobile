@@ -125,6 +125,10 @@ enum TodaySessionDemo: String, CaseIterable {
     func start(_ session: TodaySession, now: Date = Date()) async {
         await session.open()
         session.todos = todos
+        #if DEBUG
+        // `-HexCodeSentMessage "<text>"`: a message in flight, for the You line.
+        if let sent = UserDefaults.standard.string(forKey: "HexCodeSentMessage") { session.sentMessage = sent }
+        #endif
         switch self {
         case .card:
             session.busySince = now.addingTimeInterval(-252)

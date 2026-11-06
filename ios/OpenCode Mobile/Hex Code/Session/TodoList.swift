@@ -21,8 +21,6 @@ struct TodoItem: Equatable, Sendable {
 /// replaces it.
 enum TodoList {
     static let toolName = "todowrite"
-    /// Item text is clipped to this many characters shown.
-    static let itemLimit = 40
 
     /// The items as the row shows them: cancelled ones are left out; an unknown status counts as
     /// pending.
@@ -86,7 +84,7 @@ struct TodoProgress: Equatable, Sendable {
         }
         let current = items.firstIndex { $0.status == .inProgress } ?? items.firstIndex { $0.status == .pending }
         if let current {
-            label = .item(position: current + 1, total: items.count, text: InlineMarkdown.clip(items[current].content, TodoList.itemLimit))
+            label = .item(position: current + 1, total: items.count, text: items[current].content)
         } else {
             label = .allDone(total: items.count)
         }

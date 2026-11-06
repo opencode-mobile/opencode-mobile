@@ -105,17 +105,17 @@ struct StatusCardView: View {
             NowText(lines: layout.shown(card.lines), style: layout.size.style, rowLimit: layout.rowLimit)
                 .opacity(summary.isUpdating ? 0.35 : 1)
             if let sentMessage {
-                // Not tappable: it is what was just sent.
+                // Not tappable: it is what was just sent. The whole message, never cut.
                 Text(verbatim: String(localized: "home.summary.you", defaultValue: "You: “\(sentMessage)”"))
                     .hexFont(.body)
                     .foregroundStyle(HexColor.text3)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
             } else if let next = card.next {
                 // Next is in the user's words: a tap puts it into the draft, never sends it.
                 Button { onNext(InlineMarkdown.plain(next)) } label: {
                     SummaryText(text: String(localized: "home.summary.next", defaultValue: "Next: \(next)"), style: .body)
                         .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                 }
@@ -251,8 +251,9 @@ struct CardLabel: View {
                 }
             }
         }
-        .lineLimit(1)
-        .frame(height: HomeLabel.height)
+        // Never cut: a long title wraps.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(minHeight: HomeLabel.height, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: InlineMarkdown.plain(Self.text(title: title, state: state))))
     }

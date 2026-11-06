@@ -94,9 +94,8 @@ enum StatusSummary: Equatable, Sendable, Codable {
     case fallback(String)
 
     /// Clipping (app plan, "Clipping"), in characters shown (grapheme clusters, formatting's
-    /// symbols not counted). To-do items clip at `TodoList.itemLimit`.
-    static let titleLimit = 40
-    static let nextLimit = 60
+    /// symbols not counted). Only the fallback is cut: nothing on the card is (the title, Now,
+    /// Next and the to-do item wrap; Now size makes the card fit).
     static let fallbackLimit = 300
     /// Now isn't cut by characters (the prompt keeps it short, and Now size makes it fit): at most
     /// 5 lines, 4 of them bullets; extra ones are dropped.
@@ -169,9 +168,9 @@ enum StatusSummary: Equatable, Sendable, Codable {
         let pulledNext = next.flatMap { isNoNext($0) ? nil : CardLinks.pull(from: $0) }
         links += pulledNext?.links ?? []
         return .card(StatusCard(
-            title: InlineMarkdown.clip(title, titleLimit),
+            title: title,
             lines: limitNow(now),
-            next: pulledNext.map { InlineMarkdown.clip($0.text, nextLimit) },
+            next: pulledNext?.text,
             links: CardLinks.unique(links)
         ))
     }

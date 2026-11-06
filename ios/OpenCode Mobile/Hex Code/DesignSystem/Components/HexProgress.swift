@@ -11,8 +11,9 @@ enum HexProgressSegment: Equatable, Sendable {
 }
 
 /// The agent's to-do list in one line (the prototype's `.fx-prog`): one 18 × 3 segment per item,
-/// then a label such as "3 of 4 · Run the tests" in `caption`, `text2`, on one line, and "›" in
-/// `text3`. Tappable; the label and "›" light to `text1` while pressed.
+/// then a label such as "3 of 4 · Run the tests" in `caption`, `text2`, and "›" in `text3`: on
+/// one line when it fits, else the label wraps under the segments (never cut). Tappable; the
+/// label and "›" light to `text1` while pressed.
 struct HexProgress: View {
     let segments: [HexProgressSegment]
     /// The label, which may carry formatting (code runs built with `HexInlineCode`).
@@ -26,24 +27,23 @@ struct HexProgress: View {
             EmptyView()
         }
         .buttonStyle(PressReporting { pressed in
-            HStack(spacing: 10) {
-                HStack(spacing: 4) {
-                    ForEach(segments.indices, id: \.self) { index in
-                        SegmentMark(segment: segments[index])
+            // One line when it fits; else the label wraps under the segments.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    segmentMarks
+                    labelText(pressed: pressed)
+                        .lineLimit(1)
+                        .fixedSize()
+                    chevron(pressed: pressed)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    segmentMarks
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        labelText(pressed: pressed)
+                            .fixedSize(horizontal: false, vertical: true)
+                        chevron(pressed: pressed)
                     }
                 }
-                .fixedSize()
-                .animation(HexMotion.ease(0.3), value: segments)
-                label
-                    .hexFont(.caption)
-                    .foregroundStyle(pressed ? HexColor.text1 : HexColor.text2)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .hexInlineCode()
-                Text(verbatim: "›")
-                    .hexFont(.caption)
-                    .foregroundStyle(pressed ? HexColor.text1 : HexColor.text3)
-                    .fixedSize()
             }
             .animation(HexMotion.ease(HexMotion.press), value: pressed)
             .padding(.vertical, 6)
@@ -72,6 +72,32 @@ private struct SegmentMark: View {
         }
         .frame(width: 18, height: 3)
         .clipShape(Capsule())
+    }
+}
+
+extension HexProgress {
+    private var segmentMarks: some View {
+        HStack(spacing: 4) {
+            ForEach(segments.indices, id: \.self) { index in
+                SegmentMark(segment: segments[index])
+            }
+        }
+        .fixedSize()
+        .animation(HexMotion.ease(0.3), value: segments)
+    }
+
+    private func labelText(pressed: Bool) -> some View {
+        label
+            .hexFont(.caption)
+            .foregroundStyle(pressed ? HexColor.text1 : HexColor.text2)
+            .hexInlineCode()
+    }
+
+    private func chevron(pressed: Bool) -> some View {
+        Text(verbatim: "›")
+            .hexFont(.caption)
+            .foregroundStyle(pressed ? HexColor.text1 : HexColor.text3)
+            .fixedSize()
     }
 }
 

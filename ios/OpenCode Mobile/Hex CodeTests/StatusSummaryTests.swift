@@ -127,17 +127,16 @@ struct StatusSummaryTests {
         #expect(text.hasPrefix("I am going through"))
     }
 
-    @Test func titleNowAndNextAreClipped() {
-        let long = String(repeating: "word ", count: 40)
+    @Test func titleNowAndNextAreNeverCut() {
+        let long = String(repeating: "word ", count: 40).trimmingCharacters(in: .whitespaces)
         let reply = "## \(long)\nNow: \(long)\nNext: \(long)"
         guard case let .card(card) = StatusSummary.parse(reply) else {
             Issue.record("expected a card")
             return
         }
-        #expect(card.title.count <= 40)
-        #expect(card.now.count <= 300)
-        #expect(card.next.map(\.count).map { $0 <= 60 } == true)
-        #expect(card.title.hasSuffix("…"))
+        #expect(card.title == long)
+        #expect(card.now == long)
+        #expect(card.next == long)
     }
 
     // MARK: Clipping, as the prototype's clip()
