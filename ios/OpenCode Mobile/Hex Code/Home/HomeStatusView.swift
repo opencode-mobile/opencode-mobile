@@ -7,49 +7,67 @@ struct HomeStatusView: View {
     let session: TodaySession
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        Group {
             switch session.setup {
             case .opening:
                 // Setup is still finding today's session: only a card saved for it shows.
-                switch session.summary.summary {
-                case let .card(card):
-                    StatusCardView(card: card, summary: session.summary, onDetails: { session.openDetails() })
-                case let .fallback(text):
-                    FallbackCardView(text: text, summary: session.summary)
-                case nil:
-                    EmptyView()
-                }
+                summary(hint: nil)
             case let .failed(retrying):
                 SetupFailedView(retrying: retrying) { Task { await session.retry() } }
             case .ready:
-                switch session.summary.summary {
-                case let .card(card):
-                    StatusCardView(card: card, summary: session.summary, onDetails: { session.openDetails() })
-                case let .fallback(text):
-                    FallbackCardView(text: text, summary: session.summary)
-                case nil:
-                    // The first summary of a session that ran before: only ↻ "updating…".
-                    if session.summary.isUpdating {
-                        HStack {
-                            Spacer(minLength: 0)
-                            SummaryRefreshButton(summary: session.summary)
-                        }
-                    }
-                }
-                if let input = session.pendingInput {
-                    NeedsHintCard(input: input) { session.openPendingInput() }
-                }
+                summary(hint: session.pendingInput)
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .animation(HexMotion.ease(HexMotion.fade), value: session.summary.summary)
         .animation(HexMotion.ease(HexMotion.fade), value: session.pendingInput)
     }
+
+    @ViewBuilder
+    private func summary(hint: PendingItem?) -> some View {
+        switch session.summary.summary {
+        case let .card(card):
+            // The Now sentence steps down in size until the card (and the hint under it) fits
+            // between the top bar and the dock; the last size ends the sentence in "…" if needed.
+            ViewThatFits(in: .vertical) {
+                ForEach(NowSize.candidates(for: card.now), id: \.self) { size in
+                    VStack(alignment: .leading, spacing: 14) {
+                        StatusCardView(card: card, nowSize: size, summary: session.summary, onDetails: { session.openDetails() })
+                        hintCard(hint)
+                    }
+                }
+            }
+        case let .fallback(text):
+            VStack(alignment: .leading, spacing: 14) {
+                FallbackCardView(text: text, summary: session.summary)
+                hintCard(hint)
+            }
+        case nil:
+            VStack(alignment: .leading, spacing: 14) {
+                // The first summary of a session that ran before: only ↻ "updating…".
+                if session.summary.isUpdating {
+                    HStack {
+                        Spacer(minLength: 0)
+                        SummaryRefreshButton(summary: session.summary)
+                    }
+                }
+                hintCard(hint)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func hintCard(_ hint: PendingItem?) -> some View {
+        if let hint {
+            NeedsHintCard(input: hint) { session.openPendingInput() }
+        }
+    }
 }
 
 /// The task, what the agent does now, what comes next, the plan's progress and ↻.
 struct StatusCardView: View {
     let card: StatusCard
+    var nowSize: NowSize = .display
     let summary: StatusSummaryModel
     let onDetails: () -> Void
 
@@ -61,9 +79,9 @@ struct StatusCardView: View {
                 .lineLimit(1)
                 .frame(height: HomeLabel.height)
             Text(verbatim: card.now)
-                .hexFont(.display)
+                .hexFont(nowSize.style)
                 .foregroundStyle(HexColor.text1)
-                .lineLimit(5)
+                .truncationMode(.tail)
                 .opacity(summary.isUpdating ? 0.35 : 1)
             if let next = card.next {
                 Text(verbatim: String(localized: "home.summary.next", defaultValue: "Next: \(next)"))

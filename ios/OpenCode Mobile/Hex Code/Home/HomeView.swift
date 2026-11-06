@@ -18,9 +18,9 @@ struct HomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             HomeTopBar(session: session, onSettings: onSettings)
-            // The status card, its fallback, the setup failure and the draft all hang from the same
-            // line, 26 % down, so switching between them moves nothing (the prototype's `.fx-sp`).
-            HangingLayout(fraction: 0.26) {
+            // The draft hangs from a line 26 % down and grows downward as you talk (the prototype's
+            // `.fx-sp`); the status card, its fallback and the setup failure are centred.
+            HangingLayout(fraction: drafting ? 0.26 : nil) {
                 if drafting {
                     DraftView(home: home)
                         .transition(.opacity)
@@ -403,15 +403,26 @@ enum DraftClock {
 }
 
 /// Places its content from a line `fraction` of the way down, and higher only when the content
-/// would not fit below it (a long draft), like the prototype's shrinking `.fx-sp` spacer.
+/// would not fit below it (a long draft), like the prototype's shrinking `.fx-sp` spacer. With no
+/// fraction, the content is centred (from the top when it is taller than the space), and it is
+/// offered the whole height, so a card can choose a size that fits.
 struct HangingLayout: Layout {
-    var fraction: CGFloat
+    var fraction: CGFloat?
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions()
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let fraction else {
+            for subview in subviews {
+                let offer = ProposedViewSize(width: bounds.width, height: bounds.height)
+                let height = min(subview.sizeThatFits(offer).height, bounds.height)
+                let top = max(0, (bounds.height - height) / 2)
+                subview.place(at: CGPoint(x: bounds.minX, y: bounds.minY + top), anchor: .topLeading, proposal: offer)
+            }
+            return
+        }
         for subview in subviews {
             let height = min(subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height, bounds.height)
             let top = min(bounds.height * fraction, max(0, bounds.height - height))

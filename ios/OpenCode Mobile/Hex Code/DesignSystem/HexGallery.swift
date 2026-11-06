@@ -131,7 +131,8 @@ private struct HexGalleryContent: View {
     }
 
     private static let typeScale: [(String, HexTextStyle)] = [
-        ("display", .display), ("title", .title), ("pageTitle", .pageTitle), ("draft", .draft),
+        ("display", .display), ("nowLarge", .nowLarge), ("nowMedium", .nowMedium), ("nowSmall", .nowSmall),
+        ("nowFit", .nowFit), ("title", .title), ("pageTitle", .pageTitle), ("draft", .draft),
         ("headline", .headline), ("body", .body), ("bodyStrong", .bodyStrong), ("row", .row),
         ("button", .button), ("callout", .callout), ("small", .small), ("caption", .caption),
         ("footnote", .footnote), ("sectionLabel", .sectionLabel), ("badge", .badge), ("mono", .mono),

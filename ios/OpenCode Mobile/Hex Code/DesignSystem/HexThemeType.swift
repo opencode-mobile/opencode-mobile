@@ -32,6 +32,14 @@ struct HexTextStyle: Equatable, Sendable {
 extension HexTextStyle {
     /// 30 / semibold, line 1.18, −0.028 em. The agent's "now" line, first-run titles.
     static let display = HexTextStyle(size: 30, weight: .semibold, tracking: -0.028, lineHeight: 1.18)
+    /// 25 / semibold, line 1.22, −0.022 em. A Now sentence up to 150 characters (`.fx-now.n1`).
+    static let nowLarge = HexTextStyle(size: 25, weight: .semibold, tracking: -0.022, lineHeight: 1.22)
+    /// 21 / medium, line 1.28, −0.016 em. A Now sentence up to 220 characters (`.fx-now.n2`).
+    static let nowMedium = HexTextStyle(size: 21, weight: .medium, tracking: -0.016, lineHeight: 1.28)
+    /// 19 / medium, line 1.32, −0.012 em. A Now sentence up to 300 characters (`.fx-now.n3`).
+    static let nowSmall = HexTextStyle(size: 19, weight: .medium, tracking: -0.012, lineHeight: 1.32)
+    /// 17 / medium, line 1.36, −0.008 em. Only when the card doesn't fit otherwise (`.fx-now.n4`).
+    static let nowFit = HexTextStyle(size: 17, weight: .medium, tracking: -0.008, lineHeight: 1.36)
     /// 26 / semibold, −0.025 em.
     static let title = HexTextStyle(size: 26, weight: .semibold, tracking: -0.025)
     /// 20 / semibold, −0.02 em. Page titles in the top bar of pickers and Settings (`.pk-top b`).
