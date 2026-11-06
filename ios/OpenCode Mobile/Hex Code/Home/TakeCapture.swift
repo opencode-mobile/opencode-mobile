@@ -20,8 +20,27 @@ final class TakeCapture: TakeRecording {
         audio.prepare()
     }
 
-    /// Loudness of the take now, 0 to 1; 0 until audio arrives.
-    var level: Float { audio.level }
+    /// The meter's height now, 0 to 1 (`HexMeterLevel`); 0 until audio arrives.
+    var level: Float {
+        guard let decibels = audio.decibels else { return 0 }
+        #if DEBUG
+        levels.append(decibels)
+        #endif
+        return Float(HexMeterLevel.height(dBFS: decibels))
+    }
+
+    #if DEBUG
+    /// The loudness read during this take, for tuning the meter on a phone.
+    private var levels: [Double] = []
+
+    private func logLevels() {
+        guard !levels.isEmpty else { return }
+        let sorted = levels.sorted()
+        func at(_ p: Double) -> Double { sorted[min(sorted.count - 1, Int(Double(sorted.count - 1) * p))] }
+        HexLog.dictation.info("meter: take dBFS min \(at(0), format: .fixed(precision: 1)) p10 \(at(0.1), format: .fixed(precision: 1)) p50 \(at(0.5), format: .fixed(precision: 1)) p90 \(at(0.9), format: .fixed(precision: 1)) max \(at(1), format: .fixed(precision: 1)) over \(sorted.count) reads")
+        levels = []
+    }
+    #endif
 
     func startRecording() async throws {
         switch AVAudioApplication.shared.recordPermission {
@@ -45,12 +64,18 @@ final class TakeCapture: TakeRecording {
     }
 
     func stopRecording() async -> RecordedTake? {
+        #if DEBUG
+        logLevels()
+        #endif
         let take = await audio.stop()
         if take == nil { HexLog.dictation.error("take: stopped, but nothing was recording") }
         return take
     }
 
     func cancelRecording() {
+        #if DEBUG
+        levels = []
+        #endif
         audio.cancel()
     }
 
@@ -74,13 +99,14 @@ private nonisolated final class TakeAudio: @unchecked Sendable {
     private var recorder: AVAudioRecorder?
     private var categorySet = false
 
-    var level: Float {
+    /// Loudness now, RMS in dBFS; nil while nothing records.
+    var decibels: Double? {
         lock.lock()
         let recorder = recorder
         lock.unlock()
-        guard let recorder else { return 0 }
+        guard let recorder else { return nil }
         recorder.updateMeters()
-        return max(0, min(1, (recorder.averagePower(forChannel: 0) + 48) / 48))
+        return Double(recorder.averagePower(forChannel: 0))
     }
 
     func prepare() {

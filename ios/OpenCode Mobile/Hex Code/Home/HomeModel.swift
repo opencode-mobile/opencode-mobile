@@ -103,6 +103,25 @@ final class HomeModel {
         return true
     }
 
+    /// VoiceOver's activate: starts a hands-free (locked) take, or ends the one recording.
+    func toggleHandsFreeTake() async {
+        if isRecording {
+            locked = true
+            pressStartedAt = now()
+            await pressEnded()
+        } else if startTake() {
+            locked = true
+        }
+    }
+
+    /// VoiceOver's Drop: forgets the take being recorded.
+    func dropCurrentTake() async {
+        guard isRecording else { return }
+        locked = false
+        pressStartedAt = nil
+        await dropTake()
+    }
+
     /// The finger moved while holding: sideways distance in points, right positive.
     func pressMoved(dx: CGFloat) {
         guard pressStartedAt != nil, isRecording, !locked else { return }

@@ -71,6 +71,7 @@ private struct HexGalleryContent: View {
             fields
             draft
             talkButton
+            holdHints
             notices
             progress
             surfaces
@@ -302,19 +303,35 @@ private struct HexGalleryContent: View {
 
     private var talkButton: some View {
         section("Talk button and meter") {
-            HexMeter(level: { Double.random(in: 0.05 ... 0.5) })
-                .frame(height: 28)
+            HexMeter(level: { HexMeterLevel.height(dBFS: Double.random(in: -42 ... -20)) })
+                .frame(height: HexTalkButton.meterHeight)
+            HexMeter(level: { HexMeterLevel.height(dBFS: -60) })
+                .frame(height: HexTalkButton.meterHeight)
+            caption("Speech (−42 to −20 dBFS) · silence (dots)")
             talk(HexTalkButton.Phase(label: "Hold to talk"))
-            talk(HexTalkButton.Phase(label: "Getting speech ready…", ready: false))
             talk(HexTalkButton.Phase(label: "Hold to keep talking", quiet: true))
             talk(HexTalkButton.Phase(label: "", recording: true, pressing: true))
             talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, offset: 43))
             talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, offset: 70, arm: .lock))
             talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, offset: -54))
             talk(HexTalkButton.Phase(label: "", recording: true, locked: true))
-            caption("Idle · not ready · quiet · held · dragging to lock · armed · dragging to drop · locked")
+            caption("Idle · quiet · held · dragging to lock · armed · dragging to drop · locked")
         }
         .padding(.horizontal, HexSpacing.screenHome - HexSpacing.screen)
+    }
+
+    private var holdHints: some View {
+        section("Hold hint") {
+            VStack(spacing: 14) {
+                HexHoldHintLine(offset: 0, arm: nil)
+                HexHoldHintLine(offset: 40, arm: nil)
+                HexHoldHintLine(offset: -40, arm: nil)
+                HexHoldHintLine(offset: 70, arm: .lock)
+                HexHoldHintLine(offset: -70, arm: .drop)
+            }
+            .frame(maxWidth: .infinity)
+            caption("Resting · leaning lock · leaning drop · armed lock · armed drop")
+        }
     }
 
     private var notices: some View {
@@ -336,7 +353,7 @@ private struct HexGalleryContent: View {
 
     private static let toastSamples: [HexToastItem] = [
         HexToastItem(tone: .sun, title: "New day, new session", detail: "Yesterday’s is kept on your computer.", duration: 3.6),
-        HexToastItem(tone: .info, title: "Speech is almost ready", detail: "The speech model is still downloading. It happens once."),
+        HexToastItem(tone: .info, title: "Not in this version yet", detail: "It comes with the session screen."),
         HexToastItem(tone: .stop, title: "Stopped", detail: "Queued prompts stay parked. Talk to start again."),
         HexToastItem(tone: .steer, title: "Build copied", detail: "Hex Code 0.1.0 (debug) fdd8a45"),
         HexToastItem(

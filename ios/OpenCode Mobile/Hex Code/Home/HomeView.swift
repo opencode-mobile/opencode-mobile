@@ -36,6 +36,16 @@ struct HomeView: View {
                 Spacer().frame(height: 12)
             }
             dock
+                // While held, a quiet hint floats 10 pt above, where the finger can't cover it.
+                .overlay(alignment: .top) {
+                    HexHoldHint(
+                        holding: home.isPressing && home.isRecording && !home.locked,
+                        offset: home.dragOffset,
+                        arm: home.arm
+                    )
+                    .fixedSize()
+                    .alignmentGuide(.top) { $0[.bottom] + 10 }
+                }
                 .padding(.bottom, 6)
         }
         .padding(.horizontal, HexSpacing.screenHome)

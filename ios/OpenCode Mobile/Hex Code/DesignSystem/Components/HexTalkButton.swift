@@ -13,8 +13,6 @@ struct HexTalkButton: View {
     struct Phase: Equatable {
         /// Shown while not recording.
         var label: String
-        /// Speech is ready; otherwise the label is dimmed.
-        var ready = true
         /// A draft exists: the quiet style.
         var quiet = false
         var recording = false
@@ -25,6 +23,9 @@ struct HexTalkButton: View {
         /// What release does now; set when the drag has gone far enough.
         var arm: TalkDrag.Arm?
     }
+
+    /// The meter's full height inside the 50 pt pill.
+    static let meterHeight: CGFloat = 30
 
     /// The spring the look follows the finger with.
     static let follow = Animation.spring(duration: 0.12, bounce: 0)
@@ -98,7 +99,6 @@ struct HexTalkButton: View {
                 .lineLimit(1)
         }
         .foregroundStyle(isQuiet ? HexColor.text1 : HexColor.onSolid)
-        .opacity(phase.ready ? 1 : 0.6)
     }
 
     @ViewBuilder
@@ -106,6 +106,7 @@ struct HexTalkButton: View {
         if phase.locked {
             ZStack {
                 HexMeter(level: level)
+                    .frame(height: Self.meterHeight)
                     .padding(.leading, 40)
                     .padding(.trailing, 16)
                 HStack {
@@ -152,6 +153,7 @@ private struct TalkDragLook: View, Animatable {
             glow(HexColor.red, strength: (0.24, 0.06), amount: drop, from: .leading)
             glow(HexColor.text1, strength: (0.16, 0.04), amount: lock, from: .trailing)
             HexMeter(level: level)
+                .frame(height: HexTalkButton.meterHeight)
                 .padding(.horizontal, 14)
                 .opacity(1 - 0.75 * abs(progress))
                 .offset(x: progress * 6)

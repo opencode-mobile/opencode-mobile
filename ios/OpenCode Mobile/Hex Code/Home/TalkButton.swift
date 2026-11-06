@@ -24,6 +24,12 @@ struct TalkButton: View {
             onPressMoved: { home.pressMoved(dx: $0) },
             onPressEnded: { Task { await home.pressEnded() } }
         )
+        // VoiceOver can't hold and drag: activating starts or ends a hands-free take, and Drop
+        // forgets the one recording.
+        .accessibilityAction { Task { await home.toggleHandsFreeTake() } }
+        .accessibilityAction(named: Text(LocalizedStringResource("home.hold.drop", defaultValue: "Drop"))) {
+            Task { await home.dropCurrentTake() }
+        }
     }
 
     private var label: String {
