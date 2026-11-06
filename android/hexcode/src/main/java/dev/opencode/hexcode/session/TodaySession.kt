@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -40,6 +41,8 @@ data class TodayState(
     val busySince: Long? = null,
     /** Messages in the inbox, waiting for this turn to end. */
     val waiting: Int = 0,
+    /** The same messages, oldest first, for the Waiting to send sheet. */
+    val queued: List<InboxEntry> = emptyList(),
     /** Show the new-day notice; [TodaySession.newDayShown] clears it. */
     val newDayNotice: Boolean = false,
 ) {
@@ -58,6 +61,19 @@ interface LiveSessionApi {
         sessionId: String,
         prompt: String,
     ): String
+
+    /** `POST /api/session/{id}/prompt` with [text] and [delivery] (`queue` or `steer`); returns the inbox item's id. */
+    suspend fun send(
+        sessionId: String,
+        text: String,
+        delivery: String,
+    ): String
+
+    /** `DELETE /api/session/{id}/inbox/{item}`: takes back a message that hasn't been delivered. */
+    suspend fun cancelQueued(
+        sessionId: String,
+        itemId: String,
+    )
 
     /** `POST /api/session/{id}/model`. */
     suspend fun switchModel(
@@ -184,6 +200,23 @@ class TodaySession(
         }
     }
 
+    /**
+     * Sends [text] to today's session with [delivery]; returns the inbox item's id, which [cancelQueued] takes back.
+     * Throws when the session isn't open or the server refuses it.
+     */
+    suspend fun send(
+        text: String,
+        delivery: String,
+    ): String = api.send(sessionId ?: error("Today's session isn't open"), text, delivery)
+
+    /** Takes back a message waiting in the inbox. */
+    suspend fun cancelQueued(itemId: String) = api.cancelQueued(sessionId ?: error("Today's session isn't open"), itemId)
+
+    /** Waits until the event stream is up, as after a reconnect. */
+    suspend fun awaitStream() {
+        state.first { it.streamUp }
+    }
+
     /** Developer settings' "Drop event stream" (debug builds). */
     fun dropStream() {
         stream?.drop()
@@ -246,6 +279,7 @@ class TodaySession(
                 busySince = state?.busySince,
                 pendingInput = state?.firstPending,
                 waiting = state?.waiting ?: 0,
+                queued = state?.queued.orEmpty(),
             )
         }
     }

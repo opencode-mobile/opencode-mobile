@@ -66,7 +66,7 @@ class SessionEventTest {
     @Test
     fun theInbox() {
         assertEquals(
-            SessionEvent.InboxEnqueued("ses_1", "msg_B", "queue"),
+            SessionEvent.InboxEnqueued("ses_1", "msg_B", "queue", "m2 queued A"),
             SessionEvent.decode(
                 """{"type":"session.inbox.enqueued","data":{"sessionID":"ses_1","inboxID":"msg_B",
                 "item":{"type":"user","payload":{"text":"m2 queued A"},"delivery":"queue"}}}""",

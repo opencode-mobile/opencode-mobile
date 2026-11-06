@@ -75,6 +75,7 @@ sealed interface SessionEvent {
         val sessionId: String,
         val id: String,
         val delivery: String,
+        val text: String = "",
     ) : SessionEvent
 
     /** `session.inbox.delivered` or `.cancelled`. */
@@ -163,8 +164,10 @@ sealed interface SessionEvent {
                 }
                 "session.inbox.enqueued" -> {
                     val id = data.string("inboxID") ?: return null
-                    val delivery = (data["item"] as? JsonObject)?.string("delivery") ?: "queue"
-                    sessionId?.let { InboxEnqueued(it, id, delivery) }
+                    val item = data["item"] as? JsonObject
+                    val delivery = item?.string("delivery") ?: "queue"
+                    val text = (item?.get("payload") as? JsonObject)?.string("text").orEmpty()
+                    sessionId?.let { InboxEnqueued(it, id, delivery, text) }
                 }
                 "session.inbox.delivered", "session.inbox.cancelled" -> {
                     val id = data.string("inboxID") ?: return null

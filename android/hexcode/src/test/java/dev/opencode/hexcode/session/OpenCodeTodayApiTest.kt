@@ -67,7 +67,7 @@ class OpenCodeTodayApiTest {
             assertTrue(snapshot.hasRun)
             assertEquals(listOf("ses_c1", "ses_c2"), snapshot.children)
             assertEquals(listOf(PendingItem("frm_1", "ses_c1", PendingItem.Kind.Question, "Which database?")), snapshot.pending)
-            assertEquals(listOf(InboxEntry("msg_1", "queue")), snapshot.inbox)
+            assertEquals(listOf(InboxEntry("msg_1", "queue", "Also")), snapshot.inbox)
             // Only running subagents are asked; the idle one isn't.
             assertTrue(requests.none { "ses_c2/" in it })
         }

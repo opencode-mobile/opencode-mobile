@@ -85,7 +85,7 @@ class OpenCodeTodayApi(
                 hasRun = busy != null,
                 children = childIds,
                 pending = pending,
-                inbox = inbox.await().map { InboxEntry(it.id, it.delivery ?: "queue") },
+                inbox = inbox.await().map { InboxEntry(it.id, it.delivery ?: "queue", it.payload?.text.orEmpty()) },
             )
         }
 
@@ -95,6 +95,23 @@ class OpenCodeTodayApi(
     ): String {
         ready()
         return sessions.generateSessionTextV2(sessionId, prompt, timeoutMs = SummaryRefresher.TIMEOUT_MS)
+    }
+
+    override suspend fun send(
+        sessionId: String,
+        text: String,
+        delivery: String,
+    ): String {
+        ready()
+        return sessions.promptTextV2(sessionId, text, delivery).id
+    }
+
+    override suspend fun cancelQueued(
+        sessionId: String,
+        itemId: String,
+    ) {
+        ready()
+        sessions.cancelInboxV2(sessionId, itemId)
     }
 
     override suspend fun switchModel(

@@ -82,6 +82,17 @@ class TodaySessionTest {
         ) {
             models += model
         }
+
+        override suspend fun send(
+            sessionId: String,
+            text: String,
+            delivery: String,
+        ) = "msg_1"
+
+        override suspend fun cancelQueued(
+            sessionId: String,
+            itemId: String,
+        ) = Unit
     }
 
     private class Memory(

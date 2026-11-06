@@ -81,7 +81,7 @@ enum class TodaySessionDemo(
         val busy = LiveSnapshot(now - 252_000, hasRun = true, children = emptyList(), pending = emptyList(), inbox = emptyList())
         val idle = busy.copy(busySince = null)
         return when (this) {
-            Card -> busy.copy(inbox = listOf(InboxEntry("msg_demo", "queue")))
+            Card -> busy.copy(inbox = listOf(InboxEntry("msg_demo", "queue", "Also keep the old error messages")))
             Needs ->
                 busy.copy(
                     pending = listOf(pending("frm_demo", PendingItem.Kind.Question, "2 questions · login length and remember-me")),
@@ -189,6 +189,17 @@ private class DemoLive(
     override suspend fun switchModel(
         sessionId: String,
         model: ModelChoice,
+    ) = Unit
+
+    override suspend fun send(
+        sessionId: String,
+        text: String,
+        delivery: String,
+    ) = "msg_sample"
+
+    override suspend fun cancelQueued(
+        sessionId: String,
+        itemId: String,
     ) = Unit
 }
 

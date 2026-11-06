@@ -4,6 +4,8 @@ package dev.opencode.hexcode.session
 data class InboxEntry(
     val id: String,
     val delivery: String,
+    /** What the message says, for the Waiting to send sheet. */
+    val text: String = "",
 )
 
 /** The state read back on every (re)connect (app-plan.md, Today's session on screen). */
@@ -42,7 +44,10 @@ data class LiveSessionState(
     val inbox: List<InboxEntry> = emptyList(),
 ) {
     /** Messages that send after this turn. */
-    val waiting: Int get() = inbox.count { it.delivery == "queue" }
+    val waiting: Int get() = queued.size
+
+    /** The messages that send after this turn, oldest first. */
+    val queued: List<InboxEntry> get() = inbox.filter { it.delivery == "queue" }
 
     /** The question or approval the hint card shows: the oldest. */
     val firstPending: PendingItem? get() = pending.firstOrNull()
@@ -79,7 +84,7 @@ data class LiveSessionState(
                 if (event.sessionId != rootId || inbox.any { it.id == event.id }) {
                     this to null
                 } else {
-                    copy(inbox = inbox + InboxEntry(event.id, event.delivery)) to null
+                    copy(inbox = inbox + InboxEntry(event.id, event.delivery, event.text)) to null
                 }
             is SessionEvent.InboxRemoved ->
                 if (event.sessionId != rootId) this to null else copy(inbox = inbox.filterNot { it.id == event.id }) to null
