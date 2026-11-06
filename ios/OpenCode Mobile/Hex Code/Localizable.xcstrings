@@ -766,17 +766,6 @@
         }
       }
     },
-    "home.hold.lock": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lock"
-          }
-        }
-      }
-    },
     "home.hold.release_drop": {
       "extractionState": "manual",
       "localizations": {
@@ -795,6 +784,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Release to lock"
+          }
+        }
+      }
+    },
+    "home.hold.slide_lock": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide to lock"
           }
         }
       }

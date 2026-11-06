@@ -1,11 +1,12 @@
 import SwiftUI
 
-/// The quiet line above the talk button while it is held, where the finger can't cover it:
-/// "‹ Drop" on the left and "Lock ›" on the right, `caption`, `text3` at 70 %. It fades in 250 ms
-/// after the press (a quick take never shows it) and out on release. As the drag grows towards a
-/// side, that side brightens (drop to `red`, lock to `text1`) and the other fades; once armed it
-/// reads "Release to drop" or "Release to lock". It follows the same spring-smoothed drag as the
-/// button, so the two move together and never flicker. Decorative: VoiceOver skips it.
+/// The quiet label above the talk button while it is held, where the finger can't cover it:
+/// "Slide to lock", `caption`, `text3` at 70 %. It fades in 250 ms after the press (a quick take
+/// never shows it) and out on release. It stays subtle all the way, so the eye goes to the button:
+/// leaning right keeps it as it is, leaning left fades it out. Once armed it reads "Release to
+/// lock" (the same `text3` at 70 %) or "Release to drop" (`red` at 55 %). It follows the same
+/// spring-smoothed drag as the button, so the two move together and never flicker. Decorative:
+/// VoiceOver skips it.
 struct HexHoldHint: View {
     /// The finger is down on the talk button (not locked).
     let holding: Bool
@@ -37,7 +38,7 @@ struct HexHoldHint: View {
     }
 }
 
-/// The line itself, drawn from the smoothed offset (always shown; for the gallery too).
+/// The label itself, drawn from the smoothed offset (always shown; for the gallery too).
 struct HexHoldHintLine: View, Animatable {
     var offset: CGFloat
     let arm: TalkDrag.Arm?
@@ -48,46 +49,19 @@ struct HexHoldHintLine: View, Animatable {
     }
 
     var body: some View {
-        let progress = TalkDrag.progress(offset)
-        let drop = max(0, -progress)
-        let lock = max(0, progress)
+        let drop = max(0, -TalkDrag.progress(offset))
         ZStack {
-            HStack(spacing: 28) {
-                side(icon: .chevL, text: LocalizedStringResource("home.hold.drop", defaultValue: "Drop"), bright: HexColor.red, lean: drop, away: lock, iconFirst: true)
-                side(icon: .chevR, text: LocalizedStringResource("home.hold.lock", defaultValue: "Lock"), bright: HexColor.text1, lean: lock, away: drop, iconFirst: false)
-            }
-            .opacity(arm == nil ? 1 : 0)
-            armed(.drop)
-            armed(.lock)
+            Text(LocalizedStringResource("home.hold.slide_lock", defaultValue: "Slide to lock"))
+                .foregroundStyle(HexColor.text3)
+                .opacity(0.7 * (1 - drop) * (arm == nil ? 1 : 0))
+            Text(LocalizedStringResource("home.hold.release_lock", defaultValue: "Release to lock"))
+                .foregroundStyle(HexColor.text3)
+                .opacity(arm == .lock ? 0.7 : 0)
+            Text(LocalizedStringResource("home.hold.release_drop", defaultValue: "Release to drop"))
+                .foregroundStyle(HexColor.red)
+                .opacity(arm == .drop ? 0.55 : 0)
         }
         .hexFont(.caption)
         .lineLimit(1)
-    }
-
-    /// One side: quiet `text3` at 70 %, brightening as the drag leans its way and fading as it
-    /// leans the other way.
-    private func side(icon: HexIcon, text: LocalizedStringResource, bright: Color, lean: CGFloat, away: CGFloat, iconFirst: Bool) -> some View {
-        let label = HStack(spacing: 3) {
-            if iconFirst { HexIconView(icon, size: HexIconSize.small) }
-            Text(text)
-            if !iconFirst { HexIconView(icon, size: HexIconSize.small) }
-        }
-        return ZStack {
-            label.foregroundStyle(HexColor.text3).opacity(0.7 * (1 - lean))
-            label.foregroundStyle(bright).opacity(lean)
-        }
-        .opacity(1 - away)
-    }
-
-    private func armed(_ which: TalkDrag.Arm) -> some View {
-        HStack(spacing: 3) {
-            if which == .drop { HexIconView(.chevL, size: HexIconSize.small) }
-            Text(which == .drop
-                ? LocalizedStringResource("home.hold.release_drop", defaultValue: "Release to drop")
-                : LocalizedStringResource("home.hold.release_lock", defaultValue: "Release to lock"))
-            if which == .lock { HexIconView(.chevR, size: HexIconSize.small) }
-        }
-        .foregroundStyle(which == .drop ? HexColor.red : HexColor.text1)
-        .opacity(arm == which ? 1 : 0)
     }
 }
