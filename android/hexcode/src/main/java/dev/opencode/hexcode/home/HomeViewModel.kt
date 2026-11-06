@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.session.TodaySession
 import dev.opencode.hexcode.session.TodayState
@@ -31,6 +32,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
+import kotlin.math.sqrt
 
 /** The phone's side of dictation: record a take, end it, turn its samples into text. [VoiceEngine] in the app. */
 interface Dictation {
@@ -83,7 +85,23 @@ class VoiceEngineDictation(
     private val scope = CoroutineScope(SupervisorJob() + audio)
     private val gate = SpeechGate(engine, loadModel, holdMs, failOnce, scope)
 
-    override val level: Float get() = engine.level
+    private var loggedAt = 0L
+
+    /** The engine reports RMS × 6 (capped at 1, well above full); the meter shows it in dBFS ([MeterLevel]). */
+    override val level: Float
+        get() {
+            val rms = engine.level / 6f
+            if (BuildConfig.DEBUG && engine.isRecording) logLevel(rms)
+            return MeterLevel.fromRms(rms)
+        }
+
+    /** Debug builds: the take's loudness every quarter second, to tune the meter's mapping on the phone. */
+    private fun logLevel(rms: Float) {
+        val now = SystemClock.uptimeMillis()
+        if (now - loggedAt < 250) return
+        loggedAt = now
+        Log.d(TalkLog.TAG, "level %.1f dBFS → %.2f".format(MeterLevel.dbfs(rms), MeterLevel.fromRms(rms)))
+    }
 
     override val speech: StateFlow<SpeechStatus> get() = gate.speech
 
@@ -467,23 +485,31 @@ class ClipDictation(
 ) : Dictation {
     private val clips = SpeechModels.clips(context)
     private var next = 0
-    private var recording = false
+    private var take: FloatArray? = null
+    private var startedAt = 0L
 
-    override val level: Float get() = if (recording) 0.5f else 0f
+    /** The clip's own loudness as the take goes on, so the meter moves as it would for that voice. */
+    override val level: Float
+        get() {
+            val audio = take ?: return 0f
+            val window = VoiceEngine.SAMPLE_RATE / 20
+            val at = ((SystemClock.uptimeMillis() - startedAt) * VoiceEngine.SAMPLE_RATE / 1000).toInt()
+            if (at + window > audio.size) return 0f
+            var sum = 0.0
+            for (i in at until at + window) sum += audio[i] * audio[i]
+            return MeterLevel.fromRms(sqrt(sum / window).toFloat())
+        }
 
     override fun start(onFailed: (Throwable) -> Unit) {
-        recording = true
+        val clip = clips[next++ % clips.size]
+        take = SpeechModels.clipAudio(context, clip)
+        startedAt = SystemClock.uptimeMillis()
     }
 
-    override suspend fun end(): FloatArray? {
-        if (!recording) return null
-        recording = false
-        val clip = clips[next++ % clips.size]
-        return SpeechModels.clipAudio(context, clip)
-    }
+    override suspend fun end(): FloatArray? = take.also { take = null }
 
     override fun drop() {
-        recording = false
+        take = null
     }
 
     override suspend fun transcribe(samples: FloatArray): String = transcribeWith(engine, samples)

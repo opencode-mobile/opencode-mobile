@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexTheme
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.pow
@@ -27,7 +28,8 @@ import kotlin.math.sin
 
 /**
  * The live level meter (`.meter`): thin rounded bars across the space, tallest in the middle, that follow [level]
- * (0 to 1) while someone talks. [active] off leaves a flat row of short ticks.
+ * (0 to 1, already mapped for show) while someone talks, rising fast and falling slowly. At 0 the bars rest as dots.
+ * [active] off leaves a flat row of short ticks.
  */
 @Composable
 fun HexMeter(
@@ -40,10 +42,13 @@ fun HexMeter(
     var smoothed by remember { mutableFloatStateOf(0f) }
     var time by remember { mutableLongStateOf(0L) }
     LaunchedEffect(active) {
+        var last = 0L
         while (active) {
             withFrameMillis { now ->
+                val dt = if (last == 0L) 16L else now - last
+                last = now
                 time = now
-                smoothed += (level().coerceIn(0f, 1f) - smoothed) * 0.25f
+                smoothed = HexMeterMotion.follow(smoothed, level().coerceIn(0f, 1f), dt)
             }
         }
     }
@@ -58,8 +63,10 @@ fun HexMeter(
         for (i in 0 until n) {
             val xn = if (n > 1) i / (n - 1f) else 0.5f
             val envelope = sin(PI * (0.08 + 0.84 * xn)).toFloat().pow(0.6f)
-            val amplitude = if (active) (0.15f + 0.85f * noise(i, t) * smoothed) * envelope else 0.05f
-            val height = max(bw, amplitude * size.height)
+            // Silence rests as dots; neighbouring bars vary a little so it looks alive.
+            val amplitude = if (active) smoothed * (0.72f + 0.28f * noise(i, t)) * envelope else 0.05f
+            // The tallest bar stays clear of the button's outline.
+            val height = max(bw, amplitude * size.height * MAX_HEIGHT)
             drawRoundRect(
                 color = color,
                 topLeft = Offset(offset + i * (bw + space), (size.height - height) / 2),
@@ -67,6 +74,28 @@ fun HexMeter(
                 cornerRadius = CornerRadius(bw / 2),
             )
         }
+    }
+}
+
+/** The tallest a bar gets, as a share of the meter's height. */
+private const val MAX_HEIGHT = 0.76f
+
+/** How the meter's bars move towards the level (app-plan.md, Dictation › Meter). */
+object HexMeterMotion {
+    /** Rising: about 40 ms. */
+    const val ATTACK_MS = 40f
+
+    /** Falling: about 220 ms. */
+    const val RELEASE_MS = 220f
+
+    /** [current] moved towards [target] over [dtMs]: fast up, slow down. */
+    fun follow(
+        current: Float,
+        target: Float,
+        dtMs: Long,
+    ): Float {
+        val tau = if (target > current) ATTACK_MS else RELEASE_MS
+        return current + (target - current) * (1f - exp(-dtMs / tau))
     }
 }
 
