@@ -27,7 +27,8 @@ enum NowSize: Int, CaseIterable, Comparable, Sendable {
         }
     }
 
-    static func forText(_ text: String) -> NowSize { forLength(text.count) }
+    /// Counts the characters shown, not the formatting's symbols.
+    static func forText(_ text: String) -> NowSize { forLength(InlineMarkdown.plain(text).count) }
 
     /// The sizes to try, largest first: from the one its length gives, down to `nowFit`. The
     /// first whose card fits is used; if none does, the last, with the sentence ending in "…".

@@ -97,12 +97,13 @@ struct StatusSummaryTests {
         #expect(StatusSummary.parse("Working   on\tthe\n\n  tests   now") == .fallback("Working on the tests now"))
     }
 
-    @Test func linkLinesAreIgnoredForNow() {
+    @Test func linkLinesBecomeLinksNotText() {
         let reply = "## Repo overview\nNow: OpenCode is an open-source AI coding agent.\nLink: Docs | https://opencode.ai/docs\nNext: Read the docs."
         #expect(StatusSummary.parse(reply) == .card(StatusCard(
             title: "Repo overview",
             now: "OpenCode is an open-source AI coding agent.",
-            next: "Read the docs."
+            next: "Read the docs.",
+            links: [CardLink(label: "Docs", url: "https://opencode.ai/docs")]
         )))
         // Nor do they reach a fallback's text.
         #expect(StatusSummary.parse("Plain words.\nLink: Docs | https://opencode.ai") == .fallback("Plain words."))

@@ -12,8 +12,30 @@ struct StatusCard: Equatable, Sendable, Codable {
     /// Nil when the reply had no `Next:` line.
     var next: String?
     var steps: [Step] = []
+    /// The tiles under Next: the reply's `Link:` lines, then links left in Now and Next.
+    var links: [CardLink] = []
 
     var doneCount: Int { steps.filter(\.done).count }
+
+    private enum CodingKeys: String, CodingKey { case title, now, next, steps, links }
+
+    init(title: String, now: String, next: String? = nil, steps: [Step] = [], links: [CardLink] = []) {
+        self.title = title
+        self.now = now
+        self.next = next
+        self.steps = steps
+        self.links = links
+    }
+
+    /// Cards saved before links were kept read without them.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decode(String.self, forKey: .title)
+        now = try container.decode(String.self, forKey: .now)
+        next = try container.decodeIfPresent(String.self, forKey: .next)
+        steps = try container.decodeIfPresent([Step].self, forKey: .steps) ?? []
+        links = try container.decodeIfPresent([CardLink].self, forKey: .links) ?? []
+    }
 
     /// A session that never ran: no request. The title is today's long date in English, day before
     /// month, whatever the phone's region ("Thursday 5 November").
@@ -71,6 +93,11 @@ enum StatusSummary: Equatable, Sendable, Codable {
         var now: String?
         var next: String?
         var steps: [StatusCard.Step] = []
+        let linkLines = reply
+            .split(whereSeparator: \.isNewline)
+            .compactMap { $0.trimmingCharacters(in: .whitespaces).value(afterLabel: "link:") }
+            .compactMap(CardLinks.fromLinkLine)
+            .prefix(CardLinks.maxLinkLines)
         let lines = meaningfulLines(reply)
         for line in lines {
             if let value = line.value(after: "## ") {
@@ -80,25 +107,29 @@ enum StatusSummary: Equatable, Sendable, Codable {
             } else if let value = line.value(afterLabel: "next:") {
                 if next == nil, !value.isEmpty { next = value }
             } else if let value = line.value(after: "- [x]") ?? line.value(after: "- [X]") {
-                if !value.isEmpty { steps.append(.init(text: clip(value, stepLimit), done: true)) }
+                if !value.isEmpty { steps.append(.init(text: InlineMarkdown.clip(value, stepLimit), done: true)) }
             } else if let value = line.value(after: "- [ ]") {
-                if !value.isEmpty { steps.append(.init(text: clip(value, stepLimit), done: false)) }
+                if !value.isEmpty { steps.append(.init(text: InlineMarkdown.clip(value, stepLimit), done: false)) }
             }
         }
         guard let title, let now else {
             let text = lines.joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
             return .fallback(clip(text, fallbackLimit))
         }
+        // Links left in Now or Next become tiles and read as their label (or host) in the sentence.
+        let pulledNow = CardLinks.pull(from: now)
+        let pulledNext = next.map(CardLinks.pull(from:))
         return .card(StatusCard(
-            title: clip(title, titleLimit),
-            now: clip(now, nowLimit),
-            next: next.map { clip($0, nextLimit) },
-            steps: Array(steps.prefix(maxSteps))
+            title: InlineMarkdown.clip(title, titleLimit),
+            now: InlineMarkdown.clip(pulledNow.text, nowLimit),
+            next: pulledNext.map { InlineMarkdown.clip($0.text, nextLimit) },
+            steps: Array(steps.prefix(maxSteps)),
+            links: CardLinks.unique(Array(linkLines) + pulledNow.links + (pulledNext?.links ?? []))
         ))
     }
 
     /// The reply's lines, trimmed, without blank lines, code fences and `Link:` lines (those are
-    /// for the link tiles, which come later; they never make a reply fall back).
+    /// read separately for the link tiles; they never make a reply fall back).
     private static func meaningfulLines(_ reply: String) -> [String] {
         reply
             .split(whereSeparator: \.isNewline)
