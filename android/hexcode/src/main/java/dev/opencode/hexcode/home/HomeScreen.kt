@@ -212,7 +212,7 @@ fun HomeScreen(
                             },
                         // Recording never waits for the speech model; only turning a take into text does.
                         enabled = true,
-                        level = { vm.level ?: 0f },
+                        level = { vm.level },
                         onPress = {
                             if (micAllowed) {
                                 vm.press()

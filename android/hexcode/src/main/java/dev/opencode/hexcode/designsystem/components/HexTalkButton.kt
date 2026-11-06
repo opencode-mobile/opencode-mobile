@@ -190,7 +190,8 @@ fun HexTalkButton(
     label: String,
     accessibilityLabel: String,
     enabled: Boolean,
-    level: () -> Float,
+    /** The take's meter level; null until its audio comes, while the bars run the listening wave. */
+    level: () -> Float?,
     onPress: () -> Boolean,
     onRelease: (HexTalkRelease) -> Unit,
     onTapLocked: () -> Unit,
