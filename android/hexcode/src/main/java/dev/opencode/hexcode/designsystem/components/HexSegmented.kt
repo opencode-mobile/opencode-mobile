@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexTheme
@@ -29,7 +30,12 @@ import dev.opencode.hexcode.designsystem.HexTheme
 data class HexSegment(
     val id: String,
     val label: String,
+    /** Selected, its label is amber: a choice with consequences, such as Now. */
+    val warning: Boolean = false,
 )
+
+/** 36 pt and full width (a setting), or small and as wide as its labels (`.mode`, beside Send). */
+enum class HexSegmentedSize { Regular, Small }
 
 /**
  * A segmented choice (`.mp-seg`): segments in a 36 pt `tint(6)` track, the selected one raised on `panel3`. Without
@@ -42,19 +48,28 @@ fun HexSegmented(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
     emptyText: String? = null,
+    size: HexSegmentedSize = HexSegmentedSize.Regular,
 ) {
     val colors = HexTheme.colors
+    val small = size == HexSegmentedSize.Small
     val track = RoundedCornerShape(HexTheme.radius.m)
     val segment = RoundedCornerShape(HexTheme.radius.s)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
             modifier
-                .fillMaxWidth()
-                .height(36.dp)
+                .then(if (small) Modifier.height(32.dp) else Modifier.fillMaxWidth().height(36.dp))
                 .clip(track)
-                .background(colors.tint(6f))
-                .padding(3.dp)
+                .then(
+                    if (small) {
+                        Modifier
+                            .background(
+                                colors.background,
+                            ).border(1.dp, colors.line, track)
+                    } else {
+                        Modifier.background(colors.tint(6f))
+                    },
+                ).padding(if (small) 2.dp else 3.dp)
                 .selectableGroup(),
     ) {
         if (segments.isEmpty()) {
@@ -70,12 +85,21 @@ fun HexSegmented(
         segments.forEach { item ->
             val selected = item.id == selectedId
             val fill by animateColorAsState(if (selected) colors.panel3 else Color.Transparent, HexTheme.motion.fade(), label = "segment")
-            val text by animateColorAsState(if (selected) colors.text1 else colors.text2, HexTheme.motion.fade(), label = "segment-text")
+            val text by animateColorAsState(
+                when {
+                    selected && item.warning -> colors.amber
+                    selected -> colors.text1
+                    small -> colors.text3
+                    else -> colors.text2
+                },
+                HexTheme.motion.fade(),
+                label = "segment-text",
+            )
             Box(
                 contentAlignment = Alignment.Center,
                 modifier =
                     Modifier
-                        .weight(1f)
+                        .then(if (small) Modifier.padding(0.dp) else Modifier.weight(1f))
                         .fillMaxHeight()
                         .then(
                             if (selected) {
@@ -91,9 +115,16 @@ fun HexSegmented(
                         ).clip(segment)
                         .background(fill)
                         .then(if (selected) Modifier.border(1.dp, colors.line, segment) else Modifier)
-                        .selectable(selected = selected, role = Role.Tab, onClick = { onSelect(item.id) }),
+                        .selectable(selected = selected, role = Role.Tab, onClick = { onSelect(item.id) })
+                        .then(if (small) Modifier.padding(horizontal = 10.dp) else Modifier),
             ) {
-                Text(item.label, style = HexTheme.type.callout, color = text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    item.label,
+                    style = if (small) HexTheme.type.caption.copy(fontWeight = FontWeight.Medium) else HexTheme.type.callout,
+                    color = text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

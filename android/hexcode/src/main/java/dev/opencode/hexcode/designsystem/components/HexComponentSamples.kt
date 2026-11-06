@@ -384,6 +384,12 @@ private fun ButtonSample() {
                 HexButton(onClick = {}, text = "Clear", style = HexButtonStyle.Danger, size = HexButtonSize.Regular)
             }
         }
+        StateSample("icon after the label: Send") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HexButton(onClick = {}, text = "Send", icon = HexIcons.send, style = HexButtonStyle.Primary, iconAfter = true)
+                HexButton(onClick = {}, text = "Transcribing", style = HexButtonStyle.Primary, enabled = false)
+            }
+        }
         StateSample("leading icon") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HexButton(onClick = {}, text = "Re-record", icon = HexIcons.mic)
@@ -457,6 +463,17 @@ private fun SegmentedSample() {
     Edge {
         StateSample("segments (tap one)") {
             HexSegmented(listOf(HexSegment("d", "Default"), HexSegment("h", "High"), HexSegment("m", "Max")), level, { level = it })
+        }
+        StateSample("small, beside Send: queue, then Now selected (amber)") {
+            var mode by remember { mutableStateOf("queue") }
+            val modes = listOf(HexSegment("queue", "After turn"), HexSegment("steer", "Now", warning = true))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HexSegmented(modes, mode, { mode = it }, size = HexSegmentedSize.Small)
+                HexSegmented(modes, "steer", {}, size = HexSegmentedSize.Small)
+            }
+        }
+        StateSample("regular") {
+            HexSegmented(listOf(HexSegment("a", "Auto"), HexSegment("b", "Light")), "a", {}, size = HexSegmentedSize.Regular)
         }
         StateSample("no segments") {
             HexSegmented(emptyList(), null, {}, emptyText = "This model has no reasoning levels")

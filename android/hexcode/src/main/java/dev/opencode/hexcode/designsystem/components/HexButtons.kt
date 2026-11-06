@@ -92,6 +92,8 @@ fun HexButton(
     size: HexButtonSize = HexButtonSize.Small,
     enabled: Boolean = true,
     loading: Boolean = false,
+    /** The icon after the label instead of before it, as on Send. */
+    iconAfter: Boolean = false,
 ) {
     val colors = HexTheme.colors
     val type = HexTheme.type
@@ -156,12 +158,14 @@ fun HexButton(
                 ),
     ) {
         val iconSize = if (size == HexButtonSize.Small) HexTheme.size.iconSmall else HexTheme.size.icon
+        val leading = !iconAfter || text == null
         if (loading) {
             HexSpinner(size = iconSize, tint = iconTint)
-        } else if (icon != null) {
+        } else if (icon != null && leading) {
             Icon(icon, null, tint = iconTint, modifier = Modifier.size(iconSize))
         }
         if (text != null) Text(text, style = textStyle, color = content, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (!loading && icon != null && !leading) Icon(icon, null, tint = iconTint, modifier = Modifier.size(iconSize))
     }
 }
 
