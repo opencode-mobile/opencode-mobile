@@ -314,4 +314,19 @@ class HomeViewModelTest {
             advanceUntilIdle()
             assertEquals("Second try", vm.uiState.value.draft.text)
         }
+
+    @Test
+    fun withoutTheHoldATakeStartsHandsFreeAndCanBeDropped() =
+        runTest(dispatcher) {
+            val dictation = FakeDictation()
+            val vm = HomeViewModel(dictation) { now }
+            // What the talk button's screen-reader action does: press, then let go as a lock.
+            assertTrue(vm.press())
+            vm.release(TalkRelease.Lock)
+            assertEquals(TalkMode.Locked, vm.uiState.value.talk)
+            vm.dropTakeNow()
+            assertEquals(TalkMode.Idle, vm.uiState.value.talk)
+            assertEquals(1, dictation.drops)
+            assertTrue(vm.uiState.value.draft.isEmpty)
+        }
 }

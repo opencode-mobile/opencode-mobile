@@ -186,6 +186,8 @@ fun HomeScreen(
                         onTapLocked = vm::tapLocked,
                         modifier = Modifier.weight(1f),
                         hold = hold,
+                        dropActionLabel = stringResource(R.string.home_hold_drop),
+                        onDrop = vm::dropTakeNow,
                     )
                     HexIconButton(
                         HexIcons.stop,

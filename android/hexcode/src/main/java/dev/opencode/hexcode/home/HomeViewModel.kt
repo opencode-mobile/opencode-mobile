@@ -336,6 +336,11 @@ class HomeViewModel(
         }
     }
 
+    /** Screen readers' "Drop": forgets the take that's recording, held or hands-free. */
+    fun dropTakeNow() {
+        if (state.value.talk != TalkMode.Idle) dropTake()
+    }
+
     /** A tap on a locked take pauses it into the draft. */
     fun tapLocked() {
         if (state.value.talk == TalkMode.Locked) endTake()

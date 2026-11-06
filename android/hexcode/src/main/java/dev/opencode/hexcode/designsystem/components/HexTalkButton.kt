@@ -50,8 +50,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
@@ -192,6 +195,10 @@ fun HexTalkButton(
     onTapLocked: () -> Unit,
     modifier: Modifier = Modifier,
     hold: HexTalkHold = rememberHexTalkHold(),
+    /** Screen readers: the "Drop" action's name; it shows while a take records. */
+    dropActionLabel: String? = null,
+    /** Screen readers' "Drop": forgets the take that's recording. */
+    onDrop: () -> Unit = {},
 ) {
     val colors = HexTheme.colors
     val view = LocalView.current
@@ -201,6 +208,7 @@ fun HexTalkButton(
     val press by rememberUpdatedState(onPress)
     val release by rememberUpdatedState(onRelease)
     val tapLocked by rememberUpdatedState(onTapLocked)
+    val drop by rememberUpdatedState(onDrop)
     // Held by the finger: the recording look shows from the touch itself, before the take's state comes back.
     var held by remember { mutableStateOf(false) }
     // The take came back as Holding; if it leaves Holding while still held (the microphone failed), the look goes back.
@@ -235,6 +243,26 @@ fun HexTalkButton(
                 .semantics {
                     role = Role.Button
                     contentDescription = accessibilityLabel
+                    // Without the hold: activating starts a hands-free take, or ends the one recording.
+                    if (enabled) {
+                        onClick {
+                            if (currentState == HexTalkState.Locked) {
+                                tapLocked()
+                            } else if (press()) {
+                                release(HexTalkRelease.Lock)
+                            }
+                            true
+                        }
+                    }
+                    if (listening && dropActionLabel != null) {
+                        customActions =
+                            listOf(
+                                CustomAccessibilityAction(dropActionLabel) {
+                                    drop()
+                                    true
+                                },
+                            )
+                    }
                 }.pointerInput(enabled) {
                     if (!enabled) return@pointerInput
                     awaitEachGesture {
