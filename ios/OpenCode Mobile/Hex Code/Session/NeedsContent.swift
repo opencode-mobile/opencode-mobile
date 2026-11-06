@@ -74,11 +74,11 @@ struct ApprovalContent: Equatable, Sendable {
         String(localized: "needs.approval.more_lines", defaultValue: "… \(count) more lines")
     }
 
-    /// Nil (no line, no Always) when nothing would be saved or the project is `global`, where a
-    /// rule would apply to every folder that isn't a git repository.
+    /// Nil (no line, no Always) when nothing would be saved, while the project isn't known yet, or
+    /// when it is `global`, where a rule would apply to every folder that isn't a git repository.
     static func alwaysLine(save: [String], action: String, projectID: String?) -> String? {
         let patterns = save.filter { !$0.isEmpty }
-        guard !patterns.isEmpty, projectID != "global" else { return nil }
+        guard !patterns.isEmpty, let projectID, projectID != "global" else { return nil }
         if patterns == ["*"] {
             return String(localized: "needs.approval.always_any", defaultValue: "Always allows any \(action) in this project, from now on.")
         }

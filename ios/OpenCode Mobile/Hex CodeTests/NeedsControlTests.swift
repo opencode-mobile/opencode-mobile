@@ -244,6 +244,8 @@ struct ApprovalTests {
     @Test func alwaysIsHiddenForGlobalProjectsAndEmptySaves() {
         #expect(ApprovalContent.alwaysLine(save: ["ls *"], action: "shell", projectID: "global") == nil)
         #expect(ApprovalContent.alwaysLine(save: [], action: "shell", projectID: "c6e7") == nil)
+        // Until the session's project is known, Always isn't offered.
+        #expect(ApprovalContent.alwaysLine(save: ["ls *"], action: "shell", projectID: nil) == nil)
         #expect(ApprovalContent.alwaysLine(save: ["*"], action: "edit", projectID: "c6e7") == "Always allows any edit in this project, from now on.")
     }
 
@@ -410,6 +412,18 @@ struct QuestionTests {
         #expect(h.session.presentedNeed == nil)
         #expect(h.session.pendingItems.isEmpty)
         #expect(h.toasts.current?.title == "No longer needed")
+    }
+
+    @Test func aSheetTakeWontStartDuringATalkButtonTake() async {
+        let home = HomeModel(recorder: FakeRecorder(), speech: FakeSpeech())
+        home.pressBegan()
+        #expect(home.isRecording)
+        #expect(!home.beginSideTake())
+        await home.dropCurrentTake()
+        #expect(home.beginSideTake())
+        #expect(home.isSideTaking)
+        await home.cancelSideTake()
+        #expect(!home.isSideTaking)
     }
 
     @Test func aSpokenAnswerHoldsReleasesAndTaps() async {
@@ -856,11 +870,13 @@ struct ControlRequestTests {
         ControlURLProtocol.reset([
             (404, #"{"_tag":"PermissionNotFoundError","requestID":"per_1","message":"Permission request not found: per_1"}"#),
             (409, #"{"_tag":"FormAlreadySettledError","id":"frm_1","message":"Form already settled: frm_1"}"#),
+            (404, #"{"_tag":"FormNotFoundError","id":"frm_x","message":"Form not found: frm_x"}"#),
             (500, "{}"),
         ])
         let service = service()
         await #expect(throws: ControlError.gone) { try await service.replyToApproval(sessionID: "ses_a", requestID: "per_1", decision: .once, note: nil) }
         await #expect(throws: ControlError.gone) { try await service.answerQuestion(sessionID: "ses_a", formID: "frm_1", answer: [:]) }
+        await #expect(throws: ControlError.gone) { try await service.dismissQuestion(sessionID: "ses_a", formID: "frm_x", note: "x") }
         await #expect(throws: SessionStateAPIError.self) { try await service.dismissQuestion(sessionID: "ses_a", formID: "frm_1", note: "x") }
     }
 

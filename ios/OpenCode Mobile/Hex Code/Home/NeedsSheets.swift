@@ -118,13 +118,15 @@ private struct ApprovalSheet: View {
     }
 
     private func buttons(offersAlways: Bool) -> some View {
-        let busy = sending != nil || (spoken?.isBusy ?? false)
+        let busy = sending != nil
+        // Deny waits for a take still listening or transcribing, so it never goes without its text.
+        let taking = spoken?.isBusy ?? false
         return HStack(spacing: 8) {
             HexButton(
                 LocalizedStringResource("needs.approval.deny", defaultValue: "Deny"),
                 size: .regular,
                 style: .danger,
-                enabled: !busy || sending == .reject,
+                enabled: (!busy && !taking) || sending == .reject,
                 loading: sending == .reject
             ) { reply(.reject) }
             Spacer(minLength: 0)
