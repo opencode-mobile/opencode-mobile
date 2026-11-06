@@ -9,8 +9,9 @@ public nonisolated enum SessionStateAPIError: Error, Equatable {
 
 /// OpenCode v2 calls for following one session from a phone: find, read and create sessions (with
 /// their location, model and busy time), switch the model, list the session's own pending approvals,
-/// questions and inbox, generate text from the session, and put an instruction entry. See
-/// `m2-api-notes.md` for the routes. New calls, separate from OpenCode Mobile's session client.
+/// questions and inbox, answer them, stop a run, list the agent's shells, generate text from the
+/// session, and put an instruction entry. See `m2-api-notes.md` and `m4-proposal.md` for the
+/// routes. New calls, separate from OpenCode Mobile's session client.
 public nonisolated struct SessionStateAPIClient: Sendable {
     /// `parentID` filter of the session list.
     public nonisolated enum Parent: Sendable, Equatable {
@@ -132,6 +133,68 @@ public nonisolated struct SessionStateAPIClient: Sendable {
     /// `GET /api/session/{id}/inbox`: messages not delivered yet, in order.
     public func inbox(sessionID: String) async throws -> [InboxItemV2] {
         let envelope: APIListEnvelope<InboxItemV2> = try await send(path: "api/session/\(sessionID)/inbox")
+        return envelope.data
+    }
+
+    // MARK: Answering
+
+    /// How an approval is answered (`decision` of the permission reply).
+    public nonisolated enum PermissionDecision: String, Sendable, Equatable {
+        /// This request only.
+        case once
+        /// Saves a rule for each `save` pattern, for the session's project, until it is removed.
+        case always
+        /// Refuses it. With a message the agent reads the message and carries on; without one the
+        /// run ends. Either way the session's other pending approvals are refused too.
+        case reject
+    }
+
+    /// `POST /api/session/{id}/permission/{request}/reply` (204). `sessionID` is the session that
+    /// owns the request (a subagent's own id). `message` only counts with `reject`. An unknown or
+    /// already answered request gives `404`.
+    public func replyToPermission(sessionID: String, requestID: String, decision: PermissionDecision, message: String? = nil) async throws {
+        nonisolated struct Body: Encodable {
+            let decision: String
+            let message: String?
+        }
+        try await sendEmpty(
+            path: "api/session/\(sessionID)/permission/\(requestID)/reply",
+            method: "POST",
+            body: Body(decision: decision.rawValue, message: decision == .reject ? message : nil)
+        )
+    }
+
+    /// `POST /api/session/{id}/form/{form}/reply` with `{"answer": {key: value}}` (204). A form already
+    /// settled gives `409 FormAlreadySettledError`; a value of the wrong type `400`.
+    public func replyToForm(sessionID: String, formID: String, answer: [String: FormAnswerV2]) async throws {
+        nonisolated struct Body: Encodable { let answer: [String: FormAnswerV2] }
+        try await sendEmpty(path: "api/session/\(sessionID)/form/\(formID)/reply", method: "POST", body: Body(answer: answer))
+    }
+
+    /// `DELETE /api/session/{id}/form/{form}`, with `?message=` when there is one (204). With a message
+    /// the agent reads it and carries on; without one the run ends.
+    public func cancelForm(sessionID: String, formID: String, message: String? = nil) async throws {
+        let query = message.map { [URLQueryItem(name: "message", value: $0)] } ?? []
+        _ = try await perform(request(path: "api/session/\(sessionID)/form/\(formID)", method: "DELETE", query: query, body: nil, timeout: nil))
+    }
+
+    // MARK: Stopping and shells
+
+    /// `POST /api/session/{id}/interrupt`: stops the session's run. True when a run was stopped,
+    /// false when it was already idle. It answers at once; `session.execution.interrupted` follows.
+    public func interrupt(sessionID: String) async throws -> Bool {
+        nonisolated struct Reply: Decodable, Sendable { let interrupted: Bool? }
+        let envelope: APIDataEnvelope<Reply> = try await send(path: "api/session/\(sessionID)/interrupt", method: "POST")
+        return envelope.data.interrupted ?? false
+    }
+
+    /// `GET /api/shell?location[directory]=…`: the shells running in that folder (the server
+    /// compares the folder as an exact string). Each names the session that started it.
+    public func shells(directory: String) async throws -> [ShellInfoV2] {
+        let envelope: APIListEnvelope<ShellInfoV2> = try await send(
+            path: "api/shell",
+            query: [URLQueryItem(name: "location[directory]", value: directory)]
+        )
         return envelope.data
     }
 
