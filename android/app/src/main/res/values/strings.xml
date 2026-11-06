@@ -416,6 +416,7 @@
     <string name="session_chat_fork_result_stay_here">Stay here</string>
     <string name="session_chat_attachment_source_title">Add attachment</string>
     <string name="session_chat_attachment_source_photos">Photos</string>
+    <string name="session_chat_attachment_source_media">Media</string>
     <string name="session_chat_attachment_source_files">Files</string>
     <string name="session_chat_attachment_source_log_file">Log file</string>
     <string name="session_chat_commands_title">Commands</string>

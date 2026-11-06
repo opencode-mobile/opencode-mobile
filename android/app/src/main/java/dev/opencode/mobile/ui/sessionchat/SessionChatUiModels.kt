@@ -120,6 +120,7 @@ data class SessionChatComposerState(
             photos = canAttachPhotos,
             files = canAttachFiles,
             logFile = developerToolsUnlocked,
+            acceptsAnyType = attachmentUploadAvailable,
         )
 }
 
@@ -127,6 +128,8 @@ data class ComposerAttachmentSources(
     val photos: Boolean,
     val files: Boolean,
     val logFile: Boolean,
+    /** Streamed uploads take any file, so the gallery offers videos too and Files takes every type. */
+    val acceptsAnyType: Boolean = false,
 ) {
     val isAttachEnabled: Boolean
         get() = photos || files || logFile

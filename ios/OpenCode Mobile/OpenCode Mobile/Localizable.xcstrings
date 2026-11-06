@@ -7334,6 +7334,17 @@
         }
       }
     },
+    "session_chat.attachment_source.media" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media"
+          }
+        }
+      }
+    },
     "session_chat.attachment_source.photos" : {
       "extractionState" : "manual",
       "localizations" : {

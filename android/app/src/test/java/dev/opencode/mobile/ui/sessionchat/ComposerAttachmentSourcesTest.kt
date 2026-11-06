@@ -49,4 +49,14 @@ class ComposerAttachmentSourcesTest {
         assertEquals(true, sources.photos)
         assertEquals(true, sources.logFile)
     }
+
+    @Test
+    fun streamedUploads_acceptAnyType() {
+        assertFalse(SessionChatComposerState().attachmentSources(developerToolsUnlocked = false).acceptsAnyType)
+        assertTrue(
+            SessionChatComposerState(attachmentUploadAvailable = true)
+                .attachmentSources(developerToolsUnlocked = false)
+                .acceptsAnyType,
+        )
+    }
 }
