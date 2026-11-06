@@ -96,6 +96,10 @@ struct HexToast: View {
 @Observable
 final class HexToaster {
     private(set) var current: HexToastItem?
+    /// While true (the stop button is held) no notice shows; one that arrives meanwhile shows after.
+    var isHeld = false
+    /// A sheet with its own host is up: notices show at the top of the sheet instead of under it.
+    var inSheet = false
 
     @ObservationIgnored private var onAction: (() -> Void)?
     @ObservationIgnored private var timer: Task<Void, Never>?
@@ -131,19 +135,21 @@ final class HexToaster {
 }
 
 extension View {
-    /// Shows the toaster's notice over the top of this view, 8 pt under the safe area.
-    func hexToastHost(_ toaster: HexToaster) -> some View {
-        modifier(HexToastHost(toaster: toaster))
+    /// Shows the toaster's notice over the top of this view, 8 pt under the safe area. A sheet that
+    /// sets `inSheet` hosts them itself (`sheet: true`) while it is up, so they aren't hidden under it.
+    func hexToastHost(_ toaster: HexToaster, sheet: Bool = false) -> some View {
+        modifier(HexToastHost(toaster: toaster, sheet: sheet))
     }
 }
 
 private struct HexToastHost: ViewModifier {
     let toaster: HexToaster
+    let sheet: Bool
 
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .top) {
-                if let item = toaster.current {
+                if let item = toaster.current, !toaster.isHeld, toaster.inSheet == sheet {
                     HexToast(item: item, onAction: { toaster.performAction() })
                         .padding(.horizontal, 12)
                         .padding(.top, 8)
@@ -152,5 +158,6 @@ private struct HexToastHost: ViewModifier {
                 }
             }
             .animation(HexMotion.ease(HexMotion.fade), value: toaster.current?.id)
+            .animation(HexMotion.ease(HexMotion.fade), value: toaster.isHeld)
     }
 }

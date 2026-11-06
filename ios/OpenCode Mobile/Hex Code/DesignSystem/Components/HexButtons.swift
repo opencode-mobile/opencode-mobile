@@ -223,6 +223,8 @@ struct HexRoundButton: View {
 }
 
 /// A 46 pt borderless icon button beside the talk button. The stop tone is red; disabled is 35 %.
+/// The hold state (the agent's stop): with `press`, touches go there instead of `action`; while
+/// `heldSince` is set the button scales to 0.95 and a red ring fills clockwise round it.
 struct HexIconButton: View {
     enum Tone {
         /// `text2`.
@@ -237,26 +239,64 @@ struct HexIconButton: View {
     let label: Text
     var tone: Tone = .plain
     var enabled = true
+    /// Held since then: the ring fills over `holdDuration`.
+    var heldSince: Date?
+    var holdDuration: TimeInterval = HexMotion.stopHold
+    /// Hold instead of tap.
+    var press: HexPress?
     let action: () -> Void
 
-    init(_ icon: HexIcon, label: LocalizedStringResource, tone: Tone = .plain, enabled: Bool = true, action: @escaping () -> Void) {
+    init(
+        _ icon: HexIcon,
+        label: LocalizedStringResource,
+        tone: Tone = .plain,
+        enabled: Bool = true,
+        heldSince: Date? = nil,
+        holdDuration: TimeInterval = HexMotion.stopHold,
+        press: HexPress? = nil,
+        action: @escaping () -> Void = {}
+    ) {
         self.icon = icon
         self.label = Text(label)
         self.tone = tone
         self.enabled = enabled
+        self.heldSince = heldSince
+        self.holdDuration = holdDuration
+        self.press = press
         self.action = action
     }
 
     var body: some View {
-        Button(action: action) {
-            HexIconView(icon, size: HexIconSize.large)
-                .foregroundStyle(tone == .stop ? HexColor.red : tone == .strong ? HexColor.text1 : HexColor.text2)
-                .frame(width: 46, height: 46)
-                .contentShape(RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous))
+        Group {
+            if let press {
+                face
+                    .background(heldSince != nil ? HexColor.hover : .clear, in: shape)
+                    .overlay(HexHoldSurface(press: enabled ? press : HexPress(began: {}, ended: {})))
+                    .accessibilityElement()
+                    .accessibilityAddTraits(.isButton)
+            } else {
+                Button(action: action) { face }
+                    .buttonStyle(HexRowPressStyle(radius: HexRadius.l))
+                    .disabled(!enabled)
+            }
         }
-        .buttonStyle(HexRowPressStyle(radius: HexRadius.l))
+        .overlay {
+            if let heldSince {
+                HexHoldRing(since: heldSince, duration: holdDuration, radius: HexRadius.l)
+            }
+        }
+        .scaleEffect(heldSince != nil ? 0.95 : 1)
+        .animation(HexMotion.ease(HexMotion.press), value: heldSince != nil)
         .opacity(enabled ? 1 : 0.35)
-        .disabled(!enabled)
         .accessibilityLabel(label)
+    }
+
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous) }
+
+    private var face: some View {
+        HexIconView(icon, size: HexIconSize.large)
+            .foregroundStyle(tone == .stop ? HexColor.red : tone == .strong ? HexColor.text1 : HexColor.text2)
+            .frame(width: 46, height: 46)
+            .contentShape(shape)
     }
 }

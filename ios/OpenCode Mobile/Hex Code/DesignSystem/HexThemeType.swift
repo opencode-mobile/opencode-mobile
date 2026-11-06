@@ -73,6 +73,9 @@ extension HexTextStyle {
     static let mono = HexTextStyle(size: 11.5, weight: .regular, isMonospaced: true)
     /// 10.5 / regular, monospace. The `git` tag.
     static let monoSmall = HexTextStyle(size: 10.5, weight: .regular, isMonospaced: true)
+    /// 13 / regular, monospace, line 1.5. Commands and diffs (`HexCode`), paths and commands in
+    /// Details rows.
+    static let code = HexTextStyle(size: 13, weight: .regular, lineHeight: 1.5, isMonospaced: true)
 }
 
 extension View {
@@ -98,7 +101,9 @@ private struct HexFontModifier: ViewModifier {
 
     private func lineSpacing(size: CGFloat) -> CGFloat {
         guard let lineHeight = style.lineHeight else { return 0 }
-        let natural = UIFont.systemFont(ofSize: size, weight: style.weight.uiFontWeight).lineHeight
+        let natural = style.isMonospaced
+            ? UIFont.monospacedSystemFont(ofSize: size, weight: style.weight.uiFontWeight).lineHeight
+            : UIFont.systemFont(ofSize: size, weight: style.weight.uiFontWeight).lineHeight
         return max(0, lineHeight * size - natural)
     }
 }

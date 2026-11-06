@@ -20,6 +20,11 @@ struct HexTopBarState: Equatable {
     var timer: String?
 }
 
+/// The home top bar's height, for what sits just under it (the stop countdown).
+enum HexTopBarMetrics {
+    static let homeHeight: CGFloat = HexSize.touch + 2
+}
+
 /// Top bar. Two forms:
 /// - home (`.tb`): the agent's state on the left, round buttons on the right;
 /// - page (`.pk-top`): a round back button, the page title and a line under it with a dot.
@@ -79,7 +84,7 @@ struct HexTopBar<Trailing: View>: View {
                 trailing
             }
             .frame(height: HexSize.touch)
-            .padding(.top, 2)
+            .padding(.top, HexTopBarMetrics.homeHeight - HexSize.touch)
         case let .page(text, subtitle, dot):
             HStack(spacing: 10) {
                 if let onBack {

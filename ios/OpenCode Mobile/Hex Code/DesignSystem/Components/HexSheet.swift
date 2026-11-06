@@ -2,11 +2,26 @@ import SwiftUI
 
 /// A bottom sheet on `panel`: radius 20 at the top, a grab bar, and a head with the title and
 /// up to one action on each side. Shown with `.hexSheet(isPresented:)`, on the system sheet.
+///
+/// A request sheet (a question or approval, the prototype's `.rq-head`) has a request head
+/// instead: the title on the left in `headline`, an optional count in `mono` `text3`, and a 36 pt
+/// round Hide button. An approval adds the amber edge (`.perm-sh`): a 1 pt `amber` 60 % line along
+/// the top with an `amber` glow under it. The system sheet can't draw above itself, so the glow
+/// sits just inside the top edge.
 struct HexSheet<Leading: View, Trailing: View, Content: View>: View {
+    struct RequestHead {
+        var title: Text
+        var count: String?
+        var hideLabel: Text
+        var onHide: () -> Void
+    }
+
     let title: Text?
     @ViewBuilder let leading: Leading
     @ViewBuilder let trailing: Trailing
     @ViewBuilder let content: Content
+    var request: RequestHead?
+    var amberEdge = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,8 +29,33 @@ struct HexSheet<Leading: View, Trailing: View, Content: View>: View {
                 .fill(HexColor.line2)
                 .frame(width: 36, height: 4)
                 .padding(.top, 8)
-                .padding(.bottom, 10)
-            if let title {
+                .padding(.bottom, request == nil ? 10 : 4)
+            if let request {
+                HStack(spacing: 8) {
+                    request.title
+                        .hexFont(.headline)
+                        .foregroundStyle(HexColor.text1)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityAddTraits(.isHeader)
+                    if let count = request.count {
+                        Text(verbatim: count)
+                            .hexFont(HexTextStyle.mono.sized(12))
+                            .foregroundStyle(HexColor.text3)
+                    }
+                    Button(action: request.onHide) {
+                        HexIconView(.chevD, size: HexIconSize.regular)
+                            .foregroundStyle(HexColor.text2)
+                            .frame(width: 36, height: 36)
+                            .background(HexColor.tint(5), in: Circle())
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(HexPressStyle(scale: 0.94))
+                    .accessibilityLabel(request.hideLabel)
+                }
+                .frame(minHeight: 44)
+                .padding(.bottom, 4)
+            } else if let title {
                 HStack {
                     leading.frame(minWidth: 70, alignment: .leading)
                     Spacer(minLength: 8)
@@ -34,11 +74,48 @@ struct HexSheet<Leading: View, Trailing: View, Content: View>: View {
         }
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .overlay(alignment: .top) {
+            if amberEdge { HexAmberEdge() }
+        }
+    }
+}
+
+/// An approval sheet's amber top edge: a 1 pt `amber` 60 % line following the sheet's rounded top,
+/// with a soft `amber` 25 % glow just inside it.
+struct HexAmberEdge: View {
+    var body: some View {
+        let top = UnevenRoundedRectangle(topLeadingRadius: HexRadius.sheet, topTrailingRadius: HexRadius.sheet, style: .continuous)
+        ZStack(alignment: .top) {
+            LinearGradient(colors: [HexColor.amber.opacity(0.25), HexColor.amber.opacity(0)], startPoint: .top, endPoint: .bottom)
+                .frame(height: 18)
+                .clipShape(top)
+            top
+                .stroke(HexColor.amber.opacity(0.6), lineWidth: 2)
+                .frame(height: HexRadius.sheet * 2)
+                .mask(alignment: .top) { Rectangle().frame(height: HexRadius.sheet + 1) }
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+extension HexSheet where Leading == EmptyView, Trailing == EmptyView {
+    /// A request sheet: the request head, and the amber edge for an approval.
+    init(request: RequestHead, amberEdge: Bool = false, @ViewBuilder content: () -> Content) {
+        title = nil
+        leading = EmptyView()
+        trailing = EmptyView()
+        self.content = content()
+        self.request = request
+        self.amberEdge = amberEdge
     }
 }
 
 extension HexSheet where Leading == EmptyView, Trailing == EmptyView {
     init(_ title: LocalizedStringResource? = nil, @ViewBuilder content: () -> Content) {
+        request = nil
         self.title = title.map { Text($0) }
         leading = EmptyView()
         trailing = EmptyView()
@@ -62,5 +139,36 @@ extension View {
                 .presentationCornerRadius(HexRadius.sheet)
                 .presentationBackground(HexColor.panel)
         }
+    }
+
+    /// A sheet as tall as its content (up to the large detent), for request sheets: one per item,
+    /// kept on screen while it slides away.
+    func hexFittedSheet<Item: Identifiable, SheetContent: View>(
+        item: Binding<Item?>,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping (Item) -> SheetContent
+    ) -> some View {
+        sheet(item: item, onDismiss: onDismiss) { item in
+            HexFittedSheetContent(content: { content(item) })
+        }
+    }
+}
+
+/// Measures its content and asks for a detent of that height; content taller than the screen
+/// scrolls.
+private struct HexFittedSheetContent<Content: View>: View {
+    let content: () -> Content
+    @State private var height: CGFloat = 360
+
+    var body: some View {
+        ScrollView {
+            content()
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = max(120, $0) }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .presentationDetents([.height(height)])
+            .presentationDragIndicator(.hidden)
+            .presentationCornerRadius(HexRadius.sheet)
+            .presentationBackground(HexColor.panel)
     }
 }

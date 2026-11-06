@@ -78,6 +78,11 @@ private struct HexGalleryContent: View {
             inlineCode
             linkTiles
             surfaces
+            options
+            codeBlocks
+            stopHold
+            requestSheets
+            details
         }
         .padding(.bottom, 40)
     }
@@ -139,7 +144,7 @@ private struct HexGalleryContent: View {
         ("headline", .headline), ("body", .body), ("bodyStrong", .bodyStrong), ("row", .row),
         ("button", .button), ("callout", .callout), ("small", .small), ("caption", .caption),
         ("footnote", .footnote), ("sectionLabel", .sectionLabel), ("badge", .badge), ("mono", .mono),
-        ("monoSmall", .monoSmall),
+        ("monoSmall", .monoSmall), ("code", .code),
     ]
 
     private var icons: some View {
@@ -158,6 +163,14 @@ private struct HexGalleryContent: View {
                     HexIconView(.mic, size: size).foregroundStyle(HexColor.text2)
                 }
                 caption("small · regular · large")
+            }
+            HStack(spacing: 16) {
+                ForEach(HexTodoIcon.allCases, id: \.self) { icon in
+                    VStack(spacing: 5) {
+                        HexTodoIconView(icon)
+                        caption(icon.rawValue)
+                    }
+                }
             }
         }
     }
@@ -490,6 +503,133 @@ private struct HexGalleryContent: View {
                         .strokeBorder(HexColor.line, lineWidth: 1)
                 )
             HexButton("Open as a sheet", size: .regular) { showsSheet = true }
+        }
+    }
+
+    // MARK: M4
+
+    private var options: some View {
+        section("Options") {
+            HexOption(title: "30 days", detail: "Today's behaviour") {}
+            HexOption(title: "7 days", detail: "Safer on shared computers", selected: true) {}
+            HexOption(title: "Apple", mark: .checkbox) {}
+            HexOption(title: "Kiwi", mark: .checkbox, selected: true) {}
+            HexOption(title: "Say your own answer") {}
+            HexOption(title: "Say your own answer", live: .listening("Listening… · release to finish")) {}
+            HexOption(title: "Say your own answer", live: .transcribing("Transcribing…")) {}
+            HexOption(title: "Say your own answer", detail: "Green, but only a dark one", selected: true) {}
+            HexOption(title: "Say what to do instead", mark: .none) {}
+            HexOption(title: "1 day", enabled: false) {}
+            caption("Unselected · selected · multi unselected · multi selected · own answer empty · Listening · Transcribing · filled · no mark · disabled")
+        }
+    }
+
+    private var codeBlocks: some View {
+        section("Code") {
+            HexCode(lines: [HexCodeLine("bun run db:reset"), HexCodeLine("bun test auth --watch=false --reporter=verbose --timeout=30000")])
+            HexCode(lines: [
+                HexCodeLine("src/auth/session.ts"),
+                HexCodeLine("-const maxAge = days(30)", kind: .removed),
+                HexCodeLine("+const maxAge = days(7)", kind: .added),
+            ])
+            HexCode(lines: (1 ... 16).map { HexCodeLine("+line \($0)", kind: .added) }, lineLimit: 12)
+            caption("Commands (wrapping, never cut) · a diff · capped at 12 lines")
+        }
+    }
+
+    private var stopHold: some View {
+        section("Stop hold") {
+            HStack(spacing: 18) {
+                HexIconButton(.stop, label: "Stop", tone: .stop, heldSince: Date().addingTimeInterval(-1.4), holdDuration: 100_000)
+                HexIconButton(.stop, label: "Stop", tone: .stop, heldSince: Date(), holdDuration: 3)
+                HexIconButton(.stop, label: "Stop", tone: .stop)
+            }
+            caption("Held, ring part filled · held now, filling over 3 s · resting")
+            ForEach([0.2, 1.2, 2.4], id: \.self) { elapsed in
+                HexStopWarning(since: Date(), title: { "Stopping the agent in \($0)" }, detail: "Let go to keep it running", frozenAt: elapsed)
+            }
+            HexStopWarning(since: Date(), title: { "Stopping the agent in \($0)" }, detail: "Let go to keep it running", frozenAt: 0.1, reducedMotion: true)
+            caption("3 · 2 · 1 · Reduce Motion (no pop)")
+            ZStack {
+                HexColor.background
+                HexStopEdge(cornerRadius: 28)
+                Text(verbatim: "The screen edge, pulsing")
+                    .hexFont(.caption)
+                    .foregroundStyle(HexColor.text3)
+            }
+            .frame(height: 160)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        }
+    }
+
+    private var requestSheets: some View {
+        section("Request sheets") {
+            sheetSample(amber: true) {
+                HexSheet(request: .init(title: Text(verbatim: "Permission requested"), count: "1 of 2", hideLabel: Text(verbatim: "Hide"), onHide: {}), amberEdge: true) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(verbatim: "Run a command").hexFont(.body).foregroundStyle(HexColor.text2)
+                        HexCode(lines: [HexCodeLine("ls -la")])
+                    }
+                }
+            }
+            sheetSample(amber: false) {
+                HexSheet(request: .init(title: Text(verbatim: "Login length"), count: nil, hideLabel: Text(verbatim: "Hide"), onHide: {})) {
+                    Text(verbatim: "How long should a login last?").hexFont(.body).foregroundStyle(HexColor.text1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            caption("Request head with a count and the amber edge · without")
+        }
+    }
+
+    private func sheetSample(amber: Bool, @ViewBuilder content: () -> some View) -> some View {
+        content()
+            .frame(height: amber ? 150 : 110)
+            .background(
+                UnevenRoundedRectangle(topLeadingRadius: HexRadius.sheet, topTrailingRadius: HexRadius.sheet, style: .continuous)
+                    .fill(HexColor.panel)
+            )
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: HexRadius.sheet, topTrailingRadius: HexRadius.sheet, style: .continuous))
+    }
+
+    private var details: some View {
+        section("Details") {
+            HexDetailsSection(title: Text(verbatim: "Needs you")) {
+                HexDetailRow(leading: .icon(.alert, HexColor.amber), title: Text(verbatim: "Approval needed"), detail: Text(verbatim: "bun run db:reset")) {
+                    HexDetailChevron()
+                }
+            }
+            HexDetailsSection(title: Text(verbatim: "Running now"), count: "2") {
+                HexDetailRow(leading: .dot(.green), title: Text(verbatim: "Find every caller"), detail: Text(verbatim: "Subagent · general")) {
+                    HexDetailTime(text: "1:14")
+                }
+                HexDetailRow(leading: .dot(.neutral), title: Text(verbatim: "bun run dev --port 5173 --host 0.0.0.0"), code: true, detail: Text(verbatim: "Shell command")) {
+                    HexDetailTime(text: "5:12")
+                }
+                HexDetailRow(title: Text(verbatim: "+1 more"), done: true)
+            }
+            HexDetailsSection(title: Text(verbatim: "To-do list"), suffix: Text(verbatim: "· from the agent"), count: "1/3") {
+                HexDetailRow(leading: .todo(.todoDone), title: Text(verbatim: "Remove old session helper"), wraps: true, done: true)
+                HexDetailRow(leading: .todo(.todoDoing), title: Text(verbatim: "Token refresh"), wraps: true)
+                HexDetailRow(leading: .todo(.todoPending), title: Text(verbatim: "Auth tests"), wraps: true)
+            }
+            HexDetailsSection(title: Text(verbatim: "Waiting to send"), count: "1") {
+                HexDetailRow(leading: .icon(.send, HexColor.text3), title: Text(verbatim: "Then run the auth tests"), detail: Text(verbatim: "Queue · after this turn")) {
+                    HexButton("Cancel") {}
+                }
+            }
+            HexDetailsSection(title: Text(verbatim: "Recent")) {
+                HexDetailRow(leading: .icon(.pencil, HexColor.text3), title: Text(verbatim: "src/auth/session.ts"), code: true, detail: Text(verbatim: "Edited · +12 −3")) {
+                    HexDetailTime(text: "4m")
+                }
+                HexDetailRow(leading: .icon(.term, HexColor.text3), title: Text(verbatim: "bun test auth"), code: true, detail: Text(verbatim: "Failed · exit 1")) {
+                    HexDetailTime(text: "2m")
+                }
+                HexDetailRow(leading: .icon(.spark, HexColor.text3), title: Text(verbatim: "Find every caller"), detail: Text(verbatim: "Subagent · general")) {
+                    HexDetailTime(text: "now")
+                }
+            }
+            caption("Section heads with a suffix and a count · icon, dot and to-do rows · time, button and › · done variant")
         }
     }
 
