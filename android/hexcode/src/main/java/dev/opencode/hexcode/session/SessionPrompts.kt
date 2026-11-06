@@ -8,9 +8,9 @@ package dev.opencode.hexcode.session
 object SessionPrompts {
     /**
      * Raised whenever [SUMMARY] changes. 2: Now is a TL;DR of the substance, up to 300 characters, with Link lines
-     * and backticks.
+     * and backticks. 3: no steps (the to-do row comes from the agent's own list).
      */
-    const val SUMMARY_VERSION = 2
+    const val SUMMARY_VERSION = 3
 
     /**
      * The status summary's prompt, exactly as app-plan.md (The status summary), sent to
@@ -22,10 +22,7 @@ object SessionPrompts {
         ## <the topic, at most 5 words>
         Now: <the TL;DR, in plain words, at most 300 characters. Lead with the substance, not with what you did. If you have just answered, found or decided something, give that itself: the key facts, names, numbers or outcome ("Three apps share one API client: …", never "Explained the repo"). If you are still working, say what you are on and anything already found. If you need the user, say exactly what you need from them.>
         Next: <what happens next, or what the user could do, one sentence, at most 60 characters>
-        - [x] <a finished step>
-        - [ ] <a step not done yet>
         Link: <a short label> | <a URL the user may want to open>
-        List at most 8 steps, in order. Leave out the step lines if there is no plan.
         Add at most 2 Link lines, only for URLs from this session, and none if there are none. Never put a URL in Now or Next.
         Put file names, commands and code in backticks. Use no other formatting.
         """.trimIndent()

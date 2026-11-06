@@ -149,7 +149,8 @@ class SummaryTextTest {
     fun aSavedCardKeepsItsLinks() {
         val card = StatusSummary.parse("## Login\nNow: Done.\nLink: PR | https://github.com/o/r/pull/1")
         val saved = SavedSummary("s1", card, 1, "2026-11-06", "/p")
-        val json = kotlinx.serialization.json.Json
+        // As the app reads its settings: a card saved with fields it no longer has (steps) still reads.
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
         assertEquals(saved, json.decodeFromString(SavedSummary.serializer(), json.encodeToString(SavedSummary.serializer(), saved)))
         // A card saved before links existed still reads, with none.
         val old = """{"sessionId":"s1","summary":{"type":"card","title":"T","now":"N","next":null,"steps":[]},"updatedAt":1}"""

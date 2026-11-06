@@ -21,7 +21,7 @@ enum class TodaySessionDemo(
     /** Working, with a four-step plan and a message waiting. */
     Card("card"),
 
-    /** Idle, a card with no steps and no Next line. */
+    /** Idle, a card with no to-do list and no Next line. */
     Plain("plain"),
 
     /** Idle, a Now of 150 characters (`nowLarge`). */
@@ -108,21 +108,47 @@ enum class TodaySessionDemo(
         val busy = LiveSnapshot(now - 252_000, hasRun = true, children = emptyList(), pending = emptyList(), inbox = emptyList())
         val idle = busy.copy(busySince = null)
         return when (this) {
-            Card -> busy.copy(inbox = listOf(InboxEntry("msg_demo", "queue", "Also keep the old error messages")))
+            // Working, with a subagent running, a message waiting and the agent's list half done.
+            Card ->
+                busy.copy(
+                    children = listOf(CHILD),
+                    runningChildren = listOf(CHILD),
+                    inbox = listOf(InboxEntry("msg_demo", "queue", "Also keep the old error messages")),
+                    todos = todos(DONE, DONE, NOW, TODO),
+                )
             Needs ->
                 busy.copy(
                     pending = listOf(pending("frm_demo", PendingItem.Kind.Question, "2 questions · login length and remember-me")),
+                    todos = todos(DONE, DONE, DONE, TODO),
                 )
             Approval ->
                 busy.copy(
                     pending = listOf(pending("per_demo", PendingItem.Kind.Approval, "Run bun run db:reset on the dev database")),
+                    todos = todos(DONE, DONE, DONE, TODO),
                 )
-            Reconnecting -> busy
-            Updating, UpdateFailed -> busy.copy(busySince = now - 95_000)
+            Reconnecting -> busy.copy(todos = todos(DONE, NOW, TODO, TODO))
+            Updating, UpdateFailed -> busy.copy(busySince = now - 95_000, todos = todos(DONE, DONE, NOW, TODO))
             Empty, NewDay -> idle.copy(hasRun = false)
+            // Every item done.
+            Long -> idle.copy(todos = todos(DONE, DONE, DONE, DONE))
+            Formatted ->
+                idle.copy(
+                    todos =
+                        listOf(
+                            TodoItem("Find the 401", DONE),
+                            TodoItem("Retry once in `client.ts`", NOW),
+                            TodoItem("Run `bun test auth`", TODO),
+                        ),
+                )
+            // Plain, Fallback and Longest keep no list: no row.
             else -> idle
         }
     }
+
+    /** The login rewrite's four items, with these statuses. */
+    private fun todos(vararg statuses: TodoItem.Status): List<TodoItem> =
+        listOf("Remove old session helper", "New login form", "Token refresh", "Auth tests")
+            .zip(statuses.toList()) { content, status -> TodoItem(content, status) }
 
     private fun pending(
         id: String,
@@ -134,25 +160,22 @@ enum class TodaySessionDemo(
         when (this) {
             Fallback -> FALLBACK_REPLY
             Plain -> "## Login screen rewrite\nNow: Reading the auth tests to see what the old helper covers."
-            Long -> "## API client\nNow: $LONG_NOW\nNext: Fix token refresh in the shared client.\n$PLAN"
-            Longest -> "## Read-only mode first\nNow: $LONGEST_NOW\nNext: Add a read-only flag to the router.\n$PLAN"
+            Long -> "## API client\nNow: $LONG_NOW\nNext: Fix token refresh in the shared client."
+            Longest -> "## Read-only mode first\nNow: $LONGEST_NOW\nNext: Add a read-only flag to the router."
             Formatted -> FORMATTED_REPLY
             Needs ->
                 "## Login screen rewrite\nNow: Token refresh is done. Paused before changing login length.\n" +
-                    "Next: Your answers, then the auth tests.\n- [x] Remove old session helper\n- [x] New login form\n" +
-                    "- [x] Token refresh\n- [ ] Auth tests"
+                    "Next: Your answers, then the auth tests."
             Approval ->
                 "## Login screen rewrite\nNow: The auth tests need a clean database. Waiting for your approval.\n" +
-                    "Next: Then run the auth tests.\n- [x] Remove old session helper\n- [x] New login form\n" +
-                    "- [x] Token refresh\n- [ ] Auth tests"
+                    "Next: Then run the auth tests."
             else -> REPLY
         }
 
     companion object {
         const val REPLY =
             "## Login screen rewrite\nNow: Wiring the new token refresh into the API client.\n" +
-                "Next: Run the auth tests, then fix whatever breaks.\n- [x] Remove old session helper\n- [x] New login form\n" +
-                "- [ ] Token refresh\n- [ ] Auth tests"
+                "Next: Run the auth tests, then fix whatever breaks."
 
         /** 150 characters. */
         const val LONG_NOW =
@@ -168,10 +191,7 @@ enum class TodaySessionDemo(
         const val FORMATTED_REPLY =
             "## Login `401` fix\nNow: The **token refresh** in `client.ts` now retries once; the login page at " +
                 "http://localhost:5173/login no longer shows a 401.\nNext: Run `bun test auth`, then open a PR.\n" +
-                "- [x] Find the 401\n- [x] Retry in `client.ts`\n- [ ] Auth tests\n" +
                 "Link: Issue 412 | https://github.com/example/app/issues/412"
-
-        private const val PLAN = "- [x] Read the code\n- [x] Map the screens\n- [ ] Router flag\n- [ ] Hide edits"
 
         const val FALLBACK_REPLY =
             "Okay, I finished the token refresh and now I am going through the auth tests one at a time. Two of them " +
@@ -180,6 +200,10 @@ enum class TodaySessionDemo(
 
         private const val DIRECTORY = "/Users/example/Projects/hexcode"
         private const val SESSION = "ses_demo"
+        private const val CHILD = "ses_demo_child"
+        private val DONE = TodoItem.Status.Completed
+        private val NOW = TodoItem.Status.InProgress
+        private val TODO = TodoItem.Status.Pending
     }
 }
 

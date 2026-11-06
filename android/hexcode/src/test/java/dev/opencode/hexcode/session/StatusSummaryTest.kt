@@ -26,30 +26,24 @@ class StatusSummaryTest {
                 title = "Token refresh",
                 now = "Adding a refresh on 401 to the API client.",
                 next = "Rerun the auth tests",
-                steps =
-                    listOf(
-                        SummaryStep("Find where tokens are stored", done = true),
-                        SummaryStep("Add the refresh call", done = true),
-                        SummaryStep("Retry the failed request", done = false),
-                        SummaryStep("Run the auth tests", done = false),
-                    ),
             ),
             StatusSummary.parse(full),
         )
     }
 
     @Test
-    fun noStepsIsACardWithoutSteps() {
-        val card = StatusSummary.parse("## Token refresh\nNow: Reading the API client.\nNext: Add the refresh call") as StatusSummary.Card
-        assertEquals(emptyList<SummaryStep>(), card.steps)
-        assertEquals("Add the refresh call", card.next)
+    fun stepLinesAreIgnored() {
+        // The summary no longer asks for steps; a model that still writes them changes nothing.
+        assertEquals(
+            StatusSummary.parse("## Token refresh\nNow: Adding a refresh on 401 to the API client.\nNext: Rerun the auth tests"),
+            StatusSummary.parse(full),
+        )
     }
 
     @Test
     fun noNextIsACardWithoutNext() {
         val card = StatusSummary.parse("## Token refresh\nNow: Reading the API client.\n- [ ] Add the refresh call") as StatusSummary.Card
         assertEquals(null, card.next)
-        assertEquals(listOf(SummaryStep("Add the refresh call", done = false)), card.steps)
     }
 
     @Test
@@ -92,7 +86,7 @@ class StatusSummaryTest {
     }
 
     @Test
-    fun theFirstOfEachLineWinsAndStepsKeepTheirOrder() {
+    fun theFirstOfEachLineWins() {
         val card =
             StatusSummary.parse(
                 "## First\n## Second\nNow: One.\nNow: Two.\nNext: A\nNext: B\n- [ ] 1\n- [X] 2\n- [x] 3",
@@ -100,15 +94,6 @@ class StatusSummaryTest {
         assertEquals("First", card.title)
         assertEquals("One.", card.now)
         assertEquals("A", card.next)
-        assertEquals(listOf(false, true, true), card.steps.map { it.done })
-        assertEquals(listOf("1", "2", "3"), card.steps.map { it.text })
-    }
-
-    @Test
-    fun atMostEightStepsAreKept() {
-        val steps = (1..10).joinToString("\n") { "- [ ] Step $it" }
-        val card = StatusSummary.parse("## Many\nNow: Working.\n$steps") as StatusSummary.Card
-        assertEquals((1..8).map { "Step $it" }, card.steps.map { it.text })
     }
 
     @Test
@@ -133,14 +118,13 @@ class StatusSummaryTest {
     }
 
     @Test
-    fun linkLinesAreIgnoredAndDoNotMakeAFallback() {
+    fun linkLinesDoNotMakeAFallback() {
         val reply =
             "## Login rewrite\nNow: Three apps share one API client.\nNext: Run the tests.\n- [x] Read the code\n" +
                 "Link: Dev server | http://localhost:5173/login\nLink: PR | https://github.com/o/r/pull/1"
         val card = StatusSummary.parse(reply) as StatusSummary.Card
         assertEquals("Three apps share one API client.", card.now)
         assertEquals("Run the tests.", card.next)
-        assertEquals(listOf("Read the code"), card.steps.map { it.text })
     }
 
     @Test
@@ -168,18 +152,6 @@ class StatusSummaryTest {
         val rockets = "\uD83D\uDE80".repeat(5)
         assertEquals(rockets, StatusSummary.clip(rockets, 5))
         assertEquals("\uD83D\uDE80".repeat(3) + "…", StatusSummary.clip(rockets, 4))
-    }
-
-    @Test
-    fun stepsAreClippedTo40() {
-        val long = "Rewrite every test that leans on the old session helper"
-        val card = StatusSummary.parse("## Task\nNow: Working.\n- [ ] $long") as StatusSummary.Card
-        assertEquals("Rewrite every test that leans on the…", card.steps.single().text)
-        assertTrue(
-            card.steps
-                .single()
-                .text.length <= 40,
-        )
     }
 
     @Test

@@ -7,13 +7,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** One line of the summary's plan. */
-@Serializable
-data class SummaryStep(
-    val text: String,
-    val done: Boolean,
-)
-
 /**
  * What the home screen's status card shows (app-plan.md, Today's session on screen): a [Card] read from the
  * summary's reply, the reply as plain text when it isn't in the card's shape ([Fallback]), a new session's card
@@ -23,8 +16,7 @@ data class SummaryStep(
 @Serializable
 sealed interface StatusSummary {
     /**
-     * The reply in the card's shape, clipped to fit: [title] 40, [now] 300, [next] 60 and each step 40 characters
-     * shown. The text keeps its inline Markdown ([SummaryText]); links in Now and Next are already their labels, and
+     * The reply in the card's shape, clipped to fit: [title] 40, [now] 300 and [next] 60 characters shown. The text keeps its inline Markdown ([SummaryText]); links in Now and Next are already their labels, and
      * with the `Link:` lines they're the card's [links].
      */
     @Serializable
@@ -34,7 +26,6 @@ sealed interface StatusSummary {
         val now: String,
         /** Null when the reply had no `Next:` line. */
         val next: String?,
-        val steps: List<SummaryStep>,
         /** The link tiles, each URL once; none when the reply had none. */
         val links: List<SummaryLink> = emptyList(),
     ) : StatusSummary
@@ -68,15 +59,10 @@ sealed interface StatusSummary {
         const val NOW_MAX = 300
         const val NEXT_MAX = 60
         const val FALLBACK_MAX = 300
-        const val STEP_MAX = 40
-
-        /** The prompt asks for at most this many steps; more are left out, so the progress segments fit. */
-        const val STEPS_MAX = 8
 
         private val TITLE = Regex("""^##\s+(.*)$""")
         private val NOW = Regex("""^Now:\s*(.*)$""", RegexOption.IGNORE_CASE)
         private val NEXT = Regex("""^Next:\s*(.*)$""", RegexOption.IGNORE_CASE)
-        private val STEP = Regex("""^- \[([ xX])]\s*(.*)$""")
         private val LINK = Regex("""^Link:\s*(.*)$""", RegexOption.IGNORE_CASE)
         private val SPACES = Regex("""\s+""")
 
@@ -85,18 +71,17 @@ sealed interface StatusSummary {
 
         /**
          * Reads the summary's [reply]. Code fences and blank lines are ignored; the first `## ` line is the title,
-         * the first `Now:` line the sentence, the first `Next:` line what follows, and `- [x]` / `- [ ]` lines the
-         * steps, in order. Any other line is ignored. Without a title or a `Now:` line, the reply is a [Fallback].
+         * the first `Now:` line the sentence, the first `Next:` line what follows, and `Link:` lines links. Any other
+         * line, such as a step a model still writes, is ignored. Without a title or a `Now:` line, the reply is a
+         * [Fallback].
          */
         fun parse(reply: String): StatusSummary {
             val lines = reply.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("```") }
             var title: String? = null
             var now: String? = null
             var next: String? = null
-            val steps = mutableListOf<SummaryStep>()
             val linkLines = mutableListOf<SummaryLink>()
             for (line in lines) {
-                val step = STEP.matchEntire(line)
                 when {
                     TITLE.matches(line) -> title = title ?: TITLE.value(line)
                     NOW.matches(line) -> now = now ?: NOW.value(line)
@@ -105,10 +90,6 @@ sealed interface StatusSummary {
                         if (linkLines.size < SummaryLinks.LINE_MAX) {
                             LINK.value(line)?.let(SummaryLinks::fromLine)?.let { linkLines += it }
                         }
-                    step != null -> {
-                        val text = step.groupValues[2].trim()
-                        if (text.isNotEmpty()) steps += SummaryStep(SummaryText.clip(text, STEP_MAX), done = step.groupValues[1] != " ")
-                    }
                 }
             }
             val shownTitle = title
@@ -124,7 +105,6 @@ sealed interface StatusSummary {
                 title = SummaryText.clip(shownTitle, TITLE_MAX),
                 now = SummaryText.clip(nowText, NOW_MAX),
                 next = nextText?.let { SummaryText.clip(it, NEXT_MAX) },
-                steps = steps.take(STEPS_MAX),
                 links = SummaryLinks.distinct(linkLines + nowLinks + nextLinks),
             )
         }
