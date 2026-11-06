@@ -7,11 +7,14 @@ import dev.opencode.mobile.data.remote.SseAttemptOutcome
 import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 
 /** Today's session over OpenCode v2.2.5's API (m2-api-notes.md); the calls themselves are in `:opencode-kit`. */
 class OpenCodeTodayApi(
@@ -87,7 +90,18 @@ class OpenCodeTodayApi(
                 hasRun = busy != null,
                 children = childIds,
                 pending = pending,
-                inbox = inbox.await().map { InboxEntry(it.id, it.delivery ?: "queue", it.payload?.text.orEmpty()) },
+                inbox =
+                    inbox.await().map { item ->
+                        InboxEntry(
+                            item.id,
+                            item.delivery ?: "queue",
+                            item.payload?.text.orEmpty(),
+                            item.payload
+                                ?.files
+                                .orEmpty()
+                                .map { InboxFile(it.name, it.mime) },
+                        )
+                    },
                 runningChildren = childIds.filter { it in running },
                 todos = todos.await().getOrNull().orEmpty(),
                 // A list that couldn't be read keeps the one shown; the rest of the state still counts.
@@ -127,9 +141,12 @@ class OpenCodeTodayApi(
         sessionId: String,
         text: String,
         delivery: String,
+        images: List<PromptImage>,
     ): String {
         ready()
-        return sessions.promptTextV2(sessionId, text, delivery).id
+        // About 3 MB for 4 photos once encoded: small enough to build in memory (attach-notes.md, OpenCode Mobile).
+        val files = withContext(Dispatchers.IO) { images.map { V2PromptFileDto(uri = it.dataUrl(), name = it.name) } }
+        return sessions.promptTextV2(sessionId, text, delivery, files).id
     }
 
     override suspend fun cancelQueued(

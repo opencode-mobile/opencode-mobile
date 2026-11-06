@@ -76,6 +76,8 @@ sealed interface SessionEvent {
         val id: String,
         val delivery: String,
         val text: String = "",
+        /** The message's files by name and type; their base64, which the event carries in full, is dropped. */
+        val files: List<InboxFile> = emptyList(),
     ) : SessionEvent
 
     /** `session.inbox.delivered` or `.cancelled`. */
@@ -178,8 +180,14 @@ sealed interface SessionEvent {
                     val id = data.string("inboxID") ?: return null
                     val item = data["item"] as? JsonObject
                     val delivery = item?.string("delivery") ?: "queue"
-                    val text = (item?.get("payload") as? JsonObject)?.string("text").orEmpty()
-                    sessionId?.let { InboxEnqueued(it, id, delivery, text) }
+                    val payload = item?.get("payload") as? JsonObject
+                    val text = payload?.string("text").orEmpty()
+                    val files =
+                        (payload?.get("files") as? JsonArray)
+                            ?.mapNotNull { it as? JsonObject }
+                            ?.map { InboxFile(it.string("name"), it.string("mime")) }
+                            .orEmpty()
+                    sessionId?.let { InboxEnqueued(it, id, delivery, text, files) }
                 }
                 "session.inbox.delivered", "session.inbox.cancelled" -> {
                     val id = data.string("inboxID") ?: return null

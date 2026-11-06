@@ -164,4 +164,36 @@ class SessionEventTest {
     fun theStreamAsksForToolSuccess() {
         assertTrue("session.tool.success" in SessionEvent.TYPES)
     }
+
+    @Test
+    fun anEnqueuedMessageKeepsItsFileNamesAndTypesButNotTheirBase64() {
+        // As captured live (attach-notes.md, §3), with a photo's worth of base64.
+        val data = "/9j/4AAQSkZJRgAB" + "A".repeat(700_000)
+        val line =
+            """{"id":"evt_1","created":1793975222256,"type":"session.inbox.enqueued","location":{"directory":"/tmp/x"},""" +
+                """"data":{"inboxID":"msg_1","sessionID":"ses_1","item":{"type":"user","payload":{"text":"Queued: what letters?",""" +
+                """"files":[{"data":"$data","mime":"image/jpeg","source":{"type":"inline"},"name":"Photo 1.jpg"},""" +
+                """{"data":"iVBOR","mime":"image/png","name":"Screenshot 1.jpg"}]},"delivery":"queue"}},""" +
+                """"durable":{"aggregateID":"ses_1","seq":10,"version":1}}"""
+        val event = SessionEvent.decode(line) as SessionEvent.InboxEnqueued
+        assertEquals(
+            listOf(InboxFile("Photo 1.jpg", "image/jpeg"), InboxFile("Screenshot 1.jpg", "image/png")),
+            event.files,
+        )
+        assertEquals("Queued: what letters?", event.text)
+        // Nothing the event keeps holds the data.
+        assertTrue(data.take(40) !in event.toString())
+        val (state, _) = LiveSessionState("ses_1").apply(event, 0)
+        assertEquals(2, state.queued.single().images)
+    }
+
+    @Test
+    fun aMessageWithoutFilesHasNone() {
+        val event =
+            SessionEvent.decode(
+                """{"type":"session.inbox.enqueued","data":{"sessionID":"ses_1","inboxID":"msg_B",
+                "item":{"type":"user","payload":{"text":"m2 queued A"},"delivery":"queue"}}}""",
+            ) as SessionEvent.InboxEnqueued
+        assertEquals(emptyList<InboxFile>(), event.files)
+    }
 }

@@ -201,4 +201,55 @@ class OpenCodeTodayApiTest {
             assertEquals(5L, snapshot.busySince)
             assertFalse(snapshot.todosRead)
         }
+
+    @Test
+    fun aMessageWithImagesSendsThemAsDataUrlsInTheSamePrompt() =
+        runTest {
+            val jpeg =
+                java.io.File
+                    .createTempFile("photo", ".jpg")
+                    .apply { writeBytes(ByteArray(5_000) { (it * 7).toByte() }) }
+            val api = api { path -> if (path.endsWith("/prompt")) """{"data":{"id":"msg_9","type":"user"}}""" else null }
+            val id =
+                api.send(
+                    "ses_1",
+                    "What is this?",
+                    "queue",
+                    listOf(PromptImage("Photo 1.jpg", jpeg), PromptImage("Screenshot 1.jpg", jpeg)),
+                )
+            assertEquals("msg_9", id)
+            val body = requests.single().substringAfter("/prompt ")
+            val b64 =
+                java.util.Base64
+                    .getEncoder()
+                    .encodeToString(jpeg.readBytes())
+            assertEquals(
+                """{"text":"What is this?","delivery":"queue","files":[{"uri":"data:image/jpeg;base64,$b64","name":"Photo 1.jpg"},""" +
+                    """{"uri":"data:image/jpeg;base64,$b64","name":"Screenshot 1.jpg"}]}""",
+                body,
+            )
+            assertFalse(body.contains('\n'))
+            jpeg.delete()
+        }
+
+    @Test
+    fun theReadBackKeepsEachWaitingMessagesFileNamesAndTypes() =
+        runTest {
+            val api =
+                api { path ->
+                    when {
+                        path.endsWith("/session/active") -> """{"data":{}}"""
+                        path.endsWith("/inbox") ->
+                            """{"data":[{"id":"msg_1","type":"user","payload":{"text":"","files":[{"data":"${"A".repeat(
+                                50_000,
+                            )}","mime":"image/jpeg",
+                            "name":"Photo 1.jpg"}]},"delivery":"queue"}]}"""
+                        path.endsWith("/session/ses_1") -> """{"data":{"id":"ses_1","time":{"created":1,"updated":2}}}"""
+                        path.endsWith("/session") || path.endsWith("/session?parentID") -> """{"data":[]}"""
+                        else -> """{"data":[]}"""
+                    }
+                }
+            val inbox = api.snapshot("ses_1").inbox
+            assertEquals(listOf(InboxEntry("msg_1", "queue", "", listOf(InboxFile("Photo 1.jpg", "image/jpeg")))), inbox)
+        }
 }

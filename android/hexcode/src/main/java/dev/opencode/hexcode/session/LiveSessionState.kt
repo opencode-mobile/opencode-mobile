@@ -6,6 +6,17 @@ data class InboxEntry(
     val delivery: String,
     /** What the message says, for the Waiting to send sheet. */
     val text: String = "",
+    /** Its files, by name and type; the server's copy of their data is never kept. */
+    val files: List<InboxFile> = emptyList(),
+) {
+    /** How many of [files] are images, for "2 images" on a message the phone has no copy of. */
+    val images: Int get() = files.count { it.mime == null || it.mime.startsWith("image/") }
+}
+
+/** A file of a waiting message: its name and type (`files[].name` and `mime`), without its data. */
+data class InboxFile(
+    val name: String?,
+    val mime: String?,
 )
 
 /** The state read back on every (re)connect (app-plan.md, Today's session on screen). */
@@ -116,7 +127,7 @@ data class LiveSessionState(
                 if (event.sessionId != rootId || inbox.any { it.id == event.id }) {
                     this to null
                 } else {
-                    copy(inbox = inbox + InboxEntry(event.id, event.delivery, event.text)) to null
+                    copy(inbox = inbox + InboxEntry(event.id, event.delivery, event.text, event.files)) to null
                 }
             is SessionEvent.InboxRemoved ->
                 if (event.sessionId != rootId) this to null else copy(inbox = inbox.filterNot { it.id == event.id }) to null

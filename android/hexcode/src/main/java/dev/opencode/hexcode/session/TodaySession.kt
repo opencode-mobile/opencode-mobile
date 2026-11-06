@@ -77,11 +77,15 @@ interface LiveSessionApi {
         prompt: String,
     ): String
 
-    /** `POST /api/session/{id}/prompt` with [text] and [delivery] (`queue` or `steer`); returns the inbox item's id. */
+    /**
+     * `POST /api/session/{id}/prompt` with [text], [delivery] (`queue` or `steer`) and [images] in the same request;
+     * returns the inbox item's id.
+     */
     suspend fun send(
         sessionId: String,
         text: String,
         delivery: String,
+        images: List<PromptImage> = emptyList(),
     ): String
 
     /** `DELETE /api/session/{id}/inbox/{item}`: takes back a message that hasn't been delivered. */
@@ -244,13 +248,14 @@ class TodaySession(
     }
 
     /**
-     * Sends [text] to today's session with [delivery]; returns the inbox item's id, which [cancelQueued] takes back.
-     * Throws when the session isn't open or the server refuses it.
+     * Sends [text] with [images] to today's session with [delivery]; returns the inbox item's id, which [cancelQueued]
+     * takes back. Throws when the session isn't open or the server refuses it.
      */
     suspend fun send(
         text: String,
         delivery: String,
-    ): String = api.send(sessionId ?: error("Today's session isn't open"), text, delivery).also { sent[it] = text }
+        images: List<PromptImage> = emptyList(),
+    ): String = api.send(sessionId ?: error("Today's session isn't open"), text, delivery, images).also { sent[it] = text }
 
     /** Takes back a message waiting in the inbox; once the DELETE works it leaves [TodayState.queued] at once. */
     suspend fun cancelQueued(itemId: String) {

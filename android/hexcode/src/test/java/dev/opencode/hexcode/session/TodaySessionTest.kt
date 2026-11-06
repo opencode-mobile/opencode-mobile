@@ -95,6 +95,7 @@ class TodaySessionTest {
             sessionId: String,
             text: String,
             delivery: String,
+            images: List<PromptImage>,
         ) = "msg_1"
 
         var cancelFails = false

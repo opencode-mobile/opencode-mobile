@@ -290,6 +290,7 @@ private class DemoLive(
         sessionId: String,
         text: String,
         delivery: String,
+        images: List<PromptImage>,
     ) = "msg_sample"
 
     override suspend fun cancelQueued(
