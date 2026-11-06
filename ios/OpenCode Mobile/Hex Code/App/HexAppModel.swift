@@ -17,13 +17,21 @@ final class HexAppModel {
     private(set) var phase: Phase = .launching
     private(set) var firstRun: FirstRunModel?
     private(set) var main: HexMainModel?
-    let voice = VoiceEngine()
+    let voice: VoiceEngine
+    /// The speech model; it starts loading with the process when it is already on the phone.
+    let speech: SpeechModel
 
     @ObservationIgnored private let store: any HexSetupStoring
     @ObservationIgnored private var speechTask: Task<Void, Never>?
 
     init(store: any HexSetupStoring = HexSetupStore()) {
         self.store = store
+        let voice = VoiceEngine()
+        self.voice = voice
+        speech = SpeechModel(voice: voice)
+        // Load at process start (app plan, "The speech model"). On first run the download still
+        // starts at the scan step.
+        if VoiceEngine.hasDownloadedModel { prepareSpeech() }
     }
 
     func launch() async {
@@ -65,8 +73,7 @@ final class HexAppModel {
 
     /// The speech model downloads once, in the background; later calls only load it.
     func prepareSpeech() {
-        guard speechTask == nil else { return }
-        speechTask = Task { [voice] in await voice.prepare() }
+        speech.start()
     }
 
     private func beginFirstRun() {
@@ -94,7 +101,7 @@ final class HexAppModel {
         // `-HexCodeDemoSession <preset>` starts on a sample session (debug builds; see `TodaySessionDemo`).
         main = HexMainModel(
             setup: setup,
-            home: HomeModel(recorder: TakeCapture(voice: voice)),
+            home: HomeModel(recorder: TakeCapture(), speech: speech),
             samplePreset: TodaySessionDemo.launchPreset,
             store: store
         )

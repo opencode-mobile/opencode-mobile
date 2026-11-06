@@ -166,21 +166,69 @@ struct DictationDraftTests {
 
 @MainActor
 final class FakeRecorder: TakeRecording {
-    var isReady = true
     var level: Float = 0
     var startFails = false
-    var transcript = "hello there"
+    /// Seconds of audio each take holds.
+    var duration: TimeInterval = 1
     private(set) var started = 0
     private(set) var cancelled = 0
+    private(set) var takes: [URL] = []
 
     func startRecording() async throws {
         started += 1
         if startFails { throw CancellationError() }
     }
 
-    func stopAndTranscribe() async throws -> String { transcript }
+    func stopRecording() async -> RecordedTake? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("fake-take-\(takes.count)-\(UUID().uuidString).wav")
+        takes.append(url)
+        return RecordedTake(url: url, duration: duration)
+    }
 
     func cancelRecording() { cancelled += 1 }
+}
+
+/// A speech model whose readiness the test controls.
+@MainActor
+final class FakeSpeech: SpeechTranscribing {
+    var status: SpeechStatus {
+        didSet {
+            guard status == .ready || status == .failed else { return }
+            let waiting = waiters
+            waiters = []
+            waiting.forEach { $0.resume() }
+        }
+    }
+
+    /// The text of each take, in turn; then `transcript`.
+    var transcripts: [String] = []
+    var transcript = "hello there"
+    var failsTranscription = false
+    private(set) var transcribed: [URL] = []
+    private(set) var reloads = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(_ status: SpeechStatus = .ready) {
+        self.status = status
+    }
+
+    func waitUntilReady() async -> Bool {
+        if status != .ready, status != .failed {
+            await withCheckedContinuation { waiters.append($0) }
+        }
+        return status == .ready
+    }
+
+    func reload() {
+        reloads += 1
+        status = .loading
+    }
+
+    func transcribe(_ take: RecordedTake) async throws -> String {
+        transcribed.append(take.url)
+        if failsTranscription { throw CancellationError() }
+        return transcripts.isEmpty ? transcript : transcripts.removeFirst()
+    }
 }
 
 @MainActor
@@ -189,10 +237,10 @@ struct HomeModelTests {
         var now = Date(timeIntervalSince1970: 1_000)
     }
 
-    private func make(_ given: FakeRecorder? = nil) -> (HomeModel, FakeRecorder, Clock) {
+    private func make(_ given: FakeRecorder? = nil, speech: FakeSpeech? = nil) -> (HomeModel, FakeRecorder, Clock) {
         let recorder = given ?? FakeRecorder()
         let clock = Clock()
-        return (HomeModel(recorder: recorder, now: { clock.now }), recorder, clock)
+        return (HomeModel(recorder: recorder, speech: speech ?? FakeSpeech(), now: { clock.now }), recorder, clock)
     }
 
     @Test func holdAndReleaseMakesAChunkAndNeverSends() async {
@@ -256,22 +304,24 @@ struct HomeModelTests {
         #expect(recorder.cancelled == 1)
     }
 
-    @Test func nothingRecordsBeforeTheSpeechModelIsReady() async {
-        let recorder = FakeRecorder()
-        recorder.isReady = false
-        let (home, _, _) = make(recorder)
+    @Test func theTalkButtonDoesNotWaitForTheSpeechModel() async {
+        let speech = FakeSpeech(.loading)
+        let (home, recorder, _) = make(speech: speech)
         home.pressBegan()
-        #expect(!home.isRecording)
-        #expect(recorder.started == 0)
+        #expect(home.isRecording)
+        #expect(home.toast == nil)
+        await Task.yield()
+        #expect(recorder.started == 1)
     }
 
     @Test func reRecordFromTheChunkActionsIsHandsFree() async {
-        let (home, recorder, clock) = make()
+        let speech = FakeSpeech()
+        let (home, _, clock) = make(speech: speech)
         home.pressBegan()
         clock.now += 2
         await home.pressEnded()
         home.toggleChunk(home.draft.chunks[0].id)
-        recorder.transcript = "better words"
+        speech.transcript = "better words"
         home.rerecordSelected()
         #expect(home.locked)
         #expect(home.draft.isRerecording)
@@ -342,7 +392,7 @@ struct TalkDragTests {
 
     @Test func releaseActsOnTheArmNotTheLook() async {
         let recorder = FakeRecorder()
-        let home = HomeModel(recorder: recorder)
+        let home = HomeModel(recorder: recorder, speech: FakeSpeech())
         home.pressBegan()
         home.pressMoved(dx: 70)
         // Back to 55: inside the hysteresis, still armed.
@@ -350,5 +400,133 @@ struct TalkDragTests {
         #expect(home.arm == .lock)
         await home.pressEnded()
         #expect(home.locked)
+    }
+}
+
+/// Takes released before the speech model is ready wait for it (app plan, "The speech model").
+@MainActor
+struct WaitingTakeTests {
+    final class Clock {
+        var now = Date(timeIntervalSince1970: 1_000)
+    }
+
+    private func make(_ speech: FakeSpeech, recorder: FakeRecorder? = nil) -> (HomeModel, Clock) {
+        let clock = Clock()
+        return (HomeModel(recorder: recorder ?? FakeRecorder(), speech: speech, now: { clock.now }), clock)
+    }
+
+    private func take(_ home: HomeModel, _ clock: Clock) async {
+        home.pressBegan()
+        clock.now += 2
+        await home.pressEnded()
+    }
+
+    private func eventually(_ condition: @MainActor () -> Bool) async {
+        for _ in 0 ..< 200 where !condition() {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    @Test func aTakeWhileLoadingWaitsThenGetsItsText() async {
+        let speech = FakeSpeech(.loading)
+        let (home, clock) = make(speech)
+        await take(home, clock)
+        #expect(home.draft.chunks.map(\.state) == [.waiting])
+        #expect(!home.draft.isComplete)
+        speech.status = .ready
+        await eventually { home.draft.chunks.first?.text != nil }
+        #expect(home.draft.chunks.map(\.text) == ["hello there"])
+    }
+
+    @Test func threeWaitingTakesComeOutInTheOrderTheyWereRecorded() async {
+        let speech = FakeSpeech(.downloading(percent: 45))
+        let recorder = FakeRecorder()
+        let (home, clock) = make(speech, recorder: recorder)
+        for _ in 0 ..< 3 { await take(home, clock) }
+        #expect(home.draft.chunks.map(\.state) == [.waiting, .waiting, .waiting])
+        speech.transcripts = ["one", "two", "three"]
+        speech.status = .ready
+        await eventually { home.draft.isComplete }
+        #expect(home.draft.chunks.map(\.text) == ["one", "two", "three"])
+        #expect(speech.transcribed == recorder.takes)
+    }
+
+    @Test func aFailedModelThenTryAgainGivesText() async {
+        let speech = FakeSpeech(.loading)
+        let (home, clock) = make(speech)
+        await take(home, clock)
+        speech.status = .failed
+        await eventually { home.canRetryTakes }
+        #expect(home.draft.chunks.map(\.state) == [.failed("Couldn’t turn this take into text")])
+        #expect(DraftStatusLine.of(isRecording: false, draft: home.draft, speech: speech.status) == .speechFailed)
+        home.retryFailedTakes()
+        #expect(speech.reloads == 1)
+        #expect(home.draft.chunks.map(\.state) == [.waiting])
+        speech.status = .ready
+        await eventually { home.draft.isComplete }
+        #expect(home.draft.chunks.map(\.text) == ["hello there"])
+    }
+
+    @Test func aFailedTakeCanStillBeReRecordedOrDeleted() async {
+        let speech = FakeSpeech(.failed)
+        let (home, clock) = make(speech)
+        await take(home, clock)
+        await eventually { home.canRetryTakes }
+        let id = home.draft.chunks[0].id
+        home.toggleChunk(id)
+        #expect(home.draft.selectedID == id)
+        home.deleteSelectedChunk()
+        #expect(home.draft.isEmpty)
+    }
+
+    @Test func sendWaitsWhileAChunkWaits() {
+        var draft = DictationDraft()
+        let first = draft.beginTake()!
+        draft.endTake(duration: 1)
+        draft.finishTranscription(first, text: "Fix the login")
+        let second = draft.beginTake()!
+        draft.endTake(duration: 1)
+        draft.markWaiting(second)
+        // Send, Ask and Set as goal wait for isComplete.
+        #expect(!draft.isComplete)
+        let began = draft.beginTranscribing(second)
+        #expect(began)
+        draft.finishTranscription(second, text: "then the tests")
+        #expect(draft.isComplete)
+    }
+
+    @Test func theLabelLineRules() {
+        var draft = DictationDraft()
+        let id = draft.beginTake()!
+        #expect(DraftStatusLine.of(isRecording: true, draft: draft, speech: .loading) == .recording)
+        draft.endTake(duration: 1)
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .ready) == .transcribing)
+        draft.markWaiting(id)
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .loading) == .speechLoading)
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .downloading(percent: 45)) == .speechDownloading(percent: 45))
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .failed) == .speechFailed)
+        _ = draft.beginTranscribing(id)
+        draft.finishTranscription(id, text: "Hello")
+        // Nothing waits: the model's state doesn't show.
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .loading) == .summary)
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .downloading(percent: 10)) == .summary)
+    }
+
+    @Test func aTooShortTakeLeavesNoChunk() async {
+        let recorder = FakeRecorder()
+        recorder.duration = 0.2
+        let speech = FakeSpeech()
+        let (home, clock) = make(speech, recorder: recorder)
+        await take(home, clock)
+        #expect(home.draft.isEmpty)
+        #expect(speech.transcribed.isEmpty)
+    }
+
+    @Test func aSilentTakeLeavesNoChunk() async {
+        let speech = FakeSpeech()
+        speech.transcript = ""
+        let (home, clock) = make(speech)
+        await take(home, clock)
+        #expect(home.draft.isEmpty)
     }
 }

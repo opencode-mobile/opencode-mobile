@@ -1,20 +1,18 @@
 import Foundation
 import Observation
+import os
 import VoiceEngineKit
 
-/// The recorder the home screen drives. `VoiceEngine` in the app; a fake in tests.
+/// The recorder the home screen drives: `TakeCapture` in the app; a fake in tests. It only
+/// records; `SpeechTranscribing` turns the audio into text.
 @MainActor
 protocol TakeRecording: AnyObject {
-    var isReady: Bool { get }
     /// Loudness of the take now, 0 to 1; 0 until audio arrives.
     var level: Float { get }
     func startRecording() async throws
-    func stopAndTranscribe() async throws -> String
+    /// Ends the take and hands over its audio file; nil when nothing was recording.
+    func stopRecording() async -> RecordedTake?
     func cancelRecording()
-}
-
-extension VoiceEngine: TakeRecording {
-    var isReady: Bool { modelState == .ready }
 }
 
 /// Home, not hooked up to the agent yet: hold to talk, lock or drop, chunks with delete and
@@ -39,13 +37,21 @@ final class HomeModel {
     var showEarlier = false
 
     @ObservationIgnored private let recorder: any TakeRecording
+    /// The speech model. Recording never waits for it.
+    let speech: any SpeechTranscribing
     @ObservationIgnored private let now: () -> Date
+    /// Each take's audio, kept until it has text (or the draft is cleared).
+    @ObservationIgnored private var audio: [UUID: RecordedTake] = [:]
+    /// Takes to transcribe, in the order they were recorded.
+    @ObservationIgnored private var queue: [UUID] = []
+    @ObservationIgnored private var isDraining = false
     @ObservationIgnored private var pressStartedAt: Date?
     @ObservationIgnored private var startTask: Task<Bool, Never>?
     @ObservationIgnored private var lastDeleted: (index: Int, chunk: DraftChunk)?
 
-    init(recorder: any TakeRecording, toasts: HexToaster? = nil, now: @escaping () -> Date = Date.init) {
+    init(recorder: any TakeRecording, speech: any SpeechTranscribing, toasts: HexToaster? = nil, now: @escaping () -> Date = Date.init) {
         self.recorder = recorder
+        self.speech = speech
         self.toasts = toasts ?? HexToaster()
         self.now = now
     }
@@ -68,14 +74,6 @@ final class HomeModel {
             pressStartedAt = now()
             return
         }
-        guard recorder.isReady else {
-            toasts.show(HexToastItem(
-                tone: .info,
-                title: String(localized: "home.speech_not_ready", defaultValue: "Speech is almost ready"),
-                detail: String(localized: "home.speech_not_ready.sub", defaultValue: "The speech model is still downloading. It happens once.")
-            ))
-            return
-        }
         guard startTake() else { return }
         pressStartedAt = now()
     }
@@ -83,7 +81,7 @@ final class HomeModel {
     /// Re-record from the chunk's actions: a hands-free take replaces the selected chunk; a tap on
     /// the talk button ends it.
     func rerecordSelected() {
-        guard draft.selectedIndex != nil, recorder.isReady, startTake() else { return }
+        guard draft.selectedIndex != nil, startTake() else { return }
         locked = true
     }
 
@@ -170,12 +168,84 @@ final class HomeModel {
         guard await startTask?.value == true else { return }
         draft.endTake(duration: takeStartedAt.map { now().timeIntervalSince($0) } ?? 0)
         takeStartedAt = nil
-        do {
-            let text = try await recorder.stopAndTranscribe()
-            draft.finishTranscription(id, text: text)
-        } catch {
-            draft.failTranscription(id, message: String(localized: "home.transcribe_failed", defaultValue: "Couldn’t turn this take into text"))
+        guard let take = await recorder.stopRecording() else {
+            draft.failTranscription(id, message: Self.failedText)
+            return
         }
+        guard take.duration >= TakeCapture.minimumAudio else {
+            HexLog.dictation.info("take: \(take.duration, format: .fixed(precision: 2)) s of audio, too short to read; dropped")
+            try? FileManager.default.removeItem(at: take.url)
+            draft.finishTranscription(id, text: "")
+            return
+        }
+        if let earlier = audio[id] { try? FileManager.default.removeItem(at: earlier.url) }
+        audio[id] = take
+        await enqueue(id)
+    }
+
+    static var failedText: String {
+        String(localized: "home.transcribe_failed", defaultValue: "Couldn’t turn this take into text")
+    }
+
+    // MARK: Transcription
+
+    /// A finished take: transcribed at once when the model is ready, else it waits for speech.
+    private func enqueue(_ id: UUID) async {
+        queue.removeAll { $0 == id }
+        queue.append(id)
+        if speech.status == .ready {
+            await drain()
+        } else {
+            draft.markWaiting(id)
+            Task { await drain() }
+        }
+    }
+
+    /// Transcribes queued takes in recording order once the model is ready. If it fails, every
+    /// waiting take reads "Couldn't turn this take into text" with Try again; its audio is kept.
+    private func drain() async {
+        guard !isDraining else { return }
+        isDraining = true
+        defer { isDraining = false }
+        while let id = queue.first {
+            if speech.status != .ready {
+                guard await speech.waitUntilReady() else {
+                    for waiting in queue { draft.failTranscription(waiting, message: Self.failedText) }
+                    queue.removeAll()
+                    return
+                }
+            }
+            queue.removeFirst()
+            guard let take = audio[id], draft.beginTranscribing(id) else { continue }
+            do {
+                let text = try await speech.transcribe(take)
+                guard audio[id]?.url == take.url else { continue }
+                draft.finishTranscription(id, text: text)
+                try? FileManager.default.removeItem(at: take.url)
+                audio[id] = nil
+            } catch {
+                draft.failTranscription(id, message: Self.failedText)
+            }
+        }
+    }
+
+    /// Try again: failed takes whose audio is kept go back in the queue, in draft order; a model
+    /// that failed loads again first.
+    func retryFailedTakes() {
+        let failed = draft.chunks.filter { if case .failed = $0.state { audio[$0.id] != nil } else { false } }
+        guard !failed.isEmpty else { return }
+        if speech.status == .failed { speech.reload() }
+        for chunk in failed {
+            draft.markWaiting(chunk.id)
+            queue.removeAll { $0 == chunk.id }
+            queue.append(chunk.id)
+        }
+        Task { await drain() }
+    }
+
+    /// Some failed take can be tried again.
+    var canRetryTakes: Bool {
+        draft.chunks.contains { if case .failed = $0.state { audio[$0.id] != nil } else { false } }
     }
 
     private func dropTake() async {
@@ -217,6 +287,9 @@ final class HomeModel {
     func clearDraft() {
         guard !draft.isEmpty, !isRecording else { return }
         draft.clear()
+        for take in audio.values { try? FileManager.default.removeItem(at: take.url) }
+        audio.removeAll()
+        queue.removeAll()
         lastDeleted = nil
         showEarlier = false
         toasts.show(HexToastItem(

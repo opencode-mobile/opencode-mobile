@@ -1,10 +1,13 @@
 import Foundation
 
 /// One take in the draft. A take is transcribed once it ends, so it moves
-/// Listening → Transcribing → text, and Send (later) waits for every chunk to have text.
+/// Listening → (Waiting for speech, while the model loads) → Transcribing → text, and Send (later)
+/// waits for every chunk to have text.
 struct DraftChunk: Identifiable, Equatable, Sendable {
     enum State: Equatable, Sendable {
         case listening
+        /// Released before the speech model was ready; its audio waits.
+        case waiting
         case transcribing
         case text(String)
         case failed(String)
@@ -47,6 +50,8 @@ struct DictationDraft: Equatable, Sendable {
     var isEmpty: Bool { chunks.isEmpty }
     var isListening: Bool { recordingID != nil }
     var isTranscribing: Bool { chunks.contains { $0.state == .transcribing } }
+    var isWaiting: Bool { chunks.contains { $0.state == .waiting } }
+    var hasFailed: Bool { chunks.contains { if case .failed = $0.state { true } else { false } } }
     /// Every chunk has text: what Send will wait for.
     var isComplete: Bool { !chunks.isEmpty && chunks.allSatisfy { $0.text != nil } }
     var selectedIndex: Int? { selectedID.flatMap(index(of:)) }
@@ -115,8 +120,25 @@ struct DictationDraft: Equatable, Sendable {
     }
 
     mutating func failTranscription(_ id: UUID, message: String) {
-        guard let index = index(of: id), chunks[index].state == .transcribing else { return }
+        guard let index = index(of: id), [.transcribing, .waiting].contains(chunks[index].state) else { return }
         chunks[index].state = .failed(message)
+    }
+
+    /// The take waits for the speech model (from Transcribing, or a failed take tried again).
+    mutating func markWaiting(_ id: UUID) {
+        guard let index = index(of: id) else { return }
+        switch chunks[index].state {
+        case .transcribing, .failed: chunks[index].state = .waiting
+        default: return
+        }
+        if selectedID == id { selectedID = nil }
+    }
+
+    /// The take's turn to be transcribed. False when it is no longer waiting for that.
+    mutating func beginTranscribing(_ id: UUID) -> Bool {
+        guard let index = index(of: id), [.transcribing, .waiting].contains(chunks[index].state) else { return false }
+        chunks[index].state = .transcribing
+        return true
     }
 
     // MARK: Chunks
@@ -127,7 +149,7 @@ struct DictationDraft: Equatable, Sendable {
         switch chunks[index].state {
         case .text, .failed:
             selectedID = selectedID == id ? nil : id
-        case .listening, .transcribing:
+        case .listening, .waiting, .transcribing:
             return
         }
     }
@@ -178,5 +200,31 @@ struct DictationDraft: Equatable, Sendable {
         } else {
             chunks.remove(at: index)
         }
+    }
+}
+
+/// What the draft's label line says (app plan, "The speech model" › Showing it): the take being
+/// recorded; else, only while a take waits for speech, the model's progress; "Speech model didn't
+/// load" when it failed and takes are left without text; else Transcribing; else the summary.
+enum DraftStatusLine: Equatable, Sendable {
+    case recording
+    case speechDownloading(percent: Int)
+    case speechLoading
+    case speechFailed
+    case transcribing
+    case summary
+
+    static func of(isRecording: Bool, draft: DictationDraft, speech: SpeechStatus) -> DraftStatusLine {
+        if isRecording { return .recording }
+        if draft.isWaiting {
+            switch speech {
+            case let .downloading(percent): return .speechDownloading(percent: percent)
+            case .failed: return .speechFailed
+            case .loading, .ready: return .speechLoading
+            }
+        }
+        if speech == .failed, draft.hasFailed { return .speechFailed }
+        if draft.isTranscribing { return .transcribing }
+        return .summary
     }
 }

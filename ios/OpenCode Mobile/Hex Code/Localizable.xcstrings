@@ -710,6 +710,50 @@
           }
         }
       }
+    },
+    "home.speech.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model loading…"
+          }
+        }
+      }
+    },
+    "home.speech.downloading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading the speech model · %lld%%"
+          }
+        }
+      }
+    },
+    "home.speech.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model didn’t load"
+          }
+        }
+      }
+    },
+    "home.take.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        }
+      }
     }
   }
 }

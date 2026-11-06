@@ -122,13 +122,29 @@ struct DraftView: View {
                         }
                     }
                 }
-            } else if draft.isTranscribing {
-                HStack(spacing: 6) {
-                    HexSpinner(size: HexIconSize.small)
-                    Text(LocalizedStringResource("draft.transcribing", defaultValue: "Transcribing on this phone…"))
-                }
             } else {
-                Text(verbatim: summary)
+                switch DraftStatusLine.of(isRecording: false, draft: draft, speech: home.speech.status) {
+                case let .speechDownloading(percent):
+                    HStack(spacing: 6) {
+                        HexSpinner(size: HexIconSize.small)
+                        Text(verbatim: String(localized: "home.speech.downloading", defaultValue: "Downloading the speech model · \(percent)%"))
+                    }
+                case .speechLoading:
+                    HStack(spacing: 6) {
+                        HexSpinner(size: HexIconSize.small)
+                        Text(LocalizedStringResource("home.speech.loading", defaultValue: "Speech model loading…"))
+                    }
+                case .speechFailed:
+                    Text(LocalizedStringResource("home.speech.failed", defaultValue: "Speech model didn’t load"))
+                        .foregroundStyle(HexColor.red)
+                case .transcribing:
+                    HStack(spacing: 6) {
+                        HexSpinner(size: HexIconSize.small)
+                        Text(LocalizedStringResource("draft.transcribing", defaultValue: "Transcribing on this phone…"))
+                    }
+                case .recording, .summary:
+                    Text(verbatim: summary)
+                }
             }
         }
         .hexFont(HexTextStyle.caption.weight(.medium))
@@ -174,6 +190,11 @@ struct DraftView: View {
                 HexButton(icon: .x) { home.clearDraft() }
                     .accessibilityLabel(Text(LocalizedStringResource("draft.clear", defaultValue: "Clear the draft")))
                 Spacer()
+                if home.canRetryTakes {
+                    HexButton(LocalizedStringResource("home.take.retry", defaultValue: "Try again"), icon: .refresh) {
+                        home.retryFailedTakes()
+                    }
+                }
             }
         }
         .frame(minHeight: 30)
@@ -212,7 +233,8 @@ struct DraftText: View {
         switch chunk.state {
         case .listening:
             HexChunkItem(id: chunk.id, text: String(localized: "draft.listening", defaultValue: "Listening…"), kind: .placeholder)
-        case .transcribing:
+        case .transcribing, .waiting:
+            // A waiting take looks like one being transcribed; the label line says why it waits.
             HexChunkItem(id: chunk.id, text: String(localized: "draft.transcribing_chunk", defaultValue: "Transcribing…"), kind: .placeholder)
         case let .text(text):
             HexChunkItem(id: chunk.id, text: text)

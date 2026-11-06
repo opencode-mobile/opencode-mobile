@@ -32,9 +32,11 @@ actor ParakeetTranscriber {
 
     func prepare(progress: @escaping @Sendable (Progress) -> Void) async throws {
         guard manager == nil else { return }
+        Self.excludeModelFromBackup()
         let models = try await AsrModels.downloadAndLoad(version: .v2) { update in
             progress(Progress(fractionCompleted: update.fractionCompleted, detail: Self.detail(for: update.phase)))
         }
+        Self.excludeModelFromBackup()
         let manager = AsrManager(config: .default)
         try await manager.loadModels(models)
         self.manager = manager
@@ -47,6 +49,16 @@ actor ParakeetTranscriber {
         let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw TranscriberError.emptyTranscript }
         return text
+    }
+
+    /// The model can always be downloaded again, so it stays out of iCloud and device backups.
+    /// FluidAudio doesn't mark its folder; this does, once it exists.
+    nonisolated static func excludeModelFromBackup() {
+        var folder = AsrModels.defaultCacheDirectory(for: .v2)
+        guard FileManager.default.fileExists(atPath: folder.path) else { return }
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? folder.setResourceValues(values)
     }
 
     private static func detail(for phase: DownloadPhase) -> String {

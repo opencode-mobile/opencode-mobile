@@ -11,7 +11,6 @@ struct TalkButton: View {
         HexTalkButton(
             phase: HexTalkButton.Phase(
                 label: label,
-                ready: voice.modelState == .ready,
                 quiet: !home.draft.isEmpty,
                 recording: home.isRecording,
                 pressing: home.isPressing,
@@ -28,21 +27,13 @@ struct TalkButton: View {
     }
 
     private var label: String {
-        switch voice.modelState {
-        case let .preparing(fraction, _):
-            return String(localized: "talk.preparing", defaultValue: "Getting speech ready · \(Int((fraction * 100).rounded()))%")
-        case .notLoaded:
-            return String(localized: "talk.waiting", defaultValue: "Getting speech ready")
-        case .failed:
-            return String(localized: "talk.failed", defaultValue: "Speech isn’t available")
-        case .ready:
-            if home.draft.selectedIndex != nil {
-                return String(localized: "talk.rerecord", defaultValue: "Hold to re-record")
-            }
-            return home.draft.isEmpty
-                ? String(localized: "talk.hold", defaultValue: "Hold to talk")
-                : String(localized: "talk.more", defaultValue: "Hold to keep talking")
+        // The button works whatever the speech model is doing; takes wait for it instead.
+        if home.draft.selectedIndex != nil {
+            return String(localized: "talk.rerecord", defaultValue: "Hold to re-record")
         }
+        return home.draft.isEmpty
+            ? String(localized: "talk.hold", defaultValue: "Hold to talk")
+            : String(localized: "talk.more", defaultValue: "Hold to keep talking")
     }
 
     private var accessibilityText: String {

@@ -12,17 +12,13 @@ final class TakeCapture: TakeRecording {
     /// Takes shorter than this hold no speech Parakeet can read (FluidAudio needs 0.3 s).
     static let minimumAudio: TimeInterval = 0.3
 
-    private let voice: VoiceEngine
     private let audio = TakeAudio()
 
-    init(voice: VoiceEngine) {
-        self.voice = voice
+    init() {
         // Setting the category doesn't take the microphone or stop other audio; doing it now keeps
         // it out of the first press.
         audio.prepare()
     }
-
-    var isReady: Bool { voice.modelState == .ready }
 
     /// Loudness of the take now, 0 to 1; 0 until audio arrives.
     var level: Float { audio.level }
@@ -48,29 +44,10 @@ final class TakeCapture: TakeRecording {
         }
     }
 
-    /// Ends the take and returns its text; "" when there was nothing to read (too short, silent).
-    func stopAndTranscribe() async throws -> String {
-        guard let take = await audio.stop() else {
-            HexLog.dictation.error("take: stopped, but nothing was recording")
-            throw VoiceEngine.EngineError.notRecording
-        }
-        defer { try? FileManager.default.removeItem(at: take.url) }
-        guard take.duration >= Self.minimumAudio else {
-            HexLog.dictation.info("take: \(take.duration, format: .fixed(precision: 2)) s of audio, too short to read; dropped")
-            return ""
-        }
-        do {
-            let text = try await voice.transcribe(fileAt: take.url)
-            HexLog.dictation.info("take: \(take.duration, format: .fixed(precision: 2)) s → \(text.count) characters")
-            return text
-        } catch {
-            if Self.isNoSpeech(error) {
-                HexLog.dictation.info("take: \(take.duration, format: .fixed(precision: 2)) s, no speech heard; dropped")
-                return ""
-            }
-            HexLog.dictation.error("take: \(take.duration, format: .fixed(precision: 2)) s, transcription failed: \(String(describing: error), privacy: .public)")
-            throw error
-        }
+    func stopRecording() async -> RecordedTake? {
+        let take = await audio.stop()
+        if take == nil { HexLog.dictation.error("take: stopped, but nothing was recording") }
+        return take
     }
 
     func cancelRecording() {
