@@ -84,23 +84,18 @@ object ApprovalLines {
         }
     }
 
-    /** A unified diff's hunk lines, without its headers (`Index:`, `===`, `---`, `+++`, `@@`). */
+    /** A unified diff's added and removed lines only: no headers (`Index:`, `===`, `---`, `+++`, `@@`), no context. */
     fun diffLines(patch: String): List<CodeLine> {
-        val lines = patch.lines()
         val body = mutableListOf<CodeLine>()
         var inHunk = false
-        for (line in lines) {
+        for (line in patch.lines()) {
             when {
                 line.startsWith("@@") -> inHunk = true
                 !inHunk -> Unit
-                line.startsWith("\\") -> Unit
                 line.startsWith("+") -> body += CodeLine(line, CodeLine.Kind.Added)
                 line.startsWith("-") -> body += CodeLine(line, CodeLine.Kind.Removed)
-                else -> body += CodeLine(line)
             }
         }
-        // A patch ends with a newline: its last, empty line isn't a line of the file.
-        while (body.lastOrNull()?.let { it.kind == CodeLine.Kind.Plain && it.text.isBlank() } == true) body.removeAt(body.lastIndex)
         return body
     }
 }
@@ -257,10 +252,9 @@ data class QuestionAnswers(
         return copy(answers = answers + (question.key to next))
     }
 
-    /** A tap on the own answer that already has text: chooses it again, or in multiselect toggles it. */
+    /** A tap on the own answer: chooses it (single choice; it counts once it has text), or in multiselect toggles it. */
     fun toggleOwn(): QuestionAnswers {
         val current = answer
-        if (current.own.isNullOrBlank()) return this
         val next =
             if (question.multiple) {
                 current.copy(ownChosen = !current.ownChosen)

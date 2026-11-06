@@ -208,6 +208,11 @@ class OpenCodeTodayApi(
         return sessions.interruptSessionResultV2(sessionId)
     }
 
+    override suspend fun subagents(rootId: String): Set<String> {
+        ready()
+        return sessions.listSessionsV2(parentId = rootId).map { it.id }.toSet()
+    }
+
     override suspend fun activeSessions(): Set<String> {
         ready()
         return sessions.getActiveSessionsV2().keys

@@ -105,6 +105,14 @@ class TodaySessionNeedsTest {
             return interrupted[sessionId] ?: true
         }
 
+        /** The server's fresh list of subagents; null fails, and the known ones count. */
+        var fresh: Set<String>? = null
+
+        override suspend fun subagents(rootId: String): Set<String> {
+            log += "subagents"
+            return fresh ?: error("HTTP 500")
+        }
+
         override suspend fun activeSessions(): Set<String> {
             log += "active"
             return active
@@ -268,8 +276,39 @@ class TodaySessionNeedsTest {
 
             val outcome = today.stop()
 
-            assertEquals(listOf("interrupt ses_root", "active", "interrupt ses_a", "interrupt ses_b"), log)
+            assertEquals(listOf("interrupt ses_root", "subagents", "active", "interrupt ses_a", "interrupt ses_b"), log)
             assertEquals(StopOutcome.Stopped(waiting = false), outcome)
+        }
+
+    @Test
+    fun aSubagentStartedSinceTheLastReadIsStoppedTooAndItsAnswerCounts() =
+        runTest {
+            val api = Api()
+            api.active = setOf("ses_root", "ses_new")
+            api.fresh = setOf("ses_new")
+            api.interrupted["ses_root"] = false
+            val (today, _) = open(api)
+
+            // The session was already idle, but its subagent was stopped: "Stopped".
+            assertEquals(StopOutcome.Stopped(waiting = false), today.stop())
+            assertEquals(listOf("interrupt ses_root", "subagents", "active", "interrupt ses_new"), log)
+        }
+
+    @Test
+    fun aSubagentsNoteWhileTheSessionIsBusyGetsOneMoreInterruptAtOnce() =
+        runTest {
+            val api = Api()
+            val (today, transport) = open(api)
+            today.stop()
+            log.clear()
+            // Still busy (no interrupted event yet), the note by its metadata, whatever its text.
+            transport.send(
+                "session.inbox.enqueued",
+                """{"inboxID":"msg_n","sessionID":"ses_root","item":{"type":"synthetic","payload":{"text":"done",""" +
+                    """"metadata":{"source":"subagent","childID":"ses_c","state":"completed"}},"delivery":"steer"}}""",
+            )
+            runCurrent()
+            assertEquals(listOf("interrupt ses_root"), log)
         }
 
     @Test

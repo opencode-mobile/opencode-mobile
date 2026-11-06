@@ -114,6 +114,8 @@ object RecentSteps {
                 val deletions = files.sumOf { it.int("deletions") }
                 val outcome =
                     when {
+                        // No file data: the path with no second line.
+                        files.isEmpty() -> RecentOutcome.Unknown
                         files.size > 1 -> RecentOutcome.Files(files.size, additions, deletions)
                         files.singleOrNull()?.string("status") == "added" -> RecentOutcome.Created(additions)
                         else -> RecentOutcome.Edited(additions, deletions)
@@ -147,8 +149,7 @@ object RecentSteps {
             type == "permission.rejected" -> RecentOutcome.Denied
             type == "aborted" && "declined" in message -> RecentOutcome.Denied
             type == "aborted" && "interrupted" in message -> RecentOutcome.Stopped
-            exit != null && exit != 0 -> RecentOutcome.Failed(exit)
-            type == "aborted" -> RecentOutcome.Stopped
+            exit != null -> RecentOutcome.Failed(exit)
             else -> RecentOutcome.Unknown
         }
     }
@@ -236,16 +237,21 @@ object DetailsSections {
         )
 }
 
-/** "now" under a minute, then whole minutes ("2m"), then whole hours ("3h"): Recent's age on the right. */
+/**
+ * Recent's age on the right: null ("now") under 45 s, then minutes ("2m", rounded, at least 1), hours ("3h") and days
+ * ("2d"). Written in code, as the clocks are.
+ */
 fun recentAge(
     at: Long,
     now: Long,
 ): String? {
     val seconds = (now - at).coerceAtLeast(0) / 1000
+    val minutes = ((seconds + 30) / 60).coerceAtLeast(1)
     return when {
-        seconds < 60 -> null
-        seconds < 3600 -> "${seconds / 60}m"
-        else -> "${seconds / 3600}h"
+        seconds < 45 -> null
+        minutes < 60 -> "${minutes}m"
+        minutes < 24 * 60 -> "${minutes / 60}h"
+        else -> "${minutes / (24 * 60)}d"
     }
 }
 

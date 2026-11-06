@@ -804,7 +804,8 @@ class HomeViewModel(
                 val left =
                     state.value.today.pending
                         .filterNot { it.id == itemId || it.id in settling }
-                if (state.value.needs == null && left.isNotEmpty()) openNeeds(left.first().id)
+                // Not over Details: it shows what's left.
+                if (state.value.needs == null && !state.value.detailsOpen && left.isNotEmpty()) openNeeds(left.first().id)
             }
     }
 
@@ -840,6 +841,7 @@ class HomeViewModel(
     fun sheetTakeStart(target: SheetTarget): Boolean {
         val current = state.value
         if (current.sheetTake != null || current.talk != TalkMode.Idle || current.draft.isListening) return false
+        sheetPressedAt = clock()
         state.update { it.copy(sheetTake = SheetTake(target)) }
         dictation.start {
             if (state.value.sheetTake?.target == target) state.update { it.copy(sheetTake = null, notice = HomeNotice.MicUnavailable) }
@@ -847,13 +849,23 @@ class HomeViewModel(
         return true
     }
 
+    /** When the spoken row was pressed: under [SHEET_TAP_MS] it was a tap. */
+    private var sheetPressedAt = 0L
+
     /**
-     * The row is released: the take ends and is turned into text, which becomes Deny's note or the own answer. A take
-     * with no speech (a tap) keeps what was said before, and a tap on an own answer that has text chooses it.
+     * The row is released: the take ends and is turned into text, which becomes Deny's note or the own answer (chosen
+     * once spoken). A take with no speech keeps what was said before. Pressed for under [SHEET_TAP_MS] it was a tap and
+     * records nothing: on the own answer a tap chooses it (multiselect: toggles it); on Say why it does nothing.
      */
     fun sheetTakeEnd() {
         val take = state.value.sheetTake ?: return
         if (take.transcribing) return
+        if (clock() - sheetPressedAt < SHEET_TAP_MS) {
+            dictation.drop()
+            state.update { it.copy(sheetTake = null) }
+            if (take.target is SheetTarget.Own) ownTapped(take.target)
+            return
+        }
         state.update { it.copy(sheetTake = take.copy(transcribing = true)) }
         viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
             val samples = dictation.end()
@@ -886,19 +898,29 @@ class HomeViewModel(
         target: SheetTarget,
         text: String?,
     ): HomeUiState =
-        when (target) {
-            is SheetTarget.Note -> if (text == null) this else copy(notes = notes + (target.itemId to text))
-            is SheetTarget.Own -> {
-                val answers = answers[target.itemId] ?: return this
-                val index =
-                    answers.form.fields
-                        .indexOfFirst { it.key == target.key }
-                        .takeIf { it >= 0 } ?: return this
-                val onPage = answers.copy(page = index)
-                val changed = if (text == null) onPage.toggleOwn() else onPage.own(text)
-                copy(answers = this.answers + (target.itemId to changed.copy(page = answers.page)))
-            }
+        when {
+            text == null -> this
+            target is SheetTarget.Note -> copy(notes = notes + (target.itemId to text))
+            target is SheetTarget.Own -> onField(target) { it.own(text) }
+            else -> this
         }
+
+    /** A tap on the own answer of [target]'s field. */
+    private fun ownTapped(target: SheetTarget.Own) = state.update { it.onField(target) { answers -> answers.toggleOwn() } }
+
+    /** [change] applied on [target]'s page, whichever page shows. */
+    private fun HomeUiState.onField(
+        target: SheetTarget.Own,
+        change: (QuestionAnswers) -> QuestionAnswers,
+    ): HomeUiState {
+        val answers = answers[target.itemId] ?: return this
+        val index =
+            answers.form.fields
+                .indexOfFirst { it.key == target.key }
+                .takeIf { it >= 0 } ?: return this
+        val changed = change(answers.copy(page = index))
+        return copy(answers = this.answers + (target.itemId to changed.copy(page = answers.page)))
+    }
 
     // --- Details (app-plan.md, Needs you and control › Details)
 
@@ -1603,6 +1625,9 @@ class HomeViewModel(
 
 /** 0.3 s at 16 kHz: a shorter take leaves the draft quietly. */
 private const val MIN_SAMPLES = 4_800
+
+/** A spoken row (Say why, an own answer) pressed for less than this is a tap: it records nothing. */
+const val SHEET_TAP_MS = 380L
 
 /** Where the sheets and Details log what went wrong. */
 private const val NEEDS_TAG = "HexCode.Needs"

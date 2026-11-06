@@ -116,10 +116,8 @@ private fun ApprovalBody(
             Text(actionTitle(approval.action), style = HexTheme.type.body, color = colors.text2)
             if (item.sessionId != state.today.rootId) {
                 val child = state.today.children[item.sessionId]
-                val name = child?.title?.ifBlank { null } ?: child?.agent
-                if (name != null) {
-                    Text(stringResource(R.string.needs_approval_from_subagent, name), style = HexTheme.type.caption, color = colors.text3)
-                }
+                val name = child?.title?.ifBlank { null } ?: child?.agent?.ifBlank { null } ?: item.sessionId
+                Text(stringResource(R.string.needs_approval_from_subagent, name), style = HexTheme.type.caption, color = colors.text3)
             }
         }
         approval.message?.let { Text(it, style = HexTheme.type.body, color = colors.text2) }
@@ -228,7 +226,7 @@ private fun QuestionPage(
             HexOption(
                 stringResource(R.string.needs_question_own),
                 mark,
-                selected = answer.ownChosen && !answer.own.isNullOrBlank(),
+                selected = answer.ownChosen,
                 detail = answer.own,
                 take = take?.let { if (it.transcribing) HexOptionTake.Transcribing else HexOptionTake.Listening },
                 takeLabel = take?.let { stringResource(if (it.transcribing) R.string.needs_transcribing else R.string.needs_listening) },

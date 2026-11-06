@@ -369,6 +369,21 @@ fun HomeScreen(
                         null -> if (micOff) HexToastMessage(micOffText, HexToastTone.Info) else null
                     }
                 }
+            AttachSheet(
+                attachOpen,
+                onPhotos = {
+                    attachOpen = false
+                    attach.photos()
+                },
+                onCamera = {
+                    attachOpen = false
+                    attach.camera()
+                },
+                onClose = { attachOpen = false },
+            )
+            DetailsSheet(state, vm)
+            NeedsSheets(state, vm, micReady)
+            // Notices and the stop warning show over any open sheet.
             HexToastHost(
                 message = notice,
                 onDismissed = {
@@ -388,20 +403,6 @@ fun HomeScreen(
             ) {
                 StopCountdown(state.stopHeldAt, still)
             }
-            AttachSheet(
-                attachOpen,
-                onPhotos = {
-                    attachOpen = false
-                    attach.photos()
-                },
-                onCamera = {
-                    attachOpen = false
-                    attach.camera()
-                },
-                onClose = { attachOpen = false },
-            )
-            DetailsSheet(state, vm)
-            NeedsSheets(state, vm, micReady)
         }
         // The red edge round the whole screen while Stop is held, over the bars too.
         if (state.stopHolding) HexStopEdge(corner = screenCorner(), reduceMotion = still)

@@ -87,6 +87,8 @@ sealed interface SessionEvent {
          * that wakes the session when it finishes.
          */
         val synthetic: Boolean = false,
+        /** A finished subagent's note (`payload.metadata.source: "subagent"`), which wakes the session. */
+        val fromSubagent: Boolean = false,
     ) : SessionEvent
 
     /** `session.inbox.delivered` or `.cancelled`. */
@@ -207,7 +209,9 @@ sealed interface SessionEvent {
                             ?.map { InboxFile(it.string("name"), it.string("mime")) }
                             .orEmpty()
                     val synthetic = item?.string("type") == "synthetic"
-                    sessionId?.let { InboxEnqueued(it, id, delivery, text, files, synthetic) }
+                    val source = (payload?.get("metadata") as? JsonObject)?.string("source")
+                    val fromSubagent = synthetic && (source == "subagent" || text.trimStart().startsWith("<subagent"))
+                    sessionId?.let { InboxEnqueued(it, id, delivery, text, files, synthetic, fromSubagent) }
                 }
                 "session.inbox.delivered", "session.inbox.cancelled" -> {
                     val id = data.string("inboxID") ?: return null

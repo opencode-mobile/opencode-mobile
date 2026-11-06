@@ -305,6 +305,7 @@ class NeedsYouViewModelTest {
                 dictation.gate = CompletableDeferred()
                 assertTrue(vm.sheetTakeStart(SheetTarget.Note("per_1")))
                 assertTrue(dictation.recording)
+                advanceTimeBy(1_500)
                 vm.sheetTakeEnd()
                 assertTrue(
                     vm.uiState.value.sheetTake!!
@@ -350,10 +351,20 @@ class NeedsYouViewModelTest {
             try {
                 vm.openNeeds()
                 vm.sheetTakeStart(SheetTarget.Note("per_1"))
+                advanceTimeBy(1_500)
                 vm.sheetTakeEnd()
                 runCurrent()
+                // A tap (under 0.38 s) records nothing and keeps what was said.
+                vm.sheetTakeStart(SheetTarget.Note("per_1"))
+                advanceTimeBy(200)
+                vm.sheetTakeEnd()
+                runCurrent()
+                assertFalse(dictation.recording)
+                assertEquals("Ask me first.", vm.uiState.value.notes["per_1"])
+                // An empty take (no speech) keeps it too.
                 dictation.short = true
                 vm.sheetTakeStart(SheetTarget.Note("per_1"))
+                advanceTimeBy(1_000)
                 vm.sheetTakeEnd()
                 runCurrent()
                 assertEquals("Ask me first.", vm.uiState.value.notes["per_1"])
@@ -473,6 +484,7 @@ class NeedsYouViewModelTest {
                 vm.chooseOption("Red")
                 dictation.gate = CompletableDeferred()
                 vm.sheetTakeStart(SheetTarget.Own("frm_1", "q0"))
+                advanceTimeBy(1_500)
                 vm.sheetTakeEnd()
                 // Next waits for the take's text.
                 vm.nextQuestion()
@@ -575,4 +587,43 @@ class NeedsYouViewModelTest {
         assertEquals(1, StopCount.left(2_500))
         assertEquals(1, StopCount.left(3_000))
     }
+
+    @Test
+    fun aTapOnTheOwnAnswerChoosesItOrTogglesIt() =
+        runTest(dispatcher) {
+            server.pending = listOf(PendingItem("frm_1", "ses_1", PendingItem.Kind.Question, "Which colour?", form = form))
+            val (vm, dictation) = home()
+            try {
+                vm.openNeeds()
+                vm.chooseOption("Red")
+                vm.sheetTakeStart(SheetTarget.Own("frm_1", "q0"))
+                advanceTimeBy(100)
+                vm.sheetTakeEnd()
+                assertFalse(dictation.recording)
+                val single =
+                    vm.uiState.value.answers["frm_1"]!!
+                        .answer
+                assertTrue(single.ownChosen)
+                assertTrue(single.chosen.isEmpty())
+                assertFalse(single.answered)
+                vm.chooseOption("Red")
+                vm.nextQuestion()
+                vm.sheetTakeStart(SheetTarget.Own("frm_1", "q1"))
+                advanceTimeBy(100)
+                vm.sheetTakeEnd()
+                assertTrue(
+                    vm.uiState.value.answers["frm_1"]!!
+                        .answer.ownChosen,
+                )
+                vm.sheetTakeStart(SheetTarget.Own("frm_1", "q1"))
+                advanceTimeBy(100)
+                vm.sheetTakeEnd()
+                assertFalse(
+                    vm.uiState.value.answers["frm_1"]!!
+                        .answer.ownChosen,
+                )
+            } finally {
+                done(vm)
+            }
+        }
 }

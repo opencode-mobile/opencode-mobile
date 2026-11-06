@@ -159,6 +159,9 @@ interface LiveSessionApi {
 
     /** Recent's steps, from the session's newest assistant messages. */
     suspend fun recent(sessionId: String): List<RecentStep> = emptyList()
+
+    /** Today's subagents as the server lists them now (`GET /api/session?parentID=`). */
+    suspend fun subagents(rootId: String): Set<String> = throw UnsupportedOperationException("No subagent list here")
 }
 
 /**
@@ -412,8 +415,9 @@ class TodaySession(
 
     /**
      * Stop, after the 3 s hold (app-plan.md, Stop › At 3 s): interrupts today's session, then each of its subagents
-     * that is running ([LiveSessionApi.activeSessions]). For [STOP_RETRY_MS] after, if a subagent's `<subagent …>` note
-     * starts the session again, it's interrupted once more. Background shells are left running.
+     * that is running: in [LiveSessionApi.activeSessions] and in a fresh list of its subagents (else the ones known).
+     * For [STOP_RETRY_MS] after, if a subagent's note starts the session again, or arrives while it's busy, it's
+     * interrupted once more. Background shells are left running.
      */
     suspend fun stop(): StopOutcome {
         val root = sessionId ?: return StopOutcome.Failed
@@ -427,7 +431,14 @@ class TodaySession(
                 return StopOutcome.Failed
             }
         stopWatch = StopWatch(root, clock() + STOP_RETRY_MS)
-        val children = live?.children.orEmpty()
+        val children =
+            try {
+                api.subagents(root)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                live?.children.orEmpty()
+            }
         val active =
             if (children.isEmpty()) {
                 emptySet()
@@ -463,23 +474,25 @@ class TodaySession(
             stopWatch = null
             return
         }
-        when {
-            event is SessionEvent.InboxEnqueued &&
-                event.sessionId == watch.root &&
-                event.synthetic &&
-                event.text.trimStart().startsWith("<subagent") -> watch.noteSeen = true
-            event is SessionEvent.ExecutionStarted && event.sessionId == watch.root && watch.noteSeen -> {
-                stopWatch = null
-                Log.i(STOP_TAG, "a subagent's note started ${watch.root} again: interrupting it once more")
-                scope.launch {
-                    try {
-                        api.interrupt(watch.root)
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Exception) {
-                        Log.w(STOP_TAG, "the second stop failed: ${error.message}")
-                    }
+        val retry =
+            when {
+                event is SessionEvent.InboxEnqueued && event.sessionId == watch.root && event.fromSubagent -> {
+                    watch.noteSeen = true
+                    live?.busySince != null
                 }
+                event is SessionEvent.ExecutionStarted && event.sessionId == watch.root -> watch.noteSeen
+                else -> false
+            }
+        if (!retry) return
+        stopWatch = null
+        Log.i(STOP_TAG, "a subagent's note woke ${watch.root} again: interrupting it once more")
+        scope.launch {
+            try {
+                api.interrupt(watch.root)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(STOP_TAG, "the second stop failed: ${error.message}")
             }
         }
     }

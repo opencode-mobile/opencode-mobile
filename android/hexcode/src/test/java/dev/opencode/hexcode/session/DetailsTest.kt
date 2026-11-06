@@ -48,6 +48,11 @@ class DetailsTest {
         assertEquals(RecentOutcome.Files(3, 18, 3), several?.outcome)
         // An edit that didn't complete changed nothing.
         assertNull(step("edit", """{"status":"error","input":{"path":"a.kt"},"error":{"type":"permission.rejected","message":"no"}}"""))
+        // No file data: the path, with no second line.
+        assertEquals(
+            RecentStep(RecentStep.Kind.Edit, "a.kt", RecentOutcome.Unknown, 1_000),
+            step("edit", """{"status":"completed","input":{"path":"a.kt"}}"""),
+        )
     }
 
     @Test
@@ -72,6 +77,16 @@ class DetailsTest {
             outcome("""{"status":"error","input":{"command":"echo m4"},"error":{"type":"permission.rejected","message":"Use printf"}}"""),
         )
         assertEquals("date", step("shell", """{"status":"completed","input":{"command":"date"}}""")?.title)
+        // Any other error: the exit code when it's known, else no second line.
+        assertEquals(
+            RecentOutcome.Failed(124),
+            outcome("""{"status":"error","input":{"command":"x"},"error":{"type":"timeout"},"metadata":{"exit":124}}"""),
+        )
+        assertEquals(
+            RecentOutcome.Unknown,
+            outcome("""{"status":"error","input":{"command":"x"},"error":{"type":"aborted","message":"gone"}}"""),
+        )
+        assertEquals("ls", step("bash", """{"status":"completed","input":{"command":"ls"}}""")?.title)
     }
 
     @Test
@@ -146,9 +161,11 @@ class DetailsTest {
 
     @Test
     fun agesAndClocks() {
-        assertNull(recentAge(0, 59_000))
-        assertEquals("2m", recentAge(0, 150_000))
+        assertNull(recentAge(0, 44_000))
+        assertEquals("1m", recentAge(0, 45_000))
+        assertEquals("2m", recentAge(0, 120_000))
         assertEquals("3h", recentAge(0, 3 * 3_600_000L + 5))
+        assertEquals("2d", recentAge(0, 2 * 86_400_000L))
         assertEquals("1:05", elapsedClock(0, 65_000))
     }
 }
