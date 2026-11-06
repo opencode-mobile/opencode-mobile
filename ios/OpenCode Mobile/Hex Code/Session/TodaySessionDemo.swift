@@ -8,7 +8,7 @@ enum TodaySessionDemo: String, CaseIterable {
     case card
     /// Idle, a card with no to-do row and no Next line.
     case plain
-    /// The reply didn't match the card shape.
+    /// A reply with no shape at all: a "Status" card, every line as Now.
     case fallback
     /// Couldn't open today's session.
     case failed

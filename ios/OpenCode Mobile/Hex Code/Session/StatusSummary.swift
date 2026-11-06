@@ -91,75 +91,178 @@ struct StatusCard: Equatable, Sendable, Codable {
 /// What a summary reply becomes: a card, or the reply as plain text when it doesn't match the shape.
 enum StatusSummary: Equatable, Sendable, Codable {
     case card(StatusCard)
+    /// Only on cards saved by older versions: replies are always read as a card now, and this
+    /// shows as one too (`asCard`).
     case fallback(String)
 
-    /// Clipping (app plan, "Clipping"), in characters shown (grapheme clusters, formatting's
-    /// symbols not counted). Only the fallback is cut: nothing on the card is (the title, Now,
-    /// Next and the to-do item wrap; Now size makes the card fit).
-    static let fallbackLimit = 300
     /// Now isn't cut by characters (the prompt keeps it short, and Now size makes it fit): at most
-    /// 5 lines, 4 of them bullets; extra ones are dropped.
+    /// 5 lines, 4 of them bullets; extra ones are dropped. Nothing on the card is cut.
     static let maxNowLines = 5
     static let maxBullets = 4
 
     /// What a `Next:` line says when there is nothing to suggest (any case, optional full stop).
     static let noNextWords: Set<String> = ["", "none", "n/a", "-", "—", "(none)"]
 
-    /// Reads a reply to `SessionPrompts.Summary` (app plan, "Reading the reply"). Each line is
-    /// trimmed; code fences and blank lines are ignored. The first line starting `## ` is the
-    /// title. The first line starting `Now:` (any case) and the lines after it, up to the next
-    /// `Next:`, `Link:` or `## ` line, are Now: a line starting `- `, `* `, `• `, `1. ` or `1) `
-    /// is a bullet (marker removed), any other a plain line. The first `Next:` line is the
-    /// follow-up; the "none" words mean no Next. `Link:` lines with an http(s) URL are links.
-    /// Other lines are ignored. Without a title or a `Now:` line (with something in it) it is a
-    /// fallback: the lines joined with spaces, runs of spaces collapsed.
+    /// How much of the asked-for shape a reply had.
+    enum Shape: Equatable, Sendable {
+        case full
+        /// A title, but no `Now:`: the lines after the title were read as Now.
+        case noNow
+        /// `Now:`, but no title.
+        case noTitle
+        /// Neither: every line was read as Now, under "Status".
+        case none
+    }
+
+    /// The card, whatever the summary is: an old saved fallback shows as a "Status" card.
+    var asCard: StatusCard {
+        switch self {
+        case let .card(card): card
+        case let .fallback(text): StatusCard(title: Self.statusTitle, lines: [NowLine(text: text)])
+        }
+    }
+
+    static var statusTitle: String {
+        String(localized: "home.summary.fallback.title", defaultValue: "Status")
+    }
+
     static func parse(_ reply: String) -> StatusSummary {
+        read(reply).summary
+    }
+
+    /// A label a reply's line may start with (app plan, "Reading the reply").
+    enum Label: Equatable, Sendable {
+        case now
+        case next
+        case link
+    }
+
+    /// Any case, with or without bold, then `:`, or `-` / `—` before a space or the end.
+    private static let labelPattern = try! NSRegularExpression(
+        pattern: #"^(?:\*\*|__)?\s*(now|status|summary|tl;?dr|next steps?|next|follow[- ]up|suggested|links?|source)\s*(?:\*\*|__)?\s*(?::|[-—–](?=\s|$))\s*(?:\*\*|__)?\s*(.*)$"#,
+        options: [.caseInsensitive]
+    )
+
+    /// The label a line starts with, and what follows it.
+    static func label(of line: String) -> (label: Label, value: String)? {
+        let range = NSRange(line.startIndex..., in: line)
+        guard let match = labelPattern.firstMatch(in: line, range: range),
+              let word = Range(match.range(at: 1), in: line),
+              let rest = Range(match.range(at: 2), in: line)
+        else { return nil }
+        let value = String(line[rest]).trimmingCharacters(in: .whitespaces)
+        switch line[word].lowercased() {
+        case "now", "status", "summary", "tl;dr", "tldr": return (.now, value)
+        case "links", "link", "source": return (.link, value)
+        default: return (.next, value)
+        }
+    }
+
+    /// The title a line gives: one to three `#`; or, as the first line, at most 60 characters in
+    /// bold.
+    static func headingTitle(_ line: String) -> String? {
+        if let heading = line.range(of: #"^#{1,3}\s+"#, options: .regularExpression) {
+            let value = String(line[heading.upperBound...]).trimmingCharacters(in: .whitespaces)
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
+
+    static func boldTitle(_ line: String) -> String? {
+        guard let match = line.range(of: #"^(\*\*|__)(.+?)(\*\*|__):?$"#, options: .regularExpression), match == line.startIndex ..< line.endIndex else { return nil }
+        var inner = line.dropFirst(2).dropLast(line.hasSuffix(":") ? 3 : 2).trimmingCharacters(in: .whitespaces)
+        if inner.hasSuffix(":") { inner.removeLast() }
+        return !inner.isEmpty && inner.count <= 60 ? inner : nil
+    }
+
+    /// A link on a line of its own: `[label](url)` or a bare http(s) URL.
+    static func linkLine(_ line: String) -> CardLink? {
+        if let match = line.range(of: #"^!?\[([^\]]+)\]\((https?://[^)\s]+)\)[.,]?$"#, options: .regularExpression), match.lowerBound == line.startIndex {
+            let pulled = CardLinks.pull(from: line)
+            return pulled.links.first
+        }
+        if line.range(of: #"^https?://\S+$"#, options: .regularExpression) != nil {
+            return CardLinks.pull(from: line).links.first
+        }
+        return nil
+    }
+
+    /// Reads a reply to `SessionPrompts.Summary` at best effort (app plan, "Reading the reply",
+    /// "Fallback"): whatever parts can be recognised show, and it is always a card, never raw text.
+    /// Each line is trimmed; code fences and blank lines are ignored. Labels match in any case,
+    /// with or without bold, with `:`, `-` or `—` after them, and with variants (`Status`,
+    /// `Summary`, `TL;DR` for Now; `Next step(s)`, `Follow-up`, `Suggested` for Next; `Links`,
+    /// `Source` for links). The title is the first line with one to three `#`, else a short bold
+    /// first line, else a short first line followed by a Now line. Now is the Now line and every
+    /// line after it that isn't a label, with lines after the title and any other unrecognised
+    /// lines kept as plain lines, unless they come after Next. With neither a title nor a Now line
+    /// the card is "Status" and nothing is dropped. Markers `- `, `* `, `+ `, `• `, `1. `, `1) `
+    /// make bullets. Links come from Link lines, link-only lines and links inside lines.
+    static func read(_ reply: String) -> (summary: StatusSummary, shape: Shape) {
         let lines = reply
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && !$0.hasPrefix("```") }
+            .filter { !$0.isEmpty && !$0.hasPrefix("```") && $0.range(of: #"^#+$"#, options: .regularExpression) == nil }
+        // The title.
+        var titleIndex: Int?
         var title: String?
-        var nowLines: [String]?
-        var inNow = false
+        if let index = lines.firstIndex(where: { headingTitle($0) != nil }) {
+            titleIndex = index
+            title = headingTitle(lines[index])
+        } else if let first = lines.first, label(of: first) == nil, let bold = boldTitle(first) {
+            titleIndex = 0
+            title = bold
+        } else if lines.count > 1, lines[0].count <= 60, label(of: lines[0]) == nil, label(of: lines[1])?.label == .now {
+            titleIndex = 0
+            title = lines[0]
+        }
+        var nowLines: [String] = []
+        var sawNow = false
         var next: String?
         var sawNext = false
+        var afterNext = false
         var linkLines: [CardLink] = []
-        for line in lines {
-            if let value = line.value(after: "## ") {
-                if title == nil, !value.isEmpty { title = value }
-                inNow = false
-            } else if let value = line.value(afterLabel: "now:") {
-                if nowLines == nil {
-                    nowLines = value.isEmpty ? [] : [value]
-                    inNow = true
-                } else {
-                    inNow = false
+        for (index, line) in lines.enumerated() {
+            if index == titleIndex { continue }
+            // Chatter before the title isn't part of the card.
+            if let titleIndex, index < titleIndex { continue }
+            if let (kind, value) = label(of: line) {
+                switch kind {
+                case .now:
+                    if !sawNow {
+                        sawNow = true
+                        if !value.isEmpty { nowLines.append(value) }
+                    } else if !value.isEmpty {
+                        nowLines.append(value)
+                    }
+                    afterNext = false
+                case .next:
+                    if !sawNext {
+                        sawNext = true
+                        next = value
+                    }
+                    afterNext = true
+                case .link:
+                    if let link = CardLinks.fromLinkLine(value) ?? linkLine(value) { linkLines.append(link) }
                 }
-            } else if let value = line.value(afterLabel: "next:") {
-                if !sawNext {
-                    sawNext = true
-                    next = value
-                }
-                inNow = false
-            } else if let value = line.value(afterLabel: "link:") {
-                if let link = CardLinks.fromLinkLine(value) { linkLines.append(link) }
-                inNow = false
-            } else if inNow {
-                nowLines?.append(line)
+            } else if let link = linkLine(line) {
+                linkLines.append(link)
+            } else if !afterNext {
+                // Unrecognised lines stay, as plain lines of Now; a second heading loses its `#`.
+                nowLines.append(headingTitle(line) ?? line)
             }
         }
-        guard let title, let nowLines, !nowLines.isEmpty else {
-            let text = lines
-                .filter { $0.value(afterLabel: "link:") == nil }
-                .joined(separator: " ")
-                .split(whereSeparator: \.isWhitespace)
-                .joined(separator: " ")
-            return .fallback(clip(text, fallbackLimit))
+        let shape: Shape = switch (title != nil, sawNow) {
+        case (true, true): .full
+        case (true, false): .noNow
+        case (false, true): .noTitle
+        case (false, false): .none
         }
+        let rawNow = shape == .none ? nowLines.map { $0.replacingOccurrences(of: #"^#+\s*"#, with: "", options: .regularExpression) } : nowLines
         // Links left in Now or Next become tiles and read as their label (or host) in the line.
         var links = Array(linkLines.prefix(CardLinks.maxLinkLines))
         var now: [NowLine] = []
-        for raw in nowLines {
+        for raw in rawNow {
             let line = nowLine(raw)
             let pulled = CardLinks.pull(from: line.text)
             links += pulled.links
@@ -167,17 +270,25 @@ enum StatusSummary: Equatable, Sendable, Codable {
         }
         let pulledNext = next.flatMap { isNoNext($0) ? nil : CardLinks.pull(from: $0) }
         links += pulledNext?.links ?? []
-        return .card(StatusCard(
-            title: title,
-            lines: limitNow(now),
+        var cardTitle = title ?? (shape == .none ? statusTitle : "")
+        if now.isEmpty {
+            // Only a title is left: it shows as Now, with no label above it.
+            now = [NowLine(text: title ?? "")]
+            cardTitle = ""
+        }
+        let card = StatusCard(
+            title: cardTitle,
+            // With no shape at all, nothing is dropped.
+            lines: shape == .none ? now : limitNow(now),
             next: pulledNext?.text,
             links: CardLinks.unique(links)
-        ))
+        )
+        return (.card(card), shape)
     }
 
     /// A Now line: a bullet when it starts with a marker, else a plain line.
     static func nowLine(_ line: String) -> NowLine {
-        for marker in ["- ", "* ", "• "] where line.hasPrefix(marker) {
+        for marker in ["- ", "* ", "+ ", "• "] where line.hasPrefix(marker) {
             return NowLine(text: line.dropFirst(marker.count).trimmingCharacters(in: .whitespaces), isBullet: true)
         }
         if let marker = line.range(of: #"^\d+[.)]\s+"#, options: .regularExpression) {
@@ -215,20 +326,6 @@ enum StatusSummary: Equatable, Sendable, Codable {
             cut.removeLast()
         }
         return cut + "…"
-    }
-}
-
-private extension String {
-    /// The rest of the line after `prefix`, trimmed; nil when the line doesn't start with it.
-    func value(after prefix: String) -> String? {
-        guard hasPrefix(prefix) else { return nil }
-        return dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
-    }
-
-    /// The same for a label matched in any case, such as `now:`.
-    func value(afterLabel label: String) -> String? {
-        guard lowercased().hasPrefix(label) else { return nil }
-        return dropFirst(label.count).trimmingCharacters(in: .whitespaces)
     }
 }
 

@@ -645,17 +645,6 @@
         }
       }
     },
-    "home.summary.fallback.note": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reply didn’t match the card shape."
-          }
-        }
-      }
-    },
     "home.summary.updating": {
       "extractionState": "manual",
       "localizations": {

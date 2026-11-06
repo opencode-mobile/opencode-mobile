@@ -216,7 +216,11 @@ final class StatusSummaryModel {
             }
             return
         }
-        var parsed = StatusSummary.parse(reply)
+        var (parsed, shape) = StatusSummary.read(reply)
+        if shape != .full {
+            // Read at best effort; nothing shows on the card.
+            HexLog.summary.info("summary: reply without its full shape (\(String(describing: shape), privacy: .public))")
+        }
         let busy = basis?.busy ?? isWorking()
         if busy, case var .card(card) = parsed {
             card.next = nil

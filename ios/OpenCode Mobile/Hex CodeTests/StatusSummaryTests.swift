@@ -63,7 +63,8 @@ struct StatusSummaryTests {
             return
         }
         #expect(card.title == "First title")
-        #expect(card.now == "Doing it.")
+        // A second heading is kept as a plain line; both Now values are Now.
+        #expect(card.lines.map(\.text) == ["Second title", "Doing it.", "Something else"])
     }
 
     @Test func nowAndNextMatchInAnyCase() {
@@ -76,8 +77,10 @@ struct StatusSummaryTests {
         #expect(card.next == "After that.")
     }
 
-    @Test func theFallbackCollapsesRunsOfSpaces() {
-        #expect(StatusSummary.parse("Working   on\tthe\n\n  tests   now") == .fallback("Working on the tests now"))
+    @Test func proseWithNoShapeIsAStatusCard() {
+        let card = StatusSummary.parse("Working on the\n\n  tests now").asCard
+        #expect(card.title == "Status")
+        #expect(card.lines.map(\.text) == ["Working on the", "tests now"])
     }
 
     @Test func linkLinesBecomeLinksNotText() {
@@ -88,43 +91,39 @@ struct StatusSummaryTests {
             next: "Read the docs.",
             links: [CardLink(label: "Docs", url: "https://opencode.ai/docs")]
         )))
-        // Nor do they reach a fallback's text.
-        #expect(StatusSummary.parse("Plain words.\nLink: Docs | https://opencode.ai") == .fallback("Plain words."))
+        // Nor do they reach Now's text when the reply has no shape.
+        #expect(StatusSummary.parse("Plain words.\nLink: Docs | https://opencode.ai") == .card(StatusCard(
+            title: "Status",
+            now: "Plain words.",
+            links: [CardLink(label: "Docs", url: "https://opencode.ai")]
+        )))
     }
 
-    @Test func noNowLineIsAFallback() {
-        let reply = "## Login screen rewrite\nNext: Run the auth tests.\n- [x] New login form"
-        #expect(StatusSummary.parse(reply) == .fallback("## Login screen rewrite Next: Run the auth tests. - [x] New login form"))
+    @Test func onlyATitleShowsAsNow() {
+        // Lines after Next are chatter.
+        let card = StatusSummary.parse("## Login screen rewrite\nNext: Run the auth tests.\n- [x] New login form").asCard
+        #expect(card == StatusCard(title: "", now: "Login screen rewrite", next: "Run the auth tests."))
     }
 
-    @Test func noTitleIsAFallback() {
-        let reply = "Now: Wiring the new token refresh.\nNext: Run the auth tests."
-        guard case .fallback = StatusSummary.parse(reply) else {
-            Issue.record("expected a fallback")
-            return
-        }
+    @Test func noTitleIsACardWithoutALabel() {
+        let card = StatusSummary.parse("Now: Wiring the new token refresh.\nNext: Run the auth tests.").asCard
+        #expect(card == StatusCard(title: "", now: "Wiring the new token refresh.", next: "Run the auth tests."))
     }
 
-    @Test func anEmptyTitleOrNowDoesNotCount() {
-        guard case .fallback = StatusSummary.parse("## \nNow: Doing it.") else {
-            Issue.record("expected a fallback")
-            return
-        }
-        guard case .fallback = StatusSummary.parse("## Title\nNow:   ") else {
-            Issue.record("expected a fallback")
-            return
-        }
+    @Test func anEmptyTitleOrNowIsLeftOut() {
+        #expect(StatusSummary.parse("## \nNow: Doing it.").asCard == StatusCard(title: "", now: "Doing it."))
+        #expect(StatusSummary.parse("## Title\nNow:   ").asCard == StatusCard(title: "", now: "Title"))
     }
 
-    @Test func plainProseIsAFallbackOfAtMost300Characters() {
-        let prose = String(repeating: "I am going through the auth tests one at a time. ", count: 10)
-        guard case let .fallback(text) = StatusSummary.parse("```\n" + prose + "\n```") else {
-            Issue.record("expected a fallback")
-            return
-        }
-        #expect(text.count <= 300)
-        #expect(text.hasSuffix("…"))
-        #expect(text.hasPrefix("I am going through"))
+    @Test func longProseWithNoShapeIsNeverCut() {
+        let prose = String(repeating: "I am going through the auth tests one at a time. ", count: 10).trimmingCharacters(in: .whitespaces)
+        let card = StatusSummary.parse("```\n" + prose + "\n```").asCard
+        #expect(card.title == "Status")
+        #expect(card.now == prose)
+    }
+
+    @Test func anOldSavedFallbackShowsAsAStatusCard() {
+        #expect(StatusSummary.fallback("Plain words.").asCard == StatusCard(title: "Status", now: "Plain words."))
     }
 
     @Test func titleNowAndNextAreNeverCut() {
@@ -202,8 +201,9 @@ struct StatusSummaryTests {
     }
 
     @Test func thePromptAndRulesAreVersioned() {
-        #expect(SessionPrompts.Summary.version == 4)
+        #expect(SessionPrompts.Summary.version == 5)
         #expect(SessionPrompts.Summary.text.hasPrefix("Say where this session stands, for the user glancing at their phone instead of reading the chat."))
+        #expect(SessionPrompts.Summary.text.contains("and always start the second line with \"Now:\":"))
         #expect(SessionPrompts.Summary.text.contains("Next: <what the user might say next, at most 60 characters, or \"none\">"))
         #expect(SessionPrompts.Summary.text.contains("At most 300 characters in all. Shorter is better: this is read at a glance."))
         #expect(SessionPrompts.Summary.text.hasSuffix("Never put a URL in Now or Next.\nUse no other formatting."))

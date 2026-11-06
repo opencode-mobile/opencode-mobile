@@ -23,7 +23,7 @@ struct HomeView: View {
         VStack(spacing: 0) {
             HomeTopBar(session: session, onSettings: onSettings)
             // The draft hangs from a line 26 % down and grows downward as you talk (the prototype's
-            // `.fx-sp`); the status card, its fallback and the setup failure are centred.
+            // `.fx-sp`); the status card and the setup failure are centred.
             HangingLayout(fraction: drafting ? 0.26 : nil) {
                 if drafting {
                     DraftView(home: home)

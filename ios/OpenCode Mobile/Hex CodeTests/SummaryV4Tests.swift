@@ -120,11 +120,12 @@ struct SummaryReplyTests {
 
     // MARK: Rules
 
-    @Test func nowEndsAtNextLinkOrATitle() {
+    @Test func unrecognisedLinesStayUnlessAfterNext() {
         let titled = card("## T\nNow: One.\nTwo.\n## Another title\nThree.\nNext: Go\nFour.")
-        #expect(titled?.lines == [plain("One."), plain("Two.")])
+        #expect(titled?.lines == [plain("One."), plain("Two."), plain("Another title"), plain("Three.")])
         let linked = card("## T\nNow: One.\nLink: A | https://a.example\nTwo.")
-        #expect(linked?.lines == [plain("One.")])
+        #expect(linked?.lines == [plain("One."), plain("Two.")])
+        #expect(linked?.links.map(\.url) == ["https://a.example"])
     }
 
     @Test func anEmptyNowLabelStartsWithTheNextLine() {
@@ -132,8 +133,8 @@ struct SummaryReplyTests {
         #expect(card?.lines == [plain("First line."), bullet("A point")])
     }
 
-    @Test func anEmptyNowIsAFallback() {
-        #expect(StatusSummary.parse("## T\nNow:\nNext: Go") == .fallback("## T Now: Next: Go"))
+    @Test func anEmptyNowShowsTheTitleAsNow() {
+        #expect(card("## T\nNow:\nNext: Go") == StatusCard(title: "", now: "T", next: "Go"))
     }
 
     @Test func everyBulletMarker() {
@@ -424,5 +425,131 @@ struct NextIntoDraftTests {
         #expect(draft.text == "Commit it Then push")
         draft.addText("   ")
         #expect(draft.chunks.count == 2)
+    }
+}
+
+/// Reading a reply at best effort (app plan, "Reading the reply", "Fallback"): whatever can be
+/// recognised shows, and a reply is always a card.
+@MainActor
+struct BestEffortReplyTests {
+    private func read(_ reply: String) -> (card: StatusCard, shape: StatusSummary.Shape) {
+        let result = StatusSummary.read(reply)
+        return (result.summary.asCard, result.shape)
+    }
+
+    private func plain(_ text: String) -> NowLine { NowLine(text: text) }
+    private func bullet(_ text: String) -> NowLine { NowLine(text: text, isBullet: true) }
+
+    @Test func thePixelReplyWithoutNow() {
+        let reply = """
+        ## Research and prototype six mobile features
+        Not started yet: six subagents must each research one feature, build a prototype with the prototype skill, and publish it via publish-artifact, each with a brief usage example.
+        - Subagents: pairing, steering, approvals, resume/reconnect, voice, media
+        """
+        let (card, shape) = read(reply)
+        #expect(shape == .noNow)
+        #expect(card.title == "Research and prototype six mobile features")
+        #expect(card.lines == [
+            plain("Not started yet: six subagents must each research one feature, build a prototype with the prototype skill, and publish it via publish-artifact, each with a brief usage example."),
+            bullet("Subagents: pairing, steering, approvals, resume/reconnect, voice, media"),
+        ])
+    }
+
+    @Test func boldLabels() {
+        let (card, shape) = read("## Fix\n**Now:** Tests pass.\n**Next:** Commit it")
+        #expect(shape == .full)
+        #expect(card.lines == [plain("Tests pass.")])
+        #expect(card.next == "Commit it")
+        let outside = read("## Fix\n**Now**: Tests pass.\n**Next** — Commit it").card
+        #expect(outside.lines == [plain("Tests pass.")])
+        #expect(outside.next == "Commit it")
+    }
+
+    @Test func labelVariantsAndSeparators() {
+        #expect(read("## T\nStatus - Tests pass.").card.lines == [plain("Tests pass.")])
+        #expect(read("## T\nSummary: Tests pass.").card.lines == [plain("Tests pass.")])
+        #expect(read("## T\nTL;DR — Tests pass.").card.lines == [plain("Tests pass.")])
+        #expect(read("## T\nNow: X.\nNext steps: Commit it").card.next == "Commit it")
+        #expect(read("## T\nNow: X.\nNext step - Commit it").card.next == "Commit it")
+        #expect(read("## T\nNow: X.\nFollow-up: Commit it").card.next == "Commit it")
+        #expect(read("## T\nNow: X.\nSuggested: Commit it").card.next == "Commit it")
+        #expect(read("## T\nNow: X.\nLinks: Docs | https://a.example").card.links.map(\.label) == ["Docs"])
+        #expect(read("## T\nNow: X.\nSource: https://www.b.example/x").card.links.map(\.label) == ["b.example"])
+        // A word that only starts like a label isn't one.
+        #expect(read("## T\nNow: X.\nNext-gen builds are faster.").card.lines.count == 2)
+        #expect(read("## T\nNow that tests pass, commit.").card.lines == [plain("Now that tests pass, commit.")])
+    }
+
+    @Test func titleVariants() {
+        #expect(read("### Small title\nNow: X.").card.title == "Small title")
+        #expect(read("# Big title\nNow: X.").card.title == "Big title")
+        // Four `#` isn't a heading, but a short first line before a Now line is a title; it shows
+        // without its `#`.
+        #expect(InlineMarkdown.plain(read("#### Deep\nNow: X.").card.title) == "Deep")
+        #expect(read("#### Deep\nMore words.\nNow: X.").card.title == "")
+        #expect(read("**Login fix**\nNow: X.").card.title == "Login fix")
+        #expect(read("**Login fix:**\nTests pass.").card.title == "Login fix")
+        // A short first line followed by a Now line.
+        let short = read("Login fix\nNow: Tests pass.")
+        #expect(short.card.title == "Login fix")
+        #expect(short.shape == .full)
+        // A long first line isn't a title.
+        let long = String(repeating: "word ", count: 14)
+        #expect(read("\(long)\nNow: X.").card.title == "")
+    }
+
+    @Test func plusBulletsAndLinkLines() {
+        let (card, _) = read("""
+        ## Ideas
+        Now: Three ways:
+        + Validate `qty`
+        + Clamp to zero
+        [Python docs](https://docs.python.org/3/)
+        https://example.com/page.
+        Next: Try the first
+        """)
+        #expect(card.lines == [plain("Three ways:"), bullet("Validate `qty`"), bullet("Clamp to zero")])
+        #expect(card.links.map(\.url) == ["https://docs.python.org/3/", "https://example.com/page"])
+        #expect(card.links.map(\.label) == ["Python docs", "example.com"])
+    }
+
+    @Test func chatterBeforeTheTitleAndAfterNextGoes() {
+        let (card, _) = read("Sure, here is the card:\n## T\nNow: X.\nNext: Go\nHope this helps!")
+        #expect(card.title == "T")
+        #expect(card.lines == [plain("X.")])
+    }
+
+    @Test func noShapeAtAllIsAStatusCardWithEverything() {
+        let (card, shape) = read("Okay, so far:\n- read the README\n- found two tests\n- six more lines\n- seven\n- eight\nStill going.")
+        #expect(shape == .none)
+        #expect(card.title == "Status")
+        // Nothing dropped: all lines, every bullet.
+        #expect(card.lines.count == 7)
+        #expect(card.lines.filter(\.isBullet).count == 5)
+    }
+
+    @Test func aDashCountsOnlyBeforeASpace() {
+        // The same fixtures as Android.
+        let (card, _) = read("## T\nNow: Done.\nStatus-quo stays.\nNext-gen later.")
+        #expect(card.lines == [plain("Done."), plain("Status-quo stays."), plain("Next-gen later.")])
+        #expect(card.next == nil)
+    }
+
+    @Test func otherLinesBeforeNextStay() {
+        let (card, _) = read("## T\nNow: Done.\nOne more thing.\nNext: Commit it\nHope this helps!")
+        #expect(card.lines == [plain("Done."), plain("One more thing.")])
+        #expect(card.next == "Commit it")
+    }
+
+    @Test func eightPlainLinesWithNoShapeAreAllKept() {
+        let (card, shape) = read((1 ... 8).map { "Line \($0)." }.joined(separator: "\n"))
+        #expect(shape == .none)
+        #expect(card.lines.count == 8)
+    }
+
+    @Test func aHeadingWithFourHashesLosesItsHashesWithoutShape() {
+        let (card, shape) = read("#### Notes\nPlain words.")
+        #expect(shape == .none)
+        #expect(card.lines == [plain("Notes"), plain("Plain words.")])
     }
 }

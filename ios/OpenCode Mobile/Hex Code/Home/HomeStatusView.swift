@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The status area on home (the prototype's `.fx-body` when not drafting): the summary card or its
-/// plain-text fallback, the needs-you hint under it, or "Couldn't open today's session". Centred in
+/// "Status" card for a reply without its shape, the needs-you hint under it, or "Couldn't open today's session". Centred in
 /// the room between the top bar and the talk button.
 struct HomeStatusView: View {
     let session: TodaySession
@@ -30,7 +30,9 @@ struct HomeStatusView: View {
     @ViewBuilder
     private func summary(hint: PendingItem?) -> some View {
         switch session.summary.summary {
-        case let .card(card):
+        case let summary?:
+            // Every reply is a card; an old saved fallback shows as a "Status" card.
+            let card = summary.asCard
             // Now steps down in size until the whole card (and the hint under it), as drawn, fits
             // between the top bar and the dock; then whole lines go from the end.
             ViewThatFits(in: .vertical) {
@@ -52,11 +54,6 @@ struct HomeStatusView: View {
                         hintCard(hint)
                     }
                 }
-            }
-        case let .fallback(text):
-            VStack(alignment: .leading, spacing: 14) {
-                FallbackCardView(text: text, summary: session.summary)
-                hintCard(hint)
             }
         case nil:
             VStack(alignment: .leading, spacing: 14) {
@@ -386,32 +383,6 @@ private struct LightsWhenPressed: ButtonStyle {
         configuration.label
             .foregroundStyle(configuration.isPressed ? HexColor.text1 : HexColor.text3)
             .animation(HexMotion.ease(HexMotion.press), value: configuration.isPressed)
-    }
-}
-
-/// The reply as plain text when it didn't match the card shape, with ↻ to try again.
-struct FallbackCardView: View {
-    let text: String
-    let summary: StatusSummaryModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(LocalizedStringResource("home.summary.fallback.title", defaultValue: "Status"))
-                .hexFont(HexTextStyle.caption.weight(.medium))
-                .foregroundStyle(HexColor.text3)
-                .frame(height: HomeLabel.height)
-            Text(verbatim: text)
-                .hexFont(.body)
-                .foregroundStyle(HexColor.text2)
-                .lineLimit(8)
-                .opacity(summary.isUpdating ? 0.35 : 1)
-            HStack(spacing: 0) {
-                HexStatusLine(.warning, LocalizedStringResource("home.summary.fallback.note", defaultValue: "Reply didn’t match the card shape."))
-                Spacer(minLength: 10)
-                SummaryRefreshButton(summary: summary)
-            }
-            .frame(minHeight: 30)
-        }
     }
 }
 

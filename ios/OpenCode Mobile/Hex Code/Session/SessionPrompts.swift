@@ -11,10 +11,11 @@ enum SessionPrompts {
         /// 3: no step lines; the to-do row is the agent's own `todowrite` list.
         /// 4: the latest request, not the whole session; Now may span lines or a short list; Next is
         /// what the user might say next, or "none" (status-summary-proposal.md).
-        static let version = 4
+        /// 5: always start the second line with "Now:".
+        static let version = 5
 
         static let text = """
-        Say where this session stands, for the user glancing at their phone instead of reading the chat. This message is not part of the session: leave it out when you decide what the latest request is. Don't call any tools. Reply in exactly this shape and nothing else:
+        Say where this session stands, for the user glancing at their phone instead of reading the chat. This message is not part of the session: leave it out when you decide what the latest request is. Don't call any tools. Reply in exactly this shape and nothing else, and always start the second line with "Now:":
         ## <the topic of the latest request, at most 5 words>
         Now: <the substance in one sentence, at most 140 characters>
         <optional: one more sentence, or 2 to 4 lines starting "- ">
