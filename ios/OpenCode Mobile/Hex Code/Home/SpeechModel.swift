@@ -150,6 +150,14 @@ final class SpeechModel: SpeechTranscribing {
     }
 
     func transcribe(_ take: RecordedTake) async throws -> String {
+        #if DEBUG
+        // `-HexCodeTakeText "<text>"`: every take reads as that text (a simulator has no reliable
+        // microphone).
+        if let text = UserDefaults.standard.string(forKey: "HexCodeTakeText") {
+            HexLog.dictation.info("take: \(take.duration, format: .fixed(precision: 2)) s → -HexCodeTakeText")
+            return text
+        }
+        #endif
         do {
             let text = try await voice.transcribe(fileAt: take.url)
             HexLog.dictation.info("take: \(take.duration, format: .fixed(precision: 2)) s → \(text.count) characters")

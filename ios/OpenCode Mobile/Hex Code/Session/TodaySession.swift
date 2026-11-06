@@ -235,6 +235,10 @@ final class TodaySession {
     /// Sends a message to today's session; returns its inbox id.
     func send(_ text: String, delivery: Delivery) async throws -> String {
         guard let api, let sessionID else { throw NotOpen() }
+        #if DEBUG
+        // `-HexCodeFailSends YES`: every send fails, as without a network.
+        if UserDefaults.standard.bool(forKey: "HexCodeFailSends") { throw URLError(.notConnectedToInternet) }
+        #endif
         return try await api.prompt(sessionID: sessionID, text: text, delivery: delivery)
     }
 

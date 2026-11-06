@@ -242,12 +242,12 @@ struct DraftView: View {
             } else {
                 HexButton(icon: .x) { home.clearDraft() }
                     .accessibilityLabel(Text(LocalizedStringResource("draft.clear", defaultValue: "Clear the draft")))
-                Spacer()
                 if home.canRetryTakes {
                     HexButton(LocalizedStringResource("home.take.retry", defaultValue: "Try again"), icon: .refresh) {
                         home.retryFailedTakes()
                     }
                 }
+                Spacer()
                 if home.agentBusy {
                     HexSegmented(
                         [SendMode.afterTurn, .now],
@@ -424,7 +424,13 @@ struct WaitingSheet: View {
     @State private var cancelling: Set<String> = []
 
     var body: some View {
-        HexSheet(LocalizedStringResource("home.waiting.title", defaultValue: "Waiting to send")) {
+        HexSheet(
+            title: Text(LocalizedStringResource("home.waiting.title", defaultValue: "Waiting to send")),
+            leading: { EmptyView() },
+            trailing: {
+                HexButton(LocalizedStringResource("common.close", defaultValue: "Close"), action: onClose)
+            }
+        ) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(session.waitingMessages) { message in
