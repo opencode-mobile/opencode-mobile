@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import Hex_Code
 
@@ -96,6 +97,17 @@ struct StatusSummaryTests {
         #expect(StatusSummary.parse("Working   on\tthe\n\n  tests   now") == .fallback("Working on the tests now"))
     }
 
+    @Test func linkLinesAreIgnoredForNow() {
+        let reply = "## Repo overview\nNow: OpenCode is an open-source AI coding agent.\nLink: Docs | https://opencode.ai/docs\nNext: Read the docs."
+        #expect(StatusSummary.parse(reply) == .card(StatusCard(
+            title: "Repo overview",
+            now: "OpenCode is an open-source AI coding agent.",
+            next: "Read the docs."
+        )))
+        // Nor do they reach a fallback's text.
+        #expect(StatusSummary.parse("Plain words.\nLink: Docs | https://opencode.ai") == .fallback("Plain words."))
+    }
+
     @Test func noNowLineIsAFallback() {
         let reply = "## Login screen rewrite\nNext: Run the auth tests.\n- [x] New login form"
         #expect(StatusSummary.parse(reply) == .fallback("## Login screen rewrite Next: Run the auth tests. - [x] New login form"))
@@ -139,7 +151,7 @@ struct StatusSummaryTests {
             return
         }
         #expect(card.title.count <= 40)
-        #expect(card.now.count <= 90)
+        #expect(card.now.count <= 300)
         #expect(card.next.map(\.count).map { $0 <= 60 } == true)
         #expect(card.title.hasSuffix("…"))
     }
@@ -218,9 +230,10 @@ struct StatusSummaryTests {
     }
 
     @Test func thePromptAndRulesAreVersioned() {
-        #expect(SessionPrompts.Summary.version == 1)
-        #expect(SessionPrompts.Summary.text.hasPrefix("Summarise this session for a small phone screen."))
-        #expect(SessionPrompts.Summary.text.split(separator: "\n").count == 7)
+        #expect(SessionPrompts.Summary.version == 2)
+        #expect(SessionPrompts.Summary.text.hasPrefix("Summarise this session for someone glancing at their phone."))
+        #expect(SessionPrompts.Summary.text.contains("Link: <a short label> | <a URL the user may want to open>"))
+        #expect(SessionPrompts.Summary.text.split(separator: "\n").count == 10)
         #expect(SessionPrompts.MessageRules.version == 2)
         #expect(SessionPrompts.MessageRules.text == """
         Messages come from a voice app and may arrive while you work.
@@ -387,5 +400,43 @@ struct StatusSummaryModelTests {
             return
         }
         #expect(card.now == "New session. Nothing running yet.")
+    }
+}
+
+/// The Now sentence's size by length, then down to nowFit while the card doesn't fit (app plan,
+/// "Now size").
+struct NowSizeTests {
+    @Test func lengthBoundaries() {
+        #expect(NowSize.forLength(0) == .display)
+        #expect(NowSize.forLength(90) == .display)
+        #expect(NowSize.forLength(91) == .large)
+        #expect(NowSize.forLength(150) == .large)
+        #expect(NowSize.forLength(151) == .medium)
+        #expect(NowSize.forLength(220) == .medium)
+        #expect(NowSize.forLength(221) == .small)
+        #expect(NowSize.forLength(300) == .small)
+    }
+
+    @Test func charactersAreWhatTheUserSees() {
+        // 90 flags are 90 characters, though many more UTF-16 units.
+        #expect(NowSize.forText(String(repeating: "🇬🇧", count: 90)) == .display)
+        #expect(NowSize.forText(String(repeating: "🇬🇧", count: 91)) == .large)
+    }
+
+    @Test func itStepsDownUntilTheCardFits() {
+        let text = String(repeating: "a", count: 120) // starts at large
+        #expect(NowSize.candidates(for: text) == [.large, .medium, .small, .fit])
+        #expect(NowSize.choose(for: text) { _ in true } == .large)
+        #expect(NowSize.choose(for: text) { $0 >= .small } == .small)
+        // Nothing fits: the smallest, where the sentence ends in "…".
+        #expect(NowSize.choose(for: text) { _ in false } == .fit)
+    }
+
+    @Test func eachSizeUsesItsToken() {
+        #expect(NowSize.display.style == .display)
+        #expect(NowSize.large.style == HexTextStyle(size: 25, weight: .semibold, tracking: -0.022, lineHeight: 1.22))
+        #expect(NowSize.medium.style == HexTextStyle(size: 21, weight: .medium, tracking: -0.016, lineHeight: 1.28))
+        #expect(NowSize.small.style == HexTextStyle(size: 19, weight: .medium, tracking: -0.012, lineHeight: 1.32))
+        #expect(NowSize.fit.style == HexTextStyle(size: 17, weight: .medium, tracking: -0.008, lineHeight: 1.36))
     }
 }

@@ -50,10 +50,10 @@ enum StatusSummary: Equatable, Sendable, Codable {
     case card(StatusCard)
     case fallback(String)
 
-    /// Clipping, as the prototype: title 40, Now 90, Next 60, steps 40, fallback 300 characters
+    /// Clipping, as the prototype: title 40, Now 300, Next 60, steps 40, fallback 300 characters
     /// (grapheme clusters).
     static let titleLimit = 40
-    static let nowLimit = 90
+    static let nowLimit = 300
     static let nextLimit = 60
     static let stepLimit = 40
     static let fallbackLimit = 300
@@ -97,12 +97,13 @@ enum StatusSummary: Equatable, Sendable, Codable {
         ))
     }
 
-    /// The reply's lines, trimmed, without blank lines and code fences.
+    /// The reply's lines, trimmed, without blank lines, code fences and `Link:` lines (those are
+    /// for the link tiles, which come later; they never make a reply fall back).
     private static func meaningfulLines(_ reply: String) -> [String] {
         reply
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && !$0.hasPrefix("```") }
+            .filter { !$0.isEmpty && !$0.hasPrefix("```") && $0.value(afterLabel: "link:") == nil }
     }
 
     /// The prototype's `clip`: at most `limit` characters, cut at the last space past half way when
