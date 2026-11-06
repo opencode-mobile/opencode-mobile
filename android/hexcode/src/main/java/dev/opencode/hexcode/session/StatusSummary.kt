@@ -22,7 +22,11 @@ data class SummaryStep(
  */
 @Serializable
 sealed interface StatusSummary {
-    /** The reply in the card's shape, clipped to fit: [title] 40, [now] 300, [next] 60 and each step 40 characters. */
+    /**
+     * The reply in the card's shape, clipped to fit: [title] 40, [now] 300, [next] 60 and each step 40 characters
+     * shown. The text keeps its inline Markdown ([SummaryText]); links in Now and Next are already their labels, and
+     * with the `Link:` lines they're the card's [links].
+     */
     @Serializable
     @SerialName("card")
     data class Card(
@@ -31,6 +35,8 @@ sealed interface StatusSummary {
         /** Null when the reply had no `Next:` line. */
         val next: String?,
         val steps: List<SummaryStep>,
+        /** The link tiles, each URL once; none when the reply had none. */
+        val links: List<SummaryLink> = emptyList(),
     ) : StatusSummary
 
     /** A reply that isn't in the card's shape, as one line of plain text, at most 300 characters. */
@@ -71,6 +77,7 @@ sealed interface StatusSummary {
         private val NOW = Regex("""^Now:\s*(.*)$""", RegexOption.IGNORE_CASE)
         private val NEXT = Regex("""^Next:\s*(.*)$""", RegexOption.IGNORE_CASE)
         private val STEP = Regex("""^- \[([ xX])]\s*(.*)$""")
+        private val LINK = Regex("""^Link:\s*(.*)$""", RegexOption.IGNORE_CASE)
         private val SPACES = Regex("""\s+""")
 
         /** The long date in English, the title of a new session's card: "Thursday 5 November". */
@@ -87,28 +94,38 @@ sealed interface StatusSummary {
             var now: String? = null
             var next: String? = null
             val steps = mutableListOf<SummaryStep>()
+            val linkLines = mutableListOf<SummaryLink>()
             for (line in lines) {
                 val step = STEP.matchEntire(line)
                 when {
                     TITLE.matches(line) -> title = title ?: TITLE.value(line)
                     NOW.matches(line) -> now = now ?: NOW.value(line)
                     NEXT.matches(line) -> next = next ?: NEXT.value(line)
+                    LINK.matches(line) ->
+                        if (linkLines.size < SummaryLinks.LINE_MAX) {
+                            LINK.value(line)?.let(SummaryLinks::fromLine)?.let { linkLines += it }
+                        }
                     step != null -> {
                         val text = step.groupValues[2].trim()
-                        if (text.isNotEmpty()) steps += SummaryStep(clip(text, STEP_MAX), done = step.groupValues[1] != " ")
+                        if (text.isNotEmpty()) steps += SummaryStep(SummaryText.clip(text, STEP_MAX), done = step.groupValues[1] != " ")
                     }
                 }
             }
             val shownTitle = title
             val shownNow = now
             if (shownTitle == null || shownNow == null) {
-                return Fallback(clip(lines.joinToString(" ").replace(SPACES, " "), FALLBACK_MAX))
+                val text = lines.filterNot { LINK.matches(it) }.joinToString(" ").replace(SPACES, " ")
+                return Fallback(clip(text, FALLBACK_MAX))
             }
+            // Links left in Now or Next become tiles, after the Link lines; the sentence keeps their label.
+            val (nowText, nowLinks) = SummaryLinks.pull(shownNow)
+            val (nextText, nextLinks) = next?.let(SummaryLinks::pull) ?: (null to emptyList())
             return Card(
-                title = clip(shownTitle, TITLE_MAX),
-                now = clip(shownNow, NOW_MAX),
-                next = next?.let { clip(it, NEXT_MAX) },
+                title = SummaryText.clip(shownTitle, TITLE_MAX),
+                now = SummaryText.clip(nowText, NOW_MAX),
+                next = nextText?.let { SummaryText.clip(it, NEXT_MAX) },
                 steps = steps.take(STEPS_MAX),
+                links = SummaryLinks.distinct(linkLines + nowLinks + nextLinks),
             )
         }
 

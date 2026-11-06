@@ -1,6 +1,7 @@
 package dev.opencode.hexcode.home
 
 import dev.opencode.hexcode.session.StatusSummary
+import dev.opencode.hexcode.session.SummaryText
 
 /**
  * The Now sentence's type size (app-plan.md, Now size; the prototype's `nowTier` and `fitNow`): it steps down with
@@ -36,8 +37,8 @@ enum class NowSize {
                 else -> Small
             }
 
-        /** The size for [text], counted in characters as the user sees them, as clipping counts. */
-        fun forText(text: String): NowSize = forLength(StatusSummary.length(text))
+        /** The size for [text], counted in characters shown (without Markdown symbols), as clipping counts. */
+        fun forText(text: String): NowSize = forLength(StatusSummary.length(SummaryText.shown(text)))
 
         /**
          * The first size from [start] down to [Fit] at which the card [fits], and whether it does; at [Fit] when none
