@@ -134,8 +134,8 @@ fun HomeScreen(
             HomeTopBar(today.agent, now, Modifier.padding(start = edge, end = edge - 6.dp)) {
                 HexRoundButton(HexIcons.gear, stringResource(R.string.home_settings), onClick = onSettings)
             }
-            // Status and draft start at the same line, 26 % down the space between the top bar and the dock (the
-            // prototype's `.fx-sp`), so switching between them, or the waiting line appearing, moves nothing.
+            // The status card is centred between the top bar and the dock (`.fx-body.centred`); the draft starts at a
+            // line 26 % down that space (the prototype's `.fx-sp`), so it grows downward while you talk.
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 val hang = maxHeight * 0.26f
                 Column(Modifier.fillMaxSize()) {
@@ -146,8 +146,12 @@ fun HomeScreen(
                         label = "status-draft",
                     ) { empty ->
                         Column(Modifier.fillMaxSize().padding(horizontal = edge)) {
-                            Spacer(Modifier.height(hang))
-                            if (empty) StatusArea(today, now, vm) else DraftView(state, vm)
+                            if (empty) {
+                                StatusArea(today, now, vm)
+                            } else {
+                                Spacer(Modifier.height(hang))
+                                DraftView(state, vm)
+                            }
                         }
                     }
                     if (state.draft.isEmpty && today.waiting > 0) {

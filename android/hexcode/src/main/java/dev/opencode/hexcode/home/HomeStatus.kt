@@ -15,9 +15,11 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -37,9 +39,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.designsystem.HexIcons
@@ -106,9 +111,10 @@ internal fun HomeTopBar(
 }
 
 /**
- * The status area (`.fx-body`): the status card, the fallback, or "Couldn't open today's session" with Try again, and
- * the Needs-you hint under the card. While setup runs it shows only the card saved for today's session, if there is
- * one. Home starts it at the same line as the draft.
+ * The status area (`.fx-body.centred`): the status card, the fallback, or "Couldn't open today's session" with Try
+ * again, and the Needs-you hint under the card, centred between the top bar and the dock whatever their length. While
+ * setup runs it shows only the card saved for today's session, if there is one. The Now sentence's size steps down
+ * with its length, and on down while the card doesn't fit ([NowSize]).
  */
 @Composable
 internal fun StatusArea(
@@ -117,19 +123,65 @@ internal fun StatusArea(
     vm: HomeViewModel,
     modifier: Modifier = Modifier,
 ) {
-    // Starts at the top of what it's given: home puts it at the same line as the draft.
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        when (today.setup) {
-            // The card saved for today's session shows while setup runs.
-            SessionSetup.Opening -> if (today.summary.summary != null) Summary(today.summary, now, vm)
-            is SessionSetup.Failed -> SetupFailed(today.setup.retrying, vm::retrySetup)
-            is SessionSetup.Ready -> {
-                Summary(today.summary, now, vm)
+    val summary = today.summary
+    val start = (summary.summary as? StatusSummary.Card)?.let { NowSize.forText(it.now) } ?: NowSize.Display
+    when (today.setup) {
+        // The card saved for today's session shows while setup runs.
+        SessionSetup.Opening ->
+            if (summary.summary != null) CentredFit(start, modifier) { size, lines -> Summary(summary, now, vm, size, lines) }
+        is SessionSetup.Failed -> CentredFit(NowSize.Display, modifier) { _, _ -> SetupFailed(today.setup.retrying, vm::retrySetup) }
+        is SessionSetup.Ready ->
+            CentredFit(start, modifier) { size, lines ->
+                Summary(summary, now, vm, size, lines)
                 today.pendingInput?.let { NeedsHint(it, onClick = {}) }
             }
-        }
     }
 }
+
+/**
+ * [content] centred in the space it's given, or from the top when it's taller (it never scrolls). It's measured at
+ * the Now size from [start] down until it fits ([NowSize.fit]); at [NowSize.Fit] the Now sentence takes as many lines
+ * as fit, ending in "…". Measured again whenever the content or the user's text size changes.
+ */
+@Composable
+private fun CentredFit(
+    start: NowSize,
+    modifier: Modifier,
+    content: @Composable ColumnScope.(size: NowSize, nowLines: Int) -> Unit,
+) {
+    SubcomposeLayout(modifier.fillMaxSize()) { constraints ->
+        val loose = constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity)
+        val room = if (constraints.hasBoundedHeight) constraints.maxHeight else Int.MAX_VALUE
+        val measured = HashMap<Pair<NowSize, Int>, Placeable>()
+
+        fun measure(
+            size: NowSize,
+            lines: Int,
+        ): Placeable =
+            measured.getOrPut(size to lines) {
+                subcompose(size to lines) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { content(size, lines) }
+                }.first().measure(loose)
+            }
+        val fitted = NowSize.fit(start) { measure(it, Int.MAX_VALUE).height <= room }
+        var card = measure(fitted.size, Int.MAX_VALUE)
+        if (!fitted.fits) {
+            // The most lines of Now that fit, found by halving.
+            var low = 1
+            var high = MAX_FIT_LINES
+            while (low < high) {
+                val mid = (low + high + 1) / 2
+                if (measure(NowSize.Fit, mid).height <= room) low = mid else high = mid - 1
+            }
+            card = measure(NowSize.Fit, low)
+        }
+        val height = if (constraints.hasBoundedHeight) constraints.maxHeight else card.height
+        layout(constraints.maxWidth, height) { card.place(0, ((height - card.height) / 2).coerceAtLeast(0)) }
+    }
+}
+
+/** At [NowSize.Fit], the Now sentence never takes more lines than this (the prototype's `.n4` clamp). */
+private const val MAX_FIT_LINES = 13
 
 /** The status card, its fallback or just ↻, with the card's age. */
 @Composable
@@ -137,6 +189,8 @@ private fun Summary(
     summary: SummaryState,
     now: Long,
     vm: HomeViewModel,
+    size: NowSize,
+    nowLines: Int,
 ) {
     val label = summary.label(now)
     val dim by animateFloatAsState(if (summary.loading) 0.35f else 1f, HexTheme.motion.fade(), label = "loading")
@@ -150,6 +204,8 @@ private fun Summary(
                 dim,
                 label,
                 vm::refreshSummary,
+                size,
+                nowLines,
             )
         is StatusSummary.Empty ->
             Card(
@@ -176,10 +232,10 @@ private fun Summary(
     }
 }
 
-/** The small label over the card, in an 18 dp line like the draft's, so the two sit at exactly the same place. */
+/** The small label over the card, in an 18 dp line like the draft's, taller only when the user's text size needs it. */
 @Composable
 private fun Label(content: @Composable () -> Unit) {
-    Box(Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) { content() }
+    Box(Modifier.heightIn(min = 18.dp), contentAlignment = Alignment.CenterStart) { content() }
 }
 
 /** The card: the task as a label, what it's doing now in large type, what's next, and the plan's progress. */
@@ -192,14 +248,24 @@ private fun Card(
     dim: Float,
     label: RefreshLabel?,
     onRefresh: () -> Unit,
+    size: NowSize = NowSize.Display,
+    nowLines: Int = Int.MAX_VALUE,
 ) {
     val colors = HexTheme.colors
     Label { Text(title, style = HexTheme.type.caption, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    val type = HexTheme.type
     Text(
         now,
-        style = HexTheme.type.display,
+        style =
+            when (size) {
+                NowSize.Display -> type.display
+                NowSize.Large -> type.nowLarge
+                NowSize.Medium -> type.nowMedium
+                NowSize.Small -> type.nowSmall
+                NowSize.Fit -> type.nowFit
+            },
         color = colors.text1,
-        maxLines = 5,
+        maxLines = nowLines,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.alpha(dim),
     )

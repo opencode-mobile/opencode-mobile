@@ -147,6 +147,9 @@ sealed interface StatusSummary {
             return cut.joinToString("") + "…"
         }
 
+        /** How many characters [text] has as the user sees them (grapheme clusters), as [clip] counts. */
+        fun length(text: String): Int = graphemes(text).size
+
         private val TRAILING = setOf(",", ".", ";", ":")
 
         /** [text] split into what the user sees as single characters. */
