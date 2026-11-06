@@ -5,14 +5,18 @@ import kotlin.math.log10
 /**
  * The talk button's meter level from the take's loudness (app-plan.md, Dictation › Meter): a visual cue that you're
  * being heard, not a measurement. RMS in dBFS maps to 0 at [EMPTY_DB] and 1 at [FULL_DB], on an ease-out curve, so
- * normal speech at arm's length fills about half to nine tenths of the height. Tuned on real phones.
+ * normal speech at arm's length fills about half to nine tenths of the height. Tuned on real phones: debug builds log
+ * each take's level every quarter second (HexCode.Talk) to tune it again.
  */
 object MeterLevel {
-    /** At or below this the bars rest as dots. */
-    const val EMPTY_DB = -50f
+    /**
+     * At or below this the bars rest as dots. Android's speech-recognition input is much quieter than iOS's (the
+     * Pixel 9 gave −46 to −56 dB for normal speech), so its range sits lower than iOS's −50 to −18.
+     */
+    const val EMPTY_DB = -68f
 
     /** At or above this the bars are full. */
-    const val FULL_DB = -18f
+    const val FULL_DB = -38f
 
     /** [rms] (0 to 1, full scale) in dBFS; very quiet audio is a large negative number, never minus infinity. */
     fun dbfs(rms: Float): Float = 20f * log10(rms.coerceAtLeast(1e-6f))
