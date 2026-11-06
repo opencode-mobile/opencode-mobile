@@ -79,6 +79,7 @@ val HexComponentSamples: List<HexSampleSection> =
         HexSampleSection("HexChunkRow") { ChunkRowSample() },
         HexSampleSection("HexToast, HexToastHost") { ToastSample() },
         HexSampleSection("HexProgress") { ProgressSample() },
+        HexSampleSection("HexLinkTile, HexTileRow") { LinkTileSample() },
     )
 
 /** A section's heading, in the gallery and the previews: component names, so not upper-cased like HexSectionLabel. */
@@ -310,6 +311,8 @@ private fun IconsSample() {
             "alert" to HexIcons.alert,
             "moon" to HexIcons.moon,
             "sun" to HexIcons.sun,
+            "globe" to HexIcons.globe,
+            "monitor" to HexIcons.monitor,
             "spin" to HexIcons.spin,
             "mark" to HexIcons.mark,
         )
@@ -736,6 +739,25 @@ private fun ToastHostSample() {
             modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
         )
         HexToastHost(message, onDismissed = { message = null }, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
+@Composable
+private fun LinkTileSample() {
+    Edge {
+        StateSample("web (HexLinkKind.Web) and the computer (HexLinkKind.Local)") {
+            HexTileRow(Modifier.fillMaxWidth()) {
+                HexLinkTile("Pull request", "github.com", HexLinkKind.Web, "Open Pull request", onClick = {})
+                HexLinkTile("Dev server", "192.168.1.20:5173", HexLinkKind.Local, "Open Dev server", onClick = {})
+            }
+        }
+        StateSample("more than fits: the row scrolls and fades at its right edge") {
+            HexTileRow(Modifier.fillMaxWidth()) {
+                HexLinkTile("Dev server", "192.168.1.20:5173", HexLinkKind.Local, "Open Dev server", onClick = {})
+                HexLinkTile("A long label that has to end early", "docs.example.com", HexLinkKind.Web, "Open docs", onClick = {})
+                HexLinkTile("Issue 412", "github.com", HexLinkKind.Web, "Open Issue 412", onClick = {})
+            }
+        }
     }
 }
 

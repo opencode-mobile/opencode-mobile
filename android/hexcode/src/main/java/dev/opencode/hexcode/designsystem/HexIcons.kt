@@ -117,6 +117,14 @@ object HexIcons {
         circle(12f, 12f, 4f)
         path("M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4")
     }
+    val globe by icon {
+        circle(12f, 12f, 9f)
+        path("M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z")
+    }
+    val monitor by icon {
+        rect(3f, 4f, 18f, 12f, 2f)
+        path("M8 20h8M12 16v4")
+    }
 
     /** The spinner (the prototype's `SI.spin`): a faint ring and a quarter arc, on a 16 grid. `HexSpinner` turns it. */
     val spin by icon(grid = 16f) {
