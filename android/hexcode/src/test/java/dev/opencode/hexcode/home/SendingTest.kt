@@ -29,6 +29,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -84,6 +85,10 @@ class SendingTest {
         val sent = mutableListOf<Pair<String, String>>()
         val cancelled = mutableListOf<String>()
 
+        /** Holds Cancel's DELETE until completed; [cancelFails] makes it fail. */
+        var cancelGate: CompletableDeferred<Unit>? = null
+        var cancelFails = false
+
         override suspend fun sessionsPage(
             directory: String,
             search: String,
@@ -121,6 +126,8 @@ class SendingTest {
             sessionId: String,
             itemId: String,
         ) {
+            cancelGate?.await()
+            if (cancelFails) error("The computer can't be reached.")
             cancelled += itemId
         }
 
@@ -329,16 +336,10 @@ class SendingTest {
         }
 
     @Test
-    fun cancelInTheSheetCallsDeleteAndADeliveredMessageLeavesTheList() =
+    fun cancelInTheSheetSpinsWhileTheDeleteRunsAndTheRowLeavesWhenItWorks() =
         runTest(dispatcher) {
             server.busy = true
             val (vm, _) = home()
-
-            fun enqueue(id: String) =
-                stream.lines.trySend(
-                    """{"type":"session.inbox.enqueued","data":{"sessionID":"ses_1","inboxID":"$id",""" +
-                        """"item":{"type":"user","payload":{"text":"Message $id"},"delivery":"queue"}}}""",
-                )
             enqueue("msg_a")
             enqueue("msg_b")
             runCurrent()
@@ -347,11 +348,24 @@ class SendingTest {
                 vm.uiState.value.today.queued
                     .map { it.text },
             )
+            server.cancelGate = CompletableDeferred()
             vm.cancelQueued("msg_a")
             runCurrent()
+            assertEquals(setOf("msg_a"), vm.uiState.value.cancelling)
+            assertEquals(2, vm.uiState.value.today.queued.size)
+            server.cancelGate?.complete(Unit)
+            runCurrent()
+            // Gone as soon as the DELETE worked, without waiting for the event.
             assertEquals(listOf("msg_a"), server.cancelled)
-            stream.lines.trySend("""{"type":"session.inbox.delivered","data":{"sessionID":"ses_1","inboxID":"msg_b"}}""")
+            assertEquals(emptySet<String>(), vm.uiState.value.cancelling)
+            assertEquals(
+                listOf("msg_b"),
+                vm.uiState.value.today.queued
+                    .map { it.id },
+            )
+            // The event that follows, and a delivery, change nothing more.
             stream.lines.trySend("""{"type":"session.inbox.cancelled","data":{"sessionID":"ses_1","inboxID":"msg_a"}}""")
+            stream.lines.trySend("""{"type":"session.inbox.delivered","data":{"sessionID":"ses_1","inboxID":"msg_b"}}""")
             runCurrent()
             assertTrue(
                 vm.uiState.value.today.queued
@@ -359,6 +373,32 @@ class SendingTest {
             )
             done(vm)
         }
+
+    @Test
+    fun aFailedCancelKeepsTheRowAndStopsTheSpinner() =
+        runTest(dispatcher) {
+            server.busy = true
+            val (vm, _) = home()
+            enqueue("msg_a")
+            runCurrent()
+            server.cancelFails = true
+            vm.cancelQueued("msg_a")
+            runCurrent()
+            assertEquals(emptySet<String>(), vm.uiState.value.cancelling)
+            assertEquals(
+                listOf("msg_a"),
+                vm.uiState.value.today.queued
+                    .map { it.id },
+            )
+            assertNull(vm.uiState.value.notice)
+            done(vm)
+        }
+
+    private fun enqueue(id: String) =
+        stream.lines.trySend(
+            """{"type":"session.inbox.enqueued","data":{"sessionID":"ses_1","inboxID":"$id",""" +
+                """"item":{"type":"user","payload":{"text":"Message $id"},"delivery":"queue"}}}""",
+        )
 
     @Test
     fun theDeliveryRules() {

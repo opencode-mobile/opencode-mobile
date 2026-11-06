@@ -247,6 +247,8 @@ data class HomeUiState(
     val sendMode: SendMode = SendMode.AfterTurn,
     /** The notice's second line when it shows the message, such as "Sending now…". */
     val noticeDetail: String? = null,
+    /** Waiting to send rows whose Cancel (the DELETE) is running: their Cancel shows a spinner. */
+    val cancelling: Set<String> = emptySet(),
 ) {
     /** The agent runs or waits for an answer, so Send has a choice to make. */
     val busy: Boolean get() = today.busySince != null || today.pendingInput != null
@@ -576,15 +578,20 @@ class HomeViewModel(
         undoable = null
     }
 
-    /** Cancel, in the Waiting to send sheet: the message leaves once the server says so. */
+    /** Cancel, in the Waiting to send sheet: a spinner while the DELETE runs; the row leaves as soon as it works. */
     fun cancelQueued(itemId: String) {
+        if (itemId in state.value.cancelling) return
+        state.update { it.copy(cancelling = it.cancelling + itemId) }
         viewModelScope.launch {
             try {
                 session?.cancelQueued(itemId)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                // The row stays, with Cancel to try again.
                 Log.w(TalkLog.TAG, "couldn't cancel $itemId: ${error.message}", error)
+            } finally {
+                state.update { it.copy(cancelling = it.cancelling - itemId) }
             }
         }
     }

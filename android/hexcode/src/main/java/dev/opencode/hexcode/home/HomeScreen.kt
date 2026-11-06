@@ -24,8 +24,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -289,7 +291,13 @@ fun HomeScreen(
             onAction = vm::noticeAction,
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
         )
-        WaitingSheet(waitingOpen, state.today.queued, onCancel = vm::cancelQueued, onClose = { waitingOpen = false })
+        WaitingSheet(
+            waitingOpen,
+            state.today.queued,
+            cancelling = state.cancelling,
+            onCancel = vm::cancelQueued,
+            onClose = { waitingOpen = false },
+        )
     }
 }
 
@@ -297,13 +305,15 @@ fun HomeScreen(
 private fun quoted(text: String?): String? = text?.let { "“$it”" }
 
 /**
- * Waiting to send (app-plan.md, Sending): the queued messages, oldest first, each with Cancel. A message delivered or
- * cancelled elsewhere leaves the list as the events say so.
+ * Waiting to send (app-plan.md, Sending): the queued messages, oldest first, each with Cancel, which shows a spinner
+ * while the DELETE runs; the row leaves as soon as it works. A message delivered or cancelled elsewhere leaves the list
+ * as the events say so.
  */
 @Composable
 private fun BoxScope.WaitingSheet(
     open: Boolean,
     queued: List<InboxEntry>,
+    cancelling: Set<String>,
     onCancel: (String) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -315,10 +325,16 @@ private fun BoxScope.WaitingSheet(
     ) {
         queued.forEach { item ->
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
             ) {
+                Icon(
+                    HexIcons.send,
+                    null,
+                    tint = HexTheme.colors.text3,
+                    modifier = Modifier.padding(top = 3.dp).size(HexTheme.size.iconSmall),
+                )
                 Text(
                     item.text,
                     style = HexTheme.type.row,
@@ -327,7 +343,11 @@ private fun BoxScope.WaitingSheet(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                HexButton(onClick = { onCancel(item.id) }, text = stringResource(R.string.home_waiting_cancel))
+                HexButton(
+                    onClick = { onCancel(item.id) },
+                    text = stringResource(R.string.home_waiting_cancel),
+                    loading = item.id in cancelling,
+                )
             }
         }
     }

@@ -89,10 +89,15 @@ class TodaySessionTest {
             delivery: String,
         ) = "msg_1"
 
+        var cancelFails = false
+
         override suspend fun cancelQueued(
             sessionId: String,
             itemId: String,
-        ) = Unit
+        ) {
+            log += "cancel $itemId"
+            if (cancelFails) error("HTTP 500")
+        }
     }
 
     private class Memory(
@@ -429,5 +434,35 @@ class TodaySessionTest {
             today.refresh()
             runCurrent()
             assertTrue(today.state.value.summary.failed)
+        }
+
+    @Test
+    fun aCancelledMessageLeavesTheListOnceTheDeleteWorks() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            api.snapshot = api.snapshot.copy(busySince = 50, inbox = listOf(InboxEntry("m1", "queue"), InboxEntry("m2", "queue")))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            today.cancelQueued("m1")
+            runCurrent()
+            assertEquals(
+                listOf("m2"),
+                today.state.value.queued
+                    .map { it.id },
+            )
+            assertEquals(1, today.state.value.waiting)
+            api.cancelFails = true
+            val failed = runCatching { today.cancelQueued("m2") }
+            assertTrue(failed.isFailure)
+            runCurrent()
+            assertEquals(
+                listOf("m2"),
+                today.state.value.queued
+                    .map { it.id },
+            )
         }
 }

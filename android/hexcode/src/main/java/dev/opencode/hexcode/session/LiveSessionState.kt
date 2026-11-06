@@ -64,6 +64,9 @@ data class LiveSessionState(
             inbox = snapshot.inbox,
         )
 
+    /** Without inbox item [id], once a DELETE took it back: the row goes before the event says so. */
+    fun withoutInbox(id: String): LiveSessionState = copy(inbox = inbox.filterNot { it.id == id })
+
     /** Applies one event at [now] (for a run start without a time): the next state, and what it asks of the summary. */
     fun apply(
         event: SessionEvent,

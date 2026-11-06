@@ -209,8 +209,16 @@ class TodaySession(
         delivery: String,
     ): String = api.send(sessionId ?: error("Today's session isn't open"), text, delivery)
 
-    /** Takes back a message waiting in the inbox. */
-    suspend fun cancelQueued(itemId: String) = api.cancelQueued(sessionId ?: error("Today's session isn't open"), itemId)
+    /** Takes back a message waiting in the inbox; once the DELETE works it leaves [TodayState.queued] at once. */
+    suspend fun cancelQueued(itemId: String) {
+        val id = sessionId ?: error("Today's session isn't open")
+        api.cancelQueued(id, itemId)
+        if (live?.rootId == id) {
+            live = live?.withoutInbox(itemId)
+            publish()
+        }
+    }
+
 
     /** Waits until the event stream is up, as after a reconnect. */
     suspend fun awaitStream() {
