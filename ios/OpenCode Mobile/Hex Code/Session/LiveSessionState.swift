@@ -1,4 +1,5 @@
 import Foundation
+import OpenCodeKit
 
 /// A question or approval the agent waits for, in today's session or one of its subagents.
 struct PendingItem: Equatable, Sendable {
@@ -44,8 +45,11 @@ enum SessionEvent: Equatable, Sendable {
     case inboxRemoved(sessionID: String, id: String)
     case inboxDeliveryChanged(sessionID: String, id: String, delivery: String)
     case sessionCreated(id: String, parentID: String?)
-    case shellCreated(id: String, sessionID: String)
+    case shellCreated(id: String, sessionID: String, at: Date?)
     case shellExited(id: String)
+    /// `session.tool.success` whose `metadata.todos` is a list: a `todowrite` call (the event
+    /// doesn't name its tool).
+    case todosWritten(sessionID: String, todos: [TodoItemV2])
 
     /// The exact types home subscribes to, each sent as its own `types=` (the server refuses
     /// wildcards and lists).
@@ -66,6 +70,7 @@ enum SessionEvent: Equatable, Sendable {
         "session.created",
         "shell.created",
         "shell.exited",
+        "session.tool.success",
     ]
 
     /// Reads one `data:` payload; nil for types home doesn't use or a payload it can't read.
@@ -127,9 +132,16 @@ enum SessionEvent: Equatable, Sendable {
                   let id = info["id"] as? String,
                   let shellSession = (info["metadata"] as? [String: Any])?["sessionID"] as? String
             else { return nil }
-            return .shellCreated(id: id, sessionID: shellSession)
+            return .shellCreated(id: id, sessionID: shellSession, at: created)
         case "shell.exited":
             return (data["id"] as? String).map { .shellExited(id: $0) }
+        case "session.tool.success":
+            guard let sessionID, let todos = (data["metadata"] as? [String: Any])?["todos"] as? [Any] else { return nil }
+            let items = todos.compactMap { item -> TodoItemV2? in
+                guard let item = item as? [String: Any], let content = item["content"] as? String else { return nil }
+                return TodoItemV2(content: content, status: item["status"] as? String ?? "pending")
+            }
+            return .todosWritten(sessionID: sessionID, todos: items)
         default:
             return nil
         }
@@ -184,9 +196,13 @@ struct LiveSnapshot: Equatable, Sendable {
     /// Whether the session ever ran (`time.busy` is set).
     var hasRun: Bool
     var children: [String]
+    /// The subagents running now.
+    var runningChildren: [String] = []
     var pending: [PendingItem]
     /// Messages not delivered yet, in order.
     var inbox: [InboxEntry]
+    /// The agent's to-do list ([] for none); nil when it couldn't be read, so the last one stays.
+    var todos: [TodoItem]? = []
 }
 
 /// Today's session as the stream tells it: busy since when, the subagents and agent shells it owns,
@@ -205,7 +221,12 @@ struct LiveSessionState: Equatable, Sendable {
     var busySince: Date?
     var hasRun = false
     var children: Set<String> = []
-    var shells: Set<String> = []
+    /// Subagents between `session.execution.started` and its end.
+    var runningChildren: Set<String> = []
+    /// Agent shells running, and when each started.
+    var shells: [String: Date] = [:]
+    /// The agent's to-do list, cancelled items left out; empty for none.
+    var todos: [TodoItem] = []
     /// Oldest first.
     var pending: [PendingItem] = []
     /// Messages not delivered yet, in arrival order.
@@ -226,6 +247,19 @@ struct LiveSessionState: Equatable, Sendable {
     /// The question or approval the hint card shows: the oldest.
     var firstPending: PendingItem? { pending.first }
 
+    /// Subagents and shell commands running, as Running now counts them: a shell counts once it
+    /// has run for `shellDelay` (a quick command never shows).
+    func runningCount(at date: Date) -> Int {
+        runningChildren.count + shells.values.filter { date.timeIntervalSince($0) >= Self.shellDelay }.count
+    }
+
+    /// When the next young shell starts to count; nil when none is waiting.
+    func nextShellCount(after date: Date) -> Date? {
+        shells.values.map { $0.addingTimeInterval(Self.shellDelay) }.filter { $0 > date }.min()
+    }
+
+    static let shellDelay: TimeInterval = 10
+
     func owns(_ sessionID: String) -> Bool {
         sessionID == rootID || children.contains(sessionID)
     }
@@ -235,7 +269,9 @@ struct LiveSessionState: Equatable, Sendable {
         busySince = snapshot.busySince
         hasRun = hasRun || snapshot.hasRun
         children = Set(snapshot.children)
+        runningChildren = Set(snapshot.runningChildren)
         pending = snapshot.pending
+        if let todos = snapshot.todos { self.todos = todos }
         inbox = snapshot.inbox
     }
 
@@ -246,12 +282,14 @@ struct LiveSessionState: Equatable, Sendable {
         case .connected:
             return nil
         case let .executionStarted(sessionID, at):
+            if children.contains(sessionID) { runningChildren.insert(sessionID) }
             guard sessionID == rootID else { return nil }
             // One run includes the queued messages delivered during it: keep the first start.
             if busySince == nil { busySince = at ?? Date() }
             hasRun = true
             return nil
         case let .executionEnded(sessionID):
+            runningChildren.remove(sessionID)
             guard sessionID == rootID else { return nil }
             busySince = nil
             hasRun = true
@@ -279,11 +317,16 @@ struct LiveSessionState: Equatable, Sendable {
         case let .sessionCreated(id, parentID):
             if parentID == rootID { children.insert(id) }
             return nil
-        case let .shellCreated(id, sessionID):
-            if owns(sessionID) { shells.insert(id) }
+        case let .shellCreated(id, sessionID, at):
+            if owns(sessionID) { shells[id] = at ?? Date() }
             return nil
         case let .shellExited(id):
-            shells.remove(id)
+            shells[id] = nil
+            return nil
+        case let .todosWritten(sessionID, todos):
+            // Today's session's own list; a subagent's list is its own.
+            guard sessionID == rootID else { return nil }
+            self.todos = TodoList.items(todos)
             return nil
         }
     }

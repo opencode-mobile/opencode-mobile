@@ -3,7 +3,8 @@ import OpenCodeKit
 
 /// What following today's session asks of the server, beyond setting it up.
 protocol LiveSessionAPI: Sendable {
-    /// The state on a (re)connect: busy since when, the subagents, what they wait for, the inbox.
+    /// The state on a (re)connect: busy since when, the subagents, what they wait for, the inbox,
+    /// the to-do list.
     func snapshot(rootID: String) async throws -> LiveSnapshot
     func generate(sessionID: String, prompt: String) async throws -> String
     func switchModel(sessionID: String, model: ModelChoice) async throws
@@ -70,6 +71,7 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
         async let root = client.getSession(id: rootID)
         async let children = client.listSessions(parent: .session(rootID))
         async let inbox = client.inbox(sessionID: rootID)
+        async let todos = todos(sessionID: rootID)
         let running = try await active
         let session = try await root
         let childIDs = try await children.sessions.map(\.id)
@@ -87,9 +89,28 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
             busySince: busy,
             hasRun: session.busyMs != nil,
             children: childIDs,
+            runningChildren: childIDs.filter(running.contains),
             pending: PendingItem.oldestFirst(pending),
-            inbox: try await inbox.map { InboxEntry(id: $0.id, delivery: $0.delivery ?? "queue", text: $0.text ?? "") }
+            inbox: try await inbox.map { InboxEntry(id: $0.id, delivery: $0.delivery ?? "queue", text: $0.text ?? "") },
+            // A list that can't be read doesn't fail the rest; the last one stays.
+            todos: try? await todos.map(TodoList.items) ?? []
         )
+    }
+
+    /// Pages read looking for the newest `todowrite` call, newest first.
+    static let todoPages = 4
+    static let todoPageSize = 50
+
+    /// The newest completed `todowrite` list in the session; nil when there is none.
+    func todos(sessionID: String) async throws -> [TodoItemV2]? {
+        var cursor: String?
+        for _ in 0 ..< Self.todoPages {
+            let page = try await client.assistantMessages(sessionID: sessionID, limit: Self.todoPageSize, cursor: cursor)
+            if let todos = TodoList.newest(in: page.messages) { return todos }
+            guard let next = page.nextCursor, !page.messages.isEmpty else { return nil }
+            cursor = next
+        }
+        return nil
     }
 
     func generate(sessionID: String, prompt: String) async throws -> String {

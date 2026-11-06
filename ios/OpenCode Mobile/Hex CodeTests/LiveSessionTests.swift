@@ -80,14 +80,14 @@ struct LiveSessionStateTests {
         ))
         #expect(SessionEvent.decode(EventLines.enqueued("ses_a", id: "msg_1")) == .inboxEnqueued(sessionID: "ses_a", id: "msg_1", delivery: "queue", text: "hi"))
         #expect(SessionEvent.decode(EventLines.child("ses_c", parent: "ses_a")) == .sessionCreated(id: "ses_c", parentID: "ses_a"))
-        #expect(SessionEvent.decode(EventLines.shellCreated("sh_1", session: "ses_a")) == .shellCreated(id: "sh_1", sessionID: "ses_a"))
+        #expect(SessionEvent.decode(EventLines.shellCreated("sh_1", session: "ses_a")) == .shellCreated(id: "sh_1", sessionID: "ses_a", at: Date(timeIntervalSince1970: Double(1_793_914_275_814) / 1000)))
         #expect(SessionEvent.decode(EventLines.shellExited("sh_1")) == .shellExited(id: "sh_1"))
         #expect(SessionEvent.decode(EventLines.line("session.step.ended", #"{"sessionID":"ses_a"}"#)) == nil)
         #expect(SessionEvent.decode("not json") == nil)
     }
 
     @Test func theTypesAreTheExactListEachOnItsOwn() {
-        #expect(SessionEvent.types.count == 16)
+        #expect(SessionEvent.types.count == 17)
         #expect(!SessionEvent.types.contains { $0.contains("*") || $0.contains(",") })
     }
 
@@ -157,7 +157,7 @@ struct LiveSessionStateTests {
     @Test func shellExitsMatchByTheShellFromAKeptStart() {
         var state = LiveSessionState(rootID: "ses_a")
         _ = apply([EventLines.shellCreated("sh_1", session: "ses_a"), EventLines.shellCreated("sh_2", session: "ses_other")], to: &state)
-        #expect(state.shells == ["sh_1"])
+        #expect(Set(state.shells.keys) == ["sh_1"])
         _ = apply([EventLines.shellExited("sh_1")], to: &state)
         #expect(state.shells.isEmpty)
     }
@@ -177,7 +177,7 @@ struct LiveSessionStateTests {
         #expect(state.children == ["ses_c"])
         #expect(state.firstPending?.id == "frm_9")
         #expect(state.waitingCount == 1)
-        #expect(state.shells == ["sh_1"])
+        #expect(Set(state.shells.keys) == ["sh_1"])
     }
 
     @Test func theReadBackListsPendingItemsOldestFirstById() {

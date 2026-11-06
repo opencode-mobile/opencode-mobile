@@ -37,6 +37,10 @@ final class TodaySession {
     var computerHost: String?
     /// Those messages, in order, for the Waiting to send sheet.
     var waitingMessages: [InboxEntry] = []
+    /// The agent's to-do list (`todowrite`), cancelled items left out; empty for none.
+    var todos: [TodoItem] = []
+    /// Subagents and shell commands running, for the Details link.
+    var runningCount = 0
     let summary: StatusSummaryModel
 
     @ObservationIgnored private let dailySetup: DailySessionSetup
@@ -52,6 +56,8 @@ final class TodaySession {
     @ObservationIgnored private var day: String?
     @ObservationIgnored private var isOpening = false
     @ObservationIgnored private var backgroundStop: Task<Void, Never>?
+    /// Publishes again when a young shell has run long enough to count as running.
+    @ObservationIgnored private var shellTick: Task<Void, Never>?
 
     init(
         setup: DailySessionSetup,
@@ -215,6 +221,19 @@ final class TodaySession {
         pendingInput = live?.firstPending
         waitingCount = live?.waitingCount ?? 0
         waitingMessages = live?.waiting ?? []
+        todos = live?.todos ?? []
+        let date = now()
+        runningCount = live?.runningCount(at: date) ?? 0
+        shellTick?.cancel()
+        shellTick = nil
+        if let next = live?.nextShellCount(after: date) {
+            let delay = next.timeIntervalSince(date)
+            shellTick = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled else { return }
+                self?.publish()
+            }
+        }
     }
 
     /// The empty card for a session that never ran; else a new summary.
