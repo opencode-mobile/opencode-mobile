@@ -18,6 +18,8 @@ struct HexTalkButton: View {
         var recording = false
         var pressing = false
         var locked = false
+        /// When the take began, for the clock a locked take shows.
+        var startedAt: Date?
         /// The finger's sideways distance from where it touched down, in points (right positive).
         var offset: CGFloat = 0
         /// What release does now; set when the drag has gone far enough.
@@ -108,13 +110,21 @@ struct HexTalkButton: View {
                 HexMeter(level: level)
                     .frame(height: Self.meterHeight)
                     .padding(.leading, 40)
-                    .padding(.trailing, 16)
+                    .padding(.trailing, 56)
                 HStack {
                     HexIconView(.lock, size: HexIconSize.regular)
                         .foregroundStyle(HexColor.text2)
                     Spacer()
+                    // The take's clock (the prototype's `.ptt .tmr`).
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text(verbatim: AgentState.clock(phase.startedAt.map { context.date.timeIntervalSince($0) } ?? 0))
+                            .hexFont(.mono)
+                            .foregroundStyle(HexColor.text3)
+                            .monospacedDigit()
+                    }
                 }
-                .padding(.horizontal, 15)
+                .padding(.leading, 15)
+                .padding(.trailing, 16)
             }
         } else {
             TalkDragLook(

@@ -71,3 +71,47 @@ struct TalkButtonAccessibilityTests {
         #expect(recorder.cancelled == 1)
     }
 }
+
+/// The dock around the talk button (app plan, "Dictation" › Locked take).
+@MainActor
+struct DockTests {
+    @Test func theDockSwapsOnlyForALockedTake() async {
+        let home = HomeModel(recorder: FakeRecorder(), speech: FakeSpeech())
+        // Idle.
+        #expect(home.dock == .standard)
+        // Holding.
+        home.pressBegan()
+        #expect(home.dock == .standard)
+        // Locked.
+        home.pressMoved(dx: TalkDrag.armDistance)
+        await home.pressEnded()
+        #expect(home.locked && home.dock == .lockedTake)
+        // ✓ finishes it into the draft; the dock comes back.
+        await home.finishLockedTake()
+        #expect(home.dock == .standard)
+        #expect(home.draft.chunks.map(\.text) == ["hello there"])
+        // A draft.
+        #expect(!home.draft.isEmpty && home.dock == .standard)
+    }
+
+    @Test func dropForgetsTheLockedTakeWithTheNotice() async {
+        let home = HomeModel(recorder: FakeRecorder(), speech: FakeSpeech())
+        await home.toggleHandsFreeTake()
+        #expect(home.dock == .lockedTake)
+        await home.dropLockedTake()
+        #expect(home.dock == .standard)
+        #expect(home.draft.isEmpty)
+        #expect(home.toast?.title == "Take dropped")
+    }
+
+    @Test func reRecordingHandsFreeUsesTheSameDock() async {
+        let home = HomeModel(recorder: FakeRecorder(), speech: FakeSpeech())
+        await home.toggleHandsFreeTake()
+        await home.toggleHandsFreeTake()
+        #expect(home.draft.chunks.count == 1)
+        guard let chunk = home.draft.chunks.first else { return }
+        home.toggleChunk(chunk.id)
+        home.rerecordSelected()
+        #expect(home.dock == .lockedTake)
+    }
+}

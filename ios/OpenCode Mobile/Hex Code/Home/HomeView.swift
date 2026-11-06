@@ -58,16 +58,38 @@ struct HomeView: View {
     /// unless the agent is working or needs input.
     private var dock: some View {
         HStack(spacing: 8) {
-            HexIconButton(.clip, label: LocalizedStringResource("home.attach", defaultValue: "Attach"), action: onNotYet)
+            ZStack {
+                if home.dock == .lockedTake {
+                    HexIconButton(.x, label: LocalizedStringResource("home.locked.drop", defaultValue: "Drop this take")) {
+                        Task { await home.dropLockedTake() }
+                    }
+                    .transition(.opacity)
+                } else {
+                    HexIconButton(.clip, label: LocalizedStringResource("home.attach", defaultValue: "Attach"), action: onNotYet)
+                        .transition(.opacity)
+                }
+            }
             TalkButton(home: home, voice: voice)
-            HexIconButton(
-                .stop,
-                label: LocalizedStringResource("home.stop", defaultValue: "Stop"),
-                tone: .stop,
-                enabled: stopEnabled,
-                action: onNotYet
-            )
+            ZStack {
+                if home.dock == .lockedTake {
+                    // While a take is locked the agent's stop steps aside, so ✓ is never confused with it.
+                    HexIconButton(.check, label: LocalizedStringResource("home.locked.done", defaultValue: "Done"), tone: .strong) {
+                        Task { await home.finishLockedTake() }
+                    }
+                    .transition(.opacity)
+                } else {
+                    HexIconButton(
+                        .stop,
+                        label: LocalizedStringResource("home.stop", defaultValue: "Stop"),
+                        tone: .stop,
+                        enabled: stopEnabled,
+                        action: onNotYet
+                    )
+                    .transition(.opacity)
+                }
+            }
         }
+        .animation(HexMotion.ease(HexMotion.fade), value: home.dock)
     }
 
     private var stopEnabled: Bool {

@@ -798,6 +798,28 @@
           }
         }
       }
+    },
+    "home.locked.drop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drop this take"
+          }
+        }
+      }
+    },
+    "home.locked.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
     }
   }
 }

@@ -221,6 +221,7 @@ private struct HexGalleryContent: View {
                 HexIconButton(.clip, label: "Attach", enabled: false) {}
                 HexIconButton(.stop, label: "Stop", tone: .stop) {}
                 HexIconButton(.stop, label: "Stop", tone: .stop, enabled: false) {}
+                HexIconButton(.check, label: "Done", tone: .strong) {}
             }
             caption("Press styles: HexPressStyle (buttons), HexRowPressStyle (rows and icon buttons)")
         }
@@ -314,7 +315,7 @@ private struct HexGalleryContent: View {
             talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, offset: 43))
             talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, offset: 70, arm: .lock))
             talk(HexTalkButton.Phase(label: "", recording: true, pressing: true, offset: -54))
-            talk(HexTalkButton.Phase(label: "", recording: true, locked: true))
+            talk(HexTalkButton.Phase(label: "", recording: true, locked: true, startedAt: Date().addingTimeInterval(-14)))
             caption("Idle · quiet · held · dragging to lock · armed · dragging to drop · locked")
         }
         .padding(.horizontal, HexSpacing.screenHome - HexSpacing.screen)

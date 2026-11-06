@@ -15,6 +15,7 @@ struct TalkButton: View {
                 recording: home.isRecording,
                 pressing: home.isPressing,
                 locked: home.locked,
+                startedAt: home.takeStartedAt,
                 offset: home.dragOffset,
                 arm: home.arm
             ),

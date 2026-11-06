@@ -114,6 +114,30 @@ final class HomeModel {
         }
     }
 
+    /// What the dock shows around the talk button.
+    enum Dock: Equatable {
+        /// Attach, the talk button, the agent's stop.
+        case standard
+        /// A locked (hands-free) take: ✕ drops it, ✓ finishes it.
+        case lockedTake
+    }
+
+    var dock: Dock { isRecording && locked ? .lockedTake : .standard }
+
+    /// ✓ on a locked take: it goes into the draft, as a tap on the talk button does.
+    func finishLockedTake() async {
+        guard isRecording, locked else { return }
+        pressStartedAt = now()
+        await pressEnded()
+    }
+
+    /// ✕ on a locked take: it is dropped, with the "Take dropped" notice.
+    func dropLockedTake() async {
+        guard isRecording, locked else { return }
+        await dropCurrentTake()
+        showTakeDropped()
+    }
+
     /// VoiceOver's Drop: forgets the take being recorded.
     func dropCurrentTake() async {
         guard isRecording else { return }
@@ -146,13 +170,7 @@ final class HomeModel {
             locked = true
         } else if armed == .drop {
             await dropTake()
-            toasts.show(HexToastItem(
-                tone: .undo,
-                title: String(localized: "home.take_dropped", defaultValue: "Take dropped"),
-                detail: draft.isEmpty
-                    ? String(localized: "home.take_dropped.empty", defaultValue: "Nothing was recorded.")
-                    : String(localized: "home.take_dropped.kept", defaultValue: "Earlier parts of the draft are kept.")
-            ))
+            showTakeDropped()
         } else if now().timeIntervalSince(started) < Self.minimumHold {
             await dropTake()
             toasts.show(HexToastItem(
@@ -163,6 +181,16 @@ final class HomeModel {
         } else {
             await endTake()
         }
+    }
+
+    private func showTakeDropped() {
+        toasts.show(HexToastItem(
+            tone: .undo,
+            title: String(localized: "home.take_dropped", defaultValue: "Take dropped"),
+            detail: draft.isEmpty
+                ? String(localized: "home.take_dropped.empty", defaultValue: "Nothing was recorded.")
+                : String(localized: "home.take_dropped.kept", defaultValue: "Earlier parts of the draft are kept.")
+        ))
     }
 
     private func confirmStart() async {

@@ -213,8 +213,12 @@ struct HexRoundButton: View {
 /// A 46 pt borderless icon button beside the talk button. The stop tone is red; disabled is 35 %.
 struct HexIconButton: View {
     enum Tone {
+        /// `text2`.
         case plain
+        /// `red`: the agent's stop.
         case stop
+        /// `text1`: the one action that finishes something, such as ✓ on a locked take.
+        case strong
     }
 
     let icon: HexIcon
@@ -234,7 +238,7 @@ struct HexIconButton: View {
     var body: some View {
         Button(action: action) {
             HexIconView(icon, size: HexIconSize.large)
-                .foregroundStyle(tone == .stop ? HexColor.red : HexColor.text2)
+                .foregroundStyle(tone == .stop ? HexColor.red : tone == .strong ? HexColor.text1 : HexColor.text2)
                 .frame(width: 46, height: 46)
                 .contentShape(RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous))
         }
