@@ -8,17 +8,15 @@ enum SessionPrompts {
     enum Summary {
         /// 2: a TL;DR of the substance (the answer, finding or outcome, what's in progress, or
         /// what the user needs to do), Now up to 300 characters, Link lines, backticks for code.
-        static let version = 2
+        /// 3: no step lines; the to-do row is the agent's own `todowrite` list.
+        static let version = 3
 
         static let text = """
         Summarise this session for someone glancing at their phone. Reply in exactly this shape and nothing else:
         ## <the topic, at most 5 words>
         Now: <the TL;DR, in plain words, at most 300 characters. Lead with the substance, not with what you did. If you have just answered, found or decided something, give that itself: the key facts, names, numbers or outcome ("Three apps share one API client: …", never "Explained the repo"). If you are still working, say what you are on and anything already found. If you need the user, say exactly what you need from them.>
         Next: <what happens next, or what the user could do, one sentence, at most 60 characters>
-        - [x] <a finished step>
-        - [ ] <a step not done yet>
         Link: <a short label> | <a URL the user may want to open>
-        List at most 8 steps, in order. Leave out the step lines if there is no plan.
         Add at most 2 Link lines, only for URLs from this session, and none if there are none. Never put a URL in Now or Next.
         Put file names, commands and code in backticks. Use no other formatting.
         """

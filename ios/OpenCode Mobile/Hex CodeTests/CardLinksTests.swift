@@ -88,7 +88,7 @@ struct CardLinksTests {
     }
 
     @Test func savedCardsKeepTheirLinks() throws {
-        let card = StatusCard(title: "T", now: "N", next: nil, steps: [], links: [CardLink(label: "A", url: "https://a.example")])
+        let card = StatusCard(title: "T", now: "N", next: nil, links: [CardLink(label: "A", url: "https://a.example")])
         let decoded = try JSONDecoder().decode(StatusCard.self, from: JSONEncoder().encode(card))
         #expect(decoded == card)
     }

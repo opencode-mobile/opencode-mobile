@@ -4,9 +4,9 @@ import Foundation
 /// `-HexCodeDemoSession <preset>` at launch (debug builds). Nothing here talks to OpenCode. The
 /// presets are the same on both platforms.
 enum TodaySessionDemo: String, CaseIterable {
-    /// Working, with a four-step plan and a message waiting.
+    /// Working, with a subagent running, a message waiting and the agent's list half done.
     case card
-    /// Idle, a card with no steps and no Next line.
+    /// Idle, a card with no to-do row and no Next line.
     case plain
     /// The reply didn't match the card shape.
     case fallback
@@ -26,11 +26,12 @@ enum TodaySessionDemo: String, CaseIterable {
     case updating
     /// The last summary request failed.
     case updatefailed
-    /// A Now of about 150 characters.
+    /// A Now of 150 characters; every to-do item done.
     case long
-    /// A Now of about 300 characters, the most the prompt asks for.
+    /// A Now of 298 characters, near the most the prompt asks for; no to-do row.
     case longest
-    /// Code, bold, a `Link:` line and a localhost link: formatting and link tiles.
+    /// Idle, with code, bold, a `Link:` line and a localhost link in Now: formatting and link
+    /// tiles; code in a to-do item.
     case formatted
 
     static var launchPreset: TodaySessionDemo? {
@@ -52,23 +53,20 @@ enum TodaySessionDemo: String, CaseIterable {
     ## Login screen rewrite
     Now: Wiring the new token refresh into the API client.
     Next: Run the auth tests, then fix whatever breaks.
-    - [x] Remove old session helper
-    - [x] New login form
-    - [ ] Token refresh
-    - [ ] Auth tests
     """
 
-    static let formattedReply = """
-    ## Login screen `v2`
-    Now: Moved token refresh into `AuthClient`, so an **expired session** renews quietly. Preview it at http://localhost:5173/login.
-    Next: Run `npm test`, then read the [refresh docs](https://developer.mozilla.org/docs/Web/HTTP/Authentication).
-    - [x] Remove `SessionHelper`
-    - [x] New login form
-    - [ ] **Token refresh**
-    - [ ] Auth tests
-    Link: Login preview | http://localhost:5173/login
-    Link: https://github.com/sst/opencode/pull/42
-    """
+    /// 150 characters.
+    static let longNow = "Three apps share one API client in packages/api: the web app, the phone app and the admin tool. Token "
+        + "refresh lives there, so one fix covers them all."
+
+    /// 298 characters.
+    static let longestNow = "Mapping which screens need a signed-in user and which can open read-only. Settings, the project list and "
+        + "the session view can all be read without logging in. Billing and team admin both write data, so they "
+        + "stay behind login. This list becomes the read-only flag in the router next. Edits hide later."
+
+    static let formattedReply = "## Login `401` fix\nNow: The **token refresh** in `client.ts` now retries once; the login page at "
+        + "http://localhost:5173/login no longer shows a 401.\nNext: Run `bun test auth`, then open a PR.\n"
+        + "Link: Issue 412 | https://github.com/example/app/issues/412"
 
     static let fallbackReply = """
     Okay, I finished the token refresh and now I am going through the auth tests one at a time. Two of them \
@@ -103,10 +101,12 @@ enum TodaySessionDemo: String, CaseIterable {
     @MainActor
     func start(_ session: TodaySession, now: Date = Date()) async {
         await session.open()
+        session.todos = todos
         switch self {
         case .card:
             session.busySince = now.addingTimeInterval(-252)
             session.waitingCount = 1
+            session.runningCount = 1
         case .needs:
             session.pendingInput = PendingItem(id: "frm_demo", sessionID: "ses_demo", kind: .question, text: "2 questions · login length and remember-me")
         case .approval:
@@ -135,12 +135,36 @@ enum TodaySessionDemo: String, CaseIterable {
         switch self {
         case .fallback: Self.fallbackReply
         case .plain: "## Login screen rewrite\nNow: Reading the auth tests to see what the old helper covers."
-        case .long: "## Login screen rewrite\nNow: Wiring the new token refresh into the API client, then checking that an expired session renews quietly instead of signing you out.\nNext: Run the auth tests, then fix whatever breaks.\n- [x] Remove old session helper\n- [x] New login form\n- [ ] Token refresh\n- [ ] Auth tests"
-        case .longest: "## Login screen rewrite\nNow: Wiring the new token refresh into the API client. Two auth tests still lean on the old session helper, so I am rewriting those to use the new client first. After that the expired-session case should renew quietly, and the remember-me flag keeps its 30 day login.\nNext: Run the whole auth suite, then fix what breaks.\n- [x] Remove old session helper\n- [x] New login form\n- [ ] Token refresh\n- [ ] Auth tests"
+        case .long: "## API client\nNow: \(Self.longNow)\nNext: Fix token refresh in the shared client."
+        case .longest: "## Read-only mode first\nNow: \(Self.longestNow)\nNext: Add a read-only flag to the router."
         case .formatted: Self.formattedReply
-        case .needs: "## Login screen rewrite\nNow: Token refresh is done. Paused before changing login length.\nNext: Your answers, then the auth tests.\n- [x] Remove old session helper\n- [x] New login form\n- [x] Token refresh\n- [ ] Auth tests"
-        case .approval: "## Login screen rewrite\nNow: The auth tests need a clean database. Waiting for your approval.\nNext: Then run the auth tests.\n- [x] Remove old session helper\n- [x] New login form\n- [x] Token refresh\n- [ ] Auth tests"
+        case .needs: "## Login screen rewrite\nNow: Token refresh is done. Paused before changing login length.\nNext: Your answers, then the auth tests."
+        case .approval: "## Login screen rewrite\nNow: The auth tests need a clean database. Waiting for your approval.\nNext: Then run the auth tests."
         default: Self.reply
+        }
+    }
+
+    /// The agent's to-do list in this state; plain, fallback, longest, empty and new day keep none.
+    private var todos: [TodoItem] {
+        switch self {
+        case .card: Self.loginTodos(.completed, .completed, .inProgress, .pending)
+        case .needs, .approval: Self.loginTodos(.completed, .completed, .completed, .pending)
+        case .reconnecting: Self.loginTodos(.completed, .inProgress, .pending, .pending)
+        case .updating, .updatefailed: Self.loginTodos(.completed, .completed, .inProgress, .pending)
+        case .long: Self.loginTodos(.completed, .completed, .completed, .completed)
+        case .formatted: [
+                TodoItem(content: "Find the 401", status: .completed),
+                TodoItem(content: "Retry once in `client.ts`", status: .inProgress),
+                TodoItem(content: "Run `bun test auth`", status: .pending),
+            ]
+        default: []
+        }
+    }
+
+    /// The login rewrite's four items, with these statuses.
+    private static func loginTodos(_ statuses: TodoItem.Status...) -> [TodoItem] {
+        zip(["Remove old session helper", "New login form", "Token refresh", "Auth tests"], statuses).map {
+            TodoItem(content: $0, status: $1)
         }
     }
 

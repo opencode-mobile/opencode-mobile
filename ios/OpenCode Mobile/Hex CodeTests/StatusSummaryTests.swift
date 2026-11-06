@@ -20,26 +20,21 @@ struct StatusSummaryTests {
         let expected = StatusCard(
             title: "Login screen rewrite",
             now: "Wiring the new token refresh into the API client.",
-            next: "Run the auth tests, then fix whatever breaks.",
-            steps: [
-                .init(text: "Remove old session helper", done: true),
-                .init(text: "New login form", done: true),
-                .init(text: "Token refresh", done: false),
-                .init(text: "Auth tests", done: false),
-            ]
+            next: "Run the auth tests, then fix whatever breaks."
         )
         #expect(StatusSummary.parse(fullReply) == .card(expected))
-        #expect(expected.doneCount == 2)
     }
 
-    @Test func noStepsIsACardWithoutProgress() {
-        let reply = "## Login screen rewrite\nNow: Reading the auth tests.\nNext: Fix the first failure."
-        guard case let .card(card) = StatusSummary.parse(reply) else {
-            Issue.record("expected a card")
-            return
-        }
-        #expect(card.steps.isEmpty)
-        #expect(card.next == "Fix the first failure.")
+    @Test func stepLinesAreIgnored() {
+        let withSteps = "## Login screen rewrite\nNow: Reading the auth tests.\n- [x] Done\n- [ ] Not yet\n- [X] Also done\nNext: Fix the first failure."
+        let without = "## Login screen rewrite\nNow: Reading the auth tests.\nNext: Fix the first failure."
+        #expect(StatusSummary.parse(withSteps) == StatusSummary.parse(without))
+    }
+
+    @Test func savedCardsWithStepsStillDecode() throws {
+        let old = #"{"title":"T","now":"N","next":"X","steps":[{"text":"A","done":true}]}"#
+        let card = try JSONDecoder().decode(StatusCard.self, from: Data(old.utf8))
+        #expect(card == StatusCard(title: "T", now: "N", next: "X"))
     }
 
     @Test func noNextIsACardWithoutNext() {
@@ -49,7 +44,6 @@ struct StatusSummaryTests {
             return
         }
         #expect(card.next == nil)
-        #expect(card.steps == [.init(text: "Auth tests", done: false)])
     }
 
     @Test func codeFencesAndBlankLinesAreIgnored() {
@@ -72,25 +66,14 @@ struct StatusSummaryTests {
         #expect(card.now == "Doing it.")
     }
 
-    @Test func nowAndNextMatchInAnyCaseAndCapitalXIsDone() {
-        let reply = "## Task\nNOW: Doing it.\nnext: After that.\n- [X] One\n- [x] Two\n- [ ] Three"
+    @Test func nowAndNextMatchInAnyCase() {
+        let reply = "## Task\nNOW: Doing it.\nnext: After that."
         guard case let .card(card) = StatusSummary.parse(reply) else {
             Issue.record("expected a card")
             return
         }
         #expect(card.now == "Doing it.")
         #expect(card.next == "After that.")
-        #expect(card.steps.map(\.done) == [true, true, false])
-    }
-
-    @Test func stepsAreClippedTo40() {
-        let long = String(repeating: "step ", count: 20)
-        guard case let .card(card) = StatusSummary.parse("## Task\nNow: Doing it.\n- [ ] \(long)") else {
-            Issue.record("expected a card")
-            return
-        }
-        #expect(card.steps[0].text.count <= 40)
-        #expect(card.steps[0].text.hasSuffix("…"))
     }
 
     @Test func theFallbackCollapsesRunsOfSpaces() {
@@ -157,16 +140,6 @@ struct StatusSummaryTests {
         #expect(card.title.hasSuffix("…"))
     }
 
-    @Test func atMostEightSteps() {
-        let steps = (1 ... 10).map { "- [x] Step \($0)" }.joined(separator: "\n")
-        guard case let .card(card) = StatusSummary.parse("## Title\nNow: Doing it.\n" + steps) else {
-            Issue.record("expected a card")
-            return
-        }
-        #expect(card.steps.count == 8)
-        #expect(card.steps.last?.text == "Step 8")
-    }
-
     // MARK: Clipping, as the prototype's clip()
 
     @Test func clipKeepsShortTextAsItIs() {
@@ -198,7 +171,6 @@ struct StatusSummaryTests {
         #expect(card.title == "Thursday 5 November")
         #expect(card.now == "New session. Nothing running yet.")
         #expect(card.next == "Say what to do.")
-        #expect(card.steps.isEmpty)
         // The phone's region doesn't change it (the formatter ignores Locale.current).
         #expect(StatusCard.longDate(thursday + 86400 * 3, timeZone: utc) == "Sunday 8 November")
         #expect(StatusCard.longDate(thursday, timeZone: TimeZone(identifier: "Pacific/Kiritimati")!) == "Friday 6 November")
@@ -231,10 +203,11 @@ struct StatusSummaryTests {
     }
 
     @Test func thePromptAndRulesAreVersioned() {
-        #expect(SessionPrompts.Summary.version == 2)
+        #expect(SessionPrompts.Summary.version == 3)
         #expect(SessionPrompts.Summary.text.hasPrefix("Summarise this session for someone glancing at their phone."))
         #expect(SessionPrompts.Summary.text.contains("Link: <a short label> | <a URL the user may want to open>"))
-        #expect(SessionPrompts.Summary.text.split(separator: "\n").count == 10)
+        #expect(!SessionPrompts.Summary.text.contains("- [ ]"))
+        #expect(SessionPrompts.Summary.text.split(separator: "\n").count == 7)
         #expect(SessionPrompts.MessageRules.version == 2)
         #expect(SessionPrompts.MessageRules.text == """
         Messages come from a voice app and may arrive while you work.

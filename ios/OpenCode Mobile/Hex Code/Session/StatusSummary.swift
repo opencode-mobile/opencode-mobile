@@ -1,39 +1,31 @@
 import Foundation
 
-/// The status card on home: the task, what the agent does now, what comes next, and the plan.
+/// The status card on home: the task, what the agent does now, what comes next, and links. The
+/// to-do row isn't the summary's: it is the agent's own list (`TodoList`).
 struct StatusCard: Equatable, Sendable, Codable {
-    struct Step: Equatable, Sendable, Codable {
-        var text: String
-        var done: Bool
-    }
-
     var title: String
     var now: String
     /// Nil when the reply had no `Next:` line.
     var next: String?
-    var steps: [Step] = []
     /// The tiles under Next: the reply's `Link:` lines, then links left in Now and Next.
     var links: [CardLink] = []
 
-    var doneCount: Int { steps.filter(\.done).count }
+    private enum CodingKeys: String, CodingKey { case title, now, next, links }
 
-    private enum CodingKeys: String, CodingKey { case title, now, next, steps, links }
-
-    init(title: String, now: String, next: String? = nil, steps: [Step] = [], links: [CardLink] = []) {
+    init(title: String, now: String, next: String? = nil, links: [CardLink] = []) {
         self.title = title
         self.now = now
         self.next = next
-        self.steps = steps
         self.links = links
     }
 
-    /// Cards saved before links were kept read without them.
+    /// Cards saved before links were kept read without them; steps saved by older versions are
+    /// ignored.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         title = try container.decode(String.self, forKey: .title)
         now = try container.decode(String.self, forKey: .now)
         next = try container.decodeIfPresent(String.self, forKey: .next)
-        steps = try container.decodeIfPresent([Step].self, forKey: .steps) ?? []
         links = try container.decodeIfPresent([CardLink].self, forKey: .links) ?? []
     }
 
@@ -72,27 +64,24 @@ enum StatusSummary: Equatable, Sendable, Codable {
     case card(StatusCard)
     case fallback(String)
 
-    /// Clipping, as the prototype: title 40, Now 300, Next 60, steps 40, fallback 300 characters
-    /// (grapheme clusters).
+    /// Clipping, as the prototype: title 40, Now 300, Next 60, fallback 300 characters (grapheme
+    /// clusters). To-do items clip at `TodoList.itemLimit`.
     static let titleLimit = 40
     static let nowLimit = 300
     static let nextLimit = 60
-    static let stepLimit = 40
     static let fallbackLimit = 300
-    /// The prompt asks for at most 8 steps; more are dropped from the end.
-    static let maxSteps = 8
 
     /// Reads a reply to `SessionPrompts.Summary`. Each line is trimmed; code fences and blank lines
     /// are ignored, and so is any other line (such as text before the title). The first line
     /// starting `## ` is the title, the first lines starting `Now:` and `Next:` (in any case) the
-    /// sentence and what follows, and lines starting `- [x]`, `- [X]` or `- [ ]` the steps (the
-    /// first 8). A label with nothing after it counts as missing. Without a title or a `Now:` line
-    /// it is a fallback: the lines joined with spaces, runs of spaces collapsed.
+    /// sentence and what follows, and lines starting `Link:` links. Other lines, step lines
+    /// (`- [x]`, `- [ ]`) among them, are ignored. A label with nothing after it counts as
+    /// missing. Without a title or a `Now:` line it is a fallback: the lines joined with spaces,
+    /// runs of spaces collapsed.
     static func parse(_ reply: String) -> StatusSummary {
         var title: String?
         var now: String?
         var next: String?
-        var steps: [StatusCard.Step] = []
         let linkLines = reply
             .split(whereSeparator: \.isNewline)
             .compactMap { $0.trimmingCharacters(in: .whitespaces).value(afterLabel: "link:") }
@@ -106,10 +95,6 @@ enum StatusSummary: Equatable, Sendable, Codable {
                 if now == nil, !value.isEmpty { now = value }
             } else if let value = line.value(afterLabel: "next:") {
                 if next == nil, !value.isEmpty { next = value }
-            } else if let value = line.value(after: "- [x]") ?? line.value(after: "- [X]") {
-                if !value.isEmpty { steps.append(.init(text: InlineMarkdown.clip(value, stepLimit), done: true)) }
-            } else if let value = line.value(after: "- [ ]") {
-                if !value.isEmpty { steps.append(.init(text: InlineMarkdown.clip(value, stepLimit), done: false)) }
             }
         }
         guard let title, let now else {
@@ -123,7 +108,6 @@ enum StatusSummary: Equatable, Sendable, Codable {
             title: InlineMarkdown.clip(title, titleLimit),
             now: InlineMarkdown.clip(pulledNow.text, nowLimit),
             next: pulledNext.map { InlineMarkdown.clip($0.text, nextLimit) },
-            steps: Array(steps.prefix(maxSteps)),
             links: CardLinks.unique(Array(linkLines) + pulledNow.links + (pulledNext?.links ?? []))
         ))
     }
