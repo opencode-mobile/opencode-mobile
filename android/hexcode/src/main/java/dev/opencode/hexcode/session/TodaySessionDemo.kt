@@ -30,6 +30,9 @@ enum class TodaySessionDemo(
     /** Idle, a Now of about 300 characters (`nowSmall`, or smaller if the card doesn't fit). */
     Longest("longest"),
 
+    /** Idle, with code, bold, a `Link:` line and a localhost link in Now: formatting and link tiles. */
+    Formatted("formatted"),
+
     /** The reply didn't match the card shape. */
     Fallback("fallback"),
 
@@ -133,6 +136,7 @@ enum class TodaySessionDemo(
             Plain -> "## Login screen rewrite\nNow: Reading the auth tests to see what the old helper covers."
             Long -> "## API client\nNow: $LONG_NOW\nNext: Fix token refresh in the shared client.\n$PLAN"
             Longest -> "## Read-only mode first\nNow: $LONGEST_NOW\nNext: Add a read-only flag to the router.\n$PLAN"
+            Formatted -> FORMATTED_REPLY
             Needs ->
                 "## Login screen rewrite\nNow: Token refresh is done. Paused before changing login length.\n" +
                     "Next: Your answers, then the auth tests.\n- [x] Remove old session helper\n- [x] New login form\n" +
@@ -160,6 +164,12 @@ enum class TodaySessionDemo(
             "Mapping which screens need a signed-in user and which can open read-only. Settings, the project list and " +
                 "the session view can all be read without logging in. Billing and team admin both write data, so they " +
                 "stay behind login. This list becomes the read-only flag in the router next. Edits hide later."
+
+        const val FORMATTED_REPLY =
+            "## Login `401` fix\nNow: The **token refresh** in `client.ts` now retries once; the login page at " +
+                "http://localhost:5173/login no longer shows a 401.\nNext: Run `bun test auth`, then open a PR.\n" +
+                "- [x] Find the 401\n- [x] Retry in `client.ts`\n- [ ] Auth tests\n" +
+                "Link: Issue 412 | https://github.com/example/app/issues/412"
 
         private const val PLAN = "- [x] Read the code\n- [x] Map the screens\n- [ ] Router flag\n- [ ] Hide edits"
 
