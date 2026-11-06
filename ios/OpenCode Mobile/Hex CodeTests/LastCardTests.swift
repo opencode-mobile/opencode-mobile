@@ -118,4 +118,120 @@ struct LastCardTests {
         #expect(second.summary.summary == card)
         #expect(!second.summary.failed)
     }
+
+    // MARK: Before setup finishes
+
+    /// Setup that waits until the test lets it finish.
+    final class SlowService: DailySessionService, @unchecked Sendable {
+        let gate: Gate
+        let server: FakeSessionServer
+
+        init(gate: Gate, server: FakeSessionServer) {
+            self.gate = gate
+            self.server = server
+        }
+
+        func sessionsPage(directory: String, search: String, limit: Int, cursor: String?) async throws -> SessionListingPage {
+            await gate.wait()
+            return try await server.sessionsPage(directory: directory, search: search, limit: limit, cursor: cursor)
+        }
+
+        func createSession(title: String, directory: String, model: ModelChoice) async throws -> SessionListing {
+            try await server.createSession(title: title, directory: directory, model: model)
+        }
+
+        func putMessageRules(sessionID: String) async throws {
+            try await server.putMessageRules(sessionID: sessionID)
+        }
+    }
+
+    private func slowSession(_ store: MemorySummaryStore, listed: [SessionListing], gate: Gate) -> TodaySession {
+        let server = FakeSessionServer()
+        server.listed = listed
+        return TodaySession(
+            setup: DailySessionSetup(service: SlowService(gate: gate, server: server), memory: FakeMemory("2026-11-05")),
+            summary: StatusSummaryModel(store: store, now: { [start] in start }),
+            directory: { "/p" },
+            model: { ModelChoice(providerID: "opencode", modelID: "big-pickle", variant: nil) },
+            toasts: HexToaster(),
+            now: { [start] in start },
+            timeZone: TimeZone(identifier: "UTC")!
+        )
+    }
+
+    private func saved(_ id: String, day: String = "2026-11-05", directory: String = "/p") -> SavedSummary {
+        SavedSummary(sessionID: id, summary: card, updatedAt: start - 600, day: day, directory: directory)
+    }
+
+    private func todays(_ id: String) -> SessionListing {
+        SessionListing(id: id, title: "2026-11-05", directory: "/p", updatedAt: start, busySince: start)
+    }
+
+    private func settle() async {
+        for _ in 0 ..< 10 { await Task.yield() }
+    }
+
+    @Test func todaysCardShowsBeforeSetupFinishesAndStays() async {
+        let store = MemorySummaryStore()
+        store.saved = saved("ses_a")
+        let gate = Gate()
+        let session = slowSession(store, listed: [todays("ses_a")], gate: gate)
+        let opening = Task { await session.open() }
+        await settle()
+        #expect(session.setup == .opening)
+        #expect(session.summary.summary == card)
+        #expect(session.summary.refreshLabel(at: start) == .minutesAgo(10))
+        gate.open()
+        await opening.value
+        #expect(session.setup == .ready(sessionID: "ses_a"))
+        #expect(session.summary.summary == card)
+    }
+
+    @Test func yesterdaysCardDoesNotShow() async {
+        let store = MemorySummaryStore()
+        store.saved = saved("ses_y", day: "2026-11-04")
+        let gate = Gate()
+        let session = slowSession(store, listed: [], gate: gate)
+        let opening = Task { await session.open() }
+        await settle()
+        #expect(session.summary.summary == nil)
+        gate.open()
+        await opening.value
+    }
+
+    @Test func anotherProjectsCardDoesNotShow() async {
+        let store = MemorySummaryStore()
+        store.saved = saved("ses_q", directory: "/q")
+        let gate = Gate()
+        let session = slowSession(store, listed: [], gate: gate)
+        let opening = Task { await session.open() }
+        await settle()
+        #expect(session.summary.summary == nil)
+        gate.open()
+        await opening.value
+    }
+
+    @Test func theCardGoesWhenSetupFindsADifferentSession() async {
+        let store = MemorySummaryStore()
+        store.saved = saved("ses_old")
+        let gate = Gate()
+        let session = slowSession(store, listed: [todays("ses_new")], gate: gate)
+        let opening = Task { await session.open() }
+        await settle()
+        #expect(session.summary.summary == card)
+        gate.open()
+        await opening.value
+        #expect(session.setup == .ready(sessionID: "ses_new"))
+        #expect(session.summary.summary != card)
+    }
+
+    @Test func aSavedCardCarriesItsDateAndProject() async {
+        let store = MemorySummaryStore()
+        let model = StatusSummaryModel(generator: Generator(reply: "## Task\nNow: Doing it."), store: store, now: { [start] in start })
+        model.preopen(day: "2026-11-05", directory: "/p")
+        model.open(sessionID: "ses_a")
+        await model.refresh()
+        #expect(store.saved?.day == "2026-11-05")
+        #expect(store.saved?.directory == "/p")
+    }
 }

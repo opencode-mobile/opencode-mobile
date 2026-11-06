@@ -12,6 +12,10 @@ struct SavedSummary: Equatable, Codable, Sendable {
     var sessionID: String
     var summary: StatusSummary
     var updatedAt: Date
+    /// The session's date (`yyyy-MM-dd`) and project, so the card can show before setup finds the
+    /// session. Missing on cards saved before they were kept.
+    var day: String?
+    var directory: String?
 }
 
 /// Where the last card is kept. Only one session's (today's) at a time.
@@ -60,6 +64,8 @@ final class StatusSummaryModel {
     @ObservationIgnored var generator: (any SummaryGenerating)?
     /// The session whose cards are saved; set when today's session opens.
     @ObservationIgnored private(set) var sessionID: String?
+    @ObservationIgnored private var day: String?
+    @ObservationIgnored private var directory: String?
     @ObservationIgnored private let store: (any SummaryStoring)?
     @ObservationIgnored private let timeZone: TimeZone
     /// Whether the agent is working now, asked when an empty answer comes back.
@@ -85,9 +91,24 @@ final class StatusSummaryModel {
     /// Today's session opened: its saved card shows at once, with its age, until a refresh
     /// succeeds. A card saved for another session is not shown.
     func open(sessionID: String) {
-        clear()
         self.sessionID = sessionID
-        guard let saved = store?.load(), saved.sessionID == sessionID else { return }
+        if let saved = store?.load(), saved.sessionID == sessionID {
+            clear()
+            summary = saved.summary
+            updatedAt = saved.updatedAt
+        } else {
+            // Setup found a different session than the card shown before it finished.
+            clear()
+        }
+    }
+
+    /// The app opened, before setup finds today's session: a card saved for a session of this date
+    /// in this project shows at once. `open(sessionID:)` keeps it or removes it.
+    func preopen(day: String, directory: String) {
+        clear()
+        self.day = day
+        self.directory = directory
+        guard let saved = store?.load(), saved.day == day, saved.directory == directory else { return }
         summary = saved.summary
         updatedAt = saved.updatedAt
     }
@@ -145,7 +166,9 @@ final class StatusSummaryModel {
         summary = parsed
         updatedAt = now()
         failed = false
-        if let sessionID { store?.save(SavedSummary(sessionID: sessionID, summary: parsed, updatedAt: now())) }
+        if let sessionID {
+            store?.save(SavedSummary(sessionID: sessionID, summary: parsed, updatedAt: now(), day: day, directory: directory))
+        }
     }
 
     /// The reply, or nil after an error or the timeout. The timeout doesn't wait for the request

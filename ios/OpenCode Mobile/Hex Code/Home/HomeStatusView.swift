@@ -10,7 +10,15 @@ struct HomeStatusView: View {
         VStack(alignment: .leading, spacing: 14) {
             switch session.setup {
             case .opening:
-                EmptyView()
+                // Setup is still finding today's session: only a card saved for it shows.
+                switch session.summary.summary {
+                case let .card(card):
+                    StatusCardView(card: card, summary: session.summary, onDetails: { session.openDetails() })
+                case let .fallback(text):
+                    FallbackCardView(text: text, summary: session.summary)
+                case nil:
+                    EmptyView()
+                }
             case let .failed(retrying):
                 SetupFailedView(retrying: retrying) { Task { await session.retry() } }
             case .ready:

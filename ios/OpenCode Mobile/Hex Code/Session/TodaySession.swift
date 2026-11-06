@@ -104,7 +104,10 @@ final class TodaySession {
         }
         stream?.stop()
         let today = DailySession.title(for: now(), timeZone: timeZone)
-        switch await dailySetup.open(today: today, directory: directory(), model: model()) {
+        let directory = directory()
+        // Today's saved card for this project shows at once, while setup finds the session.
+        summary.preopen(day: today, directory: directory)
+        switch await dailySetup.open(today: today, directory: directory, model: model()) {
         case .failed:
             setup = .failed(retrying: false)
         case let .opened(session, _, showsNewDayNotice):
