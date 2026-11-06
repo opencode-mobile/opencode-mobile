@@ -13,15 +13,18 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withAnnotation
 import androidx.compose.ui.text.withStyle
 import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.components.HEX_CODE_TAG
+import dev.opencode.hexcode.designsystem.components.hexCodeStyle
 import dev.opencode.hexcode.session.SummaryLinks
 import dev.opencode.hexcode.session.SummaryRun
 import dev.opencode.hexcode.session.SummaryText
 
 /**
- * [text]'s inline Markdown drawn (app-plan.md, Formatting): code in the same font, size and weight as the text
- * around it, only quieter (`text2`, no box); bold in [bold] and `text1`. [prefix] and [suffix] go round it unformatted ("Next: …").
+ * [text]'s inline Markdown drawn (app-plan.md, Formatting): code as Slack draws it, but quieter, in the monospace at 0.82
+ * of the size, marked for [HexCodeText] to box; bold in [bold] and `text1`. Draw it with [HexCodeText]. [prefix] and [suffix] go round it unformatted ("Next: …").
  */
 @Composable
 internal fun summaryText(
@@ -30,15 +33,15 @@ internal fun summaryText(
     prefix: String = "",
     suffix: String = "",
 ): AnnotatedString {
-    val quiet = HexTheme.colors.text2
+    val code = hexCodeStyle()
     val strong = HexTheme.colors.text1
-    return remember(text, bold, prefix, suffix, quiet, strong) { formatted(text, bold, quiet, strong, prefix, suffix) }
+    return remember(text, bold, prefix, suffix, code, strong) { formatted(text, bold, code, strong, prefix, suffix) }
 }
 
 private fun formatted(
     text: String,
     bold: FontWeight,
-    quiet: Color,
+    code: SpanStyle,
     strong: Color,
     prefix: String,
     suffix: String,
@@ -48,8 +51,12 @@ private fun formatted(
         SummaryText.runs(text).forEach { run ->
             when (run.style) {
                 SummaryRun.Style.Plain -> append(run.text)
-                // The user found boxes and a monospace distracting: code is only a little quieter.
-                SummaryRun.Style.Code -> withStyle(SpanStyle(color = quiet)) { append(run.text) }
+                SummaryRun.Style.Code -> {
+                    // Room either side for the box (HexCodeText), which hugs the glyphs with 0.26 em of padding.
+                    append(CODE_GAP)
+                    withAnnotation(HEX_CODE_TAG, "") { withStyle(code) { append(run.text) } }
+                    append(CODE_GAP)
+                }
                 SummaryRun.Style.Bold -> withStyle(SpanStyle(fontWeight = bold, color = strong)) { append(run.text) }
             }
         }
@@ -69,6 +76,9 @@ internal fun summaryTextIn(
     if (at < 0) return summaryText(text)
     return summaryText(text, prefix = template.substring(0, at), suffix = template.substring(at + SUMMARY_MARK.length))
 }
+
+/** A four-per-em space either side of inline code, so its box doesn't touch the text around it. */
+private const val CODE_GAP = "\u2005"
 
 /** Stands in for the text in a template given to [summaryTextIn]. */
 internal const val SUMMARY_MARK = "\u0000"

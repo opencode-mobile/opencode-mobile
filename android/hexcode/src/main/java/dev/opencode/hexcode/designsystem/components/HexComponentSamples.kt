@@ -39,6 +39,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withAnnotation
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexIcons
@@ -81,6 +84,7 @@ val HexComponentSamples: List<HexSampleSection> =
         HexSampleSection("HexToast, HexToastHost") { ToastSample() },
         HexSampleSection("HexProgress") { ProgressSample() },
         HexSampleSection("HexLinkTile, HexTileRow") { LinkTileSample() },
+        HexSampleSection("HexCodeText") { CodeTextSample() },
     )
 
 /** A section's heading, in the gallery and the previews: component names, so not upper-cased like HexSectionLabel. */
@@ -740,6 +744,25 @@ private fun ToastHostSample() {
             modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
         )
         HexToastHost(message, onDismissed = { message = null }, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
+@Composable
+private fun CodeTextSample() {
+    val code = hexCodeStyle()
+    val text =
+        buildAnnotatedString {
+            append("Found work on \u2005")
+            withAnnotation(HEX_CODE_TAG, "") { withStyle(code) { append("origin/ios-titlebar-safe-area") } }
+            append("\u2005 and \u2005")
+            withAnnotation(HEX_CODE_TAG, "") { withStyle(code) { append("packages/desktop/icons") } }
+            append("\u2005, wrapping across lines.")
+        }
+    Edge {
+        StateSample("inline code in a box that hugs the glyphs, at display and caption") {
+            HexCodeText(text, HexTheme.type.display, HexTheme.colors.text1)
+            HexCodeText(text, HexTheme.type.caption, HexTheme.colors.text2)
+        }
     }
 }
 

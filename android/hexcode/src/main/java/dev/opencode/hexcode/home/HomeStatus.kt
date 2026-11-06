@@ -57,6 +57,7 @@ import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.designsystem.components.HexAgentState
 import dev.opencode.hexcode.designsystem.components.HexButton
 import dev.opencode.hexcode.designsystem.components.HexButtonSize
+import dev.opencode.hexcode.designsystem.components.HexCodeText
 import dev.opencode.hexcode.designsystem.components.HexDot
 import dev.opencode.hexcode.designsystem.components.HexDotTone
 import dev.opencode.hexcode.designsystem.components.HexLinkKind
@@ -340,7 +341,7 @@ private fun Card(
                 modifier = Modifier.alpha(dim),
             )
         next != null ->
-            Text(
+            HexCodeText(
                 summaryTextIn(stringResource(R.string.home_summary_next, SUMMARY_MARK), next),
                 style = HexTheme.type.body,
                 color = colors.text2,
@@ -404,7 +405,7 @@ private fun CardLabel(
             CardPhase.Waiting -> HexDot(HexDotTone.Amber)
             null -> Unit
         }
-        Text(text, style = style, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        HexCodeText(text, style = style, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -449,10 +450,10 @@ private fun NowText(
             if (line.bullet) {
                 Row {
                     Text("•", style = style, color = HexTheme.colors.text3, modifier = Modifier.width(em * 0.9f))
-                    Text(text, style = style, color = HexTheme.colors.text1, modifier = Modifier.weight(1f))
+                    HexCodeText(text, style = style, color = HexTheme.colors.text1, modifier = Modifier.weight(1f))
                 }
             } else {
-                Text(text, style = style, color = HexTheme.colors.text1)
+                HexCodeText(text, style = style, color = HexTheme.colors.text1)
             }
         }
     }

@@ -78,7 +78,8 @@ fun HexProgress(
                 )
             }
         }
-        Text(
+        // Inline code in the item gets its box (HexCodeText).
+        HexCodeText(
             label,
             style = HexTheme.type.caption,
             color = labelColor,
