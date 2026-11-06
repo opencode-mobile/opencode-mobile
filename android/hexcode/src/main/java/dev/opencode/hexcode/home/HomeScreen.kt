@@ -98,6 +98,8 @@ import kotlinx.coroutines.delay
 fun HomeScreen(
     vm: HomeViewModel,
     onSettings: () -> Unit,
+    /** The paired computer's address, where link tiles for `localhost` open. */
+    computer: String? = null,
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -147,7 +149,7 @@ fun HomeScreen(
                     ) { empty ->
                         Column(Modifier.fillMaxSize().padding(horizontal = edge)) {
                             if (empty) {
-                                StatusArea(today, now, vm)
+                                StatusArea(today, now, vm, computer = computer, onOpenLink = { openLink(context, it, computer) })
                             } else {
                                 Spacer(Modifier.height(hang))
                                 DraftView(state, vm)

@@ -43,6 +43,7 @@ import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -52,15 +53,20 @@ import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.designsystem.components.HexAgentState
 import dev.opencode.hexcode.designsystem.components.HexButton
 import dev.opencode.hexcode.designsystem.components.HexButtonSize
+import dev.opencode.hexcode.designsystem.components.HexLinkKind
+import dev.opencode.hexcode.designsystem.components.HexLinkTile
 import dev.opencode.hexcode.designsystem.components.HexProgress
 import dev.opencode.hexcode.designsystem.components.HexStatusLine
 import dev.opencode.hexcode.designsystem.components.HexStatusTone
+import dev.opencode.hexcode.designsystem.components.HexTileRow
 import dev.opencode.hexcode.designsystem.components.HexTopBar
 import dev.opencode.hexcode.session.AgentStatus
 import dev.opencode.hexcode.session.PendingItem
 import dev.opencode.hexcode.session.RefreshLabel
 import dev.opencode.hexcode.session.SessionSetup
 import dev.opencode.hexcode.session.StatusSummary
+import dev.opencode.hexcode.session.SummaryLink
+import dev.opencode.hexcode.session.SummaryLinks
 import dev.opencode.hexcode.session.SummaryState
 import dev.opencode.hexcode.session.TodayState
 import kotlinx.coroutines.delay
@@ -122,17 +128,21 @@ internal fun StatusArea(
     now: Long,
     vm: HomeViewModel,
     modifier: Modifier = Modifier,
+    /** The paired computer's address, which a tile for a `localhost` link shows and opens. */
+    computer: String? = null,
+    onOpenLink: (String) -> Unit = {},
 ) {
     val summary = today.summary
+    val links = Links(computer, onOpenLink)
     val start = (summary.summary as? StatusSummary.Card)?.let { NowSize.forText(it.now) } ?: NowSize.Display
     when (today.setup) {
         // The card saved for today's session shows while setup runs.
         SessionSetup.Opening ->
-            if (summary.summary != null) CentredFit(start, modifier) { size, lines -> Summary(summary, now, vm, size, lines) }
+            if (summary.summary != null) CentredFit(start, modifier) { size, lines -> Summary(summary, now, vm, size, lines, links) }
         is SessionSetup.Failed -> CentredFit(NowSize.Display, modifier) { _, _ -> SetupFailed(today.setup.retrying, vm::retrySetup) }
         is SessionSetup.Ready ->
             CentredFit(start, modifier) { size, lines ->
-                Summary(summary, now, vm, size, lines)
+                Summary(summary, now, vm, size, lines, links)
                 today.pendingInput?.let { NeedsHint(it, onClick = {}) }
             }
     }
@@ -191,6 +201,7 @@ private fun Summary(
     vm: HomeViewModel,
     size: NowSize,
     nowLines: Int,
+    links: Links,
 ) {
     val label = summary.label(now)
     val dim by animateFloatAsState(if (summary.loading) 0.35f else 1f, HexTheme.motion.fade(), label = "loading")
@@ -206,6 +217,8 @@ private fun Summary(
                 vm::refreshSummary,
                 size,
                 nowLines,
+                card.links,
+                links,
             )
         is StatusSummary.Empty ->
             Card(
@@ -238,7 +251,16 @@ private fun Label(content: @Composable () -> Unit) {
     Box(Modifier.heightIn(min = 18.dp), contentAlignment = Alignment.CenterStart) { content() }
 }
 
-/** The card: the task as a label, what it's doing now in large type, what's next, and the plan's progress. */
+/** Where link tiles open: the paired [computer]'s address for `localhost` links, and [open] for a tap. */
+private class Links(
+    val computer: String?,
+    val open: (String) -> Unit,
+)
+
+/**
+ * The card: the task as a label, what it's doing now in large type, what's next, its link tiles, and the plan's
+ * progress. The texts keep their inline Markdown ([summaryText]).
+ */
 @Composable
 private fun Card(
     title: String,
@@ -250,12 +272,17 @@ private fun Card(
     onRefresh: () -> Unit,
     size: NowSize = NowSize.Display,
     nowLines: Int = Int.MAX_VALUE,
+    tiles: List<SummaryLink> = emptyList(),
+    links: Links? = null,
 ) {
     val colors = HexTheme.colors
-    Label { Text(title, style = HexTheme.type.caption, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    Label {
+        Text(summaryText(title), style = HexTheme.type.caption, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
     val type = HexTheme.type
     Text(
-        now,
+        // Bold is bold at the two largest sizes, semibold below (`.md-b`).
+        summaryText(now, bold = if (size <= NowSize.Large) FontWeight.Bold else FontWeight.SemiBold),
         style =
             when (size) {
                 NowSize.Display -> type.display
@@ -271,11 +298,24 @@ private fun Card(
     )
     if (next != null) {
         Text(
-            stringResource(R.string.home_summary_next, next),
+            summaryTextIn(stringResource(R.string.home_summary_next, SUMMARY_MARK), next),
             style = HexTheme.type.body,
             color = colors.text2,
             modifier = Modifier.alpha(dim),
         )
+    }
+    if (tiles.isNotEmpty() && links != null) {
+        HexTileRow(Modifier.alpha(dim)) {
+            tiles.forEach { link ->
+                HexLinkTile(
+                    label = link.label,
+                    host = tileHost(link.url, links.computer),
+                    kind = if (SummaryLinks.isLocal(link.url)) HexLinkKind.Local else HexLinkKind.Web,
+                    accessibilityLabel = stringResource(R.string.home_link_open, link.label),
+                    onClick = { links.open(link.url) },
+                )
+            }
+        }
     }
     Meta(label, onRefresh) {
         if (steps.isNotEmpty()) {

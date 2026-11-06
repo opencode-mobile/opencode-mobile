@@ -259,6 +259,8 @@ private fun AfterFirstRun(
         }
     }
     val sample by services.sampleSession.collectAsStateWithLifecycle()
+    // Where link tiles for `localhost` open: the paired computer, as the phone reaches it.
+    val computer by produceState<String?>(null) { value = services.computerAddress() }
     // Today's session reads the latest choices when it opens, so a change made in Settings reaches the next open.
     val latest by rememberUpdatedState(prefs)
     // A new sample (or Off) is a new home: the session starts again from opening.
@@ -362,7 +364,7 @@ private fun AfterFirstRun(
         Box(Modifier.fillMaxSize().background(HexTheme.colors.background)) {
             when (current) {
                 Page.Home -> {
-                    HomeScreen(homeModel, onSettings = { page = Page.Settings })
+                    HomeScreen(homeModel, onSettings = { page = Page.Settings }, computer = computer)
                 }
                 Page.Settings ->
                     SettingsScreen(

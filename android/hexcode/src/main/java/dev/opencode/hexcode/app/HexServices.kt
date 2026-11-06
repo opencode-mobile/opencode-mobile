@@ -188,6 +188,16 @@ class HexServices(
         )
     }
 
+    /**
+     * The paired computer's address as the phone reaches it (`192.168.1.20`, `mbp.local`), for links to `localhost` on
+     * it; null before pairing.
+     */
+    suspend fun computerAddress(): String? {
+        connectionLoaded.await()
+        val url = connection.current()?.baseUrl ?: return null
+        return runCatching { java.net.URI(url).host }.getOrNull()?.removeSurrounding("[", "]")
+    }
+
     /** Completes once the saved server is bound (or there is none), so calls made at startup reach it. */
     val connectionLoaded = CompletableDeferred<Unit>()
 

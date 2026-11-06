@@ -132,6 +132,7 @@
     <string name="home_summary_updated_now">now</string>
     <string name="home_summary_updated_ago">%1$dm ago</string>
     <string name="home_summary_failed">Couldn’t update</string>
+    <string name="home_link_open">Open %1$s</string>
     <string name="home_summary_progress">%1$d/%2$d · details ›</string>
     <string name="home_needs_input">Needs your input</string>
     <string name="home_needs_approval">Approval needed</string>
