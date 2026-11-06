@@ -1,8 +1,8 @@
 import Foundation
 
 /// The status card on home: the task, what the agent does now, what comes next, and the plan.
-struct StatusCard: Equatable, Sendable {
-    struct Step: Equatable, Sendable {
+struct StatusCard: Equatable, Sendable, Codable {
+    struct Step: Equatable, Sendable, Codable {
         var text: String
         var done: Bool
     }
@@ -25,6 +25,15 @@ struct StatusCard: Equatable, Sendable {
         )
     }
 
+    /// No card yet, and the server answered with no text because the agent is working.
+    static func working(on date: Date, timeZone: TimeZone = .current) -> StatusCard {
+        StatusCard(
+            title: longDate(date, timeZone: timeZone),
+            now: String(localized: "home.summary.working.now", defaultValue: "The agent is working."),
+            next: String(localized: "home.summary.working.next", defaultValue: "The summary updates when this run ends.")
+        )
+    }
+
     /// "Thursday 5 November": weekday, day and month in English, in that order, on every phone.
     static func longDate(_ date: Date, timeZone: TimeZone) -> String {
         let formatter = DateFormatter()
@@ -37,7 +46,7 @@ struct StatusCard: Equatable, Sendable {
 }
 
 /// What a summary reply becomes: a card, or the reply as plain text when it doesn't match the shape.
-enum StatusSummary: Equatable, Sendable {
+enum StatusSummary: Equatable, Sendable, Codable {
     case card(StatusCard)
     case fallback(String)
 

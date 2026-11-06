@@ -108,7 +108,7 @@ final class HexMainModel {
         stream?.watchNetwork()
         return TodaySession(
             setup: DailySessionSetup(service: service ?? UnpairedSessionService(), memory: DailySessionDefaults()),
-            summary: StatusSummaryModel(),
+            summary: StatusSummaryModel(store: SummaryDefaults()),
             directory: { current.setup.project.path },
             model: { current.setup.model },
             toasts: toasts,

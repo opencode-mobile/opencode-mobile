@@ -6,8 +6,8 @@ import Observation
 ///
 /// With a `LiveSessionAPI` and a stream it follows OpenCode: on open (and back in front on a new
 /// date) it finds or creates today's session and puts the message rules, then opens the event
-/// stream; on every (re)connect it reads the state again and, after the first, refreshes the
-/// summary; a run's end refreshes it too. The sample sessions (`TodaySessionDemo`) use it without
+/// stream; on every (re)connect it reads the state again and then refreshes the summary (the saved
+/// card shows until then); a run's end refreshes it too. The sample sessions (`TodaySessionDemo`) use it without
 /// either.
 @MainActor
 @Observable
@@ -48,7 +48,6 @@ final class TodaySession {
     @ObservationIgnored private(set) var live: LiveSessionState?
     /// The local date today's session was opened for.
     @ObservationIgnored private var day: String?
-    @ObservationIgnored private var connectedOnce = false
     @ObservationIgnored private var isOpening = false
     @ObservationIgnored private var backgroundStop: Task<Void, Never>?
 
@@ -115,11 +114,16 @@ final class TodaySession {
             streamUp = true
             setup = .ready(sessionID: session.id)
             if showsNewDayNotice { toasts.show(Self.newDayNotice()) }
-            summary.clear()
+            summary.open(sessionID: session.id)
             if let api { summary.generator = SessionSummaryGenerator(api: api, sessionID: session.id) }
-            connectedOnce = false
             stream?.start()
-            await refreshSummary()
+            if stream == nil || live?.hasRun == false {
+                // A session that never ran shows its empty card now; with no stream, nothing will
+                // tell us more.
+                await refreshSummary()
+            }
+            // Otherwise the first summary waits for the stream's read-back, which says whether the
+            // agent is working (an empty reply then isn't a failure); the saved card shows meanwhile.
         }
     }
 
@@ -189,8 +193,7 @@ final class TodaySession {
             live?.apply(snapshot)
             publish()
         }
-        if connectedOnce { await refreshSummary() }
-        connectedOnce = true
+        await refreshSummary()
     }
 
     private func received(_ event: SessionEvent) {

@@ -331,8 +331,8 @@ struct TodaySessionLiveTests {
         )
         let (session, transport, _) = make(server)
         await session.open()
-        #expect(server.calls.contains(.generate("ses_a")))
-        #expect(session.summary.summary == .card(StatusCard(title: "Task", now: "Doing it.")))
+        // The first summary waits for the read-back, which says whether the agent is working.
+        #expect(!server.calls.contains(.generate("ses_a")))
         await eventually { transport.connections == 1 }
         transport.send(EventLines.connected)
         await eventually { session.waitingCount == 1 }
@@ -340,7 +340,8 @@ struct TodaySessionLiveTests {
         #expect(session.busySince == since)
         #expect(session.pendingInput?.kind == .approval)
         #expect(session.agentState == .needsInput)
-        // The first connect after open doesn't ask for a second summary.
+        await eventually { session.summary.summary != nil }
+        #expect(session.summary.summary == .card(StatusCard(title: "Task", now: "Doing it.")))
         #expect(server.calls.filter { $0 == .generate("ses_a") }.count == 1)
     }
 

@@ -7,11 +7,45 @@ protocol SummaryGenerating: Sendable {
     func generateSummary(prompt: String) async throws -> String
 }
 
+/// The last card of today's session, kept on the phone so it survives the app being closed.
+struct SavedSummary: Equatable, Codable, Sendable {
+    var sessionID: String
+    var summary: StatusSummary
+    var updatedAt: Date
+}
+
+/// Where the last card is kept. Only one session's (today's) at a time.
+@MainActor
+protocol SummaryStoring: AnyObject {
+    func load() -> SavedSummary?
+    func save(_ saved: SavedSummary)
+}
+
+@MainActor
+final class SummaryDefaults: SummaryStoring {
+    static let key = "hexcode.summary.last"
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func load() -> SavedSummary? {
+        defaults.data(forKey: Self.key).flatMap { try? JSONDecoder().decode(SavedSummary.self, from: $0) }
+    }
+
+    func save(_ saved: SavedSummary) {
+        if let data = try? JSONEncoder().encode(saved) { defaults.set(data, forKey: Self.key) }
+    }
+}
+
 /// The status summary on home and its ↻. Refreshed when the session opens or reconnects, when a
 /// run ends and on ↻; never on a timer. A refresh asked for while one runs is dropped. A request
 /// that fails, times out (60 s) or answers with no text keeps the last card and shows
 /// "Couldn't update" — except an empty answer while the agent works (the server often gives one
-/// then): the last card stays without the note, and the run's end refreshes it.
+/// then): the last card stays without the note, and the run's end refreshes it; with no card yet,
+/// a "The agent is working." card shows instead. Each new card is saved for its session, and shown
+/// at once (with its age) the next time that session opens.
 @MainActor
 @Observable
 final class StatusSummaryModel {
@@ -24,16 +58,38 @@ final class StatusSummaryModel {
     private(set) var failed = false
 
     @ObservationIgnored var generator: (any SummaryGenerating)?
+    /// The session whose cards are saved; set when today's session opens.
+    @ObservationIgnored private(set) var sessionID: String?
+    @ObservationIgnored private let store: (any SummaryStoring)?
+    @ObservationIgnored private let timeZone: TimeZone
     /// Whether the agent is working now, asked when an empty answer comes back.
     @ObservationIgnored var isWorking: () -> Bool = { false }
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let timeout: Duration
     @ObservationIgnored private var inFlight: Task<Void, Never>?
 
-    init(generator: (any SummaryGenerating)? = nil, timeout: Duration = StatusSummaryModel.timeout, now: @escaping () -> Date = Date.init) {
+    init(
+        generator: (any SummaryGenerating)? = nil,
+        store: (any SummaryStoring)? = nil,
+        timeout: Duration = StatusSummaryModel.timeout,
+        timeZone: TimeZone = .current,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.generator = generator
+        self.store = store
         self.timeout = timeout
+        self.timeZone = timeZone
         self.now = now
+    }
+
+    /// Today's session opened: its saved card shows at once, with its age, until a refresh
+    /// succeeds. A card saved for another session is not shown.
+    func open(sessionID: String) {
+        clear()
+        self.sessionID = sessionID
+        guard let saved = store?.load(), saved.sessionID == sessionID else { return }
+        summary = saved.summary
+        updatedAt = saved.updatedAt
     }
 
     /// A session that never ran: the long-date card, with no request. A request on its way is
@@ -75,13 +131,21 @@ final class StatusSummaryModel {
         isUpdating = false
         inFlight = nil
         guard let reply, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            // No text while the agent works keeps the last card as it is; anything else failed.
-            failed = !(reply != nil && isWorking())
+            // No text while the agent works keeps the last card as it is (or, with none yet, says
+            // the agent is working); anything else failed.
+            let working = reply != nil && isWorking()
+            failed = !working
+            if working, summary == nil {
+                summary = .card(.working(on: now(), timeZone: timeZone))
+                updatedAt = now()
+            }
             return
         }
-        summary = StatusSummary.parse(reply)
+        let parsed = StatusSummary.parse(reply)
+        summary = parsed
         updatedAt = now()
         failed = false
+        if let sessionID { store?.save(SavedSummary(sessionID: sessionID, summary: parsed, updatedAt: now())) }
     }
 
     /// The reply, or nil after an error or the timeout. The timeout doesn't wait for the request

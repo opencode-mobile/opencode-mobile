@@ -1040,6 +1040,28 @@
           }
         }
       }
+    },
+    "home.summary.working.now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent is working."
+          }
+        }
+      }
+    },
+    "home.summary.working.next": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The summary updates when this run ends."
+          }
+        }
+      }
     }
   }
 }
