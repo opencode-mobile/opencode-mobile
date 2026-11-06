@@ -82,6 +82,8 @@ sealed interface SessionEvent {
     data class InboxRemoved(
         val sessionId: String,
         val id: String,
+        /** Delivered to the session (not cancelled): the message is on its way to the agent. */
+        val delivered: Boolean = false,
     ) : SessionEvent
 
     data class InboxDeliveryChanged(
@@ -181,7 +183,7 @@ sealed interface SessionEvent {
                 }
                 "session.inbox.delivered", "session.inbox.cancelled" -> {
                     val id = data.string("inboxID") ?: return null
-                    sessionId?.let { InboxRemoved(it, id) }
+                    sessionId?.let { InboxRemoved(it, id, delivered = type == "session.inbox.delivered") }
                 }
                 "session.inbox.delivery.changed" -> {
                     val id = data.string("inboxID") ?: return null

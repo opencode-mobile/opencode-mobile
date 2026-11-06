@@ -78,7 +78,7 @@ class SessionEventTest {
             SessionEvent.decode("""{"type":"session.inbox.cancelled","data":{"sessionID":"ses_1","inboxID":"msg_B"}}"""),
         )
         assertEquals(
-            SessionEvent.InboxRemoved("ses_1", "msg_C"),
+            SessionEvent.InboxRemoved("ses_1", "msg_C", delivered = true),
             SessionEvent.decode("""{"type":"session.inbox.delivered","data":{"sessionID":"ses_1","inboxID":"msg_C"}}"""),
         )
         assertEquals(

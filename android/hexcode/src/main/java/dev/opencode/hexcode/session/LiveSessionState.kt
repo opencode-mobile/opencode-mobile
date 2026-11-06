@@ -24,6 +24,8 @@ data class LiveSnapshot(
     val todos: List<TodoItem> = emptyList(),
     /** False when the to-do list couldn't be read: the one already shown stays. */
     val todosRead: Boolean = true,
+    /** The session's `time.updated`: what the saved card's basis is checked against (app-plan.md, Nothing new). */
+    val updatedAt: Long? = null,
 )
 
 /** What an event asks of the summary. */

@@ -65,7 +65,7 @@ class TodaySessionTest {
 
         override suspend fun snapshot(rootId: String): LiveSnapshot {
             log += "snapshot $rootId"
-            return snapshot
+            return snapshot.copy(updatedAt = updated)
         }
 
         override suspend fun summarise(
@@ -75,6 +75,11 @@ class TodaySessionTest {
             log += "summary $sessionId"
             return reply
         }
+
+        /** The session's `time.updated`, read before each request and on every read-back. */
+        var updated: Long? = 100
+
+        override suspend fun updatedAt(sessionId: String): Long? = updated
 
         override suspend fun switchModel(
             sessionId: String,
@@ -200,7 +205,7 @@ class TodaySessionTest {
         }
 
     @Test
-    fun aSessionThatRanIsSummarisedOnceTheStreamHasReadTheStateBack() =
+    fun aBusySessionAsksForNoSummaryOnConnect() =
         runTest {
             val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
             api.snapshot = api.snapshot.copy(busySince = 50, inbox = listOf(InboxEntry("m1", "queue"), InboxEntry("m2", "steer")))
@@ -210,8 +215,8 @@ class TodaySessionTest {
             runCurrent()
             transport.connected()
             runCurrent()
-            // The summary waits for the read-back, which says whether the agent is working.
-            assertEquals(listOf("list", "rules s1", "stream", "snapshot s1", "summary s1"), log)
+            // The read-back says the agent is working: no request; the run's end refreshes.
+            assertEquals(listOf("list", "rules s1", "stream", "snapshot s1"), log)
             assertEquals(AgentStatus.Working(50), today.state.value.agent)
             assertEquals(1, today.state.value.waiting)
             assertFalse(today.state.value.newDayNotice)
@@ -234,7 +239,7 @@ class TodaySessionTest {
             runCurrent()
             assertEquals(AgentStatus.Idle, today.state.value.agent)
             assertEquals(1, log.count { it.startsWith("summary") })
-            assertEquals("Working.", (today.state.value.summary.summary as StatusSummary.Card).now)
+            assertEquals("Working.", (today.state.value.summary.summary as StatusSummary.Card).nowText)
         }
 
     @Test
@@ -258,7 +263,7 @@ class TodaySessionTest {
         }
 
     @Test
-    fun aDroppedStreamShowsReconnectingThenReadsTheStateAgainAndRefreshes() =
+    fun aDroppedStreamShowsReconnectingThenReadsTheStateAgain() =
         runTest {
             val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
             val transport = Transport()
@@ -276,7 +281,8 @@ class TodaySessionTest {
             advanceTimeBy(1_300)
             transport.connected()
             runCurrent()
-            assertEquals(listOf("stream", "snapshot s1", "summary s1"), log)
+            // Nothing new since the card (time.updated didn't move): no request.
+            assertEquals(listOf("stream", "snapshot s1"), log)
             assertEquals(AgentStatus.NeedsInput, today.state.value.agent)
         }
 
@@ -435,7 +441,7 @@ class TodaySessionTest {
             api.reply = "## Task\nNow: Done."
             transport.send(event("session.execution.succeeded", """{"sessionID":"s1"}"""))
             runCurrent()
-            assertEquals("Done.", (today.state.value.summary.summary as StatusSummary.Card).now)
+            assertEquals("Done.", (today.state.value.summary.summary as StatusSummary.Card).nowText)
         }
 
     @Test
@@ -472,7 +478,8 @@ class TodaySessionTest {
             assertEquals(0, log.count { it.startsWith("summary") })
             transport.connected()
             runCurrent()
-            assertEquals(listOf("list", "rules s1", "stream", "snapshot s1", "summary s1"), log)
+            // Busy: no request at all, so no empty reply to mistake for a failure.
+            assertEquals(listOf("list", "rules s1", "stream", "snapshot s1"), log)
             assertEquals(saved.summary, today.state.value.summary.summary)
             assertFalse(today.state.value.summary.failed)
             assertEquals(
@@ -496,7 +503,10 @@ class TodaySessionTest {
             runCurrent()
             val card = StatusSummary.parse("## Task\nNow: Working.")
             assertEquals(card, today.state.value.summary.summary)
-            assertEquals(SavedSummary("s1", card, testScheduler.currentTime, "2026-11-05", project), store.saved)
+            assertEquals(
+                SavedSummary("s1", card, testScheduler.currentTime, "2026-11-05", project, basis = 100, madeWhileBusy = false),
+                store.saved,
+            )
         }
 
     @Test
@@ -625,5 +635,127 @@ class TodaySessionTest {
             runCurrent()
             assertEquals(SessionSetup.Ready("s1"), today.state.value.setup)
             assertNull(today.state.value.summary.summary)
+        }
+
+    @Test
+    fun nothingNewSinceTheSavedCardMakesNoRequest() =
+        runTest {
+            val store = Store()
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            // The first launch asks, and saves the card with its basis.
+            val first = Transport()
+            session(api, first, Memory(date), store).open()
+            runCurrent()
+            first.connected()
+            runCurrent()
+            assertEquals(1, log.count { it.startsWith("summary") })
+            assertEquals(100L, store.saved?.basis)
+            assertFalse(store.saved!!.madeWhileBusy)
+            // The second launch finds nothing new: no request, the saved card shows.
+            log.clear()
+            val second = Transport()
+            val today = session(api, second, Memory(date), store)
+            today.open()
+            runCurrent()
+            second.connected()
+            runCurrent()
+            assertEquals(0, log.count { it.startsWith("summary") })
+            assertEquals(store.saved?.summary, today.state.value.summary.summary)
+            // Something new (a message moved time.updated): the next connect asks.
+            api.updated = 200
+            second.end()
+            runCurrent()
+            advanceTimeBy(1_300)
+            second.connected()
+            runCurrent()
+            assertEquals(1, log.count { it.startsWith("summary") })
+            // ↻ always asks.
+            today.refresh()
+            runCurrent()
+            assertEquals(2, log.count { it.startsWith("summary") })
+        }
+
+    @Test
+    fun aFailedReplyNeverMovesTheBasis() =
+        runTest {
+            val store = Store()
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date), store)
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            api.updated = 300
+            api.reply = ""
+            today.refresh()
+            runCurrent()
+            assertTrue(today.state.value.summary.failed)
+            assertEquals(100L, store.saved?.basis)
+        }
+
+    @Test
+    fun theAppsOwnModelSwitchMovesTheBasis() =
+        runTest {
+            val store = Store()
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date), store)
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            api.updated = 150
+            today.switchModel(ModelChoice("opencode", "beam-free"))
+            runCurrent()
+            assertEquals(150L, store.saved?.basis)
+        }
+
+    @Test
+    fun aDeliveredMessageShowsAsYouUntilTheCardAfterItsRun() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            transport.send(
+                """{"type":"session.inbox.enqueued","data":{"sessionID":"s1","inboxID":"m1",""" +
+                    """"item":{"type":"user","payload":{"text":"Also add a test"},"delivery":"steer"}}}""",
+            )
+            transport.send("""{"type":"session.inbox.delivered","data":{"sessionID":"s1","inboxID":"m1"}}""")
+            transport.send(event("session.execution.started", """{"sessionID":"s1"}""", created = 60))
+            runCurrent()
+            assertEquals("Also add a test", today.state.value.you)
+            // ↻ mid-run: a new card, which keeps the You line and drops the reply's Next.
+            api.reply = "## Task\nNow: Adding the test.\nNext: Run it"
+            today.refresh()
+            runCurrent()
+            assertEquals("Also add a test", today.state.value.you)
+            assertNull((today.state.value.summary.summary as StatusSummary.Card).next)
+            // The run ends: the card made then replaces the You line.
+            api.reply = "## Task\nNow: Test added; 5 pass.\nNext: Commit it"
+            transport.send(event("session.execution.succeeded", """{"sessionID":"s1"}"""))
+            runCurrent()
+            assertNull(today.state.value.you)
+            assertEquals("Commit it", (today.state.value.summary.summary as StatusSummary.Card).next)
+        }
+
+    @Test
+    fun theYouLineUsesWhatThePhoneSent() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            val id = today.send("Rename it", "steer")
+            transport.send("""{"type":"session.inbox.delivered","data":{"sessionID":"s1","inboxID":"$id"}}""")
+            runCurrent()
+            assertEquals("Rename it", today.state.value.you)
         }
 }

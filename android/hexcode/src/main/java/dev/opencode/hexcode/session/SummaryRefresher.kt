@@ -16,6 +16,9 @@ import kotlin.math.roundToInt
 /** Where the summary's reply comes from: `POST /api/session/{id}/generate` with [prompt], the model and its level. */
 fun interface SummarySource {
     suspend fun summarise(prompt: String): String
+
+    /** The session's `time.updated` now (`GET /api/session/{id}`), the basis of the card a request makes. */
+    suspend fun updatedAt(): Long? = null
 }
 
 /**
@@ -30,6 +33,10 @@ data class SavedSummary(
     val updatedAt: Long,
     val date: String = "",
     val directory: String = "",
+    /** The session's `time.updated` read just before the request that made the card (app-plan.md, Nothing new). */
+    val basis: Long? = null,
+    /** The card was made while the session was busy (a mid-run card), so it never counts as up to date. */
+    val madeWhileBusy: Boolean = false,
 )
 
 /** Where the last card is kept: one session's (today's) at a time, so saving forgets the one before. */
@@ -117,6 +124,43 @@ class SummaryRefresher(
     @Volatile
     private var shownFor: String? = null
 
+    /** The card on screen as saved, with its basis; null for a card that wasn't made by a request. */
+    @Volatile
+    private var saved: SavedSummary? = null
+
+    /** Called with whether the session was busy each time a request makes a new card. */
+    var onNewCard: (busy: Boolean) -> Unit = {}
+
+    /**
+     * Whether the card on screen is up to date (app-plan.md, Nothing new): it's today's session's, it was made while
+     * the session was idle, and its basis is the session's [updatedAt] now.
+     */
+    fun isUpToDate(updatedAt: Long?): Boolean {
+        val card = saved ?: return false
+        return updatedAt != null &&
+            shownFor == sessionId &&
+            card.sessionId == sessionId &&
+            !card.madeWhileBusy &&
+            card.basis == updatedAt &&
+            mutable.value.summary == card.summary
+    }
+
+    /** The app switched the model itself: that moves `time.updated`, not the card's content, so its basis moves too. */
+    suspend fun moveBasis(updatedAt: Long?) {
+        val card = saved ?: return
+        if (updatedAt == null || card.basis == null || card.sessionId != sessionId) return
+        val moved = card.copy(basis = updatedAt)
+        saved = moved
+        store(moved)
+    }
+
+    /** No card yet while the session is busy: say it's working, without a request; the run's end refreshes. */
+    fun showWorking() {
+        if (mutable.value.summary != null || mutable.value.loading) return
+        mutable.value = SummaryState(StatusSummary.working(today()), updatedAt = clock())
+        shownFor = sessionId
+    }
+
     /**
      * The app opens, before setup has found today's session: the saved card shows at once, with its age, if it was
      * saved for a session of [date] in [directory]. Anything else on screen goes.
@@ -160,6 +204,7 @@ class SummaryRefresher(
     private fun show(saved: SavedSummary) {
         mutable.update { if (it.summary == null) it.copy(summary = saved.summary, updatedAt = saved.updatedAt) else it }
         shownFor = saved.sessionId
+        this.saved = saved
     }
 
     /** No card, before a session opens or when another session takes its place. A request still running is dropped. */
@@ -167,6 +212,7 @@ class SummaryRefresher(
         job?.cancel()
         mutable.value = SummaryState()
         shownFor = null
+        saved = null
     }
 
     /** A new session's card, without a request. A request still running is dropped. */
@@ -174,6 +220,7 @@ class SummaryRefresher(
         job?.cancel()
         mutable.value = SummaryState(StatusSummary.empty(date), updatedAt = clock())
         shownFor = sessionId
+        saved = null
     }
 
     /** Asks for a new summary, unless one is on its way. Returns whether this call started a request. */
@@ -186,6 +233,16 @@ class SummaryRefresher(
         job =
             scope.launch {
                 try {
+                    // The basis first: generate itself doesn't move `time.updated`, so the card is up to date with it.
+                    val basis =
+                        try {
+                            source.updatedAt()
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (_: Exception) {
+                            null
+                        }
+                    val busyAtStart = busy()
                     // A timeout counts as a failed request, not as a cancellation.
                     val reply = withTimeoutOrNull(timeoutMs) { source.summarise(SessionPrompts.SUMMARY) }
                     if (reply != null && reply.isBlank() && busy()) {
@@ -202,11 +259,14 @@ class SummaryRefresher(
                         return@launch
                     }
                     if (reply.isNullOrBlank()) throw IllegalStateException("The summary timed out or came back empty.")
-                    val summary = StatusSummary.parse(reply)
+                    val midRun = busyAtStart || busy()
+                    // Mid-run the model suggests its own next step, not the user's: the card drops it (Mid-run card).
+                    val summary = StatusSummary.parse(reply).let { if (midRun && it is StatusSummary.Card) it.copy(next = null) else it }
                     val updatedAt = clock()
                     mutable.value = SummaryState(summary, updatedAt = updatedAt)
                     shownFor = sessionId
-                    save(summary, updatedAt)
+                    save(summary, updatedAt, basis, midRun)
+                    onNewCard(midRun)
                 } catch (error: CancellationException) {
                     mutable.update { it.copy(loading = false) }
                     throw error
@@ -220,10 +280,18 @@ class SummaryRefresher(
     private suspend fun save(
         summary: StatusSummary,
         updatedAt: Long,
+        basis: Long?,
+        midRun: Boolean,
     ) {
         val id = sessionId ?: return
+        val card = SavedSummary(id, summary, updatedAt, date?.toString().orEmpty(), directory.orEmpty(), basis, midRun)
+        saved = card
+        store(card)
+    }
+
+    private suspend fun store(card: SavedSummary) {
         try {
-            store?.saveSummary(SavedSummary(id, summary, updatedAt, date?.toString().orEmpty(), directory.orEmpty()))
+            store?.saveSummary(card)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {

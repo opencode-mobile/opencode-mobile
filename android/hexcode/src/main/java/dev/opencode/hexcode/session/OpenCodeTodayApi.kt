@@ -80,7 +80,8 @@ class OpenCodeTodayApi(
                     }.awaitAll()
                     .flatten()
                     .sortedBy { it.id.substringAfter('_') }
-            val busy = root.await().time?.busy
+            val time = root.await().time
+            val busy = time?.busy
             LiveSnapshot(
                 busySince = if (rootId in running) busy ?: clock() else null,
                 hasRun = busy != null,
@@ -91,6 +92,7 @@ class OpenCodeTodayApi(
                 todos = todos.await().getOrNull().orEmpty(),
                 // A list that couldn't be read keeps the one shown; the rest of the state still counts.
                 todosRead = todos.await().isSuccess,
+                updatedAt = time?.updated,
             )
         }
 
@@ -106,6 +108,11 @@ class OpenCodeTodayApi(
             cursor = page.cursor?.next?.takeIf { it.isNotBlank() && page.data.isNotEmpty() } ?: return emptyList()
         }
         return emptyList()
+    }
+
+    override suspend fun updatedAt(sessionId: String): Long? {
+        ready()
+        return sessions.getSessionV2(sessionId).time?.updated
     }
 
     override suspend fun summarise(
