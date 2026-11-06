@@ -39,6 +39,8 @@ struct HomeStatusView: View {
                             nowSize: size,
                             summary: session.summary,
                             computerHost: session.computerHost,
+                            todo: TodoProgress(session.todos),
+                            runningCount: session.runningCount,
                             onDetails: { session.openDetails() },
                             onOpenLink: onOpenLink
                         )
@@ -79,6 +81,10 @@ struct StatusCardView: View {
     var nowSize: NowSize = .display
     let summary: StatusSummaryModel
     var computerHost: String?
+    /// The agent's to-do list; nil for no row.
+    var todo: TodoProgress?
+    /// Subagents and shell commands running, in front of Details.
+    var runningCount = 0
     let onDetails: () -> Void
     var onOpenLink: (CardLinks.Destination) -> Void = { _ in }
 
@@ -104,12 +110,18 @@ struct StatusCardView: View {
                     }
                 }
             }
-            // One 10 pt gap between the progress and ↻, however wide (the prototype's `.fx-meta`).
+            if let todo {
+                // Opens Details from M4.
+                HexProgress(
+                    segments: todo.segments.map(\.mark),
+                    label: Text(SummaryText.attributed(todo.text, style: .caption, scale: scale)),
+                    accessibilityText: InlineMarkdown.plain(todo.text),
+                    action: onDetails
+                )
+            }
+            // Details and ↻, at least 10 pt apart (the prototype's `.fx-meta`).
             HStack(spacing: 0) {
-                if !card.steps.isEmpty {
-                    HexProgress(steps: card.steps.map(\.done), label: progressLabel, action: onDetails)
-                        .layoutPriority(1)
-                }
+                DetailsLink(runningCount: runningCount, action: onDetails)
                 Spacer(minLength: 10)
                 SummaryRefreshButton(summary: summary)
             }
@@ -132,10 +144,54 @@ struct StatusCardView: View {
         }
     }
 
-    private var progressLabel: String {
-        let done = card.doneCount
-        let total = card.steps.count
-        return String(localized: "home.summary.progress", defaultValue: "\(done)/\(total) · details ›")
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 100
+}
+
+private extension TodoProgress.Segment {
+    var mark: HexProgressSegment {
+        switch self {
+        case .done: .done
+        case .inProgress: .inProgress
+        case .open: .open
+        }
+    }
+}
+
+/// "Details ›" in `mono`, with a green dot and "2 running · " in front while subagents or shell
+/// commands run (the prototype's `.fx-det`). Lights to `text1` while pressed.
+private struct DetailsLink: View {
+    let runningCount: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if runningCount > 0 {
+                    HexDot(tone: .green)
+                }
+                Text(verbatim: label)
+                    .hexFont(.mono)
+                    .lineLimit(1)
+            }
+            .frame(minHeight: 30)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(LightsWhenPressed())
+    }
+
+    private var label: String {
+        let details = String(localized: "home.details", defaultValue: "Details ›")
+        guard runningCount > 0 else { return details }
+        return String(localized: "home.details.running", defaultValue: "\(runningCount) running · ") + details
+    }
+}
+
+/// `text3`, lit to `text1` while pressed.
+private struct LightsWhenPressed: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(configuration.isPressed ? HexColor.text1 : HexColor.text3)
+            .animation(HexMotion.ease(HexMotion.press), value: configuration.isPressed)
     }
 }
 
@@ -316,11 +372,12 @@ struct SummaryText: View {
     @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 100
 
     var body: some View {
-        Text(attributed)
+        Text(Self.attributed(text, style: style, scale: scale))
             .hexFont(style)
     }
 
-    private var attributed: AttributedString {
+    /// The runs of `text` at `style`, with Dynamic Type's `scale` (100 at the default size).
+    static func attributed(_ text: String, style: HexTextStyle, scale: CGFloat) -> AttributedString {
         let size = style.size * scale / 100
         var out = AttributedString()
         for run in InlineMarkdown.runs(text) {

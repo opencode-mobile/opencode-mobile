@@ -645,13 +645,46 @@
         }
       }
     },
-    "home.summary.progress": {
+    "home.todo.progress": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld/%2$lld · details ›"
+            "value": "%1$lld of %2$lld · %3$@"
+          }
+        }
+      }
+    },
+    "home.todo.all_done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All %lld done"
+          }
+        }
+      }
+    },
+    "home.details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details ›"
+          }
+        }
+      }
+    },
+    "home.details.running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld running · "
           }
         }
       }

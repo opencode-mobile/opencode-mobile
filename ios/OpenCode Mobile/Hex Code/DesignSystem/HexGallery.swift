@@ -376,12 +376,12 @@ private struct HexGalleryContent: View {
 
     private var progress: some View {
         section("Progress") {
-            HexProgress(steps: [false, false, false, false], label: "0/4 · details ›")
-            HexProgress(steps: [true, true, false, false], label: "2/4 · details ›")
-            HexProgress(steps: [true, true, true, true], label: "4/4 · details ›")
-            HexProgress(steps: [true], label: "1/1 · details ›")
-            HexProgress(steps: [true, true, true, true, true, false, false, false], label: "5/8 · details ›")
-            caption("None done · some · all · one step · eight steps (the most). The label lights while pressed")
+            progressSample([.open, .open, .open, .open], "1 of 4 · Read the auth tests")
+            progressSample([.done, .done, .inProgress, .open], "3 of 4 · Token refresh")
+            progressSample([.done, .inProgress, .open, .open, .open, .open, .open, .open, .open, .open], "2 of 10 · A long item that runs past the edge of the row")
+            progressSample([.done, .done, .done, .done], "All 4 done")
+            progressSample([.inProgress], "1 of 1 · One item")
+            caption("None started · one in progress · ten items, a long item · all done · one item. The label and › light while pressed")
         }
     }
 
@@ -402,6 +402,10 @@ private struct HexGalleryContent: View {
             }
             caption("A row that fits: no fade")
         }
+    }
+
+    private func progressSample(_ segments: [HexProgressSegment], _ label: String) -> some View {
+        HexProgress(segments: segments, label: Text(verbatim: label), accessibilityText: label)
     }
 
     private var surfaces: some View {
