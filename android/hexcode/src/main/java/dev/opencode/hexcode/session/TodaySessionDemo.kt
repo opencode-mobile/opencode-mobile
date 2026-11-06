@@ -33,6 +33,12 @@ enum class TodaySessionDemo(
     /** Idle, with code, bold, a `Link:` line and a localhost link in Now: formatting and link tiles. */
     Formatted("formatted"),
 
+    /** Idle, a list answer: a lead and four bullets (status-summary-proposal.md §5 C). */
+    Bullets("bullets"),
+
+    /** Idle, a long Now full of code spans, which are wider than letters: the fit has to measure, not count. */
+    Branches("branches"),
+
     /** The reply didn't match the card shape. */
     Fallback("fallback"),
 
@@ -74,12 +80,14 @@ enum class TodaySessionDemo(
         val memory = DemoMemory(if (this == Empty) null else today.minusDays(1))
         val live = DemoLive(reply(), snapshot(now))
         val transport = if (this == Reconnecting) DemoTransport(up = false) else DemoTransport(up = true)
-        // The stream never comes up, so the summary is never asked for: the card saved 4 minutes ago shows.
+        // While the session is busy, open asks for nothing (the run's end does): the card saved 2 minutes ago shows. The
+        // Reconnecting stream never comes up, so its card is 4 minutes old.
         val saved =
-            if (this == Reconnecting) {
-                SavedSummary(SESSION, StatusSummary.parse(REPLY), now - 240_000, today.toString(), DIRECTORY)
-            } else {
-                null
+            when (this) {
+                Reconnecting -> SavedSummary(SESSION, StatusSummary.parse(REPLY), now - 240_000, today.toString(), DIRECTORY)
+                Card, Needs, Approval, Updating, UpdateFailed ->
+                    SavedSummary(SESSION, StatusSummary.parse(reply()), now - 120_000, today.toString(), DIRECTORY)
+                else -> null
             }
         val session =
             TodaySession(
@@ -163,6 +171,8 @@ enum class TodaySessionDemo(
             Long -> "## API client\nNow: $LONG_NOW\nNext: Fix token refresh in the shared client."
             Longest -> "## Read-only mode first\nNow: $LONGEST_NOW\nNext: Add a read-only flag to the router."
             Formatted -> FORMATTED_REPLY
+            Bullets -> BULLETS_REPLY
+            Branches -> "## Mobile work in the repo\nNow: $BRANCHES_NOW\nNext: Check out `origin/ios-pwa-shell`"
             Needs ->
                 "## Login screen rewrite\nNow: Token refresh is done. Paused before changing login length.\n" +
                     "Next: Your answers, then the auth tests."
@@ -187,6 +197,18 @@ enum class TodaySessionDemo(
             "Mapping which screens need a signed-in user and which can open read-only. Settings, the project list and " +
                 "the session view can all be read without logging in. Billing and team admin both write data, so they " +
                 "stay behind login. This list becomes the read-only flag in the router next. Edits hide later."
+
+        const val BULLETS_REPLY =
+            "## Safer remove_item ideas\nNow: Four one-line ways to make `remove_item` safer, without changing code.\n" +
+                "- Validate non-negative `qty`\n- Treat missing item as zero\n- Clamp result to zero\n- Return a copy of stock\n" +
+                "Next: Apply one of these"
+
+        /** From a real phone: code spans make it wider than its 300 characters suggest. */
+        const val BRANCHES_NOW =
+            "Found real mobile work across branches: `origin/ios-pwa-shell`, `origin/ios-titlebar-safe-area`, " +
+                "`origin/mobile-bottom-nav`, `origin/pwa-push`, plus a since-deleted `packages/mobile-voice` (iOS " +
+                "`Info.plist`) and Capacitor-style Android/iOS icon sets under `packages/desktop/icons`. No mobile app " +
+                "source in the main tree."
 
         const val FORMATTED_REPLY =
             "## Login `401` fix\nNow: The **token refresh** in `client.ts` now retries once; the login page at " +
