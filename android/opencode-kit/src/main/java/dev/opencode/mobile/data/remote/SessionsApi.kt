@@ -546,6 +546,27 @@ class SessionsApi private constructor(
             }.bodyOnSuccess()
 
     /**
+     * `GET /api/session/{id}/message` (v2): a page of the session's messages as the server sends them (each with its
+     * `content` parts), only [type] messages (`assistant`), in [order] (`desc`: newest first). A later page sends
+     * [cursor] with the same filters, which the cursor doesn't carry.
+     */
+    suspend fun listSessionMessagesPageV2(
+        sessionId: String,
+        type: String? = null,
+        order: String? = null,
+        limit: Int? = null,
+        cursor: String? = null,
+    ): ApiListEnvelope<JsonObject> =
+        httpClient
+            .get()
+            .get("api/session/$sessionId/message") {
+                cursor?.let { parameter("cursor", it) }
+                type?.let { parameter("type", it) }
+                order?.let { parameter("order", it) }
+                limit?.let { parameter("limit", it) }
+            }.bodyOnSuccess()
+
+    /**
      * `POST /api/session/{id}/prompt` with only [text] and [delivery]: every prompt goes through the session's inbox,
      * so the reply is the inbox item, whose id cancels it (`DELETE /api/session/{id}/inbox/{item}`) until delivered.
      */

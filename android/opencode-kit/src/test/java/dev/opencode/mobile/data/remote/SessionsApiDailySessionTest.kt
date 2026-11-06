@@ -58,6 +58,40 @@ class SessionsApiDailySessionTest {
         }
 
     @Test
+    fun messagesArePagedWithTheirFiltersAndReadRaw() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            val api =
+                api { request ->
+                    captured += request
+                    respond(
+                        """{"data":[{"id":"msg_2","type":"assistant","content":[{"type":"tool","name":"todowrite",
+                        "state":{"status":"completed","input":{"todos":[]},"metadata":{"todos":[{"content":"a","status":"pending"}]}}}]}],
+                        "cursor":{"previous":"p","next":"n"}}""",
+                        HttpStatusCode.OK,
+                        jsonHeaders,
+                    )
+                }
+
+            val page = api.listSessionMessagesPageV2("ses_1", type = "assistant", order = "desc", limit = 50, cursor = "c")
+
+            val url = captured.single().url
+            assertTrue(url.encodedPath.endsWith("/api/session/ses_1/message"))
+            assertEquals("assistant", url.parameters["type"])
+            assertEquals("desc", url.parameters["order"])
+            assertEquals("50", url.parameters["limit"])
+            assertEquals("c", url.parameters["cursor"])
+            assertEquals(
+                "msg_2",
+                page.data
+                    .single()["id"]
+                    ?.toString()
+                    ?.trim('"'),
+            )
+            assertEquals("n", page.cursor?.next)
+        }
+
+    @Test
     fun aLaterPageSendsTheCursorAlone() =
         runTest {
             val captured = mutableListOf<HttpRequestData>()
