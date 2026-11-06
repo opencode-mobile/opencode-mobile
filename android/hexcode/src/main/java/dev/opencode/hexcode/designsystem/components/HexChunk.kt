@@ -50,6 +50,11 @@ import dev.opencode.hexcode.designsystem.HexTheme
 data class HexChunkItem(
     val text: String,
     val kind: HexChunkKind,
+    /**
+     * A locked take cut at pauses: the text of its parts so far, shown before "Listening…" or "Transcribing…" like the
+     * draft's text while recording, and not tappable until the take has all its text.
+     */
+    val soFar: String = "",
 )
 
 /** Where a chunk is. */
@@ -70,8 +75,9 @@ enum class HexChunkRowState { Normal, Selected, Dim, Past }
 /**
  * The draft as running text (`.fx-draft`, `.chunk`): each chunk with text is tappable, on a `tint(4.5)` fill; the
  * [selected] one gets `tint(15)` and a `tint(28)` inner border, and the others dim. While [recording], earlier chunks
- * are quieter and not tappable. A [hint] ("Text appears when you pause") sits under the text. Three lines of room are
- * kept, so the draft never jumps as it fills.
+ * are quieter and not tappable. A [hint] ("Text appears when you pause") sits under the text. A locked take's text so
+ * far comes before its "Listening…" ([HexChunkItem.soFar]). Three lines of room are kept, so the draft never jumps as
+ * it fills.
  */
 @Composable
 fun HexChunk(
@@ -92,6 +98,10 @@ fun HexChunk(
         buildAnnotatedString {
             chunks.forEachIndexed { index, chunk ->
                 if (index > 0) append(" ")
+                if (chunk.kind != HexChunkKind.Text && chunk.soFar.isNotEmpty()) {
+                    withStyle(SpanStyle(color = colors.text2)) { append(chunk.soFar) }
+                    append(" ")
+                }
                 when (chunk.kind) {
                     HexChunkKind.Listening -> withStyle(SpanStyle(color = colors.text3)) { append(chunk.text) }
                     HexChunkKind.Transcribing -> withStyle(SpanStyle(color = colors.text4)) { append(chunk.text) }

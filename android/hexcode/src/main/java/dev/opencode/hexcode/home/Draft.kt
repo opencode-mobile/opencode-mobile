@@ -30,8 +30,16 @@ data class Chunk(
     val id: Long,
     val state: ChunkState,
     val durationMs: Long = 0,
+    /**
+     * A locked take cut at pauses (app-plan.md, Dictation › Locked takes): the text of its parts so far, shown while it
+     * is still Listening and, after release, while its last part is transcribed. Empty for every other take.
+     */
+    val soFar: String = "",
 ) {
     val text: String? get() = (state as? ChunkState.Text)?.text
+
+    /** The words the draft shows for it: its text, or a locked take's text so far. */
+    val shownText: String get() = text ?: soFar
 
     /** It can be tapped to re-record or delete it: it has its text, or the engine failed on it. */
     val selectable: Boolean get() = state is ChunkState.Text || state is ChunkState.Failed
@@ -118,8 +126,8 @@ data class Draft(
             return if (at != null && at in chunks.indices) chunks.toMutableList().also { it[at] = take } else chunks + take
         }
 
-    /** The characters the running text shows: the chunks' text, a space between them. */
-    val characters: Int get() = shown.sumOf { it.text?.length ?: 0 } + (shown.size - 1).coerceAtLeast(0)
+    /** The characters the running text shows: the chunks' text (a locked take's so far), a space between them. */
+    val characters: Int get() = shown.sumOf { it.shownText.length } + (shown.size - 1).coerceAtLeast(0)
 
     val durationMs: Long get() = chunks.sumOf { it.durationMs }
 
@@ -164,14 +172,33 @@ data class Draft(
         if (index < 0) return this
         val words = text?.trim().orEmpty()
         if (words.isEmpty()) return copy(chunks = chunks.filterNot { it.id == id }, selected = null)
-        return copy(chunks = chunks.toMutableList().also { it[index] = it[index].copy(state = ChunkState.Text(words)) })
+        return copy(chunks = chunks.toMutableList().also { it[index] = it[index].copy(state = ChunkState.Text(words), soFar = "") })
     }
+
+    /**
+     * One more part of locked take [id] has its [text]: it joins the take's text so far, with a space, while the take
+     * records or, after release, waits for its last part. A take dropped meanwhile is gone, and so is the text.
+     */
+    fun heard(
+        id: Long,
+        text: String,
+    ): Draft {
+        fun Chunk.plus() = copy(soFar = joinParts(listOf(soFar, text)))
+        val take = live
+        if (take?.id == id) return copy(live = take.plus())
+        val index = chunks.indexOfFirst { it.id == id && it.state == ChunkState.Transcribing }
+        if (index < 0) return this
+        return copy(chunks = chunks.toMutableList().also { it[index] = it[index].plus() })
+    }
+
+    /** The text of locked take [id]'s parts so far, recording or not. */
+    fun soFar(id: Long): String = (live?.takeIf { it.id == id } ?: chunks.firstOrNull { it.id == id })?.soFar.orEmpty()
 
     /** The engine failed on take [id]: it stays, as a failed chunk, to re-record or delete; [retry] when its audio is kept. */
     fun failed(
         id: Long,
         retry: Boolean = false,
-    ): Draft = withState(id, ChunkState.Failed(retry))
+    ): Draft = withState(id, ChunkState.Failed(retry), soFar = "")
 
     /** Take [id] waits for the speech model. */
     fun waiting(id: Long): Draft = withState(id, ChunkState.Waiting)
@@ -214,10 +241,13 @@ data class Draft(
     private fun withState(
         id: Long,
         state: ChunkState,
+        soFar: String? = null,
     ): Draft {
         val index = chunks.indexOfFirst { it.id == id }
         if (index < 0) return this
-        return copy(chunks = chunks.toMutableList().also { it[index] = it[index].copy(state = state) })
+        return copy(
+            chunks = chunks.toMutableList().also { it[index] = it[index].copy(state = state, soFar = soFar ?: it[index].soFar) },
+        )
     }
 
     /** Selects a chunk that has its text (or failed), or clears the selection when it is tapped again. */

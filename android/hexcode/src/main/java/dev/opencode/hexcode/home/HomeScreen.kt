@@ -684,9 +684,10 @@ private fun DraftText(
         chunks =
             draft.shown.map { chunk ->
                 when (val s = chunk.state) {
-                    ChunkState.Listening -> HexChunkItem(listening, HexChunkKind.Listening)
+                    // A locked take shows its text so far before "Listening…", and before "Transcribing…" after release.
+                    ChunkState.Listening -> HexChunkItem(listening, HexChunkKind.Listening, chunk.soFar)
                     // A take waiting for the speech model looks like one being transcribed; the label line says why.
-                    ChunkState.Waiting, ChunkState.Transcribing -> HexChunkItem(transcribing, HexChunkKind.Transcribing)
+                    ChunkState.Waiting, ChunkState.Transcribing -> HexChunkItem(transcribing, HexChunkKind.Transcribing, chunk.soFar)
                     is ChunkState.Text -> HexChunkItem(s.text, HexChunkKind.Text)
                     is ChunkState.Failed -> HexChunkItem(failed, HexChunkKind.Text)
                 }
@@ -732,8 +733,14 @@ private fun ChunkList(
                 number = index + 1,
                 text =
                     when (chunk.state) {
-                        ChunkState.Listening -> stringResource(R.string.draft_listening)
-                        ChunkState.Waiting, ChunkState.Transcribing -> stringResource(R.string.draft_transcribing_chunk)
+                        // A locked take shows its text so far, once it has some.
+                        ChunkState.Listening -> chunk.soFar.ifEmpty { stringResource(R.string.draft_listening) }
+                        ChunkState.Waiting, ChunkState.Transcribing ->
+                            chunk.soFar.ifEmpty {
+                                stringResource(
+                                    R.string.draft_transcribing_chunk,
+                                )
+                            }
                         is ChunkState.Text -> chunk.state.text
                         is ChunkState.Failed -> stringResource(R.string.home_transcribe_failed)
                     },

@@ -709,6 +709,22 @@ private fun ChunkSample() {
         StateSample("transcribing") {
             HexChunk(written + HexChunkItem("Transcribing…", HexChunkKind.Transcribing), selected = null, recording = false, onSelect = {})
         }
+        StateSample("locked take: its text so far, still listening") {
+            HexChunk(
+                written + HexChunkItem("Listening…", HexChunkKind.Listening, soFar = "Then run the tests on the CI."),
+                selected = null,
+                recording = true,
+                onSelect = {},
+            )
+        }
+        StateSample("locked take: its last part transcribing") {
+            HexChunk(
+                written + HexChunkItem("Transcribing…", HexChunkKind.Transcribing, soFar = "Then run the tests on the CI."),
+                selected = null,
+                recording = false,
+                onSelect = {},
+            )
+        }
     }
 }
 

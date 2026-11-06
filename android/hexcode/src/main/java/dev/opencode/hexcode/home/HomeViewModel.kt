@@ -20,12 +20,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -33,6 +36,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
 
 /** The phone's side of dictation: record a take, end it, turn its samples into text. [VoiceEngine] in the app. */
@@ -57,6 +61,15 @@ interface Dictation {
 
     fun drop()
 
+    /**
+     * The take went hands-free (app-plan.md, Dictation › Locked takes): from now on it is cut at the speaker's pauses
+     * while it records, and each part goes to [parts], in order. When the take ends, the audio since the last cut goes
+     * too (unless there was no speech in it), and then [parts] closes; it closes with an error if the cutting broke.
+     * A dropped take's [parts] are left to the caller. False when pauses can't be found yet: the take is then turned
+     * into text whole after release.
+     */
+    fun split(parts: SendChannel<TakePart>): Boolean = false
+
     /** The take's text; empty when there was no speech. Throws when the engine fails on it. */
     suspend fun transcribe(samples: FloatArray): String
 
@@ -78,11 +91,13 @@ fun speechStatus(model: VoiceEngine.ModelState): SpeechStatus =
 
 /**
  * Takes from [mic] on a thread of its own, turned into text by [engine]: starting the microphone takes time the main
- * thread must not wait for. Warm-up, start, end and drop run there in order, so a take never ends before it started.
+ * thread must not wait for. Warm-up, start, split, end and drop run there in order, so a take never ends before it
+ * started. A locked take is fed to the pause detector on another thread, `hex-vad`, as its audio arrives: never on the
+ * microphone's own thread, which only reads.
  */
 class VoiceEngineDictation(
     private val engine: VoiceEngine,
-    private val mic: MicRecorder,
+    private val mic: Microphone,
     loadModel: () -> Unit,
     /** Debug builds (`--ei HexCodeSpeechDelay`): the model counts as ready only this long after launch. */
     holdMs: Long = 0,
@@ -92,6 +107,16 @@ class VoiceEngineDictation(
     private val audio = Executors.newSingleThreadExecutor { Thread(it, "hex-audio") }.asCoroutineDispatcher()
     private val scope = CoroutineScope(SupervisorJob() + audio)
     private val gate = SpeechGate(engine, loadModel, holdMs, failOnce, scope)
+    private val vad = Executors.newSingleThreadExecutor { Thread(it, "hex-vad") }.asCoroutineDispatcher()
+    private val vadScope = CoroutineScope(SupervisorJob() + vad)
+
+    /** The locked take being cut at pauses: its job on `hex-vad`, and whether it has ended. Audio thread only. */
+    private class Splitting(
+        val job: Job,
+        val ended: AtomicBoolean,
+    )
+
+    private var splitting: Splitting? = null
 
     private var loggedAt = 0L
 
@@ -144,13 +169,74 @@ class VoiceEngineDictation(
 
     override suspend fun end(): FloatArray? =
         withContext(audio) {
-            mic.end().also { readyForNext() }
+            mic.end().also {
+                // The take's audio is all in: the splitter takes its last part and closes the parts.
+                splitting?.ended?.set(true)
+                splitting = null
+                readyForNext()
+            }
         }
 
     override fun drop() {
         scope.launch {
             mic.end()
+            splitting?.job?.cancel()
+            splitting = null
             readyForNext()
+        }
+    }
+
+    override fun split(parts: SendChannel<TakePart>): Boolean {
+        if (!engine.pausesReady) return false
+        scope.launch {
+            val take = mic.take
+            if (take == null || splitting != null) {
+                parts.close()
+                return@launch
+            }
+            val ended = AtomicBoolean(false)
+            splitting = Splitting(vadScope.launch { cut(take, ended, parts) }, ended)
+        }
+        return true
+    }
+
+    /**
+     * On `hex-vad`: feeds the take to a pause detector every [VAD_POLL_MS] as its audio arrives (spike S3 fed 50 ms at
+     * a time), and sends each part as it's cut. Once the take has [ended], the last part, then [parts] closes.
+     */
+    private suspend fun cut(
+        take: RecordedAudio,
+        ended: AtomicBoolean,
+        parts: SendChannel<TakePart>,
+    ) {
+        val detector =
+            try {
+                engine.pauseDetector() ?: error("The pause detector isn't ready.")
+            } catch (error: Throwable) {
+                Log.w(TalkLog.TAG, "couldn't cut the take at pauses: ${error.message}", error)
+                parts.close(error)
+                return
+            }
+        try {
+            val splitter =
+                TakeSplitter(take, detector.asPauses(), { part ->
+                    Log.i(TalkLog.TAG, "part ${part.number} cut: %.1f s from %.1f s".format(part.seconds, part.start / 16_000.0))
+                    parts.trySend(part)
+                }, SystemClock::uptimeMillis)
+            while (!ended.get()) {
+                splitter.step()
+                delay(VAD_POLL_MS)
+            }
+            splitter.finish()
+            parts.close()
+        } catch (error: CancellationException) {
+            parts.close()
+            throw error
+        } catch (error: Throwable) {
+            Log.w(TalkLog.TAG, "cutting the take at pauses broke: ${error.message}", error)
+            parts.close(error)
+        } finally {
+            detector.close()
         }
     }
 
@@ -548,8 +634,30 @@ class HomeViewModel(
     /** Home left the screen, or the app went to the background. */
     fun homeHidden() = dictation.coolDown()
 
-    /** One chunk is transcribed at a time; takes keep recording meanwhile. */
+    /** One chunk, or one part of a locked take, is transcribed at a time; takes keep recording meanwhile. */
     private val transcribing = Mutex()
+
+    /**
+     * The locked take being cut at pauses (app-plan.md, Dictation › Locked takes): its parts as they're cut, and the
+     * job turning them into text, one at a time, in order.
+     */
+    private class Split(
+        val id: Long,
+        val parts: Channel<TakePart>,
+    ) {
+        lateinit var job: Job
+
+        /** A part failed: the rest aren't transcribed, and the take keeps its audio for Try again. */
+        var failed = false
+
+        /** The cutting broke: the take is turned into text whole after release, as one not cut. */
+        var broken = false
+
+        /** Parts that have their text. */
+        var done = 0
+    }
+
+    private var split: Split? = null
 
     /**
      * The talk button went down: the take starts at once, and the microphone alongside it. Returns false when a take
@@ -580,9 +688,31 @@ class HomeViewModel(
         Log.i(TalkLog.TAG, "press probe done")
     }
 
+    /**
+     * Debug builds (`--ez HexCodeTakeProbe` with `--es HexCodeTakeAudio`): once speech is ready, one locked take as
+     * long as the file plus [tail], started with a tap and finished with one, as a finger would. Dictation logs when
+     * each part's text came, and how long after release the take had its text.
+     */
+    suspend fun takeProbe(
+        seconds: Double,
+        tail: Long = PROBE_TAIL_MS,
+    ) {
+        dictation.speech.first { it == SpeechStatus.Ready }
+        // The pause detector loads just after the model.
+        delay(PROBE_SETTLE_MS)
+        Log.i(TalkLog.TAG, "take probe: a locked take of %.1f s".format(seconds + tail / 1000.0))
+        if (!press()) return
+        release(TalkRelease.Tap)
+        delay((seconds * 1000).toLong() + tail)
+        tapLocked()
+        val done = uiState.first { it.draft.isSettled }
+        Log.i(TalkLog.TAG, "take probe done: ${done.draft.text.length} characters")
+    }
+
     /** The microphone didn't start: the button goes back, and the notice says so. */
     private fun microphoneFailed() {
         if (!state.value.draft.isListening) return
+        stopSplit()
         state.update { it.copy(draft = it.draft.dropTake(), talk = TalkMode.Idle, notice = HomeNotice.MicUnavailable) }
     }
 
@@ -590,7 +720,10 @@ class HomeViewModel(
     fun release(how: TalkRelease) {
         if (state.value.talk != TalkMode.Holding) return
         when (how) {
-            TalkRelease.Lock, TalkRelease.Tap -> state.update { it.copy(talk = TalkMode.Locked) }
+            TalkRelease.Lock, TalkRelease.Tap -> {
+                state.update { it.copy(talk = TalkMode.Locked) }
+                splitTake()
+            }
             TalkRelease.Drop -> dropTake()
             TalkRelease.End -> endTake()
         }
@@ -606,19 +739,97 @@ class HomeViewModel(
         if (state.value.talk == TalkMode.Locked) endTake()
     }
 
+    /**
+     * The take went hands-free: it's cut at pauses while it records, if the speech model and the pause detector are
+     * ready (app-plan.md, Dictation › Locked takes). Otherwise it's turned into text whole after release, as before.
+     * Only locked takes are cut; a held one stays whole.
+     */
+    private fun splitTake() {
+        val take = state.value.draft.live ?: return
+        if (split != null) return
+        if (state.value.speech != SpeechStatus.Ready) {
+            Log.i(TalkLog.TAG, "take ${take.id} is locked before the speech model is ready: it waits whole")
+            return
+        }
+        val parts = Channel<TakePart>(Channel.UNLIMITED)
+        if (!dictation.split(parts)) {
+            Log.i(TalkLog.TAG, "take ${take.id} is locked, but pauses can't be found yet: it's transcribed whole")
+            return
+        }
+        val cutting = Split(take.id, parts)
+        cutting.job =
+            viewModelScope.launch {
+                try {
+                    for (part in parts) transcribePart(cutting, part)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Throwable) {
+                    // The parts closed with an error: the cutting broke.
+                    cutting.broken = true
+                }
+            }
+        split = cutting
+    }
+
+    /** Turns one part of a locked take into text and adds it to the take's text so far; a failure stops the rest. */
+    private suspend fun transcribePart(
+        cutting: Split,
+        part: TakePart,
+    ) {
+        if (cutting.failed) return
+        transcribing.withLock {
+            val began = SystemClock.uptimeMillis()
+            try {
+                val text = dictation.transcribe(part.samples)
+                state.update { it.copy(draft = it.draft.heard(cutting.id, text)) }
+                cutting.done += 1
+                val now = SystemClock.uptimeMillis()
+                Log.i(
+                    TalkLog.TAG,
+                    "take ${cutting.id} part ${part.number}${if (part.last) " (after release)" else ""}: %.1f s of audio, "
+                        .format(part.seconds) +
+                        "text %d ms after its speech ended, %d ms after the cut, transcribed in %d ms"
+                            .format(now - part.speechEndedAt, now - part.cutAt, now - began),
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(TalkLog.TAG, "take ${cutting.id} part ${part.number} failed: ${error.message}", error)
+                cutting.failed = true
+            }
+        }
+    }
+
+    /** A dropped take: a part being transcribed stops, the ones waiting aren't, and their text goes with the take. */
+    private fun stopSplit() {
+        val cutting = split ?: return
+        split = null
+        cutting.job.cancel()
+        cutting.parts.cancel()
+        Log.i(TalkLog.TAG, "take ${cutting.id} dropped after ${cutting.done} parts had text; the rest stopped")
+    }
+
     private fun endTake() {
         val started = state.value.takeStartedAt
+        val releasedAt = SystemClock.uptimeMillis()
         val take = state.value.draft.live
         state.update { it.copy(draft = it.draft.endTake(durationMs = clock() - started), talk = TalkMode.Idle) }
         if (take == null) return
+        val cutting = split?.takeIf { it.id == take.id }
+        split = null
         // Undispatched, so the end is queued behind this take's start now, before a next press can start another.
         viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
             val samples = dictation.end()
             // A take with no audio, or under 0.3 s, leaves the draft quietly.
             if (samples == null || samples.size < MIN_SAMPLES) {
+                cutting?.job?.cancel()
                 val why = if (samples == null) "nothing was recording" else "${samples.size} samples, under 0.3 s"
                 Log.i(TalkLog.TAG, "take ${take.id} left the draft: $why")
                 state.update { it.copy(draft = it.draft.transcribed(take.id, null)) }
+                return@launch
+            }
+            if (cutting != null) {
+                finishSplit(cutting, samples, releasedAt)
                 return@launch
             }
             if (state.value.speech != SpeechStatus.Ready) {
@@ -632,7 +843,38 @@ class HomeViewModel(
                 }
                 return@launch
             }
-            transcribe(take.id, samples)
+            transcribe(take.id, samples, releasedAt)
+        }
+    }
+
+    /**
+     * A locked take cut at pauses ended: once its last part has text, the take has its parts' text, joined. Send waits
+     * for that, as the chunk is Transcribing until then. If a part failed, the take keeps its whole audio for Try
+     * again; if the cutting broke, the whole take is turned into text instead.
+     */
+    private suspend fun finishSplit(
+        cutting: Split,
+        samples: FloatArray,
+        releasedAt: Long,
+    ) {
+        cutting.job.join()
+        val id = cutting.id
+        when {
+            cutting.broken -> transcribe(id, samples, releasedAt)
+            cutting.failed -> {
+                takes.save(id, samples)
+                state.update { it.copy(draft = it.draft.failed(id, retry = true)) }
+            }
+            else -> {
+                val text = state.value.draft.soFar(id)
+                if (text.isBlank()) Log.i(TalkLog.TAG, "take $id left the draft: no speech in ${samples.size} samples")
+                state.update { it.copy(draft = it.draft.transcribed(id, text)) }
+                Log.i(
+                    TalkLog.TAG,
+                    "take $id: text %d ms after release, %d parts, %.1f s in all"
+                        .format(SystemClock.uptimeMillis() - releasedAt, cutting.done, samples.size / 16_000.0),
+                )
+            }
         }
     }
 
@@ -640,6 +882,7 @@ class HomeViewModel(
     private suspend fun transcribe(
         id: Long,
         samples: FloatArray,
+        releasedAt: Long? = null,
     ) {
         transcribing.withLock {
             try {
@@ -647,6 +890,13 @@ class HomeViewModel(
                 // A silent take leaves quietly too.
                 if (text.isBlank()) Log.i(TalkLog.TAG, "take $id left the draft: no speech in ${samples.size} samples")
                 state.update { it.copy(draft = it.draft.transcribed(id, text)) }
+                if (releasedAt != null) {
+                    Log.i(
+                        TalkLog.TAG,
+                        "take $id: text %d ms after release, whole, %.1f s"
+                            .format(SystemClock.uptimeMillis() - releasedAt, samples.size / 16_000.0),
+                    )
+                }
                 takes.delete(id)
             } catch (error: CancellationException) {
                 throw error
@@ -843,6 +1093,7 @@ class HomeViewModel(
     }
 
     private fun dropTake() {
+        stopSplit()
         dictation.drop()
         state.update { it.copy(draft = it.draft.dropTake(), talk = TalkMode.Idle, notice = HomeNotice.TakeDropped) }
     }
@@ -863,7 +1114,10 @@ class HomeViewModel(
     fun rerecord() {
         if (state.value.draft.selected == null) return
         press()
-        if (state.value.talk == TalkMode.Holding) state.update { it.copy(talk = TalkMode.Locked) }
+        if (state.value.talk == TalkMode.Holding) {
+            state.update { it.copy(talk = TalkMode.Locked) }
+            splitTake()
+        }
     }
 
     fun clearDraft() {
@@ -886,12 +1140,20 @@ class HomeViewModel(
     }
 
     override fun onCleared() {
+        stopSplit()
         if (state.value.draft.isListening) dictation.drop()
     }
 }
 
 /** 0.3 s at 16 kHz: a shorter take leaves the draft quietly. */
 private const val MIN_SAMPLES = 4_800
+
+/** How often a locked take's new audio goes to the pause detector. */
+private const val VAD_POLL_MS = 50L
+
+/** The take probe's silence after the file, and its wait for the pause detector after the model is ready. */
+private const val PROBE_TAIL_MS = 500L
+private const val PROBE_SETTLE_MS = 2_000L
 
 /** The press probe holds the button this long, and waits this long between presses. */
 private const val PROBE_HOLD_MS = 1_000L

@@ -10,6 +10,44 @@ import android.util.Log
 import dev.opencode.voiceengine.VoiceEngine
 import kotlin.math.sqrt
 
+/** Where a take's audio comes from: the phone's microphone ([MicRecorder]), or in debug builds a file ([FileMicrophone]). */
+interface Microphone {
+    /** The loudness of the latest buffer, 0 to 1 (full scale RMS); 0 between takes. */
+    val rms: Float
+
+    /** Whether the take has had its first buffer of audio yet. */
+    val hasAudio: Boolean
+
+    /** The take that's recording, as its samples arrive; null between takes. */
+    val take: RecordedAudio?
+
+    /** Gets ready ahead of a press. Returns whether it is. */
+    fun prepare(): Boolean
+
+    /** Lets go of what [prepare] got ready. */
+    fun release()
+
+    /** Starts a take; [pressedAt] (uptime) is the touch. Throws when it can't start. */
+    fun start(pressedAt: Long)
+
+    /** Ends the take and returns its samples; null when nothing was recording. */
+    fun end(): FloatArray?
+}
+
+/**
+ * A take's samples, -1 to 1, as they arrive: [size] grows while it records, and [copy] reads any stretch of it from
+ * another thread meanwhile, without holding the recording up. Each take has its own.
+ */
+interface RecordedAudio {
+    val size: Int
+
+    /** Samples [from] until [to], clamped to what has arrived. */
+    fun copy(
+        from: Int,
+        to: Int,
+    ): FloatArray
+}
+
 /**
  * The talk button's microphone (app-plan.md, Dictation › Microphone start): 16 kHz mono, as the speech models take it.
  * While home is on screen the recorder is made ahead ([prepare]), with its buffer, but not started, so the microphone and
@@ -19,34 +57,37 @@ import kotlin.math.sqrt
 class MicRecorder(
     /** Whether the app holds RECORD_AUDIO; without it nothing is made ahead. */
     private val permitted: () -> Boolean,
-) {
+) : Microphone {
     /** Made ahead, not started. */
     private var ready: AudioRecord? = null
 
     @Volatile
     private var running: AudioRecord? = null
     private var reader: Thread? = null
-    private val samples = SampleBuffer()
 
-    /** The loudness of the latest buffer, 0 to 1 (full scale RMS); 0 between takes. */
+    /** A new buffer for every take, so a take still being cut at pauses never sees the next one's audio. */
     @Volatile
-    var rms: Float = 0f
+    private var samples = SampleBuffer()
+
+    @Volatile
+    override var rms: Float = 0f
         private set
 
-    /** Whether the take has had its first buffer of audio yet. */
     @Volatile
-    var hasAudio: Boolean = false
+    override var hasAudio: Boolean = false
         private set
+
+    override val take: RecordedAudio? get() = if (running != null) samples else null
 
     /** Makes the recorder ahead of a press, if it isn't made yet and no take is running. Returns whether one is ready. */
-    fun prepare(): Boolean {
+    override fun prepare(): Boolean {
         if (running != null) return false
         if (ready == null && permitted()) ready = create()
         return ready != null
     }
 
     /** Lets go of a recorder made ahead. A take that's running goes on. */
-    fun release() {
+    override fun release() {
         ready?.release()
         ready = null
     }
@@ -55,12 +96,13 @@ class MicRecorder(
      * Starts a take: the recorder made ahead if there is one, else a new one. [pressedAt] (uptime) is the touch, for the
      * log of how soon audio came. Throws when the microphone can't start. The caller must hold RECORD_AUDIO.
      */
-    fun start(pressedAt: Long) {
+    override fun start(pressedAt: Long) {
         if (running != null) return
         val madeAhead = ready != null
         val record = ready ?: create() ?: error("The microphone couldn't be opened.")
         ready = null
-        samples.clear()
+        val buffer = SampleBuffer()
+        samples = buffer
         rms = 0f
         hasAudio = false
         record.startRecording()
@@ -71,11 +113,11 @@ class MicRecorder(
         val startedAt = SystemClock.uptimeMillis()
         running = record
         reader =
-            Thread({ read(record, pressedAt, startedAt, madeAhead) }, "hex-mic").apply { start() }
+            Thread({ read(record, buffer, pressedAt, startedAt, madeAhead) }, "hex-mic").apply { start() }
     }
 
     /** Ends the take and returns its samples; null when nothing was recording. */
-    fun end(): FloatArray? {
+    override fun end(): FloatArray? {
         val record = running ?: return null
         running = null
         reader?.join(500)
@@ -89,6 +131,7 @@ class MicRecorder(
 
     private fun read(
         record: AudioRecord,
+        samples: SampleBuffer,
         pressedAt: Long,
         startedAt: Long,
         madeAhead: Boolean,
@@ -149,26 +192,47 @@ class MicRecorder(
     }
 }
 
-/** A growing array of samples, -1 to 1, that the reading thread fills. */
-private class SampleBuffer {
+/**
+ * A growing array of samples, -1 to 1, that the reading thread fills. The lock is only held to append a buffer or copy a
+ * stretch out, so the reading thread never waits long for it.
+ */
+internal class SampleBuffer : RecordedAudio {
     private var data = FloatArray(VoiceEngine.SAMPLE_RATE * 10)
-    private var size = 0
+    private var count = 0
 
     @Synchronized
     fun add(
         chunk: ShortArray,
         n: Int,
     ) {
-        if (size + n > data.size) data = data.copyOf(maxOf(data.size * 2, size + n))
-        for (i in 0 until n) data[size + i] = chunk[i] / 32_768f
-        size += n
+        grow(n)
+        for (i in 0 until n) data[count + i] = chunk[i] / 32_768f
+        count += n
     }
 
     @Synchronized
-    fun clear() {
-        size = 0
+    fun add(samples: FloatArray) {
+        grow(samples.size)
+        samples.copyInto(data, count)
+        count += samples.size
+    }
+
+    private fun grow(n: Int) {
+        if (count + n > data.size) data = data.copyOf(maxOf(data.size * 2, count + n))
+    }
+
+    override val size: Int
+        @Synchronized get() = count
+
+    @Synchronized
+    override fun copy(
+        from: Int,
+        to: Int,
+    ): FloatArray {
+        val end = to.coerceAtMost(count)
+        return data.copyOfRange(from.coerceIn(0, end), end)
     }
 
     @Synchronized
-    fun toArray(): FloatArray = data.copyOf(size)
+    fun toArray(): FloatArray = data.copyOf(count)
 }
