@@ -249,16 +249,6 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun attachAndStopSayTheyAreNotInThisVersionYet() =
-        runTest(dispatcher) {
-            val vm = HomeViewModel(FakeDictation()) { now }
-            vm.notInThisVersion()
-            assertEquals(HomeNotice.NotInThisVersion, vm.uiState.value.notice)
-            vm.noticeShown()
-            assertEquals(null, vm.uiState.value.notice)
-        }
-
-    @Test
     fun theTakeStartsAtOnceAndTheButtonGoesBackIfTheMicrophoneFails() =
         runTest(dispatcher) {
             val dictation = FakeDictation().apply { failStart = true }

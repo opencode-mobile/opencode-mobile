@@ -2,18 +2,25 @@ package dev.opencode.hexcode.home
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
+import android.view.HapticFeedbackConstants
+import android.view.RoundedCorner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -31,7 +38,6 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,13 +47,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -88,6 +98,8 @@ import dev.opencode.hexcode.designsystem.components.HexSegmentedSize
 import dev.opencode.hexcode.designsystem.components.HexSheet
 import dev.opencode.hexcode.designsystem.components.HexSheetAction
 import dev.opencode.hexcode.designsystem.components.HexSpinner
+import dev.opencode.hexcode.designsystem.components.HexStopEdge
+import dev.opencode.hexcode.designsystem.components.HexStopWarning
 import dev.opencode.hexcode.designsystem.components.HexTalkButton
 import dev.opencode.hexcode.designsystem.components.HexTalkHold
 import dev.opencode.hexcode.designsystem.components.HexTalkRelease
@@ -99,7 +111,6 @@ import dev.opencode.hexcode.designsystem.components.HexToastMessage
 import dev.opencode.hexcode.designsystem.components.HexToastTone
 import dev.opencode.hexcode.designsystem.components.rememberHexTalkHold
 import dev.opencode.hexcode.session.AgentStatus
-import dev.opencode.hexcode.session.InboxEntry
 import kotlinx.coroutines.delay
 
 /**
@@ -120,13 +131,8 @@ fun HomeScreen(
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
     }
     var micOff by remember { mutableStateOf(false) }
-    var waitingOpen by remember { mutableStateOf(false) }
     var attachOpen by remember { mutableStateOf(false) }
     val attach = rememberAttachPickers(state.draft.roomForImages, vm::attach)
-    // Waiting to send closes once nothing is left in it (delivered, cancelled, or taken back elsewhere).
-    LaunchedEffect(state.today.queued.isEmpty()) {
-        if (state.today.queued.isEmpty()) waitingOpen = false
-    }
     val askMic =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             micAllowed = it
@@ -138,308 +144,329 @@ fun HomeScreen(
         vm.homeShown()
         onStopOrDispose { vm.homeHidden() }
     }
+    // Say why and own answers need the microphone too: asked for on the press, as the talk button does.
+    val micReady = {
+        if (!micAllowed) askMic.launch(Manifest.permission.RECORD_AUDIO)
+        micAllowed
+    }
     val edge = HexTheme.space.screenHome
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(HexTheme.colors.background)
-            .systemBarsPadding(),
-    ) {
-        Column(Modifier.fillMaxSize().padding(top = 10.dp, bottom = 6.dp)) {
-            val today = state.today
-            val now = rememberNow(if (today.agent is AgentStatus.Working) 1_000 else 15_000)
-            HomeTopBar(today.agent, now, Modifier.padding(start = edge, end = edge - 6.dp)) {
-                HexRoundButton(HexIcons.gear, stringResource(R.string.home_settings), onClick = onSettings)
-            }
-            // The status card is centred between the top bar and the dock (`.fx-body.centred`); the draft starts at a
-            // line 26 % down that space (the prototype's `.fx-sp`), so it grows downward while you talk.
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                val hang = maxHeight * 0.26f
-                Column(Modifier.fillMaxSize()) {
-                    Crossfade(
-                        state.draft.isEmpty,
-                        Modifier.weight(1f).fillMaxWidth(),
-                        HexTheme.motion.fade(),
-                        label = "status-draft",
-                    ) { empty ->
-                        Column(Modifier.fillMaxSize().padding(horizontal = edge)) {
-                            if (empty) {
-                                StatusArea(today, now, vm, computer = computer, onOpenLink = { openLink(context, it, computer) })
-                            } else {
-                                Spacer(Modifier.height(hang))
-                                DraftView(state, vm)
+    val still = reduceMotion()
+    StopHaptics(state)
+    Box(Modifier.fillMaxSize().background(HexTheme.colors.background)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .systemBarsPadding(),
+        ) {
+            Column(Modifier.fillMaxSize().padding(top = 10.dp, bottom = 6.dp)) {
+                val today = state.today
+                val now = rememberNow(if (today.agent is AgentStatus.Working) 1_000 else 15_000)
+                HomeTopBar(today.agent, now, Modifier.padding(start = edge, end = edge - 6.dp), onNeedsInput = { vm.openNeeds() }) {
+                    HexRoundButton(HexIcons.gear, stringResource(R.string.home_settings), onClick = onSettings)
+                }
+                // The status card is centred between the top bar and the dock (`.fx-body.centred`); the draft starts at a
+                // line 26 % down that space (the prototype's `.fx-sp`), so it grows downward while you talk.
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    val hang = maxHeight * 0.26f
+                    Column(Modifier.fillMaxSize()) {
+                        Crossfade(
+                            state.draft.isEmpty,
+                            Modifier.weight(1f).fillMaxWidth(),
+                            HexTheme.motion.fade(),
+                            label = "status-draft",
+                        ) { empty ->
+                            Column(Modifier.fillMaxSize().padding(horizontal = edge)) {
+                                if (empty) {
+                                    StatusArea(today, now, vm, computer = computer, onOpenLink = { openLink(context, it, computer) })
+                                } else {
+                                    Spacer(Modifier.height(hang))
+                                    DraftView(state, vm)
+                                }
                             }
                         }
+                        if (state.draft.isEmpty && today.waiting > 0) {
+                            WaitingLine(
+                                today.waiting,
+                                idle = today.busySince == null && today.pendingInput == null,
+                                onClick = vm::openDetails,
+                                modifier = Modifier.padding(start = edge, end = edge, top = 10.dp),
+                            )
+                        }
                     }
-                    if (state.draft.isEmpty && today.waiting > 0) {
-                        WaitingLine(
-                            today.waiting,
-                            onClick = { waitingOpen = true },
-                            modifier = Modifier.padding(start = edge, end = edge, top = 10.dp),
+                }
+                val label =
+                    when {
+                        state.draft.selected != null -> stringResource(R.string.talk_rerecord)
+                        !state.draft.isEmpty -> stringResource(R.string.talk_more)
+                        else -> stringResource(R.string.talk_hold)
+                    }
+                // The dock (`.fx-dock`): attach, the talk button filling the rest, stop, 8 dp apart. Stop needs a 3 s hold;
+                // it is dimmed, and does nothing, unless the agent is working or needs input.
+                val agent = today.agent
+                val hold = rememberHexTalkHold()
+                // The locked take's clock in the talk button ticks while it records.
+                var lockedNow by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(state.talk) {
+                    while (state.talk == TalkMode.Locked) {
+                        lockedNow = System.currentTimeMillis()
+                        delay(250)
+                    }
+                }
+                // The hold hint fades in a quarter second into a hold, so a quick take never shows it.
+                var hintShown by remember { mutableStateOf(false) }
+                LaunchedEffect(hold.holding) {
+                    if (hold.holding) {
+                        delay(HOLD_HINT_DELAY_MS)
+                        hintShown = true
+                    } else {
+                        hintShown = false
+                    }
+                }
+                Box(Modifier.padding(start = edge, end = edge, top = 12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        val dock = HomeDock.of(state.talk)
+                        DockSide(dock.left, state, vm = vm, onAttach = { if (vm.openAttach()) attachOpen = true })
+                        HexTalkButton(
+                            state =
+                                when (state.talk) {
+                                    TalkMode.Holding -> HexTalkState.Holding
+                                    TalkMode.Locked -> HexTalkState.Locked
+                                    TalkMode.Idle -> if (state.draft.isEmpty) HexTalkState.Idle else HexTalkState.Draft
+                                },
+                            label = label,
+                            accessibilityLabel =
+                                when (state.talk) {
+                                    // The clock is part of the button's label, not an item of its own.
+                                    TalkMode.Locked -> stringResource(R.string.draft_recording, clock(lockedNow - state.takeStartedAt))
+                                    TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
+                                    TalkMode.Idle -> label
+                                },
+                            // Recording never waits for the speech model; only turning a take into text does.
+                            enabled = true,
+                            level = { vm.level },
+                            onPress = {
+                                if (micAllowed) {
+                                    vm.press()
+                                } else {
+                                    askMic.launch(Manifest.permission.RECORD_AUDIO)
+                                    false
+                                }
+                            },
+                            onRelease = { how -> vm.release(how.toTalkRelease()) },
+                            onTapLocked = vm::tapLocked,
+                            modifier = Modifier.weight(1f),
+                            hold = hold,
+                            clock = if (state.talk == TalkMode.Locked) clock(lockedNow - state.takeStartedAt) else null,
+                            dropActionLabel = stringResource(R.string.home_hold_drop),
+                            onDrop = vm::dropTakeNow,
+                        )
+                        DockSide(
+                            dock.right,
+                            state,
+                            vm = vm,
+                            onAttach = { if (vm.openAttach()) attachOpen = true },
                         )
                     }
+                    // 10 dp above the talk button, over where the waiting line and the draft actions are (both hidden while
+                    // a take records), so nothing moves.
+                    HoldHintLine(hintShown, hold, Modifier.align(Alignment.TopCenter))
                 }
             }
-            val label =
-                when {
-                    state.draft.selected != null -> stringResource(R.string.talk_rerecord)
-                    !state.draft.isEmpty -> stringResource(R.string.talk_more)
-                    else -> stringResource(R.string.talk_hold)
+            val micOffText = stringResource(R.string.home_mic_off)
+            val deleted = stringResource(R.string.home_chunk_deleted)
+            val dropped = stringResource(R.string.home_take_dropped)
+            val newDayTitle = stringResource(R.string.home_newday_title)
+            val newDayDetail = stringResource(R.string.home_newday_detail)
+            val undo = stringResource(R.string.common_undo)
+            val needsGone = stringResource(R.string.needs_gone)
+            val needsGoneSub = stringResource(R.string.needs_gone_sub)
+            val needsFailed = stringResource(R.string.needs_failed)
+            val needsFailedSub = stringResource(R.string.needs_failed_sub)
+            val stopTap = stringResource(R.string.stop_hold)
+            val stopTapSub = stringResource(R.string.stop_hold_sub)
+            val stopCancelled = stringResource(R.string.stop_cancelled)
+            val stopCancelledSub = stringResource(R.string.stop_cancelled_sub)
+            val stopped = stringResource(R.string.stop_done)
+            val stoppedSub = stringResource(R.string.stop_done_sub)
+            val stoppedWaiting = stringResource(R.string.stop_done_waiting)
+            val nothing = stringResource(R.string.stop_nothing)
+            val nothingSub = stringResource(R.string.stop_nothing_sub)
+            val stopFailed = stringResource(R.string.stop_failed)
+            val stopFailedSub = stringResource(R.string.stop_failed_sub)
+            val queued = stringResource(R.string.home_sent_queued)
+            val queuedSub = stringResource(R.string.home_sent_queued_sub)
+            val sentIdle = stringResource(R.string.home_sent_idle)
+            val sendingNow = stringResource(R.string.home_sending_now)
+            val sentNow = stringResource(R.string.home_sent_now)
+            val unsent = stringResource(R.string.home_unsent)
+            val unsentSub = stringResource(R.string.home_unsent_sub)
+            val takenBack = stringResource(R.string.home_taken_back)
+            val takenBackSub = stringResource(R.string.home_taken_back_sub)
+            val sendFailed = stringResource(R.string.home_send_failed)
+            val sendFailedSub = stringResource(R.string.home_send_failed_sub)
+            val attachLimit = stringResource(R.string.home_attach_limit)
+            val attachFailed = stringResource(R.string.home_attach_failed)
+            val sentNoImages = stringResource(R.string.home_sent_no_images)
+            val sentNoImagesSub = stringResource(R.string.home_sent_no_images_sub, state.imageInput?.model.orEmpty())
+            // A message of only images says how many in place of its text.
+            val messageDetail =
+                quoted(state.noticeDetail)
+                    ?: state.noticeImages.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.home_waiting_images, it, it) }
+            val notice =
+                remember(state.notice, messageDetail, micOff, sentNoImagesSub) {
+                    when (state.notice) {
+                        HomeNotice.ChunkDeleted ->
+                            HexToastMessage(deleted, HexToastTone.Undo, actionLabel = undo, actionIcon = HexIcons.undo, durationMs = 3_500)
+                        HomeNotice.TakeDropped -> HexToastMessage(dropped, HexToastTone.Undo)
+                        HomeNotice.NewDay -> HexToastMessage(newDayTitle, HexToastTone.Sun, newDayDetail, durationMs = NEW_DAY_NOTICE_MS)
+                        HomeNotice.MicUnavailable -> HexToastMessage(micOffText, HexToastTone.Info)
+                        HomeNotice.Queued ->
+                            HexToastMessage(
+                                queued,
+                                HexToastTone.Steer,
+                                queuedSub,
+                                actionLabel = undo,
+                                actionIcon = HexIcons.undo,
+                                durationMs = 3_200,
+                            )
+                        HomeNotice.SentIdle -> HexToastMessage(sentIdle, HexToastTone.Steer, messageDetail, durationMs = 2_600)
+                        HomeNotice.SendingNow ->
+                            HexToastMessage(
+                                sendingNow,
+                                HexToastTone.Steer,
+                                messageDetail,
+                                actionLabel = undo,
+                                actionIcon = HexIcons.undo,
+                                durationMs = Sending.HOLD_MS,
+                            )
+                        HomeNotice.SentNow -> HexToastMessage(sentNow, HexToastTone.Steer, messageDetail, durationMs = 2_600)
+                        HomeNotice.Unsent -> HexToastMessage(unsent, HexToastTone.Undo, unsentSub, durationMs = 2_200)
+                        HomeNotice.TakenBack -> HexToastMessage(takenBack, HexToastTone.Undo, takenBackSub, durationMs = 2_200)
+                        HomeNotice.SendFailed -> HexToastMessage(sendFailed, HexToastTone.Stop, sendFailedSub, durationMs = 3_200)
+                        HomeNotice.AttachLimit -> HexToastMessage(attachLimit, HexToastTone.Info)
+                        HomeNotice.AttachFailed -> HexToastMessage(attachFailed, HexToastTone.Stop)
+                        HomeNotice.SentNoImages -> HexToastMessage(sentNoImages, HexToastTone.Info, sentNoImagesSub, durationMs = 2_600)
+                        HomeNotice.QueuedNoImages ->
+                            HexToastMessage(
+                                sentNoImages,
+                                HexToastTone.Info,
+                                sentNoImagesSub,
+                                actionLabel = undo,
+                                actionIcon = HexIcons.undo,
+                                durationMs = 3_200,
+                            )
+                        HomeNotice.NeedsGone -> HexToastMessage(needsGone, HexToastTone.Info, needsGoneSub)
+                        HomeNotice.NeedsFailed -> HexToastMessage(needsFailed, HexToastTone.Stop, needsFailedSub)
+                        HomeNotice.StopTap -> HexToastMessage(stopTap, HexToastTone.Stop, stopTapSub)
+                        HomeNotice.StopCancelled -> HexToastMessage(stopCancelled, HexToastTone.Info, stopCancelledSub, durationMs = 2_200)
+                        HomeNotice.Stopped -> HexToastMessage(stopped, HexToastTone.Stop, stoppedSub, durationMs = 3_200)
+                        HomeNotice.StoppedWaiting -> HexToastMessage(stopped, HexToastTone.Stop, stoppedWaiting, durationMs = 3_200)
+                        HomeNotice.NothingToStop -> HexToastMessage(nothing, HexToastTone.Info, nothingSub)
+                        HomeNotice.StopFailed -> HexToastMessage(stopFailed, HexToastTone.Stop, stopFailedSub)
+                        null -> if (micOff) HexToastMessage(micOffText, HexToastTone.Info) else null
+                    }
                 }
-            // The dock (`.fx-dock`): attach, the talk button filling the rest, stop, 8 dp apart. Stop comes with M4:
-            // until then a tap says it isn't in this version yet. It is dimmed, and does nothing, unless the agent is
-            // working or needs input.
-            val agent = today.agent
-            val hold = rememberHexTalkHold()
-            // The locked take's clock in the talk button ticks while it records.
-            var lockedNow by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(state.talk) {
-                while (state.talk == TalkMode.Locked) {
-                    lockedNow = System.currentTimeMillis()
-                    delay(250)
-                }
+            HexToastHost(
+                message = notice,
+                onDismissed = {
+                    vm.noticeShown()
+                    micOff = false
+                },
+                onAction = vm::noticeAction,
+                // Toasts are hidden while Stop is held.
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp).alpha(if (state.stopHolding) 0f else 1f),
+            )
+            // Stop's countdown card, under the top bar, while the button is held.
+            AnimatedVisibility(
+                state.stopHolding,
+                enter = fadeIn(HexTheme.motion.fade()),
+                exit = fadeOut(HexTheme.motion.fade()),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 58.dp, start = 12.dp, end = 12.dp),
+            ) {
+                StopCountdown(state.stopHeldAt, still)
             }
-            // The hold hint fades in a quarter second into a hold, so a quick take never shows it.
-            var hintShown by remember { mutableStateOf(false) }
-            LaunchedEffect(hold.holding) {
-                if (hold.holding) {
-                    delay(HOLD_HINT_DELAY_MS)
-                    hintShown = true
-                } else {
-                    hintShown = false
-                }
-            }
-            Box(Modifier.padding(start = edge, end = edge, top = 12.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    val dock = HomeDock.of(state.talk)
-                    DockSide(dock.left, stopLive = false, vm = vm, onAttach = { if (vm.openAttach()) attachOpen = true })
-                    HexTalkButton(
-                        state =
-                            when (state.talk) {
-                                TalkMode.Holding -> HexTalkState.Holding
-                                TalkMode.Locked -> HexTalkState.Locked
-                                TalkMode.Idle -> if (state.draft.isEmpty) HexTalkState.Idle else HexTalkState.Draft
-                            },
-                        label = label,
-                        accessibilityLabel =
-                            when (state.talk) {
-                                // The clock is part of the button's label, not an item of its own.
-                                TalkMode.Locked -> stringResource(R.string.draft_recording, clock(lockedNow - state.takeStartedAt))
-                                TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
-                                TalkMode.Idle -> label
-                            },
-                        // Recording never waits for the speech model; only turning a take into text does.
-                        enabled = true,
-                        level = { vm.level },
-                        onPress = {
-                            if (micAllowed) {
-                                vm.press()
-                            } else {
-                                askMic.launch(Manifest.permission.RECORD_AUDIO)
-                                false
-                            }
-                        },
-                        onRelease = { how -> vm.release(how.toTalkRelease()) },
-                        onTapLocked = vm::tapLocked,
-                        modifier = Modifier.weight(1f),
-                        hold = hold,
-                        clock = if (state.talk == TalkMode.Locked) clock(lockedNow - state.takeStartedAt) else null,
-                        dropActionLabel = stringResource(R.string.home_hold_drop),
-                        onDrop = vm::dropTakeNow,
-                    )
-                    DockSide(
-                        dock.right,
-                        stopLive = agent is AgentStatus.Working || agent == AgentStatus.NeedsInput,
-                        vm = vm,
-                        onAttach = { if (vm.openAttach()) attachOpen = true },
-                    )
-                }
-                // 10 dp above the talk button, over where the waiting line and the draft actions are (both hidden while
-                // a take records), so nothing moves.
-                HoldHintLine(hintShown, hold, Modifier.align(Alignment.TopCenter))
-            }
+            AttachSheet(
+                attachOpen,
+                onPhotos = {
+                    attachOpen = false
+                    attach.photos()
+                },
+                onCamera = {
+                    attachOpen = false
+                    attach.camera()
+                },
+                onClose = { attachOpen = false },
+            )
+            DetailsSheet(state, vm)
+            NeedsSheets(state, vm, micReady)
         }
-        val micOffText = stringResource(R.string.home_mic_off)
-        val deleted = stringResource(R.string.home_chunk_deleted)
-        val dropped = stringResource(R.string.home_take_dropped)
-        val newDayTitle = stringResource(R.string.home_newday_title)
-        val newDayDetail = stringResource(R.string.home_newday_detail)
-        val undo = stringResource(R.string.common_undo)
-        val notYet = stringResource(R.string.settings_soon)
-        val queued = stringResource(R.string.home_sent_queued)
-        val queuedSub = stringResource(R.string.home_sent_queued_sub)
-        val sentIdle = stringResource(R.string.home_sent_idle)
-        val sendingNow = stringResource(R.string.home_sending_now)
-        val sentNow = stringResource(R.string.home_sent_now)
-        val unsent = stringResource(R.string.home_unsent)
-        val unsentSub = stringResource(R.string.home_unsent_sub)
-        val takenBack = stringResource(R.string.home_taken_back)
-        val takenBackSub = stringResource(R.string.home_taken_back_sub)
-        val sendFailed = stringResource(R.string.home_send_failed)
-        val sendFailedSub = stringResource(R.string.home_send_failed_sub)
-        val attachLimit = stringResource(R.string.home_attach_limit)
-        val attachFailed = stringResource(R.string.home_attach_failed)
-        val sentNoImages = stringResource(R.string.home_sent_no_images)
-        val sentNoImagesSub = stringResource(R.string.home_sent_no_images_sub, state.imageInput?.model.orEmpty())
-        // A message of only images says how many in place of its text.
-        val messageDetail =
-            quoted(state.noticeDetail)
-                ?: state.noticeImages.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.home_waiting_images, it, it) }
-        val notice =
-            remember(state.notice, messageDetail, micOff, sentNoImagesSub) {
-                when (state.notice) {
-                    HomeNotice.ChunkDeleted ->
-                        HexToastMessage(deleted, HexToastTone.Undo, actionLabel = undo, actionIcon = HexIcons.undo, durationMs = 3_500)
-                    HomeNotice.TakeDropped -> HexToastMessage(dropped, HexToastTone.Undo)
-                    HomeNotice.NewDay -> HexToastMessage(newDayTitle, HexToastTone.Sun, newDayDetail, durationMs = NEW_DAY_NOTICE_MS)
-                    HomeNotice.NotInThisVersion -> HexToastMessage(notYet, HexToastTone.Info)
-                    HomeNotice.MicUnavailable -> HexToastMessage(micOffText, HexToastTone.Info)
-                    HomeNotice.Queued ->
-                        HexToastMessage(
-                            queued,
-                            HexToastTone.Steer,
-                            queuedSub,
-                            actionLabel = undo,
-                            actionIcon = HexIcons.undo,
-                            durationMs = 3_200,
-                        )
-                    HomeNotice.SentIdle -> HexToastMessage(sentIdle, HexToastTone.Steer, messageDetail, durationMs = 2_600)
-                    HomeNotice.SendingNow ->
-                        HexToastMessage(
-                            sendingNow,
-                            HexToastTone.Steer,
-                            messageDetail,
-                            actionLabel = undo,
-                            actionIcon = HexIcons.undo,
-                            durationMs = Sending.HOLD_MS,
-                        )
-                    HomeNotice.SentNow -> HexToastMessage(sentNow, HexToastTone.Steer, messageDetail, durationMs = 2_600)
-                    HomeNotice.Unsent -> HexToastMessage(unsent, HexToastTone.Undo, unsentSub, durationMs = 2_200)
-                    HomeNotice.TakenBack -> HexToastMessage(takenBack, HexToastTone.Undo, takenBackSub, durationMs = 2_200)
-                    HomeNotice.SendFailed -> HexToastMessage(sendFailed, HexToastTone.Stop, sendFailedSub, durationMs = 3_200)
-                    HomeNotice.AttachLimit -> HexToastMessage(attachLimit, HexToastTone.Info)
-                    HomeNotice.AttachFailed -> HexToastMessage(attachFailed, HexToastTone.Stop)
-                    HomeNotice.SentNoImages -> HexToastMessage(sentNoImages, HexToastTone.Info, sentNoImagesSub, durationMs = 2_600)
-                    HomeNotice.QueuedNoImages ->
-                        HexToastMessage(
-                            sentNoImages,
-                            HexToastTone.Info,
-                            sentNoImagesSub,
-                            actionLabel = undo,
-                            actionIcon = HexIcons.undo,
-                            durationMs = 3_200,
-                        )
-                    null -> if (micOff) HexToastMessage(micOffText, HexToastTone.Info) else null
-                }
-            }
-        HexToastHost(
-            message = notice,
-            onDismissed = {
-                vm.noticeShown()
-                micOff = false
-            },
-            onAction = vm::noticeAction,
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
-        )
-        WaitingSheet(
-            waitingOpen,
-            state.today.queued,
-            images = state.queuedImages,
-            cancelling = state.cancelling,
-            onCancel = vm::cancelQueued,
-            onClose = { waitingOpen = false },
-        )
-        AttachSheet(
-            attachOpen,
-            onPhotos = {
-                attachOpen = false
-                attach.photos()
-            },
-            onCamera = {
-                attachOpen = false
-                attach.camera()
-            },
-            onClose = { attachOpen = false },
-        )
+        // The red edge round the whole screen while Stop is held, over the bars too.
+        if (state.stopHolding) HexStopEdge(corner = screenCorner(), reduceMotion = still)
     }
+}
+
+/**
+ * The warning's ring, bar and count over the 3 s from [heldAt] (the view model's clock: the wall clock), redrawn every
+ * frame while it shows.
+ */
+@Composable
+private fun StopCountdown(
+    heldAt: Long,
+    still: Boolean,
+) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(heldAt) {
+        while (true) {
+            withFrameMillis { now = System.currentTimeMillis() }
+        }
+    }
+    val progress = ((now - heldAt).toFloat() / STOP_HOLD_MS).coerceIn(0f, 1f)
+    val count = StopCount.left(now - heldAt)
+    HexStopWarning(
+        progress = progress,
+        count = count,
+        title = stringResource(R.string.stop_warning, count),
+        detail = stringResource(R.string.stop_warning_sub),
+        reduceMotion = still,
+    )
+}
+
+/** Stop's haptics: light at the press, a tick at each second, and a success one when the 3 s are reached. */
+@Composable
+private fun StopHaptics(state: HomeUiState) {
+    val view = LocalView.current
+    LaunchedEffect(state.stopHolding, state.stopHeldAt) {
+        if (!state.stopHolding) return@LaunchedEffect
+        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        repeat(2) {
+            delay(1_000)
+            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        }
+    }
+    LaunchedEffect(state.stopping) {
+        if (state.stopping) {
+            view.performHapticFeedback(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.LONG_PRESS,
+            )
+        }
+    }
+}
+
+/** The screen's corner radius, for the stop edge; square where the system doesn't say (before Android 12). */
+@Composable
+private fun screenCorner(): Dp {
+    val view = LocalView.current
+    val density = LocalDensity.current
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return 0.dp
+    val radius = view.rootWindowInsets?.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)?.radius ?: 0
+    return with(density) { radius.toDp() }
 }
 
 /** A message's text as a notice's second line: “in quotes”. */
 private fun quoted(text: String?): String? = text?.takeIf { it.isNotBlank() }?.let { "“$it”" }
-
-/**
- * Waiting to send (app-plan.md, Sending): the queued messages, oldest first, each with Cancel, which shows a spinner
- * while the DELETE runs; the row leaves as soon as it works. A message delivered or cancelled elsewhere leaves the list
- * as the events say so.
- */
-@Composable
-private fun BoxScope.WaitingSheet(
-    open: Boolean,
-    queued: List<InboxEntry>,
-    /** The phone's copy of the images each message took; a message from another device has none. */
-    images: Map<String, List<DraftImage>>,
-    cancelling: Set<String>,
-    onCancel: (String) -> Unit,
-    onClose: () -> Unit,
-) {
-    HexSheet(
-        visible = open,
-        onDismiss = onClose,
-        title = stringResource(R.string.home_waiting_title),
-        trailing = HexSheetAction(stringResource(R.string.common_close), onClose),
-    ) {
-        queued.forEach { item ->
-            Row(
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-            ) {
-                Icon(
-                    HexIcons.send,
-                    null,
-                    tint = HexTheme.colors.text3,
-                    modifier = Modifier.padding(top = 3.dp).size(HexTheme.size.iconSmall),
-                )
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (item.text.isNotEmpty()) {
-                        Text(
-                            item.text,
-                            style = HexTheme.type.row,
-                            color = HexTheme.colors.text1,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    val own = images[item.id].orEmpty()
-                    if (own.isNotEmpty()) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            own.take(Draft.MAX_IMAGES).forEach { image ->
-                                HexThumbnail(
-                                    rememberThumbnail(image.file, HexThumbnailSize.Small.side),
-                                    size = HexThumbnailSize.Small,
-                                )
-                            }
-                        }
-                    } else if (item.images > 0) {
-                        Text(
-                            pluralStringResource(R.plurals.home_waiting_images, item.images, item.images),
-                            style = HexTheme.type.caption,
-                            color = HexTheme.colors.text3,
-                        )
-                    }
-                }
-                HexButton(
-                    onClick = { onCancel(item.id) },
-                    text = stringResource(R.string.home_waiting_cancel),
-                    loading = item.id in cancelling,
-                )
-            }
-        }
-    }
-}
 
 /** The hold hint, 10 dp above the talk button; it takes no room, so nothing moves when it shows. */
 @Composable
@@ -470,27 +497,20 @@ private fun HoldHintLine(
 
 /**
  * One end of the dock, crossfading as it changes: attach and the agent's stop; or, while a take is locked, ✕ to drop
- * the take and ✓ to finish it (app-plan.md, Dictation › Locked take). Attach calls [onAttach]. Stop comes with M4; until
- * then a tap says so, and it is dimmed unless [stopLive].
+ * the take and ✓ to finish it (app-plan.md, Dictation › Locked take). Attach calls [onAttach]. Stop needs a 3 s hold
+ * (app-plan.md, Stop), and is dimmed, doing nothing, unless the agent works or needs input.
  */
 @Composable
 private fun DockSide(
     button: DockButton,
-    stopLive: Boolean,
+    state: HomeUiState,
     vm: HomeViewModel,
     onAttach: () -> Unit,
 ) {
     Crossfade(button, animationSpec = HexTheme.motion.fade(), label = "dock-side") { shown ->
         when (shown) {
             DockButton.Attach -> HexIconButton(HexIcons.clip, stringResource(R.string.home_attach), onClick = onAttach)
-            DockButton.Stop ->
-                HexIconButton(
-                    HexIcons.stop,
-                    stringResource(R.string.home_stop),
-                    onClick = vm::notInThisVersion,
-                    tone = HexIconButtonTone.Stop,
-                    enabled = stopLive,
-                )
+            DockButton.Stop -> StopButton(state, vm)
             DockButton.DropTake -> HexIconButton(HexIcons.x, stringResource(R.string.home_locked_drop), onClick = vm::dropTakeNow)
             DockButton.Done ->
                 HexIconButton(
@@ -502,6 +522,57 @@ private fun DockSide(
         }
     }
 }
+
+/**
+ * The stop button and its 3 s hold: the ring fills while it's held; lifting the finger before the end, or sliding it
+ * more than 44 dp off the button, cancels (app-plan.md, Stop › Cancel). The view model times the hold.
+ */
+@Composable
+private fun StopButton(
+    state: HomeUiState,
+    vm: HomeViewModel,
+) {
+    val live = state.stopLive
+    val ring = remember { Animatable(0f) }
+    LaunchedEffect(state.stopHolding) {
+        if (state.stopHolding) {
+            ring.snapTo(0f)
+            ring.animateTo(1f, tween(STOP_HOLD_MS.toInt(), easing = LinearEasing))
+        } else {
+            ring.snapTo(0f)
+        }
+    }
+    val slack = with(LocalDensity.current) { STOP_SLIDE_OFF.toPx() }
+    HexIconButton(
+        HexIcons.stop,
+        stringResource(R.string.home_stop),
+        onClick = null,
+        tone = HexIconButtonTone.Stop,
+        enabled = live,
+        hold = if (state.stopHolding) ring.value else null,
+        modifier =
+            Modifier.pointerInput(live) {
+                if (!live) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    if (!vm.stopPressed()) return@awaitEachGesture
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        val p = change.position
+                        val dx = maxOf(0f, -p.x, p.x - size.width)
+                        val dy = maxOf(0f, -p.y, p.y - size.height)
+                        if (dx * dx + dy * dy > slack * slack) break
+                    }
+                    vm.stopReleased()
+                }
+            },
+    )
+}
+
+/** Sliding this far off the stop button cancels the hold. */
+private val STOP_SLIDE_OFF = 44.dp
 
 /** A hold this long shows the hold hint (app-plan.md, Dictation › Hold hint). */
 private const val HOLD_HINT_DELAY_MS = 250L

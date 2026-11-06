@@ -11,6 +11,7 @@
     <string name="common_close">Close</string>
     <string name="common_retry">Retry</string>
     <string name="common_undo">Undo</string>
+    <string name="common_done">Done</string>
     <string name="common_tag_git">git</string>
     <string name="common_home">Home</string>
 
@@ -161,13 +162,83 @@
     <string name="home_taken_back_sub">It never reached the agent.</string>
     <string name="home_send_failed">Couldn’t send</string>
     <string name="home_send_failed_sub">Your draft is kept.</string>
-    <string name="home_waiting_title">Waiting to send</string>
     <string name="home_waiting_cancel">Cancel</string>
     <string name="home_waiting">%1$d waiting · sends after this turn ›</string>
+    <string name="home_waiting_idle">%1$d waiting · sends after your next message ›</string>
     <plurals name="home_waiting_images">
         <item quantity="one">%1$d image</item>
         <item quantity="other">%1$d images</item>
     </plurals>
+    <!-- Needs you (app-plan.md, Needs you and control › Approvals and Questions) -->
+    <string name="needs_hide">Hide</string>
+    <string name="needs_count">%1$d of %2$d</string>
+    <string name="needs_gone">No longer needed</string>
+    <string name="needs_gone_sub">It was answered elsewhere or the run ended.</string>
+    <string name="needs_failed">Couldn’t send</string>
+    <string name="needs_failed_sub">Try again.</string>
+    <string name="needs_approval_title">Permission requested</string>
+    <string name="needs_approval_shell">Run a command</string>
+    <string name="needs_approval_edit">Edit files</string>
+    <string name="needs_approval_webfetch">Open a web page</string>
+    <string name="needs_approval_subagent">Start a subagent</string>
+    <string name="needs_approval_from_subagent">From a subagent · %1$s</string>
+    <string name="needs_approval_always_line">Always allows %1$s in this project, from now on.</string>
+    <string name="needs_approval_always_any">Always allows any %1$s in this project, from now on.</string>
+    <string name="needs_approval_more_lines">… %1$d more lines</string>
+    <string name="needs_approval_say_why">Say what to do instead</string>
+    <string name="needs_approval_deny">Deny</string>
+    <string name="needs_approval_always">Always</string>
+    <string name="needs_approval_once">Allow once</string>
+    <string name="needs_question_title">Question</string>
+    <string name="needs_question_select_one">Select one</string>
+    <string name="needs_question_select_any">Select any</string>
+    <string name="needs_question_own">Say your own answer</string>
+    <string name="needs_listening">Listening… · release to finish</string>
+    <string name="needs_transcribing">Transcribing…</string>
+    <string name="needs_question_dismiss">Dismiss</string>
+    <string name="needs_question_next">Next</string>
+    <string name="needs_question_submit">Submit</string>
+    <string name="needs_question_unsupported">Answer this one on your computer</string>
+
+    <!-- Stop (app-plan.md, Needs you and control › Stop) -->
+    <string name="stop_warning">Stopping the agent in %1$d</string>
+    <string name="stop_warning_sub">Let go to keep it running</string>
+    <string name="stop_hold">Hold to stop</string>
+    <string name="stop_hold_sub">Keep pressing for 3 seconds. A tap does nothing.</string>
+    <string name="stop_cancelled">Stop cancelled</string>
+    <string name="stop_cancelled_sub">The agent keeps running.</string>
+    <string name="stop_done">Stopped</string>
+    <string name="stop_done_sub">Talk to start again.</string>
+    <string name="stop_done_waiting">Waiting messages send after your next one.</string>
+    <string name="stop_nothing">Nothing to stop</string>
+    <string name="stop_nothing_sub">The agent had already finished.</string>
+    <string name="stop_failed">Couldn’t stop</string>
+    <string name="stop_failed_sub">Check the connection and hold again.</string>
+
+    <!-- Details (app-plan.md, Needs you and control › Details) -->
+    <string name="details_title">Details</string>
+    <string name="details_needs">Needs you</string>
+    <string name="details_needs_approval">Approval needed</string>
+    <string name="details_needs_questions">Questions from the agent</string>
+    <string name="details_waiting">Waiting to send</string>
+    <string name="details_waiting_queue">Queue · after this turn</string>
+    <string name="details_waiting_steer">Steer · lands at the next step</string>
+    <string name="details_running">Running now</string>
+    <string name="details_running_subagent">Subagent · %1$s</string>
+    <string name="details_running_shell">Shell command</string>
+    <string name="details_more">+%1$d more</string>
+    <string name="details_todo">To-do list</string>
+    <string name="details_todo_suffix">· from the agent</string>
+    <string name="details_recent">Recent</string>
+    <string name="details_recent_edited">Edited · +%1$d −%2$d</string>
+    <string name="details_recent_created">Created · +%1$d</string>
+    <string name="details_recent_files">%1$d files · +%2$d −%3$d</string>
+    <string name="details_recent_done">Done</string>
+    <string name="details_recent_failed">Failed · exit %1$d</string>
+    <string name="details_recent_stopped">Stopped</string>
+    <string name="details_recent_denied">Denied</string>
+    <string name="details_empty">Nothing running right now.</string>
+
     <!-- Attach (app-plan.md, Attach) -->
     <string name="home_attach_title">Attach</string>
     <string name="home_attach_photos">Photos</string>

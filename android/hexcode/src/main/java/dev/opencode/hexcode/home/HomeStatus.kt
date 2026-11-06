@@ -111,6 +111,8 @@ internal fun HomeTopBar(
     status: AgentStatus?,
     now: Long,
     modifier: Modifier = Modifier,
+    /** Needs input opens the oldest question or approval. */
+    onNeedsInput: () -> Unit = {},
     actions: @Composable RowScope.() -> Unit,
 ) {
     when (status) {
@@ -121,6 +123,7 @@ internal fun HomeTopBar(
                 HexAgentState.NeedsInput,
                 stringResource(R.string.home_state_needs_input),
                 modifier,
+                onStateClick = onNeedsInput,
                 actions = actions,
             )
         is AgentStatus.Working ->
@@ -161,7 +164,7 @@ internal fun StatusArea(
             today.busySince != null -> CardPhase.Working
             else -> null
         }
-    val work = Work(today.todos, today.running(now), today.you, vm::addToDraft, phase)
+    val work = Work(today.todos, today.running(now), today.you, vm::addToDraft, phase, vm::openDetails)
     val nowLines =
         when (val card = summary.summary) {
             is StatusSummary.Card -> card.now
@@ -180,7 +183,7 @@ internal fun StatusArea(
         is SessionSetup.Ready ->
             CentredFit(start, count, modifier) { size, lines ->
                 Summary(summary, now, vm, size, lines, links, work)
-                today.pendingInput?.let { NeedsHint(it, onClick = {}) }
+                today.pendingInput?.let { NeedsHint(it, onClick = { vm.openNeeds() }) }
             }
     }
 }
@@ -330,6 +333,8 @@ private class Work(
     val onNext: (String) -> Unit = {},
     /** Busy or waiting for the user: the label over Now says so (app-plan.md, Card label while working). */
     val phase: CardPhase? = null,
+    /** "Details ›" and the to-do row open Details. */
+    val onDetails: () -> Unit = {},
 )
 
 /** What the label over Now adds while the session isn't idle. */
@@ -407,9 +412,8 @@ private fun Card(
             }
         }
     }
-    TodoRow(work.todos)
-    // Details comes with M4; until then the link does nothing.
-    Meta(label, onRefresh) { DetailsLink(work.running, onClick = {}) }
+    TodoRow(work.todos, work.onDetails)
+    Meta(label, onRefresh) { DetailsLink(work.running, onClick = work.onDetails) }
 }
 
 /**
@@ -488,7 +492,7 @@ private const val SHINE_MS = 2_400
 
 /** Animations are off (developer options or accessibility: animator duration scale 0). */
 @Composable
-private fun reduceMotion(): Boolean {
+internal fun reduceMotion(): Boolean {
     val context = LocalContext.current
     return remember {
         Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
@@ -549,10 +553,13 @@ private fun NowText(
 
 /**
  * The agent's to-do row (`HexProgress`): a segment per item, then "3 of 4 · <the item in progress>" or "All 4 done",
- * and "›". No row without a list. Tapping opens Details from M4; until then it does nothing.
+ * and "›". No row without a list. Tapping opens Details.
  */
 @Composable
-private fun TodoRow(todos: List<TodoItem>) {
+private fun TodoRow(
+    todos: List<TodoItem>,
+    onClick: () -> Unit,
+) {
     val label = TodoList.label(todos) ?: return
     val text =
         when (label) {
@@ -569,7 +576,7 @@ private fun TodoRow(todos: List<TodoItem>) {
             }
         },
         text,
-        onClick = {},
+        onClick = onClick,
     )
 }
 
@@ -716,10 +723,14 @@ private fun NeedsHint(
     }
 }
 
-/** "N waiting · sends after this turn ›" (`.waitline`), while the inbox has queued messages. */
+/**
+ * "N waiting · sends after this turn ›" (`.waitline`), while the inbox has queued messages; while the agent is [idle]
+ * (after Stop) "N waiting · sends after your next message ›". It opens Details.
+ */
 @Composable
 internal fun WaitingLine(
     count: Int,
+    idle: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -740,7 +751,7 @@ internal fun WaitingLine(
         Icon(HexIcons.send, null, tint = colors.text3, modifier = Modifier.size(HexTheme.size.iconSmall))
         // The text ends in "›", so there is no chevron icon after it, unlike the prototype's `.waitline`.
         Text(
-            stringResource(R.string.home_waiting, count),
+            stringResource(if (idle) R.string.home_waiting_idle else R.string.home_waiting, count),
             style = HexTheme.type.small,
             color = colors.text2,
             modifier = Modifier.weight(1f),

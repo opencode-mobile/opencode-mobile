@@ -29,3 +29,8 @@ data class HomeDock(
             }
     }
 }
+
+/** The stop warning's count (app-plan.md, Stop › Warning): 3, 2, 1 over the 3 s hold, as the prototype's `stopLeft`. */
+object StopCount {
+    fun left(heldMs: Long): Int = ((STOP_HOLD_MS - heldMs + 999) / 1000).toInt().coerceIn(1, 3)
+}

@@ -7,7 +7,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.firstrun.ModelChoice
+import dev.opencode.hexcode.session.AgentStatus
+import dev.opencode.hexcode.session.ApprovalDecision
+import dev.opencode.hexcode.session.PendingItem
 import dev.opencode.hexcode.session.PromptImage
+import dev.opencode.hexcode.session.QuestionAnswers
+import dev.opencode.hexcode.session.RecentStep
+import dev.opencode.hexcode.session.RequestGoneException
+import dev.opencode.hexcode.session.StopOutcome
 import dev.opencode.hexcode.session.TodaySession
 import dev.opencode.hexcode.session.TodayState
 import dev.opencode.voiceengine.NoSpeechException
@@ -332,7 +339,6 @@ enum class HomeNotice {
     ChunkDeleted,
     TakeDropped,
     NewDay,
-    NotInThisVersion,
     MicUnavailable,
 
     /** "Queued · sends after this turn", with Undo. */
@@ -367,7 +373,60 @@ enum class HomeNotice {
 
     /** The same, for a message queued after this turn: with Undo, as "Queued" has. */
     QueuedNoImages,
+
+    /** "No longer needed · It was answered elsewhere or the run ended." */
+    NeedsGone,
+
+    /** "Couldn't send · Try again.": a reply to a question or approval failed. */
+    NeedsFailed,
+
+    /** "Hold to stop · Keep pressing for 3 seconds. A tap does nothing." */
+    StopTap,
+
+    /** "Stop cancelled · The agent keeps running." */
+    StopCancelled,
+
+    /** "Stopped · Talk to start again." */
+    Stopped,
+
+    /** "Stopped · Waiting messages send after your next one." */
+    StoppedWaiting,
+
+    /** "Nothing to stop · The agent had already finished." */
+    NothingToStop,
+
+    /** "Couldn't stop · Check the connection and hold again." */
+    StopFailed,
 }
+
+/** The open approval or question ([itemId]), and which of its buttons waits for the server. */
+data class NeedsSheet(
+    val itemId: String,
+    val busy: NeedsAction? = null,
+)
+
+/** A button of the approval or question sheet. */
+enum class NeedsAction { Deny, Always, Once, Submit, Dismiss }
+
+/** Where a take on a sheet goes: an approval's Say why, or a question's own answer for field [key]. */
+sealed interface SheetTarget {
+    val itemId: String
+
+    data class Note(
+        override val itemId: String,
+    ) : SheetTarget
+
+    data class Own(
+        override val itemId: String,
+        val key: String,
+    ) : SheetTarget
+}
+
+/** A take on a sheet: recording while the row is held, then being turned into text. */
+data class SheetTake(
+    val target: SheetTarget,
+    val transcribing: Boolean = false,
+)
 
 data class HomeUiState(
     val draft: Draft = Draft(),
@@ -391,7 +450,31 @@ data class HomeUiState(
     val imageInput: ImageInput? = null,
     /** The phone's copy of the images each queued message took, by inbox item, for the Waiting to send sheet. */
     val queuedImages: Map<String, List<DraftImage>> = emptyMap(),
+    /** The approval or question sheet, while open. */
+    val needs: NeedsSheet? = null,
+    /** What was said for each approval's Say why, by request id: Deny's note. */
+    val notes: Map<String, String> = emptyMap(),
+    /** Each question's answers so far, by form id: kept while it's hidden, and when going Back. */
+    val answers: Map<String, QuestionAnswers> = emptyMap(),
+    /** A take on a sheet (Say why, an own answer). */
+    val sheetTake: SheetTake? = null,
+    /** Details is open. */
+    val detailsOpen: Boolean = false,
+    /** Details' Recent, read when it opens and after each tool while open. */
+    val recent: List<RecentStep> = emptyList(),
+    /** Stop is held: the warning, the screen edge and the ring show, and toasts are hidden. */
+    val stopHolding: Boolean = false,
+    /** When the hold started ([clock] time), for the ring, the bar and the count. */
+    val stopHeldAt: Long = 0,
+    /** The 3 s were reached: the interrupt is on its way. */
+    val stopping: Boolean = false,
 ) {
+    /** Stop is lit (the agent works or waits for an answer); dimmed, a hold does nothing. */
+    val stopLive: Boolean get() = today.agent.let { it is AgentStatus.Working || it == AgentStatus.NeedsInput }
+
+    /** The open sheet's item, while it's still pending. */
+    val needsItem: PendingItem? get() = needs?.let { open -> today.pending.firstOrNull { it.id == open.itemId } }
+
     /** The agent runs or waits for an answer, so Send has a choice to make. */
     val busy: Boolean get() = today.busySince != null || today.pendingInput != null
 
@@ -462,6 +545,7 @@ class HomeViewModel(
         }
         session?.let { today ->
             viewModelScope.launch {
+                var previous: TodayState? = null
                 today.state.collect { next ->
                     val before = state.value.queuedImages
                     state.update {
@@ -473,6 +557,9 @@ class HomeViewModel(
                     }
                     if (state.value.queuedImages.size != before.size) sweepImages()
                     if (next.newDayNotice) today.newDayShown()
+                    watchNeeds(next)
+                    watchDetails(previous, next)
+                    previous = next
                 }
             }
             today.open()
@@ -608,8 +695,310 @@ class HomeViewModel(
         session?.open()
     }
 
-    /** Stop (M4) isn't built yet: a tap says so. */
-    fun notInThisVersion() = state.update { it.copy(notice = HomeNotice.NotInThisVersion) }
+    // --- Needs you (app-plan.md, Needs you and control › Approvals and Questions)
+
+    /** Items being answered from this phone: their leaving the queue isn't "No longer needed". */
+    private val settling = mutableSetOf<String>()
+
+    /** Opening the next pending item 0.3 s after a reply. */
+    private var nextNeeds: Job? = null
+
+    /**
+     * The amber hint, the top bar's Needs input, or a Needs you row in Details ([itemId]): opens the sheet for that
+     * item, else the oldest pending one. Approvals and questions share one queue.
+     */
+    fun openNeeds(itemId: String? = null) {
+        nextNeeds?.cancel()
+        val pending = state.value.today.pending
+        val item = pending.firstOrNull { it.id == itemId } ?: pending.firstOrNull() ?: return
+        state.update {
+            val form = item.form
+            val answers =
+                if (form != null && item.id !in it.answers) it.answers + (item.id to QuestionAnswers(form)) else it.answers
+            it.copy(needs = NeedsSheet(item.id), answers = answers, detailsOpen = false)
+        }
+    }
+
+    /** Hide: the sheet closes unanswered; the hint stays. */
+    fun hideNeeds() {
+        nextNeeds?.cancel()
+        state.update { it.copy(needs = null) }
+    }
+
+    /** Allow once, Always, or Deny (with the spoken note, else the default one) on the open approval. */
+    fun approve(decision: ApprovalDecision) {
+        val item = state.value.needsItem ?: return
+        if (state.value.needs?.busy != null) return
+        val note = state.value.notes[item.id]
+        val action =
+            when (decision) {
+                ApprovalDecision.Once -> NeedsAction.Once
+                ApprovalDecision.Always -> NeedsAction.Always
+                ApprovalDecision.Reject -> NeedsAction.Deny
+            }
+        settle(item, action) { it.reply(item, decision, note) }
+    }
+
+    /** Submit, on the open question's last page. */
+    fun submitAnswers() {
+        val item = state.value.needsItem ?: return
+        val answers = state.value.answers[item.id] ?: return
+        if (state.value.needs?.busy != null || state.value.sheetTake != null) return
+        if (!answers.last || !answers.answer.answered) return
+        settle(item, NeedsAction.Submit) { it.answer(item, answers.body()) }
+    }
+
+    /** Dismiss: the form closes with the note, so the run goes on. */
+    fun dismissQuestion() {
+        val item = state.value.needsItem ?: return
+        if (state.value.needs?.busy != null) return
+        settle(item, NeedsAction.Dismiss) { it.dismiss(item) }
+    }
+
+    private fun settle(
+        item: PendingItem,
+        action: NeedsAction,
+        call: suspend (TodaySession) -> Unit,
+    ) {
+        val today = session ?: return
+        settling += item.id
+        state.update { it.copy(needs = it.needs?.copy(busy = action)) }
+        viewModelScope.launch {
+            try {
+                call(today)
+                closeNeeds(item.id, gone = false)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: RequestGoneException) {
+                closeNeeds(item.id, gone = true)
+            } catch (error: Exception) {
+                Log.w(NEEDS_TAG, "couldn't answer ${item.id}: ${error.message}")
+                state.update { it.copy(needs = it.needs?.copy(busy = null), notice = HomeNotice.NeedsFailed) }
+            } finally {
+                settling -= item.id
+            }
+        }
+    }
+
+    /**
+     * The sheet closes at once and the item leaves the queue (with "No longer needed" when it was [gone]); if another
+     * is pending, its sheet opens 0.3 s later.
+     */
+    private fun closeNeeds(
+        itemId: String,
+        gone: Boolean,
+    ) {
+        state.update {
+            it.copy(
+                needs = if (it.needs?.itemId == itemId) null else it.needs,
+                notes = it.notes - itemId,
+                answers = it.answers - itemId,
+                notice = if (gone) HomeNotice.NeedsGone else it.notice,
+            )
+        }
+        if (gone) return
+        nextNeeds?.cancel()
+        nextNeeds =
+            viewModelScope.launch {
+                delay(NEXT_NEEDS_MS)
+                val left =
+                    state.value.today.pending
+                        .filterNot { it.id == itemId || it.id in settling }
+                if (state.value.needs == null && left.isNotEmpty()) openNeeds(left.first().id)
+            }
+    }
+
+    /** The open item left the queue without this phone answering it: answered elsewhere, or its run ended. */
+    private fun watchNeeds(today: TodayState) {
+        val open = state.value.needs ?: return
+        if (open.itemId in settling || today.pending.any { it.id == open.itemId }) return
+        state.update { it.copy(needs = null, notice = HomeNotice.NeedsGone) }
+    }
+
+    /** A tap on an option of the open question: chooses it, or in a multiselect toggles it. */
+    fun chooseOption(value: String) = changeAnswers { it.choose(value) }
+
+    /** A tap on the own answer that has text: chooses it again (multiselect: toggles it). */
+    fun toggleOwnAnswer() = changeAnswers { it.toggleOwn() }
+
+    fun nextQuestion() {
+        if (state.value.sheetTake != null) return
+        changeAnswers { it.next() }
+    }
+
+    fun previousQuestion() = changeAnswers { it.back() }
+
+    private fun changeAnswers(change: (QuestionAnswers) -> QuestionAnswers) {
+        val id = state.value.needs?.itemId ?: return
+        state.update { s -> s.answers[id]?.let { s.copy(answers = s.answers + (id to change(it))) } ?: s }
+    }
+
+    /**
+     * Say why, or Say your own answer, is pressed: a take starts, as the talk button's (app-plan.md, Approvals › Say
+     * why). False when one is running already, here or on the talk button.
+     */
+    fun sheetTakeStart(target: SheetTarget): Boolean {
+        val current = state.value
+        if (current.sheetTake != null || current.talk != TalkMode.Idle || current.draft.isListening) return false
+        state.update { it.copy(sheetTake = SheetTake(target)) }
+        dictation.start {
+            if (state.value.sheetTake?.target == target) state.update { it.copy(sheetTake = null, notice = HomeNotice.MicUnavailable) }
+        }
+        return true
+    }
+
+    /**
+     * The row is released: the take ends and is turned into text, which becomes Deny's note or the own answer. A take
+     * with no speech (a tap) keeps what was said before, and a tap on an own answer that has text chooses it.
+     */
+    fun sheetTakeEnd() {
+        val take = state.value.sheetTake ?: return
+        if (take.transcribing) return
+        state.update { it.copy(sheetTake = take.copy(transcribing = true)) }
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            val samples = dictation.end()
+            val text =
+                if (samples == null || samples.size < MIN_SAMPLES) {
+                    null
+                } else {
+                    sheetText(samples)
+                }
+            state.update { s -> s.withSheetText(take.target, text?.trim()?.ifEmpty { null }).copy(sheetTake = null) }
+        }
+    }
+
+    /** A sheet take's text, once the speech model is ready; null when it can't be had. */
+    private suspend fun sheetText(samples: FloatArray): String? {
+        if (dictation.speech.first { it !is SpeechStatus.Loading } != SpeechStatus.Ready) return null
+        return transcribing.withLock {
+            try {
+                dictation.transcribe(samples)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(TalkLog.TAG, "a sheet take didn't become text: ${error.message}", error)
+                null
+            }
+        }
+    }
+
+    private fun HomeUiState.withSheetText(
+        target: SheetTarget,
+        text: String?,
+    ): HomeUiState =
+        when (target) {
+            is SheetTarget.Note -> if (text == null) this else copy(notes = notes + (target.itemId to text))
+            is SheetTarget.Own -> {
+                val answers = answers[target.itemId] ?: return this
+                val index =
+                    answers.form.fields
+                        .indexOfFirst { it.key == target.key }
+                        .takeIf { it >= 0 } ?: return this
+                val onPage = answers.copy(page = index)
+                val changed = if (text == null) onPage.toggleOwn() else onPage.own(text)
+                copy(answers = this.answers + (target.itemId to changed.copy(page = answers.page)))
+            }
+        }
+
+    // --- Details (app-plan.md, Needs you and control › Details)
+
+    /** Reading Recent again a second after a tool finishes, while Details is open. */
+    private var recentRead: Job? = null
+
+    /** "Details ›", the to-do row, or the waiting line: opens Details and reads Running now and Recent. */
+    fun openDetails() {
+        state.update { it.copy(detailsOpen = true) }
+        readRunning()
+        readRecent()
+    }
+
+    fun closeDetails() {
+        recentRead?.cancel()
+        state.update { it.copy(detailsOpen = false) }
+    }
+
+    private fun readRunning() {
+        val today = session ?: return
+        viewModelScope.launch {
+            try {
+                today.readRunning()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(NEEDS_TAG, "couldn't read Running now: ${error.message}")
+            }
+        }
+    }
+
+    private fun readRecent(after: Long = 0) {
+        val today = session ?: return
+        recentRead?.cancel()
+        recentRead =
+            viewModelScope.launch {
+                delay(after)
+                try {
+                    val steps = today.recent()
+                    state.update { it.copy(recent = steps) }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(NEEDS_TAG, "couldn't read Recent: ${error.message}")
+                }
+            }
+    }
+
+    /** While Details is open: Recent again 1 s after each tool, and Running now again after a reconnect. */
+    private fun watchDetails(
+        before: TodayState?,
+        now: TodayState,
+    ) {
+        if (!state.value.detailsOpen || before == null) return
+        if (now.toolEvents != before.toolEvents) readRecent(after = RECENT_DELAY_MS)
+        if (now.streamUp && !before.streamUp) readRunning()
+    }
+
+    // --- Stop (app-plan.md, Needs you and control › Stop)
+
+    private var stopTimer: Job? = null
+
+    /** Stop is pressed: the hold starts when it's lit; a dimmed stop does nothing (false). */
+    fun stopPressed(): Boolean {
+        val current = state.value
+        if (!current.stopLive || current.stopHolding || current.stopping) return false
+        val at = clock()
+        state.update { it.copy(stopHolding = true, stopHeldAt = at) }
+        stopTimer =
+            viewModelScope.launch {
+                delay(STOP_HOLD_MS)
+                stopHeld()
+            }
+        return true
+    }
+
+    /** Let go before 3 s, or slid off the button: under 0.35 s "Hold to stop", else "Stop cancelled". */
+    fun stopReleased() {
+        val current = state.value
+        if (!current.stopHolding) return
+        stopTimer?.cancel()
+        val held = clock() - current.stopHeldAt
+        state.update { it.copy(stopHolding = false, notice = if (held < STOP_TAP_MS) HomeNotice.StopTap else HomeNotice.StopCancelled) }
+    }
+
+    /** 3 s held: the warning goes as the interrupt is sent, and the notice says how it went. */
+    private fun stopHeld() {
+        val today = session
+        state.update { it.copy(stopHolding = false, stopping = true) }
+        viewModelScope.launch {
+            val outcome = today?.stop() ?: StopOutcome.Failed
+            val notice =
+                when (outcome) {
+                    is StopOutcome.Stopped -> if (outcome.waiting) HomeNotice.StoppedWaiting else HomeNotice.Stopped
+                    StopOutcome.NothingToStop -> HomeNotice.NothingToStop
+                    StopOutcome.Failed -> HomeNotice.StopFailed
+                }
+            state.update { it.copy(stopping = false, notice = notice) }
+        }
+    }
 
     /** Developer settings' "Drop event stream". */
     fun dropStream() {
@@ -1214,6 +1603,19 @@ class HomeViewModel(
 
 /** 0.3 s at 16 kHz: a shorter take leaves the draft quietly. */
 private const val MIN_SAMPLES = 4_800
+
+/** Where the sheets and Details log what went wrong. */
+private const val NEEDS_TAG = "HexCode.Needs"
+
+/** After a reply, the next pending item's sheet opens this much later. */
+const val NEXT_NEEDS_MS = 300L
+
+/** Details reads Recent again this long after a tool finishes. */
+private const val RECENT_DELAY_MS = 1_000L
+
+/** Stop needs this long a hold; a hold shorter than [STOP_TAP_MS] is a tap ("Hold to stop"). */
+const val STOP_HOLD_MS = 3_000L
+const val STOP_TAP_MS = 350L
 
 /** How often a locked take's new audio goes to the pause detector. */
 private const val VAD_POLL_MS = 50L
