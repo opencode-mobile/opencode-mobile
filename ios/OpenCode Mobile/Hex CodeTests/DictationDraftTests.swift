@@ -166,7 +166,12 @@ struct DictationDraftTests {
 
 @MainActor
 final class FakeRecorder: TakeRecording {
-    var level: Float = 0
+    var level: Float? = 0
+    private(set) var prepared = 0
+    private(set) var released = 0
+
+    func prepare() { prepared += 1 }
+    func release() { released += 1 }
     var startFails = false
     /// Seconds of audio each take holds.
     var duration: TimeInterval = 1

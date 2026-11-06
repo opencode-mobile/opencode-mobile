@@ -7,8 +7,12 @@ import VoiceEngineKit
 /// records; `SpeechTranscribing` turns the audio into text.
 @MainActor
 protocol TakeRecording: AnyObject {
-    /// Loudness of the take now, 0 to 1; 0 until audio arrives.
-    var level: Float { get }
+    /// The meter's height now, 0 to 1; nil until audio arrives.
+    var level: Float? { get }
+    /// Home is on screen: get the microphone ready to start fast (without starting it).
+    func prepare()
+    /// Home left the foreground: let go of what `prepare()` holds.
+    func release()
     func startRecording() async throws
     /// Ends the take and hands over its audio file; nil when nothing was recording.
     func stopRecording() async -> RecordedTake?
@@ -77,7 +81,16 @@ final class HomeModel {
     var isRecording: Bool { draft.isListening }
     var isPressing: Bool { pressStartedAt != nil }
     var isArmed: Bool { arm != nil }
-    var level: Float { recorder.level }
+    var level: Float? { recorder.level }
+
+    /// Home is on screen: the recorder gets ready, so a press starts the microphone fast.
+    func prepareRecorder() { recorder.prepare() }
+
+    /// Home left the foreground.
+    func releaseRecorder() {
+        guard !isRecording else { return }
+        recorder.release()
+    }
 
     // MARK: Talk button
 

@@ -54,6 +54,11 @@ struct HomeView: View {
         .hexScreenBackground()
         .animation(HexMotion.ease(HexMotion.fade), value: drafting)
         .animation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
+        // The microphone gets ready (not started) while home is on screen.
+        .onAppear { home.prepareRecorder() }
+        #if DEBUG
+        .task { await PressProbe.run(home) }
+        #endif
         .hexSheet(isPresented: $showsWaiting, detents: [.medium]) {
             WaitingSheet(session: session) { showsWaiting = false }
         }
@@ -470,3 +475,28 @@ struct WaitingSheet: View {
         }
     }
 }
+
+#if DEBUG
+/// `-HexCodePressProbe <n>`: a few seconds after home appears, n press, hold 1 s and release
+/// cycles through the talk button's own path, printing the press timings (read them with
+/// `devicectl device process launch --console`). Debug builds only; never on a normal launch.
+@MainActor
+enum PressProbe {
+    private static var ran = false
+
+    static func run(_ home: HomeModel) async {
+        let count = UserDefaults.standard.integer(forKey: "HexCodePressProbe")
+        guard count > 0, !ran else { return }
+        ran = true
+        try? await Task.sleep(for: .seconds(4))
+        for cycle in 1 ... count {
+            print("HEXPROBE cycle \(cycle)")
+            home.pressBegan()
+            try? await Task.sleep(for: .seconds(1))
+            await home.pressEnded()
+            try? await Task.sleep(for: .seconds(2))
+        }
+        print("HEXPROBE done")
+    }
+}
+#endif

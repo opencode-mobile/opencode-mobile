@@ -15,25 +15,42 @@ func hexMilliseconds(from start: TimeInterval, to end: TimeInterval) -> Int {
 }
 
 /// Times one press of the talk button: touch down, the first frame drawn with the recording look,
-/// and the microphone running. Logged at info level, for checks on a phone.
+/// the microphone running and the first audio buffer. Logged at info level, and printed in debug
+/// builds (the press probe reads them from the console).
 @MainActor
 enum PressTiming {
     private static var touchDown: TimeInterval?
     private static var drawn = false
+    private static var heard = false
 
     static func began() {
         touchDown = ProcessInfo.processInfo.systemUptime
         drawn = false
+        heard = false
     }
 
     static func recordingLookDrawn() {
         guard let touchDown, !drawn else { return }
         drawn = true
-        HexLog.dictation.info("press: recording look drawn after \(hexMilliseconds(from: touchDown, to: ProcessInfo.processInfo.systemUptime)) ms")
+        report("recording look drawn", since: touchDown)
     }
 
     static func microphoneRunning() {
         guard let touchDown else { return }
-        HexLog.dictation.info("press: microphone running after \(hexMilliseconds(from: touchDown, to: ProcessInfo.processInfo.systemUptime)) ms")
+        report("microphone running", since: touchDown)
+    }
+
+    static func firstAudio() {
+        guard let touchDown, !heard else { return }
+        heard = true
+        report("first audio", since: touchDown)
+    }
+
+    private static func report(_ what: String, since start: TimeInterval) {
+        let ms = hexMilliseconds(from: start, to: ProcessInfo.processInfo.systemUptime)
+        HexLog.dictation.info("press: \(what, privacy: .public) after \(ms) ms")
+        #if DEBUG
+        print("HEXPROBE press: \(what) after \(ms) ms")
+        #endif
     }
 }

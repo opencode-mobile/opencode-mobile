@@ -26,7 +26,7 @@ struct TalkButton: View {
                 offset: home.dragOffset,
                 arm: home.arm
             ),
-            level: { Double(home.level) },
+            level: { home.level.map(Double.init) },
             accessibilityText: accessibilityText(at: date),
             onPressBegan: { home.pressBegan() },
             onPressMoved: { home.pressMoved(dx: $0) },

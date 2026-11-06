@@ -182,8 +182,12 @@ struct HexMainView: View {
         .task { await main.realSession.open() }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .active: Task { await main.realSession.enteredForeground() }
-            case .background: main.realSession.enteredBackground()
+            case .active:
+                main.home.prepareRecorder()
+                Task { await main.realSession.enteredForeground() }
+            case .background:
+                main.home.releaseRecorder()
+                main.realSession.enteredBackground()
             default: break
             }
         }
