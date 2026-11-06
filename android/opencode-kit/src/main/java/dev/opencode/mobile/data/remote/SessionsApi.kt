@@ -40,6 +40,7 @@ import dev.opencode.mobile.data.remote.dto.V2SessionGenerateRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionGenerateResponseDto
 import dev.opencode.mobile.data.remote.dto.V2SessionViewRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
+import dev.opencode.mobile.data.remote.dto.V2TextPromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsFileStatusDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
@@ -543,6 +544,22 @@ class SessionsApi private constructor(
                     limit?.let { parameter("limit", it) }
                 }
             }.bodyOnSuccess()
+
+    /**
+     * `POST /api/session/{id}/prompt` with only [text] and [delivery]: every prompt goes through the session's inbox,
+     * so the reply is the inbox item, whose id cancels it (`DELETE /api/session/{id}/inbox/{item}`) until delivered.
+     */
+    suspend fun promptTextV2(
+        id: String,
+        text: String,
+        delivery: String,
+    ): V2InboxItemDto =
+        httpClient
+            .get()
+            .post("api/session/$id/prompt") {
+                setJsonBody(json, V2TextPromptRequestDto(text = text, delivery = delivery))
+            }.bodyOnSuccess<ApiDataEnvelope<V2InboxItemDto>>()
+            .data
 
     /** `POST /api/session/{id}/model`: the model and level the session's prompts and generate use from now on. */
     suspend fun switchSessionModelV2(

@@ -197,6 +197,29 @@ class SessionsApiDailySessionTest {
             assertNull(session.time?.busy)
         }
 
+    @Test
+    fun aTextPromptPostsTextAndDeliveryAndReadsTheInboxItem() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            val api =
+                api { request ->
+                    captured += request
+                    respond(
+                        """{"data":{"id":"msg_1","sessionID":"ses_1","time":{"created":5},"type":"user","payload":{"text":"Run ls"},"delivery":"queue"}}""",
+                        HttpStatusCode.OK,
+                        jsonHeaders,
+                    )
+                }
+
+            val item = api.promptTextV2("ses_1", "Run ls", "queue")
+
+            assertEquals("msg_1", item.id)
+            assertEquals("Run ls", item.payload?.text)
+            val request = captured.single()
+            assertTrue(request.url.encodedPath.endsWith("/api/session/ses_1/prompt"))
+            assertEquals("""{"text":"Run ls","delivery":"queue"}""", request.body.readText())
+        }
+
     private fun api(handler: MockRequestHandler): SessionsApi {
         val json = Json { ignoreUnknownKeys = true }
         val client =

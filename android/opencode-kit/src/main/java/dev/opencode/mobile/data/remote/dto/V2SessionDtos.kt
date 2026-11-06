@@ -76,6 +76,16 @@ data class V2MoveSessionRequestDto(
     val directory: String,
 )
 
+/**
+ * `POST /api/session/{id}/prompt` with text only: [delivery] `queue` (after this turn) or `steer` (at the next step;
+ * an idle session starts a run).
+ */
+@Serializable
+data class V2TextPromptRequestDto(
+    val text: String,
+    val delivery: String,
+)
+
 /** `PUT /api/experimental/session/{id}/instructions/entries/{key}`: a string value is used as it is. */
 @Serializable
 data class V2InstructionEntryRequestDto(
