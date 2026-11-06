@@ -59,6 +59,7 @@ import dev.opencode.hexcode.firstrun.ProjectScreen
 import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.hexcode.home.AndroidImagePreparer
 import dev.opencode.hexcode.home.ClipDictation
+import dev.opencode.hexcode.home.FileMicrophone
 import dev.opencode.hexcode.home.FileTakeStore
 import dev.opencode.hexcode.home.HomeScreen
 import dev.opencode.hexcode.home.HomeViewModel
@@ -122,6 +123,13 @@ class MainActivity : ComponentActivity() {
         // debug builds: `--ei HexCodePressProbe 5` runs 5 press, hold 1 s and release cycles of the talk button through
         // the real code path once home shows, to time the microphone from logcat on a phone nobody is touching
         if (BuildConfig.DEBUG) services.pressProbe = intent.getIntExtra("HexCodePressProbe", 0)
+        // debug builds: `--es HexCodeTakeAudio <WAV in filesDir>` plays that file as the microphone in every take, in
+        // real time (16 kHz mono), and `--ez HexCodeTakeProbe true` runs one locked take of it once speech is ready, to
+        // time how its parts and the wait after release come out from logcat on a phone nobody is touching
+        if (BuildConfig.DEBUG) {
+            services.takeAudio = intent.getStringExtra("HexCodeTakeAudio")
+            services.takeProbe = intent.getBooleanExtra("HexCodeTakeProbe", false)
+        }
         // debug builds: `--es HexCodeSampleSession long` opens home on that sample session (Settings › Developer)
         if (BuildConfig.DEBUG) {
             intent.getStringExtra("HexCodeSampleSession")?.let { label ->
@@ -268,6 +276,7 @@ private fun AfterFirstRun(
         }
     }
     val sample by services.sampleSession.collectAsStateWithLifecycle()
+    val takeFile = remember { services.takeAudio?.let { File(it).takeIf(File::isAbsolute) ?: File(context.filesDir, it) } }
     // Where link tiles for `localhost` open: the paired computer, as the phone reaches it.
     val computer by produceState<String?>(null) { value = services.computerAddress() }
     // Today's session reads the latest choices when it opens, so a change made in Settings reaches the next open.
@@ -282,7 +291,7 @@ private fun AfterFirstRun(
                     val app = context.applicationContext
                     VoiceEngineDictation(
                         services.voice,
-                        MicRecorder {
+                        takeFile?.let(::FileMicrophone) ?: MicRecorder {
                             ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                         },
                         services::reloadSpeech,
@@ -307,6 +316,11 @@ private fun AfterFirstRun(
         val cycles = services.pressProbe
         services.pressProbe = 0
         if (cycles > 0) homeModel.pressProbe(cycles)
+    }
+    LaunchedEffect(homeModel) {
+        val probe = services.takeProbe
+        services.takeProbe = false
+        if (probe && takeFile != null) homeModel.takeProbe(FileMicrophone(takeFile).seconds)
     }
     LaunchedEffect(homeModel) {
         services.networkPath.updates

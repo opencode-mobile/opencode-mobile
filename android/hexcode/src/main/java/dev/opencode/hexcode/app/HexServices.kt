@@ -101,6 +101,12 @@ class HexServices(
     /** Debug builds: home runs this many press, hold 1 s, release cycles once it shows (`--ei HexCodePressProbe`). */
     var pressProbe = 0
 
+    /** Debug builds: a WAV every take plays as the microphone (`--es HexCodeTakeAudio`). */
+    var takeAudio: String? = null
+
+    /** Debug builds: home runs one locked take of [takeAudio] once speech is ready (`--ez HexCodeTakeProbe`). */
+    var takeProbe = false
+
     /**
      * At process start (app-plan.md, The speech model): loads the speech model, once per process, when it's on the
      * phone or first run is done. Before that, first run's scan step starts the download ([loadSpeech]).
