@@ -121,6 +121,37 @@ public nonisolated struct SessionStateAPIClient: Sendable {
         return envelope.data
     }
 
+    // MARK: Sending
+
+    /// How a prompt reaches a running session (`Session.Inbox.Delivery`).
+    public nonisolated enum Delivery: String, Sendable, Equatable {
+        /// After the current turn.
+        case queue
+        /// At the next step (and at once for an idle session).
+        case steer
+    }
+
+    /// `POST /api/session/{id}/prompt` with `text` and `delivery`. Every prompt goes through the
+    /// inbox; the answer is that inbox item, whose id `cancelInbox` takes.
+    public func prompt(sessionID: String, text: String, delivery: Delivery) async throws -> InboxItemV2 {
+        nonisolated struct Body: Encodable {
+            let text: String
+            let delivery: String
+        }
+        let envelope: APIDataEnvelope<InboxItemV2> = try await send(
+            path: "api/session/\(sessionID)/prompt",
+            method: "POST",
+            body: Body(text: text, delivery: delivery.rawValue)
+        )
+        return envelope.data
+    }
+
+    /// `DELETE /api/session/{id}/inbox/{item}`: takes back a message not delivered yet. Repeating
+    /// it, or cancelling one already delivered, also answers 204.
+    public func cancelInbox(sessionID: String, itemID: String) async throws {
+        try await sendEmpty(path: "api/session/\(sessionID)/inbox/\(itemID)", method: "DELETE")
+    }
+
     // MARK: Generate and instructions
 
     /// `POST /api/session/{id}/generate`: text from the session's model and history, without
