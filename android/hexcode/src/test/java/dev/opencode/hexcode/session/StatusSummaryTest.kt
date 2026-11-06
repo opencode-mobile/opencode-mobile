@@ -97,15 +97,15 @@ class StatusSummaryTest {
     }
 
     @Test
-    fun theTitleAndNextAreClippedButNowIsNot() {
+    fun nothingIsCutByCharacters() {
         val title = "A title that runs on far longer than forty characters allow"
         val sentence = "Now I am doing something that takes a very long sentence to describe, longer than ninety characters. "
         val now = sentence.repeat(4).trim()
         val next = "Then something else that also takes more than sixty characters to say"
         val card = StatusSummary.parse("## $title\nNow: $now\nNext: $next") as StatusSummary.Card
-        assertEquals("A title that runs on far longer than…", card.title)
+        assertEquals(title, card.title)
         assertEquals(now, card.nowText)
-        assertEquals("Then something else that also takes more than sixty…", card.next)
+        assertEquals(next, card.next)
     }
 
     @Test

@@ -35,9 +35,6 @@ sealed interface TodoLabel {
  * out. Shapes as OpenCode v2.2.5 sends them.
  */
 object TodoList {
-    /** An item's text is clipped to this many characters shown on the to-do row. */
-    const val ITEM_MAX = 40
-
     /**
      * [todos] (`[{content, status}]`) as items, cancelled ones left out and an unknown status counted as pending; null
      * when it isn't a list. An empty list is a list: it clears the row.
@@ -89,7 +86,7 @@ object TodoList {
             items.indexOfFirst { it.status == TodoItem.Status.InProgress }.takeIf { it >= 0 }
                 ?: items.indexOfFirst { it.status == TodoItem.Status.Pending }.takeIf { it >= 0 }
                 ?: return TodoLabel.AllDone(items.size)
-        return TodoLabel.Current(current + 1, items.size, SummaryText.clip(items[current].content, ITEM_MAX))
+        return TodoLabel.Current(current + 1, items.size, items[current].content)
     }
 
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content

@@ -6,11 +6,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -22,7 +23,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexTheme
 
@@ -39,9 +42,11 @@ enum class HexProgressStep {
 }
 
 /**
- * The agent's to-do list in one line (`.fx-prog`): one 18 × 3 segment per item ([steps]), then [label] ("3 of 4 ·
- * <the item>") in `caption`, `text2`, on one line, and "›". Tapping it calls [onClick].
+ * The agent's to-do list (`.fx-prog`): one 18 × 3 segment per item ([steps]), then [label] ("3 of 4 · <the item>") in
+ * `caption`, `text2`, and "›". Nothing is cut: a label too long for the line beside the segments goes under them and
+ * wraps. Tapping it calls [onClick].
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HexProgress(
     steps: List<HexProgressStep>,
@@ -54,9 +59,10 @@ fun HexProgress(
     val pressed by source.collectIsPressedAsState()
     val labelColor by animateColorAsState(if (pressed) colors.text1 else colors.text2, HexTheme.motion.press(), label = "progress")
     val chevronColor by animateColorAsState(if (pressed) colors.text1 else colors.text3, HexTheme.motion.press(), label = "progress-chev")
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    FlowRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
         modifier =
             modifier
                 .semantics(mergeDescendants = true) {}
@@ -78,15 +84,15 @@ fun HexProgress(
                 )
             }
         }
-        // Inline code in the item gets its box (HexCodeText).
-        HexCodeText(
-            label,
-            style = HexTheme.type.caption,
-            color = labelColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        Text("›", style = HexTheme.type.caption, color = chevronColor)
+        // The item keeps its inline code boxes (HexCodeText); "›" ends the text, in text3.
+        val text =
+            remember(label, chevronColor) {
+                buildAnnotatedString {
+                    append(label)
+                    append("\u00A0")
+                    withStyle(SpanStyle(color = chevronColor)) { append("›") }
+                }
+            }
+        HexCodeText(text, style = HexTheme.type.caption, color = labelColor)
     }
 }

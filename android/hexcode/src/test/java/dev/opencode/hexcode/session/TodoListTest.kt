@@ -115,9 +115,9 @@ class TodoListTest {
     }
 
     @Test
-    fun theItemIsClippedAt40CharactersShown() {
-        val label = TodoList.label(listOf(TodoItem("Rewrite every test in `auth/` that leans on the old session helper", InProgress)))
-        assertEquals(TodoLabel.Current(1, 1, "Rewrite every test in `auth/` that leans…"), label)
+    fun theItemIsNeverCut() {
+        val item = "Rewrite every test in `auth/` that leans on the old session helper"
+        assertEquals(TodoLabel.Current(1, 1, item), TodoList.label(listOf(TodoItem(item, InProgress))))
     }
 
     private fun item(status: TodoItem.Status) = TodoItem("x", status)

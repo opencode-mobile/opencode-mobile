@@ -360,8 +360,6 @@ private fun Card(
                 stringResource(R.string.home_summary_you, you),
                 style = HexTheme.type.body,
                 color = colors.text3,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.alpha(dim),
             )
         next != null ->
@@ -410,7 +408,7 @@ private fun CardLabel(
     val colors = HexTheme.colors
     val style = HexTheme.type.caption
     if (phase == null) {
-        HexCodeText(summaryText(title), style = style, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        HexCodeText(summaryText(title), style = style, color = colors.text3)
         return
     }
     val template =
@@ -432,7 +430,7 @@ private fun CardLabel(
             }
         }
     val brush = if (still) null else shine(if (phase == CardPhase.Waiting) colors.amber else colors.text1, colors.text3)
-    HexCodeText(text, style = style, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis, brush = brush)
+    HexCodeText(text, style = style, color = colors.text3, brush = brush)
 }
 
 /**

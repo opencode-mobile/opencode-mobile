@@ -35,8 +35,8 @@ data class NowLine(
 @Serializable
 sealed interface StatusSummary {
     /**
-     * The reply in the card's shape, clipped to fit (app-plan.md, Clipping): [title] 40 characters shown, [now] at
-     * most 5 lines and 4 bullets (not cut by characters), [next] 60. The text keeps its inline Markdown ([SummaryText]);
+     * The reply in the card's shape (app-plan.md, Clipping): nothing is cut by characters; [now] keeps at most 5 lines
+     * and 4 bullets, and the card's fit makes it all fit. The text keeps its inline Markdown ([SummaryText]);
      * links in Now and Next are already their labels, and with the `Link:` lines they're the card's [links].
      */
     @Serializable
@@ -80,8 +80,6 @@ sealed interface StatusSummary {
     ) : StatusSummary
 
     companion object {
-        const val TITLE_MAX = 40
-        const val NEXT_MAX = 60
         const val FALLBACK_MAX = 300
 
         private val TITLE = Regex("""^##\s+(.*)$""")
@@ -155,9 +153,9 @@ sealed interface StatusSummary {
                 }
             val (nextText, nextLinks) = next?.let(SummaryLinks::pull) ?: (null to emptyList())
             return Card(
-                title = SummaryText.clip(shownTitle, TITLE_MAX),
+                title = shownTitle,
                 now = clipNow(pulled),
-                next = nextText?.let { SummaryText.clip(it, NEXT_MAX) },
+                next = nextText,
                 links = SummaryLinks.distinct(linkLines + nowLinks + nextLinks),
             )
         }
