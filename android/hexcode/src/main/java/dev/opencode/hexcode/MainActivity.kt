@@ -115,6 +115,12 @@ class MainActivity : ComponentActivity() {
         // debug builds: `--ei HexCodePressProbe 5` runs 5 press, hold 1 s and release cycles of the talk button through
         // the real code path once home shows, to time the microphone from logcat on a phone nobody is touching
         if (BuildConfig.DEBUG) services.pressProbe = intent.getIntExtra("HexCodePressProbe", 0)
+        // debug builds: `--es HexCodeSampleSession long` opens home on that sample session (Settings › Developer)
+        if (BuildConfig.DEBUG) {
+            intent.getStringExtra("HexCodeSampleSession")?.let { label ->
+                services.sampleSession.value = TodaySessionDemo.entries.firstOrNull { it.label == label }
+            }
+        }
         // debug builds: `--es HexCodeLastDate 2026-11-04` saves that as the last date a session was opened, before home
         // opens, to try the new-day notice
         if (BuildConfig.DEBUG) {

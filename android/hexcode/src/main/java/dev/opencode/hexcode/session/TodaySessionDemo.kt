@@ -24,6 +24,12 @@ enum class TodaySessionDemo(
     /** Idle, a card with no steps and no Next line. */
     Plain("plain"),
 
+    /** Idle, a Now of 150 characters (`nowLarge`). */
+    Long("long"),
+
+    /** Idle, a Now of about 300 characters (`nowSmall`, or smaller if the card doesn't fit). */
+    Longest("longest"),
+
     /** The reply didn't match the card shape. */
     Fallback("fallback"),
 
@@ -125,6 +131,8 @@ enum class TodaySessionDemo(
         when (this) {
             Fallback -> FALLBACK_REPLY
             Plain -> "## Login screen rewrite\nNow: Reading the auth tests to see what the old helper covers."
+            Long -> "## API client\nNow: $LONG_NOW\nNext: Fix token refresh in the shared client.\n$PLAN"
+            Longest -> "## Read-only mode first\nNow: $LONGEST_NOW\nNext: Add a read-only flag to the router.\n$PLAN"
             Needs ->
                 "## Login screen rewrite\nNow: Token refresh is done. Paused before changing login length.\n" +
                     "Next: Your answers, then the auth tests.\n- [x] Remove old session helper\n- [x] New login form\n" +
@@ -141,6 +149,19 @@ enum class TodaySessionDemo(
             "## Login screen rewrite\nNow: Wiring the new token refresh into the API client.\n" +
                 "Next: Run the auth tests, then fix whatever breaks.\n- [x] Remove old session helper\n- [x] New login form\n" +
                 "- [ ] Token refresh\n- [ ] Auth tests"
+
+        /** 150 characters. */
+        const val LONG_NOW =
+            "Three apps share one API client in packages/api: the web app, the phone app and the admin tool. Token " +
+                "refresh lives there, so one fix covers them all."
+
+        /** 298 characters. */
+        const val LONGEST_NOW =
+            "Mapping which screens need a signed-in user and which can open read-only. Settings, the project list and " +
+                "the session view can all be read without logging in. Billing and team admin both write data, so they " +
+                "stay behind login. This list becomes the read-only flag in the router next. Edits hide later."
+
+        private const val PLAN = "- [x] Read the code\n- [x] Map the screens\n- [ ] Router flag\n- [ ] Hide edits"
 
         const val FALLBACK_REPLY =
             "Okay, I finished the token refresh and now I am going through the auth tests one at a time. Two of them " +
