@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.designsystem.components
 
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -11,6 +12,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -53,30 +55,30 @@ fun HexCodeText(
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
+    /** Paints the text instead of [color] (a light sweeping across it); spans with their own colour keep it. */
+    brush: Brush? = null,
 ) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val fill = HexTheme.colors.tint(4.5f)
     val edge = HexTheme.colors.tint(7f)
     val ranges = remember(text) { text.getStringAnnotations(HEX_CODE_TAG, 0, text.length) }
     val spoken = remember(text) { text.text.replace("\u2005", "").replace("\u2060", "") }
-    Text(
-        text,
-        style = style,
-        color = color,
-        maxLines = maxLines,
-        overflow = overflow,
-        onTextLayout = { layout = it },
-        modifier =
-            modifier
-                // Screen readers get the plain words, without the spaces and joiners added for the boxes.
-                .clearAndSetSemantics { this.text = AnnotatedString(spoken) }
-                .drawBehind {
-                    val result = layout ?: return@drawBehind
-                    if (result.layoutInput.text != text) return@drawBehind
-                    val em = style.fontSize.toPx()
-                    ranges.forEach { drawCodeBoxes(result, it.start, it.end, em, fill, edge) }
-                },
-    )
+    val drawn =
+        modifier
+            // Screen readers get the plain words, without the spaces and joiners added for the boxes.
+            .clearAndSetSemantics { this.text = AnnotatedString(spoken) }
+            .drawBehind {
+                val result = layout ?: return@drawBehind
+                if (result.layoutInput.text != text) return@drawBehind
+                val em = style.fontSize.toPx()
+                ranges.forEach { drawCodeBoxes(result, it.start, it.end, em, fill, edge) }
+            }
+    if (brush != null) {
+        // A brush only paints through BasicText: Text's colour would cover it.
+        BasicText(text, drawn, style.copy(brush = brush), onTextLayout = { layout = it }, overflow = overflow, maxLines = maxLines)
+    } else {
+        Text(text, drawn, color = color, maxLines = maxLines, overflow = overflow, onTextLayout = { layout = it }, style = style)
+    }
 }
 
 /** One rounded box per line the code range [start] to [end] covers, around its glyphs. */

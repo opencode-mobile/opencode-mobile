@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.home
 
+import android.provider.Settings
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -40,13 +41,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.LinearGradientShader
+import androidx.compose.ui.graphics.Shader
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -64,7 +74,6 @@ import dev.opencode.hexcode.designsystem.components.HexLinkKind
 import dev.opencode.hexcode.designsystem.components.HexLinkTile
 import dev.opencode.hexcode.designsystem.components.HexProgress
 import dev.opencode.hexcode.designsystem.components.HexProgressStep
-import dev.opencode.hexcode.designsystem.components.HexSpinner
 import dev.opencode.hexcode.designsystem.components.HexStatusLine
 import dev.opencode.hexcode.designsystem.components.HexStatusTone
 import dev.opencode.hexcode.designsystem.components.HexTileRow
@@ -388,8 +397,10 @@ private fun Card(
 }
 
 /**
- * The label over Now: the title, or while the session is busy "Still working · <title>" with the green arc, and while
- * it waits for an answer "Waiting for you · <title>" with the amber dot. The new card's plain title follows the run.
+ * The label over Now (app-plan.md, Card label while working): the title, or while the session is busy "Still working ·
+ * <title>", and while it waits for an answer "Waiting for you · <title>". No icon: the top bar has the spinner. Instead
+ * a slow light sweeps across the words every 2.4 s, `text3` with a band of `text1` (`amber` while waiting); with
+ * animations off it's still, the status words in `text2`. The new card's plain title follows the run.
  */
 @Composable
 private fun CardLabel(
@@ -398,29 +409,73 @@ private fun CardLabel(
 ) {
     val colors = HexTheme.colors
     val style = HexTheme.type.caption
+    if (phase == null) {
+        HexCodeText(summaryText(title), style = style, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        return
+    }
+    val template =
+        if (title.isBlank()) {
+            stringResource(if (phase == CardPhase.Working) R.string.home_summary_working_bare else R.string.home_summary_waiting_bare)
+        } else {
+            stringResource(if (phase == CardPhase.Working) R.string.home_summary_working else R.string.home_summary_waiting, SUMMARY_MARK)
+        }
+    val status = template.substringBefore(SUMMARY_MARK)
+    val after = template.substringAfter(SUMMARY_MARK, "")
+    val still = reduceMotion()
     val text =
-        when (phase) {
-            null -> summaryText(title)
-            CardPhase.Working ->
-                if (title.isBlank()) {
-                    AnnotatedString(stringResource(R.string.home_summary_working_bare))
-                } else {
-                    summaryTextIn(stringResource(R.string.home_summary_working, SUMMARY_MARK), title)
-                }
-            CardPhase.Waiting ->
-                if (title.isBlank()) {
-                    AnnotatedString(stringResource(R.string.home_summary_waiting_bare))
-                } else {
-                    summaryTextIn(stringResource(R.string.home_summary_waiting, SUMMARY_MARK), title)
-                }
+        summaryText(title.takeIf { it.isNotBlank() }.orEmpty(), prefix = status, suffix = after).let { label ->
+            if (!still) {
+                label
+            } else {
+                // Still: the status words stand out a little instead (`text2`), the title stays `text3`.
+                AnnotatedString.Builder(label).apply { addStyle(SpanStyle(color = colors.text2), 0, status.length) }.toAnnotatedString()
+            }
         }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        when (phase) {
-            CardPhase.Working -> HexSpinner(size = 12.dp, tint = colors.green)
-            CardPhase.Waiting -> HexDot(HexDotTone.Amber)
-            null -> Unit
+    val brush = if (still) null else shine(if (phase == CardPhase.Waiting) colors.amber else colors.text1, colors.text3)
+    HexCodeText(text, style = style, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis, brush = brush)
+}
+
+/**
+ * The prototype's `.lab-shine`: [base] with a band of [light] crossing the text left to right every 2.4 s. The
+ * gradient is three times the text's width (light at its middle fifth), and slides across it.
+ */
+@Composable
+private fun shine(
+    light: Color,
+    base: Color,
+): Brush {
+    val transition = rememberInfiniteTransition(label = "shine")
+    val progress by transition.animateFloat(
+        0f,
+        1f,
+        infiniteRepeatable(tween(SHINE_MS, easing = LinearEasing), RepeatMode.Restart),
+        label = "shine-progress",
+    )
+    return remember(light, base, progress) {
+        object : ShaderBrush() {
+            override fun createShader(size: Size): Shader {
+                val width = size.width
+                // From the band before the text (offset −2 widths) to after it (offset 0), as background-position 100% → 0%.
+                val start = -2f * width + 2f * width * progress
+                return LinearGradientShader(
+                    from = Offset(start, 0f),
+                    to = Offset(start + 3f * width, 0f),
+                    colors = listOf(base, base, light, base, base),
+                    colorStops = listOf(0f, 0.4f, 0.5f, 0.6f, 1f),
+                )
+            }
         }
-        HexCodeText(text, style = style, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+private const val SHINE_MS = 2_400
+
+/** Animations are off (developer options or accessibility: animator duration scale 0). */
+@Composable
+private fun reduceMotion(): Boolean {
+    val context = LocalContext.current
+    return remember {
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     }
 }
 
