@@ -52,6 +52,35 @@ object SpeechModels {
      */
     const val DICTATION_DEFAULT = "parakeet-v2-onnx-int8"
 
+    /**
+     * The pause detector that cuts a locked take into parts while it records (app-plan.md, Dictation › Locked takes):
+     * Silero VAD v5 on sherpa-onnx. Not sherpa-onnx's default `silero_vad.onnx`, which is v4 and lost half the pauses in
+     * noise and at the Pixel's quiet input (spike S3). Pinned to a Hugging Face revision and checked by its SHA-256 like
+     * the speech models, and fetched with dictation's model; it isn't one the lab lists.
+     */
+    val PAUSES =
+        SpeechModel(
+            id = "silero-vad-v5",
+            title = "Silero VAD v5",
+            engine = "sherpa-onnx",
+            kind = "silero_vad",
+            params = 2_000_000,
+            license = "MIT",
+            source = "https://huggingface.co/csukuangfj/vad",
+            note = "Finds the pauses a locked take is cut at.",
+            librispeechWer = null,
+            fleursWer = null,
+            files =
+                listOf(
+                    ModelFile(
+                        "silero_vad_v5.onnx",
+                        "https://huggingface.co/csukuangfj/vad/resolve/fba88cd2e921609e7675c3aaf51e0b9b295da4bc/silero_vad_v5.onnx",
+                        2_313_101,
+                        "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396",
+                    ),
+                ),
+        )
+
     fun load(context: Context): List<SpeechModel> {
         val json =
             JSONObject(
@@ -140,11 +169,12 @@ class ModelStore(
     }
 
     /**
-     * Deletes what no listed model uses: other models' folders, and loose files such as the GGUF models (and their
-     * half-done `.part` downloads) of the removed transcribe.cpp engine. Returns the names it removed.
+     * Deletes what no listed model, nor the pause detector ([SpeechModels.PAUSES]), uses: other models' folders, and
+     * loose files such as the GGUF models (and their half-done `.part` downloads) of the removed transcribe.cpp engine.
+     * Returns the names it removed.
      */
     fun removeUnlisted(models: List<SpeechModel>): List<String> {
-        val keep = models.map { it.id }.toSet()
+        val keep = models.map { it.id }.toSet() + SpeechModels.PAUSES.id
         return root
             .listFiles()
             .orEmpty()

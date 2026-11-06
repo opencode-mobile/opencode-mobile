@@ -6,6 +6,8 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.SystemClock
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -93,16 +95,40 @@ class VoiceEngine(
                 "${cores.count} cores, ${cores.fastCount} fast",
             ).joinToString(" · ")
 
-    /** Downloads the chosen model if needed and loads it. Safe to call again. */
+    /**
+     * Whether locked takes can be cut at pauses: the pause detector ([SpeechModels.PAUSES]) is on the phone and loads.
+     * It comes with the speech model, but never holds it back: without it a locked take is turned into text whole.
+     */
+    @Volatile var pausesReady: Boolean = false
+        private set
+
+    /**
+     * Downloads the chosen model if needed and loads it, with the pause detector. Safe to call again. A first download
+     * fetches the detector alongside the model, in the same progress; on a phone that already has the model, the
+     * detector is fetched once the model is ready.
+     */
     suspend fun prepare() {
         lock.withLock {
-            if (engine != null) return
+            if (engine != null) {
+                withContext(Dispatchers.IO) { preparePauses() }
+                return
+            }
             val model = active.value
             withContext(Dispatchers.IO) {
                 try {
                     if (!store.isInstalled(model)) {
-                        store.download(model) { done, all ->
+                        val pauses = SpeechModels.PAUSES.takeUnless { store.isInstalled(it) }
+                        val all = model.bytes + (pauses?.bytes ?: 0)
+                        val progress = { done: Long ->
                             state.value = ModelState.Preparing(done.toDouble() / all, "Downloading · ${done / 1_000_000} MB")
+                        }
+                        store.download(model) { done, _ -> progress(done) }
+                        if (pauses != null) {
+                            try {
+                                store.download(pauses) { done, _ -> progress(model.bytes + done) }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "the pause detector didn't download: ${e.message}")
+                            }
                         }
                     }
                     state.value = ModelState.Preparing(1.0, "Loading the model")
@@ -115,8 +141,36 @@ class VoiceEngine(
                     // than "Getting speech ready" for good.
                     state.value = ModelState.Failed(e.message ?: "Could not get speech ready")
                 }
+                if (state.value == ModelState.Ready) preparePauses()
             }
         }
+    }
+
+    /** Fetches the pause detector if it's missing and checks that it loads; a failure only leaves takes uncut. */
+    private fun preparePauses() {
+        if (pausesReady) return
+        val pauses = SpeechModels.PAUSES
+        try {
+            if (!store.isInstalled(pauses)) store.download(pauses) { _, _ -> }
+            val started = SystemClock.elapsedRealtime()
+            PauseDetector(store.file(pauses, pauses.files.single().name).path).close()
+            pausesReady = true
+            Log.i(TAG, "pause detector loaded in ${SystemClock.elapsedRealtime() - started} ms")
+        } catch (e: Exception) {
+            Log.w(TAG, "the pause detector isn't ready, so locked takes are transcribed whole: ${e.message}", e)
+        } catch (e: Error) {
+            Log.w(TAG, "the pause detector didn't load, so locked takes are transcribed whole: ${e.message}", e)
+        }
+    }
+
+    /**
+     * A new pause detector for one take (app-plan.md, Dictation › Locked takes), or null when it isn't ready. Each take
+     * gets its own, made on the thread that feeds it.
+     */
+    fun pauseDetector(): PauseDetector? {
+        if (!pausesReady) return null
+        val pauses = SpeechModels.PAUSES
+        return PauseDetector(store.file(pauses, pauses.files.single().name).path)
     }
 
     /** Switches dictation to [model] with [options] and gets it ready. */
@@ -259,6 +313,8 @@ class VoiceEngine(
 
     companion object {
         const val SAMPLE_RATE = 16_000
+
+        private const val TAG = "VoiceEngine"
 
         /** Reads a 16-bit mono WAV into samples (debug samples and tests). */
         fun readWav(file: File): FloatArray = readWav(file.readBytes())
