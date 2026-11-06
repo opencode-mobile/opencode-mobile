@@ -103,6 +103,20 @@ public nonisolated struct SessionStateAPIClient: Sendable {
 
     // MARK: Pending items and inbox
 
+    /// `GET /api/session/{id}/message?type=assistant`, newest first. A `cursor` (from the previous
+    /// page) carries the order; the server refuses `order` with it, but not `type`.
+    public func assistantMessages(sessionID: String, limit: Int? = nil, cursor: String? = nil) async throws -> MessagePageV2 {
+        var query = [URLQueryItem(name: "type", value: "assistant")]
+        if let cursor {
+            query.append(URLQueryItem(name: "cursor", value: cursor))
+        } else {
+            query.append(URLQueryItem(name: "order", value: "desc"))
+        }
+        if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
+        let envelope: APIListEnvelope<SessionMessageV2> = try await send(path: "api/session/\(sessionID)/message", query: query)
+        return MessagePageV2(messages: envelope.data, nextCursor: envelope.cursor?.next)
+    }
+
     /// `GET /api/session/{id}/permission`: the session's own pending approvals (not its children's).
     public func pendingPermissions(sessionID: String) async throws -> [PendingPermissionV2] {
         let envelope: APIListEnvelope<PendingPermissionV2> = try await send(path: "api/session/\(sessionID)/permission")
