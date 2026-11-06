@@ -141,6 +141,14 @@ fun HomeScreen(
             // the agent is working or needs input.
             val agent = today.agent
             val hold = rememberHexTalkHold()
+            // The locked take's clock in the talk button ticks while it records.
+            var lockedNow by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(state.talk) {
+                while (state.talk == TalkMode.Locked) {
+                    lockedNow = System.currentTimeMillis()
+                    delay(250)
+                }
+            }
             // The hold hint fades in a quarter second into a hold, so a quick take never shows it.
             var hintShown by remember { mutableStateOf(false) }
             LaunchedEffect(hold.holding) {
@@ -156,7 +164,8 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    HexIconButton(HexIcons.clip, stringResource(R.string.home_attach), onClick = vm::notInThisVersion)
+                    val dock = HomeDock.of(state.talk)
+                    DockSide(dock.left, stopLive = false, vm = vm)
                     HexTalkButton(
                         state =
                             when (state.talk) {
@@ -186,16 +195,11 @@ fun HomeScreen(
                         onTapLocked = vm::tapLocked,
                         modifier = Modifier.weight(1f),
                         hold = hold,
+                        clock = if (state.talk == TalkMode.Locked) clock(lockedNow - state.takeStartedAt) else null,
                         dropActionLabel = stringResource(R.string.home_hold_drop),
                         onDrop = vm::dropTakeNow,
                     )
-                    HexIconButton(
-                        HexIcons.stop,
-                        stringResource(R.string.home_stop),
-                        onClick = vm::notInThisVersion,
-                        tone = HexIconButtonTone.Stop,
-                        enabled = agent is AgentStatus.Working || agent == AgentStatus.NeedsInput,
-                    )
+                    DockSide(dock.right, stopLive = agent is AgentStatus.Working || agent == AgentStatus.NeedsInput, vm = vm)
                 }
                 // 10 dp above the talk button, over where the waiting line and the draft actions are (both hidden while
                 // a take records), so nothing moves.
@@ -257,6 +261,40 @@ private fun HoldHintLine(
             releaseLockLabel = stringResource(R.string.home_hold_release_lock),
             releaseDropLabel = stringResource(R.string.home_hold_release_drop),
         )
+    }
+}
+
+/**
+ * One end of the dock, crossfading as it changes: attach and the agent's stop; or, while a take is locked, ✕ to drop
+ * the take and ✓ to finish it (app-plan.md, Dictation › Locked take). Attach and stop come with M3 and M4; until then a
+ * tap says so, and stop is dimmed unless [stopLive].
+ */
+@Composable
+private fun DockSide(
+    button: DockButton,
+    stopLive: Boolean,
+    vm: HomeViewModel,
+) {
+    Crossfade(button, animationSpec = HexTheme.motion.fade(), label = "dock-side") { shown ->
+        when (shown) {
+            DockButton.Attach -> HexIconButton(HexIcons.clip, stringResource(R.string.home_attach), onClick = vm::notInThisVersion)
+            DockButton.Stop ->
+                HexIconButton(
+                    HexIcons.stop,
+                    stringResource(R.string.home_stop),
+                    onClick = vm::notInThisVersion,
+                    tone = HexIconButtonTone.Stop,
+                    enabled = stopLive,
+                )
+            DockButton.DropTake -> HexIconButton(HexIcons.x, stringResource(R.string.home_locked_drop), onClick = vm::dropTakeNow)
+            DockButton.Done ->
+                HexIconButton(
+                    HexIcons.check,
+                    stringResource(R.string.home_locked_done),
+                    onClick = vm::tapLocked,
+                    tone = HexIconButtonTone.Strong,
+                )
+        }
     }
 }
 

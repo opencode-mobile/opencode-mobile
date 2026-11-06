@@ -196,8 +196,8 @@ fun HexRoundButton(
     }
 }
 
-/** What a [HexIconButton] is for: most are neutral; Stop is red. */
-enum class HexIconButtonTone { Default, Stop }
+/** What a [HexIconButton] is for: most are neutral (`text2`); Stop is red; Strong is `text1`, as Done on a locked take. */
+enum class HexIconButtonTone { Default, Stop, Strong }
 
 /** The 46 pt borderless icon button (`.ghost`), radius 12. Disabled fades to 35 %. */
 @Composable
@@ -228,6 +228,7 @@ fun HexIconButton(
         val tint =
             when {
                 tone == HexIconButtonTone.Stop -> colors.red
+                tone == HexIconButtonTone.Strong -> colors.text1
                 pressed -> colors.text1
                 else -> colors.text2
             }

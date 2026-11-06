@@ -195,6 +195,8 @@ fun HexTalkButton(
     onTapLocked: () -> Unit,
     modifier: Modifier = Modifier,
     hold: HexTalkHold = rememberHexTalkHold(),
+    /** The take's clock (`0:12`), shown at the right while locked. */
+    clock: String? = null,
     /** Screen readers: the "Drop" action's name; it shows while a take records. */
     dropActionLabel: String? = null,
     /** Screen readers' "Drop": forgets the take that's recording. */
@@ -324,11 +326,32 @@ fun HexTalkButton(
                 level,
                 Modifier
                     .fillMaxSize()
-                    .padding(start = if (locked) 40.dp else 14.dp, end = if (locked) 16.dp else 14.dp)
+                    .padding(
+                        start = if (locked) 40.dp else 14.dp,
+                        end =
+                            if (locked &&
+                                clock != null
+                            ) {
+                                56.dp
+                            } else if (locked) {
+                                16.dp
+                            } else {
+                                14.dp
+                            },
+                    )
                     // The prototype nudges the meter 6 px towards the side being dragged to.
                     .offset { IntOffset(((lock - drop) * 6.dp.toPx()).roundToInt(), 0) }
                     .alpha(if (holding) meterAlpha else 1f),
             )
+            if (locked && clock != null) {
+                Text(
+                    clock,
+                    style = HexTheme.type.mono,
+                    color = colors.text3,
+                    maxLines = 1,
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp),
+                )
+            }
             if (locked) {
                 Icon(
                     HexIcons.lock,

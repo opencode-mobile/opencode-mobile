@@ -423,10 +423,11 @@ private fun RoundButtonsSample() {
                 HexRoundButton(HexIcons.target, "Goal", onClick = {}, selected = true)
             }
         }
-        StateSample("HexIconButton: default, stop, disabled") {
+        StateSample("HexIconButton: default, stop, strong, disabled") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HexIconButton(HexIcons.clip, "Attach", onClick = {}, tone = HexIconButtonTone.Default)
                 HexIconButton(HexIcons.stop, "Stop", onClick = {}, tone = HexIconButtonTone.Stop)
+                HexIconButton(HexIcons.check, "Done", onClick = {}, tone = HexIconButtonTone.Strong)
                 HexIconButton(HexIcons.clip, "Attach", onClick = {}, enabled = false)
             }
         }
@@ -615,7 +616,9 @@ private fun TalkButtonStates(level: () -> Float) {
             HexTalkButton(HexTalkState.Draft, "Hold to keep talking", "Hold to keep talking", true, { 0f }, { false }, {}, {})
         }
         StateSample("holding") { HexTalkButton(HexTalkState.Holding, "", "Recording", true, level, { false }, {}, {}) }
-        StateSample("locked") { HexTalkButton(HexTalkState.Locked, "", "Recording, hands-free", true, level, { false }, {}, {}) }
+        StateSample("locked, with the take's clock") {
+            HexTalkButton(HexTalkState.Locked, "", "Recording, hands-free", true, level, { false }, {}, {}, clock = "0:12")
+        }
         StateSample("disabled") { HexTalkButton(HexTalkState.Idle, "Hold to talk", "Hold to talk", false, { 0f }, { false }, {}, {}) }
     }
 }
