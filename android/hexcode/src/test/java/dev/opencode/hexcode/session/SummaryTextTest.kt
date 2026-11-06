@@ -111,7 +111,7 @@ class SummaryTextTest {
                 "Link: Dev server | http://localhost:5173/login\nLink: ftp://nope\nLink: PR | https://github.com/o/r/pull/1\n" +
                 "Link: Third | https://example.com"
         val card = StatusSummary.parse(reply) as StatusSummary.Card
-        assertEquals("The form is at localhost:5173 now.", card.now)
+        assertEquals("The form is at localhost:5173 now.", card.nowText)
         assertEquals("Read the PR.", card.next)
         assertEquals(
             listOf(SummaryLink("Dev server", "http://localhost:5173/login"), SummaryLink("PR", "https://github.com/o/r/pull/1")),
@@ -152,8 +152,10 @@ class SummaryTextTest {
         // As the app reads its settings: a card saved with fields it no longer has (steps) still reads.
         val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
         assertEquals(saved, json.decodeFromString(SavedSummary.serializer(), json.encodeToString(SavedSummary.serializer(), saved)))
-        // A card saved before links existed still reads, with none.
+        // A card saved before links and Now lines existed still reads: no links, Now as one plain line.
         val old = """{"sessionId":"s1","summary":{"type":"card","title":"T","now":"N","next":null,"steps":[]},"updatedAt":1}"""
-        assertEquals(emptyList<SummaryLink>(), (json.decodeFromString(SavedSummary.serializer(), old).summary as StatusSummary.Card).links)
+        val read = json.decodeFromString(SavedSummary.serializer(), old).summary as StatusSummary.Card
+        assertEquals(emptyList<SummaryLink>(), read.links)
+        assertEquals(listOf(NowLine("N")), read.now)
     }
 }

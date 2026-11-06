@@ -24,7 +24,7 @@ class StatusSummaryTest {
         assertEquals(
             StatusSummary.Card(
                 title = "Token refresh",
-                now = "Adding a refresh on 401 to the API client.",
+                now = listOf(NowLine("Adding a refresh on 401 to the API client.")),
                 next = "Rerun the auth tests",
             ),
             StatusSummary.parse(full),
@@ -92,29 +92,20 @@ class StatusSummaryTest {
                 "## First\n## Second\nNow: One.\nNow: Two.\nNext: A\nNext: B\n- [ ] 1\n- [X] 2\n- [x] 3",
             ) as StatusSummary.Card
         assertEquals("First", card.title)
-        assertEquals("One.", card.now)
+        assertEquals("One.", card.nowText)
         assertEquals("A", card.next)
     }
 
     @Test
-    fun theCardIsClippedToTitle40Now300Next60() {
+    fun theTitleAndNextAreClippedButNowIsNot() {
         val title = "A title that runs on far longer than forty characters allow"
         val sentence = "Now I am doing something that takes a very long sentence to describe, longer than ninety characters. "
         val now = sentence.repeat(4).trim()
         val next = "Then something else that also takes more than sixty characters to say"
         val card = StatusSummary.parse("## $title\nNow: $now\nNext: $next") as StatusSummary.Card
         assertEquals("A title that runs on far longer than…", card.title)
-        assertTrue(card.now.length <= 300 && card.now.endsWith("…"))
-        assertTrue(card.now.startsWith(sentence.repeat(2)))
+        assertEquals(now, card.nowText)
         assertEquals("Then something else that also takes more than sixty…", card.next)
-        assertTrue(card.title.length <= 40 && card.next!!.length <= 60)
-    }
-
-    @Test
-    fun aNowOf300CharactersIsKeptWhole() {
-        val now = "x".repeat(299) + "."
-        val card = StatusSummary.parse("## Long\nNow: $now") as StatusSummary.Card
-        assertEquals(now, card.now)
     }
 
     @Test
@@ -123,7 +114,7 @@ class StatusSummaryTest {
             "## Login rewrite\nNow: Three apps share one API client.\nNext: Run the tests.\n- [x] Read the code\n" +
                 "Link: Dev server | http://localhost:5173/login\nLink: PR | https://github.com/o/r/pull/1"
         val card = StatusSummary.parse(reply) as StatusSummary.Card
-        assertEquals("Three apps share one API client.", card.now)
+        assertEquals("Three apps share one API client.", card.nowText)
         assertEquals("Run the tests.", card.next)
     }
 

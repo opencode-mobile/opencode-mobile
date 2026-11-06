@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.home
 
+import dev.opencode.hexcode.session.NowLine
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -44,5 +45,24 @@ class NowSizeTest {
     @Test
     fun aCardThatNeverFitsEndsAtFitWithAnEllipsis() {
         assertEquals(NowSize.Fitted(NowSize.Fit, fits = false), NowSize.fit(NowSize.Display) { false })
+    }
+
+    @Test
+    fun eachLineAfterTheFirstCountsAs20MoreCharacters() {
+        // 60 + 20: display; a second line of 20 makes 60 + 20 + 20 = 100: nowLarge.
+        assertEquals(NowSize.Display, NowSize.forLines(listOf(NowLine("a".repeat(60)), NowLine("b".repeat(10)))))
+        assertEquals(NowSize.Large, NowSize.forLines(listOf(NowLine("a".repeat(60)), NowLine("b".repeat(20)))))
+        // Markers and backticks don't count.
+        assertEquals(NowSize.Display, NowSize.forLines(listOf(NowLine("`" + "a".repeat(90) + "`"))))
+    }
+
+    @Test
+    fun aNowWithBulletsIsAtMostNowMedium() {
+        assertEquals(
+            NowSize.Medium,
+            NowSize.forLines(listOf(NowLine("Two things:"), NowLine("a", bullet = true), NowLine("b", bullet = true))),
+        )
+        val long = List(4) { NowLine("x".repeat(60), bullet = true) }
+        assertEquals(NowSize.Small, NowSize.forLines(listOf(NowLine("Lead.")) + long))
     }
 }

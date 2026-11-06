@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.home
 
+import dev.opencode.hexcode.session.NowLine
 import dev.opencode.hexcode.session.StatusSummary
 import dev.opencode.hexcode.session.SummaryText
 
@@ -36,6 +37,20 @@ enum class NowSize {
                 characters <= 220 -> Medium
                 else -> Small
             }
+
+        /** Each line of Now after the first counts as this many characters more. */
+        const val LINE_WEIGHT = 20
+
+        /**
+         * The size for Now's [lines]: by their effective length, the characters shown plus [LINE_WEIGHT] for each line
+         * after the first; a Now with bullets is at most [Medium].
+         */
+        fun forLines(lines: List<NowLine>): NowSize {
+            val effective =
+                lines.sumOf { StatusSummary.length(SummaryText.shown(it.text)) } + LINE_WEIGHT * (lines.size - 1).coerceAtLeast(0)
+            val size = forLength(effective)
+            return if (lines.any { it.bullet } && size < Medium) Medium else size
+        }
 
         /** The size for [text], counted in characters shown (without Markdown symbols), as clipping counts. */
         fun forText(text: String): NowSize = forLength(StatusSummary.length(SummaryText.shown(text)))

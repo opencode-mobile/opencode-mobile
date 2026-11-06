@@ -44,7 +44,7 @@ class SummaryRefresherTest {
             advanceUntilIdle()
             assertEquals(1, source.prompts.size)
             assertEquals(SessionPrompts.SUMMARY, source.prompts.single())
-            assertEquals(StatusSummary.Card("Task", "Working.", null, emptyList()), summary.state.value.summary)
+            assertEquals(StatusSummary.Card("Task", listOf(NowLine("Working.")), null, emptyList()), summary.state.value.summary)
         }
 
     @Test
@@ -99,7 +99,7 @@ class SummaryRefresherTest {
             summary.refresh()
             advanceUntilIdle()
             assertFalse(summary.state.value.failed)
-            assertEquals("Still working.", (summary.state.value.summary as StatusSummary.Card).now)
+            assertEquals("Still working.", (summary.state.value.summary as StatusSummary.Card).nowText)
         }
 
     @Test
