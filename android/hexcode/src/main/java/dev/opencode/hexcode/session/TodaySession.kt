@@ -45,7 +45,16 @@ data class TodayState(
     val queued: List<InboxEntry> = emptyList(),
     /** Show the new-day notice; [TodaySession.newDayShown] clears it. */
     val newDayNotice: Boolean = false,
+    /** The agent's to-do list; empty when it keeps none (no row). */
+    val todos: List<TodoItem> = emptyList(),
+    /** Subagents running now. */
+    val subagentsRunning: Int = 0,
+    /** When each agent shell running now started. */
+    val shellStarts: List<Long> = emptyList(),
 ) {
+    /** What runs besides the session at [now], for "N running · Details ›": subagents, and shells after 10 s. */
+    fun running(now: Long): Int = subagentsRunning + shellStarts.count { now - it >= SHELL_SHOWN_MS }
+
     /** The top bar's state; null (an empty slot) until today's session is open. */
     val agent: AgentStatus?
         get() = if (setup is SessionSetup.Ready) AgentStatus.of(streamUp, pendingInput != null, busySince) else null
@@ -295,6 +304,14 @@ class TodaySession(
                 pendingInput = state?.firstPending,
                 waiting = state?.waiting ?: 0,
                 queued = state?.queued.orEmpty(),
+                todos = state?.todos.orEmpty(),
+                subagentsRunning = state?.runningChildren?.size ?: 0,
+                shellStarts =
+                    state
+                        ?.shells
+                        ?.values
+                        ?.toList()
+                        .orEmpty(),
             )
         }
     }

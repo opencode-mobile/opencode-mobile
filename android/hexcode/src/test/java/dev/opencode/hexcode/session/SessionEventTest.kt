@@ -2,13 +2,14 @@ package dev.opencode.hexcode.session
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Payloads as OpenCode v2.2.5 sends them (m2-api-notes.md, §4, captured live). */
 class SessionEventTest {
     @Test
-    fun theTypesAreTheExactSixteenThePlanLists() {
-        assertEquals(16, SessionEvent.TYPES.size)
+    fun theTypesAreTheExactSeventeenThePlanLists() {
+        assertEquals(17, SessionEvent.TYPES.size)
         assertEquals(SessionEvent.TYPES.distinct(), SessionEvent.TYPES)
         assertEquals(listOf<String>(), SessionEvent.TYPES.filter { '*' in it || ',' in it })
     }
@@ -138,5 +139,29 @@ class SessionEventTest {
                 """{"type":"permission.asked","data":{"id":"per_2","sessionID":"ses_1","action":"edit","resources":[],"message":"Edit the config"}}""",
             ),
         )
+    }
+
+    @Test
+    fun aToolSuccessWithTodosIsTheNewList() {
+        val line =
+            """{"id":"evt_1","created":5,"type":"session.tool.success","data":{"sessionID":"ses_1","assistantMessageID":"msg_1",""" +
+                """"id":"call-1","content":[{"type":"text","text":"Todos updated: 0/1 completed"}],""" +
+                """"metadata":{"todos":[{"content":"read math.ts","status":"in_progress"}],"truncated":false},"executed":false}}"""
+        assertEquals(
+            SessionEvent.TodosUpdated("ses_1", listOf(TodoItem("read math.ts", TodoItem.Status.InProgress))),
+            SessionEvent.decode(line),
+        )
+    }
+
+    @Test
+    fun anotherToolsSuccessIsIgnored() {
+        val line =
+            """{"type":"session.tool.success","data":{"sessionID":"ses_1","id":"call-2","content":[],"metadata":{"truncated":false}}}"""
+        assertEquals(null, SessionEvent.decode(line))
+    }
+
+    @Test
+    fun theStreamAsksForToolSuccess() {
+        assertTrue("session.tool.success" in SessionEvent.TYPES)
     }
 }

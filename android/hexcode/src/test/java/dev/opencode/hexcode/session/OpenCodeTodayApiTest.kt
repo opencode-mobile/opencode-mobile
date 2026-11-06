@@ -14,6 +14,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -143,5 +144,52 @@ class OpenCodeTodayApiTest {
             val pending = today.snapshot("ses_1").pending
             assertEquals(listOf("frm_1addb0000001bbbb", "per_1addc0000001aaaa"), pending.map { it.id })
             assertEquals(listOf("Database", "Edit the config"), pending.map { it.text })
+        }
+
+    @Test
+    fun theToDoListIsTheNewestCompletedTodowriteAcrossPages() =
+        runTest {
+            val today =
+                api { path ->
+                    when (path) {
+                        "/api/session/active" -> """{"data":{}}"""
+                        "/api/session/ses_1" -> """{"data":{"id":"ses_1","time":{"created":1,"updated":2,"busy":5}}}"""
+                        "/api/session?parentID" -> """{"data":[],"cursor":{"next":null}}"""
+                        "/api/session/ses_1/message" ->
+                            if (requests.count { it.endsWith("/message") } == 1) {
+                                // The first page has no to-do call; the next one does.
+                                """{"data":[{"id":"msg_3","type":"assistant","content":[{"type":"text","text":"Done."}]}],""" +
+                                    """"cursor":{"next":"c2"}}"""
+                            } else {
+                                """{"data":[{"id":"msg_2","type":"assistant","content":[{"type":"tool","name":"todowrite","state":""" +
+                                    """{"status":"completed","input":{"todos":[]},"metadata":{"todos":""" +
+                                    """[{"content":"a","status":"completed"},""" +
+                                    """{"content":"b","status":"cancelled"}]}}}]}],"cursor":{"next":"c3"}}"""
+                            }
+                        else -> """{"data":[]}"""
+                    }
+                }
+            val snapshot = today.snapshot("ses_1")
+            assertEquals(listOf(TodoItem("a", TodoItem.Status.Completed)), snapshot.todos)
+            assertTrue(snapshot.todosRead)
+            assertEquals(2, requests.count { it.endsWith("/message") })
+        }
+
+    @Test
+    fun aToDoListThatCanNotBeReadLeavesTheRestOfTheSnapshot() =
+        runTest {
+            val today =
+                api { path ->
+                    when (path) {
+                        "/api/session/active" -> """{"data":{"ses_1":{"type":"running"}}}"""
+                        "/api/session/ses_1" -> """{"data":{"id":"ses_1","time":{"created":1,"updated":2,"busy":5}}}"""
+                        "/api/session?parentID" -> """{"data":[],"cursor":{"next":null}}"""
+                        "/api/session/ses_1/message" -> "not json"
+                        else -> """{"data":[]}"""
+                    }
+                }
+            val snapshot = today.snapshot("ses_1")
+            assertEquals(5L, snapshot.busySince)
+            assertFalse(snapshot.todosRead)
         }
 }

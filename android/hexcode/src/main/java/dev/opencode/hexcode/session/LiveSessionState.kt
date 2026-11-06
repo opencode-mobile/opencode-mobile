@@ -18,6 +18,12 @@ data class LiveSnapshot(
     /** Pending approvals and questions of the session and its running subagents, oldest first. */
     val pending: List<PendingItem>,
     val inbox: List<InboxEntry>,
+    /** The subagents that are running now. */
+    val runningChildren: List<String> = emptyList(),
+    /** The agent's to-do list from its newest `todowrite` call; empty when there is none. */
+    val todos: List<TodoItem> = emptyList(),
+    /** False when the to-do list couldn't be read: the one already shown stays. */
+    val todosRead: Boolean = true,
 )
 
 /** What an event asks of the summary. */
@@ -37,17 +43,28 @@ data class LiveSessionState(
     val busySince: Long? = null,
     val hasRun: Boolean = false,
     val children: Set<String> = emptySet(),
-    val shells: Set<String> = emptySet(),
+    /** Subagents running now. */
+    val runningChildren: Set<String> = emptySet(),
+    /** Agent shells running now, with when each started. */
+    val shells: Map<String, Long> = emptyMap(),
     /** Oldest first. */
     val pending: List<PendingItem> = emptyList(),
     /** In arrival order. */
     val inbox: List<InboxEntry> = emptyList(),
+    /** The agent's to-do list; empty when it keeps none. */
+    val todos: List<TodoItem> = emptyList(),
 ) {
     /** Messages that send after this turn. */
     val waiting: Int get() = queued.size
 
     /** The messages that send after this turn, oldest first. */
     val queued: List<InboxEntry> get() = inbox.filter { it.delivery == "queue" }
+
+    /**
+     * What runs besides the session itself at [now], as Running now counts it: its subagents, and agent shells running
+     * for [SHELL_SHOWN_MS] or longer.
+     */
+    fun running(now: Long): Int = runningChildren.size + shells.values.count { now - it >= SHELL_SHOWN_MS }
 
     /** The question or approval the hint card shows: the oldest. */
     val firstPending: PendingItem? get() = pending.firstOrNull()
@@ -60,8 +77,10 @@ data class LiveSessionState(
             busySince = snapshot.busySince,
             hasRun = hasRun || snapshot.hasRun,
             children = snapshot.children.toSet(),
+            runningChildren = snapshot.runningChildren.toSet(),
             pending = snapshot.pending,
             inbox = snapshot.inbox,
+            todos = if (snapshot.todosRead) snapshot.todos else todos,
         )
 
     /** Without inbox item [id], once a DELETE took it back: the row goes before the event says so. */
@@ -75,10 +94,18 @@ data class LiveSessionState(
         when (event) {
             SessionEvent.Connected -> this to null
             is SessionEvent.ExecutionStarted ->
-                // One run includes the queued messages delivered during it: the first start is kept.
-                if (event.sessionId != rootId) this to null else copy(busySince = busySince ?: event.at ?: now, hasRun = true) to null
+                when (event.sessionId) {
+                    // One run includes the queued messages delivered during it: the first start is kept.
+                    rootId -> copy(busySince = busySince ?: event.at ?: now, hasRun = true) to null
+                    in children -> copy(runningChildren = runningChildren + event.sessionId) to null
+                    else -> this to null
+                }
             is SessionEvent.ExecutionEnded ->
-                if (event.sessionId != rootId) this to null else copy(busySince = null, hasRun = true) to LiveEffect.RunEnded
+                when (event.sessionId) {
+                    rootId -> copy(busySince = null, hasRun = true) to LiveEffect.RunEnded
+                    in children -> copy(runningChildren = runningChildren - event.sessionId) to null
+                    else -> this to null
+                }
             is SessionEvent.PermissionAsked -> addPending(event.item) to null
             is SessionEvent.FormCreated -> addPending(event.item) to null
             is SessionEvent.PermissionReplied -> removePending(event.sessionId, event.id) to null
@@ -98,8 +125,11 @@ data class LiveSessionState(
                     copy(inbox = inbox.map { if (it.id == event.id) it.copy(delivery = event.delivery) else it }) to null
                 }
             is SessionEvent.SessionCreated -> (if (event.parentId == rootId) copy(children = children + event.id) else this) to null
-            is SessionEvent.ShellCreated -> (if (owns(event.sessionId)) copy(shells = shells + event.id) else this) to null
+            is SessionEvent.ShellCreated ->
+                (if (owns(event.sessionId)) copy(shells = shells + (event.id to (event.at ?: now))) else this) to null
             is SessionEvent.ShellExited -> copy(shells = shells - event.id) to null
+            // Only today's session's own list; a subagent keeps its own.
+            is SessionEvent.TodosUpdated -> (if (event.sessionId == rootId) copy(todos = event.items) else this) to null
         }
 
     private fun addPending(item: PendingItem): LiveSessionState =
@@ -110,3 +140,6 @@ data class LiveSessionState(
         id: String,
     ): LiveSessionState = if (!owns(sessionId)) this else copy(pending = pending.filterNot { it.id == id })
 }
+
+/** A shell counts as running (Running now, the Details link) once it has run this long. */
+const val SHELL_SHOWN_MS = 10_000L

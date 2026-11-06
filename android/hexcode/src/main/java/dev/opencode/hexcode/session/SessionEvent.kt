@@ -95,14 +95,22 @@ sealed interface SessionEvent {
         val parentId: String?,
     ) : SessionEvent
 
+    /** [at] is the envelope's `created`: when the shell started. */
     data class ShellCreated(
         val id: String,
         val sessionId: String,
+        val at: Long? = null,
     ) : SessionEvent
 
     /** Carries no session id: it counts when its shell came from a counted [ShellCreated]. */
     data class ShellExited(
         val id: String,
+    ) : SessionEvent
+
+    /** `session.tool.success` whose `metadata.todos` is a list: the agent's to-do list now ([TodoList]). */
+    data class TodosUpdated(
+        val sessionId: String,
+        val items: List<TodoItem>,
     ) : SessionEvent
 
     companion object {
@@ -125,6 +133,8 @@ sealed interface SessionEvent {
                 "session.created",
                 "shell.created",
                 "shell.exited",
+                // Only for the to-do list: one whose `metadata.todos` is a list.
+                "session.tool.success",
             )
 
         private val json = Json { ignoreUnknownKeys = true }
@@ -187,9 +197,13 @@ sealed interface SessionEvent {
                     val info = data["info"] as? JsonObject ?: return null
                     val id = info.string("id") ?: return null
                     val shellSession = (info["metadata"] as? JsonObject)?.string("sessionID") ?: return null
-                    ShellCreated(id, shellSession)
+                    ShellCreated(id, shellSession, (envelope["created"] as? JsonPrimitive)?.longOrNull)
                 }
                 "shell.exited" -> data.string("id")?.let { ShellExited(it) }
+                "session.tool.success" -> {
+                    sessionId ?: return null
+                    TodoList.fromToolSuccess(data)?.let { TodosUpdated(sessionId, it) }
+                }
                 else -> null
             }
         }

@@ -79,8 +79,8 @@ class LiveSessionStateTest {
     @Test
     fun shellExitedHasNoSessionAndMatchesByItsShellId() {
         val state = root.after(SessionEvent.ShellCreated("sh_1", "ses_1"), SessionEvent.ShellCreated("sh_2", "ses_other"))
-        assertEquals(setOf("sh_1"), state.shells)
-        assertEquals(emptySet<String>(), state.after(SessionEvent.ShellExited("sh_1")).shells)
+        assertEquals(setOf("sh_1"), state.shells.keys)
+        assertEquals(emptySet<String>(), state.after(SessionEvent.ShellExited("sh_1")).shells.keys)
     }
 
     @Test
@@ -99,6 +99,53 @@ class LiveSessionStateTest {
         assertEquals(setOf("ses_child"), next.children)
         assertEquals(listOf("frm_1"), next.pending.map { it.id })
         assertEquals(1, next.waiting)
-        assertEquals(setOf("sh_1"), next.shells)
+        assertEquals(setOf("sh_1"), next.shells.keys)
+    }
+
+    @Test
+    fun todaysToolSuccessReplacesTheListAndASubagentsDoesNot() {
+        val list = listOf(TodoItem("a", TodoItem.Status.InProgress))
+        val state = root.after(SessionEvent.SessionCreated("ses_child", "ses_1"), SessionEvent.TodosUpdated("ses_1", list))
+        assertEquals(list, state.todos)
+        assertEquals(list, state.after(SessionEvent.TodosUpdated("ses_child", emptyList())).todos)
+        assertEquals(emptyList<TodoItem>(), state.after(SessionEvent.TodosUpdated("ses_1", emptyList())).todos)
+    }
+
+    @Test
+    fun theSnapshotsListReplacesTheOneShownUnlessItCouldNotBeRead() {
+        val shown = root.after(SessionEvent.TodosUpdated("ses_1", listOf(TodoItem("a", TodoItem.Status.Pending))))
+        val snapshot =
+            LiveSnapshot(null, true, emptyList(), emptyList(), emptyList(), todos = listOf(TodoItem("b", TodoItem.Status.Completed)))
+        assertEquals(
+            "b",
+            shown
+                .apply(snapshot)
+                .todos
+                .single()
+                .content,
+        )
+        assertEquals(
+            "a",
+            shown
+                .apply(snapshot.copy(todos = emptyList(), todosRead = false))
+                .todos
+                .single()
+                .content,
+        )
+    }
+
+    @Test
+    fun runningCountsSubagentsAndShellsAfter10s() {
+        val state =
+            root.after(
+                SessionEvent.SessionCreated("ses_child", "ses_1"),
+                SessionEvent.ExecutionStarted("ses_child", 1),
+                SessionEvent.ShellCreated("sh_1", "ses_1", at = 1_000),
+            )
+        assertEquals(1, state.running(now = 5_000))
+        assertEquals(2, state.running(now = 11_000))
+        assertEquals(1, state.after(SessionEvent.ExecutionEnded("ses_child")).running(now = 11_000))
+        // A subagent's run never makes today's session busy.
+        assertEquals(null, state.busySince)
     }
 }

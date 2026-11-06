@@ -66,6 +66,7 @@ class OpenCodeTodayApi(
             val root = async { sessions.getSessionV2(rootId) }
             val children = async { sessions.listSessionsV2(parentId = rootId) }
             val inbox = async { sessions.listInboxV2(rootId) }
+            val todos = async { runCatching { todos(rootId) } }
             val running = active.await()
             val childIds = children.await().map { it.id }
             val owners = listOf(rootId) + childIds.filter { it in running }
@@ -86,8 +87,26 @@ class OpenCodeTodayApi(
                 children = childIds,
                 pending = pending,
                 inbox = inbox.await().map { InboxEntry(it.id, it.delivery ?: "queue", it.payload?.text.orEmpty()) },
+                runningChildren = childIds.filter { it in running },
+                todos = todos.await().getOrNull().orEmpty(),
+                // A list that couldn't be read keeps the one shown; the rest of the state still counts.
+                todosRead = todos.await().isSuccess,
             )
         }
+
+    /**
+     * The agent's to-do list: the newest completed `todowrite` part among the session's assistant messages, newest
+     * first, a page at a time, at most [TODO_PAGES] pages. Empty when there is none.
+     */
+    private suspend fun todos(sessionId: String): List<TodoItem> {
+        var cursor: String? = null
+        repeat(TODO_PAGES) {
+            val page = sessions.listSessionMessagesPageV2(sessionId, type = "assistant", order = "desc", limit = TODO_PAGE, cursor = cursor)
+            TodoList.fromMessages(page.data)?.let { return it }
+            cursor = page.cursor?.next?.takeIf { it.isNotBlank() && page.data.isNotEmpty() } ?: return emptyList()
+        }
+        return emptyList()
+    }
 
     override suspend fun summarise(
         sessionId: String,
@@ -120,6 +139,12 @@ class OpenCodeTodayApi(
     ) {
         ready()
         sessions.switchSessionModelV2(sessionId, model.ref())
+    }
+
+    private companion object {
+        /** Assistant messages per page, and pages, read looking for the to-do list. */
+        const val TODO_PAGE = 50
+        const val TODO_PAGES = 4
     }
 
     private fun V2SessionDto.listing() =
