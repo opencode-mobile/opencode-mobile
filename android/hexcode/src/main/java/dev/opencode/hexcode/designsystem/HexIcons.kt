@@ -1,6 +1,7 @@
 package dev.opencode.hexcode.designsystem
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -132,6 +133,31 @@ object HexIcons {
         path("M8 2a6 6 0 0 1 6 6", width = 1.5f)
     }
 
+    /** A to-do item not started (the prototype's `SI.todo`): a ring, on a 16 grid. Drawn in `text3`. */
+    val todoPending by icon(grid = 16f) { circle(8f, 8f, 6f, width = 1.5f) }
+
+    /** A to-do item in progress (`SI.doing`): the ring with its right half filled. Drawn in `solid`. */
+    val todoDoing by icon(grid = 16f) {
+        circle(8f, 8f, 6f, width = 1.5f)
+        path("M8 4.5a3.5 3.5 0 0 1 0 7z", filled = true, stroked = false)
+    }
+
+    /**
+     * A to-do item done (`SI.done`): a filled disc with the check cut out of it, so the background shows through as the
+     * prototype's check in `--bg` does. Drawn in `text2`.
+     */
+    val todoDone by icon(grid = 16f) {
+        path(
+            "M1 8a7 7 0 1 0 14 0a7 7 0 1 0 -14 0z" +
+                // The check's 1.6-wide stroke (m5.2 8.2 1.9 1.9 3.8-4) as an outline with round ends.
+                "M5.7657 7.6343L7.0853 8.9539L10.32 5.549A0.8 0.8 0 0 1 11.48 6.651L7.68 10.651" +
+                "A0.8 0.8 0 0 1 6.5343 10.6657L4.6343 8.7657A0.8 0.8 0 0 1 5.7657 7.6343z",
+            filled = true,
+            stroked = false,
+            evenOdd = true,
+        )
+    }
+
     /** Hex Code's mark (the prototype's `MARK`): a rounded square with three bars, 1.9 stroke. */
     val mark by icon {
         rect(2.5f, 2.5f, 19f, 19f, 6f, width = 1.9f)
@@ -148,10 +174,13 @@ private class IconScope(
         filled: Boolean = false,
         stroked: Boolean = true,
         alpha: Float = 1f,
+        /** Overlapping shapes cut holes in each other, as a check cut out of a disc. */
+        evenOdd: Boolean = false,
     ) {
         data.forEach { d ->
             builder.addPath(
                 pathData = PathParser().parsePathString(d).toNodes(),
+                pathFillType = if (evenOdd) PathFillType.EvenOdd else PathFillType.NonZero,
                 fill = if (filled) SolidColor(Color.Black) else null,
                 stroke = if (stroked) SolidColor(Color.Black) else null,
                 strokeAlpha = alpha,

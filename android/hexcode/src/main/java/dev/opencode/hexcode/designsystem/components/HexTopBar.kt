@@ -8,11 +8,14 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,10 +25,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,6 +94,7 @@ enum class HexAgentState { Idle, Working, NeedsInput, Reconnecting }
 /**
  * Home's top bar (`.tb`): the state slot (an icon, the [label] and an optional mono [timer]) on the left, round
  * buttons ([actions]) on the right. A null [state] leaves the slot empty, as while today's session is being set up.
+ * With [onStateClick] the state is a button (Needs input opens the sheet).
  */
 @Composable
 fun HexTopBar(
@@ -96,6 +102,7 @@ fun HexTopBar(
     label: String,
     modifier: Modifier = Modifier,
     timer: String? = null,
+    onStateClick: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val colors = HexTheme.colors
@@ -117,7 +124,17 @@ fun HexTopBar(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(9.dp),
-            modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {},
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .semantics(mergeDescendants = true) {}
+                    .then(
+                        if (onStateClick != null) {
+                            Modifier.clickable(remember { MutableInteractionSource() }, null, role = Role.Button, onClick = onStateClick)
+                        } else {
+                            Modifier
+                        },
+                    ).fillMaxHeight(),
         ) {
             if (state != null) {
                 Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { StateIcon(state) }

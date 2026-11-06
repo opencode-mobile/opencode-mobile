@@ -61,6 +61,8 @@ class HexTypography(
     val mono: TextStyle,
     /** 10.5 / regular, monospace: the `git` badge. */
     val monoSmall: TextStyle,
+    /** 13 / regular, monospace, line 1.5: commands and diffs (`HexCode`), paths and commands in Details' rows. */
+    val code: TextStyle,
 ) {
     companion object {
         private val Even = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
@@ -103,6 +105,7 @@ class HexTypography(
                 badge = style(11f, FontWeight.Medium),
                 mono = style(11.5f, family = FontFamily.Monospace),
                 monoSmall = style(10.5f, family = FontFamily.Monospace),
+                code = style(13f, line = 1.5.em, family = FontFamily.Monospace),
             )
     }
 }

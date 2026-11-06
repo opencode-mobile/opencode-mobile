@@ -1,6 +1,7 @@
 package dev.opencode.hexcode.designsystem.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,7 +28,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -203,31 +212,51 @@ fun HexRoundButton(
 /** What a [HexIconButton] is for: most are neutral (`text2`); Stop is red; Strong is `text1`, as Done on a locked take. */
 enum class HexIconButtonTone { Default, Stop, Strong }
 
-/** The 46 pt borderless icon button (`.ghost`), radius 12. Disabled fades to 35 %. */
+/**
+ * The 46 pt borderless icon button (`.ghost`), radius 12. Disabled fades to 35 %. With a [hold] (0 to 1) it shows the
+ * **hold** state (`.hold-ring`, `.holding`): a 2 pt `red` ring 3 pt outside the button, following its radius, filling
+ * clockwise from the top, and the button at 0.95. A null [onClick] leaves taps to a gesture in [modifier], as Stop's
+ * 3 s hold.
+ */
 @Composable
 fun HexIconButton(
     icon: ImageVector,
     contentDescription: String,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     tone: HexIconButtonTone = HexIconButtonTone.Default,
     enabled: Boolean = true,
+    hold: Float? = null,
 ) {
     val colors = HexTheme.colors
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val shape = RoundedCornerShape(HexTheme.radius.l)
+    val scale by animateFloatAsState(if (hold != null) 0.95f else 1f, HexTheme.motion.press(), label = "hold-scale")
+    val ring = colors.red
+    val radius = HexTheme.radius.l
     Box(
         contentAlignment = Alignment.Center,
         modifier =
             modifier
                 .width(46.dp)
                 .height(46.dp)
-                .alpha(if (enabled) 1f else 0.35f)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }.drawWithContent {
+                    drawContent()
+                    if (hold != null && hold > 0f) holdRing(hold.coerceIn(0f, 1f), ring, radius.toPx())
+                }.alpha(if (enabled) 1f else 0.35f)
                 .clip(shape)
-                .background(if (pressed) colors.hover else Color.Transparent)
-                .clickable(source, null, enabled = enabled, role = Role.Button, onClick = onClick)
-                .semantics { this.contentDescription = contentDescription },
+                .background(if (pressed || hold != null) colors.hover else Color.Transparent)
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(source, null, enabled = enabled, role = Role.Button, onClick = onClick)
+                    } else {
+                        Modifier
+                    },
+                ).semantics { this.contentDescription = contentDescription },
     ) {
         val tint =
             when {
@@ -238,4 +267,38 @@ fun HexIconButton(
             }
         Icon(icon, null, tint = tint, modifier = Modifier.size(HexTheme.size.iconButton))
     }
+}
+
+/**
+ * The hold ring: a 2 pt stroke whose centre runs 2 pt outside the button (its outer edge 3 pt out), on the button's
+ * radius grown by as much, drawn clockwise from the top centre for [progress] of its length.
+ */
+private fun DrawScope.holdRing(
+    progress: Float,
+    color: Color,
+    radius: Float,
+) {
+    val out = 2.dp.toPx()
+    val left = -out
+    val top = -out
+    val right = size.width + out
+    val bottom = size.height + out
+    val r = radius + out
+    val path =
+        Path().apply {
+            moveTo((left + right) / 2f, top)
+            lineTo(right - r, top)
+            arcTo(Rect(right - 2 * r, top, right, top + 2 * r), -90f, 90f, false)
+            lineTo(right, bottom - r)
+            arcTo(Rect(right - 2 * r, bottom - 2 * r, right, bottom), 0f, 90f, false)
+            lineTo(left + r, bottom)
+            arcTo(Rect(left, bottom - 2 * r, left + 2 * r, bottom), 90f, 90f, false)
+            lineTo(left, top + r)
+            arcTo(Rect(left, top, left + 2 * r, top + 2 * r), 180f, 90f, false)
+            close()
+        }
+    val measure = PathMeasure().apply { setPath(path, false) }
+    val part = Path()
+    measure.getSegment(0f, measure.length * progress, part, true)
+    drawPath(part, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Butt))
 }

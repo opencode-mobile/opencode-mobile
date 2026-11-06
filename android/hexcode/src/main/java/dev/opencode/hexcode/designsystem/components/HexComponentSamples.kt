@@ -88,6 +88,10 @@ val HexComponentSamples: List<HexSampleSection> =
         HexSampleSection("HexProgress") { ProgressSample() },
         HexSampleSection("HexLinkTile, HexTileRow") { LinkTileSample() },
         HexSampleSection("HexCodeText") { CodeTextSample() },
+        HexSampleSection("HexOption") { OptionSample() },
+        HexSampleSection("HexCode") { CodeBlockSample() },
+        HexSampleSection("HexStopWarning, HexStopEdge") { StopWarningSample() },
+        HexSampleSection("HexDetailsSection, HexDetailRow") { DetailsSample() },
     )
 
 /** A section's heading, in the gallery and the previews: component names, so not upper-cased like HexSectionLabel. */
@@ -236,6 +240,7 @@ private fun TypeSample() {
             "badge" to t.badge,
             "mono" to t.mono,
             "monoSmall" to t.monoSmall,
+            "code" to t.code,
         )
     Edge {
         styles.forEach { (name, style) -> TypeLine(name, style) }
@@ -322,6 +327,9 @@ private fun IconsSample() {
             "globe" to HexIcons.globe,
             "monitor" to HexIcons.monitor,
             "spin" to HexIcons.spin,
+            "todoPending" to HexIcons.todoPending,
+            "todoDoing" to HexIcons.todoDoing,
+            "todoDone" to HexIcons.todoDone,
             "mark" to HexIcons.mark,
         )
     FlowRow(
@@ -452,6 +460,13 @@ private fun RoundButtonsSample() {
                 HexIconButton(HexIcons.clip, "Attach", onClick = {}, enabled = false)
             }
         }
+        StateSample("HexIconButton hold (Stop's 3 s hold): a third, two thirds, full") {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(4.dp)) {
+                HexIconButton(HexIcons.stop, "Stop", onClick = null, tone = HexIconButtonTone.Stop, hold = 0.33f)
+                HexIconButton(HexIcons.stop, "Stop", onClick = null, tone = HexIconButtonTone.Stop, hold = 0.66f)
+                HexIconButton(HexIcons.stop, "Stop", onClick = null, tone = HexIconButtonTone.Stop, hold = 1f)
+            }
+        }
     }
 }
 
@@ -548,7 +563,12 @@ private fun TopBarSample() {
             HexRoundButton(HexIcons.target, "Goal", onClick = {})
             HexRoundButton(HexIcons.gear, "Settings", onClick = {})
         }
-        HexTopBar(HexAgentState.NeedsInput, "Needs input", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
+        HexTopBar(
+            HexAgentState.NeedsInput,
+            "Needs input",
+            homeEdge,
+            onStateClick = {},
+        ) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
         HexTopBar(HexAgentState.Reconnecting, "Reconnecting…", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
         StateName("home: empty state slot, while today's session is being set up")
         HexTopBar(null, "", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
@@ -607,44 +627,83 @@ private fun PanelContent(translucent: Boolean) {
     }
 }
 
+/** How the sample sheet looks: two actions, a title only, or the request head (with the approval's amber edge). */
+private enum class SheetLook { Actions, TitleOnly, Question, Approval }
+
 /** The sheet in a box of its own; [open] shows it at once (the previews), otherwise Show sheet does. */
 @Composable
 internal fun SheetSample(open: Boolean = false) {
     var visible by remember { mutableStateOf(open) }
-    var actions by remember { mutableStateOf(true) }
+    var look by remember { mutableStateOf(SheetLook.Actions) }
     val shape = RoundedCornerShape(HexTheme.radius.l)
     Box(
         Modifier
             .padding(horizontal = HexTheme.space.screen)
             .fillMaxWidth()
-            .height(300.dp)
+            .height(420.dp)
             .clip(shape)
             .border(1.dp, HexTheme.colors.line, shape)
             // The box is mid-page, not at the screen's foot: no room for the navigation bar under the sheet.
             .consumeWindowInsets(WindowInsets.navigationBars),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            HexButton(
-                onClick = {
-                    actions = true
-                    visible = true
-                },
-                text = "Show sheet, two actions",
-            )
-            HexButton(
-                onClick = {
-                    actions = false
-                    visible = true
-                },
-                text = "Show sheet, title only",
-            )
+            listOf(
+                SheetLook.Actions to "Show sheet, two actions",
+                SheetLook.TitleOnly to "Show sheet, title only",
+                SheetLook.Question to "Request head, with a count",
+                SheetLook.Approval to "Request head, amber edge, footer",
+            ).forEach { (kind, label) ->
+                HexButton(
+                    onClick = {
+                        look = kind
+                        visible = true
+                    },
+                    text = label,
+                )
+            }
         }
+        val request = look == SheetLook.Question || look == SheetLook.Approval
         HexSheet(
             visible = visible,
             onDismiss = { visible = false },
-            title = "Today’s goal",
-            leading = if (actions) HexSheetAction("Clear") { visible = false } else null,
-            trailing = if (actions) HexSheetAction("Done") { visible = false } else null,
+            title =
+                when (look) {
+                    SheetLook.Question -> "Colour"
+                    SheetLook.Approval -> "Permission requested"
+                    else -> "Today’s goal"
+                },
+            leading = if (look == SheetLook.Actions) HexSheetAction("Clear") { visible = false } else null,
+            trailing = if (look == SheetLook.Actions) HexSheetAction("Done") { visible = false } else null,
+            request =
+                if (request) {
+                    HexSheetRequest(
+                        "Hide",
+                        { visible = false },
+                        count =
+                            if (look ==
+                                SheetLook.Question
+                            ) {
+                                "1 of 2"
+                            } else {
+                                null
+                            },
+                    )
+                } else {
+                    null
+                },
+            amberEdge = look == SheetLook.Approval,
+            footer =
+                if (look == SheetLook.Approval) {
+                    {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            HexButton(onClick = {}, text = "Deny", style = HexButtonStyle.Danger, size = HexButtonSize.Regular)
+                            Box(Modifier.weight(1f))
+                            HexButton(onClick = {}, text = "Allow once", style = HexButtonStyle.Primary, size = HexButtonSize.Regular)
+                        }
+                    }
+                } else {
+                    null
+                },
         ) {
             Text("Say it, set it, pause it or clear it.", style = HexTheme.type.body, color = HexTheme.colors.text2)
         }
@@ -856,5 +915,159 @@ private fun HoldHintSample() {
         StateSample("leaning drop") { hint(-0.55f, null) }
         StateSample("armed lock") { hint(1f, HexTalkRelease.Lock) }
         StateSample("armed drop") { hint(-1f, HexTalkRelease.Drop) }
+    }
+}
+
+@Composable
+private fun OptionSample() {
+    var chosen by remember { mutableStateOf("Red") }
+    Edge {
+        StateSample("radio: unselected, selected (tap one); with a second line") {
+            listOf("Red" to "warm", "Blue" to null).forEach { (label, detail) ->
+                HexOption(label, HexOptionMark.Radio, chosen == label, detail = detail, onClick = { chosen = label })
+            }
+        }
+        StateSample("checkbox: unselected, selected") {
+            HexOption("Apple", HexOptionMark.Checkbox, selected = false, onClick = {})
+            HexOption("Kiwi", HexOptionMark.Checkbox, selected = true, onClick = {})
+        }
+        StateSample("own answer: empty, Listening, Transcribing, filled") {
+            HexOption("Say your own answer", HexOptionMark.Radio, selected = false, onClick = {})
+            HexOption(
+                "Say your own answer",
+                HexOptionMark.Radio,
+                selected = false,
+                take = HexOptionTake.Listening,
+                takeLabel = "Listening… · release to finish",
+            )
+            HexOption(
+                "Say your own answer",
+                HexOptionMark.Radio,
+                selected = false,
+                take = HexOptionTake.Transcribing,
+                takeLabel = "Transcribing…",
+            )
+            HexOption("Say your own answer", HexOptionMark.Radio, selected = true, detail = "Green, but only a dark one")
+        }
+        StateSample("say why (HexOptionMark.Mic): empty, filled; disabled") {
+            HexOption("Say what to do instead", HexOptionMark.Mic, selected = false, onHoldStart = { false })
+            HexOption("Say what to do instead", HexOptionMark.Mic, selected = false, detail = "Use printf instead of echo.")
+            HexOption("Blue", HexOptionMark.Radio, selected = false, enabled = false)
+        }
+    }
+}
+
+@Composable
+private fun CodeBlockSample() {
+    Edge {
+        StateSample("commands, one per line, wrapping, never cut") {
+            HexCode(
+                listOf(
+                    HexCodeLine("cd packages/app", HexCodeLineKind.Plain),
+                    HexCodeLine("bun test --filter auth --reporter verbose --timeout 120000 --coverage"),
+                ),
+            )
+        }
+        StateSample("a diff: added, removed, capped (HexCodeLineKind.More)") {
+            HexCode(
+                listOf(
+                    HexCodeLine("src/auth/client.ts"),
+                    HexCodeLine("-  return fetch(url)", HexCodeLineKind.Removed),
+                    HexCodeLine("+  return retryOnce(() => fetch(url))", HexCodeLineKind.Added),
+                    HexCodeLine("… 9 more lines", HexCodeLineKind.More),
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StopWarningSample() {
+    Edge {
+        StateSample("3, 2, 1") {
+            HexStopWarning(0.05f, 3, "Stopping the agent in 3", "Let go to keep it running")
+            HexStopWarning(0.4f, 2, "Stopping the agent in 2", "Let go to keep it running")
+            HexStopWarning(0.8f, 1, "Stopping the agent in 1", "Let go to keep it running")
+        }
+        StateSample("Reduce Motion: no pop, no pulse") {
+            HexStopWarning(0.5f, 2, "Stopping the agent in 2", "Let go to keep it running", reduceMotion = true)
+        }
+        StateSample("HexStopEdge: the screen's red edge, pulsing; still with Reduce Motion") {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(width = 120.dp, height = 160.dp).background(HexTheme.colors.background)) {
+                    HexStopEdge(corner = 24.dp)
+                }
+                Box(Modifier.size(width = 120.dp, height = 160.dp).background(HexTheme.colors.background)) {
+                    HexStopEdge(corner = 24.dp, reduceMotion = true)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailsSample() {
+    val colors = HexTheme.colors
+    Edge {
+        HexDetailsSection("Needs you") {
+            HexDetailRow(
+                AnnotatedString("Approval needed"),
+                leading = { Icon(HexIcons.alert, null, tint = colors.amber, modifier = Modifier.size(HexTheme.size.icon)) },
+                detail = "bun run db:reset",
+                chevron = true,
+                onClick = {},
+            )
+        }
+        HexDetailsSection("Waiting to send", count = "1") {
+            HexDetailRow(
+                AnnotatedString("Also keep the old error messages"),
+                leading = { Icon(HexIcons.send, null, tint = colors.text3, modifier = Modifier.size(HexTheme.size.iconSmall)) },
+                titleLines = 2,
+                detail = "Queue · after this turn",
+                action = { HexButton(onClick = {}, text = "Cancel") },
+            )
+        }
+        HexDetailsSection("Running now", count = "2") {
+            HexDetailRow(
+                AnnotatedString("m4 date check"),
+                leading = { HexDot(HexDotTone.Green) },
+                detail = "Subagent · general",
+                time = "1:12",
+            )
+            HexDetailRow(
+                AnnotatedString("bun dev --port 5173"),
+                leading = { HexDot(HexDotTone.Neutral) },
+                code = true,
+                detail = "Shell command",
+                time = "4:03",
+                divider = true,
+            )
+        }
+        HexDetailsSection("To-do list", suffix = "· from the agent", count = "1/3") {
+            HexDetailRow(
+                AnnotatedString("Find the 401"),
+                leading = { Icon(HexIcons.todoDone, null, tint = colors.text2, modifier = Modifier.size(HexTheme.size.icon)) },
+                done = true,
+            )
+            HexDetailRow(
+                AnnotatedString("Retry once in client.ts"),
+                leading = { Icon(HexIcons.todoDoing, null, tint = colors.solid, modifier = Modifier.size(HexTheme.size.icon)) },
+                divider = true,
+            )
+            HexDetailRow(
+                AnnotatedString("Run the auth tests"),
+                leading = { Icon(HexIcons.todoPending, null, tint = colors.text3, modifier = Modifier.size(HexTheme.size.icon)) },
+                divider = true,
+            )
+        }
+        HexDetailsSection("Recent") {
+            HexDetailRow(
+                AnnotatedString("src/auth/client.ts"),
+                leading = { Icon(HexIcons.pencil, null, tint = colors.text3, modifier = Modifier.size(HexTheme.size.iconSmall)) },
+                code = true,
+                detail = "Edited · +2 −0",
+                time = "2m",
+            )
+        }
     }
 }
