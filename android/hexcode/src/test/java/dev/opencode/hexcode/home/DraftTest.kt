@@ -135,4 +135,15 @@ class DraftTest {
         val recording = Draft().startTake()
         assertSame(recording, recording.startTake())
     }
+
+    @Test
+    fun aTappedNextBecomesAChunkWithItsText() {
+        // With no draft it opens one; with one it goes after the other chunks; it never sends.
+        val opened = Draft().withText("Commit it")
+        assertEquals("Commit it", opened.text)
+        assertEquals(1, opened.chunks.size)
+        val added = opened.withText("  Then push  ")
+        assertEquals("Commit it Then push", added.text)
+        assertSame(added, added.withText("  "))
+    }
 }

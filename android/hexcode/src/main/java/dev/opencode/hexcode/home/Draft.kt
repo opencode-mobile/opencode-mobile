@@ -113,6 +113,13 @@ data class Draft(
         return copy(chunks = next, live = null, rerecording = null)
     }
 
+    /** A chunk with [text] already in it, after the others: a tapped Next (app-plan.md, Tapping Next). */
+    fun withText(text: String): Draft {
+        val words = text.trim()
+        if (words.isEmpty()) return this
+        return copy(chunks = chunks + Chunk(nextId, ChunkState.Text(words)), nextId = nextId + 1, selected = null)
+    }
+
     /** The take is dropped: nothing of it is kept, and a re-recorded chunk keeps its old text. */
     fun dropTake(): Draft = copy(live = null, rerecording = null)
 

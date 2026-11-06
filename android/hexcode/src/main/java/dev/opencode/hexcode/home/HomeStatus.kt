@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -41,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -61,11 +63,13 @@ import dev.opencode.hexcode.designsystem.components.HexLinkKind
 import dev.opencode.hexcode.designsystem.components.HexLinkTile
 import dev.opencode.hexcode.designsystem.components.HexProgress
 import dev.opencode.hexcode.designsystem.components.HexProgressStep
+import dev.opencode.hexcode.designsystem.components.HexSpinner
 import dev.opencode.hexcode.designsystem.components.HexStatusLine
 import dev.opencode.hexcode.designsystem.components.HexStatusTone
 import dev.opencode.hexcode.designsystem.components.HexTileRow
 import dev.opencode.hexcode.designsystem.components.HexTopBar
 import dev.opencode.hexcode.session.AgentStatus
+import dev.opencode.hexcode.session.NowLine
 import dev.opencode.hexcode.session.PendingItem
 import dev.opencode.hexcode.session.RefreshLabel
 import dev.opencode.hexcode.session.SessionSetup
@@ -73,6 +77,7 @@ import dev.opencode.hexcode.session.StatusSummary
 import dev.opencode.hexcode.session.SummaryLink
 import dev.opencode.hexcode.session.SummaryLinks
 import dev.opencode.hexcode.session.SummaryState
+import dev.opencode.hexcode.session.SummaryText
 import dev.opencode.hexcode.session.TodayState
 import dev.opencode.hexcode.session.TodoItem
 import dev.opencode.hexcode.session.TodoLabel
@@ -127,8 +132,8 @@ internal fun HomeTopBar(
 /**
  * The status area (`.fx-body.centred`): the status card, the fallback, or "Couldn't open today's session" with Try
  * again, and the Needs-you hint under the card, centred between the top bar and the dock whatever their length. While
- * setup runs it shows only the card saved for today's session, if there is one. The Now sentence's size steps down
- * with its length, and on down while the card doesn't fit ([NowSize]).
+ * setup runs it shows only the card saved for today's session, if there is one. Now's size steps down with its
+ * effective length, and on down while the card doesn't fit ([NowSize]); then whole lines go from the end.
  */
 @Composable
 internal fun StatusArea(
@@ -142,15 +147,25 @@ internal fun StatusArea(
 ) {
     val summary = today.summary
     val links = Links(computer, onOpenLink)
-    val work = Work(today.todos, today.running(now))
-    val start = (summary.summary as? StatusSummary.Card)?.let { NowSize.forText(it.now) } ?: NowSize.Display
+    val phase =
+        when {
+            today.pendingInput != null -> CardPhase.Waiting
+            today.busySince != null -> CardPhase.Working
+            else -> null
+        }
+    val work = Work(today.todos, today.running(now), today.you, vm::addToDraft, phase)
+    val card = summary.summary as? StatusSummary.Card
+    val start = card?.let { NowSize.forLines(it.now) } ?: NowSize.Display
+    val count = card?.now?.size ?: 1
     when (today.setup) {
         // The card saved for today's session shows while setup runs.
         SessionSetup.Opening ->
-            if (summary.summary != null) CentredFit(start, modifier) { size, lines -> Summary(summary, now, vm, size, lines, links, work) }
-        is SessionSetup.Failed -> CentredFit(NowSize.Display, modifier) { _, _ -> SetupFailed(today.setup.retrying, vm::retrySetup) }
+            if (summary.summary != null) {
+                CentredFit(start, count, modifier) { size, lines -> Summary(summary, now, vm, size, lines, links, work) }
+            }
+        is SessionSetup.Failed -> CentredFit(NowSize.Display, 1, modifier) { _, _ -> SetupFailed(today.setup.retrying, vm::retrySetup) }
         is SessionSetup.Ready ->
-            CentredFit(start, modifier) { size, lines ->
+            CentredFit(start, count, modifier) { size, lines ->
                 Summary(summary, now, vm, size, lines, links, work)
                 today.pendingInput?.let { NeedsHint(it, onClick = {}) }
             }
@@ -158,13 +173,15 @@ internal fun StatusArea(
 }
 
 /**
- * [content] centred in the space it's given, or from the top when it's taller (it never scrolls). It's measured at
- * the Now size from [start] down until it fits ([NowSize.fit]); at [NowSize.Fit] the Now sentence takes as many lines
- * as fit, ending in "…". Measured again whenever the content or the user's text size changes.
+ * [content] centred in the space it's given, or from the top when it's taller (it never scrolls). The whole card is
+ * measured, at its real height, at the Now size from [start] down until it fits ([NowSize.fit]); at [NowSize.Fit],
+ * whole lines of Now (of [nowCount]) go from the end until it fits, the last one kept ending in "…". Measured again
+ * whenever the content or the user's text size changes.
  */
 @Composable
 private fun CentredFit(
     start: NowSize,
+    nowCount: Int,
     modifier: Modifier,
     content: @Composable ColumnScope.(size: NowSize, nowLines: Int) -> Unit,
 ) {
@@ -187,7 +204,7 @@ private fun CentredFit(
         if (!fitted.fits) {
             // The most lines of Now that fit, found by halving.
             var low = 1
-            var high = MAX_FIT_LINES
+            var high = nowCount.coerceAtLeast(1)
             while (low < high) {
                 val mid = (low + high + 1) / 2
                 if (measure(NowSize.Fit, mid).height <= room) low = mid else high = mid - 1
@@ -198,9 +215,6 @@ private fun CentredFit(
         layout(constraints.maxWidth, height) { card.place(0, ((height - card.height) / 2).coerceAtLeast(0)) }
     }
 }
-
-/** At [NowSize.Fit], the Now sentence never takes more lines than this (the prototype's `.n4` clamp). */
-private const val MAX_FIT_LINES = 13
 
 /** The status card, its fallback or just ↻, with the card's age. */
 @Composable
@@ -229,11 +243,12 @@ private fun Summary(
                 nowLines,
                 card.links,
                 links,
+                nextTappable = true,
             )
         is StatusSummary.Empty ->
             Card(
                 card.title,
-                stringResource(R.string.home_summary_empty_now),
+                listOf(NowLine(stringResource(R.string.home_summary_empty_now))),
                 stringResource(R.string.home_summary_empty_next),
                 work,
                 dim,
@@ -243,7 +258,7 @@ private fun Summary(
         is StatusSummary.Working ->
             Card(
                 card.title,
-                stringResource(R.string.home_summary_working_now),
+                listOf(NowLine(stringResource(R.string.home_summary_working_now))),
                 stringResource(R.string.home_summary_working_next),
                 work,
                 dim,
@@ -261,11 +276,27 @@ private fun Label(content: @Composable () -> Unit) {
     Box(Modifier.heightIn(min = 18.dp), contentAlignment = Alignment.CenterStart) { content() }
 }
 
-/** The agent's to-do list (no row when empty), and how many subagents and shells run besides it. */
+/**
+ * What the card shows besides the summary: the agent's to-do list (no row when empty), how many subagents and shells
+ * run besides it, the message just sent ([you], in place of Next), and where a tapped Next goes ([onNext]).
+ */
 private class Work(
     val todos: List<TodoItem>,
     val running: Int,
+    val you: String? = null,
+    val onNext: (String) -> Unit = {},
+    /** Busy or waiting for the user: the label over Now says so (app-plan.md, Card label while working). */
+    val phase: CardPhase? = null,
 )
+
+/** What the label over Now adds while the session isn't idle. */
+private enum class CardPhase {
+    /** "Still working · <title>", with the top bar's green arc. */
+    Working,
+
+    /** "Waiting for you · <title>", with the amber dot. */
+    Waiting,
+}
 
 /** Where link tiles open: the paired [computer]'s address for `localhost` links, and [open] for a tap. */
 private class Links(
@@ -280,7 +311,7 @@ private class Links(
 @Composable
 private fun Card(
     title: String,
-    now: String,
+    now: List<NowLine>,
     next: String?,
     work: Work,
     dim: Float,
@@ -290,35 +321,37 @@ private fun Card(
     nowLines: Int = Int.MAX_VALUE,
     tiles: List<SummaryLink> = emptyList(),
     links: Links? = null,
+    /** Next is the reply's suggestion, which a tap puts into the draft; the screen's own Next copy isn't. */
+    nextTappable: Boolean = false,
 ) {
     val colors = HexTheme.colors
-    Label {
-        Text(summaryText(title), style = HexTheme.type.caption, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-    val type = HexTheme.type
-    Text(
-        // Bold is bold at the two largest sizes, semibold below (`.md-b`).
-        summaryText(now, bold = if (size <= NowSize.Large) FontWeight.Bold else FontWeight.SemiBold),
-        style =
-            when (size) {
-                NowSize.Display -> type.display
-                NowSize.Large -> type.nowLarge
-                NowSize.Medium -> type.nowMedium
-                NowSize.Small -> type.nowSmall
-                NowSize.Fit -> type.nowFit
-            },
-        color = colors.text1,
-        maxLines = nowLines,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.alpha(dim),
-    )
-    if (next != null) {
-        Text(
-            summaryTextIn(stringResource(R.string.home_summary_next, SUMMARY_MARK), next),
-            style = HexTheme.type.body,
-            color = colors.text2,
-            modifier = Modifier.alpha(dim),
-        )
+    Label { CardLabel(title, work.phase) }
+    NowText(now, size, nowLines, Modifier.alpha(dim))
+    val you = work.you
+    when {
+        // The message just sent stands in for Next until the card made after its run (Just sent); it isn't tappable.
+        you != null ->
+            Text(
+                stringResource(R.string.home_summary_you, you),
+                style = HexTheme.type.body,
+                color = colors.text3,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.alpha(dim),
+            )
+        next != null ->
+            Text(
+                summaryTextIn(stringResource(R.string.home_summary_next, SUMMARY_MARK), next),
+                style = HexTheme.type.body,
+                color = colors.text2,
+                modifier =
+                    Modifier
+                        .alpha(dim)
+                        .then(
+                            // Next is what the user might say: a tap puts it into the draft, never sends it.
+                            if (nextTappable) Modifier.clickable(role = Role.Button) { work.onNext(SummaryText.shown(next)) } else Modifier,
+                        ),
+            )
     }
     if (tiles.isNotEmpty() && links != null) {
         HexTileRow(Modifier.alpha(dim)) {
@@ -336,6 +369,93 @@ private fun Card(
     TodoRow(work.todos)
     // Details comes with M4; until then the link does nothing.
     Meta(label, onRefresh) { DetailsLink(work.running, onClick = {}) }
+}
+
+/**
+ * The label over Now: the title, or while the session is busy "Still working · <title>" with the green arc, and while
+ * it waits for an answer "Waiting for you · <title>" with the amber dot. The new card's plain title follows the run.
+ */
+@Composable
+private fun CardLabel(
+    title: String,
+    phase: CardPhase?,
+) {
+    val colors = HexTheme.colors
+    val style = HexTheme.type.caption
+    val text =
+        when (phase) {
+            null -> summaryText(title)
+            CardPhase.Working ->
+                if (title.isBlank()) {
+                    AnnotatedString(stringResource(R.string.home_summary_working_bare))
+                } else {
+                    summaryTextIn(stringResource(R.string.home_summary_working, SUMMARY_MARK), title)
+                }
+            CardPhase.Waiting ->
+                if (title.isBlank()) {
+                    AnnotatedString(stringResource(R.string.home_summary_waiting_bare))
+                } else {
+                    summaryTextIn(stringResource(R.string.home_summary_waiting, SUMMARY_MARK), title)
+                }
+        }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        when (phase) {
+            CardPhase.Working -> HexSpinner(size = 12.dp, tint = colors.green)
+            CardPhase.Waiting -> HexDot(HexDotTone.Amber)
+            null -> Unit
+        }
+        Text(text, style = style, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * Now (app-plan.md, Formatting): plain lines are paragraphs 0.35 em apart; bullets a list with a hanging "•" in `text3`
+ * and a 0.9 em indent, 0.15 em between items and 0.25 em above the list. Each line keeps its inline Markdown. Only the
+ * first [kept] lines show, the last of them ending in "…" when some were left out to fit.
+ */
+@Composable
+private fun NowText(
+    lines: List<NowLine>,
+    size: NowSize,
+    kept: Int,
+    modifier: Modifier = Modifier,
+) {
+    val type = HexTheme.type
+    val style =
+        when (size) {
+            NowSize.Display -> type.display
+            NowSize.Large -> type.nowLarge
+            NowSize.Medium -> type.nowMedium
+            NowSize.Small -> type.nowSmall
+            NowSize.Fit -> type.nowFit
+        }
+    // Bold is bold at the two largest sizes, semibold below (`.md-b`).
+    val bold = if (size <= NowSize.Large) FontWeight.Bold else FontWeight.SemiBold
+    val shown = lines.take(kept.coerceAtLeast(1))
+    val cut = shown.size < lines.size
+    val em = with(LocalDensity.current) { style.fontSize.toDp() }
+    Column(modifier) {
+        shown.forEachIndexed { index, line ->
+            val previous = shown.getOrNull(index - 1)
+            val gap =
+                when {
+                    previous == null -> 0f
+                    line.bullet && previous.bullet -> 0.15f
+                    line.bullet -> 0.25f
+                    else -> 0.35f
+                }
+            if (gap > 0f) Spacer(Modifier.height(em * gap))
+            val text = summaryText(line.text, bold, suffix = if (cut && index == shown.lastIndex) "…" else "")
+            if (line.bullet) {
+                Row {
+                    Text("•", style = style, color = HexTheme.colors.text3, modifier = Modifier.width(em * 0.9f))
+                    Text(text, style = style, color = HexTheme.colors.text1, modifier = Modifier.weight(1f))
+                }
+            } else {
+                Text(text, style = style, color = HexTheme.colors.text1)
+            }
+        }
+    }
 }
 
 /**

@@ -12,18 +12,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.em
 import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.session.SummaryLinks
 import dev.opencode.hexcode.session.SummaryRun
 import dev.opencode.hexcode.session.SummaryText
 
 /**
- * [text]'s inline Markdown drawn (app-plan.md, Formatting): code in the system monospace at 0.84 of the size on a
- * faint tint, bold in [bold] and `text1`. [prefix] and [suffix] go round it unformatted ("Next: …").
+ * [text]'s inline Markdown drawn (app-plan.md, Formatting): code in the same font, size and weight as the text
+ * around it, only quieter (`text2`, no box); bold in [bold] and `text1`. [prefix] and [suffix] go round it unformatted ("Next: …").
  */
 @Composable
 internal fun summaryText(
@@ -32,15 +30,15 @@ internal fun summaryText(
     prefix: String = "",
     suffix: String = "",
 ): AnnotatedString {
-    val tint = HexTheme.colors.tint(7f)
+    val quiet = HexTheme.colors.text2
     val strong = HexTheme.colors.text1
-    return remember(text, bold, prefix, suffix, tint, strong) { formatted(text, bold, tint, strong, prefix, suffix) }
+    return remember(text, bold, prefix, suffix, quiet, strong) { formatted(text, bold, quiet, strong, prefix, suffix) }
 }
 
 private fun formatted(
     text: String,
     bold: FontWeight,
-    tint: Color,
+    quiet: Color,
     strong: Color,
     prefix: String,
     suffix: String,
@@ -50,16 +48,8 @@ private fun formatted(
         SummaryText.runs(text).forEach { run ->
             when (run.style) {
                 SummaryRun.Style.Plain -> append(run.text)
-                SummaryRun.Style.Code ->
-                    withStyle(
-                        SpanStyle(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 0.84.em,
-                            fontWeight = FontWeight.Medium,
-                            letterSpacing = 0.em,
-                            background = tint,
-                        ),
-                    ) { append(run.text) }
+                // The user found boxes and a monospace distracting: code is only a little quieter.
+                SummaryRun.Style.Code -> withStyle(SpanStyle(color = quiet)) { append(run.text) }
                 SummaryRun.Style.Bold -> withStyle(SpanStyle(fontWeight = bold, color = strong)) { append(run.text) }
             }
         }
