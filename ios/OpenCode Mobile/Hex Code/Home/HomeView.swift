@@ -58,6 +58,10 @@ struct HomeView: View {
         .onAppear { home.prepareRecorder() }
         #if DEBUG
         .task { await PressProbe.run(home) }
+        .task {
+            try? await Task.sleep(for: .seconds(2))
+            EdgeDeferral.report()
+        }
         #endif
         .hexSheet(isPresented: $showsWaiting, detents: [.medium]) {
             WaitingSheet(session: session) { showsWaiting = false }
@@ -497,6 +501,25 @@ enum PressProbe {
             try? await Task.sleep(for: .seconds(2))
         }
         print("HEXPROBE done")
+    }
+}
+#endif
+
+#if DEBUG
+/// Prints the bottom edge deferral UIKit actually sees, following its child view controller chain
+/// from the window's root, to check `.defersSystemGestures(on: .bottom)` reaches it.
+@MainActor
+enum EdgeDeferral {
+    static func report() {
+        let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        guard var controller = scene?.keyWindow?.rootViewController else { return }
+        var chain = [String(describing: type(of: controller))]
+        while let child = controller.childForScreenEdgesDeferringSystemGestures {
+            controller = child
+            chain.append(String(describing: type(of: controller)))
+        }
+        let defers = controller.preferredScreenEdgesDeferringSystemGestures.contains(.bottom)
+        print("HEXTOUCH bottom edge deferred: \(defers) via \(chain.joined(separator: " > "))")
     }
 }
 #endif

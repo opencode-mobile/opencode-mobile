@@ -179,6 +179,11 @@ struct HexMainView: View {
                 }
         }
         .hexToastHost(main.toasts)
+        // The talk button sits just above the home indicator, where iOS holds a touch back until it
+        // knows it isn't a home swipe, so a hold reached the button late. While home is the page on
+        // screen it takes bottom-edge touches first; the home swipe then needs a second swipe. Set
+        // here, outside the navigation stack, so it reaches the window's root controller.
+        .defersSystemGestures(on: main.path.isEmpty ? .bottom : [])
         .task { await main.realSession.open() }
         .onChange(of: scenePhase) { _, phase in
             switch phase {

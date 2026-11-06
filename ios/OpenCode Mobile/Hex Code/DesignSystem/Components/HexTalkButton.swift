@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 
 /// The talk button: a 50 pt pill. Idle it is `solid` with the mic and its label; with a draft it
@@ -60,9 +61,16 @@ struct HexTalkButton: View {
         .clipShape(shape)
         .contentShape(shape)
         .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            // Global coordinates: the translation is the same, and the location says how close to
+            // the screen's bottom edge the touch is.
+            DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onChanged { value in
-                    if !phase.pressing { onPressBegan() }
+                    if !phase.pressing {
+                        #if DEBUG
+                        TouchDelay.report(touchedAt: value.time, location: value.location)
+                        #endif
+                        onPressBegan()
+                    }
                     onPressMoved(value.translation.width)
                 }
                 .onEnded { _ in
@@ -253,3 +261,19 @@ private struct FirstFrameProbe: View {
         }
     }
 }
+
+#if DEBUG
+/// How long a press took to reach the talk button: from the touch event to its first gesture
+/// callback, and how far the touch was from the bottom of the screen. Printed, so
+/// `devicectl device process launch --console` shows it.
+@MainActor
+enum TouchDelay {
+    static func report(touchedAt: Date, location: CGPoint) {
+        let delay = Int((Date().timeIntervalSince(touchedAt) * 1000).rounded())
+        let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.height ?? 0
+        let fromBottom = Int((screen - location.y).rounded())
+        print("HEXTOUCH press reached the button \(delay) ms after the touch, \(fromBottom) pt from the bottom edge")
+        HexLog.dictation.info("touch: press reached the button \(delay) ms after the touch, \(fromBottom) pt from the bottom")
+    }
+}
+#endif
