@@ -40,7 +40,8 @@ enum SessionEvent: Equatable, Sendable {
     case formCreated(PendingItem)
     /// `form.replied` or `form.cancelled`.
     case formClosed(sessionID: String, id: String)
-    case inboxEnqueued(sessionID: String, id: String, delivery: String, text: String)
+    /// A message joined the inbox; its files by name and type only, never their contents.
+    case inboxEnqueued(sessionID: String, id: String, delivery: String, text: String, files: [InboxFileV2] = [])
     /// `session.inbox.delivered`: the message reached the agent.
     case inboxDelivered(sessionID: String, id: String)
     /// `session.inbox.cancelled`.
@@ -117,8 +118,13 @@ enum SessionEvent: Equatable, Sendable {
         case "session.inbox.enqueued":
             guard let sessionID, let id = data["inboxID"] as? String else { return nil }
             let item = data["item"] as? [String: Any]
-            let text = (item?["payload"] as? [String: Any])?["text"] as? String ?? ""
-            return .inboxEnqueued(sessionID: sessionID, id: id, delivery: item?["delivery"] as? String ?? "queue", text: text)
+            let payload = item?["payload"] as? [String: Any]
+            let text = payload?["text"] as? String ?? ""
+            // Each file carries its stored base64 (about 0.7 MB a photo); only names and types are kept.
+            let files = (payload?["files"] as? [[String: Any]] ?? []).map {
+                InboxFileV2(name: $0["name"] as? String, mime: $0["mime"] as? String)
+            }
+            return .inboxEnqueued(sessionID: sessionID, id: id, delivery: item?["delivery"] as? String ?? "queue", text: text, files: files)
         case "session.inbox.delivered":
             guard let sessionID, let id = data["inboxID"] as? String else { return nil }
             return .inboxDelivered(sessionID: sessionID, id: id)
@@ -192,6 +198,11 @@ struct InboxEntry: Equatable, Sendable, Identifiable {
     /// `queue` (after this turn) or `steer`.
     var delivery: String
     var text: String = ""
+    /// Its files, by name and type.
+    var files: [InboxFileV2] = []
+
+    /// How many of its files are images.
+    var imageCount: Int { files.filter { $0.mime?.hasPrefix("image/") ?? true }.count }
 }
 
 /// The state read back on every (re)connect.
@@ -311,9 +322,9 @@ struct LiveSessionState: Equatable, Sendable {
             guard owns(sessionID) else { return nil }
             pending.removeAll { $0.id == id }
             return nil
-        case let .inboxEnqueued(sessionID, id, delivery, text):
+        case let .inboxEnqueued(sessionID, id, delivery, text, files):
             guard sessionID == rootID, !inbox.contains(where: { $0.id == id }) else { return nil }
-            inbox.append(InboxEntry(id: id, delivery: delivery, text: text))
+            inbox.append(InboxEntry(id: id, delivery: delivery, text: text, files: files))
             return nil
         case let .inboxDelivered(sessionID, id):
             guard sessionID == rootID else { return nil }

@@ -26,6 +26,8 @@ final class HexAppModel {
 
     init(store: any HexSetupStoring = HexSetupStore()) {
         self.store = store
+        // Prepared images live only as long as their draft; any left from an earlier run go.
+        ImagePreparer.emptyCache()
         let voice = VoiceEngine()
         self.voice = voice
         speech = SpeechModel(voice: voice)

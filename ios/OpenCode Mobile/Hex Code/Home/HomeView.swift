@@ -9,10 +9,15 @@ struct HomeView: View {
     let session: TodaySession
     let voice: VoiceEngine
     let onSettings: () -> Void
-    /// Attach (M3) and Stop (M4) aren't built yet: the "Not in this version yet" notice.
+    /// Stop (M4) isn't built yet: the "Not in this version yet" notice.
     var onNotYet: () -> Void = {}
 
     @State private var showsWaiting = false
+    @State private var showsAttach = false
+    /// Where the Attach sheet goes once it has closed.
+    @State private var attachRoute: AttachRoute?
+    @State private var showsPhotos = false
+    @State private var showsCamera = false
     /// A page on the computer, open in the in-app browser.
     @State private var browserPage: BrowserPage?
     @Environment(\.openURL) private var openURL
@@ -73,6 +78,35 @@ struct HomeView: View {
         .hexSheet(isPresented: $showsWaiting, detents: [.medium]) {
             WaitingSheet(session: session) { showsWaiting = false }
         }
+        .hexSheet(isPresented: $showsAttach, detents: [.height(AttachSheet.height)], onDismiss: openAttachRoute) {
+            AttachSheet(
+                onPick: { route in
+                    attachRoute = route
+                    showsAttach = false
+                },
+                onClose: { showsAttach = false }
+            )
+        }
+        .attachPhotosPicker(isPresented: $showsPhotos, limit: home.draft.remainingImages) { home.attach($0) }
+        .fullScreenCover(isPresented: $showsCamera) {
+            CameraPicker(onPhoto: { home.attach([PickedImage(photo: $0)]) }, onClose: { showsCamera = false })
+                .ignoresSafeArea()
+        }
+    }
+
+    /// The paperclip: the Attach sheet, or the limit's notice with 4 images.
+    private func attach() {
+        if home.attachTapped() { showsAttach = true }
+    }
+
+    /// The system picker opens once the sheet has gone.
+    private func openAttachRoute() {
+        switch attachRoute {
+        case .photos?: showsPhotos = true
+        case .camera?: showsCamera = true
+        case nil: break
+        }
+        attachRoute = nil
     }
 
     /// A tile: a page on the computer opens in the in-app browser, anything else in the system
@@ -96,7 +130,7 @@ struct HomeView: View {
                     }
                     .transition(.opacity)
                 } else {
-                    HexIconButton(.clip, label: LocalizedStringResource("home.attach", defaultValue: "Attach"), action: onNotYet)
+                    HexIconButton(.clip, label: LocalizedStringResource("home.attach", defaultValue: "Attach"), action: attach)
                         .transition(.opacity)
                 }
             }
@@ -183,6 +217,9 @@ struct DraftView: View {
         VStack(alignment: .leading, spacing: 14) {
             label
                 .frame(height: HomeLabel.height)
+            if !draft.images.isEmpty {
+                DraftImagesRow(home: home)
+            }
             content()
             actions
                 .opacity(home.isRecording ? 0 : 1)
@@ -259,6 +296,8 @@ struct DraftView: View {
     }
 
     private var summary: String {
+        // Images alone: only "Draft".
+        guard !draft.chunks.isEmpty else { return String(localized: "draft.title", defaultValue: "Draft") }
         let chunks = draft.chunks.count == 1
             ? String(localized: "draft.one_chunk", defaultValue: "1 chunk")
             : String(localized: "draft.chunks", defaultValue: "\(draft.chunks.count) chunks")
@@ -308,6 +347,8 @@ struct DraftView: View {
                 HexButton(
                     home.takesPending
                         ? LocalizedStringResource("home.send.transcribing", defaultValue: "Transcribing")
+                        : home.imagesPending
+                        ? LocalizedStringResource("home.send.preparing", defaultValue: "Preparing")
                         : LocalizedStringResource("home.send", defaultValue: "Send"),
                     icon: .send,
                     style: .primary,
@@ -525,11 +566,16 @@ struct WaitingSheet: View {
                             HexIconView(.send, size: HexIconSize.small)
                                 .foregroundStyle(HexColor.text3)
                                 .padding(.top, 3)
-                            Text(verbatim: message.text)
-                                .hexFont(.row)
-                                .foregroundStyle(HexColor.text1)
-                                .lineLimit(2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 6) {
+                                if !message.text.isEmpty {
+                                    Text(verbatim: message.text)
+                                        .hexFont(.row)
+                                        .foregroundStyle(HexColor.text1)
+                                        .lineLimit(2)
+                                }
+                                WaitingImages(thumbnails: session.waitingThumbnails[message.id], count: message.imageCount)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             HexButton(
                                 LocalizedStringResource("home.waiting.cancel", defaultValue: "Cancel"),
                                 loading: cancelling.contains(message.id)
@@ -554,6 +600,60 @@ struct WaitingSheet: View {
         Task {
             try? await session.cancelWaiting(id)
             cancelling.remove(id)
+        }
+    }
+}
+
+/// The draft's images (app plan, "Attach" › Thumbnails on the draft): 40 pt thumbnails with ✕,
+/// a spinner while preparing, then one caption. Dimmed, with a caption that says so, when today's
+/// model can't see images.
+struct DraftImagesRow: View {
+    let home: HomeModel
+
+    var body: some View {
+        let images = home.draft.images
+        let canSee = home.imageInput.canSee
+        HStack(spacing: 8) {
+            ForEach(images) { image in
+                HexThumbnail(
+                    image: image.prepared?.thumbnail,
+                    dimmed: !canSee,
+                    onRemove: { home.removeImage(image.id) }
+                )
+                .transition(.opacity)
+            }
+            Text(verbatim: canSee
+                ? String(localized: "home.attach.caption", defaultValue: "\(images.count) images · go with your next message")
+                : String(localized: "home.attach.no_vision", defaultValue: "\(home.imageInput.modelName) can’t see images · they won’t be sent"))
+                .hexFont(.caption)
+                .foregroundStyle(HexColor.text3)
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .padding(.leading, 4)
+        }
+        // Room for the ✕ over the top corner.
+        .padding(.top, 5)
+        .animation(HexMotion.ease(HexMotion.fade), value: images)
+    }
+}
+
+/// A waiting message's images: the phone's own thumbnails (24 pt, at most 4), or for one sent
+/// from elsewhere their count.
+private struct WaitingImages: View {
+    let thumbnails: [UIImage]?
+    let count: Int
+
+    var body: some View {
+        if let thumbnails, !thumbnails.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(thumbnails.indices.prefix(DictationDraft.maxImages), id: \.self) { index in
+                    HexThumbnail(image: thumbnails[index], size: .small)
+                }
+            }
+        } else if count > 0 {
+            Text(verbatim: HomeModel.imageCountText(count))
+                .hexFont(.caption)
+                .foregroundStyle(HexColor.text3)
         }
     }
 }

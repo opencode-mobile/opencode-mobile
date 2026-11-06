@@ -95,6 +95,26 @@ final class HexMainModel {
         self.store = store
         home.sender = realSession
         if let samplePreset { showSample(samplePreset) }
+        Task { await refreshImageInput() }
+    }
+
+    /// Whether today's model can see images, from the server's model list (app plan, "Attach").
+    /// Unknown until read, and for a model the list doesn't have: counted as yes.
+    func refreshImageInput() async {
+        #if DEBUG
+        // `-HexCodeNoVision YES`: today's model can't see images, to try that path.
+        if UserDefaults.standard.bool(forKey: "HexCodeNoVision") {
+            home.imageInput = ImageInput(canSee: false, modelName: setup.modelName ?? setup.model.modelID)
+            return
+        }
+        #endif
+        let choice = setup.model
+        home.imageInput = ImageInput(canSee: true, modelName: setup.modelName ?? choice.modelID)
+        guard let connection,
+              let catalog = try? await services.models(connection).listModelOptions(directory: setup.project.path),
+              setup.model == choice
+        else { return }
+        home.imageInput = ImageInput.of(choice, in: catalog.options, savedName: setup.modelName)
     }
 
     /// What home shows: the sample session when one is on, else the real one.
@@ -103,7 +123,7 @@ final class HexMainModel {
     /// Today's session on the paired server, following the project and model chosen now.
     private static func liveSession(_ current: CurrentSetup, toasts: HexToaster) -> TodaySession {
         let connection = ServerConnection(profile: current.setup.profile, serverProtocol: .v2)
-        let service = connection.map(OpenCodeSessionService.init(connection:))
+        let service = connection.map { OpenCodeSessionService(connection: $0) }
         let stream = connection.map { LiveEventStream(transport: OpenCodeEventTransport(connection: $0)) }
         stream?.watchNetwork()
         let session = TodaySession(
@@ -207,6 +227,7 @@ final class HexMainModel {
         next.modelName = modelPage?.selectedModelName
         guard await save(next) else { return }
         path = [.settings]
+        Task { await refreshImageInput() }
         await realSession.switchModel(choice)
     }
 

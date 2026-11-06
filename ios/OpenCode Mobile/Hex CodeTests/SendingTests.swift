@@ -9,11 +9,14 @@ final class FakeSender: MessageSending {
     var connected = true
     var fails = false
     private(set) var sent: [(text: String, delivery: Delivery)] = []
+    /// The images of each message sent.
+    private(set) var sentImages: [[OutgoingImage]] = []
     private(set) var cancelled: [String] = []
 
-    func send(_ text: String, delivery: Delivery) async throws -> String {
+    func send(_ text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String {
         if fails { throw CancellationError() }
         sent.append((text, delivery))
+        sentImages.append(images)
         return "msg_\(sent.count)"
     }
 
@@ -226,7 +229,7 @@ struct WaitingToSendTests {
         let server = FakeSessionServer()
         let (session, _) = make(server)
         await session.open()
-        let id = try await session.send("Run the tests", delivery: .queue)
+        let id = try await session.send("Run the tests", images: [], delivery: .queue)
         #expect(id == "msg_1")
         #expect(server.prompts.map(\.text) == ["Run the tests"])
         #expect(server.prompts.map(\.delivery) == [.queue])

@@ -31,8 +31,33 @@ struct DraftChunk: Identifiable, Equatable, Sendable {
     }
 }
 
+/// A screenshot or photo going with the draft (app plan, "Attach"): preparing, then ready.
+nonisolated struct DraftImage: Identifiable, Equatable, Sendable {
+    enum Kind: Equatable, Sendable {
+        case photo
+        case screenshot
+    }
+
+    let id: UUID
+    let kind: Kind
+    /// Nil while it is prepared.
+    var prepared: PreparedImage?
+
+    init(id: UUID = UUID(), kind: Kind, prepared: PreparedImage? = nil) {
+        self.id = id
+        self.kind = kind
+        self.prepared = prepared
+    }
+
+    var isPreparing: Bool { prepared == nil }
+
+    static func == (lhs: DraftImage, rhs: DraftImage) -> Bool {
+        lhs.id == rhs.id && lhs.kind == rhs.kind && lhs.prepared === rhs.prepared
+    }
+}
+
 /// The dictation draft on the home screen: takes become chunks; a chunk can be selected to
-/// delete or re-record it; Clear empties it. Nothing here sends anything.
+/// delete or re-record it; Clear empties it. Images can go with it. Nothing here sends anything.
 struct DictationDraft: Equatable, Sendable {
     /// More chunks than this always shows one row per chunk (app plan, "Long drafts").
     static let longChunks = 3
@@ -40,6 +65,8 @@ struct DictationDraft: Equatable, Sendable {
     static let longCharacters = 220
     /// Rows the long list shows at most.
     static let maxRows = 8
+    /// Images per message at most (app plan, "Attach" › Limit).
+    static let maxImages = 4
 
     private(set) var chunks: [DraftChunk] = []
     /// The chunk tapped for Delete or Re-record.
@@ -47,14 +74,20 @@ struct DictationDraft: Equatable, Sendable {
     /// The take being recorded now, and whether it replaces a chunk.
     private(set) var recordingID: UUID?
     private(set) var isRerecording = false
+    /// Screenshots and photos, in the order they were picked.
+    private(set) var images: [DraftImage] = []
 
-    var isEmpty: Bool { chunks.isEmpty }
+    var isEmpty: Bool { chunks.isEmpty && images.isEmpty }
     var isListening: Bool { recordingID != nil }
     var isTranscribing: Bool { chunks.contains { $0.state == .transcribing } }
     var isWaiting: Bool { chunks.contains { $0.state == .waiting } }
     var hasFailed: Bool { chunks.contains { if case .failed = $0.state { true } else { false } } }
-    /// Every chunk has text: what Send will wait for.
-    var isComplete: Bool { !chunks.isEmpty && chunks.allSatisfy { $0.text != nil } }
+    /// An image is still being prepared: Send reads "Preparing".
+    var isPreparing: Bool { images.contains(where: \.isPreparing) }
+    /// Every chunk has text and every image is prepared: what Send will wait for.
+    var isComplete: Bool { !isEmpty && chunks.allSatisfy { $0.text != nil } && !isPreparing }
+    /// Images that can still be added.
+    var remainingImages: Int { max(0, Self.maxImages - images.count) }
     var selectedIndex: Int? { selectedID.flatMap(index(of:)) }
     var recordingIndex: Int? { recordingID.flatMap(index(of:)) }
 
@@ -180,17 +213,43 @@ struct DictationDraft: Equatable, Sendable {
         chunks.insert(chunk, at: min(max(0, index), chunks.count))
     }
 
-    /// Puts a draft that didn't go back, ahead of anything said since.
+    /// Puts a draft that didn't go back, ahead of anything said since. Its images come first;
+    /// images added since that would go past the limit are dropped.
     mutating func restore(contentsOf saved: DictationDraft) {
         chunks = saved.chunks + chunks
+        images = Array((saved.images + images).prefix(Self.maxImages))
         selectedID = nil
     }
 
-    /// Empties the draft. Not while a take is running.
+    /// Empties the draft, images too. Not while a take is running.
     mutating func clear() {
         guard !isListening else { return }
         chunks = []
+        images = []
         selectedID = nil
+    }
+
+    // MARK: Images
+
+    /// Adds an image that is being prepared. False at the limit.
+    @discardableResult
+    mutating func addImage(_ image: DraftImage) -> Bool {
+        guard images.count < Self.maxImages, !images.contains(where: { $0.id == image.id }) else { return false }
+        images.append(image)
+        return true
+    }
+
+    /// The image is prepared. False when it was removed meanwhile.
+    @discardableResult
+    mutating func finishImage(_ id: UUID, _ prepared: PreparedImage) -> Bool {
+        guard let index = images.firstIndex(where: { $0.id == id }) else { return false }
+        images[index].prepared = prepared
+        return true
+    }
+
+    /// ✕ on a thumbnail, or an image that couldn't be read.
+    mutating func removeImage(_ id: UUID) {
+        images.removeAll { $0.id == id }
     }
 
     // MARK: Long list

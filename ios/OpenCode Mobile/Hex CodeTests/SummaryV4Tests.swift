@@ -360,7 +360,7 @@ struct SummaryRefreshRuleTests {
         let server = server()
         let store = MemorySummaryStore()
         let (session, transport) = await launch(server, store: store)
-        let id = try await session.send("Fix the login test", delivery: .steer)
+        let id = try await session.send("Fix the login test", images: [], delivery: .steer)
         #expect(session.sentMessage == nil)
         transport.send(EventLines.delivered("ses_a", id: id))
         await eventually { session.sentMessage != nil }

@@ -10,8 +10,8 @@ protocol LiveSessionAPI: Sendable {
     func switchModel(sessionID: String, model: ModelChoice) async throws
     /// The session's `time.updated` (epoch ms).
     func sessionUpdated(sessionID: String) async throws -> Int64
-    /// Sends a message; returns its inbox id.
-    func prompt(sessionID: String, text: String, delivery: Delivery) async throws -> String
+    /// Sends a message with its images; returns its inbox id.
+    func prompt(sessionID: String, text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String
     /// Takes back a message not delivered yet.
     func cancelInbox(sessionID: String, itemID: String) async throws
 }
@@ -36,8 +36,8 @@ protocol EventStreamTransport: Sendable {
 struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
     let client: SessionStateAPIClient
 
-    init(connection: ServerConnection) {
-        client = SessionStateAPIClient(fixedConnection: connection)
+    init(connection: ServerConnection, urlSession: URLSession? = nil) {
+        client = SessionStateAPIClient(fixedConnection: connection, urlSession: urlSession)
     }
 
     // MARK: DailySessionService
@@ -94,7 +94,7 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
             updated: session.updatedMs,
             runningChildren: childIDs.filter(running.contains),
             pending: PendingItem.oldestFirst(pending),
-            inbox: try await inbox.map { InboxEntry(id: $0.id, delivery: $0.delivery ?? "queue", text: $0.text ?? "") },
+            inbox: try await inbox.map { InboxEntry(id: $0.id, delivery: $0.delivery ?? "queue", text: $0.text ?? "", files: $0.files) },
             // A list that can't be read doesn't fail the rest; the last one stays.
             todos: try? await todos.map(TodoList.items) ?? []
         )
@@ -128,8 +128,13 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
         try await client.getSession(id: sessionID).updatedMs
     }
 
-    func prompt(sessionID: String, text: String, delivery: Delivery) async throws -> String {
-        try await client.prompt(sessionID: sessionID, text: text, delivery: delivery == .queue ? .queue : .steer).id
+    /// The images travel inside the prompt as `data:` URLs (app plan, "Attach" › Sending), read
+    /// from the phone's cache here, off the main thread.
+    func prompt(sessionID: String, text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String {
+        let files = try await Task.detached(priority: .userInitiated) {
+            try images.map { SessionStateAPIClient.PromptFile(uri: try $0.image.dataURL(), name: $0.name) }
+        }.value
+        return try await client.prompt(sessionID: sessionID, text: text, delivery: delivery == .queue ? .queue : .steer, files: files).id
     }
 
     func cancelInbox(sessionID: String, itemID: String) async throws {

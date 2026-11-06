@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import os
+import UIKit
 import VoiceEngineKit
 
 /// The recorder the home screen drives: `TakeCapture` in the app; a fake in tests. It only
@@ -45,6 +46,8 @@ final class HomeModel {
     private(set) var held: HeldMessage?
     /// Today's session, where Send goes.
     @ObservationIgnored weak var sender: (any MessageSending)?
+    /// Whether today's model can see images; set from the model list.
+    var imageInput = ImageInput.unknown
 
     @ObservationIgnored private let recorder: any TakeRecording
     /// The speech model. Recording never waits for it.
@@ -60,15 +63,20 @@ final class HomeModel {
     @ObservationIgnored private var pressStartedAt: Date?
     @ObservationIgnored private var startTask: Task<Bool, Never>?
     @ObservationIgnored private var lastDeleted: (index: Int, chunk: DraftChunk)?
+    @ObservationIgnored private let prepareImage: @Sendable (PickedImage.Content) async throws -> PreparedImage
+    /// Images being prepared, by draft image id.
+    @ObservationIgnored private var preparing: [UUID: Task<Void, Never>] = [:]
 
     init(
         recorder: any TakeRecording,
         speech: any SpeechTranscribing,
         toasts: HexToaster? = nil,
         now: @escaping () -> Date = Date.init,
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        prepareImage: @escaping @Sendable (PickedImage.Content) async throws -> PreparedImage = PickedImage.prepare
     ) {
         self.recorder = recorder
+        self.prepareImage = prepareImage
         self.sleep = sleep
         self.speech = speech
         self.toasts = toasts ?? HexToaster()
@@ -337,10 +345,15 @@ final class HomeModel {
     /// What a Now starts with.
     static let correctionPrefix = "[Correction] "
 
-    /// Every chunk has text and nothing records: Send is on.
-    var canSend: Bool { draft.isComplete && !isRecording }
+    /// Every chunk has text, every image is prepared and nothing records: Send is on. Images
+    /// alone don't make a message for a model that can't see them.
+    var canSend: Bool {
+        draft.isComplete && !isRecording && !(draft.chunks.isEmpty && !imageInput.canSee)
+    }
     /// A take still turning into text: Send reads "Transcribing".
     var takesPending: Bool { isRecording || draft.isWaiting || draft.isTranscribing }
+    /// An image still being prepared: Send reads "Preparing".
+    var imagesPending: Bool { draft.isPreparing }
     var agentBusy: Bool { sender?.agentBusy ?? false }
 
     /// Send: the draft clears at once and goes out. An idle agent gets it at once (`steer`, which
@@ -366,28 +379,61 @@ final class HomeModel {
 
     private enum SentNotice { case idle, queued, now }
 
+    /// What goes with the text: the draft's images, or none for a model that can't see them.
+    private func outgoingImages(_ saved: DictationDraft) -> [OutgoingImage] {
+        imageInput.canSee ? OutgoingImage.from(saved.images) : []
+    }
+
+    /// The notice's detail: the text in quotes, or for images alone their count.
+    private static func detail(_ text: String, imageCount: Int) -> String {
+        if text.isEmpty, imageCount > 0 { return imageCountText(imageCount) }
+        return "“\(text)”"
+    }
+
+    static func imageCountText(_ count: Int) -> String {
+        String(localized: "home.waiting.images", defaultValue: "\(count) images")
+    }
+
     private func post(_ text: String, delivery: Delivery, saved: DictationDraft, notice: SentNotice) async {
         guard let sender else { return restoreAfterFailure(saved) }
+        let images = outgoingImages(saved)
+        let withheld = images.isEmpty && !saved.images.isEmpty
         let id: String
         do {
-            id = try await sender.send(text, delivery: delivery)
+            id = try await sender.send(text, images: images, delivery: delivery)
         } catch {
             HexLog.dictation.error("send: failed: \(String(describing: error), privacy: .public)")
             return restoreAfterFailure(saved)
         }
+        let undo = HexToastItem.Action(title: String(localized: "common.undo", defaultValue: "Undo"), icon: .undo)
+        if withheld {
+            // The model can't see images: only the text went (app plan, "Attach").
+            toasts.show(
+                HexToastItem(
+                    tone: .info,
+                    title: String(localized: "home.sent.no_images", defaultValue: "Sent without the images"),
+                    detail: String(localized: "home.sent.no_images.sub", defaultValue: "\(imageInput.modelName) can’t see them"),
+                    action: notice == .queued ? undo : nil,
+                    duration: notice == .queued ? 3.2 : 2.6
+                ),
+                onAction: notice == .queued ? { [weak self] in Task { await self?.takeBack(id, saved: saved) } } : nil
+            )
+            return
+        }
+        let detail = Self.detail(text, imageCount: images.count)
         switch notice {
         case .idle:
             toasts.show(HexToastItem(
                 tone: .steer,
                 title: String(localized: "home.sent.idle", defaultValue: "Sent · starting now"),
-                detail: "“\(text)”",
+                detail: detail,
                 duration: 2.6
             ))
         case .now:
             toasts.show(HexToastItem(
                 tone: .steer,
                 title: String(localized: "home.sent.now", defaultValue: "Sent · lands at the next step"),
-                detail: "“\(text)”",
+                detail: Self.detail(saved.text, imageCount: images.count),
                 duration: 2.6
             ))
         case .queued:
@@ -396,7 +442,7 @@ final class HomeModel {
                     tone: .steer,
                     title: String(localized: "home.sent.queued", defaultValue: "Queued · sends after this turn"),
                     detail: String(localized: "home.sent.queued.sub", defaultValue: "Cancel it from the waiting line until then"),
-                    action: .init(title: String(localized: "common.undo", defaultValue: "Undo"), icon: .undo),
+                    action: undo,
                     duration: 3.2
                 ),
                 onAction: { [weak self] in Task { await self?.takeBack(id, saved: saved) } }
@@ -404,7 +450,7 @@ final class HomeModel {
         }
     }
 
-    /// Undo of a queued message: cancelled from the inbox, and the draft comes back.
+    /// Undo of a queued message: cancelled from the inbox, and the draft comes back, images too.
     private func takeBack(_ id: String, saved: DictationDraft) async {
         do {
             try await sender?.cancelWaiting(id)
@@ -429,7 +475,7 @@ final class HomeModel {
             HexToastItem(
                 tone: .steer,
                 title: String(localized: "home.sending.now", defaultValue: "Sending now…"),
-                detail: "“\(text)”",
+                detail: Self.detail(text, imageCount: outgoingImages(saved).count),
                 action: .init(title: String(localized: "common.undo", defaultValue: "Undo"), icon: .undo),
                 duration: 3
             ),
@@ -508,6 +554,8 @@ final class HomeModel {
     func clearDraft() {
         guard !draft.isEmpty, !isRecording else { return }
         draft.clear()
+        for task in preparing.values { task.cancel() }
+        preparing.removeAll()
         for take in audio.values { try? FileManager.default.removeItem(at: take.url) }
         audio.removeAll()
         queue.removeAll()
@@ -518,5 +566,69 @@ final class HomeModel {
             title: String(localized: "home.draft_cleared", defaultValue: "Draft cleared"),
             detail: String(localized: "home.draft_cleared.sub", defaultValue: "Nothing was sent.")
         ))
+    }
+
+    // MARK: Attach
+
+    /// The paperclip: true opens the Attach sheet; with 4 images it shows the limit instead.
+    func attachTapped() -> Bool {
+        guard draft.remainingImages > 0 else {
+            showImageLimit()
+            return false
+        }
+        return true
+    }
+
+    private func showImageLimit() {
+        toasts.show(HexToastItem(
+            tone: .info,
+            title: String(localized: "home.attach.limit", defaultValue: "4 images is the most per message")
+        ))
+    }
+
+    /// Picked images join the draft at once as thumbnails with a spinner and are prepared off the
+    /// main thread. Past the limit they are left out, with its notice; one that can't be read
+    /// leaves with "Couldn't add this image".
+    func attach(_ picked: [PickedImage]) {
+        guard !picked.isEmpty else { return }
+        if picked.count > draft.remainingImages { showImageLimit() }
+        for item in picked.prefix(draft.remainingImages) {
+            let image = DraftImage(kind: item.kind)
+            guard draft.addImage(image) else { continue }
+            let prepareImage = prepareImage
+            preparing[image.id] = Task { [weak self] in
+                let result: Result<PreparedImage, any Error>
+                do {
+                    let content = try await item.load()
+                    result = .success(try await prepareImage(content))
+                } catch {
+                    result = .failure(error)
+                }
+                self?.finishPreparing(image.id, result)
+            }
+        }
+    }
+
+    private func finishPreparing(_ id: UUID, _ result: Result<PreparedImage, any Error>) {
+        preparing[id] = nil
+        switch result {
+        case let .success(prepared):
+            // Removed meanwhile: the prepared file goes with `prepared`.
+            draft.finishImage(id, prepared)
+        case let .failure(error):
+            guard draft.images.contains(where: { $0.id == id }) else { return }
+            HexLog.dictation.error("attach: couldn't prepare an image: \(String(describing: error), privacy: .public)")
+            draft.removeImage(id)
+            toasts.show(HexToastItem(
+                tone: .stop,
+                title: String(localized: "home.attach.failed", defaultValue: "Couldn’t add this image")
+            ))
+        }
+    }
+
+    /// ✕ on a thumbnail. One still preparing stops.
+    func removeImage(_ id: UUID) {
+        preparing.removeValue(forKey: id)?.cancel()
+        draft.removeImage(id)
     }
 }

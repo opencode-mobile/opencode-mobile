@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import os
+import UIKit
 
 /// Today's session as home shows it: whether it opened, the agent's state for the top bar, a
 /// pending question or approval, the waiting messages, and the status summary.
@@ -38,6 +39,8 @@ final class TodaySession {
     var computerHost: String?
     /// Those messages, in order, for the Waiting to send sheet.
     var waitingMessages: [InboxEntry] = []
+    /// The phone's thumbnails of the images it sent, by inbox id, until delivered or cancelled.
+    private(set) var waitingThumbnails: [String: [UIImage]] = [:]
     /// The agent's to-do list (`todowrite`), cancelled items left out; empty for none.
     var todos: [TodoItem] = []
     /// Subagents and shell commands running, for the Details link.
@@ -69,6 +72,8 @@ final class TodaySession {
     /// The run the sent message started (or joined) has ended: the next card made while idle
     /// replaces the You line.
     @ObservationIgnored private var sentRunEnded = false
+    /// The latest inbox ids delivered or cancelled.
+    @ObservationIgnored private var leftInbox: [String] = []
 
     init(
         setup: DailySessionSetup,
@@ -222,6 +227,7 @@ final class TodaySession {
             return
         }
         live?.apply(snapshot)
+        waitingThumbnails = waitingThumbnails.filter { id, _ in snapshot.inbox.contains { $0.id == id } }
         publish()
         await summaryOnReconnect(updated: snapshot.updated)
     }
@@ -245,12 +251,14 @@ final class TodaySession {
     private func received(_ event: SessionEvent) {
         guard live != nil else { return }
         let effect = live?.apply(event)
+        if case let .inboxRemoved(_, id) = event { inboxLeft(id) }
         publish()
         switch effect {
         case .runEnded:
             if sentMessage != nil { sentRunEnded = true }
             Task { await summary.refresh() }
         case let .delivered(id, text):
+            inboxLeft(id)
             if let text = sentTexts.removeValue(forKey: id) ?? text {
                 showSent(text)
             } else {
@@ -259,6 +267,14 @@ final class TodaySession {
         case nil:
             break
         }
+    }
+
+    /// A message left the inbox (delivered or cancelled): its thumbnails go. A send that returns
+    /// after that keeps none.
+    private func inboxLeft(_ id: String) {
+        waitingThumbnails[id] = nil
+        leftInbox.append(id)
+        if leftInbox.count > 20 { leftInbox.removeFirst() }
     }
 
     /// A later delivered message replaces the You line.
@@ -317,14 +333,17 @@ final class TodaySession {
     /// The agent is working (or waiting on you): a message can go after this turn or now.
     var agentBusy: Bool { busySince != nil || pendingInput != nil }
 
-    /// Sends a message to today's session; returns its inbox id.
-    func send(_ text: String, delivery: Delivery) async throws -> String {
+    /// Sends a message, with its images, to today's session; returns its inbox id.
+    func send(_ text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String {
         guard let api, let sessionID else { throw NotOpen() }
         #if DEBUG
         // `-HexCodeFailSends YES`: every send fails, as without a network.
         if UserDefaults.standard.bool(forKey: "HexCodeFailSends") { throw URLError(.notConnectedToInternet) }
         #endif
-        let id = try await api.prompt(sessionID: sessionID, text: text, delivery: delivery)
+        let id = try await api.prompt(sessionID: sessionID, text: text, images: images, delivery: delivery)
+        if !images.isEmpty, !leftInbox.contains(id) {
+            waitingThumbnails[id] = images.prefix(DictationDraft.maxImages).map(\.image.thumbnail)
+        }
         if deliveredWithoutText == id {
             // Delivered before the send returned, with no text from the inbox.
             deliveredWithoutText = nil
@@ -340,6 +359,7 @@ final class TodaySession {
         guard let api, let sessionID else { throw NotOpen() }
         try await api.cancelInbox(sessionID: sessionID, itemID: itemID)
         sentTexts[itemID] = nil
+        inboxLeft(itemID)
         // The cancelled event removes it too; this doesn't wait for it.
         _ = live?.apply(.inboxRemoved(sessionID: sessionID, id: itemID))
         publish()
