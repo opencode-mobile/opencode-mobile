@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 /// Today's session as home shows it: whether it opened, the agent's state for the top bar, a
 /// pending question or approval, the waiting messages, and the status summary.
@@ -41,6 +42,9 @@ final class TodaySession {
     var todos: [TodoItem] = []
     /// Subagents and shell commands running, for the Details link.
     var runningCount = 0
+    /// While a message is in flight (app plan, "Just sent"): from its `session.inbox.delivered`
+    /// until the card made after that run ends, the Next line reads "You: “…”".
+    var sentMessage: String?
     let summary: StatusSummaryModel
 
     @ObservationIgnored private let dailySetup: DailySessionSetup
@@ -58,6 +62,13 @@ final class TodaySession {
     @ObservationIgnored private var backgroundStop: Task<Void, Never>?
     /// Publishes again when a young shell has run long enough to count as running.
     @ObservationIgnored private var shellTick: Task<Void, Never>?
+    /// What the phone sent, by inbox id, until it is delivered.
+    @ObservationIgnored private var sentTexts: [String: String] = [:]
+    /// The last delivered message whose text wasn't known yet (its send hadn't returned).
+    @ObservationIgnored private var deliveredWithoutText: String?
+    /// The run the sent message started (or joined) has ended: the next card made while idle
+    /// replaces the You line.
+    @ObservationIgnored private var sentRunEnded = false
 
     init(
         setup: DailySessionSetup,
@@ -83,6 +94,7 @@ final class TodaySession {
         stream?.onDisconnected = { [weak self] in self?.streamUp = false }
         stream?.onEvent = { [weak self] in self?.received($0) }
         summary.isWorking = { [weak self] in self?.busySince != nil }
+        summary.onCard = { [weak self] busy in self?.cardMade(busy: busy) }
     }
 
     /// The top bar's state; nil (empty) until today's session is open.
@@ -189,10 +201,14 @@ final class TodaySession {
         await open()
     }
 
-    /// Settings › Model changed: the session's model follows (`POST /api/session/{id}/model`).
+    /// Settings › Model changed: the session's model follows (`POST /api/session/{id}/model`). A
+    /// switch moves `time.updated`; the card stays current, so its basis moves with it.
     func switchModel(_ choice: ModelChoice) async {
         guard let api, let sessionID else { return }
-        try? await api.switchModel(sessionID: sessionID, model: choice)
+        guard (try? await api.switchModel(sessionID: sessionID, model: choice)) != nil else { return }
+        if let updated = try? await api.sessionUpdated(sessionID: sessionID), self.sessionID == sessionID {
+            summary.moveBasis(to: updated)
+        }
     }
 
     // MARK: Stream
@@ -200,20 +216,62 @@ final class TodaySession {
     private func connected() async {
         streamUp = true
         guard let api, let rootID = live?.rootID else { return }
-        if let snapshot = try? await api.snapshot(rootID: rootID), live?.rootID == rootID {
-            live?.apply(snapshot)
-            publish()
+        guard let snapshot = try? await api.snapshot(rootID: rootID), live?.rootID == rootID else {
+            // The state couldn't be read: whether anything is new is unknown.
+            await refreshSummary()
+            return
         }
-        await refreshSummary()
+        live?.apply(snapshot)
+        publish()
+        await summaryOnReconnect(updated: snapshot.updated)
+    }
+
+    /// Open, foreground and reconnect (app plan, "Nothing new"): no request while the agent works
+    /// (the run's end refreshes), nor when the card was made while idle from the session's
+    /// `time.updated` as it is now.
+    private func summaryOnReconnect(updated: Int64?) async {
+        if live?.hasRun == false {
+            summary.showEmpty(timeZone: timeZone)
+        } else if busySince != nil {
+            HexLog.summary.info("summary: busy, no request")
+            summary.showWorkingIfEmpty()
+        } else if let updated, summary.isCurrent(updated: updated) {
+            HexLog.summary.info("summary: nothing new, no request")
+        } else {
+            await summary.refresh()
+        }
     }
 
     private func received(_ event: SessionEvent) {
         guard live != nil else { return }
         let effect = live?.apply(event)
         publish()
-        if effect == .runEnded {
+        switch effect {
+        case .runEnded:
+            if sentMessage != nil { sentRunEnded = true }
             Task { await summary.refresh() }
+        case let .delivered(id, text):
+            if let text = sentTexts.removeValue(forKey: id) ?? text {
+                showSent(text)
+            } else {
+                deliveredWithoutText = id
+            }
+        case nil:
+            break
         }
+    }
+
+    /// A later delivered message replaces the You line.
+    private func showSent(_ text: String) {
+        sentMessage = text
+        sentRunEnded = false
+    }
+
+    /// The card made after the sent message's run ended replaces the You line.
+    private func cardMade(busy: Bool) {
+        guard !busy, sentRunEnded else { return }
+        sentMessage = nil
+        sentRunEnded = false
     }
 
     private func publish() {
@@ -266,13 +324,22 @@ final class TodaySession {
         // `-HexCodeFailSends YES`: every send fails, as without a network.
         if UserDefaults.standard.bool(forKey: "HexCodeFailSends") { throw URLError(.notConnectedToInternet) }
         #endif
-        return try await api.prompt(sessionID: sessionID, text: text, delivery: delivery)
+        let id = try await api.prompt(sessionID: sessionID, text: text, delivery: delivery)
+        if deliveredWithoutText == id {
+            // Delivered before the send returned, with no text from the inbox.
+            deliveredWithoutText = nil
+            showSent(text)
+        } else {
+            sentTexts[id] = text
+        }
+        return id
     }
 
     /// Takes back a message still waiting to send.
     func cancelWaiting(_ itemID: String) async throws {
         guard let api, let sessionID else { throw NotOpen() }
         try await api.cancelInbox(sessionID: sessionID, itemID: itemID)
+        sentTexts[itemID] = nil
         // The cancelled event removes it too; this doesn't wait for it.
         _ = live?.apply(.inboxRemoved(sessionID: sessionID, id: itemID))
         publish()

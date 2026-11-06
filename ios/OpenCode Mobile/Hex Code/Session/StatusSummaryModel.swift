@@ -1,10 +1,25 @@
 import Foundation
 import Observation
+import os
 
 /// Asks the session's model for a summary of today's session: `POST /api/session/{id}/generate`
 /// with only the prompt (the session's model and level answer it).
 protocol SummaryGenerating: Sendable {
     func generateSummary(prompt: String) async throws -> String
+    /// The session's `time.updated` now (`GET /api/session/{id}`), read before each request; nil
+    /// when there is no session to read.
+    func sessionUpdated() async throws -> Int64?
+}
+
+extension SummaryGenerating {
+    func sessionUpdated() async throws -> Int64? { nil }
+}
+
+/// What a card was made from (app plan, "Nothing new"): the session's `time.updated` read just
+/// before the request, and whether the session was busy then.
+struct SummaryBasis: Equatable, Codable, Sendable {
+    var updated: Int64
+    var busy: Bool
 }
 
 /// The last card of today's session, kept on the phone so it survives the app being closed.
@@ -16,6 +31,9 @@ struct SavedSummary: Equatable, Codable, Sendable {
     /// session. Missing on cards saved before they were kept.
     var day: String?
     var directory: String?
+    /// Nil on cards saved before it was kept, or when the session couldn't be read: such a card
+    /// is never current.
+    var basis: SummaryBasis?
 }
 
 /// Where the last card is kept. Only one session's (today's) at a time.
@@ -43,13 +61,16 @@ final class SummaryDefaults: SummaryStoring {
     }
 }
 
-/// The status summary on home and its ↻. Refreshed when the session opens or reconnects, when a
-/// run ends and on ↻; never on a timer. A refresh asked for while one runs is dropped. A request
-/// that fails, times out (60 s) or answers with no text keeps the last card and shows
+/// The status summary on home and its ↻. `TodaySession` asks for it when a run ends, on ↻, and on
+/// open, foreground and reconnect only when something is new (`isCurrent`); never on a timer, and
+/// never on its own during a run. A refresh asked for while one runs is dropped. Before each
+/// request it reads the session's `time.updated`, kept with the card as its basis. A request that
+/// fails, times out (60 s) or answers with no text keeps the last card and its basis and shows
 /// "Couldn't update" — except an empty answer while the agent works (the server often gives one
 /// then): the last card stays without the note, and the run's end refreshes it; with no card yet,
-/// a "The agent is working." card shows instead. Each new card is saved for its session, and shown
-/// at once (with its age) the next time that session opens.
+/// a "The agent is working." card shows instead. A card made while the session is busy (from ↻)
+/// has no Next: mid-run, the model suggests its own next step. Each new card is saved for its
+/// session, and shown at once (with its age) the next time that session opens.
 @MainActor
 @Observable
 final class StatusSummaryModel {
@@ -62,6 +83,10 @@ final class StatusSummaryModel {
     private(set) var failed = false
 
     @ObservationIgnored var generator: (any SummaryGenerating)?
+    /// What the card shown was made from; nil with no card, or none known.
+    @ObservationIgnored private(set) var basis: SummaryBasis?
+    /// A new card was made; `busy` when the session was busy then.
+    @ObservationIgnored var onCard: (_ busy: Bool) -> Void = { _ in }
     /// The session whose cards are saved; set when today's session opens.
     @ObservationIgnored private(set) var sessionID: String?
     @ObservationIgnored private var day: String?
@@ -96,6 +121,7 @@ final class StatusSummaryModel {
             clear()
             summary = saved.summary
             updatedAt = saved.updatedAt
+            basis = saved.basis
         } else {
             // Setup found a different session than the card shown before it finished.
             clear()
@@ -111,6 +137,29 @@ final class StatusSummaryModel {
         guard let saved = store?.load(), saved.day == day, saved.directory == directory else { return }
         summary = saved.summary
         updatedAt = saved.updatedAt
+        basis = saved.basis
+    }
+
+    /// Nothing is new: the card shown was made while the session was idle, from this
+    /// `time.updated`.
+    func isCurrent(updated: Int64) -> Bool {
+        guard summary != nil, let basis, !basis.busy else { return false }
+        return basis.updated == updated
+    }
+
+    /// The app switched the model itself, which moved `time.updated`: the card stays current.
+    func moveBasis(to updated: Int64) {
+        guard var basis, let summary, let updatedAt, let sessionID else { return }
+        basis.updated = updated
+        self.basis = basis
+        store?.save(SavedSummary(sessionID: sessionID, summary: summary, updatedAt: updatedAt, day: day, directory: directory, basis: basis))
+    }
+
+    /// The agent is working and there is no card yet: say so, with no request.
+    func showWorkingIfEmpty() {
+        guard summary == nil else { return }
+        summary = .card(.working(on: now(), timeZone: timeZone))
+        updatedAt = now()
     }
 
     /// A session that never ran: the long-date card, with no request. A request on its way is
@@ -121,6 +170,7 @@ final class StatusSummaryModel {
         isUpdating = false
         summary = .card(.empty(on: now(), timeZone: timeZone))
         updatedAt = now()
+        basis = nil
         failed = false
     }
 
@@ -131,6 +181,7 @@ final class StatusSummaryModel {
         isUpdating = false
         summary = nil
         updatedAt = nil
+        basis = nil
         failed = false
     }
 
@@ -139,16 +190,19 @@ final class StatusSummaryModel {
         guard inFlight == nil, let generator else { return }
         isUpdating = true
         let timeout = timeout
+        let busy = isWorking()
+        HexLog.summary.info("summary: request (busy: \(busy))")
         let task = Task {
+            let updated = try? await generator.sessionUpdated()
             let reply = await Self.generate(generator, timeout: timeout)
             guard !Task.isCancelled else { return }
-            self.finish(reply)
+            self.finish(reply, basis: updated.map { SummaryBasis(updated: $0, busy: busy) })
         }
         inFlight = task
         await task.value
     }
 
-    private func finish(_ reply: String?) {
+    private func finish(_ reply: String?, basis: SummaryBasis?) {
         isUpdating = false
         inFlight = nil
         guard let reply, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -162,13 +216,20 @@ final class StatusSummaryModel {
             }
             return
         }
-        let parsed = StatusSummary.parse(reply)
+        var parsed = StatusSummary.parse(reply)
+        let busy = basis?.busy ?? isWorking()
+        if busy, case var .card(card) = parsed {
+            card.next = nil
+            parsed = .card(card)
+        }
         summary = parsed
         updatedAt = now()
+        self.basis = basis
         failed = false
         if let sessionID {
-            store?.save(SavedSummary(sessionID: sessionID, summary: parsed, updatedAt: now(), day: day, directory: directory))
+            store?.save(SavedSummary(sessionID: sessionID, summary: parsed, updatedAt: now(), day: day, directory: directory, basis: basis))
         }
+        onCard(busy)
     }
 
     /// The reply, or nil after an error or the timeout. The timeout doesn't wait for the request

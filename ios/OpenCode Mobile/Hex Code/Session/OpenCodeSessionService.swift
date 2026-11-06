@@ -8,6 +8,8 @@ protocol LiveSessionAPI: Sendable {
     func snapshot(rootID: String) async throws -> LiveSnapshot
     func generate(sessionID: String, prompt: String) async throws -> String
     func switchModel(sessionID: String, model: ModelChoice) async throws
+    /// The session's `time.updated` (epoch ms).
+    func sessionUpdated(sessionID: String) async throws -> Int64
     /// Sends a message; returns its inbox id.
     func prompt(sessionID: String, text: String, delivery: Delivery) async throws -> String
     /// Takes back a message not delivered yet.
@@ -89,6 +91,7 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
             busySince: busy,
             hasRun: session.busyMs != nil,
             children: childIDs,
+            updated: session.updatedMs,
             runningChildren: childIDs.filter(running.contains),
             pending: PendingItem.oldestFirst(pending),
             inbox: try await inbox.map { InboxEntry(id: $0.id, delivery: $0.delivery ?? "queue", text: $0.text ?? "") },
@@ -119,6 +122,10 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
 
     func switchModel(sessionID: String, model: ModelChoice) async throws {
         try await client.switchModel(sessionID: sessionID, model: Self.ref(model))
+    }
+
+    func sessionUpdated(sessionID: String) async throws -> Int64 {
+        try await client.getSession(id: sessionID).updatedMs
     }
 
     func prompt(sessionID: String, text: String, delivery: Delivery) async throws -> String {
@@ -163,6 +170,10 @@ struct SessionSummaryGenerator: SummaryGenerating {
 
     func generateSummary(prompt: String) async throws -> String {
         try await api.generate(sessionID: sessionID, prompt: prompt)
+    }
+
+    func sessionUpdated() async throws -> Int64? {
+        try await api.sessionUpdated(sessionID: sessionID)
     }
 }
 

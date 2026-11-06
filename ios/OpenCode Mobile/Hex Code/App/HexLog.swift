@@ -7,6 +7,8 @@ enum HexLog {
     static let subsystem = "dev.opencode.hexcode"
     /// The talk button, the microphone and transcription.
     static let dictation = Logger(subsystem: subsystem, category: "dictation")
+    /// The status summary's requests, and the ones not made because nothing is new.
+    static let summary = Logger(subsystem: subsystem, category: "summary")
 }
 
 /// Milliseconds between two `CACurrentMediaTime`-style uptimes.

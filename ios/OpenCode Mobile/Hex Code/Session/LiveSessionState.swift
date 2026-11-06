@@ -41,7 +41,9 @@ enum SessionEvent: Equatable, Sendable {
     /// `form.replied` or `form.cancelled`.
     case formClosed(sessionID: String, id: String)
     case inboxEnqueued(sessionID: String, id: String, delivery: String, text: String)
-    /// `session.inbox.delivered` or `.cancelled`.
+    /// `session.inbox.delivered`: the message reached the agent.
+    case inboxDelivered(sessionID: String, id: String)
+    /// `session.inbox.cancelled`.
     case inboxRemoved(sessionID: String, id: String)
     case inboxDeliveryChanged(sessionID: String, id: String, delivery: String)
     case sessionCreated(id: String, parentID: String?)
@@ -117,7 +119,10 @@ enum SessionEvent: Equatable, Sendable {
             let item = data["item"] as? [String: Any]
             let text = (item?["payload"] as? [String: Any])?["text"] as? String ?? ""
             return .inboxEnqueued(sessionID: sessionID, id: id, delivery: item?["delivery"] as? String ?? "queue", text: text)
-        case "session.inbox.delivered", "session.inbox.cancelled":
+        case "session.inbox.delivered":
+            guard let sessionID, let id = data["inboxID"] as? String else { return nil }
+            return .inboxDelivered(sessionID: sessionID, id: id)
+        case "session.inbox.cancelled":
             guard let sessionID, let id = data["inboxID"] as? String else { return nil }
             return .inboxRemoved(sessionID: sessionID, id: id)
         case "session.inbox.delivery.changed":
@@ -196,6 +201,8 @@ struct LiveSnapshot: Equatable, Sendable {
     /// Whether the session ever ran (`time.busy` is set).
     var hasRun: Bool
     var children: [String]
+    /// The session's `time.updated` (epoch ms), to tell whether anything is new since the card.
+    var updated: Int64?
     /// The subagents running now.
     var runningChildren: [String] = []
     var pending: [PendingItem]
@@ -215,6 +222,8 @@ struct LiveSessionState: Equatable, Sendable {
     enum Effect: Equatable, Sendable {
         /// A run of today's session ended: refresh the summary.
         case runEnded
+        /// A message reached today's session's agent, with its text when the inbox had it.
+        case delivered(id: String, text: String?)
     }
 
     let rootID: String
@@ -306,6 +315,11 @@ struct LiveSessionState: Equatable, Sendable {
             guard sessionID == rootID, !inbox.contains(where: { $0.id == id }) else { return nil }
             inbox.append(InboxEntry(id: id, delivery: delivery, text: text))
             return nil
+        case let .inboxDelivered(sessionID, id):
+            guard sessionID == rootID else { return nil }
+            let text = inbox.first { $0.id == id }?.text
+            inbox.removeAll { $0.id == id }
+            return .delivered(id: id, text: text.flatMap { $0.isEmpty ? nil : $0 })
         case let .inboxRemoved(sessionID, id):
             guard sessionID == rootID else { return nil }
             inbox.removeAll { $0.id == id }

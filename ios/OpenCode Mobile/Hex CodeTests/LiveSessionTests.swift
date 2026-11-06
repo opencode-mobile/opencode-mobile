@@ -318,7 +318,7 @@ struct TodaySessionLiveTests {
         #expect(session.agentState == .idle)
     }
 
-    @Test func aSessionThatRanRefreshesOnOpenAndReadsTheStateOnConnect() async {
+    @Test func aBusySessionReadsTheStateOnConnectAndMakesNoRequest() async {
         let server = FakeSessionServer()
         server.listed = [todays("ses_a", ran: true)]
         let since = Date(timeIntervalSince1970: 1_793_879_000)
@@ -340,9 +340,14 @@ struct TodaySessionLiveTests {
         #expect(session.busySince == since)
         #expect(session.pendingInput?.kind == .approval)
         #expect(session.agentState == .needsInput)
+        // Busy: no request (the run's end refreshes); with no card yet, the working card.
         await eventually { session.summary.summary != nil }
-        #expect(session.summary.summary == .card(StatusCard(title: "Task", now: "Doing it.")))
-        #expect(server.calls.filter { $0 == .generate("ses_a") }.count == 1)
+        guard case let .card(card)? = session.summary.summary else {
+            Issue.record("expected the working card")
+            return
+        }
+        #expect(card.now == "The agent is working.")
+        #expect(!server.calls.contains(.generate("ses_a")))
     }
 
     @Test func eventsUpdateHomeAndARunsEndRefreshesTheSummary() async {

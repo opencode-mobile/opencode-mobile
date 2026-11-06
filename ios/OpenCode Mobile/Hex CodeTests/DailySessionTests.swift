@@ -154,6 +154,14 @@ final class FakeSessionServer: DailySessionService, LiveSessionAPI, @unchecked S
 
     func switchModel(sessionID: String, model: ModelChoice) async throws {
         calls.append(.model(sessionID, model))
+        updated += 1
+    }
+
+    /// The session's `time.updated`; not recorded as a call.
+    var updated: Int64 = 1000
+
+    func sessionUpdated(sessionID: String) async throws -> Int64 {
+        updated
     }
 
     var prompts: [(text: String, delivery: Delivery)] = []
