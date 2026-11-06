@@ -10,6 +10,7 @@ import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.hexcode.firstrun.ServerName
 import dev.opencode.hexcode.firstrun.ServerNaming
 import dev.opencode.hexcode.firstrun.ServerRouteCheck
+import dev.opencode.hexcode.home.ImageInput
 import dev.opencode.hexcode.home.TalkLog
 import dev.opencode.hexcode.session.DailySessionSetup
 import dev.opencode.hexcode.session.EventsApiTransport
@@ -165,6 +166,21 @@ class HexServices(
             model = model,
             summaryStore = settings,
         )
+    }
+
+    /**
+     * Whether [model] can see images (app-plan.md, Attach): `capabilities.input` from `GET /api/model`, read into
+     * `supportsImageInput` by the kit. Null for no model, or one the server doesn't list, which counts as yes.
+     */
+    suspend fun imageInput(
+        directory: String?,
+        model: ModelChoice?,
+        name: String?,
+    ): ImageInput? {
+        model ?: return null
+        connectionLoaded.await()
+        val option = models.listModelOptions(directory?.ifEmpty { null }).option(model.providerId, model.modelId) ?: return null
+        return ImageInput(name ?: option.modelLabel, option.supportsImageInput)
     }
 
     /** Folder listings Browse folders has seen this session, shared by first run and Settings. */

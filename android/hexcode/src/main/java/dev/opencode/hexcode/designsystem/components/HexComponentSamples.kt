@@ -32,7 +32,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.BrushPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.heading
@@ -81,6 +83,7 @@ val HexComponentSamples: List<HexSampleSection> =
         HexSampleSection("HexHoldHint") { HoldHintSample() },
         HexSampleSection("HexChunk") { ChunkSample() },
         HexSampleSection("HexChunkRow") { ChunkRowSample() },
+        HexSampleSection("HexThumbnail") { ThumbnailSample() },
         HexSampleSection("HexToast, HexToastHost") { ToastSample() },
         HexSampleSection("HexProgress") { ProgressSample() },
         HexSampleSection("HexLinkTile, HexTileRow") { LinkTileSample() },
@@ -447,6 +450,27 @@ private fun RoundButtonsSample() {
                 HexIconButton(HexIcons.stop, "Stop", onClick = {}, tone = HexIconButtonTone.Stop)
                 HexIconButton(HexIcons.check, "Done", onClick = {}, tone = HexIconButtonTone.Strong)
                 HexIconButton(HexIcons.clip, "Attach", onClick = {}, enabled = false)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThumbnailSample() {
+    val shot = BrushPainter(Brush.linearGradient(listOf(HexTheme.colors.indigo, HexTheme.colors.green)))
+    val photo = BrushPainter(Brush.linearGradient(listOf(HexTheme.colors.amber, HexTheme.colors.red)))
+    Edge {
+        StateSample("regular, with ✕: ready, preparing, dimmed (the model can't see images)") {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
+                HexThumbnail(shot, size = HexThumbnailSize.Regular, onRemove = {}, removeLabel = "Remove image")
+                HexThumbnail(null, preparing = true, onRemove = {}, removeLabel = "Remove image")
+                HexThumbnail(photo, dimmed = true, onRemove = {}, removeLabel = "Remove image")
+            }
+        }
+        StateSample("small, in Waiting to send") {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                HexThumbnail(shot, size = HexThumbnailSize.Small)
+                HexThumbnail(photo, size = HexThumbnailSize.Small)
             }
         }
     }

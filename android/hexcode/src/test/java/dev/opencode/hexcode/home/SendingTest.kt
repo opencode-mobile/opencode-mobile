@@ -9,6 +9,7 @@ import dev.opencode.hexcode.session.DailySessionSetup
 import dev.opencode.hexcode.session.EventTransport
 import dev.opencode.hexcode.session.LiveSessionApi
 import dev.opencode.hexcode.session.LiveSnapshot
+import dev.opencode.hexcode.session.PromptImage
 import dev.opencode.hexcode.session.SessionListing
 import dev.opencode.hexcode.session.SessionListingPage
 import dev.opencode.hexcode.session.TodaySession
@@ -33,6 +34,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 import java.time.LocalDate
 
 /** app-plan.md, Sending: delivery per agent state, Now held 3 s with Undo, failure keeps the draft, the waiting sheet. */
@@ -83,6 +85,9 @@ class SendingTest {
         var busy = false
         var fail = false
         val sent = mutableListOf<Pair<String, String>>()
+
+        /** The images of each message sent, by name. */
+        val sentImages = mutableListOf<List<String>>()
         val cancelled = mutableListOf<String>()
 
         /** Holds Cancel's DELETE until completed; [cancelFails] makes it fail. */
@@ -116,9 +121,11 @@ class SendingTest {
             sessionId: String,
             text: String,
             delivery: String,
+            images: List<PromptImage>,
         ): String {
             if (fail) error("The computer can't be reached.")
             sent += text to delivery
+            sentImages += images.map { it.name }
             return "msg_${sent.size}"
         }
 
@@ -159,13 +166,34 @@ class SendingTest {
         fun connected() = lines.trySend("""{"type":"server.connected","data":{}}""")
     }
 
+    /** Prepares each source when its gate (if any) opens; a source starting "bad" can't be read. */
+    private class Images : ImagePreparer {
+        val gates = mutableMapOf<String, CompletableDeferred<Unit>>()
+        var kept: Set<File>? = null
+
+        override suspend fun prepare(source: String): PreparedImage {
+            gates[source]?.await()
+            if (source.startsWith("bad")) error("Not an image")
+            val kind = if ("Screenshot" in source) ImageKind.Screenshot else ImageKind.Photo
+            return PreparedImage(File("/cache/attach/$source.jpg"), kind, 2000, 1500)
+        }
+
+        override suspend fun keepOnly(files: Set<File>) {
+            kept = files
+        }
+    }
+
     private val server = Server()
     private val stream = Stream()
+    private val images = Images()
+
+    /** What the model can do with images; null when it isn't known. */
+    private var imageInput: ImageInput? = null
 
     private fun TestScope.home(vararg texts: String): Pair<HomeViewModel, Dictation> {
         val dictation = Dictation(*texts)
         val vm =
-            HomeViewModel(dictation, makeSession = { scope ->
+            HomeViewModel(dictation, images = images, imageInput = { imageInput }, makeSession = { scope ->
                 TodaySession(
                     scope,
                     DailySessionSetup(server, server),
@@ -411,4 +439,237 @@ class SendingTest {
         assertEquals("[Correction] Fix it", Sending.text(SendPlan.Now, "Fix it"))
         assertEquals("Fix it", Sending.text(SendPlan.Queue, "Fix it"))
     }
+
+    @Test
+    fun imagesGoInTheSamePromptForIdleQueueAndNow() =
+        runTest(dispatcher) {
+            val (vm, _) = home("Idle one", "Queued one", "Now one")
+            dictate(vm)
+            vm.attach(listOf("photo", "Screenshot_1"))
+            runCurrent()
+            assertEquals("2 images", 2, vm.uiState.value.draft.images.size)
+            vm.send()
+            runCurrent()
+            server.busy = true
+            stream.lines.trySend("""{"type":"session.execution.started","created":5,"data":{"sessionID":"ses_1"}}""")
+            runCurrent()
+            dictate(vm)
+            vm.attach(listOf("photo"))
+            runCurrent()
+            vm.send()
+            runCurrent()
+            dictate(vm)
+            vm.attach(listOf("photo"))
+            runCurrent()
+            vm.setSendMode(SendMode.Now)
+            vm.send()
+            advanceTimeBy(3_100)
+            runCurrent()
+            assertEquals(
+                listOf("Idle one" to "steer", "Queued one" to "queue", "[Correction] Now one" to "steer"),
+                server.sent,
+            )
+            assertEquals(listOf(listOf("Photo 1.jpg", "Screenshot 1.jpg"), listOf("Photo 1.jpg"), listOf("Photo 1.jpg")), server.sentImages)
+            // The images left the draft with the text.
+            assertTrue(vm.uiState.value.draft.isEmpty)
+            done(vm)
+        }
+
+    @Test
+    fun sendWaitsForImagesBeingPreparedAndADraftOfOnlyImagesSendsEmptyText() =
+        runTest(dispatcher) {
+            val (vm, _) = home()
+            images.gates["photo"] = CompletableDeferred()
+            vm.attach(listOf("photo"))
+            runCurrent()
+            assertTrue(vm.uiState.value.draft.isPreparing)
+            assertFalse(vm.uiState.value.canSend)
+            vm.send()
+            runCurrent()
+            assertTrue(server.sent.isEmpty())
+            images.gates["photo"]?.complete(Unit)
+            runCurrent()
+            assertTrue(vm.uiState.value.canSend)
+            vm.send()
+            runCurrent()
+            assertEquals(listOf("" to "steer"), server.sent)
+            assertEquals(listOf(listOf("Photo 1.jpg")), server.sentImages)
+            done(vm)
+        }
+
+    @Test
+    fun theFifthImageIsLeftOutWithTheLimitNotice() =
+        runTest(dispatcher) {
+            val (vm, _) = home()
+            vm.attach(listOf("a", "b", "c"))
+            runCurrent()
+            assertNull(vm.uiState.value.notice)
+            vm.attach(listOf("d", "e"))
+            runCurrent()
+            assertEquals(4, vm.uiState.value.draft.images.size)
+            assertEquals(HomeNotice.AttachLimit, vm.uiState.value.notice)
+            vm.noticeShown()
+            // With 4 on the draft the paperclip doesn't open the sheet: it says so.
+            assertFalse(vm.openAttach())
+            assertEquals(HomeNotice.AttachLimit, vm.uiState.value.notice)
+            done(vm)
+        }
+
+    @Test
+    fun anImageThatCanNotBeReadLeavesWithANotice() =
+        runTest(dispatcher) {
+            val (vm, _) = home()
+            vm.attach(listOf("photo", "bad"))
+            runCurrent()
+            assertEquals(1, vm.uiState.value.draft.images.size)
+            assertEquals(HomeNotice.AttachFailed, vm.uiState.value.notice)
+            done(vm)
+        }
+
+    @Test
+    fun toAModelThatCanNotSeeImagesOnlyTheTextGoesWithANotice() =
+        runTest(dispatcher) {
+            imageInput = ImageInput("Beam Free", sees = false)
+            val (vm, _) = home("What letters are in this image?")
+            assertFalse(vm.uiState.value.seesImages)
+            dictate(vm)
+            vm.attach(listOf("photo"))
+            runCurrent()
+            vm.send()
+            runCurrent()
+            assertEquals(listOf("What letters are in this image?" to "steer"), server.sent)
+            assertEquals(listOf(emptyList<String>()), server.sentImages)
+            assertEquals(HomeNotice.SentNoImages, vm.uiState.value.notice)
+            // Queued, the notice keeps its Undo.
+            vm.noticeShown()
+            server.busy = true
+            stream.lines.trySend("""{"type":"session.execution.started","created":5,"data":{"sessionID":"ses_1"}}""")
+            runCurrent()
+            vm.addToDraft("Again")
+            vm.attach(listOf("photo"))
+            runCurrent()
+            vm.send()
+            runCurrent()
+            assertEquals(HomeNotice.QueuedNoImages, vm.uiState.value.notice)
+            vm.noticeAction()
+            vm.noticeShown()
+            runCurrent()
+            assertEquals(listOf("msg_2"), server.cancelled)
+            assertEquals(1, vm.uiState.value.draft.images.size)
+            done(vm)
+        }
+
+    @Test
+    fun anUnknownModelCountsAsSeeingImages() =
+        runTest(dispatcher) {
+            imageInput = null
+            val (vm, _) = home()
+            assertTrue(vm.uiState.value.seesImages)
+            done(vm)
+        }
+
+    @Test
+    fun undoOfAQueuedMessageBringsItsImagesBackOntoTheDraft() =
+        runTest(dispatcher) {
+            server.busy = true
+            val (vm, _) = home("Also look at this")
+            dictate(vm)
+            vm.attach(listOf("photo", "Screenshot_1"))
+            runCurrent()
+            val before = vm.uiState.value.draft.images
+            vm.send()
+            runCurrent()
+            assertTrue(vm.uiState.value.draft.isEmpty)
+            assertEquals(before, vm.uiState.value.queuedImages["msg_1"])
+            vm.noticeAction()
+            vm.noticeShown()
+            runCurrent()
+            assertEquals(HomeNotice.TakenBack, vm.uiState.value.notice)
+            assertEquals("Also look at this", vm.uiState.value.draft.text)
+            assertEquals(before, vm.uiState.value.draft.images)
+            assertTrue(
+                vm.uiState.value.queuedImages
+                    .isEmpty(),
+            )
+            // Their files are kept: they're on the draft again.
+            assertEquals(before.mapNotNull { it.file }.toSet(), images.kept)
+            done(vm)
+        }
+
+    @Test
+    fun aFailedSendBringsTheImagesBackAndKeepsTheirFiles() =
+        runTest(dispatcher) {
+            server.fail = true
+            val (vm, _) = home("One")
+            dictate(vm)
+            vm.attach(listOf("photo"))
+            runCurrent()
+            val before = vm.uiState.value.draft.images
+            vm.send()
+            runCurrent()
+            assertEquals(before, vm.uiState.value.draft.images)
+            assertEquals(HomeNotice.SendFailed, vm.uiState.value.notice)
+            assertEquals(setOf(File("/cache/attach/photo.jpg")), images.kept)
+            done(vm)
+        }
+
+    @Test
+    fun aQueuedMessagesImagesStayUntilItIsDeliveredThenTheirFilesGo() =
+        runTest(dispatcher) {
+            server.busy = true
+            val (vm, _) = home("Queued")
+            dictate(vm)
+            vm.attach(listOf("photo"))
+            runCurrent()
+            vm.send()
+            runCurrent()
+            stream.lines.trySend(
+                """{"type":"session.inbox.enqueued","data":{"sessionID":"ses_1","inboxID":"msg_1",""" +
+                    """"item":{"type":"user","payload":{"text":"Queued",""" +
+                    """"files":[{"data":"/9j/","mime":"image/jpeg","name":"Photo 1.jpg"}]},""" +
+                    """"delivery":"queue"}}}""",
+            )
+            runCurrent()
+            vm.noticeShown()
+            runCurrent()
+            assertEquals(
+                1,
+                vm.uiState.value.queuedImages["msg_1"]
+                    ?.size,
+            )
+            assertEquals(
+                1,
+                vm.uiState.value.today.queued
+                    .single()
+                    .images,
+            )
+            assertEquals(setOf(File("/cache/attach/photo.jpg")), images.kept)
+            stream.lines.trySend("""{"type":"session.inbox.delivered","data":{"sessionID":"ses_1","inboxID":"msg_1"}}""")
+            runCurrent()
+            assertTrue(
+                vm.uiState.value.queuedImages
+                    .isEmpty(),
+            )
+            assertEquals(emptySet<File>(), images.kept)
+            done(vm)
+        }
+
+    @Test
+    fun aRemovedOrClearedImageHasItsFileDeleted() =
+        runTest(dispatcher) {
+            val (vm, _) = home("One")
+            dictate(vm)
+            vm.attach(listOf("a", "b"))
+            runCurrent()
+            vm.removeImage(
+                vm.uiState.value.draft.images[0]
+                    .id,
+            )
+            runCurrent()
+            assertEquals(setOf(File("/cache/attach/b.jpg")), images.kept)
+            vm.clearDraft()
+            runCurrent()
+            assertEquals(emptySet<File>(), images.kept)
+            done(vm)
+        }
 }

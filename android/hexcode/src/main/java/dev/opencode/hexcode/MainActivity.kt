@@ -57,6 +57,7 @@ import dev.opencode.hexcode.firstrun.PickerMode
 import dev.opencode.hexcode.firstrun.ProjectPicker
 import dev.opencode.hexcode.firstrun.ProjectScreen
 import dev.opencode.hexcode.firstrun.ServerLabel
+import dev.opencode.hexcode.home.AndroidImagePreparer
 import dev.opencode.hexcode.home.ClipDictation
 import dev.opencode.hexcode.home.FileTakeStore
 import dev.opencode.hexcode.home.HomeScreen
@@ -282,6 +283,8 @@ private fun AfterFirstRun(
                     )
                 },
                 takes = FileTakeStore(File(context.filesDir, "takes")),
+                images = AndroidImagePreparer(context.applicationContext),
+                imageInput = { services.imageInput(latest.project?.path, latest.model, latest.modelName) },
                 makeSession = { scope ->
                     sample?.start(scope)
                         ?: services.todaySession(scope, directory = { latest.project?.path.orEmpty() }, model = { latest.model })

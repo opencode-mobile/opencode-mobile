@@ -44,8 +44,8 @@ data class DeletedChunk(
 )
 
 /**
- * The dictation draft: takes become chunks, each Listening → Transcribing → text. Releasing the talk button never
- * sends; nothing here sends at all yet. A re-record replaces its chunk once the new take ends, and keeps the old one if
+ * The dictation draft: takes become chunks, each Listening → Transcribing → text, and the images that go with them.
+ * Releasing the talk button never sends. A re-record replaces its chunk once the new take ends, and keeps the old one if
  * the new take is dropped.
  */
 data class Draft(
@@ -57,9 +57,17 @@ data class Draft(
     /** The take being recorded, until it ends. */
     val live: Chunk? = null,
     val deleted: DeletedChunk? = null,
+    /** Screenshots and photos that go with the message, at most [MAX_IMAGES] (app-plan.md, Attach). */
+    val images: List<DraftImage> = emptyList(),
     private val nextId: Long = 1,
 ) {
-    val isEmpty: Boolean get() = chunks.isEmpty() && live == null
+    val isEmpty: Boolean get() = chunks.isEmpty() && live == null && images.isEmpty()
+
+    /** An image is still being prepared: Send waits, reading "Preparing". */
+    val isPreparing: Boolean get() = images.any { it.preparing }
+
+    /** How many more images this message can take. */
+    val roomForImages: Int get() = (MAX_IMAGES - images.size).coerceAtLeast(0)
 
     val isListening: Boolean get() = live != null
 
@@ -71,8 +79,33 @@ data class Draft(
     /** A chunk failed with its audio kept, so Try again can turn it into text. */
     val canRetry: Boolean get() = chunks.any { (it.state as? ChunkState.Failed)?.retry == true }
 
-    /** Every chunk has its text, so the draft could be sent, asked or set as a goal. */
-    val isSettled: Boolean get() = !isListening && !isTranscribing && !isWaiting
+    /** Every chunk has its text and every image is prepared, so the draft could be sent, asked or set as a goal. */
+    val isSettled: Boolean get() = !isListening && !isTranscribing && !isWaiting && !isPreparing
+
+    /**
+     * Send can go: everything is settled, and there is text, or images a model that [seesImages] gets. A draft of only
+     * images sends an empty `text`; to a model that can't see them there would be nothing to send.
+     */
+    fun canSend(seesImages: Boolean): Boolean = isSettled && (text.isNotBlank() || (seesImages && images.isNotEmpty()))
+
+    /** Adds [count] images, each preparing, up to the room left; their ids, in order, come back with the draft. */
+    fun addImages(count: Int): Pair<Draft, List<Long>> {
+        val ids = (0 until count.coerceAtMost(roomForImages)).map { nextId + it }
+        val added = ids.map { DraftImage(it) }
+        return copy(images = images + added, nextId = nextId + ids.size) to ids
+    }
+
+    /** Image [id] is ready: its JPEG is [file], from a photo or a screenshot ([kind]). */
+    fun imagePrepared(
+        id: Long,
+        file: java.io.File,
+        kind: ImageKind,
+    ): Draft = copy(images = images.map { if (it.id == id) it.copy(file = file, kind = kind) else it })
+
+    /** The image's ✕, or an image that couldn't be read. */
+    fun removeImage(id: Long): Draft = copy(images = images.filterNot { it.id == id })
+
+    fun hasImage(id: Long): Boolean = images.any { it.id == id }
 
     /** Clear can empty the draft: nothing records or is being turned into text (takes waiting for the model can go). */
     val canClear: Boolean get() = !isListening && !isTranscribing
@@ -161,8 +194,12 @@ data class Draft(
                 },
         )
 
-    /** [earlier] back as it was before Send, followed by anything recorded since. */
-    fun restored(earlier: Draft): Draft = copy(chunks = earlier.chunks + chunks, selected = null)
+    /**
+     * [earlier] back as it was before Send, followed by anything recorded or attached since. A message holds at most
+     * [MAX_IMAGES]: the earlier draft's images come first, and any past the limit are left out.
+     */
+    fun restored(earlier: Draft): Draft =
+        copy(chunks = earlier.chunks + chunks, selected = null, images = (earlier.images + images).take(MAX_IMAGES))
 
     /** Try again: failed takes with their audio wait for the model again. */
     fun retryFailed(): Draft =
@@ -210,6 +247,9 @@ data class Draft(
     companion object {
         /** Rows a long draft shows at once; earlier ones fold into "↑ N earlier". */
         const val MAX_ROWS = 8
+
+        /** Images per message (app-plan.md, Attach › Limit). */
+        const val MAX_IMAGES = 4
     }
 }
 

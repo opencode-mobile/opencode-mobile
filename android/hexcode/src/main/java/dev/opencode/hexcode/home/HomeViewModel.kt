@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.firstrun.ModelChoice
+import dev.opencode.hexcode.session.PromptImage
 import dev.opencode.hexcode.session.TodaySession
 import dev.opencode.hexcode.session.TodayState
 import dev.opencode.voiceengine.NoSpeechException
@@ -219,6 +220,11 @@ class SpeechGate(
     }
 }
 
+/** Where attaching logs images that couldn't be prepared, and what the model's image input was. */
+object AttachLog {
+    const val TAG = "HexCode.Attach"
+}
+
 /** Where dictation logs why a take didn't become text, and how long the microphone took. */
 object TalkLog {
     const val TAG = "HexCode.Talk"
@@ -263,6 +269,18 @@ enum class HomeNotice {
 
     /** "Couldn't send · Your draft is kept." */
     SendFailed,
+
+    /** "4 images is the most per message". */
+    AttachLimit,
+
+    /** "Couldn't add this image". */
+    AttachFailed,
+
+    /** "Sent without the images · <Model> can't see them" ([HomeUiState.imageInput]). */
+    SentNoImages,
+
+    /** The same, for a message queued after this turn: with Undo, as "Queued" has. */
+    QueuedNoImages,
 }
 
 data class HomeUiState(
@@ -281,21 +299,35 @@ data class HomeUiState(
     val noticeDetail: String? = null,
     /** Waiting to send rows whose Cancel (the DELETE) is running: their Cancel shows a spinner. */
     val cancelling: Set<String> = emptySet(),
+    /** Whether today's session's model can see images; null until known, which counts as yes. */
+    val imageInput: ImageInput? = null,
+    /** The phone's copy of the images each queued message took, by inbox item, for the Waiting to send sheet. */
+    val queuedImages: Map<String, List<DraftImage>> = emptyMap(),
 ) {
     /** The agent runs or waits for an answer, so Send has a choice to make. */
     val busy: Boolean get() = today.busySince != null || today.pendingInput != null
+
+    /** Images go with the message: the model sees them, or it isn't known (app-plan.md, Attach). */
+    val seesImages: Boolean get() = imageInput?.sees != false
+
+    /** Send can go now. */
+    val canSend: Boolean get() = draft.canSend(seesImages)
 }
 
 /**
  * The home screen: today's session ([TodaySession], made by [makeSession] in this model's scope) and dictation, where
- * you hold to talk, lock or drop the take, and keep the text as a draft of chunks. Releasing never sends, and there is
- * no Send yet.
+ * you hold to talk, lock or drop the take, and keep the text as a draft of chunks, with any screenshots and photos
+ * attached. Releasing never sends; Send does.
  */
 class HomeViewModel(
     private val dictation: Dictation,
     makeSession: ((CoroutineScope) -> TodaySession)? = null,
     /** Keeps a take's audio until it has text. */
     private val takes: TakeStore = MemoryTakeStore(),
+    /** Prepares picked and taken images, and keeps them in the cache until they're sent or cleared. */
+    private val images: ImagePreparer = NoImagePreparer,
+    /** Whether today's session's model can see images; null when that isn't known (it then counts as yes). */
+    private val imageInput: suspend () -> ImageInput? = { null },
     private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     private val state = MutableStateFlow(HomeUiState(speech = dictation.speech.value))
@@ -305,6 +337,29 @@ class HomeViewModel(
 
     /** Turning waiting takes into text, oldest first, once the model is ready. */
     private var draining: Job? = null
+
+    /** What Undo on the current notice takes back: a Now held on the phone, or a message queued in the inbox. */
+    private sealed interface Undoable {
+        val draft: Draft
+
+        data class Held(
+            val job: Job,
+            override val draft: Draft,
+        ) : Undoable
+
+        data class Queued(
+            val itemId: String,
+            override val draft: Draft,
+        ) : Undoable
+    }
+
+    private var undoable: Undoable? = null
+
+    /** Inbox items the queued images map has seen in today's inbox: once one leaves it, its images can go. */
+    private val seenQueued = mutableSetOf<String>()
+
+    /** Drafts being sent, which come back if sending fails. */
+    private val inFlight = mutableListOf<Draft>()
 
     init {
         viewModelScope.launch {
@@ -320,11 +375,125 @@ class HomeViewModel(
         session?.let { today ->
             viewModelScope.launch {
                 today.state.collect { next ->
-                    state.update { it.copy(today = next, notice = if (next.newDayNotice) HomeNotice.NewDay else it.notice) }
+                    val before = state.value.queuedImages
+                    state.update {
+                        it.copy(
+                            today = next,
+                            notice = if (next.newDayNotice) HomeNotice.NewDay else it.notice,
+                            queuedImages = keptQueuedImages(it.queuedImages, next),
+                        )
+                    }
+                    if (state.value.queuedImages.size != before.size) sweepImages()
                     if (next.newDayNotice) today.newDayShown()
                 }
             }
             today.open()
+        }
+        // Images prepared before the app last closed went with no draft.
+        sweepImages()
+        checkImageInput()
+    }
+
+    /**
+     * The phone's copy of each queued message's images, until the message is delivered or cancelled: it leaves today's
+     * inbox after being in it, or nothing is waiting any more while the agent is idle.
+     */
+    private fun keptQueuedImages(
+        kept: Map<String, List<DraftImage>>,
+        today: TodayState,
+    ): Map<String, List<DraftImage>> {
+        val waiting = today.queued.map { it.id }.toSet()
+        seenQueued += kept.keys.filter { it in waiting }
+        val idle = today.busySince == null && today.pendingInput == null
+        return kept.filterKeys { id -> id in waiting || (id !in seenQueued && !idle) }.also {
+            seenQueued.retainAll(it.keys)
+        }
+    }
+
+    /** Asks whether the session's model can see images; a failed check keeps what was known. */
+    private fun checkImageInput() {
+        viewModelScope.launch {
+            val known =
+                try {
+                    imageInput()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(AttachLog.TAG, "couldn't read the model's image input: ${error.message}")
+                    return@launch
+                }
+            state.update { it.copy(imageInput = known) }
+        }
+    }
+
+    /**
+     * The paperclip: opens the Attach sheet (true), or with [Draft.MAX_IMAGES] on the draft shows "4 images is the most
+     * per message" (false). Whether the model sees images is asked again meanwhile.
+     */
+    fun openAttach(): Boolean {
+        if (state.value.draft.roomForImages == 0) {
+            notify(HomeNotice.AttachLimit, null)
+            return false
+        }
+        checkImageInput()
+        return true
+    }
+
+    /**
+     * Picked or taken images, as `content://` URIs: each goes on the draft at once with a spinner and is prepared off
+     * the main thread. Past the room left they're left out, with the limit notice; one that can't be read leaves the
+     * draft with "Couldn't add this image".
+     */
+    fun attach(sources: List<String>) {
+        if (sources.isEmpty()) return
+        var ids: List<Long> = emptyList()
+        state.update {
+            val (draft, added) = it.draft.addImages(sources.size)
+            ids = added
+            it.copy(draft = draft)
+        }
+        if (ids.size < sources.size) notify(HomeNotice.AttachLimit, null)
+        ids.zip(sources).forEach { (id, source) ->
+            viewModelScope.launch {
+                try {
+                    val prepared = images.prepare(source)
+                    var kept = false
+                    state.update {
+                        kept = it.draft.hasImage(id)
+                        if (kept) it.copy(draft = it.draft.imagePrepared(id, prepared.file, prepared.kind)) else it
+                    }
+                    // Removed, or the draft cleared, while it was being prepared.
+                    if (!kept) sweepImages()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(AttachLog.TAG, "couldn't prepare an image: ${error.message}", error)
+                    state.update { it.copy(draft = it.draft.removeImage(id)) }
+                    notify(HomeNotice.AttachFailed, null)
+                }
+            }
+        }
+    }
+
+    /** An image's ✕. */
+    fun removeImage(id: Long) {
+        state.update { it.copy(draft = it.draft.removeImage(id)) }
+        sweepImages()
+    }
+
+    /**
+     * Deletes every prepared image nothing refers to any more: not on the draft, not being sent, not held for Undo and
+     * not waiting to send.
+     */
+    private fun sweepImages() {
+        viewModelScope.launch {
+            val current = state.value
+            val drafts = listOf(current.draft) + inFlight + listOfNotNull(undoable?.draft)
+            val files =
+                (drafts.flatMap { it.images } + current.queuedImages.values.flatten())
+                    .mapNotNull { it.file }
+                    .toSet()
+            images.keepOnly(files)
         }
     }
 
@@ -342,9 +511,10 @@ class HomeViewModel(
         session?.networkReturned()
     }
 
-    /** Settings › Model changed: today's session follows it. */
+    /** Settings › Model changed: today's session follows it, and whether it can see images is asked again. */
     fun modelChanged(model: ModelChoice) {
         session?.switchModel(model)
+        checkImageInput()
     }
 
     /** Settings › Project changed: today's session is the one in the new project. */
@@ -352,7 +522,7 @@ class HomeViewModel(
         session?.open()
     }
 
-    /** Attach (M3) and Stop (M4) aren't built yet: a tap says so. */
+    /** Stop (M4) isn't built yet: a tap says so. */
     fun notInThisVersion() = state.update { it.copy(notice = HomeNotice.NotInThisVersion) }
 
     /** Developer settings' "Drop event stream". */
@@ -510,47 +680,40 @@ class HomeViewModel(
             }
     }
 
-    /** What Undo on the current notice takes back: a Now held on the phone, or a message queued in the inbox. */
-    private sealed interface Undoable {
-        val draft: Draft
-
-        data class Held(
-            val job: Job,
-            override val draft: Draft,
-        ) : Undoable
-
-        data class Queued(
-            val itemId: String,
-            override val draft: Draft,
-        ) : Undoable
-    }
-
-    private var undoable: Undoable? = null
-
     fun setSendMode(mode: SendMode) = state.update { it.copy(sendMode = mode) }
 
     /**
      * Send (app-plan.md, Sending): the draft clears at once. An idle agent gets it now (`steer`); a working one after
      * this turn (`queue`), or, with Now, after 3 s held on the phone with Undo, as a correction (`steer`). The switch
-     * goes back to After turn. If sending fails, the draft comes back as it was.
+     * goes back to After turn. If sending fails, the draft comes back as it was, images and all.
+     *
+     * Its images go in the same request (app-plan.md, Attach › Sending), unless the model can't see them: then only the
+     * text goes, with "Sent without the images".
      */
     fun send() {
         val current = state.value
         val draft = current.draft
-        if (!draft.isSettled || draft.text.isBlank()) return
+        if (!current.canSend) return
         val plan = Sending.plan(current.busy, current.sendMode)
         val text = draft.text
+        val withImages = if (current.seesImages) AttachNames.of(draft.images) else emptyList()
+        val dropped = draft.images.isNotEmpty() && withImages.isEmpty()
         state.update { it.copy(draft = it.draft.clear(), sendMode = SendMode.AfterTurn) }
         when (plan) {
             SendPlan.Idle ->
                 viewModelScope.launch {
-                    if (deliver(plan, text, draft) != null) notify(HomeNotice.SentIdle, text)
+                    if (deliver(plan, text, withImages, draft) != null) {
+                        notify(if (dropped) HomeNotice.SentNoImages else HomeNotice.SentIdle, text)
+                    }
                 }
             SendPlan.Queue ->
                 viewModelScope.launch {
-                    val id = deliver(plan, text, draft) ?: return@launch
+                    val id = deliver(plan, text, withImages, draft) ?: return@launch
+                    if (withImages.isNotEmpty()) {
+                        state.update { it.copy(queuedImages = it.queuedImages + (id to draft.images)) }
+                    }
                     undoable = Undoable.Queued(id, draft)
-                    notify(HomeNotice.Queued, null)
+                    notify(if (dropped) HomeNotice.QueuedNoImages else HomeNotice.Queued, null)
                 }
             SendPlan.Now -> {
                 val job =
@@ -559,7 +722,9 @@ class HomeViewModel(
                         undoable = null
                         // Held through a reconnect, it goes once the stream is back.
                         session?.awaitStream()
-                        if (deliver(plan, text, draft) != null) notify(HomeNotice.SentNow, text)
+                        if (deliver(plan, text, withImages, draft) != null) {
+                            notify(if (dropped) HomeNotice.SentNoImages else HomeNotice.SentNow, text)
+                        }
                     }
                 undoable = Undoable.Held(job, draft)
                 notify(HomeNotice.SendingNow, text)
@@ -567,16 +732,21 @@ class HomeViewModel(
         }
     }
 
-    /** Sends [text] as [plan] says; on failure the [draft] comes back with "Couldn't send". Returns the inbox item's id. */
+    /**
+     * Sends [text] and [images] as [plan] says; on failure the [draft] comes back with "Couldn't send". Returns the inbox
+     * item's id. Once it's sent, images nothing else holds are deleted.
+     */
     private suspend fun deliver(
         plan: SendPlan,
         text: String,
+        images: List<PromptImage>,
         draft: Draft,
     ): String? {
         val today = session
+        inFlight += draft
         return try {
             today ?: error("No session to send to")
-            today.send(Sending.text(plan, text), Sending.delivery(plan))
+            today.send(Sending.text(plan, text), Sending.delivery(plan), images)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -584,6 +754,9 @@ class HomeViewModel(
             restore(draft)
             notify(HomeNotice.SendFailed, null)
             null
+        } finally {
+            inFlight -= draft
+            sweepImages()
         }
     }
 
@@ -603,7 +776,7 @@ class HomeViewModel(
         actioned = state.value.notice
         when (state.value.notice) {
             HomeNotice.ChunkDeleted -> undoDelete()
-            HomeNotice.SendingNow, HomeNotice.Queued -> undoSend()
+            HomeNotice.SendingNow, HomeNotice.Queued, HomeNotice.QueuedNoImages -> undoSend()
             else -> Unit
         }
     }
@@ -619,7 +792,9 @@ class HomeViewModel(
                 viewModelScope.launch {
                     try {
                         session?.cancelQueued(taking.itemId)
+                        // Its images come back onto the draft with the text, so they can be sent again.
                         restore(taking.draft)
+                        state.update { it.copy(queuedImages = it.queuedImages - taking.itemId) }
                         notify(HomeNotice.TakenBack, null)
                     } catch (error: CancellationException) {
                         throw error
@@ -690,6 +865,7 @@ class HomeViewModel(
     fun clearDraft() {
         state.update { it.copy(draft = it.draft.clear()) }
         if (state.value.draft.isEmpty) viewModelScope.launch { takes.clear() }
+        sweepImages()
     }
 
     /** The notice has gone. After its action, only that notice is cleared, not "Not sent" or another that followed. */
@@ -697,6 +873,11 @@ class HomeViewModel(
         val after = actioned
         actioned = null
         if (after != null && state.value.notice != after) return
+        // A queued message's Undo goes with its notice; the images it held for that can go too.
+        if (state.value.notice in setOf(HomeNotice.Queued, HomeNotice.QueuedNoImages) && undoable is Undoable.Queued) {
+            undoable = null
+            sweepImages()
+        }
         state.update { it.copy(notice = null, noticeDetail = null) }
     }
 

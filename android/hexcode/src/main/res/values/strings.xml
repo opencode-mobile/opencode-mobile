@@ -164,6 +164,25 @@
     <string name="home_waiting_title">Waiting to send</string>
     <string name="home_waiting_cancel">Cancel</string>
     <string name="home_waiting">%1$d waiting · sends after this turn ›</string>
+    <plurals name="home_waiting_images">
+        <item quantity="one">%1$d image</item>
+        <item quantity="other">%1$d images</item>
+    </plurals>
+    <!-- Attach (app-plan.md, Attach) -->
+    <string name="home_attach_title">Attach</string>
+    <string name="home_attach_photos">Photos</string>
+    <string name="home_attach_camera">Take photo</string>
+    <plurals name="home_attach_caption">
+        <item quantity="one">%1$d image · goes with your next message</item>
+        <item quantity="other">%1$d images · go with your next message</item>
+    </plurals>
+    <string name="home_attach_limit">4 images is the most per message</string>
+    <string name="home_attach_failed">Couldn’t add this image</string>
+    <string name="home_attach_no_vision">%1$s can’t see images · they won’t be sent</string>
+    <string name="home_attach_remove">Remove image</string>
+    <string name="home_sent_no_images">Sent without the images</string>
+    <string name="home_sent_no_images_sub">%1$s can’t see them</string>
+    <string name="home_send_preparing">Preparing</string>
 
     <!-- home: dictation -->
     <string name="home_chunk_deleted">Chunk deleted</string>
