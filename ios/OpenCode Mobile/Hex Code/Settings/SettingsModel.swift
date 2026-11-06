@@ -133,6 +133,7 @@ final class HexMainModel {
             model: { current.setup.model },
             toasts: toasts,
             api: service,
+            control: service,
             stream: stream
         )
         session.computerHost = URL(string: current.setup.profile.baseURL)?.host

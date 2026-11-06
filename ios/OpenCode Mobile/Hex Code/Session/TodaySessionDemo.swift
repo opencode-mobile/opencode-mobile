@@ -1,4 +1,5 @@
 import Foundation
+import OpenCodeKit
 
 /// Fake sessions for looking at home without a server: Settings › Developer › Sample session, or
 /// `-HexCodeDemoSession <preset>` at launch (debug builds). Nothing here talks to OpenCode. The
@@ -114,7 +115,8 @@ enum TodaySessionDemo: String, CaseIterable {
             summary: summary,
             directory: { Self.directory },
             model: { ModelChoice(providerID: "opencode", modelID: "big-pickle", variant: nil) },
-            toasts: toasts
+            toasts: toasts,
+            control: DemoControl(running: sampleRunning(now: now), recent: Self.sampleTools(now: now))
         )
         return session
     }
@@ -124,31 +126,34 @@ enum TodaySessionDemo: String, CaseIterable {
     @MainActor
     func start(_ session: TodaySession, now: Date = Date()) async {
         await session.open()
-        session.todos = todos
+        let running = sampleRunning(now: now)
+        session.updateSample { live in
+            live.todos = todos
+            live.pending = samplePending
+            live.projectID = "demo"
+            for (id, child) in running.childSessions {
+                live.children.insert(id)
+                live.childSessions[id] = child
+            }
+            switch self {
+            case .card:
+                live.busySince = now.addingTimeInterval(-252)
+                live.inbox = [InboxEntry(id: "msg_demo", delivery: "queue", text: "Then run the auth tests and tell me what failed.")]
+                live.apply(running: running)
+            case .branches:
+                live.busySince = now.addingTimeInterval(-90)
+            case .reconnecting, .updating, .updatefailed:
+                live.busySince = now.addingTimeInterval(-252)
+            default:
+                break
+            }
+        }
+        if self == .card { session.setSampleRecent(RecentSteps.make(Self.sampleTools(now: now))) }
         #if DEBUG
         // `-HexCodeSentMessage "<text>"`: a message in flight, for the You line.
         if let sent = UserDefaults.standard.string(forKey: "HexCodeSentMessage") { session.sentMessage = sent }
         #endif
-        switch self {
-        case .card:
-            session.busySince = now.addingTimeInterval(-252)
-            session.waitingCount = 1
-            session.runningCount = 1
-        case .needs:
-            session.pendingInput = PendingItem(id: "frm_demo", sessionID: "ses_demo", kind: .question, text: "2 questions · login length and remember-me")
-        case .approval:
-            session.pendingInput = PendingItem(id: "per_demo", sessionID: "ses_demo", kind: .approval, text: "Run bun run db:reset on the dev database")
-        case .branches:
-            session.busySince = now.addingTimeInterval(-90)
-            session.pendingInput = PendingItem(id: "per_demo", sessionID: "ses_demo", kind: .approval, text: "git fetch --all")
-        case .reconnecting:
-            session.streamUp = false
-            session.busySince = now.addingTimeInterval(-252)
-        case .updating, .updatefailed:
-            session.busySince = now.addingTimeInterval(-95)
-        default:
-            break
-        }
+        if self == .reconnecting { session.streamUp = false }
         switch self {
         case .updating:
             session.summary.generator = DemoGenerator(reply: nil, hangs: true)
@@ -174,6 +179,56 @@ enum TodaySessionDemo: String, CaseIterable {
         case .approval: "## Login screen rewrite\nNow: The auth tests need a clean database. Waiting for your approval.\nNext: Then run the auth tests."
         default: Self.reply
         }
+    }
+
+    /// The questions and approvals waiting in this state.
+    private var samplePending: [PendingItem] {
+        switch self {
+        case .needs:
+            [PendingItem(question: PendingFormV2(id: "frm_demo", sessionID: "ses_demo", title: "Questions", kind: "question", fields: [
+                .init(key: "q0", title: "Login length", description: "How long should a login last?", type: "string", options: [
+                    .init(value: "30 days", label: "30 days", description: "Today's behaviour"),
+                    .init(value: "7 days", label: "7 days", description: "Safer on shared computers"),
+                    .init(value: "1 day", label: "1 day", description: ""),
+                ], custom: true),
+                .init(key: "q1", title: "Remember me", description: "Which sign-in options should the form show?", type: "multiselect", options: [
+                    .init(value: "Remember me", label: "Remember me", description: ""),
+                    .init(value: "Sign in with GitHub", label: "Sign in with GitHub", description: ""),
+                ], custom: true),
+            ]))]
+        case .approval:
+            [PendingItem(approval: PendingPermissionV2(
+                id: "per_demo", sessionID: "ses_demo", action: "shell",
+                resources: ["bun run db:reset", "bun test auth"], save: ["bun *"]
+            ))]
+        case .branches:
+            [PendingItem(approval: PendingPermissionV2(
+                id: "per_demo", sessionID: "ses_demo", action: "edit", resources: ["src/auth/session.ts"], save: ["*"],
+                files: [.init(file: "src/auth/session.ts", patch: "--- a/src/auth/session.ts\n+++ b/src/auth/session.ts\n@@ -1,3 +1,3 @@\n-const maxAge = days(30)\n+const maxAge = days(7)\n export { maxAge }", status: "modified", additions: 1, deletions: 1)]
+            ))]
+        default:
+            []
+        }
+    }
+
+    /// Running now in the `card` state: a subagent and a dev server.
+    private func sampleRunning(now: Date) -> RunningSnapshot {
+        guard self == .card else { return RunningSnapshot(childBusySince: [:], childSessions: [:], shells: []) }
+        return RunningSnapshot(
+            childBusySince: ["ses_child": now.addingTimeInterval(-74)],
+            childSessions: ["ses_child": ChildSession(title: "Find every caller of the old helper", agent: "general")],
+            shells: [.init(id: "sh_demo", sessionID: "ses_demo", command: "bun run dev --port 5173", startedAt: now.addingTimeInterval(-312))]
+        )
+    }
+
+    /// Recent in the `card` state: an edit, a command and a subagent start.
+    private static func sampleTools(now: Date) -> [ToolPartV2] {
+        let ms = { (seconds: TimeInterval) in Int64(now.addingTimeInterval(-seconds).timeIntervalSince1970 * 1000) }
+        return [
+            ToolPartV2(id: "t3", name: "subagent", status: "completed", description: "Find every caller of the old helper", agent: "general", completedMs: ms(74)),
+            ToolPartV2(id: "t2", name: "shell", status: "completed", command: "bun test auth", exit: 1, completedMs: ms(150)),
+            ToolPartV2(id: "t1", name: "edit", status: "completed", files: [ToolFileV2(file: "src/auth/session.ts", status: "modified", additions: 12, deletions: 3)], completedMs: ms(260)),
+        ]
     }
 
     /// The agent's to-do list in this state; plain, fallback, longest, empty and new day keep none.
@@ -234,6 +289,35 @@ private struct DemoService: DailySessionService {
     }
 
     func putMessageRules(sessionID: String) async throws {}
+}
+
+/// Answers and stops that always work, after a short wait.
+private struct DemoControl: SessionControlAPI {
+    let running: RunningSnapshot
+    let recent: [ToolPartV2]
+
+    func replyToApproval(sessionID: String, requestID: String, decision: SessionStateAPIClient.PermissionDecision, note: String?) async throws {
+        try await Task.sleep(for: .milliseconds(500))
+    }
+
+    func answerQuestion(sessionID: String, formID: String, answer: [String: FormAnswerV2]) async throws {
+        try await Task.sleep(for: .milliseconds(500))
+    }
+
+    func dismissQuestion(sessionID: String, formID: String, note: String) async throws {
+        try await Task.sleep(for: .milliseconds(500))
+    }
+
+    func interrupt(sessionID: String) async throws -> Bool {
+        try await Task.sleep(for: .milliseconds(300))
+        return true
+    }
+
+    func runningSubagents(rootID: String) async throws -> [String] { [] }
+
+    func running(rootID: String, directory: String) async throws -> RunningSnapshot { running }
+
+    func recentTools(sessionID: String) async throws -> [ToolPartV2] { recent }
 }
 
 private struct DemoGenerator: SummaryGenerating {

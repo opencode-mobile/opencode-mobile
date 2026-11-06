@@ -494,9 +494,12 @@ struct SetupFailedView: View {
     }
 }
 
-/// "N waiting · sends after this turn ›" above the talk button while the inbox has queued messages.
+/// "N waiting · sends after this turn ›" above the talk button while the inbox has queued messages;
+/// "sends after your next message" while the agent is idle (after Stop, they stay queued). It opens
+/// Details.
 struct WaitingLine: View {
     let count: Int
+    var idle = false
     let action: () -> Void
 
     var body: some View {
@@ -505,7 +508,9 @@ struct WaitingLine: View {
             HStack(spacing: 8) {
                 HexIconView(.send, size: HexIconSize.small)
                     .foregroundStyle(HexColor.text3)
-                Text(verbatim: String(localized: "home.waiting", defaultValue: "\(count) waiting · sends after this turn ›"))
+                Text(verbatim: idle
+                    ? String(localized: "home.waiting.idle", defaultValue: "\(count) waiting · sends after your next message ›")
+                    : String(localized: "home.waiting", defaultValue: "\(count) waiting · sends after this turn ›"))
                     .hexFont(HexTextStyle.small.weight(.regular))
                     .foregroundStyle(HexColor.text2)
                     .lineLimit(1)

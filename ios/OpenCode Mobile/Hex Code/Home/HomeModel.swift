@@ -515,6 +515,50 @@ final class HomeModel {
         takeStartedAt = nil
     }
 
+    // MARK: Takes for a sheet
+
+    /// A take recorded for a sheet (Say what to do instead, Say your own answer), not for the draft.
+    @ObservationIgnored private var sideTakeStart: Task<Bool, Never>?
+
+    /// Starts a take for a sheet; false while a draft take records (there is one microphone).
+    func beginSideTake() -> Bool {
+        guard !isRecording, sideTakeStart == nil else { return false }
+        let recorder = recorder
+        sideTakeStart = Task {
+            do {
+                try await recorder.startRecording()
+                return true
+            } catch {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Ends the sheet's take and turns it into text, whole: nil when the microphone or the engine
+    /// failed, "" when it held no speech (or was too short to read).
+    func endSideTake() async -> String? {
+        guard let start = sideTakeStart else { return nil }
+        sideTakeStart = nil
+        guard await start.value, let take = await recorder.stopRecording() else { return nil }
+        defer { try? FileManager.default.removeItem(at: take.url) }
+        guard take.duration >= TakeCapture.minimumAudio else { return "" }
+        if speech.status != .ready {
+            guard await speech.waitUntilReady() else { return nil }
+        }
+        return try? await speech.transcribe(take)
+    }
+
+    /// Drops the sheet's take (a tap rather than a hold, or the sheet closed).
+    func cancelSideTake() async {
+        guard let start = sideTakeStart else { return }
+        sideTakeStart = nil
+        _ = await start.value
+        recorder.cancelRecording()
+    }
+
+    var isSideTaking: Bool { sideTakeStart != nil }
+
     // MARK: Sending
 
     /// A Now waits this long on the phone, with Undo, before it goes.

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OpenCodeKit
 import os
 import UIKit
 
@@ -30,15 +31,30 @@ final class TodaySession {
 
     private(set) var setup: Setup = .opening
     var streamUp = true
+    /// The oldest question or approval, for the hint card.
     var pendingInput: PendingItem?
+    /// Every question and approval waiting, oldest first (one queue).
+    private(set) var pendingItems: [PendingItem] = []
+    /// The question or approval whose sheet is open.
+    private(set) var presentedNeed: PendingItem?
+    /// Details is open: Running now and Recent are read, and kept up to date.
+    var showsDetails = false {
+        didSet { detailsChanged(from: oldValue) }
+    }
+    /// The latest edits, commands and subagent starts, for Details.
+    private(set) var recentSteps: [RecentStep] = []
+    /// The state Details reads Running now from.
+    private(set) var liveState: LiveSessionState?
     /// When the current run started; nil while the session is idle.
     var busySince: Date?
     /// Messages queued in the inbox, sent after this turn.
     var waitingCount = 0
     /// The paired computer's address: a tile's `localhost` link opens there.
     var computerHost: String?
-    /// Those messages, in order, for the Waiting to send sheet.
+    /// Those messages, in order.
     var waitingMessages: [InboxEntry] = []
+    /// Every message not delivered yet (after this turn or at the next step), for Details.
+    private(set) var undeliveredMessages: [InboxEntry] = []
     /// The phone's thumbnails of the images it sent, by inbox id, until delivered or cancelled.
     private(set) var waitingThumbnails: [String: [UIImage]] = [:]
     /// The agent's to-do list (`todowrite`), cancelled items left out; empty for none.
@@ -55,6 +71,7 @@ final class TodaySession {
     @ObservationIgnored private let model: () -> ModelChoice
     @ObservationIgnored private let toasts: HexToaster
     @ObservationIgnored private let api: (any LiveSessionAPI)?
+    @ObservationIgnored private let control: (any SessionControlAPI)?
     @ObservationIgnored private let stream: LiveEventStream?
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let timeZone: TimeZone
@@ -74,6 +91,14 @@ final class TodaySession {
     @ObservationIgnored private var sentRunEnded = false
     /// The latest inbox ids delivered or cancelled.
     @ObservationIgnored private var leftInbox: [String] = []
+    /// Questions and approvals being answered from this phone: their leaving isn't "No longer needed".
+    @ObservationIgnored private var answering: Set<String> = []
+    /// Opens the next question or approval after one is answered.
+    @ObservationIgnored private var nextNeed: Task<Void, Never>?
+    /// After Stop: one more interrupt if a subagent's note wakes today's session.
+    @ObservationIgnored private var stopRetry: StopRetry?
+    /// Reads Recent again a moment after a tool finishes, while Details is open.
+    @ObservationIgnored private var recentReread: Task<Void, Never>?
 
     init(
         setup: DailySessionSetup,
@@ -82,6 +107,7 @@ final class TodaySession {
         model: @escaping () -> ModelChoice,
         toasts: HexToaster,
         api: (any LiveSessionAPI)? = nil,
+        control: (any SessionControlAPI)? = nil,
         stream: LiveEventStream? = nil,
         now: @escaping () -> Date = Date.init,
         timeZone: TimeZone = .current
@@ -92,6 +118,7 @@ final class TodaySession {
         self.model = model
         self.toasts = toasts
         self.api = api
+        self.control = control
         self.stream = stream
         self.now = now
         self.timeZone = timeZone
@@ -137,6 +164,9 @@ final class TodaySession {
             setup = .failed(retrying: false)
         case let .opened(session, _, showsNewDayNotice):
             day = today
+            presentedNeed = nil
+            recentSteps = []
+            stopRetry = nil
             live = LiveSessionState(rootID: session.id, hasRun: session.busySince != nil)
             publish()
             streamUp = true
@@ -229,6 +259,7 @@ final class TodaySession {
         live?.apply(snapshot)
         waitingThumbnails = waitingThumbnails.filter { id, _ in snapshot.inbox.contains { $0.id == id } }
         publish()
+        if showsDetails { Task { await refreshDetails() } }
         await summaryOnReconnect(updated: snapshot.updated)
     }
 
@@ -249,10 +280,17 @@ final class TodaySession {
     }
 
     private func received(_ event: SessionEvent) {
-        guard live != nil else { return }
+        guard let rootID = live?.rootID else { return }
         let effect = live?.apply(event)
         if case let .inboxRemoved(_, id) = event { inboxLeft(id) }
         publish()
+        if stopRetry?.observe(event, at: now(), busy: busySince != nil) == true {
+            HexLog.summary.info("stop: a subagent's note woke today's session; interrupting it once more")
+            Task { _ = try? await control?.interrupt(sessionID: rootID) }
+        }
+        if showsDetails, case let .toolFinished(sessionID) = event, sessionID == rootID {
+            rereadRecent()
+        }
         switch effect {
         case .runEnded:
             if sentMessage != nil { sentRunEnded = true }
@@ -293,8 +331,16 @@ final class TodaySession {
     private func publish() {
         busySince = live?.busySince
         pendingInput = live?.firstPending
+        pendingItems = live?.pending ?? []
         waitingCount = live?.waitingCount ?? 0
         waitingMessages = live?.waiting ?? []
+        undeliveredMessages = live?.undelivered ?? []
+        liveState = live
+        // The sheet's question or approval left without this phone answering it.
+        if let shown = presentedNeed, !answering.contains(shown.id), !pendingItems.contains(where: { $0.id == shown.id }) {
+            presentedNeed = nil
+            toasts.show(Self.goneNotice())
+        }
         todos = live?.todos ?? []
         let date = now()
         runningCount = live?.runningCount(at: date) ?? 0
@@ -372,13 +418,279 @@ final class TodaySession {
         }
     }
 
-    // MARK: Taps that open M4's sheets
+    // MARK: Needs you
 
-    /// Tapping Needs input or its hint card opens the question sheet, which comes in M4.
-    func openPendingInput() {}
+    /// The hint card, Needs input in the top bar, or a Needs you row in Details: the sheet for that
+    /// item, else the oldest.
+    func openPendingInput(_ id: String? = nil) {
+        nextNeed?.cancel()
+        presentedNeed = id.flatMap { id in pendingItems.first { $0.id == id } } ?? pendingItems.first
+    }
 
-    /// Tapping the progress or the waiting line opens Details, which comes in M4.
-    func openDetails() {}
+    /// Hide: the sheet closes unanswered; the hint stays.
+    func hideNeed() {
+        nextNeed?.cancel()
+        presentedNeed = nil
+    }
+
+    /// The subagent's title, for "From a subagent · …"; nil for today's session's own requests.
+    func subagentTitle(of item: PendingItem) -> String? {
+        guard let live, item.sessionID != live.rootID else { return nil }
+        let child = live.childSessions[item.sessionID]
+        return [child?.title, child?.agent].compactMap { $0 }.first { !$0.isEmpty } ?? item.sessionID
+    }
+
+    /// Today's session's project, once read: `global` hides Always.
+    var projectID: String? { live?.projectID }
+
+    /// Allow once, Always or Deny. Deny always sends a note (the spoken one, else the default), so
+    /// the agent carries on.
+    func reply(to item: PendingItem, _ decision: SessionStateAPIClient.PermissionDecision, note: String? = nil) async -> NeedsReply {
+        let message = decision == .reject ? Self.denyNote(spoken: note) : nil
+        return await respond(item, refusesOthers: decision == .reject) { control in
+            try await control.replyToApproval(sessionID: item.sessionID, requestID: item.id, decision: decision, note: message)
+        }
+    }
+
+    /// Submit: every page's answer in one reply.
+    func submit(_ item: PendingItem, answer: [String: FormAnswerV2]) async -> NeedsReply {
+        await respond(item) { control in
+            try await control.answerQuestion(sessionID: item.sessionID, formID: item.id, answer: answer)
+        }
+    }
+
+    /// Dismiss: the form goes with the note, so the run goes on.
+    func dismiss(_ item: PendingItem) async -> NeedsReply {
+        await respond(item) { control in
+            try await control.dismissQuestion(sessionID: item.sessionID, formID: item.id, note: SessionPrompts.Needs.dismissNote)
+        }
+    }
+
+    static func denyNote(spoken: String?) -> String {
+        let spoken = spoken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return spoken.isEmpty ? SessionPrompts.Needs.denyNote : spoken
+    }
+
+    /// Sent: the item leaves the queue, the sheet closes, and the next one opens 0.3 s later.
+    /// Gone (`404`, `409`): the same, with "No longer needed". Failed: the sheet stays.
+    private func respond(
+        _ item: PendingItem,
+        refusesOthers: Bool = false,
+        _ call: @escaping (any SessionControlAPI) async throws -> Void
+    ) async -> NeedsReply {
+        guard let control else { return .failed }
+        answering.insert(item.id)
+        defer { answering.remove(item.id) }
+        let outcome: NeedsReply
+        do {
+            try await call(control)
+            outcome = .sent
+        } catch ControlError.gone {
+            outcome = .gone
+        } catch {
+            HexLog.summary.error("needs: couldn't answer \(item.id, privacy: .public): \(String(describing: error), privacy: .public)")
+            toasts.show(Self.failedNotice())
+            return .failed
+        }
+        live?.answered(item, refusedOthers: refusesOthers && outcome == .sent)
+        if presentedNeed?.id == item.id { presentedNeed = nil }
+        publish()
+        if outcome == .gone {
+            toasts.show(Self.goneNotice())
+        } else {
+            openNextNeed()
+        }
+        return outcome
+    }
+
+    /// The next waiting item opens 0.3 s after the sheet closed.
+    private func openNextNeed() {
+        nextNeed?.cancel()
+        guard !pendingItems.isEmpty else { return }
+        nextNeed = Task { [weak self] in
+            try? await Task.sleep(for: Self.nextNeedDelay)
+            guard !Task.isCancelled, let self, self.presentedNeed == nil, !self.showsDetails else { return }
+            self.presentedNeed = self.pendingItems.first
+        }
+    }
+
+    static let nextNeedDelay: Duration = .milliseconds(300)
+
+    static func goneNotice() -> HexToastItem {
+        HexToastItem(
+            tone: .info,
+            title: String(localized: "needs.gone", defaultValue: "No longer needed"),
+            detail: String(localized: "needs.gone.sub", defaultValue: "It was answered elsewhere or the run ended.")
+        )
+    }
+
+    static func failedNotice() -> HexToastItem {
+        HexToastItem(
+            tone: .stop,
+            title: String(localized: "needs.failed", defaultValue: "Couldn’t send"),
+            detail: String(localized: "needs.failed.sub", defaultValue: "Try again.")
+        )
+    }
+
+    // MARK: Stop
+
+    /// The stop button is lit: the agent works or waits for you.
+    var canStop: Bool {
+        switch agentState {
+        case .working?, .needsInput?: true
+        default: false
+        }
+    }
+
+    /// The 3 s hold is done: interrupt today's session, then each running subagent; if a subagent's
+    /// note wakes the session within 5 s, interrupt it once more. Background shells keep running.
+    /// The server pauses the goal itself.
+    func stop() async {
+        guard let control, let rootID = live?.rootID else {
+            toasts.show(Self.stopFailedNotice())
+            return
+        }
+        stopRetry = StopRetry(rootID: rootID, stoppedAt: now())
+        var stopped: Bool
+        do {
+            stopped = try await control.interrupt(sessionID: rootID)
+        } catch {
+            stopRetry = nil
+            HexLog.summary.error("stop: couldn't interrupt: \(String(describing: error), privacy: .public)")
+            toasts.show(Self.stopFailedNotice())
+            return
+        }
+        let children = (try? await control.runningSubagents(rootID: rootID)) ?? Array(live?.runningChildren ?? [])
+        for child in children {
+            // A subagent stopped counts too: it may be all that was running.
+            if (try? await control.interrupt(sessionID: child)) == true { stopped = true }
+        }
+        HexLog.summary.info("stop: interrupted today's session and \(children.count) subagents")
+        toasts.show(stopped ? Self.stoppedNotice(waiting: (live?.waitingCount ?? 0) > 0) : Self.nothingToStopNotice())
+    }
+
+    static func stoppedNotice(waiting: Bool) -> HexToastItem {
+        HexToastItem(
+            tone: .stop,
+            title: String(localized: "stop.done", defaultValue: "Stopped"),
+            detail: waiting
+                ? String(localized: "stop.done.waiting", defaultValue: "Waiting messages send after your next one.")
+                : String(localized: "stop.done.sub", defaultValue: "Talk to start again."),
+            duration: 3.2
+        )
+    }
+
+    static func nothingToStopNotice() -> HexToastItem {
+        HexToastItem(
+            tone: .info,
+            title: String(localized: "stop.nothing", defaultValue: "Nothing to stop"),
+            detail: String(localized: "stop.nothing.sub", defaultValue: "The agent had already finished.")
+        )
+    }
+
+    static func stopFailedNotice() -> HexToastItem {
+        HexToastItem(
+            tone: .stop,
+            title: String(localized: "stop.failed", defaultValue: "Couldn’t stop"),
+            detail: String(localized: "stop.failed.sub", defaultValue: "Check the connection and hold again.")
+        )
+    }
+
+    static func holdToStopNotice() -> HexToastItem {
+        HexToastItem(
+            tone: .stop,
+            title: String(localized: "stop.hold", defaultValue: "Hold to stop"),
+            detail: String(localized: "stop.hold.sub", defaultValue: "Keep pressing for 3 seconds. A tap does nothing.")
+        )
+    }
+
+    static func stopCancelledNotice() -> HexToastItem {
+        HexToastItem(
+            tone: .info,
+            title: String(localized: "stop.cancelled", defaultValue: "Stop cancelled"),
+            detail: String(localized: "stop.cancelled.sub", defaultValue: "The agent keeps running."),
+            duration: 2.2
+        )
+    }
+
+    // MARK: Details
+
+    /// "Details ›", the to-do row and the waiting line open Details.
+    func openDetails() {
+        showsDetails = true
+    }
+
+    /// A Needs you row: Details closes, then that item's sheet opens.
+    @ObservationIgnored private var needAfterDetails: String?
+
+    func openFromDetails(_ id: String) {
+        needAfterDetails = id
+        showsDetails = false
+    }
+
+    /// Details has gone: a Needs you row's sheet opens now.
+    func detailsDismissed() {
+        guard let id = needAfterDetails else { return }
+        needAfterDetails = nil
+        openPendingInput(id)
+    }
+
+    private func detailsChanged(from wasOpen: Bool) {
+        guard showsDetails != wasOpen else { return }
+        if showsDetails {
+            Task { await refreshDetails() }
+        } else {
+            recentReread?.cancel()
+            recentReread = nil
+        }
+    }
+
+    /// Running now (running subagents and agent shells) and Recent, read on opening and on a
+    /// reconnect while open.
+    func refreshDetails() async {
+        guard let control, let rootID = live?.rootID else { return }
+        async let running = try? control.running(rootID: rootID, directory: directory())
+        async let recent = try? control.recentTools(sessionID: rootID)
+        if let running = await running, live?.rootID == rootID {
+            live?.apply(running: running)
+            publish()
+        }
+        if let recent = await recent, live?.rootID == rootID {
+            recentSteps = RecentSteps.make(recent)
+        }
+    }
+
+    /// Recent again 1 s after a tool of today's session finishes.
+    private func rereadRecent() {
+        recentReread?.cancel()
+        recentReread = Task { [weak self] in
+            try? await Task.sleep(for: RecentSteps.rereadDelay)
+            guard !Task.isCancelled, let self, self.showsDetails, let control = self.control, let rootID = self.live?.rootID else { return }
+            if let parts = try? await control.recentTools(sessionID: rootID), self.live?.rootID == rootID {
+                self.recentSteps = RecentSteps.make(parts)
+            }
+        }
+    }
+
+    /// Running now at `date`: at most 3 rows, how many more, and the total.
+    func running(at date: Date) -> (rows: [RunningRow], more: Int, total: Int) {
+        guard let liveState else { return ([], 0, 0) }
+        return RunningNow.rows(liveState, at: date)
+    }
+
+    // MARK: Sample sessions
+
+    /// Sample sessions (Settings › Developer): put the state in directly.
+    func updateSample(_ change: (inout LiveSessionState) -> Void) {
+        guard var state = live else { return }
+        change(&state)
+        live = state
+        publish()
+    }
+
+    func setSampleRecent(_ steps: [RecentStep]) {
+        recentSteps = steps
+    }
 
     static func newDayNotice() -> HexToastItem {
         HexToastItem(

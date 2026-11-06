@@ -41,6 +41,20 @@ enum SessionPrompts {
         """
     }
 
+    /// The notes Deny and Dismiss send when nothing was said (app plan, "Needs you and control"):
+    /// with a note the agent reads it and carries on; without one the run would end, and Stop is
+    /// the way to halt.
+    enum Needs {
+        /// 1: the first notes (M4).
+        static let version = 1
+
+        /// Deny's note, sent as the reject's `message` unless the user said what to do instead.
+        static let denyNote = "The user denied this request. Don't try it again; carry on another way, or ask if you're stuck."
+
+        /// Dismiss's note, sent as `DELETE …/form/{id}?message=`.
+        static let dismissNote = "The user dismissed these questions without answering. Carry on with your best judgement and say what you chose."
+    }
+
     /// The fixed instruction entry added once per session with
     /// `PUT /api/experimental/session/{id}/instructions/entries/message-rules`.
     /// The wording may change after spike S1.

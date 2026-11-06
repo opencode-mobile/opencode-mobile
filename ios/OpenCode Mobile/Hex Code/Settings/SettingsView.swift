@@ -170,8 +170,7 @@ struct HexMainView: View {
                 home: main.home,
                 session: main.session,
                 voice: voice,
-                onSettings: { main.openSettings() },
-                onNotYet: { main.showPlaceholder() }
+                onSettings: { main.openSettings() }
             )
                 .hexPage()
                 .navigationDestination(for: HexMainModel.Route.self) { route in

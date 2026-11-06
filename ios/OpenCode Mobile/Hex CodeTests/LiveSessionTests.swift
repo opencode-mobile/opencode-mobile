@@ -72,22 +72,27 @@ struct LiveSessionStateTests {
             sessionID: "ses_a",
             at: Date(timeIntervalSince1970: 1_793_914_275.814)
         ))
-        #expect(SessionEvent.decode(EventLines.permission("ses_a")) == .permissionAsked(
-            PendingItem(id: "per_1", sessionID: "ses_a", kind: .approval, text: "ls")
-        ))
-        #expect(SessionEvent.decode(EventLines.form("ses_a")) == .formCreated(
-            PendingItem(id: "frm_1", sessionID: "ses_a", kind: .question, text: "Run the tests now?")
-        ))
+        #expect(SessionEvent.decode(EventLines.permission("ses_a")) == .permissionAsked(PendingItem(
+            approval: PendingPermissionV2(id: "per_1", sessionID: "ses_a", action: "shell", resources: ["ls"], save: ["ls *"])
+        )))
+        guard case let .formCreated(form)? = SessionEvent.decode(EventLines.form("ses_a")) else {
+            Issue.record("expected a form")
+            return
+        }
+        #expect(form.id == "frm_1")
+        #expect(form.kind == .question)
+        #expect(form.text == "Run the tests now?")
         #expect(SessionEvent.decode(EventLines.enqueued("ses_a", id: "msg_1")) == .inboxEnqueued(sessionID: "ses_a", id: "msg_1", delivery: "queue", text: "hi"))
         #expect(SessionEvent.decode(EventLines.child("ses_c", parent: "ses_a")) == .sessionCreated(id: "ses_c", parentID: "ses_a"))
-        #expect(SessionEvent.decode(EventLines.shellCreated("sh_1", session: "ses_a")) == .shellCreated(id: "sh_1", sessionID: "ses_a", at: Date(timeIntervalSince1970: Double(1_793_914_275_814) / 1000)))
+        #expect(SessionEvent.decode(EventLines.shellCreated("sh_1", session: "ses_a")) == .shellCreated(id: "sh_1", sessionID: "ses_a", at: Date(timeIntervalSince1970: Double(1_793_914_275_814) / 1000), command: "ls"))
         #expect(SessionEvent.decode(EventLines.shellExited("sh_1")) == .shellExited(id: "sh_1"))
         #expect(SessionEvent.decode(EventLines.line("session.step.ended", #"{"sessionID":"ses_a"}"#)) == nil)
         #expect(SessionEvent.decode("not json") == nil)
     }
 
     @Test func theTypesAreTheExactListEachOnItsOwn() {
-        #expect(SessionEvent.types.count == 17)
+        #expect(SessionEvent.types.count == 18)
+        #expect(SessionEvent.types.contains("session.tool.failed"))
         #expect(!SessionEvent.types.contains { $0.contains("*") || $0.contains(",") })
     }
 
@@ -231,7 +236,7 @@ struct SessionStateDTOTests {
             APIListEnvelope<InboxItemV2>.self,
             from: Data(#"{"data":[{"id":"msg_1","sessionID":"ses_a","time":{"created":1},"type":"user","payload":{"text":"hi"},"delivery":"queue"}]}"#.utf8)
         )
-        #expect(inbox.data == [InboxItemV2(id: "msg_1", sessionID: "ses_a", delivery: "queue", text: "hi")])
+        #expect(inbox.data == [InboxItemV2(id: "msg_1", sessionID: "ses_a", delivery: "queue", text: "hi", type: "user")])
     }
 }
 

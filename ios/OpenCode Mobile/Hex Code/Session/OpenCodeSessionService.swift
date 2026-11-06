@@ -76,13 +76,14 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
         async let todos = todos(sessionID: rootID)
         let running = try await active
         let session = try await root
-        let childIDs = try await children.sessions.map(\.id)
+        let childList = try await children.sessions
+        let childIDs = childList.map(\.id)
         // Pending items of today's session and each subagent that is running.
         var pending: [PendingItem] = []
         for id in [rootID] + childIDs.filter(running.contains) {
             async let permissions = client.pendingPermissions(sessionID: id)
             async let forms = client.pendingForms(sessionID: id)
-            pending += try await forms.map(Self.question) + permissions.map(Self.approval)
+            pending += try await forms.map(PendingItem.init(question:)) + permissions.map(PendingItem.init(approval:))
         }
         let busy = running.contains(rootID)
             ? Date(timeIntervalSince1970: Double(session.busyMs ?? Int64(Date().timeIntervalSince1970 * 1000)) / 1000)
@@ -94,10 +95,24 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
             updated: session.updatedMs,
             runningChildren: childIDs.filter(running.contains),
             pending: PendingItem.oldestFirst(pending),
-            inbox: try await inbox.map { InboxEntry(id: $0.id, delivery: $0.delivery ?? "queue", text: $0.text ?? "", files: $0.files) },
+            inbox: try await inbox.map {
+                InboxEntry(id: $0.id, delivery: $0.delivery ?? "queue", text: $0.text ?? "", files: $0.files, kind: $0.type ?? "user")
+            },
             // A list that can't be read doesn't fail the rest; the last one stays.
-            todos: try? await todos.map(TodoList.items) ?? []
+            todos: try? await todos.map(TodoList.items) ?? [],
+            childSessions: Self.childSessions(childList),
+            childBusySince: Self.busySince(childList.filter { running.contains($0.id) }),
+            projectID: session.projectID
         )
+    }
+
+    static func childSessions(_ list: [SessionInfoV2]) -> [String: ChildSession] {
+        Dictionary(list.map { ($0.id, ChildSession(title: $0.title, agent: $0.agent)) }) { first, _ in first }
+    }
+
+    /// When each session's latest run started; now for one running without `time.busy`.
+    static func busySince(_ list: [SessionInfoV2]) -> [String: Date] {
+        Dictionary(list.map { ($0.id, $0.busyMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? Date()) }) { first, _ in first }
     }
 
     /// Pages read looking for the newest `todowrite` call, newest first.
@@ -157,14 +172,72 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
         )
     }
 
-    static func approval(_ permission: PendingPermissionV2) -> PendingItem {
-        let text = PendingPermissionText(action: permission.action, resources: permission.resources, message: permission.message).text
-        return PendingItem(id: permission.id, sessionID: permission.sessionID, kind: .approval, text: text)
+    static func approval(_ permission: PendingPermissionV2) -> PendingItem { PendingItem(approval: permission) }
+
+    static func question(_ form: PendingFormV2) -> PendingItem { PendingItem(question: form) }
+}
+
+// MARK: SessionControlAPI
+
+extension OpenCodeSessionService: SessionControlAPI {
+    func replyToApproval(sessionID: String, requestID: String, decision: SessionStateAPIClient.PermissionDecision, note: String?) async throws {
+        try await Self.mapGone { try await client.replyToPermission(sessionID: sessionID, requestID: requestID, decision: decision, message: note) }
     }
 
-    static func question(_ form: PendingFormV2) -> PendingItem {
-        let fields = form.fields.map { PendingQuestionText.Field(title: $0.title, description: $0.description) }
-        return PendingItem(id: form.id, sessionID: form.sessionID, kind: .question, text: PendingQuestionText(title: form.title, fields: fields).text)
+    func answerQuestion(sessionID: String, formID: String, answer: [String: FormAnswerV2]) async throws {
+        try await Self.mapGone { try await client.replyToForm(sessionID: sessionID, formID: formID, answer: answer) }
+    }
+
+    func dismissQuestion(sessionID: String, formID: String, note: String) async throws {
+        try await Self.mapGone { try await client.cancelForm(sessionID: sessionID, formID: formID, message: note) }
+    }
+
+    func interrupt(sessionID: String) async throws -> Bool {
+        try await client.interrupt(sessionID: sessionID)
+    }
+
+    func runningSubagents(rootID: String) async throws -> [String] {
+        async let active = client.activeSessionIDs()
+        async let children = client.listSessions(parent: .session(rootID))
+        let running = try await active
+        return try await children.sessions.map(\.id).filter(running.contains)
+    }
+
+    func running(rootID: String, directory: String) async throws -> RunningSnapshot {
+        async let active = client.activeSessionIDs()
+        async let children = client.listSessions(parent: .session(rootID))
+        async let shells = client.shells(directory: directory)
+        let running = try await active
+        let childList = try await children.sessions
+        let runningChildren = childList.filter { running.contains($0.id) }
+        let owners = Set([rootID] + childList.map(\.id))
+        return RunningSnapshot(
+            childBusySince: Self.busySince(runningChildren),
+            childSessions: Self.childSessions(childList),
+            shells: try await shells.compactMap { shell in
+                guard shell.status == nil || shell.status == "running", let owner = shell.sessionID, owners.contains(owner) else { return nil }
+                return RunningSnapshot.Shell(
+                    id: shell.id,
+                    sessionID: owner,
+                    command: shell.command ?? "",
+                    startedAt: shell.startedMs.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? Date()
+                )
+            }
+        )
+    }
+
+    func recentTools(sessionID: String) async throws -> [ToolPartV2] {
+        let page = try await client.assistantMessages(sessionID: sessionID, limit: RecentSteps.messageLimit)
+        return page.messages.flatMap { $0.toolParts.reversed() }
+    }
+
+    /// A request the server no longer has (`404`), or a form already settled (`409`), is gone.
+    private static func mapGone(_ call: () async throws -> Void) async throws {
+        do {
+            try await call()
+        } catch let SessionStateAPIError.httpStatus(status, _) where status == 404 || status == 409 {
+            throw ControlError.gone
+        }
     }
 }
 

@@ -9,11 +9,10 @@ struct HomeView: View {
     let session: TodaySession
     let voice: VoiceEngine
     let onSettings: () -> Void
-    /// Stop (M4) isn't built yet: the "Not in this version yet" notice.
-    var onNotYet: () -> Void = {}
 
-    @State private var showsWaiting = false
     @State private var showsAttach = false
+    /// The stop button's 3 s hold.
+    @State private var stopHold: StopHoldModel?
     /// Where the Attach sheet goes once it has closed.
     @State private var attachRoute: AttachRoute?
     @State private var showsPhotos = false
@@ -40,7 +39,8 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             if !drafting, session.waitingCount > 0 {
-                WaitingLine(count: session.waitingCount) { showsWaiting = true }
+                // Waiting messages open Details, where they can be cancelled.
+                WaitingLine(count: session.waitingCount, idle: session.agentState == .idle) { session.openDetails() }
                     .padding(.bottom, 10)
                     .transition(.opacity)
             } else {
@@ -60,11 +60,38 @@ struct HomeView: View {
                 .padding(.bottom, 6)
         }
         .padding(.horizontal, HexSpacing.screenHome)
+        // While stop is held: the countdown card under the top bar, and the red screen edge.
+        .overlay(alignment: .top) {
+            if let since = stopHold?.heldSince {
+                HexStopWarning(
+                    since: since,
+                    title: { String(localized: "stop.warning", defaultValue: "Stopping the agent in \($0)") },
+                    detail: String(localized: "stop.warning.sub", defaultValue: "Let go to keep it running")
+                )
+                .padding(.horizontal, 12)
+                .padding(.top, HexTopBarMetrics.homeHeight + 4)
+                .transition(.offset(y: 4).combined(with: .opacity))
+            }
+        }
+        .background {
+            if stopHold?.heldSince != nil {
+                HexStopEdge()
+                    .transition(.opacity)
+            }
+        }
         .hexScreenBackground()
         .animation(HexMotion.ease(HexMotion.fade), value: drafting)
         .animation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
+        .animation(.easeOut(duration: 0.18), value: stopHold?.heldSince)
         // The microphone gets ready (not started) while home is on screen.
         .onAppear { home.prepareRecorder() }
+        .task(id: ObjectIdentifier(session)) {
+            stopHold = StopHoldModel(
+                toasts: home.toasts,
+                canStop: { [session] in session.canStop },
+                stop: { [session] in await session.stop() }
+            )
+        }
         #if DEBUG
         .task { await PressProbe.run(home) }
         .task { await LockedProbe.run(home) }
@@ -76,8 +103,15 @@ struct HomeView: View {
         .fullScreenCover(item: $browserPage) { page in
             InAppBrowser(url: page.url).ignoresSafeArea()
         }
-        .hexSheet(isPresented: $showsWaiting, detents: [.medium]) {
-            WaitingSheet(session: session) { showsWaiting = false }
+        .hexFittedSheet(item: needsPresented) { item in
+            NeedsSheet(item: item, session: session, home: home)
+        }
+        .hexSheet(isPresented: detailsPresented, onDismiss: { session.detailsDismissed() }) {
+            DetailsSheet(session: session, home: home) { session.showsDetails = false }
+        }
+        // A sheet with its own notices is up: they show on it, not under it.
+        .onChange(of: session.presentedNeed != nil || session.showsDetails, initial: true) { _, up in
+            home.toasts.inSheet = up
         }
         .hexSheet(isPresented: $showsAttach, detents: [.height(AttachSheet.height)], onDismiss: openAttachRoute) {
             AttachSheet(
@@ -93,6 +127,14 @@ struct HomeView: View {
             CameraPicker(onPhoto: { home.attach([PickedImage(photo: $0)]) }, onClose: { showsCamera = false })
                 .ignoresSafeArea()
         }
+    }
+
+    private var needsPresented: Binding<PendingItem?> {
+        Binding(get: { session.presentedNeed }, set: { if $0 == nil { session.hideNeed() } })
+    }
+
+    private var detailsPresented: Binding<Bool> {
+        Binding(get: { session.showsDetails }, set: { session.showsDetails = $0 })
     }
 
     /// The paperclip: the Attach sheet, or the limit's notice with 4 images.
@@ -144,25 +186,25 @@ struct HomeView: View {
                     }
                     .transition(.opacity)
                 } else {
+                    // Held for 3 s; dimmed (and a hold does nothing) unless the agent works or waits.
                     HexIconButton(
                         .stop,
                         label: LocalizedStringResource("home.stop", defaultValue: "Stop"),
                         tone: .stop,
-                        enabled: stopEnabled,
-                        action: onNotYet
+                        enabled: session.canStop,
+                        heldSince: stopHold?.heldSince,
+                        press: HexPress(
+                            began: { stopHold?.pressBegan() },
+                            moved: { stopHold?.moved(outside: $0) },
+                            ended: { stopHold?.pressEnded() }
+                        )
                     )
+                    .accessibilityHint(Text(LocalizedStringResource("stop.hold.sub", defaultValue: "Keep pressing for 3 seconds. A tap does nothing.")))
                     .transition(.opacity)
                 }
             }
         }
         .animation(HexMotion.ease(HexMotion.fade), value: home.dock)
-    }
-
-    private var stopEnabled: Bool {
-        switch session.agentState {
-        case .working?, .needsInput?: true
-        default: false
-        }
     }
 }
 
@@ -553,67 +595,6 @@ struct HangingLayout: Layout {
     }
 }
 
-/// "Waiting to send": each message queued for after this turn, with Cancel. One delivered or
-/// cancelled elsewhere leaves the list (through the inbox events); the sheet closes when it's empty.
-struct WaitingSheet: View {
-    let session: TodaySession
-    let onClose: () -> Void
-
-    @State private var cancelling: Set<String> = []
-
-    var body: some View {
-        HexSheet(
-            title: Text(LocalizedStringResource("home.waiting.title", defaultValue: "Waiting to send")),
-            leading: { EmptyView() },
-            trailing: {
-                HexButton(LocalizedStringResource("common.close", defaultValue: "Close"), action: onClose)
-            }
-        ) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(session.waitingMessages) { message in
-                        HStack(alignment: .top, spacing: 12) {
-                            HexIconView(.send, size: HexIconSize.small)
-                                .foregroundStyle(HexColor.text3)
-                                .padding(.top, 3)
-                            VStack(alignment: .leading, spacing: 6) {
-                                if !message.text.isEmpty {
-                                    Text(verbatim: message.text)
-                                        .hexFont(.row)
-                                        .foregroundStyle(HexColor.text1)
-                                        .lineLimit(2)
-                                }
-                                WaitingImages(thumbnails: session.waitingThumbnails[message.id], count: message.imageCount)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            HexButton(
-                                LocalizedStringResource("home.waiting.cancel", defaultValue: "Cancel"),
-                                loading: cancelling.contains(message.id)
-                            ) {
-                                cancel(message.id)
-                            }
-                        }
-                        .padding(.vertical, 12)
-                        .transition(.opacity)
-                    }
-                }
-                .animation(HexMotion.ease(HexMotion.fade), value: session.waitingMessages)
-            }
-        }
-        .onChange(of: session.waitingMessages.isEmpty) { _, empty in
-            if empty { onClose() }
-        }
-    }
-
-    private func cancel(_ id: String) {
-        cancelling.insert(id)
-        Task {
-            try? await session.cancelWaiting(id)
-            cancelling.remove(id)
-        }
-    }
-}
-
 /// The draft's images (app plan, "Attach" › Thumbnails on the draft): 40 pt thumbnails with ✕,
 /// a spinner while preparing, then one caption. Dimmed, with a caption that says so, when today's
 /// model can't see images.
@@ -644,27 +625,6 @@ struct DraftImagesRow: View {
         // Room for the ✕ over the top corner.
         .padding(.top, 5)
         .animation(HexMotion.ease(HexMotion.fade), value: images)
-    }
-}
-
-/// A waiting message's images: the phone's own thumbnails (24 pt, at most 4), or for one sent
-/// from elsewhere their count.
-private struct WaitingImages: View {
-    let thumbnails: [UIImage]?
-    let count: Int
-
-    var body: some View {
-        if let thumbnails, !thumbnails.isEmpty {
-            HStack(spacing: 6) {
-                ForEach(thumbnails.indices.prefix(DictationDraft.maxImages), id: \.self) { index in
-                    HexThumbnail(image: thumbnails[index], size: .small)
-                }
-            }
-        } else if count > 0 {
-            Text(verbatim: HomeModel.imageCountText(count))
-                .hexFont(.caption)
-                .foregroundStyle(HexColor.text3)
-        }
     }
 }
 

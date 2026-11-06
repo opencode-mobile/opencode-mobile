@@ -2,17 +2,65 @@ import Foundation
 import OpenCodeKit
 
 /// A question or approval the agent waits for, in today's session or one of its subagents.
-struct PendingItem: Equatable, Sendable {
+struct PendingItem: Equatable, Sendable, Identifiable {
     enum Kind: Equatable, Sendable {
         case question
         case approval
     }
 
+    /// The whole request or form, for its sheet.
+    enum Request: Equatable, Sendable {
+        case approval(PendingPermissionV2)
+        case question(PendingFormV2)
+    }
+
     var id: String
+    /// The session that owns it: a subagent's own id for its requests. Replies go there.
     var sessionID: String
     var kind: Kind
-    /// The question's text, or the command or action to approve.
+    /// The question's text, or the command or action to approve (the hint card's second line).
     var text: String
+    /// Nil only for an item made from its text alone.
+    var request: Request?
+
+    init(id: String, sessionID: String, kind: Kind, text: String, request: Request? = nil) {
+        self.id = id
+        self.sessionID = sessionID
+        self.kind = kind
+        self.text = text
+        self.request = request
+    }
+
+    init(approval: PendingPermissionV2) {
+        self.init(
+            id: approval.id,
+            sessionID: approval.sessionID,
+            kind: .approval,
+            text: PendingPermissionText(action: approval.action, resources: approval.resources, message: approval.message).text,
+            request: .approval(approval)
+        )
+    }
+
+    init(question: PendingFormV2) {
+        let fields = question.fields.map { PendingQuestionText.Field(title: $0.title, description: $0.description) }
+        self.init(
+            id: question.id,
+            sessionID: question.sessionID,
+            kind: .question,
+            text: PendingQuestionText(title: question.title, fields: fields).text,
+            request: .question(question)
+        )
+    }
+
+    var approval: PendingPermissionV2? {
+        if case let .approval(approval) = request { return approval }
+        return nil
+    }
+
+    var question: PendingFormV2? {
+        if case let .question(question) = request { return question }
+        return nil
+    }
 }
 
 extension PendingItem {
@@ -28,6 +76,19 @@ extension PendingItem {
     }
 }
 
+/// A subagent of today's session: its title (the subagent's description) and agent.
+struct ChildSession: Equatable, Sendable {
+    var title: String?
+    var agent: String?
+}
+
+/// An agent shell: what it runs, and since when.
+struct ShellEntry: Equatable, Sendable {
+    var sessionID: String
+    var command: String
+    var startedAt: Date
+}
+
 /// One event from `GET /api/event`, with what home needs from it.
 enum SessionEvent: Equatable, Sendable {
     /// The first frame of every stream.
@@ -40,19 +101,23 @@ enum SessionEvent: Equatable, Sendable {
     case formCreated(PendingItem)
     /// `form.replied` or `form.cancelled`.
     case formClosed(sessionID: String, id: String)
-    /// A message joined the inbox; its files by name and type only, never their contents.
-    case inboxEnqueued(sessionID: String, id: String, delivery: String, text: String, files: [InboxFileV2] = [])
+    /// A message joined the inbox; its files by name and type only, never their contents. `kind`
+    /// is the item's `type`: `user`, or `synthetic` for a note the server made (a subagent's
+    /// `<subagent …>` note that it finished).
+    case inboxEnqueued(sessionID: String, id: String, delivery: String, text: String, files: [InboxFileV2] = [], kind: String = "user")
     /// `session.inbox.delivered`: the message reached the agent.
     case inboxDelivered(sessionID: String, id: String)
     /// `session.inbox.cancelled`.
     case inboxRemoved(sessionID: String, id: String)
     case inboxDeliveryChanged(sessionID: String, id: String, delivery: String)
-    case sessionCreated(id: String, parentID: String?)
-    case shellCreated(id: String, sessionID: String, at: Date?)
+    case sessionCreated(id: String, parentID: String?, title: String? = nil, agent: String? = nil)
+    case shellCreated(id: String, sessionID: String, at: Date?, command: String? = nil)
     case shellExited(id: String)
     /// `session.tool.success` whose `metadata.todos` is a list: a `todowrite` call (the event
     /// doesn't name its tool).
     case todosWritten(sessionID: String, todos: [TodoItemV2])
+    /// Any other `session.tool.success`, or a `session.tool.failed`: Details' Recent reads again.
+    case toolFinished(sessionID: String)
 
     /// The exact types home subscribes to, each sent as its own `types=` (the server refuses
     /// wildcards and lists).
@@ -73,6 +138,7 @@ enum SessionEvent: Equatable, Sendable {
         "session.created",
         "shell.created",
         "shell.exited",
+        "session.tool.failed",
         "session.tool.success",
     ]
 
@@ -92,26 +158,15 @@ enum SessionEvent: Equatable, Sendable {
         case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted":
             return sessionID.map { .executionEnded(sessionID: $0) }
         case "permission.asked":
-            guard let sessionID, let id = data["id"] as? String else { return nil }
-            let permission = PendingPermissionText(
-                action: data["action"] as? String ?? "",
-                resources: data["resources"] as? [String] ?? [],
-                message: data["message"] as? String
-            )
-            return .permissionAsked(PendingItem(id: id, sessionID: sessionID, kind: .approval, text: permission.text))
+            // The event's data is the request itself.
+            guard let request: PendingPermissionV2 = decoded(data) else { return nil }
+            return .permissionAsked(PendingItem(approval: request))
         case "permission.replied":
             guard let sessionID, let id = data["requestID"] as? String else { return nil }
             return .permissionReplied(sessionID: sessionID, id: id)
         case "form.created":
-            guard let form = data["form"] as? [String: Any],
-                  let id = form["id"] as? String,
-                  let formSession = form["sessionID"] as? String
-            else { return nil }
-            let fields = (form["fields"] as? [[String: Any]] ?? []).map {
-                PendingQuestionText.Field(title: $0["title"] as? String, description: $0["description"] as? String)
-            }
-            let text = PendingQuestionText(title: form["title"] as? String, fields: fields).text
-            return .formCreated(PendingItem(id: id, sessionID: formSession, kind: .question, text: text))
+            guard let form = data["form"] as? [String: Any], let request: PendingFormV2 = decoded(form) else { return nil }
+            return .formCreated(PendingItem(question: request))
         case "form.replied", "form.cancelled":
             guard let sessionID, let id = data["id"] as? String else { return nil }
             return .formClosed(sessionID: sessionID, id: id)
@@ -124,7 +179,14 @@ enum SessionEvent: Equatable, Sendable {
             let files = (payload?["files"] as? [[String: Any]] ?? []).map {
                 InboxFileV2(name: $0["name"] as? String, mime: $0["mime"] as? String)
             }
-            return .inboxEnqueued(sessionID: sessionID, id: id, delivery: item?["delivery"] as? String ?? "queue", text: text, files: files)
+            return .inboxEnqueued(
+                sessionID: sessionID,
+                id: id,
+                delivery: item?["delivery"] as? String ?? "queue",
+                text: text,
+                files: files,
+                kind: item?["type"] as? String ?? "user"
+            )
         case "session.inbox.delivered":
             guard let sessionID, let id = data["inboxID"] as? String else { return nil }
             return .inboxDelivered(sessionID: sessionID, id: id)
@@ -135,27 +197,42 @@ enum SessionEvent: Equatable, Sendable {
             guard let sessionID, let id = data["inboxID"] as? String, let delivery = data["delivery"] as? String else { return nil }
             return .inboxDeliveryChanged(sessionID: sessionID, id: id, delivery: delivery)
         case "session.created":
-            let info = data["info"] as? [String: Any]
-            guard let id = info?["id"] as? String ?? sessionID else { return nil }
-            return .sessionCreated(id: id, parentID: info?["parentID"] as? String)
+            // v2.2.5 puts the session's fields in `data` itself; older payloads nest them in `info`.
+            let info = data["info"] as? [String: Any] ?? data
+            guard let id = info["id"] as? String ?? sessionID else { return nil }
+            return .sessionCreated(
+                id: id,
+                parentID: info["parentID"] as? String ?? data["parentID"] as? String,
+                title: info["title"] as? String,
+                agent: info["agent"] as? String
+            )
         case "shell.created":
             guard let info = data["info"] as? [String: Any],
                   let id = info["id"] as? String,
                   let shellSession = (info["metadata"] as? [String: Any])?["sessionID"] as? String
             else { return nil }
-            return .shellCreated(id: id, sessionID: shellSession, at: created)
+            return .shellCreated(id: id, sessionID: shellSession, at: created, command: info["command"] as? String)
         case "shell.exited":
             return (data["id"] as? String).map { .shellExited(id: $0) }
         case "session.tool.success":
-            guard let sessionID, let todos = (data["metadata"] as? [String: Any])?["todos"] as? [Any] else { return nil }
+            guard let sessionID else { return nil }
+            guard let todos = (data["metadata"] as? [String: Any])?["todos"] as? [Any] else { return .toolFinished(sessionID: sessionID) }
             let items = todos.compactMap { item -> TodoItemV2? in
                 guard let item = item as? [String: Any], let content = item["content"] as? String else { return nil }
                 return TodoItemV2(content: content, status: item["status"] as? String ?? "pending")
             }
             return .todosWritten(sessionID: sessionID, todos: items)
+        case "session.tool.failed":
+            return sessionID.map { .toolFinished(sessionID: $0) }
         default:
             return nil
         }
+    }
+
+    /// A kit DTO from a payload already parsed.
+    private static func decoded<T: Decodable>(_ object: [String: Any]) -> T? {
+        guard let data = try? JSONSerialization.data(withJSONObject: object) else { return nil }
+        return try? JSONDecoder().decode(T.self, from: data)
     }
 }
 
@@ -200,6 +277,11 @@ struct InboxEntry: Equatable, Sendable, Identifiable {
     var text: String = ""
     /// Its files, by name and type.
     var files: [InboxFileV2] = []
+    /// `user`, or `synthetic` for a note the server made (a subagent's note that it finished).
+    var kind: String = "user"
+
+    /// A message someone sent, not a note the server made.
+    var isMessage: Bool { kind != "synthetic" }
 
     /// How many of its files are images.
     var imageCount: Int { files.filter { $0.mime?.hasPrefix("image/") ?? true }.count }
@@ -221,6 +303,12 @@ struct LiveSnapshot: Equatable, Sendable {
     var inbox: [InboxEntry]
     /// The agent's to-do list ([] for none); nil when it couldn't be read, so the last one stays.
     var todos: [TodoItem]? = []
+    /// Each subagent's title and agent, by id.
+    var childSessions: [String: ChildSession] = [:]
+    /// When each running subagent's run started (`time.busy`).
+    var childBusySince: [String: Date] = [:]
+    /// Today's session's project: `global` for a folder that isn't a git repository with commits.
+    var projectID: String? = nil
 }
 
 /// Today's session as the stream tells it: busy since when, the subagents and agent shells it owns,
@@ -241,10 +329,18 @@ struct LiveSessionState: Equatable, Sendable {
     var busySince: Date?
     var hasRun = false
     var children: Set<String> = []
+    /// Each subagent's title and agent, when known.
+    var childSessions: [String: ChildSession] = [:]
     /// Subagents between `session.execution.started` and its end.
     var runningChildren: Set<String> = []
+    /// When each running subagent's run started.
+    var childBusySince: [String: Date] = [:]
     /// Agent shells running, and when each started.
     var shells: [String: Date] = [:]
+    /// What each agent shell runs, when known.
+    var shellEntries: [String: ShellEntry] = [:]
+    /// Today's session's project, once read.
+    var projectID: String?
     /// The agent's to-do list, cancelled items left out; empty for none.
     var todos: [TodoItem] = []
     /// Oldest first.
@@ -262,7 +358,11 @@ struct LiveSessionState: Equatable, Sendable {
     var waitingCount: Int { waiting.count }
 
     /// Messages that send after this turn, in order.
-    var waiting: [InboxEntry] { inbox.filter { $0.delivery == "queue" } }
+    var waiting: [InboxEntry] { inbox.filter { $0.delivery == "queue" && $0.isMessage } }
+
+    /// Every message not delivered yet, after this turn or at the next step, in order (Details'
+    /// Waiting to send). The server's own notes are left out.
+    var undelivered: [InboxEntry] { inbox.filter(\.isMessage) }
 
     /// The question or approval the hint card shows: the oldest.
     var firstPending: PendingItem? { pending.first }
@@ -289,7 +389,10 @@ struct LiveSessionState: Equatable, Sendable {
         busySince = snapshot.busySince
         hasRun = hasRun || snapshot.hasRun
         children = Set(snapshot.children)
+        childSessions.merge(snapshot.childSessions) { _, new in new }
         runningChildren = Set(snapshot.runningChildren)
+        childBusySince = snapshot.childBusySince.filter { runningChildren.contains($0.key) }
+        if let projectID = snapshot.projectID { self.projectID = projectID }
         pending = snapshot.pending
         if let todos = snapshot.todos { self.todos = todos }
         inbox = snapshot.inbox
@@ -302,7 +405,10 @@ struct LiveSessionState: Equatable, Sendable {
         case .connected:
             return nil
         case let .executionStarted(sessionID, at):
-            if children.contains(sessionID) { runningChildren.insert(sessionID) }
+            if children.contains(sessionID) {
+                runningChildren.insert(sessionID)
+                if childBusySince[sessionID] == nil { childBusySince[sessionID] = at ?? Date() }
+            }
             guard sessionID == rootID else { return nil }
             // One run includes the queued messages delivered during it: keep the first start.
             if busySince == nil { busySince = at ?? Date() }
@@ -310,6 +416,10 @@ struct LiveSessionState: Equatable, Sendable {
             return nil
         case let .executionEnded(sessionID):
             runningChildren.remove(sessionID)
+            childBusySince[sessionID] = nil
+            // Pending ends with the run: Stop removes a pending approval without a
+            // `permission.replied`, so a run's end drops what that session waited for.
+            pending.removeAll { $0.sessionID == sessionID }
             guard sessionID == rootID else { return nil }
             busySince = nil
             hasRun = true
@@ -322,9 +432,9 @@ struct LiveSessionState: Equatable, Sendable {
             guard owns(sessionID) else { return nil }
             pending.removeAll { $0.id == id }
             return nil
-        case let .inboxEnqueued(sessionID, id, delivery, text, files):
+        case let .inboxEnqueued(sessionID, id, delivery, text, files, kind):
             guard sessionID == rootID, !inbox.contains(where: { $0.id == id }) else { return nil }
-            inbox.append(InboxEntry(id: id, delivery: delivery, text: text, files: files))
+            inbox.append(InboxEntry(id: id, delivery: delivery, text: text, files: files, kind: kind))
             return nil
         case let .inboxDelivered(sessionID, id):
             guard sessionID == rootID else { return nil }
@@ -339,20 +449,65 @@ struct LiveSessionState: Equatable, Sendable {
             guard sessionID == rootID, let index = inbox.firstIndex(where: { $0.id == id }) else { return nil }
             inbox[index].delivery = delivery
             return nil
-        case let .sessionCreated(id, parentID):
-            if parentID == rootID { children.insert(id) }
+        case let .sessionCreated(id, parentID, title, agent):
+            guard parentID == rootID else { return nil }
+            children.insert(id)
+            childSessions[id] = ChildSession(title: title, agent: agent)
             return nil
-        case let .shellCreated(id, sessionID, at):
-            if owns(sessionID) { shells[id] = at ?? Date() }
+        case let .shellCreated(id, sessionID, at, command):
+            guard owns(sessionID) else { return nil }
+            let started = at ?? Date()
+            shells[id] = started
+            shellEntries[id] = ShellEntry(sessionID: sessionID, command: command ?? "", startedAt: started)
             return nil
         case let .shellExited(id):
             shells[id] = nil
+            shellEntries[id] = nil
             return nil
         case let .todosWritten(sessionID, todos):
             // Today's session's own list; a subagent's list is its own.
             guard sessionID == rootID else { return nil }
             self.todos = TodoList.items(todos)
             return nil
+        case .toolFinished:
+            return nil
         }
     }
+
+    /// Takes Running now as read when Details opens: the subagents running now (with their run's
+    /// start) and the agent shells running in the project.
+    mutating func apply(running: RunningSnapshot) {
+        for (id, child) in running.childSessions {
+            children.insert(id)
+            childSessions[id] = child
+        }
+        runningChildren = Set(running.childBusySince.keys)
+        childBusySince = running.childBusySince
+        let owned = running.shells.filter { owns($0.sessionID) }
+        shellEntries = Dictionary(owned.map { ($0.id, ShellEntry(sessionID: $0.sessionID, command: $0.command, startedAt: $0.startedAt)) }) { first, _ in first }
+        shells = shellEntries.mapValues(\.startedAt)
+    }
+
+    /// An approval or question answered from this phone: it leaves at once. A refusal also refuses
+    /// the same session's other approvals (the server does), so they go too.
+    mutating func answered(_ item: PendingItem, refusedOthers: Bool = false) {
+        pending.removeAll { $0.id == item.id || (refusedOthers && $0.kind == .approval && $0.sessionID == item.sessionID) }
+    }
+}
+
+/// Running now as read from the server: running subagents and agent shells.
+struct RunningSnapshot: Equatable, Sendable {
+    struct Shell: Equatable, Sendable {
+        var id: String
+        var sessionID: String
+        var command: String
+        var startedAt: Date
+    }
+
+    /// Running subagents, and when each run started.
+    var childBusySince: [String: Date]
+    /// Their titles and agents.
+    var childSessions: [String: ChildSession]
+    /// Shells running in the project, each with the session that started it.
+    var shells: [Shell]
 }

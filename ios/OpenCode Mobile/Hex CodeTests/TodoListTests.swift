@@ -90,7 +90,8 @@ struct TodoListTests {
 
     @Test func otherToolSuccessesAreNotTheList() {
         let read = EventLines.line("session.tool.success", #"{"sessionID":"ses_a","id":"call_2","content":[],"metadata":{"count":3,"truncated":false}}"#)
-        #expect(SessionEvent.decode(read) == nil)
+        // Not the list; Details' Recent reads again on it.
+        #expect(SessionEvent.decode(read) == .toolFinished(sessionID: "ses_a"))
     }
 
     @Test func onlyTodaysSessionsListReplacesIt() {

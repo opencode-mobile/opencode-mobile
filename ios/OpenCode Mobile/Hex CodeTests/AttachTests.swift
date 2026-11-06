@@ -480,7 +480,8 @@ struct AttachRequestTests {
             sessionID: "ses_a",
             delivery: "queue",
             text: "Look",
-            files: [InboxFileV2(name: "Photo 1.jpg", mime: "image/jpeg"), InboxFileV2(name: "Screenshot 1.jpg", mime: "image/png")]
+            files: [InboxFileV2(name: "Photo 1.jpg", mime: "image/jpeg"), InboxFileV2(name: "Screenshot 1.jpg", mime: "image/png")],
+            type: "user"
         )])
         #expect(String(describing: inbox.data).count < 1000)
     }
