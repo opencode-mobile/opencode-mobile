@@ -539,8 +539,12 @@ class HomeViewModel(
         detail: String?,
     ) = state.update { it.copy(notice = notice, noticeDetail = detail) }
 
+    /** The notice whose action just ran: its dismissal mustn't clear the notice the action put up instead. */
+    private var actioned: HomeNotice? = null
+
     /** The notice's action: Undo a deleted chunk, a held Now, or a queued message. */
     fun noticeAction() {
+        actioned = state.value.notice
         when (state.value.notice) {
             HomeNotice.ChunkDeleted -> undoDelete()
             HomeNotice.SendingNow, HomeNotice.Queued -> undoSend()
@@ -620,7 +624,13 @@ class HomeViewModel(
         if (state.value.draft.isEmpty) viewModelScope.launch { takes.clear() }
     }
 
-    fun noticeShown() = state.update { it.copy(notice = null, noticeDetail = null) }
+    /** The notice has gone. After its action, only that notice is cleared, not "Not sent" or another that followed. */
+    fun noticeShown() {
+        val after = actioned
+        actioned = null
+        if (after != null && state.value.notice != after) return
+        state.update { it.copy(notice = null, noticeDetail = null) }
+    }
 
     override fun onCleared() {
         if (state.value.draft.isListening) dictation.drop()

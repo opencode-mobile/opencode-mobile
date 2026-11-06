@@ -103,6 +103,10 @@ fun HomeScreen(
     }
     var micOff by remember { mutableStateOf(false) }
     var waitingOpen by remember { mutableStateOf(false) }
+    // Waiting to send closes once nothing is left in it (delivered, cancelled, or taken back elsewhere).
+    LaunchedEffect(state.today.queued.isEmpty()) {
+        if (state.today.queued.isEmpty()) waitingOpen = false
+    }
     val askMic =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             micAllowed = it

@@ -245,7 +245,9 @@ class SendingTest {
             vm.setSendMode(SendMode.Now)
             vm.send()
             runCurrent()
+            // The toast calls its action, then reports itself dismissed.
             vm.noticeAction()
+            vm.noticeShown()
             advanceTimeBy(5_000)
             runCurrent()
             assertTrue(server.sent.isEmpty())
@@ -263,6 +265,7 @@ class SendingTest {
             vm.send()
             runCurrent()
             vm.noticeAction()
+            vm.noticeShown()
             runCurrent()
             assertEquals(listOf("msg_1"), server.cancelled)
             assertEquals(HomeNotice.TakenBack, vm.uiState.value.notice)
