@@ -2,6 +2,127 @@
   "sourceLanguage": "en",
   "version": "1.0",
   "strings": {
+    "a11y.chunk": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chunk %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "a11y.chunk.delete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "a11y.next.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adds it to your draft"
+          }
+        }
+      }
+    },
+    "a11y.refresh": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh the summary"
+          }
+        }
+      }
+    },
+    "a11y.refresh.now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "just now"
+          }
+        }
+      }
+    },
+    "a11y.refresh.value": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated %@"
+          }
+        }
+      }
+    },
+    "a11y.say.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-tap to start speaking, and again to finish"
+          }
+        }
+      }
+    },
+    "a11y.soon": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not in this version yet"
+          }
+        }
+      }
+    },
+    "a11y.todo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld done, now %3$@"
+          }
+        }
+      }
+    },
+    "a11y.working": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working, %@"
+          }
+        }
+      }
+    },
+    "a11y.working.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "less than a minute"
+          }
+        }
+      }
+    },
     "add_project.add_home_folder": {
       "extractionState": "manual",
       "localizations": {
@@ -323,6 +444,325 @@
         }
       }
     },
+    "ask.age.minutes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lldm"
+          }
+        }
+      }
+    },
+    "ask.close": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "ask.copied": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answer copied"
+          }
+        }
+      }
+    },
+    "ask.copy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        }
+      }
+    },
+    "ask.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No answer"
+          }
+        }
+      }
+    },
+    "ask.empty.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask it another way, or send it as a message."
+          }
+        }
+      }
+    },
+    "ask.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t answer"
+          }
+        }
+      }
+    },
+    "ask.failed.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again."
+          }
+        }
+      }
+    },
+    "ask.fold": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fold"
+          }
+        }
+      }
+    },
+    "ask.only_you": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only you see this"
+          }
+        }
+      }
+    },
+    "ask.reading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the session…"
+          }
+        }
+      }
+    },
+    "ask.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asked on the side · %@"
+          }
+        }
+      }
+    },
+    "ask.try_again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        }
+      }
+    },
+    "browse.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading folders"
+          }
+        }
+      }
+    },
+    "browse.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick a folder"
+          }
+        }
+      }
+    },
+    "browser.back": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        }
+      }
+    },
+    "browser.dev_unreachable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t reach port %1$@ on %2$@"
+          }
+        }
+      }
+    },
+    "browser.dev_unreachable.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The dev server may only listen on the computer itself. Start it so it listens on the network (for Vite, add `--host`), then try again."
+          }
+        }
+      }
+    },
+    "browser.forward": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forward"
+          }
+        }
+      }
+    },
+    "browser.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading"
+          }
+        }
+      }
+    },
+    "browser.open_system": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Safari"
+          }
+        }
+      }
+    },
+    "browser.reload": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reload"
+          }
+        }
+      }
+    },
+    "browser.unreachable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t reach %@"
+          }
+        }
+      }
+    },
+    "browser.unreachable.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check that the phone is on the same network as the computer, or on Tailscale."
+          }
+        }
+      }
+    },
+    "common.back": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        }
+      }
+    },
+    "common.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "common.close": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "common.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
+    },
+    "common.ok": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
     "common.retry": {
       "extractionState": "manual",
       "localizations": {
@@ -330,6 +770,2879 @@
           "stringUnit": {
             "state": "translated",
             "value": "Retry"
+          }
+        }
+      }
+    },
+    "common.try_again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        }
+      }
+    },
+    "common.undo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo"
+          }
+        }
+      }
+    },
+    "details.asked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asked on the side"
+          }
+        }
+      }
+    },
+    "details.asked.suffix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· only you see these"
+          }
+        }
+      }
+    },
+    "details.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing running right now."
+          }
+        }
+      }
+    },
+    "details.more": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%lld more"
+          }
+        }
+      }
+    },
+    "details.needs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs you"
+          }
+        }
+      }
+    },
+    "details.needs.approval": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approval needed"
+          }
+        }
+      }
+    },
+    "details.needs.questions": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questions from the agent"
+          }
+        }
+      }
+    },
+    "details.recent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent"
+          }
+        }
+      }
+    },
+    "details.recent.created": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Created · +%lld"
+          }
+        }
+      }
+    },
+    "details.recent.denied": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denied"
+          }
+        }
+      }
+    },
+    "details.recent.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
+    },
+    "details.recent.edited": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edited · +%1$lld −%2$lld"
+          }
+        }
+      }
+    },
+    "details.recent.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed · exit %lld"
+          }
+        }
+      }
+    },
+    "details.recent.files": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld files · +%2$lld −%3$lld"
+          }
+        }
+      }
+    },
+    "details.recent.stopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped"
+          }
+        }
+      }
+    },
+    "details.running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running now"
+          }
+        }
+      }
+    },
+    "details.running.shell": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shell command"
+          }
+        }
+      }
+    },
+    "details.running.subagent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subagent · %@"
+          }
+        }
+      }
+    },
+    "details.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        }
+      }
+    },
+    "details.todo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To-do list"
+          }
+        }
+      }
+    },
+    "details.todo.suffix": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· from the agent"
+          }
+        }
+      }
+    },
+    "details.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting to send"
+          }
+        }
+      }
+    },
+    "details.waiting.queue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Queue · after this turn"
+          }
+        }
+      }
+    },
+    "details.waiting.steer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steer · lands at the next step"
+          }
+        }
+      }
+    },
+    "draft.chunk_label": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chunk %lld"
+          }
+        }
+      }
+    },
+    "draft.chunks": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld chunks"
+          }
+        }
+      }
+    },
+    "draft.clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear the draft"
+          }
+        }
+      }
+    },
+    "draft.delete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "draft.deselect": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deselect"
+          }
+        }
+      }
+    },
+    "draft.earlier": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↑ %1$lld earlier · %2$@"
+          }
+        }
+      }
+    },
+    "draft.first_take_hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text appears when you pause"
+          }
+        }
+      }
+    },
+    "draft.later": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↓ %1$lld later · %2$@"
+          }
+        }
+      }
+    },
+    "draft.listening": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening…"
+          }
+        }
+      }
+    },
+    "draft.menu.ask": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask on the side"
+          }
+        }
+      }
+    },
+    "draft.menu.ask.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answered from the session, not sent to the agent"
+          }
+        }
+      }
+    },
+    "draft.menu.goal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set as today’s goal"
+          }
+        }
+      }
+    },
+    "draft.menu.goal.replace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace today’s goal"
+          }
+        }
+      }
+    },
+    "draft.menu.goal.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent keeps going until it’s done"
+          }
+        }
+      }
+    },
+    "draft.more": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More"
+          }
+        }
+      }
+    },
+    "draft.one_chunk": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 chunk"
+          }
+        }
+      }
+    },
+    "draft.read_all": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read all · %lld words"
+          }
+        }
+      }
+    },
+    "draft.recording": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recording · %@"
+          }
+        }
+      }
+    },
+    "draft.rerecord": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Re-record"
+          }
+        }
+      }
+    },
+    "draft.rerecording": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Re-recording chunk %1$lld · %2$@"
+          }
+        }
+      }
+    },
+    "draft.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Draft"
+          }
+        }
+      }
+    },
+    "draft.transcribing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcribing on this phone…"
+          }
+        }
+      }
+    },
+    "draft.transcribing_chunk": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcribing…"
+          }
+        }
+      }
+    },
+    "draft.words": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld words"
+          }
+        }
+      }
+    },
+    "first_run.start.save_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t save the setup on this phone. Try again."
+          }
+        }
+      }
+    },
+    "goal.again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Again"
+          }
+        }
+      }
+    },
+    "goal.box.active": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "active · round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "goal.box.active.starting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "active · starting"
+          }
+        }
+      }
+    },
+    "goal.box.active.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "active · waiting"
+          }
+        }
+      }
+    },
+    "goal.box.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No goal yet."
+          }
+        }
+      }
+    },
+    "goal.box.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "/goal"
+          }
+        }
+      }
+    },
+    "goal.box.label.new": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "new goal"
+          }
+        }
+      }
+    },
+    "goal.box.label.today": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "today’s goal"
+          }
+        }
+      }
+    },
+    "goal.box.on_phone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On this phone"
+          }
+        }
+      }
+    },
+    "goal.button": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today’s goal"
+          }
+        }
+      }
+    },
+    "goal.change": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change"
+          }
+        }
+      }
+    },
+    "goal.clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        }
+      }
+    },
+    "goal.fine": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With a goal the agent keeps going after each turn until a reviewer decides it’s done or blocked (OpenCode /goal, up to 50 rounds). The app sets it; the agent can’t set its own. Stop pauses it."
+          }
+        }
+      }
+    },
+    "goal.line.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "done"
+          }
+        }
+      }
+    },
+    "goal.line.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set today’s goal"
+          }
+        }
+      }
+    },
+    "goal.line.paused": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "paused"
+          }
+        }
+      }
+    },
+    "goal.line.round": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "round %lld"
+          }
+        }
+      }
+    },
+    "goal.line.starting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "starting"
+          }
+        }
+      }
+    },
+    "goal.line.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waiting"
+          }
+        }
+      }
+    },
+    "goal.new": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New goal"
+          }
+        }
+      }
+    },
+    "goal.notice.cleared": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Goal cleared"
+          }
+        }
+      }
+    },
+    "goal.notice.cleared.busy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent finishes this turn."
+          }
+        }
+      }
+    },
+    "goal.notice.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t change the goal"
+          }
+        }
+      }
+    },
+    "goal.notice.failed.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again."
+          }
+        }
+      }
+    },
+    "goal.notice.paused": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Goal paused"
+          }
+        }
+      }
+    },
+    "goal.notice.paused.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent finishes this turn, then stops."
+          }
+        }
+      }
+    },
+    "goal.notice.replaced": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Goal replaced"
+          }
+        }
+      }
+    },
+    "goal.notice.resumed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Goal resumed"
+          }
+        }
+      }
+    },
+    "goal.notice.resumed.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent carries on."
+          }
+        }
+      }
+    },
+    "goal.notice.set": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Goal set"
+          }
+        }
+      }
+    },
+    "goal.notice.set.busy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent starts on it at its next step."
+          }
+        }
+      }
+    },
+    "goal.notice.set.idle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent keeps going until it’s done."
+          }
+        }
+      }
+    },
+    "goal.notice.stale": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The goal had already changed"
+          }
+        }
+      }
+    },
+    "goal.pause": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause"
+          }
+        }
+      }
+    },
+    "goal.refused.long": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That’s too long for a goal"
+          }
+        }
+      }
+    },
+    "goal.refused.long.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Goals are limited to 4,000 characters."
+          }
+        }
+      }
+    },
+    "goal.refused.word": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Say a longer goal"
+          }
+        }
+      }
+    },
+    "goal.refused.word.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A single word is read as a goal command."
+          }
+        }
+      }
+    },
+    "goal.replace": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace goal"
+          }
+        }
+      }
+    },
+    "goal.resume": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume"
+          }
+        }
+      }
+    },
+    "goal.say": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Say the goal"
+          }
+        }
+      }
+    },
+    "goal.say.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hold while you speak"
+          }
+        }
+      }
+    },
+    "goal.set": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set goal"
+          }
+        }
+      }
+    },
+    "goal.sheet.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today’s goal"
+          }
+        }
+      }
+    },
+    "home.attach": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach"
+          }
+        }
+      }
+    },
+    "home.attach.camera": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take photo"
+          }
+        }
+      }
+    },
+    "home.attach.caption": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld image · goes with your next message"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld images · go with your next message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.attach.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t add this image"
+          }
+        }
+      }
+    },
+    "home.attach.limit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4 images is the most per message"
+          }
+        }
+      }
+    },
+    "home.attach.no_vision": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ can’t see images · they won’t be sent"
+          }
+        }
+      }
+    },
+    "home.attach.photos": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photos"
+          }
+        }
+      }
+    },
+    "home.attach.remove": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove image"
+          }
+        }
+      }
+    },
+    "home.attach.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach"
+          }
+        }
+      }
+    },
+    "home.chunk_deleted": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chunk deleted"
+          }
+        }
+      }
+    },
+    "home.details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details ›"
+          }
+        }
+      }
+    },
+    "home.details.running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld running · "
+          }
+        }
+      }
+    },
+    "home.draft_cleared": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Draft cleared"
+          }
+        }
+      }
+    },
+    "home.draft_cleared.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing was sent."
+          }
+        }
+      }
+    },
+    "home.hold.drop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drop"
+          }
+        }
+      }
+    },
+    "home.hold.release_drop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Release to drop"
+          }
+        }
+      }
+    },
+    "home.hold.release_lock": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Release to lock"
+          }
+        }
+      }
+    },
+    "home.hold.slide_lock": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide to lock"
+          }
+        }
+      }
+    },
+    "home.hold_to_talk": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hold to talk"
+          }
+        }
+      }
+    },
+    "home.hold_to_talk.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep pressing while you speak, or drag right to lock."
+          }
+        }
+      }
+    },
+    "home.link.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "home.locked.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        }
+      }
+    },
+    "home.locked.drop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drop this take"
+          }
+        }
+      }
+    },
+    "home.mic_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone access is off"
+          }
+        }
+      }
+    },
+    "home.mic_off.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn it on in Settings › Hex Code."
+          }
+        }
+      }
+    },
+    "home.mode.after": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After turn"
+          }
+        }
+      }
+    },
+    "home.mode.idle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sends now"
+          }
+        }
+      }
+    },
+    "home.mode.now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Now"
+          }
+        }
+      }
+    },
+    "home.mode.queue": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Queue · sends after this turn"
+          }
+        }
+      }
+    },
+    "home.mode.steer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steer · lands at the next step"
+          }
+        }
+      }
+    },
+    "home.needs.approval": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approval needed"
+          }
+        }
+      }
+    },
+    "home.needs.input": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs your input"
+          }
+        }
+      }
+    },
+    "home.newday.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yesterday’s is kept on your computer."
+          }
+        }
+      }
+    },
+    "home.newday.detail.goal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yesterday’s is kept on your computer. Its goal keeps running there."
+          }
+        }
+      }
+    },
+    "home.newday.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New day, new session"
+          }
+        }
+      }
+    },
+    "home.send": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        }
+      }
+    },
+    "home.send.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t send"
+          }
+        }
+      }
+    },
+    "home.send.failed.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your draft is kept."
+          }
+        }
+      }
+    },
+    "home.send.preparing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing"
+          }
+        }
+      }
+    },
+    "home.send.transcribing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcribing"
+          }
+        }
+      }
+    },
+    "home.sending.now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending now…"
+          }
+        }
+      }
+    },
+    "home.sent.idle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent · starting now"
+          }
+        }
+      }
+    },
+    "home.sent.no_images": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent without the images"
+          }
+        }
+      }
+    },
+    "home.sent.no_images.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ can’t see them"
+          }
+        }
+      }
+    },
+    "home.sent.now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent · lands at the next step"
+          }
+        }
+      }
+    },
+    "home.sent.queued": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Queued · sends after this turn"
+          }
+        }
+      }
+    },
+    "home.sent.queued.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel it from the waiting line until then"
+          }
+        }
+      }
+    },
+    "home.settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        }
+      }
+    },
+    "home.setup.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t open today’s session"
+          }
+        }
+      }
+    },
+    "home.setup.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        }
+      }
+    },
+    "home.speech.downloading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading the speech model · %lld%%"
+          }
+        }
+      }
+    },
+    "home.speech.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model didn’t load"
+          }
+        }
+      }
+    },
+    "home.speech.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model loading…"
+          }
+        }
+      }
+    },
+    "home.state.idle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idle"
+          }
+        }
+      }
+    },
+    "home.state.needs_input": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs input"
+          }
+        }
+      }
+    },
+    "home.state.reconnecting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnecting…"
+          }
+        }
+      }
+    },
+    "home.state.working": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working"
+          }
+        }
+      }
+    },
+    "home.stop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        }
+      }
+    },
+    "home.summary.empty.next": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Say what to do."
+          }
+        }
+      }
+    },
+    "home.summary.empty.now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New session. Nothing running yet."
+          }
+        }
+      }
+    },
+    "home.summary.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t update"
+          }
+        }
+      }
+    },
+    "home.summary.fallback.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status"
+          }
+        }
+      }
+    },
+    "home.summary.next": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next: %@"
+          }
+        }
+      }
+    },
+    "home.summary.sent.now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Working on your message."
+          }
+        }
+      }
+    },
+    "home.summary.updated.ago": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lldm ago"
+          }
+        }
+      }
+    },
+    "home.summary.updated.now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "now"
+          }
+        }
+      }
+    },
+    "home.summary.updating": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "updating…"
+          }
+        }
+      }
+    },
+    "home.summary.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for you · %@"
+          }
+        }
+      }
+    },
+    "home.summary.waiting.bare": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for you"
+          }
+        }
+      }
+    },
+    "home.summary.working": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Still working · %@"
+          }
+        }
+      }
+    },
+    "home.summary.working.bare": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Still working"
+          }
+        }
+      }
+    },
+    "home.summary.working.next": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The summary updates when this run ends."
+          }
+        }
+      }
+    },
+    "home.summary.working.now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent is working."
+          }
+        }
+      }
+    },
+    "home.summary.you": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You: “%@”"
+          }
+        }
+      }
+    },
+    "home.take.retry": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        }
+      }
+    },
+    "home.take_dropped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take dropped"
+          }
+        }
+      }
+    },
+    "home.take_dropped.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing was recorded."
+          }
+        }
+      }
+    },
+    "home.take_dropped.kept": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earlier parts of the draft are kept."
+          }
+        }
+      }
+    },
+    "home.taken_back": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taken back"
+          }
+        }
+      }
+    },
+    "home.taken_back.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It never reached the agent."
+          }
+        }
+      }
+    },
+    "home.todo.all_done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All %lld done"
+          }
+        }
+      }
+    },
+    "home.todo.progress": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld · %3$@"
+          }
+        }
+      }
+    },
+    "home.transcribe_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t turn this take into text"
+          }
+        }
+      }
+    },
+    "home.unsent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not sent"
+          }
+        }
+      }
+    },
+    "home.unsent.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It never left the phone."
+          }
+        }
+      }
+    },
+    "home.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld waiting · sends after this turn ›"
+          }
+        }
+      }
+    },
+    "home.waiting.cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "home.waiting.idle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld waiting · sends after your next message ›"
+          }
+        }
+      }
+    },
+    "home.waiting.images": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld image"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld images"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.you.goal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Goal: “%@”"
+          }
+        }
+      }
+    },
+    "home.you.read_all": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld words · Read all ›"
+          }
+        }
+      }
+    },
+    "model.default_tag": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "default"
+          }
+        }
+      }
+    },
+    "model.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t load the models from OpenCode."
+          }
+        }
+      }
+    },
+    "model.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading models"
+          }
+        }
+      }
+    },
+    "model.no_levels": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This model has no reasoning levels"
+          }
+        }
+      }
+    },
+    "model.no_match": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No models match “%@”"
+          }
+        }
+      }
+    },
+    "model.reasoning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reasoning"
+          }
+        }
+      }
+    },
+    "model.search": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search models"
+          }
+        }
+      }
+    },
+    "model.start": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start"
+          }
+        }
+      }
+    },
+    "model.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld models from OpenCode"
+          }
+        }
+      }
+    },
+    "model.test.button": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test model"
+          }
+        }
+      }
+    },
+    "model.test.button.again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test again"
+          }
+        }
+      }
+    },
+    "model.test.button.testing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testing…"
+          }
+        }
+      }
+    },
+    "model.test.empty_reply": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model answered with nothing. Try again or pick another model."
+          }
+        }
+      }
+    },
+    "model.test.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A one-line test prompt checks it works"
+          }
+        }
+      }
+    },
+    "model.test.http_status": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The test failed (HTTP %lld). Try again or pick another model."
+          }
+        }
+      }
+    },
+    "model.test.passed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Works · replied in %@ s"
+          }
+        }
+      }
+    },
+    "model.test.running": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asking %@ to reply…"
+          }
+        }
+      }
+    },
+    "model.test.signed_out": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your computer turned the phone away. Pair again."
+          }
+        }
+      }
+    },
+    "model.test.unreachable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t reach your computer. Check it’s on and try again."
+          }
+        }
+      }
+    },
+    "model.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick a model"
+          }
+        }
+      }
+    },
+    "needs.approval.always": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always"
+          }
+        }
+      }
+    },
+    "needs.approval.always_any": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always allows any %@ in this project, from now on."
+          }
+        }
+      }
+    },
+    "needs.approval.always_line": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always allows %@ in this project, from now on."
+          }
+        }
+      }
+    },
+    "needs.approval.deny": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deny"
+          }
+        }
+      }
+    },
+    "needs.approval.edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit files"
+          }
+        }
+      }
+    },
+    "needs.approval.from_subagent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From a subagent · %@"
+          }
+        }
+      }
+    },
+    "needs.approval.more_lines": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "… %lld more lines"
+          }
+        }
+      }
+    },
+    "needs.approval.once": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow once"
+          }
+        }
+      }
+    },
+    "needs.approval.say_why": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Say what to do instead"
+          }
+        }
+      }
+    },
+    "needs.approval.shell": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run a command"
+          }
+        }
+      }
+    },
+    "needs.approval.subagent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a subagent"
+          }
+        }
+      }
+    },
+    "needs.approval.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permission requested"
+          }
+        }
+      }
+    },
+    "needs.approval.webfetch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open a web page"
+          }
+        }
+      }
+    },
+    "needs.count": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "needs.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t send"
+          }
+        }
+      }
+    },
+    "needs.failed.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again."
+          }
+        }
+      }
+    },
+    "needs.gone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No longer needed"
+          }
+        }
+      }
+    },
+    "needs.gone.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It was answered elsewhere or the run ended."
+          }
+        }
+      }
+    },
+    "needs.hide": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide"
+          }
+        }
+      }
+    },
+    "needs.listening": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening… · release to finish"
+          }
+        }
+      }
+    },
+    "needs.question.dismiss": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss"
+          }
+        }
+      }
+    },
+    "needs.question.next": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next"
+          }
+        }
+      }
+    },
+    "needs.question.own": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Say your own answer"
+          }
+        }
+      }
+    },
+    "needs.question.select_any": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select any"
+          }
+        }
+      }
+    },
+    "needs.question.select_one": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select one"
+          }
+        }
+      }
+    },
+    "needs.question.submit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Submit"
+          }
+        }
+      }
+    },
+    "needs.question.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Question"
+          }
+        }
+      }
+    },
+    "needs.question.unsupported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answer this one on your computer"
+          }
+        }
+      }
+    },
+    "needs.transcribing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcribing…"
+          }
+        }
+      }
+    },
+    "pairing.expired.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codes work once, for 5 minutes. Run `opencode pair` again."
+          }
+        }
+      }
+    },
+    "pairing.expired.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This code was used or expired"
+          }
+        }
+      }
+    },
+    "pairing.local_only.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run `opencode service set hostname 0.0.0.0` on your computer, then `opencode pair` again."
+          }
+        }
+      }
+    },
+    "pairing.local_only.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your computer isn’t reachable yet"
+          }
+        }
+      }
+    },
+    "pairing.missing_routes.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Its API has no session generate route. Run `opencode upgrade`."
+          }
+        }
+      }
+    },
+    "pairing.missing_routes.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This OpenCode can’t run Hex Code"
+          }
+        }
+      }
+    },
+    "pairing.not_a_code.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan the code `opencode pair` prints on your computer."
+          }
+        }
+      }
+    },
+    "pairing.not_a_code.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That isn’t a pairing code"
+          }
+        }
+      }
+    },
+    "pairing.not_v2.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code needs OpenCode 2.2.5 or newer. Run `opencode upgrade`."
+          }
+        }
+      }
+    },
+    "pairing.not_v2.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This server isn’t OpenCode 2"
+          }
+        }
+      }
+    },
+    "pairing.too_old.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It runs OpenCode %@; Hex Code needs 2.2.5 or newer. Run `opencode upgrade`."
+          }
+        }
+      }
+    },
+    "pairing.too_old.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCode needs an update"
+          }
+        }
+      }
+    },
+    "pairing.unreachable.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the phone is on the same network or Tailscale as your computer, or use `opencode pair --remote`."
+          }
+        }
+      }
+    },
+    "pairing.unreachable.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t reach your computer"
+          }
+        }
+      }
+    },
+    "project.browse": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse folders"
+          }
+        }
+      }
+    },
+    "project.browse.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick any folder on this computer"
+          }
+        }
+      }
+    },
+    "project.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading projects"
+          }
+        }
+      }
+    },
+    "project.none": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No repositories yet. Browse folders to pick one."
+          }
+        }
+      }
+    },
+    "project.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A new session starts there each day."
+          }
+        }
+      }
+    },
+    "project.on_this_computer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On this computer"
+          }
+        }
+      }
+    },
+    "project.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick a project"
+          }
+        }
+      }
+    },
+    "reader.draft": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Draft"
+          }
+        }
+      }
+    },
+    "reader.one_word": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 word"
+          }
+        }
+      }
+    },
+    "reader.sent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You said"
           }
         }
       }
@@ -414,35 +3727,266 @@
         }
       }
     },
-    "common.back": {
+    "scan.again": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Back"
+            "value": "Scan again"
           }
         }
       }
     },
-    "common.close": {
+    "scan.checking": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Close"
+            "value": "Checking the server can run this app."
           }
         }
       }
     },
-    "welcome.badge": {
+    "scan.connected": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "experiment"
+            "value": "Connected to %@"
+          }
+        }
+      }
+    },
+    "scan.connected.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCode %@"
+          }
+        }
+      }
+    },
+    "scan.connecting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting to your computer"
+          }
+        }
+      }
+    },
+    "scan.no_camera": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The camera isn’t available. Allow it in Settings › Hex Code."
+          }
+        }
+      }
+    },
+    "scan.point.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It’s on your computer after `opencode pair`. It works once."
+          }
+        }
+      }
+    },
+    "scan.point.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Point at the code"
+          }
+        }
+      }
+    },
+    "server.addresses": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Addresses"
+          }
+        }
+      }
+    },
+    "server.in_use": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in use"
+          }
+        }
+      }
+    },
+    "server.pair_again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pair again"
+          }
+        }
+      }
+    },
+    "server.paired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paired again"
+          }
+        }
+      }
+    },
+    "server.paired.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed in to %@."
+          }
+        }
+      }
+    },
+    "server.signed_out": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed out of %@"
+          }
+        }
+      }
+    },
+    "server.signed_out.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run `opencode pair` on the computer, then pair again."
+          }
+        }
+      }
+    },
+    "server.switch.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code works with one computer at a time. Next, pick a project and a model on %@. Sessions stay on each computer."
+          }
+        }
+      }
+    },
+    "server.switch.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch"
+          }
+        }
+      }
+    },
+    "server.switch.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch to %@?"
+          }
+        }
+      }
+    },
+    "settings.agent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent"
+          }
+        }
+      }
+    },
+    "settings.app": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App"
+          }
+        }
+      }
+    },
+    "settings.appearance": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appearance"
+          }
+        }
+      }
+    },
+    "settings.appearance.auto": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto"
+          }
+        }
+      }
+    },
+    "settings.appearance.dark": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark"
+          }
+        }
+      }
+    },
+    "settings.appearance.light": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light"
           }
         }
       }
@@ -458,6 +4002,414 @@
         }
       }
     },
+    "settings.dictation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dictation · on this phone"
+          }
+        }
+      }
+    },
+    "settings.forget.button": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forget this computer"
+          }
+        }
+      }
+    },
+    "settings.forget.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forget this computer"
+          }
+        }
+      }
+    },
+    "settings.forget.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code forgets the server, project and model on this phone. Sessions stay on your computer."
+          }
+        }
+      }
+    },
+    "settings.forget.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forget this computer?"
+          }
+        }
+      }
+    },
+    "settings.language": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language"
+          }
+        }
+      }
+    },
+    "settings.language.english": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "English"
+          }
+        }
+      }
+    },
+    "settings.model": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model"
+          }
+        }
+      }
+    },
+    "settings.model.save": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        }
+      }
+    },
+    "settings.model.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model"
+          }
+        }
+      }
+    },
+    "settings.new_session": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a new session"
+          }
+        }
+      }
+    },
+    "settings.new_session.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today’s session stays on your computer as it is. The new one starts empty in %@, with the same model. Today’s goal isn’t carried over."
+          }
+        }
+      }
+    },
+    "settings.new_session.busy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent is still working there and carries on."
+          }
+        }
+      }
+    },
+    "settings.new_session.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New session"
+          }
+        }
+      }
+    },
+    "settings.new_session.done.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The earlier one is kept on your computer."
+          }
+        }
+      }
+    },
+    "settings.new_session.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t start a new session"
+          }
+        }
+      }
+    },
+    "settings.new_session.failed.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today’s session is still open."
+          }
+        }
+      }
+    },
+    "settings.new_session.start": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start new session"
+          }
+        }
+      }
+    },
+    "settings.new_session.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today’s session stays on your computer"
+          }
+        }
+      }
+    },
+    "settings.new_session.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a new session?"
+          }
+        }
+      }
+    },
+    "settings.new_session.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Its waiting message still sends there."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Its %lld waiting messages still send there."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "settings.project": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project"
+          }
+        }
+      }
+    },
+    "settings.project.changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Now in %@"
+          }
+        }
+      }
+    },
+    "settings.project.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Picking one opens today’s session there."
+          }
+        }
+      }
+    },
+    "settings.project.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change project"
+          }
+        }
+      }
+    },
+    "settings.reasoning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reasoning"
+          }
+        }
+      }
+    },
+    "settings.reasoning.default": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
+          }
+        }
+      }
+    },
+    "settings.save_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t save this on the phone. Try again."
+          }
+        }
+      }
+    },
+    "settings.server": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        }
+      }
+    },
+    "settings.session": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session"
+          }
+        }
+      }
+    },
+    "settings.soon": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not in this version yet"
+          }
+        }
+      }
+    },
+    "settings.speech_model": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model"
+          }
+        }
+      }
+    },
+    "settings.speech_model.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs on this phone"
+          }
+        }
+      }
+    },
+    "settings.text_style": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text style"
+          }
+        }
+      }
+    },
+    "settings.text_style.plain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plain"
+          }
+        }
+      }
+    },
+    "settings.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        }
+      }
+    },
     "settings.version": {
       "extractionState": "manual",
       "localizations": {
@@ -465,1196 +4417,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Version"
-          }
-        }
-      }
-    },
-    "home.newday.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New day, new session"
-          }
-        }
-      }
-    },
-    "home.newday.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yesterday’s is kept on your computer."
-          }
-        }
-      }
-    },
-    "home.setup.failed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t open today’s session"
-          }
-        }
-      }
-    },
-    "home.setup.retry": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Try again"
-          }
-        }
-      }
-    },
-    "home.state.reconnecting": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reconnecting…"
-          }
-        }
-      }
-    },
-    "home.state.needs_input": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Needs input"
-          }
-        }
-      }
-    },
-    "home.state.working": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Working"
-          }
-        }
-      }
-    },
-    "home.summary.empty.now": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New session. Nothing running yet."
-          }
-        }
-      }
-    },
-    "home.summary.empty.next": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Say what to do."
-          }
-        }
-      }
-    },
-    "home.summary.next": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Next: %@"
-          }
-        }
-      }
-    },
-    "home.summary.working": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Still working · %@"
-          }
-        }
-      }
-    },
-    "home.summary.working.bare": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Still working"
-          }
-        }
-      }
-    },
-    "home.summary.waiting": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Waiting for you · %@"
-          }
-        }
-      }
-    },
-    "home.summary.waiting.bare": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Waiting for you"
-          }
-        }
-      }
-    },
-    "home.summary.you": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You: “%@”"
-          }
-        }
-      }
-    },
-    "home.summary.fallback.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Status"
-          }
-        }
-      }
-    },
-    "home.summary.updating": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "updating…"
-          }
-        }
-      }
-    },
-    "home.summary.updated.now": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "now"
-          }
-        }
-      }
-    },
-    "home.summary.updated.ago": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lldm ago"
-          }
-        }
-      }
-    },
-    "home.summary.failed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t update"
-          }
-        }
-      }
-    },
-    "home.todo.progress": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld of %2$lld · %3$@"
-          }
-        }
-      }
-    },
-    "home.todo.all_done": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "All %lld done"
-          }
-        }
-      }
-    },
-    "home.details": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Details ›"
-          }
-        }
-      }
-    },
-    "home.details.running": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld running · "
-          }
-        }
-      }
-    },
-    "home.link.open": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open %@"
-          }
-        }
-      }
-    },
-    "home.needs.input": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Needs your input"
-          }
-        }
-      }
-    },
-    "home.needs.approval": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Approval needed"
-          }
-        }
-      }
-    },
-    "home.waiting": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld waiting · sends after this turn ›"
-          }
-        }
-      }
-    },
-    "home.attach": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Attach"
-          }
-        }
-      }
-    },
-    "home.stop": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stop"
-          }
-        }
-      }
-    },
-    "home.speech.loading": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Speech model loading…"
-          }
-        }
-      }
-    },
-    "home.speech.downloading": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Downloading the speech model · %lld%%"
-          }
-        }
-      }
-    },
-    "home.speech.failed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Speech model didn’t load"
-          }
-        }
-      }
-    },
-    "home.take.retry": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Try again"
-          }
-        }
-      }
-    },
-    "home.hold.drop": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drop"
-          }
-        }
-      }
-    },
-    "home.hold.release_drop": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Release to drop"
-          }
-        }
-      }
-    },
-    "home.hold.release_lock": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Release to lock"
-          }
-        }
-      }
-    },
-    "home.hold.slide_lock": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Slide to lock"
-          }
-        }
-      }
-    },
-    "home.locked.drop": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drop this take"
-          }
-        }
-      }
-    },
-    "home.locked.done": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Done"
-          }
-        }
-      }
-    },
-    "home.send": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Send"
-          }
-        }
-      }
-    },
-    "home.send.transcribing": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Transcribing"
-          }
-        }
-      }
-    },
-    "home.mode.after": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "After turn"
-          }
-        }
-      }
-    },
-    "home.mode.now": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Now"
-          }
-        }
-      }
-    },
-    "home.mode.queue": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Queue · sends after this turn"
-          }
-        }
-      }
-    },
-    "home.mode.steer": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Steer · lands at the next step"
-          }
-        }
-      }
-    },
-    "home.mode.idle": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sends now"
-          }
-        }
-      }
-    },
-    "home.sent.queued": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Queued · sends after this turn"
-          }
-        }
-      }
-    },
-    "home.sent.queued.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel it from the waiting line until then"
-          }
-        }
-      }
-    },
-    "home.sent.idle": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sent · starting now"
-          }
-        }
-      }
-    },
-    "home.sent.now": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sent · lands at the next step"
-          }
-        }
-      }
-    },
-    "home.sending.now": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sending now…"
-          }
-        }
-      }
-    },
-    "home.unsent": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not sent"
-          }
-        }
-      }
-    },
-    "home.unsent.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "It never left the phone."
-          }
-        }
-      }
-    },
-    "home.taken_back": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Taken back"
-          }
-        }
-      }
-    },
-    "home.taken_back.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "It never reached the agent."
-          }
-        }
-      }
-    },
-    "home.send.failed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t send"
-          }
-        }
-      }
-    },
-    "home.send.failed.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your draft is kept."
-          }
-        }
-      }
-    },
-    "home.waiting.cancel": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel"
-          }
-        }
-      }
-    },
-    "home.summary.working.now": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The agent is working."
-          }
-        }
-      }
-    },
-    "home.summary.working.next": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The summary updates when this run ends."
-          }
-        }
-      }
-    },
-    "home.attach.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Attach"
-          }
-        }
-      }
-    },
-    "home.attach.photos": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Photos"
-          }
-        }
-      }
-    },
-    "home.attach.camera": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Take photo"
-          }
-        }
-      }
-    },
-    "home.attach.caption": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld image · goes with your next message"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld images · go with your next message"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "home.attach.limit": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "4 images is the most per message"
-          }
-        }
-      }
-    },
-    "home.attach.failed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t add this image"
-          }
-        }
-      }
-    },
-    "home.attach.no_vision": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ can’t see images · they won’t be sent"
-          }
-        }
-      }
-    },
-    "home.attach.remove": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Remove image"
-          }
-        }
-      }
-    },
-    "home.sent.no_images": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sent without the images"
-          }
-        }
-      }
-    },
-    "home.sent.no_images.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ can’t see them"
-          }
-        }
-      }
-    },
-    "home.send.preparing": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preparing"
-          }
-        }
-      }
-    },
-    "home.waiting.images": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld image"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld images"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "needs.hide": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hide"
-          }
-        }
-      }
-    },
-    "needs.count": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld of %2$lld"
-          }
-        }
-      }
-    },
-    "needs.gone": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No longer needed"
-          }
-        }
-      }
-    },
-    "needs.gone.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "It was answered elsewhere or the run ended."
-          }
-        }
-      }
-    },
-    "needs.failed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t send"
-          }
-        }
-      }
-    },
-    "needs.failed.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Try again."
-          }
-        }
-      }
-    },
-    "needs.approval.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Permission requested"
-          }
-        }
-      }
-    },
-    "needs.approval.shell": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Run a command"
-          }
-        }
-      }
-    },
-    "needs.approval.edit": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit files"
-          }
-        }
-      }
-    },
-    "needs.approval.webfetch": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open a web page"
-          }
-        }
-      }
-    },
-    "needs.approval.subagent": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Start a subagent"
-          }
-        }
-      }
-    },
-    "needs.approval.from_subagent": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "From a subagent · %@"
-          }
-        }
-      }
-    },
-    "needs.approval.always_line": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Always allows %@ in this project, from now on."
-          }
-        }
-      }
-    },
-    "needs.approval.always_any": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Always allows any %@ in this project, from now on."
-          }
-        }
-      }
-    },
-    "needs.approval.more_lines": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "… %lld more lines"
-          }
-        }
-      }
-    },
-    "needs.approval.say_why": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Say what to do instead"
-          }
-        }
-      }
-    },
-    "needs.approval.deny": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deny"
-          }
-        }
-      }
-    },
-    "needs.approval.always": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Always"
-          }
-        }
-      }
-    },
-    "needs.approval.once": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Allow once"
-          }
-        }
-      }
-    },
-    "needs.question.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Question"
-          }
-        }
-      }
-    },
-    "needs.question.select_one": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Select one"
-          }
-        }
-      }
-    },
-    "needs.question.select_any": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Select any"
-          }
-        }
-      }
-    },
-    "needs.question.own": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Say your own answer"
-          }
-        }
-      }
-    },
-    "needs.listening": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Listening… · release to finish"
-          }
-        }
-      }
-    },
-    "needs.transcribing": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Transcribing…"
-          }
-        }
-      }
-    },
-    "needs.question.dismiss": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dismiss"
-          }
-        }
-      }
-    },
-    "needs.question.next": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Next"
-          }
-        }
-      }
-    },
-    "needs.question.submit": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Submit"
-          }
-        }
-      }
-    },
-    "needs.question.unsupported": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Answer this one on your computer"
-          }
-        }
-      }
-    },
-    "stop.warning": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stopping the agent in %lld"
-          }
-        }
-      }
-    },
-    "stop.warning.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Let go to keep it running"
-          }
-        }
-      }
-    },
-    "stop.hold": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hold to stop"
-          }
-        }
-      }
-    },
-    "stop.hold.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keep pressing for 3 seconds. A tap does nothing."
           }
         }
       }
@@ -1677,6 +4439,61 @@
           "stringUnit": {
             "state": "translated",
             "value": "The agent keeps running."
+          }
+        }
+      }
+    },
+    "stop.confirm.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It stops now, with its subagents. Background shells keep running."
+          }
+        }
+      }
+    },
+    "stop.confirm.keep": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep running"
+          }
+        }
+      }
+    },
+    "stop.confirm.stop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        }
+      }
+    },
+    "stop.confirm.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop the agent?"
+          }
+        }
+      }
+    },
+    "stop.dimmed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop, nothing running"
           }
         }
       }
@@ -1714,28 +4531,6 @@
         }
       }
     },
-    "stop.nothing": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nothing to stop"
-          }
-        }
-      }
-    },
-    "stop.nothing.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The agent had already finished."
-          }
-        }
-      }
-    },
     "stop.failed": {
       "extractionState": "manual",
       "localizations": {
@@ -1758,1014 +4553,233 @@
         }
       }
     },
-    "home.waiting.idle": {
+    "stop.hold": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld waiting · sends after your next message ›"
+            "value": "Hold to stop"
           }
         }
       }
     },
-    "details.title": {
+    "stop.hold.sub": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Details"
+            "value": "Keep pressing for 3 seconds. A tap does nothing."
           }
         }
       }
     },
-    "details.needs": {
+    "stop.nothing": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Needs you"
+            "value": "Nothing to stop"
           }
         }
       }
     },
-    "details.needs.approval": {
+    "stop.nothing.sub": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Approval needed"
+            "value": "The agent had already finished."
           }
         }
       }
     },
-    "details.needs.questions": {
+    "stop.warning": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questions from the agent"
+            "value": "Stopping the agent in %lld"
           }
         }
       }
     },
-    "details.waiting": {
+    "stop.warning.sub": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Waiting to send"
+            "value": "Let go to keep it running"
           }
         }
       }
     },
-    "details.waiting.queue": {
+    "talk.a11y.recording": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Queue · after this turn"
+            "value": "Recording, %@"
           }
         }
       }
     },
-    "details.waiting.steer": {
+    "talk.hold": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Steer · lands at the next step"
+            "value": "Hold to talk"
           }
         }
       }
     },
-    "details.running": {
+    "talk.more": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Running now"
+            "value": "Hold to keep talking"
           }
         }
       }
     },
-    "details.running.subagent": {
+    "talk.rerecord": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Subagent · %@"
+            "value": "Hold to re-record"
           }
         }
       }
     },
-    "details.running.shell": {
+    "welcome.badge": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Shell command"
+            "value": "experiment"
           }
         }
       }
     },
-    "details.more": {
+    "welcome.connect.remote": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%lld more"
+            "value": "Not on the same network? `opencode pair --remote` connects through the internet."
           }
         }
       }
     },
-    "details.todo": {
+    "welcome.connect.step1": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "To-do list"
+            "value": "On your computer, run"
           }
         }
       }
     },
-    "details.todo.suffix": {
+    "welcome.connect.step2": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "· from the agent"
+            "value": "Scan the code it shows"
           }
         }
       }
     },
-    "details.recent": {
+    "welcome.connect.title": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recent"
+            "value": "To connect"
           }
         }
       }
     },
-    "details.recent.edited": {
+    "welcome.footer": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Edited · +%1$lld −%2$lld"
+            "value": "Needs OpenCode 2.2.5+"
           }
         }
       }
     },
-    "details.recent.created": {
+    "welcome.rule.body": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Created · +%lld"
+            "value": "Talk to it however you like. Try things, see where it goes."
           }
         }
       }
     },
-    "details.recent.files": {
+    "welcome.rule.title": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld files · +%2$lld −%3$lld"
+            "value": "There are no rules."
           }
         }
       }
     },
-    "details.recent.done": {
+    "welcome.scan": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Done"
+            "value": "Scan the code"
           }
         }
       }
     },
-    "details.recent.failed": {
+    "welcome.tagline": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Failed · exit %lld"
+            "value": "Talk to the coding agent on your computer, from your phone."
           }
         }
       }
     },
-    "details.recent.stopped": {
+    "welcome.title": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stopped"
-          }
-        }
-      }
-    },
-    "details.recent.denied": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Denied"
-          }
-        }
-      }
-    },
-    "details.empty": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nothing running right now."
-          }
-        }
-      }
-    },
-    "common.done": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Done"
-          }
-        }
-      }
-    },
-    "goal.button": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Today’s goal"
-          }
-        }
-      }
-    },
-    "goal.line.empty": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set today’s goal"
-          }
-        }
-      }
-    },
-    "goal.line.round": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "round %lld"
-          }
-        }
-      }
-    },
-    "goal.line.starting": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "starting"
-          }
-        }
-      }
-    },
-    "goal.line.waiting": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "waiting"
-          }
-        }
-      }
-    },
-    "goal.line.paused": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "paused"
-          }
-        }
-      }
-    },
-    "goal.line.done": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "done"
-          }
-        }
-      }
-    },
-    "goal.sheet.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Today’s goal"
-          }
-        }
-      }
-    },
-    "goal.box.label": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "/goal"
-          }
-        }
-      }
-    },
-    "goal.box.label.new": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "new goal"
-          }
-        }
-      }
-    },
-    "goal.box.label.today": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "today’s goal"
-          }
-        }
-      }
-    },
-    "goal.box.on_phone": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "On this phone"
-          }
-        }
-      }
-    },
-    "goal.box.active": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "active · round %1$lld of %2$lld"
-          }
-        }
-      }
-    },
-    "goal.box.active.starting": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "active · starting"
-          }
-        }
-      }
-    },
-    "goal.box.active.waiting": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "active · waiting"
-          }
-        }
-      }
-    },
-    "goal.box.empty": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No goal yet."
-          }
-        }
-      }
-    },
-    "goal.fine": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "With a goal the agent keeps going after each turn until a reviewer decides it’s done or blocked (OpenCode /goal, up to 50 rounds). The app sets it; the agent can’t set its own. Stop pauses it."
-          }
-        }
-      }
-    },
-    "goal.say": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Say the goal"
-          }
-        }
-      }
-    },
-    "goal.say.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hold while you speak"
-          }
-        }
-      }
-    },
-    "goal.change": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Change"
-          }
-        }
-      }
-    },
-    "goal.new": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New goal"
-          }
-        }
-      }
-    },
-    "goal.again": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Again"
-          }
-        }
-      }
-    },
-    "goal.set": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set goal"
-          }
-        }
-      }
-    },
-    "goal.replace": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Replace goal"
-          }
-        }
-      }
-    },
-    "goal.pause": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pause"
-          }
-        }
-      }
-    },
-    "goal.resume": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Resume"
-          }
-        }
-      }
-    },
-    "goal.clear": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear"
-          }
-        }
-      }
-    },
-    "goal.notice.set": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Goal set"
-          }
-        }
-      }
-    },
-    "goal.notice.replaced": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Goal replaced"
-          }
-        }
-      }
-    },
-    "goal.notice.set.idle": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The agent keeps going until it’s done."
-          }
-        }
-      }
-    },
-    "goal.notice.set.busy": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The agent starts on it at its next step."
-          }
-        }
-      }
-    },
-    "goal.notice.paused": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Goal paused"
-          }
-        }
-      }
-    },
-    "goal.notice.paused.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The agent finishes this turn, then stops."
-          }
-        }
-      }
-    },
-    "goal.notice.resumed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Goal resumed"
-          }
-        }
-      }
-    },
-    "goal.notice.resumed.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The agent carries on."
-          }
-        }
-      }
-    },
-    "goal.notice.cleared": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Goal cleared"
-          }
-        }
-      }
-    },
-    "goal.notice.cleared.busy": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The agent finishes this turn."
-          }
-        }
-      }
-    },
-    "goal.notice.stale": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The goal had already changed"
-          }
-        }
-      }
-    },
-    "goal.notice.failed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t change the goal"
-          }
-        }
-      }
-    },
-    "goal.notice.failed.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Try again."
-          }
-        }
-      }
-    },
-    "goal.refused.word": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Say a longer goal"
-          }
-        }
-      }
-    },
-    "goal.refused.word.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A single word is read as a goal command."
-          }
-        }
-      }
-    },
-    "goal.refused.long": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "That’s too long for a goal"
-          }
-        }
-      }
-    },
-    "goal.refused.long.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Goals are limited to 4,000 characters."
-          }
-        }
-      }
-    },
-    "home.you.goal": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Goal: “%@”"
-          }
-        }
-      }
-    },
-    "home.newday.detail.goal": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Yesterday’s is kept on your computer. Its goal keeps running there."
-          }
-        }
-      }
-    },
-    "draft.more": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "More"
-          }
-        }
-      }
-    },
-    "draft.menu.ask": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ask on the side"
-          }
-        }
-      }
-    },
-    "draft.menu.ask.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Answered from the session, not sent to the agent"
-          }
-        }
-      }
-    },
-    "draft.menu.goal": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set as today’s goal"
-          }
-        }
-      }
-    },
-    "draft.menu.goal.replace": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Replace today’s goal"
-          }
-        }
-      }
-    },
-    "draft.menu.goal.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The agent keeps going until it’s done"
-          }
-        }
-      }
-    },
-    "ask.reading": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reading the session…"
-          }
-        }
-      }
-    },
-    "ask.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Asked on the side · %@"
-          }
-        }
-      }
-    },
-    "ask.age.minutes": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lldm"
-          }
-        }
-      }
-    },
-    "ask.only_you": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Only you see this"
-          }
-        }
-      }
-    },
-    "ask.copy": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copy"
-          }
-        }
-      }
-    },
-    "ask.copied": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Answer copied"
-          }
-        }
-      }
-    },
-    "ask.empty": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No answer"
-          }
-        }
-      }
-    },
-    "ask.empty.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ask it another way, or send it as a message."
-          }
-        }
-      }
-    },
-    "ask.failed": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t answer"
-          }
-        }
-      }
-    },
-    "ask.failed.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Try again."
-          }
-        }
-      }
-    },
-    "ask.try_again": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Try again"
-          }
-        }
-      }
-    },
-    "ask.fold": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fold"
-          }
-        }
-      }
-    },
-    "ask.close": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close"
-          }
-        }
-      }
-    },
-    "details.asked": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Asked on the side"
-          }
-        }
-      }
-    },
-    "details.asked.suffix": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "· only you see these"
-          }
-        }
-      }
-    },
-    "common.cancel": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel"
+            "value": "Hex Code"
           }
         }
       }

@@ -114,3 +114,13 @@ struct StartNewSessionTests {
         #expect(store.saved == nil)
     }
 }
+
+/// The confirmation's waiting line is a plural in the string catalog.
+struct NewSessionCopyTests {
+    @Test func oneWaitingMessageIsSingular() {
+        let one = 1
+        let three = 3
+        #expect(String(localized: "settings.new_session.waiting", defaultValue: "Its \(one) waiting messages still send there.") == "Its waiting message still sends there.")
+        #expect(String(localized: "settings.new_session.waiting", defaultValue: "Its \(three) waiting messages still send there.") == "Its 3 waiting messages still send there.")
+    }
+}
