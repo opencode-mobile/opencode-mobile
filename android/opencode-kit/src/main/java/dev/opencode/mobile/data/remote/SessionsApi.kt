@@ -24,6 +24,10 @@ import dev.opencode.mobile.data.remote.dto.V2CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
+import dev.opencode.mobile.data.remote.dto.V2GoalGetRequestDto
+import dev.opencode.mobile.data.remote.dto.V2GoalGetResponseDto
+import dev.opencode.mobile.data.remote.dto.V2GoalSessionInputDto
+import dev.opencode.mobile.data.remote.dto.V2GoalStateDto
 import dev.opencode.mobile.data.remote.dto.V2InboxDeliveryRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2InstructionEntryRequestDto
@@ -37,6 +41,7 @@ import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
 import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RevertStageRequestDto
+import dev.opencode.mobile.data.remote.dto.V2SessionCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2SessionGenerateRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionGenerateResponseDto
@@ -618,6 +623,39 @@ class SessionsApi private constructor(
                 setJsonBody(json, V2TextPromptRequestDto(text = text, delivery = delivery, files = files.ifEmpty { null }))
             }.bodyOnSuccess<ApiDataEnvelope<V2InboxItemDto>>()
             .data
+
+    /**
+     * `POST /api/session/{id}/command` with [name] and [text] (and any [files], in the same request): runs a slash
+     * command such as `/goal` on the session. `204` with no body; a failing command is a `500 CommandExecutionError`
+     * whose message says why ("No active goal to pause.").
+     */
+    suspend fun runSessionCommandV2(
+        id: String,
+        name: String,
+        text: String,
+        files: List<V2PromptFileDto> = emptyList(),
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/command") {
+                setJsonBody(json, V2SessionCommandRequestDto(name = name, text = text, files = files.ifEmpty { null }))
+            }.ensureSuccess()
+
+    /**
+     * `POST /api/rpc/opencode.goal/get` with `{"input": {"sessionID": …}}`: the session's `/goal` state, or null when it
+     * has none. It answers the same with or without [directory] (`location[directory]`).
+     */
+    suspend fun goalV2(
+        sessionId: String,
+        directory: String?,
+    ): V2GoalStateDto? =
+        httpClient
+            .get()
+            .post("api/rpc/opencode.goal/get") {
+                applyLocationDirectory(directory)
+                setJsonBody(json, V2GoalGetRequestDto(V2GoalSessionInputDto(sessionId)))
+            }.bodyOnSuccess<V2GoalGetResponseDto>()
+            .output
 
     /** `POST /api/session/{id}/model`: the model and level the session's prompts and generate use from now on. */
     suspend fun switchSessionModelV2(

@@ -223,3 +223,49 @@ data class V2InboxFileDto(
     val name: String? = null,
     val mime: String? = null,
 )
+
+/**
+ * `POST /api/session/{id}/command` with a command's [name] and its [text] (the field is `text`: `arguments` gets a
+ * `400`), plus the prompt's [files]. No `delivery`: a goal's kickoff steers by default.
+ */
+@Serializable
+data class V2SessionCommandRequestDto(
+    val name: String,
+    val text: String,
+    /** Left out when there are none; the default isn't encoded. */
+    val files: List<V2PromptFileDto>? = null,
+)
+
+/** `POST /api/rpc/opencode.goal/get`'s body: `{"input": {"sessionID": …}}`. */
+@Serializable
+data class V2GoalGetRequestDto(
+    val input: V2GoalSessionInputDto,
+)
+
+@Serializable
+data class V2GoalSessionInputDto(
+    @SerialName("sessionID") val sessionId: String,
+)
+
+/** `{"output": State | null}`: null when the session has no goal. */
+@Serializable
+data class V2GoalGetResponseDto(
+    val output: V2GoalStateDto? = null,
+)
+
+/**
+ * OpenCode's `/goal` state (`schema/src/goal.ts`, v2.2.5): [status] `active`, `paused` or `complete`; [reason] why it
+ * last changed (absent on a new goal); [rounds] the continuations sent since it was set or last resumed (0 after
+ * setting, 1 after resuming); [maxRounds] the limit per set or resume (50).
+ */
+@Serializable
+data class V2GoalStateDto(
+    val id: String,
+    val objective: String = "",
+    val status: String = "",
+    val reason: String? = null,
+    val rounds: Int = 0,
+    val maxRounds: Int = 50,
+    val stalls: Int = 0,
+    val updatedAt: Long? = null,
+)
