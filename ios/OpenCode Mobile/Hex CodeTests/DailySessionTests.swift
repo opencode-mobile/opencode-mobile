@@ -347,3 +347,161 @@ struct AgentStateTests {
         #expect(AgentState.idle.topBar(at: start) == HexTopBarState(tone: .idle, label: "Idle"))
     }
 }
+
+/// M6: a second session on the same day is numbered, and the finder takes the highest number (app
+/// plan, "The daily session" › Finding it, More than one match; "Testing" › Finder).
+struct NumberedSessionTests {
+    private let project = "/Users/example/Projects/hexcode"
+    private let base = Date(timeIntervalSince1970: 1_793_966_400) // 2026-11-07 12:00 UTC
+
+    private func session(_ id: String, _ title: String, directory: String? = nil, minutesAgo: Double = 0) -> SessionListing {
+        SessionListing(id: id, title: title, directory: directory ?? project, updatedAt: base - minutesAgo * 60)
+    }
+
+    @Test func numbersOfTitles() {
+        #expect(DailySession.number(ofTitle: "2026-11-07", today: "2026-11-07") == 1)
+        #expect(DailySession.number(ofTitle: "2026-11-07 (2)", today: "2026-11-07") == 2)
+        #expect(DailySession.number(ofTitle: "2026-11-07 (12)", today: "2026-11-07") == 12)
+        #expect(DailySession.number(ofTitle: "2026-11-07 (1)", today: "2026-11-07") == nil)
+        #expect(DailySession.number(ofTitle: "2026-11-07 (0)", today: "2026-11-07") == nil)
+        #expect(DailySession.number(ofTitle: "Notes 2026-11-07", today: "2026-11-07") == nil)
+        #expect(DailySession.number(ofTitle: "2026-11-07 (2) notes", today: "2026-11-07") == nil)
+        #expect(DailySession.number(ofTitle: "2026-11-07 (x)", today: "2026-11-07") == nil)
+        #expect(DailySession.number(ofTitle: "2026-11-07(2)", today: "2026-11-07") == nil)
+        #expect(DailySession.number(ofTitle: "2026-11-07 (-2)", today: "2026-11-07") == nil)
+    }
+
+    @Test func theHighestNumberWinsWhateverTheUpdateOrder() {
+        let sessions = [
+            session("ses_2", "2026-11-07 (2)", minutesAgo: 1),
+            session("ses_1", "2026-11-07", minutesAgo: 2),
+            session("ses_3", "2026-11-07 (3)", minutesAgo: 30),
+        ]
+        #expect(DailySession.match(today: "2026-11-07", directory: project, in: sessions)?.id == "ses_3")
+        #expect(DailySession.match(today: "2026-11-07", directory: project, in: sessions.reversed())?.id == "ses_3")
+    }
+
+    @Test func notesAndOneInBracketsAreIgnored() {
+        let sessions = [
+            session("ses_notes", "Notes 2026-11-07"),
+            session("ses_one", "2026-11-07 (1)"),
+            session("ses_plain", "2026-11-07", minutesAgo: 5),
+        ]
+        #expect(DailySession.match(today: "2026-11-07", directory: project, in: sessions)?.id == "ses_plain")
+    }
+
+    @Test func twoOfTheSameNumberTakeTheMostRecentlyUpdated() {
+        let sessions = [
+            session("ses_new", "2026-11-07 (2)", minutesAgo: 1),
+            session("ses_old", "2026-11-07 (2)", minutesAgo: 20),
+        ]
+        #expect(DailySession.match(today: "2026-11-07", directory: project, in: sessions)?.id == "ses_new")
+    }
+
+    @Test func anotherDirectoryStringIsIgnored() {
+        let sessions = [
+            session("ses_slash", "2026-11-07 (3)", directory: project + "/"),
+            session("ses_mine", "2026-11-07 (2)"),
+        ]
+        #expect(DailySession.match(today: "2026-11-07", directory: project, in: sessions)?.id == "ses_mine")
+    }
+
+    @Test func theNextTitle() {
+        #expect(DailySession.nextTitle(today: "2026-11-07", after: nil) == "2026-11-07")
+        #expect(DailySession.nextTitle(today: "2026-11-07", after: session("a", "2026-11-07")) == "2026-11-07 (2)")
+        #expect(DailySession.nextTitle(today: "2026-11-07", after: session("a", "2026-11-07 (3)")) == "2026-11-07 (4)")
+    }
+}
+
+/// The finder's pages, and Start a new session (app plan, "Settings and finish (M6)").
+@MainActor
+struct NumberedSessionSetupTests {
+    private let project = "/Users/example/Projects/hexcode"
+    private let model = ModelChoice(providerID: "opencode", modelID: "big-pickle", variant: "high")
+
+    private func today(_ id: String, title: String = "2026-11-07") -> SessionListing {
+        SessionListing(id: id, title: title, directory: project, updatedAt: Date())
+    }
+
+    @Test func aFullFirstPageWithTheHigherMatchOnPageTwoFindsIt() async {
+        let server = FakeSessionServer()
+        let first = [today("ses_1")] + (1 ..< DailySessionSetup.pageSize).map { today("ses_x\($0)", title: "2026-11-07 notes") }
+        server.pages = [
+            SessionListingPage(sessions: first, next: "c1"),
+            SessionListingPage(sessions: [today("ses_2", title: "2026-11-07 (2)")], next: nil),
+        ]
+        let setup = DailySessionSetup(service: server, memory: FakeMemory("2026-11-07"))
+        guard case let .opened(session, false, _) = await setup.open(today: "2026-11-07", directory: project, model: model) else {
+            Issue.record("expected a reuse")
+            return
+        }
+        #expect(session.id == "ses_2")
+        #expect(server.calls.prefix(2) == [.list(search: "2026-11-07", cursor: nil), .list(search: "2026-11-07", cursor: "c1")])
+    }
+
+    @Test func atMostTwentyFivePagesAreRead() async {
+        let server = FakeSessionServer()
+        let full = (0 ..< DailySessionSetup.pageSize).map { today("ses_x\($0)", title: "2026-11-07 notes") }
+        server.pages = Array(repeating: SessionListingPage(sessions: full, next: "more"), count: 30)
+        let setup = DailySessionSetup(service: server, memory: FakeMemory("2026-11-07"))
+        _ = await setup.open(today: "2026-11-07", directory: project, model: model)
+        #expect(server.calls.filter { if case .list = $0 { true } else { false } }.count == DailySessionSetup.maxPages)
+    }
+
+    @Test func aNewSessionIsTitledWithTheNextNumberAndSavedAsTheLastID() async {
+        let server = FakeSessionServer()
+        server.listed = [today("ses_2", title: "2026-11-07 (2)"), today("ses_1")]
+        let memory = FakeMemory("2026-11-07", session: "ses_2")
+        let setup = DailySessionSetup(service: server, memory: memory)
+        guard case let .opened(session) = await setup.startNew(today: "2026-11-07", directory: project, model: model) else {
+            Issue.record("expected a new session")
+            return
+        }
+        #expect(session.title == "2026-11-07 (3)")
+        #expect(server.calls == [
+            .list(search: "2026-11-07", cursor: nil),
+            .create(title: "2026-11-07 (3)", model: model),
+            .rules(session.id),
+        ])
+        #expect(memory.lastSessionID == session.id)
+        #expect(memory.lastOpenedDay == "2026-11-07")
+    }
+
+    @Test func withNoSessionTodayTheNewOneHasThePlainDate() async {
+        let server = FakeSessionServer()
+        let memory = FakeMemory("2026-11-06", session: "ses_y")
+        let setup = DailySessionSetup(service: server, memory: memory)
+        guard case let .opened(session) = await setup.startNew(today: "2026-11-07", directory: project, model: model) else {
+            Issue.record("expected a new session")
+            return
+        }
+        #expect(session.title == "2026-11-07")
+        // The last date only moves with a normal open.
+        #expect(memory.lastOpenedDay == "2026-11-06")
+    }
+
+    @Test func creatingFailsLeavesEverythingAsItWas() async {
+        let server = FakeSessionServer()
+        server.listed = [today("ses_1")]
+        server.failsCreate = true
+        let memory = FakeMemory("2026-11-07", session: "ses_1")
+        let setup = DailySessionSetup(service: server, memory: memory)
+        #expect(await setup.startNew(today: "2026-11-07", directory: project, model: model) == .createFailed)
+        #expect(memory.lastSessionID == "ses_1")
+    }
+
+    @Test func theRulesFailingThenTryAgainFindsTheNewSessionAndMakesNoThird() async {
+        let server = FakeSessionServer()
+        server.listed = [today("ses_1")]
+        server.failsRules = true
+        let setup = DailySessionSetup(service: server, memory: FakeMemory("2026-11-07", session: "ses_1"))
+        #expect(await setup.startNew(today: "2026-11-07", directory: project, model: model) == .rulesFailed)
+        server.failsRules = false
+        guard case let .opened(session, false, false) = await setup.open(today: "2026-11-07", directory: project, model: model) else {
+            Issue.record("expected the new session found")
+            return
+        }
+        #expect(session.title == "2026-11-07 (2)")
+        #expect(server.calls.filter { if case .create = $0 { true } else { false } }.count == 1)
+    }
+}

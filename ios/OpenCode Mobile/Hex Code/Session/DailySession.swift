@@ -10,7 +10,8 @@ struct SessionListing: Equatable, Sendable {
     var busySince: Date?
 }
 
-/// Today's session: one per local date and project, titled with the date (`2026-11-03`). See "The
+/// Today's session: one per local date and project, titled with the date (`2026-11-03`), or with the
+/// date and a number for one started from Settings (`2026-11-03 (2)`). See "The
 /// daily session" in the app plan.
 enum DailySession {
     /// What to do on open (and on each return to the foreground).
@@ -37,11 +38,38 @@ enum DailySession {
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
-    /// Today's session among `sessions`, in the server's order (newest update first): the first
-    /// with exactly that title and directory. The server compares directories as exact strings,
-    /// so the phone does too.
+    /// The day's number in a session's title: 1 for the plain date (`2026-11-07`), n for the date,
+    /// a space and n in brackets with n 2 or more (`2026-11-07 (2)`); nil for any other title.
+    static func number(ofTitle title: String, today: String) -> Int? {
+        if title == today { return 1 }
+        let prefix = today + " ("
+        guard title.hasPrefix(prefix), title.hasSuffix(")") else { return nil }
+        let digits = title.dropFirst(prefix.count).dropLast()
+        guard !digits.isEmpty, digits.allSatisfy(\.isASCII), digits.allSatisfy(\.isNumber),
+              let number = Int(digits), number >= 2
+        else { return nil }
+        return number
+    }
+
+    /// Today's session among `sessions`, in the server's order (newest update first): the highest
+    /// number among those with today's title and exactly this directory; among equal titles the
+    /// first, the most recently updated. Never the most recently updated across numbers: an older
+    /// session still running moves to the top of the list. The server compares directories as
+    /// exact strings, so the phone does too.
     static func match(today: String, directory: String, in sessions: [SessionListing]) -> SessionListing? {
-        sessions.first { $0.title == today && $0.directory == directory }
+        var best: (session: SessionListing, number: Int)?
+        for session in sessions where session.directory == directory {
+            guard let number = number(ofTitle: session.title, today: today) else { continue }
+            if best == nil || number > best!.number { best = (session, number) }
+        }
+        return best?.session
+    }
+
+    /// The title Start a new session gives: the next number after the highest found, or the plain
+    /// date when there is none.
+    static func nextTitle(today: String, after highest: SessionListing?) -> String {
+        guard let highest, let number = number(ofTitle: highest.title, today: today) else { return today }
+        return "\(today) (\(number + 1))"
     }
 
     /// True when the app last opened a session on an earlier date than `today`.
@@ -137,6 +165,39 @@ final class DailySessionSetup {
         self.memory = memory
     }
 
+    /// Start a new session (Settings).
+    enum NewSessionOutcome: Equatable, Sendable {
+        case opened(SessionListing)
+        /// Creating it failed: today's session is still open.
+        case createFailed
+        /// It was made, but its rules failed: as a setup failure, whose Try again finds it.
+        case rulesFailed
+    }
+
+    /// Settings › Start a new session: the day's next numbered session, with the chosen model, and
+    /// its rules. The old one is never changed. Its id becomes the last id; the last date doesn't
+    /// change, so there is no new-day notice.
+    func startNew(today: String, directory: String, model: ModelChoice) async -> NewSessionOutcome {
+        let session: SessionListing
+        do {
+            let highest = try await find(today: today, directory: directory)
+            session = try await service.createSession(
+                title: DailySession.nextTitle(today: today, after: highest),
+                directory: directory,
+                model: model
+            )
+        } catch {
+            return .createFailed
+        }
+        do {
+            try await service.putMessageRules(sessionID: session.id)
+        } catch {
+            return .rulesFailed
+        }
+        memory.lastSessionID = session.id
+        return .opened(session)
+    }
+
     func open(today: String, directory: String, model: ModelChoice) async -> Outcome {
         let previous = memory.lastSessionID
         yesterdaySessionID = nil
@@ -165,16 +226,17 @@ final class DailySessionSetup {
         return .opened(session, created: created, showsNewDayNotice: notice)
     }
 
-    /// The first exact match, following `next` only while a full page has none. An empty page is
-    /// the end.
+    /// The day's session with the highest number. Every full page is read (a higher number may be
+    /// on a later one), up to 25; a page with fewer than 20, or without a cursor, is the end.
     private func find(today: String, directory: String) async throws -> SessionListing? {
         var cursor: String?
+        var seen: [SessionListing] = []
         for _ in 0 ..< Self.maxPages {
             let page = try await service.sessionsPage(directory: directory, search: today, limit: Self.pageSize, cursor: cursor)
-            if let found = DailySession.match(today: today, directory: directory, in: page.sessions) { return found }
-            guard page.sessions.count >= Self.pageSize, let next = page.next else { return nil }
+            seen += page.sessions
+            guard page.sessions.count >= Self.pageSize, let next = page.next else { break }
             cursor = next
         }
-        return nil
+        return DailySession.match(today: today, directory: directory, in: seen)
     }
 }
