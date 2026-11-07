@@ -5,4 +5,15 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+
+    <!--
+        The system splash on a cold start (app-plan.md, Home › Cold start): the plain `bg` with nothing on it, as iOS's
+        launch screen, held until home's first state is ready (at most 1.5 s).
+    -->
+    <style name="Theme.HexCode.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/shell_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/shell_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.HexCode</item>
+    </style>
 </resources>

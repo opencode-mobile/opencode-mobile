@@ -1,6 +1,8 @@
 package dev.opencode.hexcode.home
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -8,13 +10,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.designsystem.components.HexButton
 import dev.opencode.hexcode.designsystem.components.HexDetailRow
@@ -23,8 +30,10 @@ import dev.opencode.hexcode.designsystem.components.HexDot
 import dev.opencode.hexcode.designsystem.components.HexDotTone
 import dev.opencode.hexcode.designsystem.components.HexSheet
 import dev.opencode.hexcode.designsystem.components.HexSheetAction
+import dev.opencode.hexcode.designsystem.components.HexSheetSize
 import dev.opencode.hexcode.designsystem.components.HexThumbnail
 import dev.opencode.hexcode.designsystem.components.HexThumbnailSize
+import dev.opencode.hexcode.session.DetailsBody
 import dev.opencode.hexcode.session.DetailsSection
 import dev.opencode.hexcode.session.DetailsSections
 import dev.opencode.hexcode.session.PendingItem
@@ -58,31 +67,70 @@ internal fun BoxScope.DetailsSheet(
             todos = today.todos.size,
             recent = state.recent.size,
         )
+    val body = DetailsSections.body(sections, state.detailsReading)
+    // What shows in the sheet's first frame is just there; what arrives after (also after the spinner) fades in.
+    val opening = rememberOpening(state.detailsOpen)
+    // Opens at half the screen whatever has loaded, so it never jumps (app-plan.md, Details › Size and first load).
     HexSheet(
         visible = state.detailsOpen,
         onDismiss = vm::closeDetails,
         title = stringResource(R.string.details_title),
         trailing = HexSheetAction(stringResource(R.string.common_done), vm::closeDetails),
+        size = HexSheetSize.Medium,
+        loading = body == DetailsBody.Loading,
     ) {
-        if (sections.isEmpty()) {
-            Text(
-                stringResource(R.string.details_empty),
-                style = HexTheme.type.footnote,
-                color = HexTheme.colors.text3,
-                modifier = Modifier.padding(horizontal = 2.dp, vertical = 8.dp),
-            )
+        if (body == DetailsBody.Empty) {
+            FadeInLate(opening) {
+                Text(
+                    stringResource(R.string.details_empty),
+                    style = HexTheme.type.footnote,
+                    color = HexTheme.colors.text3,
+                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 8.dp),
+                )
+            }
         }
         sections.forEach { section ->
-            when (section) {
-                DetailsSection.NeedsYou -> NeedsYou(today.pending, vm)
-                DetailsSection.Waiting -> Waiting(state, vm)
-                DetailsSection.AskedOnTheSide -> AskedSection(today.asked, vm)
-                DetailsSection.Running -> Running(running, now)
-                DetailsSection.Todo -> Todos(today.todos)
-                DetailsSection.Recent -> Recent(state.recent, now)
+            key(section) {
+                FadeInLate(opening) {
+                    when (section) {
+                        DetailsSection.NeedsYou -> NeedsYou(today.pending, vm)
+                        DetailsSection.Waiting -> Waiting(state, vm)
+                        DetailsSection.AskedOnTheSide -> AskedSection(today.asked, vm)
+                        DetailsSection.Running -> Running(running, now)
+                        DetailsSection.Todo -> Todos(today.todos)
+                        DetailsSection.Recent -> Recent(state.recent, now)
+                    }
+                }
             }
         }
     }
+}
+
+/**
+ * True in the first frame after [key] changes (the sheet opening) or this first composes, false after: what composes
+ * then was there from the start.
+ */
+@Composable
+private fun rememberOpening(key: Any = Unit): () -> Boolean {
+    val first = remember(key) { booleanArrayOf(true) }
+    LaunchedEffect(key) { first[0] = false }
+    return { first[0] }
+}
+
+/**
+ * [content], faded in over 0.2 s when it arrives after the sheet opened ([opening] false when it first composes);
+ * instant with Reduce Motion, and when it was there from the start.
+ */
+@Composable
+private fun FadeInLate(
+    opening: () -> Boolean,
+    content: @Composable () -> Unit,
+) {
+    val reduced = HexMotion.reduced
+    val fade = HexTheme.motion.fade<Float>()
+    val alpha = remember { Animatable(if (opening() || reduced) 1f else 0f) }
+    LaunchedEffect(Unit) { if (alpha.value < 1f) alpha.animateTo(1f, fade) }
+    Box(Modifier.graphicsLayer { this.alpha = alpha.value }) { content() }
 }
 
 @Composable
@@ -227,24 +275,34 @@ private fun Recent(
     steps: List<RecentStep>,
     now: Long,
 ) {
+    val opening = rememberOpening()
     HexDetailsSection(stringResource(R.string.details_recent)) {
         steps.forEachIndexed { index, step ->
-            val icon =
-                when (step.kind) {
-                    RecentStep.Kind.Edit -> HexIcons.pencil
-                    RecentStep.Kind.Command -> HexIcons.term
-                    RecentStep.Kind.Subagent -> HexIcons.spark
-                }
-            HexDetailRow(
-                AnnotatedString(step.title),
-                leading = { Icon(icon, null, tint = HexTheme.colors.text3, modifier = Modifier.size(HexTheme.size.iconSmall)) },
-                code = step.kind != RecentStep.Kind.Subagent,
-                detail = recentLine(step.outcome),
-                time = recentAge(step.at, now) ?: stringResource(R.string.home_summary_updated_now),
-                divider = index > 0,
-            )
+            key(step) { FadeInLate(opening) { RecentRow(step, index, now) } }
         }
     }
+}
+
+@Composable
+private fun RecentRow(
+    step: RecentStep,
+    index: Int,
+    now: Long,
+) {
+    val icon =
+        when (step.kind) {
+            RecentStep.Kind.Edit -> HexIcons.pencil
+            RecentStep.Kind.Command -> HexIcons.term
+            RecentStep.Kind.Subagent -> HexIcons.spark
+        }
+    HexDetailRow(
+        AnnotatedString(step.title),
+        leading = { Icon(icon, null, tint = HexTheme.colors.text3, modifier = Modifier.size(HexTheme.size.iconSmall)) },
+        code = step.kind != RecentStep.Kind.Subagent,
+        detail = recentLine(step.outcome),
+        time = recentAge(step.at, now) ?: stringResource(R.string.home_summary_updated_now),
+        divider = index > 0,
+    )
 }
 
 @Composable

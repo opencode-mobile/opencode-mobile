@@ -235,7 +235,25 @@ object DetailsSections {
             DetailsSection.Todo.takeIf { todos > 0 },
             DetailsSection.Recent.takeIf { recent > 0 },
         )
+
+    /**
+     * What the sheet's body shows (app-plan.md, Details › Size and first load): the [sections] with something in them;
+     * with none, a spinner while the first reads of Recent and Running now are still [reading], and "Nothing running
+     * right now." only once every read has returned empty.
+     */
+    fun body(
+        sections: List<DetailsSection>,
+        reading: Boolean,
+    ): DetailsBody =
+        when {
+            sections.isNotEmpty() -> DetailsBody.Sections
+            reading -> DetailsBody.Loading
+            else -> DetailsBody.Empty
+        }
 }
+
+/** Details' body: its sections, a spinner while the first reads run, or "Nothing running right now.". */
+enum class DetailsBody { Sections, Loading, Empty }
 
 /**
  * Recent's age on the right: null ("now") under 45 s, then minutes ("2m", rounded, at least 1), hours ("3h") and days

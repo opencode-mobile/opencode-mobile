@@ -92,6 +92,8 @@ dependencies {
     implementation(libs.ktor.client.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.core.ktx)
+    // Holds the system splash until home's first state is ready (app-plan.md, Home › Cold start).
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -44,6 +45,8 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.opencode.hexcode.app.Appearance
+import dev.opencode.hexcode.app.ColdStart
+import dev.opencode.hexcode.app.ColdStartGate
 import dev.opencode.hexcode.app.HexFirstRunEnvironment
 import dev.opencode.hexcode.app.HexPrefs
 import dev.opencode.hexcode.app.HexServices
@@ -84,6 +87,7 @@ import dev.opencode.voiceengine.EngineOptions
 import dev.opencode.voiceengine.SpeechLab
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -91,6 +95,11 @@ import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // A cold start keeps the system splash until home's first state is ready, at most 1.5 s, so home appears in one
+        // piece (app-plan.md, Home › Cold start). The activity made again (a rotation, a theme change) has no splash.
+        val coldStart = ColdStartGate(SystemClock::uptimeMillis)
+        val splash = installSplashScreen()
+        if (savedInstanceState == null) splash.setKeepOnScreenCondition(coldStart::holding) else coldStart.ready()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(TRANSPARENT, TRANSPARENT),
@@ -186,6 +195,8 @@ class MainActivity : ComponentActivity() {
                         },
                     )
                 }
+                // The lab and dictation tools have nothing to wait for.
+                if (tool != null) SideEffect { coldStart.ready() }
                 when (tool) {
                     Tool.Lab ->
                         LabScreen(
@@ -200,7 +211,7 @@ class MainActivity : ComponentActivity() {
                         SystemBarIcons(darkScreen = true)
                         DictationScreen(services.voice, sampleFile = sample, onOpenLab = { tool = Tool.Lab })
                     }
-                    null -> prefs?.let { HexCodeRoot(services, lab, it, pairLink, clips, draftText) }
+                    null -> prefs?.let { HexCodeRoot(services, lab, it, pairLink, clips, draftText, coldStart) }
                 }
             }
         }
@@ -235,6 +246,7 @@ private fun HexCodeRoot(
     pairLink: String?,
     clips: Boolean,
     draftText: String?,
+    coldStart: ColdStartGate,
 ) {
     LaunchedEffect(Unit) {
         // The saved server's address check can take seconds; nothing on screen waits for it.
@@ -248,7 +260,7 @@ private fun HexCodeRoot(
     ) {
         if (prefs.firstRunDone) {
             // The debug pairing link pairs again only when the app opened after first run; in first run it was used there.
-            AfterFirstRun(services, lab, prefs, clips, draftText, pairLink.takeIf { pairedAtLaunch })
+            AfterFirstRun(services, lab, prefs, clips, draftText, pairLink.takeIf { pairedAtLaunch }, coldStart)
         } else {
             // Forget and a switch to another computer start first run afresh.
             val generation by services.setupGeneration.collectAsStateWithLifecycle()
@@ -271,6 +283,8 @@ private fun HexCodeRoot(
             }
             // The camera view is dark in both themes.
             SystemBarIcons(darkScreen = HexTheme.isDark || state.step == FirstRunStep.Scan)
+            // First run's screens are ready as they come.
+            SideEffect { coldStart.ready() }
             if (state.step != FirstRunStep.Done) FirstRunFlow(vm)
         }
     }
@@ -284,6 +298,7 @@ private fun AfterFirstRun(
     clips: Boolean,
     draftText: String?,
     pairLink: String?,
+    coldStart: ColdStartGate,
 ) {
     val context = LocalContext.current
     var page by remember { mutableStateOf(Page.Home) }
@@ -349,6 +364,11 @@ private fun AfterFirstRun(
                 },
             )
         }
+    // The splash goes once today's session is found and its summary read, or setup failed or was signed out.
+    LaunchedEffect(homeModel) {
+        homeModel.uiState.first { ColdStart.settled(it.today) }
+        coldStart.ready()
+    }
     // In front, the date is checked and the stream reconnects; in the background it closes after a grace.
     LifecycleEventEffect(Lifecycle.Event.ON_START) { homeModel.enteredForeground() }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { homeModel.enteredBackground() }

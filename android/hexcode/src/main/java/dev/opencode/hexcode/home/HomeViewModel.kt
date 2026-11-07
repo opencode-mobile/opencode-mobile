@@ -20,6 +20,7 @@ import dev.opencode.hexcode.session.PromptImage
 import dev.opencode.hexcode.session.QuestionAnswers
 import dev.opencode.hexcode.session.RecentStep
 import dev.opencode.hexcode.session.RequestGoneException
+import dev.opencode.hexcode.session.SessionSetup
 import dev.opencode.hexcode.session.StopOutcome
 import dev.opencode.hexcode.session.TodaySession
 import dev.opencode.hexcode.session.TodayState
@@ -530,8 +531,15 @@ data class HomeUiState(
     val sheetTake: SheetTake? = null,
     /** Details is open. */
     val detailsOpen: Boolean = false,
-    /** Details' Recent, read when it opens and after each tool while open. */
+    /**
+     * Details' Recent: read in the background when today's session opens and a second after each run ends, again when
+     * Details opens, and after each tool while it's open.
+     */
     val recent: List<RecentStep> = emptyList(),
+    /** The first read of Recent for today's session has returned (or failed). */
+    val recentRead: Boolean = false,
+    /** The first read of Running now for today's session has returned (or failed). */
+    val runningRead: Boolean = false,
     /** Stop is held: the warning, the screen edge and the ring show, and toasts are hidden. */
     val stopHolding: Boolean = false,
     /** When the hold started ([clock] time), for the ring, the bar and the count. */
@@ -543,6 +551,9 @@ data class HomeUiState(
     /** The draft's ⋯ menu is open. */
     val draftMenu: Boolean = false,
 ) {
+    /** Details' first reads haven't all returned: with nothing else to show it has a spinner, not the empty line. */
+    val detailsReading: Boolean get() = !recentRead || !runningRead
+
     /** The draft can be asked on the side or set as the goal: every chunk has text, and there is some. */
     val draftReady: Boolean get() = draft.isSettled && draft.text.isNotBlank()
 
@@ -1201,10 +1212,16 @@ class HomeViewModel(
 
     // --- Details (app-plan.md, Needs you and control › Details)
 
-    /** Reading Recent again a second after a tool finishes, while Details is open. */
-    private var recentRead: Job? = null
+    /** Reading Recent: at once, or a second after a tool or a run finishes. */
+    private var recentJob: Job? = null
 
-    /** "Details ›", the to-do row, or the waiting line: opens Details and reads Running now and Recent. */
+    /** Reading Running now a second after a run finishes. */
+    private var runningLater: Job? = null
+
+    /**
+     * "Details ›", the to-do row, or the waiting line: opens Details, with what was read in the background, and reads
+     * Running now and Recent again quietly.
+     */
     fun openDetails() {
         state.update { it.copy(detailsOpen = true) }
         readRunning()
@@ -1212,46 +1229,68 @@ class HomeViewModel(
     }
 
     fun closeDetails() {
-        recentRead?.cancel()
         state.update { it.copy(detailsOpen = false) }
     }
 
-    private fun readRunning() {
+    private fun readRunning(after: Long = 0) {
         val today = session ?: return
-        viewModelScope.launch {
-            try {
-                today.readRunning()
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                Log.w(NEEDS_TAG, "couldn't read Running now: ${error.message}")
+        runningLater?.cancel()
+        val job =
+            viewModelScope.launch {
+                delay(after)
+                try {
+                    today.readRunning()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(NEEDS_TAG, "couldn't read Running now: ${error.message}")
+                }
+                state.update { it.copy(runningRead = true) }
             }
-        }
+        if (after > 0) runningLater = job
     }
 
     private fun readRecent(after: Long = 0) {
         val today = session ?: return
-        recentRead?.cancel()
-        recentRead =
+        recentJob?.cancel()
+        recentJob =
             viewModelScope.launch {
                 delay(after)
                 try {
                     val steps = today.recent()
-                    state.update { it.copy(recent = steps) }
+                    state.update { it.copy(recent = steps, recentRead = true) }
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
                     Log.w(NEEDS_TAG, "couldn't read Recent: ${error.message}")
+                    state.update { it.copy(recentRead = true) }
                 }
             }
     }
 
-    /** While Details is open: Recent again 1 s after each tool, and Running now again after a reconnect. */
+    /**
+     * Details' reads (app-plan.md, Details › Size and first load): in the background when today's session opens (the
+     * old one's rows go) and a second after each run ends, so the sheet usually opens with them in place; while it's
+     * open, Recent again 1 s after each tool, and Running now again after a reconnect.
+     */
     private fun watchDetails(
         before: TodayState?,
         now: TodayState,
     ) {
-        if (!state.value.detailsOpen || before == null) return
+        val opened = (now.setup as? SessionSetup.Ready)?.sessionId
+        if (opened != null && opened != (before?.setup as? SessionSetup.Ready)?.sessionId) {
+            state.update { it.copy(recent = emptyList(), recentRead = false, runningRead = false) }
+            readRunning()
+            readRecent()
+            return
+        }
+        if (before == null) return
+        if (before.busySince != null && now.busySince == null) {
+            readRecent(after = RECENT_DELAY_MS)
+            readRunning(after = RECENT_DELAY_MS)
+            return
+        }
+        if (!state.value.detailsOpen) return
         if (now.toolEvents != before.toolEvents) readRecent(after = RECENT_DELAY_MS)
         if (now.streamUp && !before.streamUp) readRunning()
     }
@@ -1338,7 +1377,6 @@ class HomeViewModel(
                 it.copy(
                     needs = null,
                     detailsOpen = false,
-                    recent = emptyList(),
                     goalSheet = null,
                     draftMenu = false,
                     notice = if (outcome == NewSessionOutcome.Started) HomeNotice.NewSession else it.notice,
@@ -1957,7 +1995,7 @@ private const val NEEDS_TAG = "HexCode.Needs"
 /** After a reply, the next pending item's sheet opens this much later. */
 const val NEXT_NEEDS_MS = 300L
 
-/** Details reads Recent again this long after a tool finishes. */
+/** Details reads Recent again this long after a tool finishes, and Recent and Running now after a run ends. */
 private const val RECENT_DELAY_MS = 1_000L
 
 /** Stop needs this long a hold; a hold shorter than [STOP_TAP_MS] is a tap ("Hold to stop"). */

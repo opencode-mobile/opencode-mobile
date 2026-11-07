@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexTheme
+import kotlinx.coroutines.delay
 
 // The component gallery's samples: every token group and every component in designsystem/, in each of its states.
 // The gallery (Settings › Developer) and the previews (HexComponentPreviews.kt) both draw from [HexComponentSamples],
@@ -636,7 +638,7 @@ private fun PanelContent(translucent: Boolean) {
 }
 
 /** How the sample sheet looks: two actions, a title only, or the request head (with the approval's amber edge). */
-private enum class SheetLook { Actions, TitleOnly, Question, Approval }
+private enum class SheetLook { Actions, TitleOnly, Question, Approval, Medium }
 
 /** The sheet in a box of its own; [open] shows it at once (the previews), otherwise Show sheet does. */
 @Composable
@@ -660,6 +662,7 @@ internal fun SheetSample(open: Boolean = false) {
                 SheetLook.TitleOnly to "Show sheet, title only",
                 SheetLook.Question to "Request head, with a count",
                 SheetLook.Approval to "Request head, amber edge, footer",
+                SheetLook.Medium to "Half height, a spinner, then its rows",
             ).forEach { (kind, label) ->
                 HexButton(
                     onClick = {
@@ -671,6 +674,13 @@ internal fun SheetSample(open: Boolean = false) {
             }
         }
         val request = look == SheetLook.Question || look == SheetLook.Approval
+        // The half-height sheet shows its spinner for a moment each time it opens, as Details before its first reads.
+        var loading by remember { mutableStateOf(false) }
+        LaunchedEffect(visible, look) {
+            loading = visible && look == SheetLook.Medium
+            delay(1_200)
+            loading = false
+        }
         HexSheet(
             visible = visible,
             onDismiss = { visible = false },
@@ -700,6 +710,8 @@ internal fun SheetSample(open: Boolean = false) {
                     null
                 },
             amberEdge = look == SheetLook.Approval,
+            size = if (look == SheetLook.Medium) HexSheetSize.Medium else HexSheetSize.Fit,
+            loading = loading,
             footer =
                 if (look == SheetLook.Approval) {
                     {

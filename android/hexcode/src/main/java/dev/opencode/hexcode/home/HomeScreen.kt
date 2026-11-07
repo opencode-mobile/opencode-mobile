@@ -44,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,6 +94,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.hexcode.R
+import dev.opencode.hexcode.app.ColdStart
 import dev.opencode.hexcode.designsystem.FullSpeed
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexMotion
@@ -106,6 +108,8 @@ import dev.opencode.hexcode.designsystem.components.HexChunkRow
 import dev.opencode.hexcode.designsystem.components.HexChunkRowState
 import dev.opencode.hexcode.designsystem.components.HexDot
 import dev.opencode.hexcode.designsystem.components.HexDotTone
+import dev.opencode.hexcode.designsystem.components.HexGoalLine
+import dev.opencode.hexcode.designsystem.components.HexGoalLineState
 import dev.opencode.hexcode.designsystem.components.HexHoldHint
 import dev.opencode.hexcode.designsystem.components.HexIconButton
 import dev.opencode.hexcode.designsystem.components.HexIconButtonTone
@@ -220,16 +224,23 @@ fun HomeScreen(
                     HexRoundButton(HexIcons.gear, stringResource(R.string.home_settings), onClick = onSettings)
                 }
                 // The goal line (`.goalline`): hidden while a take records, while there's a draft, and while an Ask shows.
+                // Its height is always held, also while it's empty or hidden, so nothing under it moves when it fills in
+                // (app-plan.md, Home › Cold start).
                 val goalLine = today.goalLine.takeIf { today.setup is SessionSetup.Ready }
-                AnimatedVisibility(
-                    goalLine != null && !state.recording && state.draft.isEmpty && today.ask == null,
-                    enter = fadeIn(HexTheme.motion.fade()),
-                    exit = fadeOut(HexTheme.motion.fade()),
-                ) {
-                    if (goalLine !=
-                        null
+                Box(Modifier.padding(start = edge, end = edge, top = 2.dp)) {
+                    HexGoalLine(
+                        HexGoalLineState.Empty,
+                        stringResource(R.string.goal_line_empty),
+                        onClick = {},
+                        modifier = Modifier.alpha(0f).clearAndSetSemantics {},
+                    )
+                    // Not the column's own AnimatedVisibility: this one is in the slot's Box.
+                    androidx.compose.animation.AnimatedVisibility(
+                        goalLine != null && !state.recording && state.draft.isEmpty && today.ask == null,
+                        enter = fadeIn(HexTheme.motion.fade()),
+                        exit = fadeOut(HexTheme.motion.fade()),
                     ) {
-                        GoalLineRow(goalLine, today.goal, vm::openGoal, Modifier.padding(start = edge, end = edge, top = 2.dp))
+                        if (goalLine != null) GoalLineRow(goalLine, today.goal, vm::openGoal)
                     }
                 }
                 // The status card and the whole draft block are centred between the top bar and the dock
@@ -244,6 +255,7 @@ fun HomeScreen(
                         ) { empty ->
                             Column(Modifier.fillMaxSize().padding(horizontal = edge)) {
                                 if (empty) {
+                                    // The card fades in when it arrives after the splash went (Cold start).
                                     StatusArea(
                                         today,
                                         now,
@@ -253,6 +265,7 @@ fun HomeScreen(
                                         serverName = serverName,
                                         onPairAgain = onPairAgain,
                                         onReadYou = { reader = ReaderOpen.YouSaid },
+                                        modifier = Modifier.fadeInOnArrival(ColdStart.cardStage(today)),
                                     )
                                 } else {
                                     // The whole draft block is centred between the top bar and the dock (Long drafts).
@@ -1368,4 +1381,27 @@ private fun Modifier.bleed(each: Dp): Modifier =
 private fun clock(ms: Long): String {
     val seconds = (ms.coerceAtLeast(0) / 1000).toInt()
     return "%d:%02d".format(seconds / 60, seconds % 60)
+}
+
+/**
+ * Fades the content in over 0.2 s each time [stage] steps up after the first composition (instant with Reduce Motion);
+ * what's there at the first composition, as when the splash goes, is just there.
+ */
+@Composable
+private fun Modifier.fadeInOnArrival(stage: Int): Modifier {
+    val reduced = HexMotion.reduced
+    val fade = HexTheme.motion.fade<Float>()
+    val alpha = remember { Animatable(1f) }
+    var last by remember { mutableIntStateOf(stage) }
+    LaunchedEffect(stage) {
+        val up = stage > last
+        last = stage
+        if (up && !reduced) {
+            alpha.snapTo(0f)
+            alpha.animateTo(1f, fade)
+        } else {
+            alpha.snapTo(1f)
+        }
+    }
+    return graphicsLayer { this.alpha = alpha.value }
 }

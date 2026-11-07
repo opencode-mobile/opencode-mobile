@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FF0E0F11</color>
-    <color name="shell_background">#FF0B0C0E</color>
+    <!-- The app's `bg` (HexColors.Light / Dark): the splash and the window behind the first frame. -->
+    <color name="shell_background">#FFFBFBFC</color>
 </resources>
