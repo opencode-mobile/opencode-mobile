@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -158,6 +160,8 @@ internal fun StatusArea(
     serverName: String? = null,
     /** Signed out's Pair again. */
     onPairAgain: () -> Unit = {},
+    /** "N words · Read all ›" under a clamped You line. */
+    onReadYou: () -> Unit = {},
 ) {
     val summary = today.summary
     val links = Links(computer, onOpenLink)
@@ -167,7 +171,17 @@ internal fun StatusArea(
             today.busySince != null -> CardPhase.Working
             else -> null
         }
-    val work = Work(today.todos, today.running(now), today.you, vm::addToDraft, phase, vm::openDetails, youGoal = today.youGoal)
+    val work =
+        Work(
+            today.todos,
+            today.running(now),
+            today.you,
+            vm::addToDraft,
+            phase,
+            vm::openDetails,
+            youGoal = today.youGoal,
+            onReadYou = onReadYou,
+        )
     val nowLines =
         when (val card = summary.summary) {
             is StatusSummary.Card -> card.now
@@ -352,6 +366,8 @@ private class Work(
     val onDetails: () -> Unit = {},
     /** [you] is a goal set from this phone: "Goal: “…”". */
     val youGoal: Boolean = false,
+    /** Opens the reader with the whole message. */
+    val onReadYou: () -> Unit = {},
 )
 
 /** What the label over Now adds while the session isn't idle. */
@@ -396,11 +412,11 @@ private fun Card(
     when {
         // The message just sent stands in for Next until the card made after its run (Just sent); it isn't tappable.
         you != null ->
-            Text(
+            YouLine(
                 stringResource(if (work.youGoal) R.string.home_you_goal else R.string.home_summary_you, you),
-                style = HexTheme.type.body,
-                color = colors.text3,
-                modifier = Modifier.alpha(dim),
+                you,
+                dim,
+                work.onReadYou,
             )
         next != null ->
             HexCodeText(
@@ -431,6 +447,44 @@ private fun Card(
     }
     TodoRow(work.todos, work.onDetails)
     Meta(label, onRefresh) { DetailsLink(work.running, onClick = work.onDetails) }
+}
+
+/**
+ * The message just sent (app-plan.md, Just sent): the whole of it up to [YOU_LINES] lines; a longer one is clamped with
+ * an ellipsis, and "N words · Read all ›" under it opens the reader. Not tappable otherwise.
+ */
+@Composable
+private fun YouLine(
+    line: String,
+    message: String,
+    dim: Float,
+    onReadAll: () -> Unit,
+) {
+    val colors = HexTheme.colors
+    var clamped by remember(line) { mutableStateOf(false) }
+    Text(
+        line,
+        style = HexTheme.type.body,
+        color = colors.text3,
+        maxLines = YOU_LINES,
+        overflow = TextOverflow.Ellipsis,
+        onTextLayout = { clamped = it.hasVisualOverflow },
+        modifier = Modifier.alpha(dim),
+    )
+    if (clamped) {
+        val words = Words.count(message)
+        Text(
+            pluralStringResource(R.plurals.home_you_read_all, words, words),
+            style = HexTheme.type.footnote,
+            color = colors.text3,
+            modifier =
+                Modifier
+                    .alpha(dim)
+                    .clip(RoundedCornerShape(HexTheme.radius.s))
+                    .clickable(role = Role.Button, onClick = onReadAll)
+                    .padding(vertical = 4.dp),
+        )
+    }
 }
 
 /**

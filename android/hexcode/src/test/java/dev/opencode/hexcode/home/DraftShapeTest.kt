@@ -40,6 +40,27 @@ class DraftShapeTest {
 
     @Test
     fun aSingleChunkNeverBecomesAList() {
-        assertEquals(DraftShape.Scrolling, DraftShape.choose(chunks = 1, characters = 2_000) { false })
+        assertEquals(DraftShape.Window, DraftShape.choose(chunks = 1, characters = 2_000) { false })
+    }
+
+    @Test
+    fun aSingleChunkLongerThanSevenLinesAt21IsTheWindowEvenIfItWouldFitSmaller() {
+        assertEquals(DraftShape.Window, DraftShape.choose(chunks = 1, characters = 900, beyondWindow = { true }) { true })
+        // Up to seven lines it stays running text.
+        assertEquals(
+            DraftShape.Running(DraftSize.Medium),
+            DraftShape.choose(chunks = 1, characters = 400, beyondWindow = { false }) { true },
+        )
+        // Two chunks are never a window.
+        assertEquals(
+            DraftShape.Running(DraftSize.Medium),
+            DraftShape.choose(chunks = 2, characters = 900, beyondWindow = { true }) { true },
+        )
+    }
+
+    @Test
+    fun wordsAreCountedBetweenSpaces() {
+        assertEquals(0, Words.count("  "))
+        assertEquals(6, Words.count("Make the quiz  three\nrounds long"))
     }
 }

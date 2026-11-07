@@ -22,8 +22,11 @@ sealed interface DraftShape {
         val size: DraftSize,
     ) : DraftShape
 
-    /** A single chunk too long even at 17: running text at 17 that scrolls inside the draft area, kept at its end. */
-    data object Scrolling : DraftShape
+    /**
+     * A single chunk longer than [WINDOW_LINES] lines at 21, or too long even at 17: a 7-line window at 21 resting on
+     * the newest words, which scrolls back with its top edge fading, and "Read all · N words" under it.
+     */
+    data object Window : DraftShape
 
     /** One row per chunk, at most 8 visible. */
     data object Rows : DraftShape
@@ -35,20 +38,34 @@ sealed interface DraftShape {
         /** More chunks than this are rows whatever their length. */
         const val RUNNING_CHUNKS = 3
 
+        /** The long single chunk's window: this many lines at 21. */
+        const val WINDOW_LINES = 7
+
         /**
-         * The draft's shape: rows for more than [RUNNING_CHUNKS] chunks; else running text at the largest size from
-         * the start that [fits] (measured as drawn); if none does, rows for 2 or more chunks, and for a single chunk
-         * running text that scrolls. A single chunk never becomes a list.
+         * The draft's shape (app-plan.md, Long drafts): rows for more than [RUNNING_CHUNKS] chunks; a single chunk
+         * [beyondWindow] (longer than [WINDOW_LINES] lines at 21) is the [Window]; else running text at the largest
+         * size from the start that [fits] (measured as drawn); if none does, rows for 2 or more chunks, and the
+         * [Window] for a single chunk. A single chunk never becomes a list.
          */
         fun choose(
             chunks: Int,
             characters: Int,
+            beyondWindow: () -> Boolean = { false },
             fits: (DraftSize) -> Boolean,
         ): DraftShape {
             if (chunks > RUNNING_CHUNKS) return Rows
+            if (chunks <= 1 && characters > DRAFT_CHARACTERS && beyondWindow()) return Window
             val start = if (characters <= DRAFT_CHARACTERS) DraftSize.Draft else DraftSize.Medium
             for (size in DraftSize.entries.drop(start.ordinal)) if (fits(size)) return Running(size)
-            return if (chunks >= 2) Rows else Scrolling
+            return if (chunks >= 2) Rows else Window
         }
     }
 }
+
+/** Words as the reader counts them ("Read all · 235 words"): runs of letters between spaces. */
+object Words {
+    fun count(text: String): Int = text.split(Regex("""\s+""")).count { it.isNotEmpty() }
+}
+
+/** The You line after a send (app-plan.md, Just sent): the whole message up to this many lines, then "Read all". */
+const val YOU_LINES = 3

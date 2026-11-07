@@ -24,7 +24,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -32,12 +31,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +53,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
@@ -61,6 +68,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -93,6 +101,8 @@ import dev.opencode.hexcode.designsystem.components.HexDotTone
 import dev.opencode.hexcode.designsystem.components.HexHoldHint
 import dev.opencode.hexcode.designsystem.components.HexIconButton
 import dev.opencode.hexcode.designsystem.components.HexIconButtonTone
+import dev.opencode.hexcode.designsystem.components.HexReader
+import dev.opencode.hexcode.designsystem.components.HexReaderFoot
 import dev.opencode.hexcode.designsystem.components.HexRoundButton
 import dev.opencode.hexcode.designsystem.components.HexRow
 import dev.opencode.hexcode.designsystem.components.HexSegment
@@ -144,6 +154,8 @@ fun HomeScreen(
     var attachOpen by remember { mutableStateOf(false) }
     // A `localhost` tile's page, in the in-app browser over home.
     var browser by remember { mutableStateOf<BrowserPage?>(null) }
+    // The reader: the whole draft ("Draft") or the message just sent ("You said").
+    var reader by remember { mutableStateOf<ReaderOpen?>(null) }
     val attach = rememberAttachPickers(state.draft.roomForImages, vm::attach)
     val askMic =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -172,7 +184,7 @@ fun HomeScreen(
         ) {
             // Behind an open sheet or the browser, nothing of home is reachable with TalkBack.
             val covered =
-                attachOpen || state.detailsOpen || state.needs != null || state.goalSheet != null || browser != null
+                attachOpen || state.detailsOpen || state.needs != null || state.goalSheet != null || browser != null || reader != null
             Column(
                 Modifier
                     .fillMaxSize()
@@ -204,10 +216,9 @@ fun HomeScreen(
                         GoalLineRow(goalLine, today.goal, vm::openGoal, Modifier.padding(start = edge, end = edge, top = 2.dp))
                     }
                 }
-                // The status card is centred between the top bar and the dock (`.fx-body.centred`); the draft starts at a
-                // line 26 % down that space (the prototype's `.fx-sp`), so it grows downward while you talk.
-                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                    val hang = maxHeight * 0.26f
+                // The status card and the whole draft block are centred between the top bar and the dock
+                // (`.fx-body.centred`, app-plan.md, Long drafts).
+                Box(Modifier.weight(1f).fillMaxWidth()) {
                     Column(Modifier.fillMaxSize()) {
                         Crossfade(
                             state.draft.isEmpty,
@@ -225,10 +236,13 @@ fun HomeScreen(
                                         onOpenLink = { url, label -> openLink(context, url, label, computer) { browser = it } },
                                         serverName = serverName,
                                         onPairAgain = onPairAgain,
+                                        onReadYou = { reader = ReaderOpen.YouSaid },
                                     )
                                 } else {
-                                    Spacer(Modifier.height(hang))
-                                    DraftView(state, vm)
+                                    // The whole draft block is centred between the top bar and the dock (Long drafts).
+                                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                                        DraftView(state, vm, onReadAll = { reader = ReaderOpen.Draft })
+                                    }
                                 }
                             }
                         }
@@ -462,6 +476,7 @@ fun HomeScreen(
                 onClose = { attachOpen = false },
             )
             DetailsSheet(state, vm)
+            DraftReader(reader, state, vm, onClose = { reader = null })
             NeedsSheets(state, vm, micReady)
             GoalSheetView(state, vm, micReady)
             // Notices and the stop warning show over any open sheet.
@@ -681,13 +696,70 @@ private fun HexTalkRelease.toTalkRelease(): TalkRelease =
 private fun ColumnScope.DraftView(
     state: HomeUiState,
     vm: HomeViewModel,
+    onReadAll: () -> Unit,
 ) {
     val draft = state.draft
     DraftLabel(state)
     if (draft.images.isNotEmpty()) AttachRow(draft.images, state.imageInput?.takeIf { !it.sees }?.model, vm::removeImage)
     // The draft takes the room between its line and the actions above the dock (app-plan.md, Long drafts).
-    DraftBody(draft, vm::selectChunk, Modifier.padding(top = 14.dp).weight(1f, fill = false))
+    DraftBody(draft, vm::selectChunk, onReadAll, Modifier.padding(top = 14.dp).weight(1f, fill = false))
     if (!draft.isListening) DraftActions(state, vm)
+}
+
+/** Which text the reader shows. */
+private enum class ReaderOpen { Draft, YouSaid }
+
+/**
+ * The reader (`HexReader`, app-plan.md, Long drafts and Just sent): the whole draft, one paragraph per take, with ✕ and
+ * Send at its foot; or the message just sent, "You said", without them.
+ */
+@Composable
+private fun BoxScope.DraftReader(
+    open: ReaderOpen?,
+    state: HomeUiState,
+    vm: HomeViewModel,
+    onClose: () -> Unit,
+) {
+    val draft = state.draft
+    val you = state.today.you
+    // Nothing left to read closes it: the draft was sent or cleared, or the You line went.
+    LaunchedEffect(open, draft.isEmpty, you) {
+        if ((open == ReaderOpen.Draft && draft.isEmpty) || (open == ReaderOpen.YouSaid && you == null)) onClose()
+    }
+    val text = if (open == ReaderOpen.YouSaid) you.orEmpty() else draft.text
+    val words = Words.count(text)
+    val wordsText = pluralStringResource(R.plurals.reader_words, words, words)
+    HexReader(
+        visible = open != null && text.isNotBlank(),
+        title = stringResource(if (open == ReaderOpen.YouSaid) R.string.reader_you_said else R.string.draft_title),
+        meta = if (open == ReaderOpen.YouSaid) wordsText else "${clock(draft.durationMs)} · $wordsText",
+        paragraphs =
+            if (open == ReaderOpen.YouSaid) {
+                text.split(Regex("""\n\s*\n""")).map { it.trim() }.filter { it.isNotEmpty() }
+            } else {
+                draft.chunks.mapNotNull { it.text?.trim()?.ifEmpty { null } }
+            },
+        doneLabel = stringResource(R.string.common_done),
+        onDone = onClose,
+        foot =
+            if (open == ReaderOpen.Draft) {
+                HexReaderFoot(
+                    discardLabel = stringResource(R.string.draft_clear),
+                    onDiscard = {
+                        onClose()
+                        vm.clearDraft()
+                    },
+                    sendLabel = stringResource(R.string.home_send),
+                    onSend = {
+                        onClose()
+                        vm.send()
+                    },
+                    sendEnabled = state.canSend,
+                )
+            } else {
+                null
+            },
+    )
 }
 
 /**
@@ -699,6 +771,7 @@ private fun ColumnScope.DraftView(
 private fun DraftBody(
     draft: Draft,
     onSelect: (Int) -> Unit,
+    onReadAll: () -> Unit,
     modifier: Modifier,
 ) {
     val type = HexTheme.type
@@ -714,8 +787,25 @@ private fun DraftBody(
     SubcomposeLayout(modifier) { constraints ->
         val loose = constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity)
         val room = if (constraints.hasBoundedHeight) constraints.maxHeight else Int.MAX_VALUE
+        val medium = styles.getValue(DraftSize.Medium)
+        // The line height is in em (1.28), or sp, as the type tokens give it.
+        val line =
+            medium.lineHeight.let { height ->
+                when {
+                    height.isEm -> medium.fontSize.toPx() * height.value
+                    height.isSp -> height.toPx()
+                    else -> medium.fontSize.toPx() * 1.3f
+                }
+            }
+        val windowLines = line * DraftShape.WINDOW_LINES
         val shape =
-            DraftShape.choose(draft.shown.size, draft.characters) { size ->
+            DraftShape.choose(
+                draft.shown.size,
+                draft.characters,
+                beyondWindow = {
+                    subcompose("window") { DraftText(draft, onSelect, medium) }.first().measure(loose).height > windowLines * 1.04f
+                },
+            ) { size ->
                 val measured = subcompose(size) { DraftText(draft, onSelect, styles.getValue(size)) }.first().measure(loose)
                 measured.height <= room
             }
@@ -723,7 +813,7 @@ private fun DraftBody(
             subcompose("shown") {
                 when (shape) {
                     is DraftShape.Running -> DraftText(draft, onSelect, styles.getValue(shape.size))
-                    DraftShape.Scrolling -> ScrollingDraft(draft, onSelect, styles.getValue(DraftSize.Fit))
+                    DraftShape.Window -> DraftWindow(draft, onSelect, medium, windowLines.toDp(), onReadAll)
                     DraftShape.Rows -> ChunkList(draft, onSelect)
                 }
             }.first().measure(constraints.copy(minHeight = 0))
@@ -731,17 +821,61 @@ private fun DraftBody(
     }
 }
 
-/** A single chunk too long even at 17: it scrolls inside the draft's room, kept at its newest words as it grows. */
+/**
+ * A long single take (app-plan.md, Long drafts): a 7-line window at 21 resting on the newest words, which scrolls
+ * back; its top edge fades while there's more above, never a hard clip. Under it "Read all · N words" opens the reader.
+ */
 @Composable
-private fun ScrollingDraft(
+private fun DraftWindow(
     draft: Draft,
     onSelect: (Int) -> Unit,
     style: TextStyle,
+    height: Dp,
+    onReadAll: () -> Unit,
 ) {
     val scroll = rememberScrollState()
     LaunchedEffect(draft.characters) { scroll.scrollTo(scroll.maxValue) }
     LaunchedEffect(scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
-    Box(Modifier.verticalScroll(scroll)) { DraftText(draft, onSelect, style) }
+    val fade = with(LocalDensity.current) { (style.fontSize * 2.6f).toPx() }
+    Column {
+        Box(
+            Modifier
+                .weight(1f, fill = false)
+                .heightIn(max = height)
+                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                .drawWithContent {
+                    drawContent()
+                    // No fade once scrolled to the start.
+                    if (scroll.value > 0) {
+                        drawRect(
+                            Brush.verticalGradient(0f to Color.Transparent, fade / size.height to Color.Black),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    }
+                }.verticalScroll(scroll),
+        ) { DraftText(draft, onSelect, style) }
+        if (!draft.isListening) {
+            val words = Words.count(draft.text)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier =
+                    Modifier
+                        .padding(top = 10.dp)
+                        .clip(RoundedCornerShape(HexTheme.radius.s))
+                        .clickable(role = Role.Button, onClick = onReadAll)
+                        .heightIn(min = 32.dp)
+                        .padding(end = 6.dp),
+            ) {
+                Icon(HexIcons.chevU, null, tint = HexTheme.colors.text3, modifier = Modifier.size(HexTheme.size.iconSmall))
+                Text(
+                    pluralStringResource(R.plurals.draft_read_all, words, words),
+                    style = HexTheme.type.footnote,
+                    color = HexTheme.colors.text3,
+                )
+            }
+        }
+    }
 }
 
 /** "● Recording 0:04", "Transcribing on this phone…", or "Draft · 2 chunks · 0:12". */
