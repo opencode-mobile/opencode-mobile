@@ -18,7 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.ReducedMotion
 
 /** What a [HexDot] says. Red and syncing pulse. */
 enum class HexDotTone { Neutral, Green, Amber, Red, Syncing }
@@ -43,8 +45,10 @@ fun HexDot(
             HexDotTone.Syncing -> 1000
             else -> 0
         }
+    // With Reduce Motion the pulse rests at full colour, not wherever Compose would end it.
+    val reduced = HexMotion.reduced
     val alpha =
-        if (pulse > 0) {
+        if (pulse > 0 && !reduced) {
             val transition = rememberInfiniteTransition(label = "dot")
             val value by transition.animateFloat(
                 initialValue = 1f,
@@ -71,8 +75,10 @@ internal fun Modifier.pressScale(
     pressed: Float,
 ): Modifier {
     val isPressed by source.collectIsPressedAsState()
+    // Colour only with Reduce Motion: no scale.
+    val reduced = HexMotion.reduced
     val scale by androidx.compose.animation.core.animateFloatAsState(
-        if (isPressed) pressed else 1f,
+        if (isPressed) ReducedMotion.pressScale(reduced, pressed) else 1f,
         HexTheme.motion.press(),
         label = "press",
     )

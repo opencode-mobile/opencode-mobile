@@ -36,7 +36,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.ReducedMotion
 
 /** A [HexAskMessage]'s state. */
 enum class HexAskState {
@@ -138,12 +140,14 @@ fun HexAskMessage(
                 when (state) {
                     HexAskState.Asking -> {
                         val transition = rememberInfiniteTransition(label = "ask-wait")
-                        val alpha by transition.animateFloat(
+                        val pulse by transition.animateFloat(
                             1f,
                             0.45f,
                             infiniteRepeatable(tween(550), RepeatMode.Reverse),
                             label = "ask-wait-alpha",
                         )
+                        // Steady `text3` with Reduce Motion.
+                        val alpha = ReducedMotion.pulse(HexMotion.reduced, pulse)
                         Text(labels.status, style = HexTheme.type.row, color = colors.text3, maxLines = 1, modifier = Modifier.alpha(alpha))
                     }
                     HexAskState.Failed, HexAskState.Empty ->

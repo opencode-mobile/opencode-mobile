@@ -45,11 +45,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
 
 /** A card (`.panel`): `panel` fill, `line` border, radius 12. [translucent] lets a camera view show through a little. */
@@ -105,10 +107,13 @@ fun BoxScope.HexSheet(
     request: HexSheetRequest? = null,
     amberEdge: Boolean = false,
     footer: (@Composable ColumnScope.() -> Unit)? = null,
+    /** A head of the sheet's own in place of the centred title ([HexReader]'s). */
+    head: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = HexTheme.colors
     val motion = HexTheme.motion
+    val reduced = HexMotion.reduced
     BackHandler(enabled = visible, onBack = onDismiss)
     AnimatedVisibility(visible, enter = fadeIn(motion.fade()), exit = fadeOut(motion.fade())) {
         Box(
@@ -119,10 +124,11 @@ fun BoxScope.HexSheet(
                 .clickable(remember { MutableInteractionSource() }, null, onClick = onDismiss),
         )
     }
+    // With Reduce Motion it fades instead of sliding up (app-plan.md, Motion and Reduce Motion).
     AnimatedVisibility(
         visible,
-        enter = slideInVertically(motion.sheet()) { it },
-        exit = slideOutVertically(motion.sheet()) { it },
+        enter = if (reduced) fadeIn(motion.fade()) else slideInVertically(motion.sheet()) { it },
+        exit = if (reduced) fadeOut(motion.fade()) else slideOutVertically(motion.sheet()) { it },
         modifier = Modifier.align(Alignment.BottomCenter),
     ) {
         val radius = HexTheme.radius.sheet
@@ -140,6 +146,8 @@ fun BoxScope.HexSheet(
                     .background(colors.panel)
                     .border(1.dp, colors.line2, shape)
                     .clickable(remember { MutableInteractionSource() }, null) {}
+                    // TalkBack hears the sheet open by its title.
+                    .semantics { paneTitle = title }
                     .navigationBarsPadding()
                     .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 18.dp),
         ) {
@@ -150,7 +158,9 @@ fun BoxScope.HexSheet(
                     .size(width = 36.dp, height = 4.dp)
                     .background(colors.line2, CircleShape),
             )
-            if (request != null) {
+            if (head != null) {
+                head()
+            } else if (request != null) {
                 RequestHead(title, request)
             } else {
                 Row(

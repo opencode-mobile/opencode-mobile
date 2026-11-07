@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
 import kotlinx.coroutines.delay
 
@@ -143,7 +144,8 @@ fun HexToastHost(
     val motion = HexTheme.motion
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(motion.fade()) + slideInVertically(motion.fade()) { -it / 4 },
+        // Fade only with Reduce Motion.
+        enter = if (HexMotion.reduced) fadeIn(motion.fade()) else fadeIn(motion.fade()) + slideInVertically(motion.fade()) { -it / 4 },
         exit = fadeOut(motion.fade()),
         modifier = modifier,
     ) {

@@ -28,6 +28,8 @@ val LocalHexMotion = staticCompositionLocalOf { HexMotion() }
 @Composable
 fun HexTheme(
     dark: Boolean = isSystemInDarkTheme(),
+    /** Reduce Motion ([HexMotion.reduced]); observed from the system unless given. */
+    reduced: Boolean = rememberReduceMotion(),
     content: @Composable () -> Unit,
 ) {
     val colors = if (dark) HexColors.Dark else HexColors.Light
@@ -70,6 +72,7 @@ fun HexTheme(
         CompositionLocalProvider(
             LocalHexColors provides colors,
             LocalHexTypography provides type,
+            LocalReduceMotion provides reduced,
             LocalContentColor provides colors.text1,
             LocalTextStyle provides type.body,
             LocalTextSelectionColors provides TextSelectionColors(handleColor = colors.text1, backgroundColor = colors.tint(20f)),

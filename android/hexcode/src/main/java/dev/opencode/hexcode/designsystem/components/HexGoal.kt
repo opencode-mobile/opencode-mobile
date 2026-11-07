@@ -35,7 +35,9 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.ReducedMotion
 
 /** A [HexGoalLine]'s look: no goal, active (working or waiting), paused, or done. */
 enum class HexGoalLineState { Empty, Active, Waiting, Paused, Done }
@@ -148,12 +150,14 @@ fun HexGoalBox(
 @Composable
 private fun Caret(modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "goal-caret")
-    val alpha by transition.animateFloat(
+    val pulse by transition.animateFloat(
         1f,
         0.35f,
         infiniteRepeatable(tween(450, easing = LinearEasing), RepeatMode.Reverse),
         label = "goal-caret-alpha",
     )
+    // A steady caret with Reduce Motion.
+    val alpha = ReducedMotion.pulse(HexMotion.reduced, pulse)
     Box(
         modifier
             .width(2.dp)

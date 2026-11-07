@@ -12,6 +12,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -46,6 +48,7 @@ import dev.opencode.hexcode.app.HexFirstRunEnvironment
 import dev.opencode.hexcode.app.HexPrefs
 import dev.opencode.hexcode.app.HexServices
 import dev.opencode.hexcode.designsystem.HexGallery
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.firstrun.BrowseScreen
 import dev.opencode.hexcode.firstrun.FirstRunFlow
@@ -369,9 +372,17 @@ private fun AfterFirstRun(
             page = Page.Settings
         }
     }
+    val reduced = HexMotion.reduced
     AnimatedContent(
         targetState = shown,
         transitionSpec = {
+            // With Reduce Motion pages fade instead of sliding (app-plan.md, Motion and Reduce Motion).
+            if (reduced) {
+                return@AnimatedContent (fadeIn(tween(200)) togetherWith fadeOut(tween(200))).apply {
+                    targetContentZIndex =
+                        targetState.depth.toFloat()
+                }
+            }
             // Deeper pages push in from the side, as a navigation stack does; going back slides them out again.
             // The deeper page is always on top: pushing slides it in over the page below, which drifts a little to the
             // left; going back slides it off to the right, uncovering the page below.

@@ -1,11 +1,5 @@
 package dev.opencode.hexcode.designsystem.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -165,13 +159,8 @@ private fun StateIcon(state: HexAgentState) {
                     .background(colors.amber, CircleShape),
             )
         HexAgentState.Working, HexAgentState.Reconnecting -> {
-            val transition = rememberInfiniteTransition(label = "state")
-            val turn by transition.animateFloat(
-                0f,
-                360f,
-                infiniteRepeatable(tween(if (state == HexAgentState.Working) 1600 else 900, easing = LinearEasing), RepeatMode.Restart),
-                label = "state-turn",
-            )
+            // It means "working", so it turns with Reduce Motion too.
+            val turn = rememberTurn(if (state == HexAgentState.Working) 1600 else 900)
             Icon(
                 HexIcons.spin,
                 null,

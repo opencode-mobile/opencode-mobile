@@ -76,7 +76,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.hexcode.R
+import dev.opencode.hexcode.designsystem.FullSpeed
 import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.designsystem.components.HexButton
 import dev.opencode.hexcode.designsystem.components.HexButtonStyle
@@ -114,6 +116,7 @@ import dev.opencode.hexcode.session.AgentStatus
 import dev.opencode.hexcode.session.GoalStatus
 import dev.opencode.hexcode.session.SessionSetup
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * Home: the top bar's state slot and settings, today's status card (or the draft while there is one, as the
@@ -152,7 +155,7 @@ fun HomeScreen(
         micAllowed
     }
     val edge = HexTheme.space.screenHome
-    val still = reduceMotion()
+    val still = HexMotion.reduced
     StopHaptics(state)
     Box(Modifier.fillMaxSize().background(HexTheme.colors.background)) {
         Box(
@@ -536,7 +539,8 @@ private fun HoldHintLine(
             },
     ) {
         HexHoldHint(
-            lean = hold.lean,
+            // Fade only with Reduce Motion: it doesn't follow the drag.
+            lean = if (HexMotion.reduced) 0f else hold.lean,
             armed = hold.armed,
             slideLabel = stringResource(R.string.home_hold_slide_lock),
             releaseLockLabel = stringResource(R.string.home_hold_release_lock),
@@ -587,7 +591,8 @@ private fun StopButton(
     LaunchedEffect(state.stopHolding) {
         if (state.stopHolding) {
             ring.snapTo(0f)
-            ring.animateTo(1f, tween(STOP_HOLD_MS.toInt(), easing = LinearEasing))
+            // The ring carries the time, so it fills with Reduce Motion too.
+            withContext(FullSpeed) { ring.animateTo(1f, tween(STOP_HOLD_MS.toInt(), easing = LinearEasing)) }
         } else {
             ring.snapTo(0f)
         }

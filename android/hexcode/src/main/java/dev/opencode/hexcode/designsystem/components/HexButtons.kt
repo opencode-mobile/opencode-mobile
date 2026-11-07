@@ -44,7 +44,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.ReducedMotion
 
 /**
  * The full-width 50 pt primary button (`.primary`): `solid` fill, radius 12. [loading] shows a spinner beside the
@@ -232,7 +234,12 @@ fun HexIconButton(
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val shape = RoundedCornerShape(HexTheme.radius.l)
-    val scale by animateFloatAsState(if (hold != null) 0.95f else 1f, HexTheme.motion.press(), label = "hold-scale")
+    // No scale with Reduce Motion; the ring still fills.
+    val scale by animateFloatAsState(
+        if (hold != null) ReducedMotion.pressScale(HexMotion.reduced, 0.95f) else 1f,
+        HexTheme.motion.press(),
+        label = "hold-scale",
+    )
     val ring = colors.red
     val radius = HexTheme.radius.l
     Box(

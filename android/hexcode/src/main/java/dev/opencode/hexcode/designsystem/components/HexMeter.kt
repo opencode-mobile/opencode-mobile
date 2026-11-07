@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
@@ -18,6 +19,7 @@ import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
 import kotlin.math.PI
 import kotlin.math.exp
@@ -43,6 +45,7 @@ fun HexMeter(
     gap: Dp = 3.dp,
 ) {
     var smoothed by remember { mutableFloatStateOf(0f) }
+    val reduced by rememberUpdatedState(HexMotion.reduced)
     // How long the meter has run (for the wave), and how long since audio came (null before).
     var time by remember { mutableLongStateOf(0L) }
     var sinceAudio by remember { mutableStateOf<Long?>(null) }
@@ -67,7 +70,7 @@ fun HexMeter(
                         smoothed = HexMeterMotion.LISTENING_BASE
                     }
                     sinceAudio = now - audioAt
-                    smoothed = HexMeterMotion.follow(smoothed, target.coerceIn(0f, 1f), dt)
+                    smoothed = HexMeterMotion.follow(smoothed, target.coerceIn(0f, 1f), dt, reduced)
                 }
             }
         }
@@ -85,7 +88,7 @@ fun HexMeter(
             val xn = if (n > 1) i / (n - 1f) else 0.5f
             val envelope = sin(PI * (0.08 + 0.84 * xn)).toFloat().pow(0.6f)
             // Silence rests as dots; each bar position has its own fixed factor, so it looks alive.
-            val shown = HexMeterMotion.blend(HexMeterMotion.listening(i, time), smoothed, sinceAudio)
+            val shown = HexMeterMotion.blend(HexMeterMotion.listening(i, time, reduced), smoothed, sinceAudio)
             val amplitude = if (active) shown * barFactor(i) * envelope else 0.05f
             val height = max(dot, (amplitude * tallest).coerceAtMost(tallest))
             drawRoundRect(
@@ -120,7 +123,10 @@ object HexMeterMotion {
         current: Float,
         target: Float,
         dtMs: Long,
+        /** Reduce Motion: the pose changes at once instead of easing, still following the voice. */
+        reduced: Boolean = false,
     ): Float {
+        if (reduced) return target
         val tau = if (target > current) ATTACK_MS else RELEASE_MS
         return current + (target - current) * (1f - exp(-dtMs / tau))
     }
@@ -139,7 +145,10 @@ object HexMeterMotion {
     fun listening(
         bar: Int,
         timeMs: Long,
-    ): Float = LISTENING_BASE + LISTENING_SWING * sin(2 * PI * (timeMs / 1000.0 * 1.1 - bar / 14.0)).toFloat()
+        /** Reduce Motion: still bars at the wave's mean height. */
+        reduced: Boolean = false,
+    ): Float =
+        if (reduced) LISTENING_BASE else LISTENING_BASE + LISTENING_SWING * sin(2 * PI * (timeMs / 1000.0 * 1.1 - bar / 14.0)).toFloat()
 
     /**
      * What a bar shows: the [listening] wave until audio comes ([sinceAudioMs] null), then [real] blending in over

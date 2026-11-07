@@ -46,7 +46,9 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.ReducedMotion
 
 /** A [HexOption]'s leading mark: a radio (one choice), a checkbox (any), or the mic of a row you hold to dictate. */
 enum class HexOptionMark { Radio, Checkbox, Mic }
@@ -203,12 +205,14 @@ private fun TakeLine(
         Text(label, style = HexTheme.type.caption, color = colors.text2)
         if (take == HexOptionTake.Listening) {
             val transition = rememberInfiniteTransition(label = "caret")
-            val alpha by transition.animateFloat(
+            val pulse by transition.animateFloat(
                 1f,
                 0.35f,
                 infiniteRepeatable(tween(450, easing = LinearEasing), RepeatMode.Reverse),
                 label = "caret-alpha",
             )
+            // A steady caret with Reduce Motion.
+            val alpha = ReducedMotion.pulse(HexMotion.reduced, pulse)
             Box(
                 Modifier
                     .width(2.dp)

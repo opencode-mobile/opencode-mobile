@@ -1,6 +1,5 @@
 package dev.opencode.hexcode.home
 
-import android.provider.Settings
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -50,7 +49,6 @@ import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -63,6 +61,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.designsystem.components.HexAgentState
 import dev.opencode.hexcode.designsystem.components.HexButton
@@ -76,6 +75,7 @@ import dev.opencode.hexcode.designsystem.components.HexProgress
 import dev.opencode.hexcode.designsystem.components.HexProgressStep
 import dev.opencode.hexcode.designsystem.components.HexTileRow
 import dev.opencode.hexcode.designsystem.components.HexTopBar
+import dev.opencode.hexcode.designsystem.components.rememberTurn
 import dev.opencode.hexcode.session.AgentStatus
 import dev.opencode.hexcode.session.NowLine
 import dev.opencode.hexcode.session.PendingItem
@@ -444,7 +444,7 @@ private fun CardLabel(
         }
     val status = template.substringBefore(SUMMARY_MARK)
     val after = template.substringAfter(SUMMARY_MARK, "")
-    val still = reduceMotion()
+    val still = HexMotion.reduced
     val text =
         summaryText(title.takeIf { it.isNotBlank() }.orEmpty(), prefix = status, suffix = after).let { label ->
             if (!still) {
@@ -492,15 +492,6 @@ private fun shine(
 }
 
 private const val SHINE_MS = 2_400
-
-/** Animations are off (developer options or accessibility: animator duration scale 0). */
-@Composable
-internal fun reduceMotion(): Boolean {
-    val context = LocalContext.current
-    return remember {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-    }
-}
 
 /**
  * Now (app-plan.md, Formatting): plain lines are paragraphs 0.35 em apart; bullets a list with a hanging "•" in `text3`
@@ -660,14 +651,7 @@ private fun Refresh(
     ) {
         val turn =
             if (label == RefreshLabel.Updating) {
-                val transition = rememberInfiniteTransition(label = "refresh")
-                transition
-                    .animateFloat(
-                        0f,
-                        360f,
-                        infiniteRepeatable(tween(800, easing = LinearEasing), RepeatMode.Restart),
-                        label = "turn",
-                    ).value
+                rememberTurn(800)
             } else {
                 0f
             }

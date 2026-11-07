@@ -60,6 +60,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import dev.opencode.hexcode.designsystem.FullSpeed
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexTheme
 import kotlinx.coroutines.launch
@@ -297,7 +298,8 @@ fun HexTalkButton(
                             if (next != null && next != hold.armed) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                             hold.armed = next
                             val target = dx
-                            scope.launch {
+                            // Kept with Reduce Motion: the spring steadies a shaky finger and never overshoots.
+                            scope.launch(FullSpeed) {
                                 follow.animateTo(target, spring(dampingRatio = 1f, stiffness = HexTalkButtonDefaults.FOLLOW_STIFFNESS))
                             }
                             if (!change.pressed) break
