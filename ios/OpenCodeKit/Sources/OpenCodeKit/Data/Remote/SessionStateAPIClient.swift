@@ -10,8 +10,9 @@ public nonisolated enum SessionStateAPIError: Error, Equatable {
 /// OpenCode v2 calls for following one session from a phone: find, read and create sessions (with
 /// their location, model and busy time), switch the model, list the session's own pending approvals,
 /// questions and inbox, answer them, stop a run, list the agent's shells, generate text from the
-/// session, and put an instruction entry. See `m2-api-notes.md` and `m4-proposal.md` for the
-/// routes. New calls, separate from OpenCode Mobile's session client.
+/// session, run a command such as `/goal`, read the goal, and put an instruction entry. See
+/// `m2-api-notes.md`, `m4-proposal.md` and `m5-proposal.md` for the routes. New calls, separate
+/// from OpenCode Mobile's session client.
 public nonisolated struct SessionStateAPIClient: Sendable {
     /// `parentID` filter of the session list.
     public nonisolated enum Parent: Sendable, Equatable {
@@ -248,6 +249,41 @@ public nonisolated struct SessionStateAPIClient: Sendable {
     /// it, or cancelling one already delivered, also answers 204.
     public func cancelInbox(sessionID: String, itemID: String) async throws {
         try await sendEmpty(path: "api/session/\(sessionID)/inbox/\(itemID)", method: "DELETE")
+    }
+
+    // MARK: Commands and the goal
+
+    /// `POST /api/session/{id}/command` with `{"name", "text"}` (the field is `text`, not
+    /// `arguments`) and `files` when there are any; no `delivery`, so the command's own default
+    /// applies. `204` on success. `/goal` answers `500 CommandExecutionError` when the goal isn't in
+    /// the state the command needs ("No active goal to pause.") or the text is refused.
+    public func runCommand(sessionID: String, name: String, text: String, files: [PromptFile] = []) async throws {
+        nonisolated struct Body: Encodable {
+            let name: String
+            let text: String
+            let files: [PromptFile]?
+        }
+        try await sendEmpty(
+            path: "api/session/\(sessionID)/command",
+            method: "POST",
+            body: Body(name: name, text: text, files: files.isEmpty ? nil : files)
+        )
+    }
+
+    /// `POST /api/rpc/opencode.goal/get` with `{"input": {"sessionID"}}`: the session's goal, or nil
+    /// when it has none. The goal lives in the server's store, not in the session.
+    public func goal(sessionID: String, directory: String? = nil) async throws -> GoalStateV2? {
+        nonisolated struct Input: Encodable { let sessionID: String }
+        nonisolated struct Body: Encodable { let input: Input }
+        nonisolated struct Reply: Decodable, Sendable { let output: GoalStateV2? }
+        let query = directory.map { [URLQueryItem(name: "location[directory]", value: $0)] } ?? []
+        let reply: Reply = try await send(
+            path: "api/rpc/opencode.goal/get",
+            method: "POST",
+            query: query,
+            body: Body(input: Input(sessionID: sessionID))
+        )
+        return reply.output
     }
 
     // MARK: Generate and instructions

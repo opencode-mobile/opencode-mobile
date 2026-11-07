@@ -366,20 +366,32 @@ public nonisolated struct InboxItemV2: Decodable, Sendable, Equatable {
     /// `user` for a message someone sent, `synthetic` for one the server made, such as a subagent's
     /// note that it finished.
     public var type: String?
+    /// `payload.metadata`: where the server's own items come from, such as a goal's kickoff.
+    public var metadata: InboxMetadataV2?
 
-    public init(id: String, sessionID: String? = nil, delivery: String? = nil, text: String? = nil, files: [InboxFileV2] = [], type: String? = nil) {
+    public init(
+        id: String,
+        sessionID: String? = nil,
+        delivery: String? = nil,
+        text: String? = nil,
+        files: [InboxFileV2] = [],
+        type: String? = nil,
+        metadata: InboxMetadataV2? = nil
+    ) {
         self.id = id
         self.sessionID = sessionID
         self.delivery = delivery
         self.text = text
         self.files = files
         self.type = type
+        self.metadata = metadata
     }
 
     private enum CodingKeys: String, CodingKey { case id, sessionID, delivery, payload, type }
     private nonisolated struct Payload: Decodable {
         let text: String?
         let files: [InboxFileV2]?
+        let metadata: InboxMetadataV2?
     }
 
     public init(from decoder: Decoder) throws {
@@ -391,6 +403,67 @@ public nonisolated struct InboxItemV2: Decodable, Sendable, Equatable {
         let payload = try? container.decodeIfPresent(Payload.self, forKey: .payload)
         text = payload?.text
         files = payload?.files ?? []
+        metadata = payload?.metadata
+    }
+}
+
+/// An inbox item's `payload.metadata`. The goal's kickoff and each round's continuation carry
+/// `source: "goal"`; the kickoff also carries its goal's `goalID`. Other keys are ignored.
+public nonisolated struct InboxMetadataV2: Decodable, Sendable, Equatable {
+    public var source: String?
+    public var goalID: String?
+
+    public init(source: String? = nil, goalID: String? = nil) {
+        self.source = source
+        self.goalID = goalID
+    }
+
+    private enum CodingKeys: String, CodingKey { case source, goalID }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        source = try? container.decodeIfPresent(String.self, forKey: .source)
+        goalID = try? container.decodeIfPresent(String.self, forKey: .goalID)
+    }
+}
+
+/// A session's goal (`/goal`), as `POST /api/rpc/opencode.goal/get` and the
+/// `rpc.opencode.goal.changed` event give it. See `m5-proposal.md`.
+public nonisolated struct GoalStateV2: Decodable, Sendable, Equatable {
+    public var id: String
+    public var objective: String
+    /// `active`, `paused` or `complete`.
+    public var status: String
+    /// Why it last changed: the reviewer's reason, or what paused it. Absent on a new goal.
+    public var reason: String?
+    /// Continuations sent since the goal was set or last resumed: 0 after setting, 1 after resuming.
+    public var rounds: Int
+    /// Always 50 on v2.2.5.
+    public var maxRounds: Int
+    /// Epoch ms of the last write.
+    public var updatedAt: Int64?
+
+    public init(id: String, objective: String, status: String, reason: String? = nil, rounds: Int = 0, maxRounds: Int = 50, updatedAt: Int64? = nil) {
+        self.id = id
+        self.objective = objective
+        self.status = status
+        self.reason = reason
+        self.rounds = rounds
+        self.maxRounds = maxRounds
+        self.updatedAt = updatedAt
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, objective, status, reason, rounds, maxRounds, updatedAt }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        objective = try container.decodeIfPresent(String.self, forKey: .objective) ?? ""
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "active"
+        reason = try? container.decodeIfPresent(String.self, forKey: .reason)
+        rounds = (try? container.decodeIfPresent(Int.self, forKey: .rounds)) ?? 0
+        maxRounds = (try? container.decodeIfPresent(Int.self, forKey: .maxRounds)) ?? 50
+        updatedAt = (try? container.decodeIfPresent(Double.self, forKey: .updatedAt)).map { Int64($0) }
     }
 }
 
