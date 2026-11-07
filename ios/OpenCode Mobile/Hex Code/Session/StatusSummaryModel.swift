@@ -41,6 +41,12 @@ struct SavedSummary: Equatable, Codable, Sendable {
 protocol SummaryStoring: AnyObject {
     func load() -> SavedSummary?
     func save(_ saved: SavedSummary)
+    /// Forgets the saved card (a new session, or Forget this computer).
+    func remove()
+}
+
+extension SummaryStoring {
+    func remove() {}
 }
 
 @MainActor
@@ -58,6 +64,10 @@ final class SummaryDefaults: SummaryStoring {
 
     func save(_ saved: SavedSummary) {
         if let data = try? JSONEncoder().encode(saved) { defaults.set(data, forKey: Self.key) }
+    }
+
+    func remove() {
+        defaults.removeObject(forKey: Self.key)
     }
 }
 
@@ -190,6 +200,11 @@ final class StatusSummaryModel {
         updatedAt = now()
         basis = nil
         failed = false
+    }
+
+    /// Start a new session: the saved card was the old session's.
+    func forgetSaved() {
+        store?.remove()
     }
 
     /// Forgets the card, for another session.

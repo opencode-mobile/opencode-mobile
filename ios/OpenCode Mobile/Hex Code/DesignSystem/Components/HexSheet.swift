@@ -154,6 +154,19 @@ extension View {
     }
 }
 
+extension View {
+    /// A fitted sheet shown while `isPresented` is true, such as `HexConfirmSheet`.
+    func hexFittedSheet<SheetContent: View>(
+        isPresented: Binding<Bool>,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping () -> SheetContent
+    ) -> some View {
+        sheet(isPresented: isPresented, onDismiss: onDismiss) {
+            HexFittedSheetContent(content: content)
+        }
+    }
+}
+
 /// Measures its content and asks for a detent of that height; content taller than the screen
 /// scrolls.
 private struct HexFittedSheetContent<Content: View>: View {

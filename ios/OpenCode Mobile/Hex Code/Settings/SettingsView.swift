@@ -5,7 +5,7 @@ import VoiceEngineKit
 /// Settings: a plain list for now. Project, model and appearance work; the rest are placeholders.
 /// Version ends App; ten quick taps on it show the Developer section after it.
 struct SettingsView: View {
-    let main: HexMainModel
+    @Bindable var main: HexMainModel
     let voice: VoiceEngine
     @Binding var appearance: HexAppearance
     let onForgetServer: () -> Void
@@ -33,7 +33,7 @@ struct SettingsView: View {
                         icon: .refresh,
                         LocalizedStringResource("settings.new_session", defaultValue: "Start a new session"),
                         subtitle: String(localized: "settings.new_session.sub", defaultValue: "Today’s session stays on your computer")
-                    ) { main.showPlaceholder() }
+                    ) { main.confirmNewSession() }
 
                     HexSectionLabel(LocalizedStringResource("settings.agent", defaultValue: "Agent"))
                     HexRow(icon: .cpu, LocalizedStringResource("settings.model", defaultValue: "Model"), value: modelName) {
@@ -92,6 +92,10 @@ struct SettingsView: View {
                 onForgetServer()
             })
         }
+        .hexFittedSheet(isPresented: $main.showsNewSession) {
+            NewSessionSheet(main: main)
+        }
+        .onChange(of: main.showsNewSession) { _, up in main.toasts.inSheet = up }
         .fullScreenCover(isPresented: $showsSpeechLab) {
             DictationScreen(engine: voice, onClose: { showsSpeechLab = false })
         }
@@ -151,6 +155,40 @@ struct SettingsView: View {
     private var reasoning: String {
         main.setup.model.variant.map(TitleCaseIdentifier.displayName(for:))
             ?? String(localized: "settings.reasoning.default", defaultValue: "Default")
+    }
+}
+
+/// "Start a new session?": what stays, what starts empty, and what carries on in the old one.
+struct NewSessionSheet: View {
+    let main: HexMainModel
+
+    var body: some View {
+        HexConfirmSheet(
+            title: Text(LocalizedStringResource("settings.new_session.title", defaultValue: "Start a new session?")),
+            paragraphs: paragraphs,
+            confirmTitle: Text(LocalizedStringResource("settings.new_session.start", defaultValue: "Start new session")),
+            loading: main.isStartingSession,
+            onCancel: { main.showsNewSession = false },
+            onConfirm: { Task { await main.startNewSession() } }
+        )
+        .hexToastHost(main.toasts, sheet: true)
+    }
+
+    private var paragraphs: [Text] {
+        let project = main.setup.project.name
+        var lines = [Text(LocalizedStringResource(
+            "settings.new_session.body",
+            defaultValue: "Today’s session stays on your computer as it is. The new one starts empty in \(project), with the same model. Today’s goal isn’t carried over."
+        ))]
+        if main.newSessionBusy {
+            lines.append(Text(LocalizedStringResource("settings.new_session.busy", defaultValue: "The agent is still working there and carries on.")))
+        }
+        let waiting = main.newSessionWaiting
+        // Plural in the string catalog: "Its waiting message still sends there." for one.
+        if waiting > 0 {
+            lines.append(Text(LocalizedStringResource("settings.new_session.waiting", defaultValue: "Its \(waiting) waiting messages still send there.")))
+        }
+        return lines
     }
 }
 

@@ -8,6 +8,7 @@ final class MemorySummaryStore: SummaryStoring {
     var saved: SavedSummary?
     func load() -> SavedSummary? { saved }
     func save(_ saved: SavedSummary) { self.saved = saved }
+    func remove() { saved = nil }
 }
 
 /// The last card survives the app being closed (app plan, "Empty or failed reply").

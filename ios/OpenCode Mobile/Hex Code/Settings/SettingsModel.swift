@@ -234,6 +234,34 @@ final class HexMainModel {
         await realSession.switchModel(choice)
     }
 
+    // MARK: Start a new session
+
+    /// The confirmation is open.
+    var showsNewSession = false
+    private(set) var isStartingSession = false
+
+    /// The confirmation's extra lines: the agent still works there, and messages still wait.
+    var newSessionBusy: Bool { realSession.agentBusy }
+    var newSessionWaiting: Int { realSession.waitingCount }
+
+    func confirmNewSession() {
+        showsNewSession = true
+    }
+
+    /// Start new session: on success Settings closes and home shows the new session; if creating
+    /// fails the sheet stays with the notice; if its rules fail, home shows "Couldn't open today's
+    /// session".
+    func startNewSession() async {
+        guard !isStartingSession else { return }
+        isStartingSession = true
+        let result = await realSession.startNewSession()
+        isStartingSession = false
+        guard result != .failed else { return }
+        showsNewSession = false
+        toasts.inSheet = false
+        path = []
+    }
+
     // MARK: Version and developer settings
 
     /// A tap on the Version row; the tenth quick one turns developer settings on.

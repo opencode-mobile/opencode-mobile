@@ -188,36 +188,109 @@ final class TodaySession {
         case let .opened(session, _, showsNewDayNotice):
             // A goal still running on yesterday's session is left as it is; the notice says so.
             let yesterdaysGoalRuns = showsNewDayNotice ? await yesterdaysGoalIsActive() : false
-            day = today
-            presentedNeed = nil
-            recentSteps = []
-            stopRetry = nil
-            // A goal belongs to its session; it is read again once the stream is up.
-            goal = nil
-            goalRounds = GoalRounds()
-            showsGoalSheet = false
-            live = LiveSessionState(rootID: session.id, hasRun: session.busySince != nil)
-            messageSent = false
-            publish()
-            streamUp = true
-            setup = .ready(sessionID: session.id)
+            await follow(session, day: today)
             if showsNewDayNotice { toasts.show(Self.newDayNotice(goalRunning: yesterdaysGoalRuns)) }
-            summary.open(sessionID: session.id)
-            if let api { summary.generator = SessionSummaryGenerator(api: api, sessionID: session.id) }
-            ask.open(sessionID: session.id)
-            if let api {
-                let id = session.id
-                ask.generate = { prompt in try await api.generate(sessionID: id, prompt: prompt) }
-            }
-            stream?.start()
-            if stream == nil || isEmptySession {
-                // A session that never ran shows its empty card now; with no stream, nothing will
-                // tell us more.
-                await refreshSummary()
-            }
-            // Otherwise the first summary waits for the stream's read-back, which says whether the
-            // agent is working (an empty reply then isn't a failure); the saved card shows meanwhile.
         }
+    }
+
+    /// Follows `session` from now on: its state, summary, Ask and goal; the stream filters for it.
+    /// A different session than before starts with nothing carried over from the last one.
+    private func follow(_ session: SessionListing, day today: String) async {
+        let changed = live?.rootID != session.id
+        day = today
+        presentedNeed = nil
+        recentSteps = []
+        stopRetry = nil
+        // A goal belongs to its session; it is read again once the stream is up.
+        goal = nil
+        goalRounds = GoalRounds()
+        showsGoalSheet = false
+        if changed {
+            sentMessage = nil
+            sentIsGoal = false
+            sentRunEnded = false
+            sentTexts = [:]
+            deliveredWithoutText = nil
+            waitingThumbnails = [:]
+            showsDetails = false
+        }
+        live = LiveSessionState(rootID: session.id, hasRun: session.busySince != nil)
+        messageSent = false
+        publish()
+        streamUp = true
+        setup = .ready(sessionID: session.id)
+        summary.open(sessionID: session.id)
+        if let api { summary.generator = SessionSummaryGenerator(api: api, sessionID: session.id) }
+        ask.open(sessionID: session.id)
+        if let api {
+            let id = session.id
+            ask.generate = { prompt in try await api.generate(sessionID: id, prompt: prompt) }
+        }
+        stream?.start()
+        if stream == nil || isEmptySession {
+            // A session that never ran shows its empty card now; with no stream, nothing will
+            // tell us more.
+            await refreshSummary()
+        }
+        // Otherwise the first summary waits for the stream's read-back, which says whether the
+        // agent is working (an empty reply then isn't a failure); the saved card shows meanwhile.
+    }
+
+    // MARK: Start a new session
+
+    enum NewSessionResult: Equatable, Sendable {
+        /// Home follows the new session.
+        case started
+        /// Creating it failed: today's session is still open, and the sheet stays.
+        case failed
+        /// It was made but its rules failed: "Couldn't open today's session", whose Try again finds it.
+        case setupFailed
+    }
+
+    /// Settings › Start a new session: the day's next numbered session, started empty with the
+    /// same project, model and level. The old one is never changed: no interrupt, no archive, no
+    /// inbox cancel, and its goal keeps running. The draft stays on the phone.
+    func startNewSession() async -> NewSessionResult {
+        guard api != nil, case .ready = setup, !isOpening else {
+            toasts.show(Self.newSessionFailedNotice())
+            return .failed
+        }
+        isOpening = true
+        defer { isOpening = false }
+        let today = DailySession.title(for: now(), timeZone: timeZone)
+        switch await dailySetup.startNew(today: today, directory: directory(), model: model()) {
+        case .createFailed:
+            toasts.show(Self.newSessionFailedNotice())
+            return .failed
+        case .rulesFailed:
+            stream?.stop()
+            setup = .failed(retrying: false)
+            return .setupFailed
+        case let .opened(session):
+            stream?.stop()
+            // The old session's card isn't today's any more.
+            summary.forgetSaved()
+            await follow(session, day: today)
+            toasts.show(Self.newSessionNotice())
+            return .started
+        }
+    }
+
+    static func newSessionNotice() -> HexToastItem {
+        HexToastItem(
+            tone: .sun,
+            title: String(localized: "settings.new_session.done", defaultValue: "New session"),
+            detail: String(localized: "settings.new_session.done.sub", defaultValue: "The earlier one is kept on your computer."),
+            duration: 2.6
+        )
+    }
+
+    static func newSessionFailedNotice() -> HexToastItem {
+        HexToastItem(
+            tone: .stop,
+            title: String(localized: "settings.new_session.failed", defaultValue: "Couldn’t start a new session"),
+            detail: String(localized: "settings.new_session.failed.sub", defaultValue: "Today’s session is still open.")
+        )
     }
 
     /// Try again, after "Couldn't open today's session".
