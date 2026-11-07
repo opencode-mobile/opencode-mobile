@@ -1,4 +1,3 @@
-import SafariServices
 import SwiftUI
 import VoiceEngineKit
 
@@ -20,7 +19,8 @@ struct HomeView: View {
     @State private var showsPhotos = false
     @State private var showsCamera = false
     /// A page on the computer, open in the in-app browser.
-    @State private var browserPage: BrowserPage?
+    @State private var browser: BrowserModel?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
 
     private var drafting: Bool { home.isRecording || !home.draft.isEmpty }
@@ -144,8 +144,8 @@ struct HomeView: View {
             EdgeDeferral.report()
         }
         #endif
-        .fullScreenCover(item: $browserPage) { page in
-            InAppBrowser(url: page.url).ignoresSafeArea()
+        .fullScreenCover(item: browserPresented) { token in
+            BrowserScreen(model: token.model, onDone: { closeBrowser() })
         }
         .hexFittedSheet(item: needsPresented) { item in
             NeedsSheet(item: item, session: session, home: home)
@@ -174,6 +174,17 @@ struct HomeView: View {
             CameraPicker(onPhoto: { home.attach([PickedImage(photo: $0)]) }, onClose: { showsCamera = false })
                 .ignoresSafeArea()
         }
+    }
+
+    private var browserPresented: Binding<BrowserToken?> {
+        Binding(get: { browser.map { BrowserToken(model: $0) } }, set: { if $0 == nil { browser = nil } })
+    }
+
+    /// With Reduce Motion the browser shows and goes without animation.
+    private func closeBrowser() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = reduceMotion
+        withTransaction(transaction) { browser = nil }
     }
 
     private var needsPresented: Binding<PendingItem?> {
@@ -207,7 +218,11 @@ struct HomeView: View {
     /// browser.
     private func open(_ destination: CardLinks.Destination) {
         if destination.inApp {
-            browserPage = BrowserPage(url: destination.url)
+            var transaction = Transaction()
+            transaction.disablesAnimations = reduceMotion
+            withTransaction(transaction) {
+                browser = BrowserModel(destination: destination, serverName: session.serverName ?? destination.shownHost)
+            }
         } else {
             openURL(destination.url)
         }
@@ -766,21 +781,10 @@ enum EdgeDeferral {
 }
 #endif
 
-/// A page shown in the in-app browser.
-struct BrowserPage: Identifiable {
-    let url: URL
-    var id: URL { url }
-}
-
-/// The system's in-app browser (`SFSafariViewController`).
-struct InAppBrowser: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
-    }
-
-    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+/// The in-app browser is open (a cover needs an item).
+struct BrowserToken: Identifiable {
+    let model: BrowserModel
+    var id: ObjectIdentifier { ObjectIdentifier(model) }
 }
 
 /// Where the draft's ⋯ is, so its menu opens above it.

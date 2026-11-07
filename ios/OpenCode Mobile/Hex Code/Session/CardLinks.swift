@@ -72,6 +72,8 @@ enum CardLinks {
         var shownHost: String
         /// In the in-app browser (a page on the computer); else the system browser.
         var inApp: Bool
+        /// The tile's label: the browser's title until the page has one.
+        var label = ""
     }
 
     static let localHosts: Set<String> = ["localhost", "127.0.0.1", "0.0.0.0"]
@@ -84,8 +86,8 @@ enum CardLinks {
             components.host = computerHost
             guard let rewritten = components.url else { return nil }
             let shown = computerHost + (components.port.map { ":\($0)" } ?? "")
-            return Destination(url: rewritten, shownHost: shown, inApp: true)
+            return Destination(url: rewritten, shownHost: shown, inApp: true, label: link.label)
         }
-        return Destination(url: url, shownHost: Self.host(of: link.url), inApp: false)
+        return Destination(url: url, shownHost: Self.host(of: link.url), inApp: false, label: link.label)
     }
 }

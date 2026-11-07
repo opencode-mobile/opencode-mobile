@@ -72,13 +72,13 @@ struct CardLinksTests {
     @Test func aLocalLinkOpensOnTheComputerInApp() {
         for host in ["localhost", "127.0.0.1", "0.0.0.0"] {
             let destination = CardLinks.destination(for: CardLink(label: "App", url: "http://\(host):5173/login?next=1"), computerHost: "192.168.1.20")
-            #expect(destination == .init(url: URL(string: "http://192.168.1.20:5173/login?next=1")!, shownHost: "192.168.1.20:5173", inApp: true))
+            #expect(destination == .init(url: URL(string: "http://192.168.1.20:5173/login?next=1")!, shownHost: "192.168.1.20:5173", inApp: true, label: "App"))
         }
     }
 
     @Test func aWebLinkOpensInTheSystemBrowser() {
         let destination = CardLinks.destination(for: CardLink(label: "Docs", url: "https://www.example.com/docs"), computerHost: "192.168.1.20")
-        #expect(destination == .init(url: URL(string: "https://www.example.com/docs")!, shownHost: "example.com", inApp: false))
+        #expect(destination == .init(url: URL(string: "https://www.example.com/docs")!, shownHost: "example.com", inApp: false, label: "Docs"))
     }
 
     @Test func savedCardsWithoutLinksStillDecode() throws {
