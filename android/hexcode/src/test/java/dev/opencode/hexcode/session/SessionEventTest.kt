@@ -9,7 +9,7 @@ import org.junit.Test
 class SessionEventTest {
     @Test
     fun theTypesAreTheExactEighteenThePlanLists() {
-        assertEquals(18, SessionEvent.TYPES.size)
+        assertEquals(19, SessionEvent.TYPES.size)
         assertEquals(SessionEvent.TYPES.distinct(), SessionEvent.TYPES)
         assertEquals(listOf<String>(), SessionEvent.TYPES.filter { '*' in it || ',' in it })
     }

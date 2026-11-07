@@ -9,7 +9,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.firstrun.ProjectChoice
+import dev.opencode.hexcode.session.AskStore
 import dev.opencode.hexcode.session.DailySessionMemory
+import dev.opencode.hexcode.session.SavedAsks
 import dev.opencode.hexcode.session.SavedSummary
 import dev.opencode.hexcode.session.SummaryStore
 import kotlinx.coroutines.flow.Flow
@@ -43,7 +45,8 @@ class HexSettings(
     private val json: Json,
 ) : DeveloperSettingsStore,
     DailySessionMemory,
-    SummaryStore {
+    SummaryStore,
+    AskStore {
     private val store = context.applicationContext.hexDataStore
 
     val prefs: Flow<HexPrefs> =
@@ -114,6 +117,23 @@ class HexSettings(
         store.edit { it[LAST_SESSION_DATE] = date.toString() }
     }
 
+    /** The session the app last opened, so a new day can read whether yesterday's goal still runs. */
+    override suspend fun lastSessionId(): String? = store.data.first()[LAST_SESSION_ID]
+
+    override suspend fun setLastSessionId(id: String) {
+        store.edit { it[LAST_SESSION_ID] = id }
+    }
+
+    /** Today's Ask answers, the shown one and the closed ones: saving one session's replaces the one before. */
+    override suspend fun loadAsks(): SavedAsks? =
+        store.data
+            .first()[ASKED]
+            ?.let { runCatching { json.decodeFromString(SavedAsks.serializer(), it) }.getOrNull() }
+
+    override suspend fun saveAsks(saved: SavedAsks) {
+        store.edit { it[ASKED] = json.encodeToString(SavedAsks.serializer(), saved) }
+    }
+
     /** The last summary card, for today's session only: saving one replaces the one before. */
     override suspend fun loadSummary(): SavedSummary? =
         store.data
@@ -139,5 +159,7 @@ class HexSettings(
         val DEVELOPER_SETTINGS = booleanPreferencesKey("developer_settings")
         val LAST_SESSION_DATE = stringPreferencesKey("session_last_date")
         val LAST_SUMMARY = stringPreferencesKey("summary_last")
+        val LAST_SESSION_ID = stringPreferencesKey("session_last_id")
+        val ASKED = stringPreferencesKey("ask_history")
     }
 }

@@ -74,7 +74,20 @@ data class TodayState(
     val projectId: String? = null,
     /** Goes up with each tool today's session finishes: Details reads Recent again. */
     val toolEvents: Int = 0,
+    /** Today's goal; null when there is none (or before it's read). */
+    val goal: Goal? = null,
+    /** [you] is a goal set from this phone: "Goal: “…”" in place of "You: “…”". */
+    val youGoal: Boolean = false,
+    /** With [newDayNotice]: yesterday's goal was still active, and keeps running there. */
+    val newDayGoal: Boolean = false,
+    /** The Ask message under the status card, while one shows. */
+    val ask: AskMessage? = null,
+    /** The closed Ask answers, newest first, for Details' Asked on the side. */
+    val asked: List<AskedAnswer> = emptyList(),
 ) {
+    /** The goal line, or null for none: no goal while the agent works. */
+    val goalLine: GoalLine? get() = GoalLine.of(goal, busySince != null)
+
     /** What runs besides the session at [now], for "N running · Details ›": subagents, and shells after 10 s. */
     fun running(now: Long): Int = subagentsRunning + shellStarts.count { now - it >= SHELL_SHOWN_MS }
 
@@ -162,6 +175,48 @@ interface LiveSessionApi {
 
     /** Today's subagents as the server lists them now (`GET /api/session?parentID=`). */
     suspend fun subagents(rootId: String): Set<String> = throw UnsupportedOperationException("No subagent list here")
+
+    /** `POST /api/rpc/opencode.goal/get`: the session's goal; null when it has none. */
+    suspend fun goal(
+        sessionId: String,
+        directory: String,
+    ): Goal? = null
+
+    /**
+     * `POST /api/session/{id}/command` with `{"name": "goal", "text": …}` and [images] as `files`. Throws
+     * [GoalChangedException] on a `500` (the goal changed elsewhere), or the server's error.
+     */
+    suspend fun goalCommand(
+        sessionId: String,
+        text: String,
+        images: List<PromptImage> = emptyList(),
+    ): Unit = throw UnsupportedOperationException("No goal here")
+
+    /**
+     * Ask on the side: `POST /api/session/{id}/generate` with [prompt], at most [AskOnTheSide.TIMEOUT_MS]. Throws
+     * [SessionGoneException] on a `404`.
+     */
+    suspend fun ask(
+        sessionId: String,
+        prompt: String,
+    ): String = summarise(sessionId, prompt)
+}
+
+/** `/goal` failed with a `500`: the goal had already changed (paused, cleared or finished elsewhere). */
+class GoalChangedException(
+    message: String? = null,
+) : Exception(message)
+
+/** How a goal command went (app-plan.md, The goal sheet). */
+enum class GoalOutcome {
+    /** `204`: the state follows from the event, or from `get` 2 s later. */
+    Done,
+
+    /** A `500`: the goal had already changed; `get` was read again. */
+    Stale,
+
+    /** Anything else: "Couldn't change the goal". */
+    Failed,
 }
 
 /**
@@ -208,6 +263,10 @@ class TodaySession(
     summaryTimeoutMs: Long = SummaryRefresher.TIMEOUT_MS,
     /** Keeps the last card across launches. */
     summaryStore: SummaryStore? = null,
+    /** Keeps today's Ask answers across launches. */
+    askStore: AskStore? = null,
+    /** A goal command whose event hasn't come this long after its `204` reads `get`. */
+    private val goalSettleMs: Long = GOAL_SETTLE_MS,
 ) {
     private val own = MutableStateFlow(TodayState())
 
@@ -232,9 +291,20 @@ class TodaySession(
 
     private val stream = transport?.let { LiveEventStream(scope, it) }
 
+    /** Ask on the side: independent of the summary; a gone session runs setup again. */
+    private val asking =
+        AskOnTheSide(
+            scope,
+            generate = { prompt -> api.ask(sessionId ?: error("No session open"), prompt) },
+            clock = clock,
+            store = askStore,
+            onSessionGone = ::open,
+        )
+
     val state: StateFlow<TodayState> =
-        combine(own, summary.state) { state, card -> state.copy(summary = card) }
-            .stateIn(scope, SharingStarted.Eagerly, TodayState())
+        combine(own, summary.state, asking.state) { state, card, ask ->
+            state.copy(summary = card, ask = ask.message, asked = ask.history)
+        }.stateIn(scope, SharingStarted.Eagerly, TodayState())
 
     private var live: LiveSessionState? = null
 
@@ -243,7 +313,15 @@ class TodaySession(
 
     /** The message the You line shows, and whether its run has ended (the next card made while idle clears it). */
     private var you: String? = null
+    private var youGoal = false
     private var youRunEnded = false
+
+    /** The objective this phone is setting, until its kickoff shows up in the inbox. */
+    @Volatile
+    private var goalSetting: String? = null
+
+    /** The objective of each kickoff this phone set, by inbox item, for "Goal: “…”" when it's delivered. */
+    private val goalSent = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /** The local date today's session was opened for. */
     private var day: LocalDate? = null
@@ -254,6 +332,7 @@ class TodaySession(
         summary.onNewCard = { busy ->
             if (!busy && youRunEnded) {
                 you = null
+                youGoal = false
                 youRunEnded = false
                 publish()
             }
@@ -497,6 +576,119 @@ class TodaySession(
         }
     }
 
+    /**
+     * Runs `/goal` [command] on today's session (app-plan.md, The goal sheet), a new goal with [images] as `files`.
+     * After a `204` the state comes from `rpc.opencode.goal.changed`, or from `get` when none comes within 2 s; a
+     * Clear or a new goal then takes back the old goal's kickoff if it still waits in the inbox, or the agent would
+     * still run a turn on it. A `500` means the goal changed elsewhere: `get` is read again.
+     */
+    suspend fun goal(
+        command: GoalCommand,
+        images: List<PromptImage> = emptyList(),
+    ): GoalOutcome {
+        val root = sessionId ?: return GoalOutcome.Failed
+        val old = live?.goal
+        val eventsBefore = live?.goalEvents ?: 0
+        goalSetting = (command as? GoalCommand.Set)?.text
+        try {
+            api.goalCommand(root, command.text, images)
+        } catch (error: CancellationException) {
+            goalSetting = null
+            throw error
+        } catch (error: GoalChangedException) {
+            goalSetting = null
+            Log.i(GOAL_TAG, "/goal ${command.text.take(20)}: the goal had already changed (${error.message})")
+            readGoal(root)
+            return GoalOutcome.Stale
+        } catch (error: Exception) {
+            goalSetting = null
+            Log.w(GOAL_TAG, "/goal ${command.text.take(20)} failed: ${error.message}")
+            return GoalOutcome.Failed
+        }
+        if (old != null && (command is GoalCommand.Set || command == GoalCommand.Clear)) takeBackKickoff(root, old.id)
+        scope.launch {
+            delay(goalSettleMs)
+            if (live?.rootId == root && live?.goalEvents == eventsBefore) {
+                Log.i(GOAL_TAG, "no goal event ${goalSettleMs}ms after /goal: reading it")
+                readGoal(root)
+            }
+        }
+        return GoalOutcome.Done
+    }
+
+    /** Deletes the kickoff of goal [goalId] if it still waits in the inbox. */
+    private suspend fun takeBackKickoff(
+        root: String,
+        goalId: String,
+    ) {
+        val items =
+            live
+                ?.goalItems
+                .orEmpty()
+                .filterValues { it == goalId }
+                .keys
+        for (item in items) {
+            try {
+                api.cancelQueued(root, item)
+                Log.i(GOAL_TAG, "took back the old goal's kickoff $item")
+                if (live?.rootId == root) changeLive { it.withoutInbox(item) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                // Delivered meanwhile, most likely.
+                Log.w(GOAL_TAG, "couldn't take back the old kickoff $item: ${error.message}")
+            }
+        }
+    }
+
+    /** Reads today's goal with `get`; a failed read keeps the one shown. */
+    private suspend fun readGoal(root: String) {
+        val goal =
+            try {
+                api.goal(root, directory())
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(GOAL_TAG, "couldn't read the goal: ${error.message}")
+                return
+            }
+        if (live?.rootId == root) changeLive { it.withGoal(goal) }
+    }
+
+    /** Whether session [id]'s goal is still active (yesterday's, before moving on); false when it can't be read. */
+    private suspend fun goalActive(
+        id: String,
+        directory: String,
+    ): Boolean =
+        try {
+            api.goal(id, directory)?.status == GoalStatus.Active
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w(GOAL_TAG, "couldn't read yesterday's goal: ${error.message}")
+            false
+        }
+
+    /** Ask on the side with [question]: the message shows under the status card until it's closed. */
+    fun ask(question: String) {
+        if (sessionId != null) asking.ask(question)
+    }
+
+    /** Try again on a failed or empty Ask. */
+    fun retryAsk() = asking.retry()
+
+    /** ✕ on the Ask message. */
+    fun closeAsk() = asking.close()
+
+    /** A tap on the folded answer. */
+    fun openAsk() = asking.expand()
+
+    /** Fold on the open answer. */
+    fun foldAsk() = asking.fold()
+
+    /** A row of Details' Asked on the side, by its place in the history. */
+    fun showAsked(index: Int) = asking.show(index)
+
     /** Details opened, or reconnected while open: reads Running now (subagents and agent shells) again. */
     suspend fun readRunning() {
         val root = sessionId ?: return
@@ -520,15 +712,21 @@ class TodaySession(
             DailySessionResult.Failed -> own.update { it.copy(setup = SessionSetup.Failed()) }
             is DailySessionResult.Opened -> {
                 val session = result.session
+                // Yesterday's goal is left as it is; the notice says when it's still running there.
+                val goalRunning = result.newDay && result.previousId?.let { goalActive(it, directory) } == true
                 day = date
                 sessionId = session.id
                 live = LiveSessionState(session.id, hasRun = session.busySince != null)
                 you = null
+                youGoal = false
                 youRunEnded = false
                 sent.clear()
+                goalSent.clear()
+                goalSetting = null
                 summary.open(session.id, date, directory)
+                asking.open(session.id)
                 publish(streamUp = true)
-                own.update { it.copy(setup = SessionSetup.Ready(session.id), newDayNotice = result.newDay) }
+                own.update { it.copy(setup = SessionSetup.Ready(session.id), newDayNotice = result.newDay, newDayGoal = goalRunning) }
                 stream?.start()
                 // With a stream, the first summary waits for its read-back, which says whether the agent is working
                 // (an empty reply then isn't a failure); the saved card shows meanwhile. A session that never ran
@@ -542,6 +740,8 @@ class TodaySession(
         own.update { it.copy(streamUp = true) }
         val root = live?.rootId ?: return
         var updatedAt: Long? = null
+        // Today's goal on every (re)connect, beside the rest; a failed read keeps the goal shown.
+        scope.launch { readGoal(root) }
         try {
             val snapshot = api.snapshot(root)
             if (live?.rootId == root) {
@@ -562,15 +762,26 @@ class TodaySession(
 
     private fun received(event: SessionEvent) {
         val current = live ?: return
+        // The kickoff of a goal this phone set: it shows as "Goal: “…”" once it's delivered.
+        if (event is SessionEvent.InboxEnqueued && event.sessionId == current.rootId && event.fromGoal) {
+            val objective = goalSetting
+            if (objective != null && (event.goalId != null || !event.synthetic)) {
+                goalSent[event.id] = objective
+                goalSetting = null
+            }
+        }
         if (event is SessionEvent.InboxRemoved && event.delivered && event.sessionId == current.rootId) {
-            // "You: …" from now until the card made after this run ends; a later message replaces it.
+            // "You: …" from now until the card made after this run ends; a later message replaces it. The goal's own
+            // items aren't in the inbox kept here, so they never set it.
+            val goal = goalSent.remove(event.id)
             val text =
-                current.inbox
+                goal ?: current.inbox
                     .firstOrNull { it.id == event.id }
                     ?.text
                     ?.ifEmpty { null } ?: sent[event.id]
             if (text != null) {
                 you = text
+                youGoal = goal != null
                 youRunEnded = false
             }
         }
@@ -579,7 +790,15 @@ class TodaySession(
         live = next
         if (effect == LiveEffect.RunEnded && you != null) youRunEnded = true
         publish()
-        if (effect == LiveEffect.RunEnded) summary.refresh()
+        when (effect) {
+            LiveEffect.RunEnded -> summary.refresh()
+            // A goal is one long run: each round's end refreshes the card, mid-run (Goal rounds refresh the summary).
+            LiveEffect.GoalRound -> {
+                Log.i(TAG, "goal round ${next.goal?.rounds}: summary request")
+                summary.refresh()
+            }
+            null -> Unit
+        }
     }
 
     private fun publish(streamUp: Boolean? = null) {
@@ -593,6 +812,8 @@ class TodaySession(
                 queued = state?.queued.orEmpty(),
                 todos = state?.todos.orEmpty(),
                 you = you,
+                youGoal = you != null && youGoal,
+                goal = state?.goal,
                 pending = state?.pending.orEmpty(),
                 rootId = state?.rootId,
                 children = state?.childInfo.orEmpty(),
@@ -643,5 +864,10 @@ class TodaySession(
         const val STOP_RETRY_MS = 5_000L
 
         private const val STOP_TAG = "HexCode.Stop"
+
+        private const val GOAL_TAG = "HexCode.Goal"
+
+        /** A goal command's state comes from its event; without one this long after the `204`, `get` is read. */
+        const val GOAL_SETTLE_MS = 2_000L
     }
 }

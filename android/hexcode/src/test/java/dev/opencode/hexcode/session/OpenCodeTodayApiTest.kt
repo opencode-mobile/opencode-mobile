@@ -257,4 +257,74 @@ class OpenCodeTodayApiTest {
             val inbox = api.snapshot("ses_1").inbox
             assertEquals(listOf(InboxEntry("msg_1", "queue", "", listOf(InboxFile("Photo 1.jpg", "image/jpeg")))), inbox)
         }
+
+    @Test
+    fun theGoalsKickoffAndContinuationsAreNeverWaitingMessagesButKickoffsAreKeptByGoal() =
+        runTest {
+            val api =
+                api { path ->
+                    when {
+                        path.endsWith("/session/active") -> """{"data":{}}"""
+                        path.endsWith("/inbox") ->
+                            """{"data":[
+                            {"id":"msg_k","type":"synthetic","payload":{"text":"A goal is now active","description":"Goal: Ship it",
+                            "metadata":{"source":"goal","goalID":"g1"}},"delivery":"steer"},
+                            {"id":"msg_f","type":"user","payload":{"text":"A goal is now active","metadata":{"source":"goal","goalID":"g2"},
+                            "files":[{"name":"Photo 1.jpg","mime":"image/jpeg"}]},"delivery":"steer"},
+                            {"id":"msg_c","type":"synthetic","payload":{"text":"Continue working toward the active goal.",
+                            "metadata":{"source":"goal"}},"delivery":"steer"},
+                            {"id":"msg_1","type":"user","payload":{"text":"Also"},"delivery":"queue"}]}"""
+                        path.endsWith("/session/ses_1") -> """{"data":{"id":"ses_1","time":{"created":1,"updated":2}}}"""
+                        else -> """{"data":[]}"""
+                    }
+                }
+            val snapshot = api.snapshot("ses_1")
+            assertEquals(listOf("msg_1"), snapshot.inbox.map { it.id })
+            assertEquals(mapOf("msg_k" to "g1", "msg_f" to "g2", "msg_c" to null), snapshot.goalItems)
+        }
+
+    @Test
+    fun theGoalIsReadWithTheProjectAndCommandsSendTheirText() =
+        runTest {
+            val api =
+                api { path ->
+                    when {
+                        path.endsWith("opencode.goal/get") ->
+                            """{"output":{"id":"g1","objective":"Ship it","status":"paused","reason":"Stopped by the user","rounds":3,"maxRounds":50}}"""
+                        else -> null
+                    }
+                }
+            assertEquals(Goal("g1", "Ship it", GoalStatus.Paused, "Stopped by the user", 3, 50), api.goal("ses_1", "/tmp/p"))
+            api.goalCommand("ses_1", "resume")
+            assertEquals(
+                listOf(
+                    """POST /api/rpc/opencode.goal/get {"input":{"sessionID":"ses_1"}}""",
+                    """POST /api/session/ses_1/command {"name":"goal","text":"resume"}""",
+                ),
+                requests,
+            )
+        }
+
+    @Test
+    fun aFailingGoalCommandMeansTheGoalChangedElsewhereAndAGoneSessionStopsAnAsk() =
+        runTest {
+            val json = Json { ignoreUnknownKeys = true }
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        if (request.url.encodedPath.endsWith("/command")) {
+                            respond(
+                                """{"_tag":"CommandExecutionError","command":"goal","message":"No active goal to pause."}""",
+                                HttpStatusCode.InternalServerError,
+                                headers,
+                            )
+                        } else {
+                            respond("""{"_tag":"SessionNotFoundError"}""", HttpStatusCode.NotFound, headers)
+                        }
+                    },
+                ) { install(ContentNegotiation) { json(json) } }
+            val api = OpenCodeTodayApi(SessionsApi(client, json))
+            assertTrue(runCatching { api.goalCommand("ses_1", "pause") }.exceptionOrNull() is GoalChangedException)
+            assertTrue(runCatching { api.ask("ses_1", "Why?") }.exceptionOrNull() is SessionGoneException)
+        }
 }

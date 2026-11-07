@@ -171,6 +171,7 @@ class HexServices(
             directory = directory,
             model = model,
             summaryStore = settings,
+            askStore = settings,
         )
     }
 

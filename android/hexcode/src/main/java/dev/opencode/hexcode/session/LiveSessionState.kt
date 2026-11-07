@@ -66,12 +66,17 @@ data class LiveSnapshot(
     val childInfo: Map<String, ChildInfo> = emptyMap(),
     /** The session's project: `global` for a folder that isn't a git repository (no Always there). */
     val projectId: String? = null,
+    /** The goal's kickoffs and continuations waiting in the inbox, by inbox item, with the goal each kickoff starts. */
+    val goalItems: Map<String, String?> = emptyMap(),
 )
 
 /** What an event asks of the summary. */
 enum class LiveEffect {
     /** A run of today's session ended: refresh the summary. */
     RunEnded,
+
+    /** The goal's round count went up: a turn ended inside the goal's one long run, so refresh as a mid-run card. */
+    GoalRound,
 }
 
 /**
@@ -103,6 +108,17 @@ data class LiveSessionState(
     val projectId: String? = null,
     /** Counts today's session's finished tools, so Details can read Recent again after each. */
     val toolEvents: Int = 0,
+    /** Today's goal; null when there is none, or before it's read. */
+    val goal: Goal? = null,
+    /** The last round count seen; a higher one is a round's end ([LiveEffect.GoalRound]). */
+    val goalRounds: Int? = null,
+    /** Counts `rpc.opencode.goal.changed` for today's session, so a command can tell whether its event came. */
+    val goalEvents: Int = 0,
+    /**
+     * The goal's kickoffs and continuations in the inbox, by inbox item, with the goal each kickoff starts: never
+     * waiting messages, but Clear and Replace take an old kickoff back.
+     */
+    val goalItems: Map<String, String?> = emptyMap(),
 ) {
     /** Messages that send after this turn. */
     val waiting: Int get() = queued.size
@@ -133,7 +149,11 @@ data class LiveSessionState(
             todos = if (snapshot.todosRead) snapshot.todos else todos,
             childInfo = childInfo + snapshot.childInfo,
             projectId = snapshot.projectId ?: projectId,
+            goalItems = snapshot.goalItems,
         )
+
+    /** Takes the goal read with the get RPC, on (re)connect or after a command; its rounds count as seen. */
+    fun withGoal(goal: Goal?): LiveSessionState = copy(goal = goal, goalRounds = goal?.rounds)
 
     /** Takes what Details read for Running now: the subagents and the agent shells, as they are now. */
     fun apply(running: RunningRead): LiveSessionState =
@@ -159,7 +179,7 @@ data class LiveSessionState(
     val shellRuns: List<ShellRun> get() = shells.map { (id, at) -> ShellRun(id, shellCommands[id].orEmpty(), at) }
 
     /** Without inbox item [id], once a DELETE took it back: the row goes before the event says so. */
-    fun withoutInbox(id: String): LiveSessionState = copy(inbox = inbox.filterNot { it.id == id })
+    fun withoutInbox(id: String): LiveSessionState = copy(inbox = inbox.filterNot { it.id == id }, goalItems = goalItems - id)
 
     /** Applies one event at [now] (for a run start without a time): the next state, and what it asks of the summary. */
     fun apply(
@@ -194,15 +214,30 @@ data class LiveSessionState(
             is SessionEvent.FormCreated -> addPending(event.item) to null
             is SessionEvent.PermissionReplied -> removePending(event.sessionId, event.id) to null
             is SessionEvent.FormClosed -> removePending(event.sessionId, event.id) to null
-            // A server note (a subagent's `<subagent …>`) isn't a message from the user: it never waits to send.
+            // A server note (a subagent's `<subagent …>`) and the goal's own items aren't messages from the user: they
+            // never wait to send.
             is SessionEvent.InboxEnqueued ->
-                if (event.sessionId != rootId || event.synthetic || inbox.any { it.id == event.id }) {
-                    this to null
-                } else {
-                    copy(inbox = inbox + InboxEntry(event.id, event.delivery, event.text, event.files)) to null
+                when {
+                    event.sessionId != rootId -> this to null
+                    event.fromGoal -> copy(goalItems = goalItems + (event.id to event.goalId)) to null
+                    event.synthetic || inbox.any { it.id == event.id } -> this to null
+                    else -> copy(inbox = inbox + InboxEntry(event.id, event.delivery, event.text, event.files)) to null
                 }
             is SessionEvent.InboxRemoved ->
-                if (event.sessionId != rootId) this to null else copy(inbox = inbox.filterNot { it.id == event.id }) to null
+                if (event.sessionId != rootId) {
+                    this to null
+                } else {
+                    copy(inbox = inbox.filterNot { it.id == event.id }, goalItems = goalItems - event.id) to null
+                }
+            // Subagents never have goals. A higher round count than the last one seen ends a turn inside the goal's run.
+            is SessionEvent.GoalChanged ->
+                if (event.sessionId != rootId) {
+                    this to null
+                } else {
+                    val round = event.goal != null && event.goal.rounds > (goalRounds ?: 0)
+                    copy(goal = event.goal, goalRounds = event.goal?.rounds, goalEvents = goalEvents + 1) to
+                        (if (round) LiveEffect.GoalRound else null)
+                }
             is SessionEvent.InboxDeliveryChanged ->
                 if (event.sessionId != rootId) {
                     this to null

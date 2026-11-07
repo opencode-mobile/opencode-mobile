@@ -89,6 +89,13 @@ sealed interface SessionEvent {
         val synthetic: Boolean = false,
         /** A finished subagent's note (`payload.metadata.source: "subagent"`), which wakes the session. */
         val fromSubagent: Boolean = false,
+        /**
+         * The goal's kickoff or a round's continuation (`payload.metadata.source: "goal"`), `synthetic` or `user`: never
+         * a waiting message, and never the You line.
+         */
+        val fromGoal: Boolean = false,
+        /** The goal a kickoff starts (`payload.metadata.goalID`), so Clear or Replace can take it back. */
+        val goalId: String? = null,
     ) : SessionEvent
 
     /** `session.inbox.delivered` or `.cancelled`. */
@@ -132,6 +139,12 @@ sealed interface SessionEvent {
         val items: List<TodoItem>,
     ) : SessionEvent
 
+    /** `rpc.opencode.goal.changed`: the session's goal now, after every write; null when it was cleared. */
+    data class GoalChanged(
+        val sessionId: String,
+        val goal: Goal?,
+    ) : SessionEvent
+
     /** Any other `session.tool.success`, or a `session.tool.failed`: Details reads Recent again. */
     data class ToolFinished(
         val sessionId: String,
@@ -160,6 +173,8 @@ sealed interface SessionEvent {
                 // Details' Recent; for the to-do list, one whose `metadata.todos` is a list.
                 "session.tool.failed",
                 "session.tool.success",
+                // The goal line. The server accepts any `rpc.*` name without checking it, so a typo fails silently.
+                "rpc.opencode.goal.changed",
             )
 
         private val json = Json { ignoreUnknownKeys = true }
@@ -209,9 +224,12 @@ sealed interface SessionEvent {
                             ?.map { InboxFile(it.string("name"), it.string("mime")) }
                             .orEmpty()
                     val synthetic = item?.string("type") == "synthetic"
-                    val source = (payload?.get("metadata") as? JsonObject)?.string("source")
+                    val metadata = payload?.get("metadata") as? JsonObject
+                    val source = metadata?.string("source")
                     val fromSubagent = synthetic && (source == "subagent" || text.trimStart().startsWith("<subagent"))
-                    sessionId?.let { InboxEnqueued(it, id, delivery, text, files, synthetic, fromSubagent) }
+                    val fromGoal = source == "goal"
+                    val goalId = metadata?.string("goalID")?.takeIf { fromGoal }
+                    sessionId?.let { InboxEnqueued(it, id, delivery, text, files, synthetic, fromSubagent, fromGoal, goalId) }
                 }
                 "session.inbox.delivered", "session.inbox.cancelled" -> {
                     val id = data.string("inboxID") ?: return null
@@ -241,6 +259,7 @@ sealed interface SessionEvent {
                     TodoList.fromToolSuccess(data)?.let { TodosUpdated(sessionId, it) } ?: ToolFinished(sessionId)
                 }
                 "session.tool.failed" -> sessionId?.let { ToolFinished(it) }
+                "rpc.opencode.goal.changed" -> sessionId?.let { GoalChanged(it, (data["goal"] as? JsonObject)?.let(Goal::read)) }
                 else -> null
             }
         }

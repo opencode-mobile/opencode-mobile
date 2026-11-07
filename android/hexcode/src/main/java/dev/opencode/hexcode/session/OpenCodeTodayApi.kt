@@ -6,6 +6,7 @@ import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.data.remote.SseAttemptOutcome
 import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
+import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
@@ -97,9 +98,10 @@ class OpenCodeTodayApi(
                 hasRun = busy != null,
                 children = childIds,
                 pending = pending,
-                // A server note (a subagent's `<subagent …>`) isn't a message from the user.
+                // A server note (a subagent's `<subagent …>`) and the goal's kickoff and continuations aren't messages
+                // from the user.
                 inbox =
-                    inbox.await().filter { it.type != "synthetic" }.map { item ->
+                    inbox.await().filter { it.type != "synthetic" && !it.fromGoal() }.map { item ->
                         InboxEntry(
                             item.id,
                             item.delivery ?: "queue",
@@ -117,8 +119,48 @@ class OpenCodeTodayApi(
                 updatedAt = time?.updated,
                 childInfo = childList.associate { it.id to it.child() },
                 projectId = root.await().projectId,
+                goalItems = inbox.await().filter { it.fromGoal() }.associate { it.id to it.metadata("goalID") },
             )
         }
+
+    override suspend fun goal(
+        sessionId: String,
+        directory: String,
+    ): Goal? {
+        ready()
+        return sessions.goalV2(sessionId, directory)?.let {
+            Goal(it.id, it.objective, GoalStatus.of(it.status), it.reason, it.rounds, it.maxRounds)
+        }
+    }
+
+    override suspend fun goalCommand(
+        sessionId: String,
+        text: String,
+        images: List<PromptImage>,
+    ) {
+        ready()
+        val files = withContext(Dispatchers.IO) { images.map { V2PromptFileDto(uri = it.dataUrl(), name = it.name) } }
+        try {
+            sessions.runSessionCommandV2(sessionId, "goal", text, files)
+        } catch (error: ResponseException) {
+            // `CommandExecutionError`: "No active goal to pause.", "No goal is set." … the goal changed elsewhere.
+            if (error.response.status.value == 500) throw GoalChangedException(error.message)
+            throw error
+        }
+    }
+
+    override suspend fun ask(
+        sessionId: String,
+        prompt: String,
+    ): String {
+        ready()
+        return try {
+            sessions.generateSessionTextV2(sessionId, prompt, timeoutMs = AskOnTheSide.TIMEOUT_MS)
+        } catch (error: ResponseException) {
+            if (error.response.status.value == 404) throw SessionGoneException(error.message)
+            throw error
+        }
+    }
 
     /**
      * The agent's to-do list: the newest completed `todowrite` part among the session's assistant messages, newest
@@ -281,6 +323,13 @@ class OpenCodeTodayApi(
         )
 
     private fun V2SessionDto.child() = ChildInfo(title, agent, time?.busy)
+
+    /** A `payload.metadata` string of an inbox item. */
+    private fun V2InboxItemDto.metadata(key: String): String? =
+        (payload?.metadata?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+    /** The goal's kickoff or a round's continuation (`payload.metadata.source: "goal"`), `synthetic` or `user`. */
+    private fun V2InboxItemDto.fromGoal(): Boolean = metadata("source") == "goal"
 
     private fun V2PermissionRequestDto.pending() =
         PendingItem(

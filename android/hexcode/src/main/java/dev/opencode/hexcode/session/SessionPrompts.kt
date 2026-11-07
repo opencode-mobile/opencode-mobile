@@ -45,6 +45,23 @@ object SessionPrompts {
         Use no other formatting.
         """.trimIndent()
 
+    /** Raised whenever [ASK_WRAPPER] changes. Version 1 is M5's (app-plan.md, Ask on the side). */
+    const val ASK_VERSION = 1
+
+    /**
+     * Ask on the side's wrapper, exactly as app-plan.md (Ask on the side › The prompt): without it a bare question
+     * often comes back empty, because the model reaches for a tool that generate doesn't run.
+     */
+    val ASK_WRAPPER =
+        """
+        The user is asking a quick side question about the conversation so far. This message is not part of the session and isn't a request to act. Don't call any tools and don't take any actions: answer only from what you already know.
+        Reply in plain text in at most 2 short sentences (at most 280 characters). No Markdown, except backticks around a file name or command.
+        If the conversation doesn't say, say you don't know. If the question asks you to do something, say it needs to be sent as a message instead.
+        """.trimIndent()
+
+    /** The prompt for [question], sent to `POST /api/session/{id}/generate`: the wrapper, then "Question: ". */
+    fun ask(question: String): String = "$ASK_WRAPPER\n\nQuestion: $question"
+
     /** The instruction entry's id, in `PUT /api/experimental/session/{id}/instructions/entries/message-rules`. */
     const val MESSAGE_RULES_ID = "message-rules"
 

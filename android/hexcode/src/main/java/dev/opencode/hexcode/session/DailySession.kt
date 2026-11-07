@@ -104,6 +104,11 @@ interface DailySessionMemory {
     suspend fun lastOpenedOn(): LocalDate?
 
     suspend fun setLastOpenedOn(date: LocalDate)
+
+    /** The session the app last opened, so a new day can ask whether yesterday's goal still runs; null before. */
+    suspend fun lastSessionId(): String? = null
+
+    suspend fun setLastSessionId(id: String) = Unit
 }
 
 /** How opening today's session went. */
@@ -113,6 +118,8 @@ sealed interface DailySessionResult {
         val session: SessionListing,
         val created: Boolean,
         val newDay: Boolean,
+        /** With [newDay]: the session the app opened before, yesterday's, when it's known. */
+        val previousId: String? = null,
     ) : DailySessionResult
 
     /** Finding, creating or putting the rules failed: "Couldn't open today's session" with Try again. */
@@ -150,14 +157,37 @@ class DailySessionSetup(
                     DailySessionResult.Opened(session, created = true, newDay = notice)
                 }
             api.putMessageRules(opened.session.id)
+            val previous = if (opened.newDay) previousOf(opened.session.id) else null
             noticeDueFor = null
             memory.setLastOpenedOn(today)
-            opened
+            remember(opened.session.id)
+            opened.copy(previousId = previous)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
             DailySessionResult.Failed
         }
+
+    /** The session opened before [current], as the phone saved it; null when it isn't known or is the same one. */
+    private suspend fun previousOf(current: String): String? =
+        try {
+            memory.lastSessionId()?.takeIf { it != current }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
+    /** Saves the session just opened; only a new day's goal check misses it if this fails. */
+    private suspend fun remember(id: String) {
+        try {
+            memory.setLastSessionId(id)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            Unit
+        }
+    }
 
     /** The first exact match, following the cursor only while a full page has none. An empty page is the end. */
     private suspend fun find(
