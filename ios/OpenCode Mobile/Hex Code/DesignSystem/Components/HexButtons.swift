@@ -136,7 +136,8 @@ struct HexButton: View {
             }
             .foregroundStyle(textColor)
             .padding(.horizontal, title == nil ? 0 : (size == .small ? 11 : 16))
-            .frame(minWidth: height, maxWidth: fullWidth ? .infinity : nil, minHeight: height, maxHeight: height)
+            // The height is a minimum: at large text sizes the button grows rather than clipping.
+            .frame(minWidth: height, maxWidth: fullWidth ? .infinity : nil, minHeight: height)
             .background(fill, in: shape)
             .overlay(shape.strokeBorder(style == .primary ? .clear : HexColor.line, lineWidth: 1))
             .opacity(enabled ? 1 : 0.3)

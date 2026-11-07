@@ -22,11 +22,17 @@ struct HexConfirmSheet: View {
                         .foregroundStyle(HexColor.text2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                HStack(spacing: 8) {
-                    HexButton(text: Text(LocalizedStringResource("common.cancel", defaultValue: "Cancel")), size: .regular, action: onCancel)
-                        .disabled(loading)
-                    Spacer(minLength: 8)
-                    HexButton(text: confirmTitle, size: .regular, style: confirmStyle, loading: loading, action: onConfirm)
+                // Side by side; stacked, the action first, when they don't fit (large text).
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        cancel.fixedSize()
+                        Spacer(minLength: 8)
+                        confirm.fixedSize()
+                    }
+                    VStack(spacing: 8) {
+                        confirm
+                        cancel
+                    }
                 }
                 .padding(.top, 8)
             }
@@ -34,5 +40,14 @@ struct HexConfirmSheet: View {
             .padding(.bottom, 16)
         }
         .interactiveDismissDisabled(loading)
+    }
+
+    private var cancel: some View {
+        HexButton(text: Text(LocalizedStringResource("common.cancel", defaultValue: "Cancel")), size: .regular, fullWidth: true, action: onCancel)
+            .disabled(loading)
+    }
+
+    private var confirm: some View {
+        HexButton(text: confirmTitle, size: .regular, style: confirmStyle, loading: loading, fullWidth: true, action: onConfirm)
     }
 }

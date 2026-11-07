@@ -96,7 +96,7 @@ struct HexTopBar<Trailing: View>: View {
                     text
                         .hexFont(.pageTitle)
                         .foregroundStyle(HexColor.text1)
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .accessibilityAddTraits(.isHeader)
                     if let subtitle {
                         HStack(spacing: 6) {
@@ -104,7 +104,7 @@ struct HexTopBar<Trailing: View>: View {
                             Text(verbatim: subtitle)
                                 .hexFont(.caption)
                                 .foregroundStyle(HexColor.text2)
-                                .lineLimit(1)
+                                .lineLimit(2)
                         }
                     }
                 }

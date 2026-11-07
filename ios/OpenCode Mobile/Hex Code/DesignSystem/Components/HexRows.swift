@@ -20,6 +20,7 @@ struct HexRow: View {
     /// A placeholder row: VoiceOver adds "Not in this version yet".
     var soon = false
     let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(
         icon: HexIcon? = nil,
@@ -76,12 +77,18 @@ struct HexRow: View {
                         Text(verbatim: subtitle)
                             .hexFont(.footnote)
                             .foregroundStyle(HexColor.text3)
-                            .lineLimit(1)
+                            .lineLimit(stacked ? nil : 1)
                             .truncationMode(.middle)
+                    }
+                    // At accessibility text sizes the value goes under the title, so neither is squeezed.
+                    if stacked, let value {
+                        Text(verbatim: value)
+                            .hexFont(.row)
+                            .foregroundStyle(HexColor.text2)
                     }
                 }
                 Spacer(minLength: 8)
-                if let value {
+                if !stacked, let value {
                     Text(verbatim: value)
                         .hexFont(.row)
                         .foregroundStyle(HexColor.text2)
@@ -102,6 +109,8 @@ struct HexRow: View {
         .accessibilityValue(Text(verbatim: value ?? ""))
         .accessibilityHint(Text(verbatim: hint))
     }
+
+    private var stacked: Bool { typeSize.isAccessibilitySize }
 
     private var hint: String {
         let soonText = soon ? String(localized: "a11y.soon", defaultValue: "Not in this version yet") : nil
@@ -227,7 +236,7 @@ struct HexSectionLabel: View {
         title
             .hexFont(.sectionLabel)
             .foregroundStyle(HexColor.text3)
-            .lineLimit(1)
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, HexSpacing.screen)
             .padding(.top, 18)
