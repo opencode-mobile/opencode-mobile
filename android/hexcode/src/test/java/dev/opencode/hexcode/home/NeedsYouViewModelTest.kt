@@ -579,6 +579,28 @@ class NeedsYouViewModelTest {
             }
         }
 
+    // app-plan.md, Settings and finish (M6) › Testing › New session: what's shown starts empty; the draft stays.
+
+    @Test
+    fun aNewSessionClosesTheOldSessionsSheetsAndKeepsTheDraft() =
+        runTest(dispatcher) {
+            val (vm, _) = home()
+            try {
+                vm.addToDraft("Make it blue")
+                vm.openDetails()
+                runCurrent()
+                assertEquals(dev.opencode.hexcode.session.NewSessionOutcome.Started, vm.startNewSession())
+                runCurrent()
+                val state = vm.uiState.value
+                assertFalse(state.detailsOpen)
+                assertEquals(null, state.needs)
+                assertEquals(HomeNotice.NewSession, state.notice)
+                assertEquals("Make it blue", state.draft.text)
+            } finally {
+                done(vm)
+            }
+        }
+
     // app-plan.md, Settings and finish (M6) › Accessibility: Stop through the screen reader's confirmation.
 
     @Test

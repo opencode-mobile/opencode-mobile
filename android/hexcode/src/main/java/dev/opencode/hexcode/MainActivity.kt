@@ -240,13 +240,15 @@ private fun HexCodeRoot(
         // The saved server's address check can take seconds; nothing on screen waits for it.
         services.appScope.launch { services.loadConnection() }
     }
+    val pairedAtLaunch = remember { prefs.firstRunDone }
     Box(
         Modifier
             .fillMaxSize()
             .background(HexTheme.colors.background),
     ) {
         if (prefs.firstRunDone) {
-            AfterFirstRun(services, lab, prefs, clips, draftText, pairLink)
+            // The debug pairing link pairs again only when the app opened after first run; in first run it was used there.
+            AfterFirstRun(services, lab, prefs, clips, draftText, pairLink.takeIf { pairedAtLaunch })
         } else {
             // Forget and a switch to another computer start first run afresh.
             val generation by services.setupGeneration.collectAsStateWithLifecycle()

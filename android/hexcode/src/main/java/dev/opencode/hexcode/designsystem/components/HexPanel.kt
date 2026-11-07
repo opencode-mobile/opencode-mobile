@@ -9,6 +9,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -145,7 +147,9 @@ fun BoxScope.HexSheet(
                     }.clip(shape)
                     .background(colors.panel)
                     .border(1.dp, colors.line2, shape)
-                    .clickable(remember { MutableInteractionSource() }, null) {}
+                    // Swallows taps on the sheet so they don't reach the scrim, without a click for TalkBack: the
+                    // sheet's own buttons stay separate items.
+                    .pointerInput(Unit) { detectTapGestures { } }
                     // TalkBack hears the sheet open by its title.
                     .semantics { paneTitle = title }
                     .navigationBarsPadding()
