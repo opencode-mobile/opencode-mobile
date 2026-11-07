@@ -86,6 +86,7 @@ private struct HexGalleryContent: View {
             menus
             goals
             askMessages
+            settingsAndFinish
         }
         .padding(.bottom, 40)
     }
@@ -709,6 +710,94 @@ private struct HexGalleryContent: View {
                 }
             }
         }
+    }
+
+    // MARK: M6
+
+    private var settingsAndFinish: some View {
+        section("Status failure, confirmation, reader, browser") {
+            HexStatusFailure(title: Text(verbatim: "Couldn’t open today’s session"), buttonTitle: "Try again", icon: .refresh) {}
+            HexStatusFailure(
+                title: Text(verbatim: "Signed out of Rapid Bison"),
+                detail: "Run `opencode pair` on the computer, then pair again.",
+                buttonTitle: "Pair again",
+                icon: .scan
+            ) {}
+            HexStatusFailure(title: Text(verbatim: "Couldn’t open today’s session"), buttonTitle: "Try again", icon: .refresh, loading: true) {}
+            caption("HexStatusFailure · setup failed · signed out · retrying")
+            galleryPanel {
+                HexConfirmSheet(
+                    title: Text(verbatim: "Start a new session?"),
+                    paragraphs: [
+                        Text(verbatim: "Today’s session stays on your computer as it is. The new one starts empty in hexcode, with the same model. Today’s goal isn’t carried over."),
+                        Text(verbatim: "The agent is still working there and carries on."),
+                    ],
+                    confirmTitle: Text(verbatim: "Start new session"),
+                    onCancel: {},
+                    onConfirm: {}
+                )
+            }
+            galleryPanel {
+                HexConfirmSheet(
+                    title: Text(verbatim: "Start a new session?"),
+                    paragraphs: [Text(verbatim: "Today’s session stays on your computer as it is.")],
+                    confirmTitle: Text(verbatim: "Start new session"),
+                    loading: true,
+                    onCancel: {},
+                    onConfirm: {}
+                )
+            }
+            caption("HexConfirmSheet · busy · loading")
+            galleryPanel {
+                HexReader(
+                    title: Text(verbatim: "Draft"),
+                    meta: "2:31 · 235 words",
+                    paragraphs: [
+                        "Make a birthday quiz game for Maya, three rounds of five questions each.",
+                        "Use her favourite things: horses, the Moomins and baking.",
+                    ],
+                    foot: HexReader.Foot(discardLabel: Text(verbatim: "Clear the draft"), sendTitle: Text(verbatim: "Send"), onDiscard: {}, onSend: {}),
+                    onDone: {}
+                )
+                .frame(height: 300)
+            }
+            galleryPanel {
+                HexReader(title: Text(verbatim: "You said"), meta: "235 words", paragraphs: ["Make a birthday quiz game for Maya."], onDone: {})
+                    .frame(height: 160)
+            }
+            caption("HexReader · Draft with its foot · You said")
+            galleryPanel {
+                HexBrowser(title: "Login preview", host: "192.168.0.47:5173", progress: 0.4, canGoBack: true, onDone: {}, onReload: {}) {
+                    Color.white
+                }
+                .frame(height: 220)
+            }
+            galleryPanel {
+                HexBrowser(
+                    title: "localhost:5173",
+                    host: "192.168.0.47:5173",
+                    failure: HexBrowserFailure(
+                        title: "Couldn’t reach port 5173 on Rapid Bison",
+                        detail: "The dev server may only listen on the computer itself. Start it so it listens on the network (for Vite, add `--host`), then try again.",
+                        button: "Try again"
+                    ),
+                    onDone: {},
+                    onReload: {}
+                ) {
+                    Color.clear
+                }
+                .frame(height: 300)
+            }
+            caption("HexBrowser · loading, can go back · dev server unreachable")
+        }
+    }
+
+    private func galleryPanel(@ViewBuilder _ content: () -> some View) -> some View {
+        content()
+            .background(HexColor.panel, in: RoundedRectangle(cornerRadius: HexRadius.xl, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: HexRadius.xl, style: .continuous).strokeBorder(HexColor.line, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: HexRadius.xl, style: .continuous))
+            .allowsHitTesting(false)
     }
 
     // MARK: Helpers
