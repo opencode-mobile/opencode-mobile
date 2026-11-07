@@ -111,6 +111,8 @@ import dev.opencode.hexcode.designsystem.components.HexToastMessage
 import dev.opencode.hexcode.designsystem.components.HexToastTone
 import dev.opencode.hexcode.designsystem.components.rememberHexTalkHold
 import dev.opencode.hexcode.session.AgentStatus
+import dev.opencode.hexcode.session.GoalStatus
+import dev.opencode.hexcode.session.SessionSetup
 import kotlinx.coroutines.delay
 
 /**
@@ -162,7 +164,27 @@ fun HomeScreen(
                 val today = state.today
                 val now = rememberNow(if (today.agent is AgentStatus.Working) 1_000 else 15_000)
                 HomeTopBar(today.agent, now, Modifier.padding(start = edge, end = edge - 6.dp), onNeedsInput = { vm.openNeeds() }) {
+                    // ◎ is always there: green while the goal is active.
+                    HexRoundButton(
+                        HexIcons.target,
+                        stringResource(R.string.goal_button),
+                        onClick = vm::openGoal,
+                        selected = today.goal?.status == GoalStatus.Active,
+                    )
                     HexRoundButton(HexIcons.gear, stringResource(R.string.home_settings), onClick = onSettings)
+                }
+                // The goal line (`.goalline`): hidden while a take records, while there's a draft, and while an Ask shows.
+                val goalLine = today.goalLine.takeIf { today.setup is SessionSetup.Ready }
+                AnimatedVisibility(
+                    goalLine != null && !state.recording && state.draft.isEmpty && today.ask == null,
+                    enter = fadeIn(HexTheme.motion.fade()),
+                    exit = fadeOut(HexTheme.motion.fade()),
+                ) {
+                    if (goalLine !=
+                        null
+                    ) {
+                        GoalLineRow(goalLine, today.goal, vm::openGoal, Modifier.padding(start = edge, end = edge, top = 2.dp))
+                    }
                 }
                 // The status card is centred between the top bar and the dock (`.fx-body.centred`); the draft starts at a
                 // line 26 % down that space (the prototype's `.fx-sp`), so it grows downward while you talk.
@@ -183,6 +205,16 @@ fun HomeScreen(
                                     DraftView(state, vm)
                                 }
                             }
+                        }
+                        // The Ask message, between the status card and the waiting line; hidden while a take records or
+                        // there's a draft, and back after.
+                        val ask = today.ask
+                        AnimatedVisibility(
+                            ask != null && state.draft.isEmpty && !state.recording,
+                            enter = fadeIn(HexTheme.motion.fade()),
+                            exit = fadeOut(HexTheme.motion.fade()),
+                        ) {
+                            if (ask != null) AskMessageView(ask, vm, Modifier.padding(start = edge, end = edge, top = 10.dp))
                         }
                         if (state.draft.isEmpty && today.waiting > 0) {
                             WaitingLine(
@@ -279,7 +311,9 @@ fun HomeScreen(
             val deleted = stringResource(R.string.home_chunk_deleted)
             val dropped = stringResource(R.string.home_take_dropped)
             val newDayTitle = stringResource(R.string.home_newday_title)
-            val newDayDetail = stringResource(R.string.home_newday_detail)
+            val newDayDetail = stringResource(if (state.today.newDayGoal) R.string.home_newday_detail_goal else R.string.home_newday_detail)
+            val goalNotices = goalNoticeTexts()
+            val askCopied = stringResource(R.string.ask_copied)
             val undo = stringResource(R.string.common_undo)
             val needsGone = stringResource(R.string.needs_gone)
             val needsGoneSub = stringResource(R.string.needs_gone_sub)
@@ -316,7 +350,7 @@ fun HomeScreen(
                 quoted(state.noticeDetail)
                     ?: state.noticeImages.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.home_waiting_images, it, it) }
             val notice =
-                remember(state.notice, messageDetail, micOff, sentNoImagesSub) {
+                remember(state.notice, messageDetail, micOff, sentNoImagesSub, newDayDetail) {
                     when (state.notice) {
                         HomeNotice.ChunkDeleted ->
                             HexToastMessage(deleted, HexToastTone.Undo, actionLabel = undo, actionIcon = HexIcons.undo, durationMs = 3_500)
@@ -366,6 +400,20 @@ fun HomeScreen(
                         HomeNotice.StoppedWaiting -> HexToastMessage(stopped, HexToastTone.Stop, stoppedWaiting, durationMs = 3_200)
                         HomeNotice.NothingToStop -> HexToastMessage(nothing, HexToastTone.Info, nothingSub)
                         HomeNotice.StopFailed -> HexToastMessage(stopFailed, HexToastTone.Stop, stopFailedSub)
+                        HomeNotice.AskCopied -> HexToastMessage(askCopied, HexToastTone.Steer, durationMs = 1_600)
+                        HomeNotice.GoalSetIdle,
+                        HomeNotice.GoalSetBusy,
+                        HomeNotice.GoalReplacedIdle,
+                        HomeNotice.GoalReplacedBusy,
+                        HomeNotice.GoalPaused,
+                        HomeNotice.GoalResumed,
+                        HomeNotice.GoalCleared,
+                        HomeNotice.GoalClearedBusy,
+                        HomeNotice.GoalStale,
+                        HomeNotice.GoalFailed,
+                        HomeNotice.GoalRefusedWord,
+                        HomeNotice.GoalRefusedLong,
+                        -> goalNotices.of(state.notice)
                         null -> if (micOff) HexToastMessage(micOffText, HexToastTone.Info) else null
                     }
                 }
@@ -383,6 +431,7 @@ fun HomeScreen(
             )
             DetailsSheet(state, vm)
             NeedsSheets(state, vm, micReady)
+            GoalSheetView(state, vm, micReady)
             // Notices and the stop warning show over any open sheet.
             HexToastHost(
                 message = notice,
@@ -955,13 +1004,25 @@ private fun DraftActions(
     val draft = state.draft
     val busy = state.busy
     val mode = state.sendMode
+    // The ⋯ menu opens above the whole row, at its right edge (`.dmenu`).
+    Box(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+        DraftMenu(state, vm)
+        DraftActionRow(state, vm, draft, busy, mode)
+    }
+}
+
+@Composable
+private fun DraftActionRow(
+    state: HomeUiState,
+    vm: HomeViewModel,
+    draft: Draft,
+    busy: Boolean,
+    mode: SendMode,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 14.dp),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         val selected = draft.selected
         if (selected != null) {
@@ -998,6 +1059,7 @@ private fun DraftActions(
                     size = HexSegmentedSize.Small,
                 )
             }
+            DraftMore(vm)
             // Send waits for every chunk's text and every image: it reads "Transcribing" while a chunk is still on its
             // way, else "Preparing" while an image is.
             val transcribing = draft.isListening || draft.isTranscribing || draft.isWaiting

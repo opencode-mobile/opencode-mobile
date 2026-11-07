@@ -39,7 +39,7 @@ import dev.opencode.hexcode.session.recentAge
 /**
  * Details (app-plan.md, Needs you and control › Details): Needs you, Waiting to send, Running now, the to-do list and
  * Recent, in that order, each left out when empty; "Nothing running right now." when all are. It updates live while
- * open. Asked on the side comes with M5.
+ * open. Asked on the side lists the closed Ask answers.
  */
 @Composable
 internal fun BoxScope.DetailsSheet(
@@ -53,7 +53,7 @@ internal fun BoxScope.DetailsSheet(
         DetailsSections.of(
             pending = today.pending.size,
             waiting = today.inbox.size,
-            asked = 0,
+            asked = today.asked.size,
             running = running.total,
             todos = today.todos.size,
             recent = state.recent.size,
@@ -76,7 +76,7 @@ internal fun BoxScope.DetailsSheet(
             when (section) {
                 DetailsSection.NeedsYou -> NeedsYou(today.pending, vm)
                 DetailsSection.Waiting -> Waiting(state, vm)
-                DetailsSection.AskedOnTheSide -> Unit
+                DetailsSection.AskedOnTheSide -> AskedSection(today.asked, vm)
                 DetailsSection.Running -> Running(running, now)
                 DetailsSection.Todo -> Todos(today.todos)
                 DetailsSection.Recent -> Recent(state.recent, now)

@@ -9,6 +9,11 @@ import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.session.AgentStatus
 import dev.opencode.hexcode.session.ApprovalDecision
+import dev.opencode.hexcode.session.GoalAction
+import dev.opencode.hexcode.session.GoalCommand
+import dev.opencode.hexcode.session.GoalOutcome
+import dev.opencode.hexcode.session.GoalRefusal
+import dev.opencode.hexcode.session.GoalText
 import dev.opencode.hexcode.session.PendingItem
 import dev.opencode.hexcode.session.PromptImage
 import dev.opencode.hexcode.session.QuestionAnswers
@@ -397,7 +402,60 @@ enum class HomeNotice {
 
     /** "Couldn't stop · Check the connection and hold again." */
     StopFailed,
+
+    /** "Goal set · The agent keeps going until it's done." (idle) */
+    GoalSetIdle,
+
+    /** "Goal set · The agent starts on it at its next step." (busy) */
+    GoalSetBusy,
+
+    /** "Goal replaced · …", idle and busy. */
+    GoalReplacedIdle,
+    GoalReplacedBusy,
+
+    /** "Goal paused · The agent finishes this turn, then stops." */
+    GoalPaused,
+
+    /** "Goal resumed · The agent carries on." */
+    GoalResumed,
+
+    /** "Goal cleared", or while busy "Goal cleared · The agent finishes this turn." */
+    GoalCleared,
+    GoalClearedBusy,
+
+    /** "The goal had already changed": a `500`. */
+    GoalStale,
+
+    /** "Couldn't change the goal · Try again." */
+    GoalFailed,
+
+    /** "Say a longer goal · A single word is read as a goal command." */
+    GoalRefusedWord,
+
+    /** "That's too long for a goal · Goals are limited to 4,000 characters." */
+    GoalRefusedLong,
+
+    /** "Answer copied" (iOS, and Android below 13, where the system doesn't confirm copies). */
+    AskCopied,
 }
+
+/** A take for the goal sheet's box: recording while the button is held, then being turned into text. */
+enum class GoalTake { Listening, Transcribing }
+
+/**
+ * The goal sheet's box as a take (app-plan.md, The goal sheet › Saying it): [text] once said (null before), and the
+ * [take] while one runs.
+ */
+data class GoalEdit(
+    val text: String? = null,
+    val take: GoalTake? = null,
+)
+
+/** The open goal sheet: its box as a take while one is being said ([edit]), and which button waits for the server. */
+data class GoalSheet(
+    val edit: GoalEdit? = null,
+    val busy: GoalAction? = null,
+)
 
 /** The open approval or question ([itemId]), and which of its buttons waits for the server. */
 data class NeedsSheet(
@@ -420,6 +478,11 @@ sealed interface SheetTarget {
         override val itemId: String,
         val key: String,
     ) : SheetTarget
+
+    /** The goal sheet's box. */
+    data object Goal : SheetTarget {
+        override val itemId = ""
+    }
 }
 
 /** A take on a sheet: recording while the row is held, then being turned into text. */
@@ -468,7 +531,17 @@ data class HomeUiState(
     val stopHeldAt: Long = 0,
     /** The 3 s were reached: the interrupt is on its way. */
     val stopping: Boolean = false,
+    /** The goal sheet, while open. */
+    val goalSheet: GoalSheet? = null,
+    /** The draft's ⋯ menu is open. */
+    val draftMenu: Boolean = false,
 ) {
+    /** The draft can be asked on the side or set as the goal: every chunk has text, and there is some. */
+    val draftReady: Boolean get() = draft.isSettled && draft.text.isNotBlank()
+
+    /** A take records, on the talk button or a sheet. */
+    val recording: Boolean get() = talk != TalkMode.Idle || draft.isListening
+
     /** Stop is lit (the agent works or waits for an answer); dimmed, a hold does nothing. */
     val stopLive: Boolean get() = today.agent.let { it is AgentStatus.Working || it == AgentStatus.NeedsInput }
 
@@ -844,7 +917,9 @@ class HomeViewModel(
         sheetPressedAt = clock()
         state.update { it.copy(sheetTake = SheetTake(target)) }
         dictation.start {
-            if (state.value.sheetTake?.target == target) state.update { it.copy(sheetTake = null, notice = HomeNotice.MicUnavailable) }
+            if (state.value.sheetTake?.target == target) {
+                state.update { it.copy(sheetTake = null, notice = HomeNotice.MicUnavailable).withGoalTake(null) }
+            }
         }
         return true
     }
@@ -862,11 +937,11 @@ class HomeViewModel(
         if (take.transcribing) return
         if (clock() - sheetPressedAt < SHEET_TAP_MS) {
             dictation.drop()
-            state.update { it.copy(sheetTake = null) }
+            state.update { it.copy(sheetTake = null).withGoalTake(null) }
             if (take.target is SheetTarget.Own) ownTapped(take.target)
             return
         }
-        state.update { it.copy(sheetTake = take.copy(transcribing = true)) }
+        state.update { it.copy(sheetTake = take.copy(transcribing = true)).withGoalTake(GoalTake.Transcribing) }
         viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
             val samples = dictation.end()
             val text =
@@ -875,7 +950,7 @@ class HomeViewModel(
                 } else {
                     sheetText(samples)
                 }
-            state.update { s -> s.withSheetText(take.target, text?.trim()?.ifEmpty { null }).copy(sheetTake = null) }
+            state.update { s -> s.withSheetText(take.target, text?.trim()?.ifEmpty { null }).copy(sheetTake = null).withGoalTake(null) }
         }
     }
 
@@ -902,6 +977,7 @@ class HomeViewModel(
             text == null -> this
             target is SheetTarget.Note -> copy(notes = notes + (target.itemId to text))
             target is SheetTarget.Own -> onField(target) { it.own(text) }
+            target is SheetTarget.Goal -> copy(goalSheet = goalSheet?.copy(edit = GoalEdit(text)))
             else -> this
         }
 
@@ -920,6 +996,200 @@ class HomeViewModel(
                 .takeIf { it >= 0 } ?: return this
         val changed = change(answers.copy(page = index))
         return copy(answers = this.answers + (target.itemId to changed.copy(page = answers.page)))
+    }
+
+    // --- The goal (app-plan.md, Goal and Ask › The goal sheet)
+
+    /** The take on the goal sheet's box: [take] while it runs, null once it's done (a box that got no text closes). */
+    private fun HomeUiState.withGoalTake(take: GoalTake?): HomeUiState {
+        val sheet = goalSheet ?: return this
+        if (sheetTake != null && sheetTake.target != SheetTarget.Goal && take != null) return this
+        val edit = sheet.edit
+        val next =
+            when {
+                take != null -> (edit ?: GoalEdit()).copy(take = take)
+                edit?.text != null -> edit.copy(take = null)
+                else -> null
+            }
+        return copy(goalSheet = sheet.copy(edit = next))
+    }
+
+    /** ◎ or the goal line: the goal sheet opens. */
+    fun openGoal() = state.update { it.copy(goalSheet = GoalSheet(), draftMenu = false) }
+
+    /** Done, or a tap outside: the sheet closes and a take's text is let go. */
+    fun closeGoal() {
+        if (state.value.sheetTake?.target == SheetTarget.Goal) return
+        state.update { it.copy(goalSheet = null) }
+    }
+
+    /** "Say the goal", Change, "New goal" or Again is held: a take into the box, as Say why (false when it can't). */
+    fun goalTakeStart(): Boolean {
+        if (state.value.goalSheet?.busy != null) return false
+        if (!sheetTakeStart(SheetTarget.Goal)) return false
+        state.update { it.withGoalTake(GoalTake.Listening) }
+        return true
+    }
+
+    /** Cancel: the box shows the goal again. */
+    fun cancelGoalEdit() {
+        if (state.value.sheetTake?.target == SheetTarget.Goal) return
+        state.update { it.copy(goalSheet = it.goalSheet?.copy(edit = null)) }
+    }
+
+    /** "Set goal" or "Replace goal": the take's text, unless it's refused; the sheet closes once it's set. */
+    fun setGoal() {
+        val sheet = state.value.goalSheet ?: return
+        val text =
+            sheet.edit
+                ?.takeIf { it.take == null }
+                ?.text
+                ?.trim()
+                ?.ifEmpty { null } ?: return
+        if (sheet.busy != null) return
+        refusal(text)?.let {
+            notify(it, null)
+            return
+        }
+        runGoal(GoalAction.Change, GoalCommand.Set(text))
+    }
+
+    fun pauseGoal() = runGoal(GoalAction.Pause, GoalCommand.Pause)
+
+    fun resumeGoal() = runGoal(GoalAction.Resume, GoalCommand.Resume)
+
+    fun clearGoal() = runGoal(GoalAction.Clear, GoalCommand.Clear)
+
+    private fun refusal(text: String): HomeNotice? =
+        when (GoalText.refusal(text)) {
+            GoalRefusal.Word -> HomeNotice.GoalRefusedWord
+            GoalRefusal.TooLong -> HomeNotice.GoalRefusedLong
+            null -> null
+        }
+
+    /** A goal button: its spinner while the request runs, then the notice; Set and Clear close the sheet once done. */
+    private fun runGoal(
+        action: GoalAction,
+        command: GoalCommand,
+    ) {
+        val today = session ?: return
+        if (state.value.goalSheet?.busy != null || state.value.sheetTake != null) return
+        val replacing = state.value.today.goal != null
+        state.update { it.copy(goalSheet = it.goalSheet?.copy(busy = action)) }
+        viewModelScope.launch {
+            val outcome = today.goal(command)
+            val busy = state.value.busy
+            val closes = outcome == GoalOutcome.Done && (command is GoalCommand.Set || command == GoalCommand.Clear)
+            state.update {
+                it.copy(
+                    goalSheet = if (closes) null else it.goalSheet?.copy(busy = null),
+                    notice = goalNotice(command, outcome, replacing, busy),
+                    noticeDetail = null,
+                )
+            }
+        }
+    }
+
+    private fun goalNotice(
+        command: GoalCommand,
+        outcome: GoalOutcome,
+        replacing: Boolean,
+        busy: Boolean,
+    ): HomeNotice =
+        when (outcome) {
+            GoalOutcome.Stale -> HomeNotice.GoalStale
+            GoalOutcome.Failed -> HomeNotice.GoalFailed
+            GoalOutcome.Done ->
+                when (command) {
+                    is GoalCommand.Set ->
+                        when {
+                            replacing && busy -> HomeNotice.GoalReplacedBusy
+                            replacing -> HomeNotice.GoalReplacedIdle
+                            busy -> HomeNotice.GoalSetBusy
+                            else -> HomeNotice.GoalSetIdle
+                        }
+                    GoalCommand.Pause -> HomeNotice.GoalPaused
+                    GoalCommand.Resume -> HomeNotice.GoalResumed
+                    GoalCommand.Clear -> if (busy) HomeNotice.GoalClearedBusy else HomeNotice.GoalCleared
+                }
+        }
+
+    // --- The draft's ⋯ (app-plan.md, Set as goal from a draft and Ask on the side)
+
+    fun toggleDraftMenu() = state.update { it.copy(draftMenu = !it.draftMenu && !it.draft.isEmpty) }
+
+    fun closeDraftMenu() = state.update { it.copy(draftMenu = false) }
+
+    /**
+     * Set as (or Replace) today's goal: the draft's text, as Send makes it, with its images as `files` unless the model
+     * can't see them. Refused for a lone goal command word or over 4,000 characters, keeping the draft; on success the
+     * draft clears with the notice Set gives; if it fails the draft comes back.
+     */
+    fun goalFromDraft() {
+        val current = state.value
+        if (!current.draftReady) return
+        val draft = current.draft
+        val text = draft.text.trim()
+        refusal(text)?.let {
+            state.update { s -> s.copy(draftMenu = false) }
+            notify(it, null)
+            return
+        }
+        val today = session ?: return
+        val images = if (current.seesImages) AttachNames.of(draft.images) else emptyList()
+        val replacing = current.today.goal != null
+        state.update { it.copy(draft = it.draft.clear(), draftMenu = false, sendMode = SendMode.AfterTurn) }
+        inFlight += draft
+        viewModelScope.launch {
+            val outcome =
+                try {
+                    today.goal(GoalCommand.Set(text), images)
+                } finally {
+                    inFlight -= draft
+                }
+            if (outcome != GoalOutcome.Done) restore(draft)
+            state.update {
+                it.copy(notice = goalNotice(GoalCommand.Set(text), outcome, replacing, it.busy), noticeDetail = null)
+            }
+            sweepImages()
+        }
+    }
+
+    /** Ask on the side: the draft's text is asked; the draft clears and the answer shows under the status card. */
+    fun askFromDraft() {
+        val current = state.value
+        if (!current.draftReady) return
+        val text = current.draft.text.trim()
+        state.update { it.copy(draft = it.draft.clear(), draftMenu = false, sendMode = SendMode.AfterTurn) }
+        sweepImages()
+        session?.ask(text)
+    }
+
+    fun retryAsk() {
+        session?.retryAsk()
+    }
+
+    fun closeAsk() {
+        session?.closeAsk()
+    }
+
+    fun openAsk() {
+        session?.openAsk()
+    }
+
+    fun foldAsk() {
+        session?.foldAsk()
+    }
+
+    /** Copy put the answer on the clipboard; [confirm] where the system doesn't say so itself. */
+    fun askCopied(confirm: Boolean) {
+        if (confirm) notify(HomeNotice.AskCopied, null)
+    }
+
+    /** A row of Details' Asked on the side: Details closes and it shows as the open Ask message. */
+    fun showAsked(index: Int) {
+        closeDetails()
+        session?.showAsked(index)
     }
 
     // --- Details (app-plan.md, Needs you and control › Details)

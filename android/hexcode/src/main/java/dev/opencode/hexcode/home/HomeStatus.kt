@@ -164,7 +164,7 @@ internal fun StatusArea(
             today.busySince != null -> CardPhase.Working
             else -> null
         }
-    val work = Work(today.todos, today.running(now), today.you, vm::addToDraft, phase, vm::openDetails)
+    val work = Work(today.todos, today.running(now), today.you, vm::addToDraft, phase, vm::openDetails, youGoal = today.youGoal)
     val nowLines =
         when (val card = summary.summary) {
             is StatusSummary.Card -> card.now
@@ -335,6 +335,8 @@ private class Work(
     val phase: CardPhase? = null,
     /** "Details ›" and the to-do row open Details. */
     val onDetails: () -> Unit = {},
+    /** [you] is a goal set from this phone: "Goal: “…”". */
+    val youGoal: Boolean = false,
 )
 
 /** What the label over Now adds while the session isn't idle. */
@@ -380,7 +382,7 @@ private fun Card(
         // The message just sent stands in for Next until the card made after its run (Just sent); it isn't tappable.
         you != null ->
             Text(
-                stringResource(R.string.home_summary_you, you),
+                stringResource(if (work.youGoal) R.string.home_you_goal else R.string.home_summary_you, you),
                 style = HexTheme.type.body,
                 color = colors.text3,
                 modifier = Modifier.alpha(dim),

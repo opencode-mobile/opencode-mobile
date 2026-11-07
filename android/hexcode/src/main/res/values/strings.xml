@@ -9,6 +9,7 @@
     <!-- shared -->
     <string name="common_back">Back</string>
     <string name="common_close">Close</string>
+    <string name="common_cancel">Cancel</string>
     <string name="common_retry">Retry</string>
     <string name="common_undo">Undo</string>
     <string name="common_done">Done</string>
@@ -120,6 +121,7 @@
     <!-- home: today's session -->
     <string name="home_newday_title">New day, new session</string>
     <string name="home_newday_detail">Yesterday’s is kept on your computer.</string>
+    <string name="home_newday_detail_goal">Yesterday’s is kept on your computer. Its goal keeps running there.</string>
     <string name="home_setup_failed">Couldn’t open today’s session</string>
     <string name="home_setup_retry">Try again</string>
     <string name="home_summary_empty_now">New session. Nothing running yet.</string>
@@ -238,6 +240,8 @@
     <string name="details_recent_stopped">Stopped</string>
     <string name="details_recent_denied">Denied</string>
     <string name="details_empty">Nothing running right now.</string>
+    <string name="details_asked">Asked on the side</string>
+    <string name="details_asked_suffix">· only you see these</string>
 
     <!-- Attach (app-plan.md, Attach) -->
     <string name="home_attach_title">Attach</string>
@@ -324,4 +328,67 @@
     <string name="settings_project_changed">Now in %1$s</string>
     <string name="settings_model_title">Model</string>
     <string name="settings_model_save">Save</string>
+    <!-- Goal and Ask (app-plan.md, Goal and Ask) -->
+    <string name="goal_button">Today’s goal</string>
+    <string name="goal_line_empty">Set today’s goal</string>
+    <string name="goal_line_round">round %1$d</string>
+    <string name="goal_line_starting">starting</string>
+    <string name="goal_line_waiting">waiting</string>
+    <string name="goal_line_paused">paused</string>
+    <string name="goal_line_done">done</string>
+    <string name="goal_sheet_title">Today’s goal</string>
+    <string name="goal_box_label">/goal</string>
+    <string name="goal_box_label_new">new goal</string>
+    <string name="goal_box_label_today">today’s goal</string>
+    <string name="goal_box_on_phone">On this phone</string>
+    <string name="goal_box_active">active · round %1$d of %2$d</string>
+    <string name="goal_box_active_starting">active · starting</string>
+    <string name="goal_box_active_waiting">active · waiting</string>
+    <string name="goal_box_empty">No goal yet.</string>
+    <string name="goal_fine">With a goal the agent keeps going after each turn until a reviewer decides it’s done or blocked (OpenCode /goal, up to 50 rounds). The app sets it; the agent can’t set its own. Stop pauses it.</string>
+    <string name="goal_say">Say the goal</string>
+    <string name="goal_change">Change</string>
+    <string name="goal_new">New goal</string>
+    <string name="goal_again">Again</string>
+    <string name="goal_set">Set goal</string>
+    <string name="goal_replace">Replace goal</string>
+    <string name="goal_pause">Pause</string>
+    <string name="goal_resume">Resume</string>
+    <string name="goal_clear">Clear</string>
+    <string name="goal_notice_set">Goal set</string>
+    <string name="goal_notice_replaced">Goal replaced</string>
+    <string name="goal_notice_set_idle">The agent keeps going until it’s done.</string>
+    <string name="goal_notice_set_busy">The agent starts on it at its next step.</string>
+    <string name="goal_notice_paused">Goal paused</string>
+    <string name="goal_notice_paused_sub">The agent finishes this turn, then stops.</string>
+    <string name="goal_notice_resumed">Goal resumed</string>
+    <string name="goal_notice_resumed_sub">The agent carries on.</string>
+    <string name="goal_notice_cleared">Goal cleared</string>
+    <string name="goal_notice_cleared_busy">The agent finishes this turn.</string>
+    <string name="goal_notice_stale">The goal had already changed</string>
+    <string name="goal_notice_failed">Couldn’t change the goal</string>
+    <string name="goal_notice_failed_sub">Try again.</string>
+    <string name="goal_refused_word">Say a longer goal</string>
+    <string name="goal_refused_word_sub">A single word is read as a goal command.</string>
+    <string name="goal_refused_long">That’s too long for a goal</string>
+    <string name="goal_refused_long_sub">Goals are limited to 4,000 characters.</string>
+    <string name="home_you_goal">Goal: “%1$s”</string>
+    <string name="draft_more">More</string>
+    <string name="draft_menu_ask">Ask on the side</string>
+    <string name="draft_menu_ask_sub">Answered from the session, not sent to the agent</string>
+    <string name="draft_menu_goal">Set as today’s goal</string>
+    <string name="draft_menu_goal_replace">Replace today’s goal</string>
+    <string name="draft_menu_goal_sub">The agent keeps going until it’s done</string>
+    <string name="ask_reading">Reading the session…</string>
+    <string name="ask_title">Asked on the side · %1$s</string>
+    <string name="ask_only_you">Only you see this</string>
+    <string name="ask_copy">Copy</string>
+    <string name="ask_copied">Answer copied</string>
+    <string name="ask_empty">No answer</string>
+    <string name="ask_empty_sub">Ask it another way, or send it as a message.</string>
+    <string name="ask_failed">Couldn’t answer</string>
+    <string name="ask_failed_sub">Try again.</string>
+    <string name="ask_try_again">Try again</string>
+    <string name="ask_fold">Fold</string>
+    <string name="ask_close">Close</string>
 </resources>
