@@ -11,11 +11,12 @@ struct ProjectPickerView: View {
     let onPick: (ChosenProject) -> Void
     /// Pushes Browse folders as its own page. Without it the browser replaces the list in place.
     var onBrowse: (() -> Void)?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if picker.isBrowsing, onBrowse == nil {
             FolderBrowserView(picker: picker, onPick: onPick)
-                .transition(.move(edge: .trailing))
+                .transition(HexMotion.transition(.move(edge: .trailing), reduced: reduceMotion))
         } else {
             list
         }

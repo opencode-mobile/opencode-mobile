@@ -101,7 +101,7 @@ struct HomeView: View {
                 )
                 .padding(.horizontal, 12)
                 .padding(.top, HexTopBarMetrics.homeHeight + 4)
-                .transition(.offset(y: 4).combined(with: .opacity))
+                .transition(HexMotion.transition(.offset(y: 4).combined(with: .opacity), reduced: reduceMotion))
             }
         }
         .background {
@@ -111,10 +111,10 @@ struct HomeView: View {
             }
         }
         .hexScreenBackground()
-        .animation(HexMotion.ease(HexMotion.fade), value: drafting)
-        .animation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
-        .animation(HexMotion.ease(HexMotion.fade), value: session.goalLine)
-        .animation(HexMotion.ease(HexMotion.fade), value: session.ask.shown?.id)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: drafting)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.goalLine)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.ask.shown?.id)
         // The draft's ⋯ menu opens above its button; a tap anywhere else closes it.
         .overlayPreferenceValue(DraftMenuAnchor.self) { anchor in
             if home.draftMenuOpen, drafting, let anchor {
@@ -314,7 +314,7 @@ struct HomeView: View {
                 }
             }
         }
-        .animation(HexMotion.ease(HexMotion.fade), value: home.dock)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: home.dock)
     }
 }
 
@@ -395,7 +395,7 @@ struct DraftView: View {
                 }
             }
         }
-        .animation(HexMotion.ease(HexMotion.fade), value: draft)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: draft)
     }
 
     private func layout(@ViewBuilder _ content: () -> some View) -> some View {
@@ -756,7 +756,7 @@ struct DraftImagesRow: View {
         }
         // Room for the ✕ over the top corner.
         .padding(.top, 5)
-        .animation(HexMotion.ease(HexMotion.fade), value: images)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: images)
     }
 }
 

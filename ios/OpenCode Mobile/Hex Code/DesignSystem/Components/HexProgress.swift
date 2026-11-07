@@ -45,7 +45,7 @@ struct HexProgress: View {
                     }
                 }
             }
-            .animation(HexMotion.ease(HexMotion.press), value: pressed)
+            .hexAnimation(HexMotion.ease(HexMotion.press), value: pressed)
             .padding(.vertical, 6)
             .contentShape(Rectangle())
         })
@@ -83,7 +83,7 @@ extension HexProgress {
             }
         }
         .fixedSize()
-        .animation(HexMotion.ease(0.3), value: segments)
+        .hexAnimation(HexMotion.ease(0.3), value: segments)
     }
 
     private func labelText(pressed: Bool) -> some View {

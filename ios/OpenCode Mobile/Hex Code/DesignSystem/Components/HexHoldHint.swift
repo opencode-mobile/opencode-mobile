@@ -18,9 +18,11 @@ struct HexHoldHint: View {
     static let delay: Duration = .milliseconds(250)
 
     @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HexHoldHintLine(offset: holding ? offset : 0, arm: holding ? arm : nil)
+        // With Reduce Motion it fades only; it doesn't follow the drag.
+        HexHoldHintLine(offset: holding ? HexMotion.follow(offset, reduced: reduceMotion) : 0, arm: holding ? arm : nil)
             .animation(HexTalkButton.follow, value: holding ? offset : 0)
             .animation(HexMotion.ease(HexMotion.fade), value: arm)
             .opacity(shown && holding ? 1 : 0)

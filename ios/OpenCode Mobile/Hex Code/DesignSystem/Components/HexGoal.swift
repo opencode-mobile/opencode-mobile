@@ -95,7 +95,7 @@ struct HexGoalBox: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(HexColor.background, in: shape)
         .overlay(shape.strokeBorder(live ? HexColor.line2 : HexColor.line, lineWidth: 1))
-        .animation(HexMotion.ease(HexMotion.fade), value: content)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: content)
     }
 
     @ViewBuilder

@@ -22,10 +22,11 @@ enum HexColor {
     static let text1 = pair(dark: 0xF7F8F8, light: 0x17181A)
     /// Secondary text, icons.
     static let text2 = pair(dark: 0x8A8F98, light: 0x5F636B)
-    /// Labels, hints, captions.
-    static let text3 = pair(dark: 0x62666D, light: 0x8B8F97)
-    /// Faint marks, empty progress.
-    static let text4 = pair(dark: 0x3E4146, light: 0xC9CCD1)
+    /// Labels, hints, captions. With Increase Contrast it takes `text2`'s value (3.1–3.5:1 is below
+    /// what small text needs).
+    static let text3 = pair(dark: 0x62666D, light: 0x8B8F97, increased: (dark: 0x8A8F98, light: 0x5F636B))
+    /// Faint marks, empty progress. With Increase Contrast it takes `text3`'s value.
+    static let text4 = pair(dark: 0x3E4146, light: 0xC9CCD1, increased: (dark: 0x62666D, light: 0x8B8F97))
     /// Connected, working, success.
     static let green = pair(dark: 0x4CB782, light: 0x2C9A66)
     /// Needs you, warnings, Now.
@@ -57,12 +58,30 @@ enum HexColor {
         foreground(dark: percent / 100, light: percent / 100)
     }
 
-    private static func pair(dark: UInt32, light: UInt32, darkAlpha: CGFloat = 1, lightAlpha: CGFloat = 1) -> Color {
+    private static func pair(
+        dark: UInt32,
+        light: UInt32,
+        darkAlpha: CGFloat = 1,
+        lightAlpha: CGFloat = 1,
+        increased: (dark: UInt32, light: UInt32)? = nil
+    ) -> Color {
         Color(uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(rgb: dark, alpha: darkAlpha)
-                : UIColor(rgb: light, alpha: lightAlpha)
+            let high = traits.accessibilityContrast == .high
+            let darkValue = high ? increased?.dark ?? dark : dark
+            let lightValue = high ? increased?.light ?? light : light
+            return traits.userInterfaceStyle == .dark
+                ? UIColor(rgb: darkValue, alpha: darkAlpha)
+                : UIColor(rgb: lightValue, alpha: lightAlpha)
         })
+    }
+
+    /// The value a token takes in `traits`, for tests and the gallery.
+    static func resolved(_ color: Color, dark: Bool, increasedContrast: Bool) -> UIColor {
+        let traits = UITraitCollection(mutations: {
+            $0.userInterfaceStyle = dark ? .dark : .light
+            $0.accessibilityContrast = increasedContrast ? .high : .normal
+        })
+        return UIColor(color).resolvedColor(with: traits)
     }
 
     private static func foreground(dark: CGFloat, light: CGFloat) -> Color {

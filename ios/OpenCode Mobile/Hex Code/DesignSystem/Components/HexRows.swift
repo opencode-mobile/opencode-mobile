@@ -154,7 +154,7 @@ struct HexPickerRow: View {
             .padding(.vertical, variant == .project ? 8 : 0)
             .frame(maxWidth: .infinity, minHeight: variant == .project ? HexSize.pickerRow : HexSize.modelRow, alignment: .leading)
             .contentShape(Rectangle())
-            .animation(HexMotion.ease(HexMotion.fade), value: subtitle)
+            .hexAnimation(HexMotion.ease(HexMotion.fade), value: subtitle)
         }
         .buttonStyle(HexRowPressStyle(radius: variant == .project ? HexRadius.l : 0))
         .padding(.horizontal, variant == .project ? HexSpacing.screen - 12 : 0)

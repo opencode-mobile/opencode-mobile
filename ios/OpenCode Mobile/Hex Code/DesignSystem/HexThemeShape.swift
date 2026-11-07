@@ -48,7 +48,10 @@ enum HexIconSize {
     static let large: CGFloat = 19
 }
 
-/// Motion: one easing and four durations. Respecting Reduce Motion comes in M6.
+/// Motion: one easing and four durations. With Reduce Motion (`HexMotion.reduced`, iOS's
+/// `\.accessibilityReduceMotion`) there is no movement and no looping decoration: state changes are
+/// instant, pulses rest at their visible state, and only motion that carries information keeps
+/// moving (spinners, the stop hold, the meter's levels, the Working clock, progress).
 enum HexMotion {
     static let press: TimeInterval = 0.12
     static let fade: TimeInterval = 0.2
@@ -58,5 +61,42 @@ enum HexMotion {
     /// cubic-bezier(0.25, 0.46, 0.45, 0.94).
     static func ease(_ duration: TimeInterval) -> Animation {
         .timingCurve(0.25, 0.46, 0.45, 0.94, duration: duration)
+    }
+
+    /// The ease, or none (instant) with Reduce Motion.
+    static func animation(_ duration: TimeInterval, reduced: Bool) -> Animation? {
+        reduced ? nil : ease(duration)
+    }
+
+    /// Press feedback: colour only with Reduce Motion, no scale.
+    static func pressScale(_ scale: CGFloat, pressed: Bool, reduced: Bool) -> CGFloat {
+        pressed && !reduced ? scale : 1
+    }
+
+    /// A drag-following offset: none with Reduce Motion.
+    static func follow(_ offset: CGFloat, reduced: Bool) -> CGFloat {
+        reduced ? 0 : offset
+    }
+
+    /// A move that becomes a plain fade with Reduce Motion.
+    static func transition(_ move: AnyTransition, reduced: Bool) -> AnyTransition {
+        reduced ? .opacity : move
+    }
+}
+
+extension View {
+    /// `.animation(_:value:)` that is instant with Reduce Motion, and follows it when it changes.
+    func hexAnimation<Value: Equatable>(_ animation: Animation?, value: Value) -> some View {
+        modifier(HexReducibleAnimation(animation: animation, value: value))
+    }
+}
+
+private struct HexReducibleAnimation<Value: Equatable>: ViewModifier {
+    let animation: Animation?
+    let value: Value
+    @Environment(\.accessibilityReduceMotion) private var reduced
+
+    func body(content: Content) -> some View {
+        content.animation(reduced ? nil : animation, value: value)
     }
 }

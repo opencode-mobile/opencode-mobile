@@ -73,7 +73,7 @@ struct HexOption: View {
         .background(selected ? HexColor.tint(6) : HexColor.panel2, in: shape)
         .overlay(shape.strokeBorder(selected ? HexColor.tint(34) : HexColor.line, lineWidth: 1))
         .contentShape(shape)
-        .animation(HexMotion.ease(HexMotion.press), value: selected)
+        .hexAnimation(HexMotion.ease(HexMotion.press), value: selected)
     }
 
     @ViewBuilder
@@ -140,10 +140,17 @@ struct HexCaret: View {
             .fill(HexColor.red)
             .frame(width: 2, height: 13)
             .opacity(dimmed ? 0.2 : 1)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true)) { dimmed = true }
-            }
+            .onAppear { pulse() }
+            // Turning Reduce Motion on while it shows steadies it at once.
+            .onChange(of: reduceMotion) { pulse() }
             .accessibilityHidden(true)
+    }
+
+    private func pulse() {
+        guard !reduceMotion else {
+            withAnimation(nil) { dimmed = false }
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true)) { dimmed = true }
     }
 }

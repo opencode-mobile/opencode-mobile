@@ -22,6 +22,17 @@ enum HexMeterLevel {
 
     /// One step of the envelope: towards `target` with a fast attack and a slow release, over
     /// `elapsed` seconds.
+    /// With Reduce Motion the pose changes at once instead of easing; the bars still follow the voice.
+    static func follow(_ current: Double, towards target: Double, elapsed: TimeInterval, reduced: Bool) -> Double {
+        reduced ? target : follow(current, towards: target, elapsed: elapsed)
+    }
+
+    /// The listening wave's clock: frozen with Reduce Motion, so the bars stand still at the wave's
+    /// shape (the prototype freezes its phase).
+    static func waveTime(_ time: TimeInterval, reduced: Bool) -> TimeInterval {
+        reduced ? 0 : time
+    }
+
     static func follow(_ current: Double, towards target: Double, elapsed: TimeInterval) -> Double {
         let time = target > current ? attack : release
         let step = 1 - exp(-max(0, elapsed) / time)

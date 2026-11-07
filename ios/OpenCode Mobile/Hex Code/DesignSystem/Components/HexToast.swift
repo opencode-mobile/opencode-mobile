@@ -145,6 +145,7 @@ extension View {
 private struct HexToastHost: ViewModifier {
     let toaster: HexToaster
     let sheet: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
@@ -154,7 +155,8 @@ private struct HexToastHost: ViewModifier {
                         .padding(.horizontal, 12)
                         .padding(.top, 8)
                         .id(item.id)
-                        .transition(.offset(y: -4).combined(with: .opacity))
+                        // With Reduce Motion it fades only.
+                        .transition(HexMotion.transition(.offset(y: -4).combined(with: .opacity), reduced: reduceMotion))
                 }
             }
             .animation(HexMotion.ease(HexMotion.fade), value: toaster.current?.id)

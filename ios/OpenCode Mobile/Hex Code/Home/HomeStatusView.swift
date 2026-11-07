@@ -29,8 +29,8 @@ struct HomeStatusView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .animation(HexMotion.ease(HexMotion.fade), value: session.summary.summary)
-        .animation(HexMotion.ease(HexMotion.fade), value: session.pendingInput)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.summary.summary)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.pendingInput)
     }
 
     @ViewBuilder
@@ -152,7 +152,7 @@ struct StatusCardView: View {
             }
             .frame(minHeight: 30)
         }
-        .animation(HexMotion.ease(HexMotion.fade), value: summary.isUpdating)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: summary.isUpdating)
     }
 
     @ViewBuilder
@@ -382,7 +382,7 @@ private struct NextPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(configuration.isPressed ? HexColor.text1 : HexColor.text2)
-            .animation(HexMotion.ease(HexMotion.press), value: configuration.isPressed)
+            .hexAnimation(HexMotion.ease(HexMotion.press), value: configuration.isPressed)
     }
 }
 
@@ -442,7 +442,7 @@ private struct LightsWhenPressed: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(configuration.isPressed ? HexColor.text1 : HexColor.text3)
-            .animation(HexMotion.ease(HexMotion.press), value: configuration.isPressed)
+            .hexAnimation(HexMotion.ease(HexMotion.press), value: configuration.isPressed)
     }
 }
 

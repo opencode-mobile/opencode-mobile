@@ -38,7 +38,7 @@ struct HexAskMessage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(HexColor.panel2, in: shape)
         .overlay(shape.strokeBorder(HexColor.line2, lineWidth: 1))
-        .animation(HexMotion.ease(HexMotion.fade), value: isOpen)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: isOpen)
     }
 
     // MARK: Folded

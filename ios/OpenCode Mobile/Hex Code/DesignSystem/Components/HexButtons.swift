@@ -245,6 +245,7 @@ struct HexIconButton: View {
     /// Hold instead of tap.
     var press: HexPress?
     let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         _ icon: HexIcon,
@@ -285,7 +286,7 @@ struct HexIconButton: View {
                 HexHoldRing(since: heldSince, duration: holdDuration, radius: HexRadius.l)
             }
         }
-        .scaleEffect(heldSince != nil ? 0.95 : 1)
+        .scaleEffect(HexMotion.pressScale(0.95, pressed: heldSince != nil, reduced: reduceMotion))
         .animation(HexMotion.ease(HexMotion.press), value: heldSince != nil)
         .opacity(enabled ? 1 : 0.35)
         .accessibilityLabel(label)

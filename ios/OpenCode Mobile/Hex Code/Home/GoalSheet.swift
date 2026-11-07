@@ -38,7 +38,7 @@ struct GoalSheet: View {
                     .padding(.top, 12)
             }
             .padding(.bottom, 16)
-            .animation(HexMotion.ease(HexMotion.fade), value: taking)
+            .hexAnimation(HexMotion.ease(HexMotion.fade), value: taking)
         }
         .hexToastHost(home.toasts, sheet: true)
         .onAppear { if spoken == nil { spoken = SpokenAnswer(home: home) } }

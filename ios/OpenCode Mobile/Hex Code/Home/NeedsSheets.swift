@@ -253,7 +253,7 @@ private struct QuestionSheet: View {
                 )
             }
         }
-        .animation(HexMotion.ease(HexMotion.press), value: form)
+        .hexAnimation(HexMotion.ease(HexMotion.press), value: form)
     }
 
     private var footer: some View {

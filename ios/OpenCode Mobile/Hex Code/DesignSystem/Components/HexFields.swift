@@ -31,7 +31,7 @@ struct HexSearchField: View {
         .padding(.horizontal, 12)
         .frame(height: 40)
         .background(HexColor.tint(focused ? 9 : 6), in: RoundedRectangle(cornerRadius: HexRadius.m, style: .continuous))
-        .animation(HexMotion.ease(HexMotion.fade), value: focused)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: focused)
     }
 }
 
@@ -150,7 +150,7 @@ struct HexSegmented<Value: Hashable>: View {
         .padding(size == .small ? 2 : 3)
         .frame(height: size == .small ? 30 : 36)
         .background(HexColor.tint(6), in: RoundedRectangle(cornerRadius: HexRadius.m, style: .continuous))
-        .animation(HexMotion.ease(HexMotion.fade), value: selection)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: selection)
     }
 }
 

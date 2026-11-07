@@ -14,12 +14,13 @@ struct HexMeter: View {
     @State private var lastFrame: Date?
     @State private var started = Date()
     @State private var audioSince: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
             Canvas { gc, size in
                 let now = context.date
-                let time = now.timeIntervalSince(started)
+                let time = HexMeterLevel.waveTime(now.timeIntervalSince(started), reduced: reduceMotion)
                 let sinceAudio = audioSince.map { now.timeIntervalSince($0) }
                 let w = size.width / CGFloat(bars)
                 let dot = min(3, w * 0.4)
@@ -42,11 +43,11 @@ struct HexMeter: View {
                 if audioSince == nil {
                     // Audio just arrived: start the real history from the wave, so nothing jumps.
                     audioSince = now
-                    let time = now.timeIntervalSince(started)
+                    let time = HexMeterLevel.waveTime(now.timeIntervalSince(started), reduced: reduceMotion)
                     history = (0 ..< bars).map { CGFloat(HexMeterLevel.listening(bar: $0, at: time)) }
                     envelope = Double(history.last ?? 0)
                 }
-                envelope = HexMeterLevel.follow(envelope, towards: min(1, max(0, target)), elapsed: elapsed)
+                envelope = HexMeterLevel.follow(envelope, towards: min(1, max(0, target)), elapsed: elapsed, reduced: reduceMotion)
                 var next = history.count == bars ? history : Array(repeating: 0, count: bars)
                 next.removeFirst()
                 next.append(CGFloat(envelope))

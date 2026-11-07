@@ -41,7 +41,7 @@ struct DetailsSheet: View {
                         }
                     }
                     .padding(.bottom, 24)
-                    .animation(HexMotion.ease(HexMotion.fade), value: sections)
+                    .hexAnimation(HexMotion.ease(HexMotion.fade), value: sections)
                 }
                 .scrollBounceBehavior(.basedOnSize)
             }
