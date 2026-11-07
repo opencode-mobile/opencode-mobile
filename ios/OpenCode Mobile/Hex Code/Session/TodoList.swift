@@ -90,6 +90,16 @@ struct TodoProgress: Equatable, Sendable {
         }
     }
 
+    /// What VoiceOver reads: "3 of 4 done, now <item>", or "All 4 done".
+    var spoken: String {
+        switch label {
+        case let .item(position, total, text):
+            String(localized: "a11y.todo", defaultValue: "\(position) of \(total) done, now \(InlineMarkdown.plain(text))")
+        case let .allDone(total):
+            String(localized: "home.todo.all_done", defaultValue: "All \(total) done")
+        }
+    }
+
     /// The label's text, with the item's formatting left in (backticks, `**`).
     var text: String {
         switch label {

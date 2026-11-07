@@ -24,7 +24,7 @@ struct HexDetailsSection<Rows: View>: View {
                         .foregroundStyle(HexColor.text3)
                 }
             }
-            .frame(height: 22)
+            .frame(minHeight: 22)
             .padding(.horizontal, 2)
             VStack(spacing: 0) {
                 rows

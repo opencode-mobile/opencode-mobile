@@ -36,7 +36,8 @@ struct HexLinkTile: View {
             }
             .padding(.leading, 8)
             .padding(.trailing, 12)
-            .frame(height: 56)
+            // A minimum: at large text sizes the tile grows rather than clipping.
+            .frame(minHeight: 56)
             .frame(maxWidth: 190, alignment: .leading)
             .fixedSize(horizontal: true, vertical: false)
             .background(HexColor.panel, in: shape)
@@ -75,6 +76,8 @@ struct HexTileRow<Content: View>: View {
                     .frame(width: 36)
             }
         }
-        .frame(height: 56)
+        // A minimum: the row grows with its tiles at large text sizes.
+        .frame(minHeight: 56)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }

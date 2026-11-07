@@ -30,8 +30,11 @@ struct HexGoalLine: View {
                         .fixedSize()
                 }
             }
-            .frame(height: 34)
+            // A minimum, and a 44 pt hit area round the 34 pt line.
+            .frame(minHeight: 34)
+            .padding(.vertical, 5)
             .contentShape(Rectangle())
+            .padding(.vertical, -5)
         }
         .buttonStyle(HexPressStyle())
         .accessibilityElement(children: .combine)

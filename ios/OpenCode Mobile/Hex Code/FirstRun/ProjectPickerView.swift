@@ -236,7 +236,7 @@ private struct RootChip: View {
                 .foregroundStyle(selected ? HexColor.onSolid : HexColor.text2)
                 .lineLimit(1)
                 .padding(.horizontal, 13)
-                .frame(height: 32)
+                .frame(minHeight: 32)
                 .background(selected ? HexColor.solid : .clear, in: Capsule())
                 .overlay(Capsule().strokeBorder(selected ? .clear : HexColor.line2, lineWidth: 1))
         }

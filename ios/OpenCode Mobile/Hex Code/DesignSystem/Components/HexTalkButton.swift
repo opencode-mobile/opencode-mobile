@@ -38,6 +38,8 @@ struct HexTalkButton: View {
     /// The live input level, 0…1, read for the meter while recording.
     let level: () -> Double?
     let accessibilityText: String
+    /// While recording: "Recording, 3 seconds".
+    var accessibilityValue: String?
     let onPressBegan: () -> Void
     /// The horizontal drag since the press began, in points.
     let onPressMoved: (CGFloat) -> Void
@@ -86,7 +88,14 @@ struct HexTalkButton: View {
         .animation(HexMotion.ease(HexMotion.fade), value: phase.quiet)
         .accessibilityElement()
         .accessibilityLabel(Text(verbatim: accessibilityText))
-        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(Text(verbatim: accessibilityValue ?? ""))
+        // VoiceOver stops talking while it records, so its speech never goes into the take.
+        .accessibilityAddTraits([.isButton, .startsMediaSession])
+        // Above the dock's text-size cap, a long press shows the Large Content Viewer.
+        .accessibilityShowsLargeContentViewer {
+            HexIconView(.mic, size: HexIconSize.regular)
+            Text(verbatim: phase.label)
+        }
     }
 
     private var isQuiet: Bool { phase.recording || phase.quiet }

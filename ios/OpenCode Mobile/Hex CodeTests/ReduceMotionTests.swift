@@ -52,3 +52,46 @@ struct IncreaseContrastTests {
         }
     }
 }
+
+/// Screen readers (app plan, "Accessibility"): what VoiceOver reads.
+struct ScreenReaderTextTests {
+    @Test func theTalkButtonSpeaksTheTakeAsADuration() {
+        #expect(TalkButton.recordingValue(3.4) == "Recording, 3 seconds")
+        #expect(TalkButton.recordingValue(64) == "Recording, 1 minute, 4 seconds")
+    }
+
+    @Test func theWorkingClockIsReadInWholeMinutes() {
+        #expect(AgentState.spokenWorking(130) == "Working, 2 minutes")
+        #expect(AgentState.spokenWorking(20) == "Working, less than a minute")
+        #expect(AgentState.working(since: Date(timeIntervalSince1970: 0)).topBar(at: Date(timeIntervalSince1970: 61)).spoken == "Working, 1 minute")
+    }
+
+    @Test func needsInputAndReconnectingAreAnnounced() {
+        #expect(AgentState.needsInput.announcement == "Needs input")
+        #expect(AgentState.reconnecting.announcement == "Reconnecting…")
+        #expect(AgentState.idle.announcement == nil)
+    }
+
+    @Test func theRefreshValue() {
+        #expect(SummaryRefreshLabel.minutesAgo(3).spoken == "Updated 3 minutes ago")
+        #expect(SummaryRefreshLabel.failed.spoken == "Couldn’t update")
+    }
+
+    @Test func theToDoRow() {
+        let items = [
+            TodoItem(content: "Write tests", status: .completed),
+            TodoItem(content: "Fix `auth`", status: .inProgress),
+            TodoItem(content: "Ship", status: .pending),
+        ]
+        #expect(TodoProgress(items)?.spoken == "2 of 3 done, now Fix auth")
+    }
+
+    @Test func aNoticeWithAnActionStaysTwiceAsLongWithAScreenReader() {
+        let undo = HexToastItem(tone: .undo, title: "Chunk deleted", detail: "“hi”", action: .init(title: "Undo"), duration: 3.5)
+        #expect(undo.shownDuration(screenReader: true) == 7)
+        #expect(undo.shownDuration(screenReader: false) == 3.5)
+        let hold = HexToastItem(tone: .steer, title: "Sending now…", action: .init(title: "Undo"), duration: 3, fixedDuration: true)
+        #expect(hold.shownDuration(screenReader: true) == 3)
+        #expect(undo.announcement == "Chunk deleted. “hi”")
+    }
+}

@@ -27,7 +27,8 @@ struct TalkButton: View {
                 arm: home.arm
             ),
             level: { home.level.map(Double.init) },
-            accessibilityText: accessibilityText(at: date),
+            accessibilityText: label,
+            accessibilityValue: accessibilityValue(at: date),
             onPressBegan: { home.pressBegan() },
             onPressMoved: { home.pressMoved(dx: $0) },
             onPressEnded: { Task { await home.pressEnded() } }
@@ -50,13 +51,16 @@ struct TalkButton: View {
             : String(localized: "talk.more", defaultValue: "Hold to keep talking")
     }
 
-    /// "Recording · 0:03" for a locked take (the clock is part of the button, not its own item).
-    private func accessibilityText(at date: Date) -> String {
-        if home.locked, home.isRecording {
-            let clock = AgentState.clock(home.takeStartedAt.map { date.timeIntervalSince($0) } ?? 0)
-            return String(localized: "draft.recording", defaultValue: "Recording · \(clock)")
-        }
-        if home.isRecording { return String(localized: "talk.a11y.recording", defaultValue: "Recording. Release to pause.") }
-        return label
+    /// "Recording, 3 seconds" while a take records: the clock is part of the button, spoken as a
+    /// duration, not "0:03".
+    private func accessibilityValue(at date: Date) -> String? {
+        guard home.isRecording else { return nil }
+        return Self.recordingValue(home.takeStartedAt.map { date.timeIntervalSince($0) } ?? 0)
+    }
+
+    static func recordingValue(_ elapsed: TimeInterval) -> String {
+        let seconds = max(0, Int(elapsed.rounded(.down)))
+        let time = Duration.seconds(seconds).formatted(.units(allowed: [.minutes, .seconds], width: .wide))
+        return String(localized: "talk.a11y.recording", defaultValue: "Recording, \(time)")
     }
 }

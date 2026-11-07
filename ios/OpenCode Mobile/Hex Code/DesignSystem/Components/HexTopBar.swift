@@ -18,6 +18,8 @@ struct HexTopBarState: Equatable {
     var label: String
     /// Mono timer after the label, for example `4:12`.
     var timer: String?
+    /// What VoiceOver reads, when it differs from the label and timer ("Working, 2 minutes").
+    var spoken: String?
 }
 
 /// The home top bar's height, for what sits just under it (the stop countdown).
@@ -83,7 +85,7 @@ struct HexTopBar<Trailing: View>: View {
                 Spacer(minLength: 0)
                 trailing
             }
-            .frame(height: HexSize.touch)
+            .frame(minHeight: HexSize.touch)
             .padding(.top, HexTopBarMetrics.homeHeight - HexSize.touch)
         case let .page(text, subtitle, dot):
             HStack(spacing: 10) {
@@ -110,7 +112,7 @@ struct HexTopBar<Trailing: View>: View {
                 trailing
             }
             .padding(.horizontal, HexSpacing.screen)
-            .frame(height: 56)
+            .frame(minHeight: 56)
             .padding(.top, 4)
         }
     }
@@ -132,8 +134,10 @@ struct HexTopBar<Trailing: View>: View {
             }
             .lineLimit(1)
         }
-        .frame(height: 24)
-        .accessibilityElement(children: .combine)
+        .frame(minHeight: 24)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: state.spoken ?? [state.label, state.timer].compactMap { $0 }.joined(separator: ", ")))
+        .accessibilityAddTraits(.isHeader)
         if let onTitle {
             Button(action: onTitle) { content }
                 .buttonStyle(HexPressStyle())

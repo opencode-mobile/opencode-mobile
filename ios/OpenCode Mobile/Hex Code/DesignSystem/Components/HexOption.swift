@@ -42,7 +42,14 @@ struct HexOption: View {
                 card(shape)
                     .overlay(HexHoldSurface(press: enabled ? press : HexPress(began: {}, ended: {})))
                     .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isButton)
+                    // VoiceOver can't hold: activate starts the take, activate again finishes it.
+                    // VoiceOver stays quiet meanwhile, so its speech isn't in the take.
+                    .accessibilityAddTraits([.isButton, .startsMediaSession])
+                    .accessibilityHint(Text(LocalizedStringResource("a11y.say.hint", defaultValue: "Double-tap to start speaking, and again to finish")))
+                    .accessibilityAction {
+                        guard enabled else { return }
+                        if case .listening = live { press.ended() } else { press.began() }
+                    }
             } else {
                 Button(action: action) { card(shape) }
                     .buttonStyle(HexPressStyle(scale: 0.99))

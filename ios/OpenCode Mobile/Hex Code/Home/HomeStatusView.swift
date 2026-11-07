@@ -112,6 +112,9 @@ struct StatusCardView: View {
             CardLabel(title: card.title, state: labelState)
             NowText(lines: layout.shown(card.lines), style: layout.size.style, rowLimit: layout.rowLimit)
                 .opacity(summary.isUpdating ? 0.35 : 1)
+                // Now is one element, its text as written (code without backticks).
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(verbatim: layout.shown(card.lines).map { InlineMarkdown.plain($0.text) }.joined(separator: "\n")))
             if let sentMessage {
                 // Not tappable as Next is: it is what was just sent. Up to 3 lines, then "Read all ›".
                 YouLineView(message: sentMessage, isGoal: sentIsGoal) { onReadSent(sentMessage) }
@@ -126,6 +129,8 @@ struct StatusCardView: View {
                 }
                 .buttonStyle(NextPressStyle())
                 .opacity(summary.isUpdating ? 0.35 : 1)
+                .accessibilityLabel(Text(verbatim: String(localized: "home.summary.next", defaultValue: "Next: \(InlineMarkdown.plain(next))")))
+                .accessibilityHint(Text(LocalizedStringResource("a11y.next.hint", defaultValue: "Adds it to your draft")))
             }
             if !card.links.isEmpty {
                 HexTileRow {
@@ -140,7 +145,7 @@ struct StatusCardView: View {
                     segments: todo.segments.map(\.mark),
                     // Code in the to-do label is a little larger, as the prototype's `.fx-pl .md-c`.
                     label: SummaryText.text(todo.text, style: .caption, scale: scale, codeScale: 0.9),
-                    accessibilityText: InlineMarkdown.plain(todo.text),
+                    accessibilityText: todo.spoken,
                     action: onDetails
                 )
             }
@@ -164,7 +169,7 @@ struct StatusCardView: View {
                 label: link.label,
                 detail: destination.shownHost,
                 detailIcon: destination.inApp ? .monitor : .out,
-                accessibilityText: String(localized: "home.link.open", defaultValue: "Open \(link.label)")
+                accessibilityText: String(localized: "home.link.open", defaultValue: "\(link.label), \(destination.shownHost)")
             ) { onOpenLink(destination) }
         }
     }
@@ -313,6 +318,7 @@ struct CardLabel: View {
         .frame(minHeight: HomeLabel.height, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: InlineMarkdown.plain(Self.text(title: title, state: state))))
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func label(_ text: Text) -> some View {
@@ -469,6 +475,8 @@ struct SummaryRefreshButton: View {
             }
             .buttonStyle(HexPressStyle())
             .disabled(label == .updating)
+            .accessibilityLabel(Text(LocalizedStringResource("a11y.refresh", defaultValue: "Refresh the summary")))
+            .accessibilityValue(Text(verbatim: label.spoken))
         }
     }
 }

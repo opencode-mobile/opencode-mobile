@@ -172,8 +172,8 @@ struct GoalSheet: View {
                 }
             }
             .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(Text(LocalizedStringResource("goal.say.hint", defaultValue: "Hold while you speak")))
+            .accessibilityAddTraits([.isButton, .startsMediaSession])
+            .accessibilityHint(Text(LocalizedStringResource("a11y.say.hint", defaultValue: "Double-tap to start speaking, and again to finish")))
             .accessibilityAction {
                 // Screen readers: activate starts a take, activate again ends it.
                 if spoken?.state == .listening {

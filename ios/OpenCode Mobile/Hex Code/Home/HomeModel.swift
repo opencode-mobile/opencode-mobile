@@ -711,7 +711,8 @@ final class HomeModel {
                 title: String(localized: "home.sending.now", defaultValue: "Sending now…"),
                 detail: Self.detail(text, imageCount: outgoingImages(saved).count),
                 action: .init(title: String(localized: "common.undo", defaultValue: "Undo"), icon: .undo),
-                duration: 3
+                duration: 3,
+                fixedDuration: true
             ),
             onAction: { [weak self] in self?.undoHeld() }
         )
@@ -803,6 +804,20 @@ final class HomeModel {
     func toggleChunk(_ id: UUID) { draft.toggleSelection(id) }
 
     func deselectChunk() { draft.deselect() }
+
+    /// A chunk row's Delete action (screen readers): as selecting it and tapping Delete.
+    func deleteChunk(_ id: UUID) {
+        if draft.selectedID != id { draft.toggleSelection(id) }
+        guard draft.selectedID == id else { return }
+        deleteSelectedChunk()
+    }
+
+    /// A chunk row's Re-record action (screen readers): a hands-free take replaces it.
+    func rerecordChunk(_ id: UUID) {
+        if draft.selectedID != id { draft.toggleSelection(id) }
+        guard draft.selectedID == id else { return }
+        rerecordSelected()
+    }
 
     func deleteSelectedChunk() {
         guard let deleted = draft.deleteSelected() else { return }

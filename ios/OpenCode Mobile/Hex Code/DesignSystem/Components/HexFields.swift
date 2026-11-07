@@ -29,7 +29,7 @@ struct HexSearchField: View {
             .focused($focused)
         }
         .padding(.horizontal, 12)
-        .frame(height: 40)
+        .frame(minHeight: 40)
         .background(HexColor.tint(focused ? 9 : 6), in: RoundedRectangle(cornerRadius: HexRadius.m, style: .continuous))
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: focused)
     }

@@ -62,12 +62,13 @@ struct HexSheet<Leading: View, Trailing: View, Content: View>: View {
                     title
                         .hexFont(.bodyStrong)
                         .foregroundStyle(HexColor.text1)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
                     Spacer(minLength: 8)
                     trailing.frame(minWidth: 70, alignment: .trailing)
                 }
-                .frame(height: 32)
+                .frame(minHeight: 32)
                 .padding(.bottom, 12)
             }
             content

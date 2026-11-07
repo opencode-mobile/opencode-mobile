@@ -24,6 +24,10 @@ struct HomeView: View {
     @State private var draftWindowed = false
     /// "You said": the sent message whole.
     @State private var youSaid: SentMessage?
+    /// VoiceOver's activate on a lit stop: "Stop the agent?" first, which keeps the hold's safety.
+    @State private var confirmsStop = false
+    @AccessibilityFocusState private var talkFocused: Bool
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
 
@@ -111,6 +115,29 @@ struct HomeView: View {
             }
         }
         .hexScreenBackground()
+        // Magic Tap (two-finger double tap) starts or finishes a hands-free take, wherever focus is.
+        .accessibilityAction(.magicTap) { Task { await home.toggleHandsFreeTake() } }
+        .alert(
+            Text(LocalizedStringResource("stop.confirm.title", defaultValue: "Stop the agent?")),
+            isPresented: $confirmsStop
+        ) {
+            Button(role: .destructive) {
+                Task { await session.stop() }
+            } label: {
+                Text(LocalizedStringResource("stop.confirm.stop", defaultValue: "Stop"))
+            }
+            Button(role: .cancel) {} label: {
+                Text(LocalizedStringResource("stop.confirm.keep", defaultValue: "Keep running"))
+            }
+        } message: {
+            Text(LocalizedStringResource("stop.confirm.body", defaultValue: "It stops now, with its subagents. Background shells keep running."))
+        }
+        // VoiceOver lands on the talk button first, after the top bar.
+        .task {
+            guard voiceOver else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            talkFocused = true
+        }
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: drafting)
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.goalLine)
@@ -126,6 +153,9 @@ struct HomeView: View {
                             .onTapGesture { home.draftMenuOpen = false }
                         // Right-aligned with the draft's actions, as the prototype's `.dmenu`.
                         DraftMenu(home: home)
+                            // VoiceOver stays in the menu; the two-finger scrub closes it.
+                            .accessibilityAddTraits(.isModal)
+                            .accessibilityAction(.escape) { home.draftMenuOpen = false }
                             .frame(width: min(320, proxy.size.width - 2 * HexSpacing.screenHome))
                             .fixedSize(horizontal: false, vertical: true)
                             .alignmentGuide(.leading) { $0[.trailing] - (proxy.size.width - HexSpacing.screenHome) }
@@ -288,6 +318,7 @@ struct HomeView: View {
                 }
             }
             TalkButton(home: home, voice: voice)
+                .accessibilityFocused($talkFocused)
             ZStack {
                 if home.dock == .lockedTake {
                     // While a take is locked the agent's stop steps aside, so ✓ is never confused with it.
@@ -309,12 +340,25 @@ struct HomeView: View {
                             ended: { stopHold?.pressEnded() }
                         )
                     )
-                    .accessibilityHint(Text(LocalizedStringResource("stop.hold.sub", defaultValue: "Keep pressing for 3 seconds. A tap does nothing.")))
+                    // VoiceOver can't hold: activate asks first, then stops as the 3 s hold does.
+                    .accessibilityLabel(session.canStop
+                        ? Text(LocalizedStringResource("home.stop", defaultValue: "Stop"))
+                        : Text(LocalizedStringResource("stop.dimmed", defaultValue: "Stop, nothing running")))
+                    .accessibilityAction {
+                        if session.canStop { confirmsStop = true }
+                    }
+                    .accessibilityShowsLargeContentViewer {
+                        HexIconView(.stop, size: HexIconSize.regular)
+                        Text(LocalizedStringResource("home.stop", defaultValue: "Stop"))
+                    }
                     .transition(.opacity)
                 }
             }
         }
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: home.dock)
+        // The dock grows with the text size up to xxxLarge, then stays; the Large Content Viewer
+        // shows its buttons above that.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 }
 
@@ -339,6 +383,10 @@ struct HomeTopBar: View {
                 HexRoundButton(.gear, label: LocalizedStringResource("home.settings", defaultValue: "Settings"), action: onSettings)
             }
         }
+        // VoiceOver hears it become Needs input or Reconnecting.
+        .onChange(of: state?.announcement) { _, spoken in
+            if let spoken { AccessibilityNotification.Announcement(spoken).post() }
+        }
     }
 }
 
@@ -354,6 +402,7 @@ struct DraftView: View {
     }
 
     private var draft: DictationDraft { home.draft }
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     /// The single take's text as drawn, for measuring it against the window.
     private var singleText: String? {
@@ -375,7 +424,9 @@ struct DraftView: View {
     @ViewBuilder
     private var content: some View {
         Group {
-            if DraftLayout.of(chunkCount: draft.chunks.count, fitsAtSmallest: true) == .rows {
+            if DraftLayout.of(chunkCount: draft.chunks.count, fitsAtSmallest: true) == .rows
+                || (voiceOver && !draft.chunks.isEmpty) {
+                // With VoiceOver each chunk is a row with its position, text, Delete and Re-record.
                 layout { ChunkListView(home: home) }
             } else if windowed, singleText != nil {
                 layout { DraftWindow(home: home) }
@@ -401,7 +452,7 @@ struct DraftView: View {
     private func layout(@ViewBuilder _ content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             label
-                .frame(height: HomeLabel.height)
+                .frame(minHeight: HomeLabel.height)
             if !draft.images.isEmpty {
                 DraftImagesRow(home: home)
             }
@@ -675,6 +726,20 @@ struct ChunkListView: View {
             action: { home.toggleChunk(chunk.id) }
         )
         .disabled(home.isRecording || chunk.text == nil && !isFailed(chunk))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(LocalizedStringResource("a11y.chunk", defaultValue: "Chunk \(index + 1) of \(home.draft.chunks.count)")))
+        .accessibilityValue(Text(verbatim: DraftText.item(chunk).plainText))
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityActions {
+            if !home.isRecording, chunk.text != nil || isFailed(chunk) {
+                Button { home.deleteChunk(chunk.id) } label: {
+                    Text(LocalizedStringResource("a11y.chunk.delete", defaultValue: "Delete"))
+                }
+                Button { home.rerecordChunk(chunk.id) } label: {
+                    Text(LocalizedStringResource("draft.rerecord", defaultValue: "Re-record"))
+                }
+            }
+        }
     }
 
     private func isFailed(_ chunk: DraftChunk) -> Bool {

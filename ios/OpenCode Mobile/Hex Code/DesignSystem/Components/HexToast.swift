@@ -1,5 +1,6 @@
 import Observation
 import SwiftUI
+import UIKit
 
 /// One notice: an icon tone, a title, an optional one-line detail and an optional action, shown
 /// for `duration` seconds.
@@ -30,6 +31,19 @@ struct HexToastItem: Identifiable, Equatable {
     var detail: String?
     var action: Action?
     var duration: TimeInterval = 2.4
+    /// The duration is a timer of its own (the Now hold's 3 s send delay): a screen reader doesn't
+    /// lengthen it.
+    var fixedDuration = false
+
+    /// How long it shows: a notice with an action stays twice as long while a screen reader is on.
+    func shownDuration(screenReader: Bool) -> TimeInterval {
+        screenReader && action != nil && !fixedDuration ? duration * 2 : duration
+    }
+
+    /// What VoiceOver announces: the title and the detail.
+    var announcement: String {
+        [title, detail].compactMap { $0 }.joined(separator: ". ")
+    }
 }
 
 /// The prototype's `.toast`: a `panel2` card with a `line2` border and a shadow, at the top of the
@@ -112,8 +126,10 @@ final class HexToaster {
         self.onAction = onAction
         timer?.cancel()
         let id = item.id
+        let duration = item.shownDuration(screenReader: UIAccessibility.isVoiceOverRunning)
+        AccessibilityNotification.Announcement(item.announcement).post()
         timer = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(item.duration))
+            try? await Task.sleep(for: .seconds(duration))
             guard !Task.isCancelled, self?.current?.id == id else { return }
             self?.dismiss()
         }

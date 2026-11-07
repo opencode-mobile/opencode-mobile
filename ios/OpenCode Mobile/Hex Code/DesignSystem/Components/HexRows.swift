@@ -17,6 +17,8 @@ struct HexRow: View {
     var subtitle: String?
     var value: String?
     var trailing: HexRowTrailing = .chevron
+    /// A placeholder row: VoiceOver adds "Not in this version yet".
+    var soon = false
     let action: () -> Void
 
     init(
@@ -95,6 +97,22 @@ struct HexRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(HexRowPressStyle())
+        // "<title>, <value>", with the second line as the hint.
+        .accessibilityLabel(title)
+        .accessibilityValue(Text(verbatim: value ?? ""))
+        .accessibilityHint(Text(verbatim: hint))
+    }
+
+    private var hint: String {
+        let soonText = soon ? String(localized: "a11y.soon", defaultValue: "Not in this version yet") : nil
+        return [subtitle, soonText].compactMap { $0 }.joined(separator: ". ")
+    }
+
+    /// A placeholder row (Settings' Dictation rows in v1).
+    func placeholder() -> HexRow {
+        var row = self
+        row.soon = true
+        return row
     }
 }
 

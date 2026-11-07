@@ -338,7 +338,7 @@ struct AgentStateTests {
 
     @Test func workingIsTimedFromTheRunsStart() {
         let state = AgentState.working(since: start).topBar(at: start + 252.9)
-        #expect(state == HexTopBarState(tone: .working, label: "Working", timer: "4:12"))
+        #expect(state == HexTopBarState(tone: .working, label: "Working", timer: "4:12", spoken: "Working, 4 minutes"))
         #expect(AgentState.clock(7) == "0:07")
         #expect(AgentState.clock(4503) == "75:03")
         #expect(AgentState.clock(-3) == "0:00")

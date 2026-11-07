@@ -27,10 +27,29 @@ enum AgentState: Equatable, Sendable {
             HexTopBarState(
                 tone: .working,
                 label: String(localized: "home.state.working", defaultValue: "Working"),
-                timer: Self.clock(date.timeIntervalSince(since))
+                timer: Self.clock(date.timeIntervalSince(since)),
+                spoken: Self.spokenWorking(date.timeIntervalSince(since))
             )
         case .idle:
             HexTopBarState(tone: .idle, label: String(localized: "home.state.idle", defaultValue: "Idle"))
+        }
+    }
+
+    /// "Working, 2 minutes": whole minutes, so VoiceOver doesn't hear it change every second.
+    static func spokenWorking(_ elapsed: TimeInterval) -> String {
+        let minutes = max(0, Int(elapsed / 60))
+        let time = minutes == 0
+            ? String(localized: "a11y.working.short", defaultValue: "less than a minute")
+            : Duration.seconds(minutes * 60).formatted(.units(allowed: [.hours, .minutes], width: .wide))
+        return String(localized: "a11y.working", defaultValue: "Working, \(time)")
+    }
+
+    /// Announced when the state becomes Needs input or Reconnecting.
+    var announcement: String? {
+        switch self {
+        case .needsInput: String(localized: "home.state.needs_input", defaultValue: "Needs input")
+        case .reconnecting: String(localized: "home.state.reconnecting", defaultValue: "Reconnecting…")
+        default: nil
         }
     }
 

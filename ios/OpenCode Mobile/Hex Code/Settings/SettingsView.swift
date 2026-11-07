@@ -52,16 +52,19 @@ struct SettingsView: View {
                         subtitle: String(localized: "settings.speech_model.sub", defaultValue: "Runs on this phone"),
                         value: voice.modelName
                     ) { main.showPlaceholder() }
+                    .placeholder()
                     HexRow(
                         icon: .book,
                         LocalizedStringResource("settings.language", defaultValue: "Language"),
                         value: String(localized: "settings.language.english", defaultValue: "English")
                     ) { main.showPlaceholder() }
+                    .placeholder()
                     HexRow(
                         icon: .pencil,
                         LocalizedStringResource("settings.text_style", defaultValue: "Text style"),
                         value: String(localized: "settings.text_style.plain", defaultValue: "Plain")
                     ) { main.showPlaceholder() }
+                    .placeholder()
 
                     HexSectionLabel(LocalizedStringResource("settings.app", defaultValue: "App"))
                     HexRow(icon: .sun, LocalizedStringResource("settings.appearance", defaultValue: "Appearance"), value: appearance.label) {

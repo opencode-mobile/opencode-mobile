@@ -366,4 +366,20 @@ enum SummaryRefreshLabel: Equatable, Sendable {
         case .none: ""
         }
     }
+
+    /// ↻'s accessibility value: "Updated 3 minutes ago", "Updated just now" or "Couldn't update".
+    var spoken: String {
+        switch self {
+        case .updating, .failed, .none:
+            return text
+        case .now:
+            let when = String(localized: "a11y.refresh.now", defaultValue: "just now")
+            return String(localized: "a11y.refresh.value", defaultValue: "Updated \(when)")
+        case let .minutesAgo(minutes):
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .full
+            let when = formatter.localizedString(fromTimeInterval: -Double(minutes) * 60)
+            return String(localized: "a11y.refresh.value", defaultValue: "Updated \(when)")
+        }
+    }
 }
