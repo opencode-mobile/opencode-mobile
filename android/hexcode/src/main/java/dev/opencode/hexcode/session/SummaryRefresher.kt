@@ -210,6 +210,7 @@ class SummaryRefresher(
 
     /** No card, before a session opens or when another session takes its place. A request still running is dropped. */
     fun clear() {
+        runEndWaiting = false
         job?.cancel()
         mutable.value = SummaryState()
         shownFor = null
@@ -218,20 +219,32 @@ class SummaryRefresher(
 
     /** A new session's card, without a request. A request still running is dropped. */
     fun showEmpty(date: LocalDate) {
+        runEndWaiting = false
         job?.cancel()
         mutable.value = SummaryState(StatusSummary.empty(date), updatedAt = clock())
         shownFor = sessionId
         saved = null
     }
 
-    /** Asks for a new summary, unless one is on its way. Returns whether this call started a request. */
-    fun refresh(): Boolean {
+    /** A run ended while a request was on its way: one more request runs as soon as that one finishes. */
+    @Volatile
+    private var runEndWaiting = false
+
+    /**
+     * Asks for a new summary, unless one is on its way: then the call is dropped, except a [runEnd], which waits and
+     * runs once when the current request finishes, so a mid-run card (from ↻ or a goal round) never outlives the run
+     * (app-plan.md, The status summary › When). At most one waits. Returns whether this call started a request.
+     */
+    fun refresh(runEnd: Boolean = false): Boolean {
         while (true) {
             val current = mutable.value
-            if (current.loading) return false
+            if (current.loading) {
+                if (runEnd) runEndWaiting = true
+                return false
+            }
             if (mutable.compareAndSet(current, current.copy(loading = true))) break
         }
-        job =
+        val request =
             scope.launch {
                 try {
                     // The basis first: generate itself doesn't move `time.updated`, so the card is up to date with it.
@@ -285,6 +298,13 @@ class SummaryRefresher(
                     mutable.update { it.copy(loading = false, failed = true) }
                 }
             }
+        job = request
+        request.invokeOnCompletion { cause ->
+            // A dropped request (a new session, an empty card) takes the waiting run end with it.
+            if (cause != null || !runEndWaiting) return@invokeOnCompletion
+            runEndWaiting = false
+            refresh()
+        }
         return true
     }
 

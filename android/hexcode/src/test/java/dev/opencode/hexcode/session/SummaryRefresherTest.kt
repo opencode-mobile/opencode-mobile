@@ -208,4 +208,64 @@ class SummaryRefresherTest {
             assertFalse(summary.isUpToDate(null))
             assertFalse(summary.isUpToDate(100))
         }
+
+    @Test
+    fun aRunEndWhileARefreshRunsWaitsAndRunsOnceWhenItFinishes() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val source = FakeSource().also { it.gate = gate }
+            source.replies += listOf("## Task\nNow: Halfway.\nNext: Wait", "## Task\nNow: Done.\nNext: Commit it")
+            var busy = true
+            val summary = SummaryRefresher(this, source, clock = { now }, busy = { busy })
+            assertTrue(summary.refresh())
+            runCurrent()
+            // The run ends twice while the mid-run request runs: one run-end refresh waits; a plain one is dropped.
+            busy = false
+            assertFalse(summary.refresh(runEnd = true))
+            assertFalse(summary.refresh(runEnd = true))
+            assertFalse(summary.refresh())
+            assertEquals(1, source.prompts.size)
+            source.gate = null
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(2, source.prompts.size)
+            // The mid-run card didn't outlive the run: the card made after it is a normal one, with its Next.
+            assertEquals("Commit it", (summary.state.value.summary as StatusSummary.Card).next)
+        }
+
+    @Test
+    fun aWaitingRunEndRefreshRunsAfterAFailureTooButNotAfterTheRefreshIsDropped() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val source = FakeSource().also { it.gate = gate }
+            source.fail = true
+            val summary = refresher(source)
+            summary.refresh()
+            runCurrent()
+            summary.refresh(runEnd = true)
+            source.gate = null
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(2, source.prompts.size)
+            // Cleared (a new session) while one waits: the waiting one goes too.
+            val held = CompletableDeferred<Unit>()
+            source.gate = held
+            summary.refresh()
+            runCurrent()
+            summary.refresh(runEnd = true)
+            summary.clear()
+            held.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(3, source.prompts.size)
+        }
+
+    @Test
+    fun aRunEndWithNothingRunningIsAPlainRefresh() =
+        runTest {
+            val source = FakeSource().apply { replies += "## Task\nNow: Done." }
+            val summary = refresher(source)
+            assertTrue(summary.refresh(runEnd = true))
+            advanceUntilIdle()
+            assertEquals(1, source.prompts.size)
+        }
 }

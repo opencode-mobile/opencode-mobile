@@ -791,7 +791,8 @@ class TodaySession(
         if (effect == LiveEffect.RunEnded && you != null) youRunEnded = true
         publish()
         when (effect) {
-            LiveEffect.RunEnded -> summary.refresh()
+            // A run end waits for a refresh already running, so the card made mid-run is replaced.
+            LiveEffect.RunEnded -> summary.refresh(runEnd = true)
             // A goal is one long run: each round's end refreshes the card, mid-run (Goal rounds refresh the summary).
             LiveEffect.GoalRound -> {
                 Log.i(TAG, "goal round ${next.goal?.rounds}: summary request")

@@ -496,4 +496,29 @@ class TodaySessionGoalTest {
             assertEquals(SessionSetup.Ready("ses_1"), today.state.value.setup)
             assertEquals(listOf("ask", "list"), log.take(2))
         }
+
+    @Test
+    fun theRunsEndWaitsForARoundsRefreshSoTheMidRunCardNeverOutlivesTheRun() =
+        runTest {
+            api.busy = true
+            val today = open()
+            goalChanged(goalJson("active", 0))
+            runCurrent()
+            api.summaryGate = CompletableDeferred()
+            api.reply = "## Task\nNow: Two files left.\nNext: Wait"
+            goalChanged(goalJson("active", 1))
+            runCurrent()
+            assertEquals(1, log.count { it == "summary" })
+            // The goal completes and the run ends while the round's refresh still runs.
+            goalChanged(goalJson("complete", 1))
+            transport.send("session.execution.succeeded", """{"sessionID":"ses_1"}""")
+            runCurrent()
+            assertEquals(1, log.count { it == "summary" })
+            api.reply = "## Task\nNow: All three files exist.\nNext: Commit them"
+            api.summaryGate?.complete(Unit)
+            api.summaryGate = null
+            runCurrent()
+            assertEquals(2, log.count { it == "summary" })
+            assertEquals("Commit them", (today.state.value.summary.summary as StatusSummary.Card).next)
+        }
 }
