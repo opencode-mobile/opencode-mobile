@@ -392,4 +392,81 @@
     <string name="ask_try_again">Try again</string>
     <string name="ask_fold">Fold</string>
     <string name="ask_close">Close</string>
+
+    <!-- Settings and finish (M6): app-plan.md, String keys (iOS keys with _ for .). -->
+    <string name="settings_new_session_title">Start a new session?</string>
+    <string name="settings_new_session_body">Today’s session stays on your computer as it is. The new one starts empty in %1$s, with the same model. Today’s goal isn’t carried over.</string>
+    <string name="settings_new_session_busy">The agent is still working there and carries on.</string>
+    <plurals name="settings_new_session_waiting">
+        <item quantity="one">Its waiting message still sends there.</item>
+        <item quantity="other">Its %d waiting messages still send there.</item>
+    </plurals>
+    <string name="settings_new_session_start">Start new session</string>
+    <string name="settings_new_session_done">New session</string>
+    <string name="settings_new_session_done_sub">The earlier one is kept on your computer.</string>
+    <string name="settings_new_session_failed">Couldn’t start a new session</string>
+    <string name="settings_new_session_failed_sub">Today’s session is still open.</string>
+    <string name="server_title">Server</string>
+    <string name="server_addresses">Addresses</string>
+    <string name="server_in_use">in use</string>
+    <string name="server_pair_again">Pair again</string>
+    <string name="server_switch_title">Switch to %1$s?</string>
+    <string name="server_switch_body">Hex Code works with one computer at a time. Next, pick a project and a model on %1$s. Sessions stay on each computer.</string>
+    <string name="server_switch_confirm">Switch</string>
+    <string name="server_paired">Paired again</string>
+    <string name="server_paired_sub">Signed in to %1$s.</string>
+    <string name="server_signed_out">Signed out of %1$s</string>
+    <string name="server_signed_out_sub">Run `opencode pair` on the computer, then pair again.</string>
+    <string name="server_this_computer">your computer</string>
+    <string name="settings_forget_title">Forget this computer?</string>
+    <string name="settings_forget_button">Forget this computer</string>
+    <string name="settings_forget_confirm">Forget</string>
+    <string name="settings_forget_message">Hex Code forgets the server, project and model on this phone. Sessions stay on your computer.</string>
+    <string name="browser_reload">Reload</string>
+    <string name="browser_back">Back</string>
+    <string name="browser_forward">Forward</string>
+    <string name="browser_open_system">Open in browser</string>
+    <string name="browser_loading">Loading</string>
+    <string name="browser_dev_unreachable">Couldn’t reach port %1$d on %2$s</string>
+    <string name="browser_dev_unreachable_sub">The dev server may only listen on the computer itself. Start it so it listens on the network (for Vite, add `--host`), then try again.</string>
+    <string name="browser_unreachable">Couldn’t reach %1$s</string>
+    <string name="browser_unreachable_sub">Check that the phone is on the same network as the computer, or on Tailscale.</string>
+    <string name="browser_try_again">Try again</string>
+    <string name="stop_confirm_title">Stop the agent?</string>
+    <string name="stop_confirm_body">It stops now, with its subagents. Background shells keep running.</string>
+    <string name="stop_confirm_stop">Stop</string>
+    <string name="stop_confirm_keep">Keep running</string>
+    <string name="stop_dimmed">Stop, nothing running</string>
+    <string name="a11y_chunk">Chunk %1$d of %2$d</string>
+    <string name="a11y_chunk_delete">Delete</string>
+    <string name="a11y_chunk_rerecord">Re-record</string>
+    <string name="a11y_say_hint">Double-tap to start speaking, and again to finish</string>
+    <string name="a11y_next_hint">Adds it to your draft</string>
+    <string name="a11y_refresh">Refresh the summary</string>
+    <string name="a11y_refresh_value">Updated %1$s</string>
+    <string name="a11y_working">Working, %1$s</string>
+    <string name="a11y_todo">%1$d of %2$d done, now %3$s</string>
+    <string name="a11y_soon">Not in this version yet</string>
+    <plurals name="a11y_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <plurals name="a11y_seconds">
+        <item quantity="one">%d second</item>
+        <item quantity="other">%d seconds</item>
+    </plurals>
+    <string name="talk_a11y_recording_for">Recording, %1$s</string>
+    <plurals name="draft_read_all">
+        <item quantity="one">Read all · %d word</item>
+        <item quantity="other">Read all · %d words</item>
+    </plurals>
+    <plurals name="home_you_read_all">
+        <item quantity="one">%d word · Read all ›</item>
+        <item quantity="other">%d words · Read all ›</item>
+    </plurals>
+    <string name="reader_you_said">You said</string>
+    <plurals name="reader_words">
+        <item quantity="one">%d word</item>
+        <item quantity="other">%d words</item>
+    </plurals>
 </resources>

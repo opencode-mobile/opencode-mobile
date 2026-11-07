@@ -36,6 +36,7 @@ class DailySessionTest {
         var failRules = false
         var failList = false
         var failCreate = false
+        var signedOut = false
         var createdModel: ModelChoice? = null
         private var next = 1
 
@@ -47,6 +48,7 @@ class DailySessionTest {
         ): SessionListingPage {
             calls += "list $search ${cursor ?: "-"}"
             if (failList) error("unreachable")
+            if (signedOut) throw SignedOutException("HTTP 401")
             val index = cursor?.removePrefix("page")?.toInt() ?: 0
             val page = pages.getOrNull(index).orEmpty()
             return SessionListingPage(page, next = "page${index + 1}")
@@ -333,6 +335,13 @@ class DailySessionTest {
             assertFalse(opened.created)
             assertFalse(opened.newDay)
             assertEquals(listOf("list 2026-11-05 -", "rules new1"), api.calls)
+        }
+
+    @Test
+    fun aRefusedSignInIsSignedOutNotAFailure() =
+        runTest {
+            val api = FakeApi().apply { signedOut = true }
+            assertEquals(DailySessionResult.SignedOut, DailySessionSetup(api, Memory(today)).open(today, project, model))
         }
 
     @Test

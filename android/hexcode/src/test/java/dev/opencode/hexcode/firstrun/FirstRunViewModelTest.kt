@@ -102,6 +102,15 @@ class FirstRunViewModelTest {
             servers += result.profile
         }
 
+        var sameComputer = true
+        val switched = mutableListOf<ConnectionProfile>()
+
+        override suspend fun isSameComputer(result: ConnectResult.Connected) = sameComputer
+
+        override suspend fun switchServer(result: ConnectResult.Connected) {
+            switched += result.profile
+        }
+
         override suspend fun saveProject(project: ProjectChoice) {
             savedProjects += project
         }
@@ -359,4 +368,63 @@ class FirstRunViewModelTest {
         }
 
     private fun picker(vm: FirstRunViewModel) = (vm.uiState.value.model as Loadable.Loaded).value
+
+    // app-plan.md, Settings and finish (M6) › Server › Pair again.
+
+    private fun pairAgain(env: Env) = FirstRunViewModel(env, connectedPause = 0L, mode = PickerMode.PairAgain)
+
+    @Test
+    fun pairingAgainWithTheSameComputerReplacesItsSignInAndCloses() =
+        runTest(dispatcher) {
+            val env = env()
+            val vm = pairAgain(env)
+            vm.openScanner()
+            vm.scanned("""{"code":"7Q4K9M","urls":["http://192.168.1.2:4096"]}""")
+            advanceUntilIdle()
+            assertEquals(1, env.servers.size)
+            assertEquals("test-password", env.servers.single().password)
+            assertEquals(FirstRunStep.Done, vm.uiState.value.step)
+            assertTrue(vm.uiState.value.paired is PairedAgain.Same)
+            // Project and model stay: no page asks for them.
+            assertTrue(env.savedProjects.isEmpty() && env.finished.isEmpty())
+        }
+
+    @Test
+    fun anotherComputerAsksFirstThenSwitchesAndFirstRunGoesOnAtItsProjects() =
+        runTest(dispatcher) {
+            val env = env().apply { sameComputer = false }
+            val vm = pairAgain(env)
+            vm.openScanner()
+            vm.scanned("""{"code":"7Q4K9M","urls":["http://192.168.1.2:4096"]}""")
+            advanceUntilIdle()
+            assertTrue(env.servers.isEmpty())
+            assertTrue(vm.uiState.value.switchTo != null)
+            vm.confirmSwitch()
+            advanceUntilIdle()
+            assertEquals(1, env.switched.size)
+            assertTrue(vm.uiState.value.paired is PairedAgain.Switched)
+            assertEquals(FirstRunStep.Done, vm.uiState.value.step)
+            // First run's own model then opens on that computer's project page.
+            val next = viewModel(env)
+            next.resumeAtProject(ServerLabel("Quiet Lynx"))
+            advanceUntilIdle()
+            assertEquals(FirstRunStep.Project, next.uiState.value.step)
+            assertTrue(next.uiState.value.projects is Loadable.Loaded)
+        }
+
+    @Test
+    fun cancellingTheSwitchChangesNothingAndScansAgain() =
+        runTest(dispatcher) {
+            val env = env().apply { sameComputer = false }
+            val vm = pairAgain(env)
+            vm.openScanner()
+            vm.scanned("""{"code":"7Q4K9M","urls":["http://192.168.1.2:4096"]}""")
+            advanceUntilIdle()
+            vm.cancelSwitch()
+            assertEquals(ScanUi.Scanning, vm.uiState.value.scan)
+            assertTrue(env.servers.isEmpty() && env.switched.isEmpty())
+            vm.back()
+            assertEquals(FirstRunStep.Done, vm.uiState.value.step)
+            assertEquals(null, vm.uiState.value.paired)
+        }
 }

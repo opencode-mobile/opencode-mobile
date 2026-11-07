@@ -4,7 +4,6 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Bundle
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -104,28 +103,28 @@ internal fun tileHost(
 ): String = SummaryLinks.host(if (computer != null && SummaryLinks.isLocal(url)) SummaryLinks.onComputer(url, computer) else url)
 
 /**
- * Opens a link tile's [url] (app-plan.md, Links): a `localhost` page in the in-app browser (a Custom Tab) at the
- * paired [computer]'s address, with the same port and path; anything else in the system browser.
+ * Opens a link tile's [url] (app-plan.md, Links and The in-app browser): a `localhost`, `127.0.0.1` or `0.0.0.0` page
+ * in the in-app browser ([onLocal]) at the paired [computer]'s address, with the same port, path, query and fragment;
+ * anything else in the system browser.
  */
 internal fun openLink(
     context: Context,
     url: String,
+    label: String,
     computer: String?,
+    onLocal: (BrowserPage) -> Unit,
 ) {
-    val local = SummaryLinks.isLocal(url)
-    val target = if (local && computer != null) SummaryLinks.onComputer(url, computer) else url
+    if (SummaryLinks.isLocal(url) && computer != null) {
+        onLocal(BrowserPage(SummaryLinks.onComputer(url, computer), label))
+        return
+    }
     val intent =
-        Intent(Intent.ACTION_VIEW, Uri.parse(target)).apply {
-            // A Custom Tab is a view intent with this extra, which browsers that support them read.
-            if (local) putExtras(Bundle().apply { putBinder(CUSTOM_TAB_SESSION, null) })
+        Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
             if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
     try {
         context.startActivity(intent)
     } catch (error: ActivityNotFoundException) {
-        Log.w(TalkLog.TAG, "nothing opens $target", error)
+        Log.w(TalkLog.TAG, "nothing opens $url", error)
     }
 }
-
-/** `CustomTabsIntent.EXTRA_SESSION`. */
-private const val CUSTOM_TAB_SESSION = "android.support.customtabs.extra.SESSION"

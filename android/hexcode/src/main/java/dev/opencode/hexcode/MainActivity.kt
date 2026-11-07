@@ -47,18 +47,24 @@ import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.HexFirstRunEnvironment
 import dev.opencode.hexcode.app.HexPrefs
 import dev.opencode.hexcode.app.HexServices
+import dev.opencode.hexcode.app.ServerAddresses
 import dev.opencode.hexcode.designsystem.HexGallery
 import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.components.HexConfirmSheet
+import dev.opencode.hexcode.designsystem.components.HexToastMessage
+import dev.opencode.hexcode.designsystem.components.HexToastTone
 import dev.opencode.hexcode.firstrun.BrowseScreen
 import dev.opencode.hexcode.firstrun.FirstRunFlow
 import dev.opencode.hexcode.firstrun.FirstRunStep
 import dev.opencode.hexcode.firstrun.FirstRunUiState
 import dev.opencode.hexcode.firstrun.FirstRunViewModel
 import dev.opencode.hexcode.firstrun.ModelScreen
+import dev.opencode.hexcode.firstrun.PairedAgain
 import dev.opencode.hexcode.firstrun.PickerMode
 import dev.opencode.hexcode.firstrun.ProjectPicker
 import dev.opencode.hexcode.firstrun.ProjectScreen
+import dev.opencode.hexcode.firstrun.ScanScreen
 import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.hexcode.home.AndroidImagePreparer
 import dev.opencode.hexcode.home.ClipDictation
@@ -68,7 +74,9 @@ import dev.opencode.hexcode.home.HomeScreen
 import dev.opencode.hexcode.home.HomeViewModel
 import dev.opencode.hexcode.home.MicRecorder
 import dev.opencode.hexcode.home.VoiceEngineDictation
+import dev.opencode.hexcode.session.SessionSetup
 import dev.opencode.hexcode.session.TodaySessionDemo
+import dev.opencode.hexcode.settings.NewSessionInfo
 import dev.opencode.hexcode.settings.SettingsScreen
 import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
@@ -144,6 +152,18 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.DEBUG) {
             intent.getStringExtra("HexCodeLastDate")?.let { date ->
                 runBlocking { services.settings.setLastOpenedOn(LocalDate.parse(date)) }
+            }
+        }
+        // debug builds: `--ei HexCodeSignedInAgo 8` saves the sign-in as issued that many days ago, to see it renewed
+        // at setup; `--ez HexCodeSignOut true` replaces the saved token with one the server refuses, to see Signed out
+        if (BuildConfig.DEBUG) {
+            val ago = intent.getIntExtra("HexCodeSignedInAgo", -1)
+            val signOut = intent.getBooleanExtra("HexCodeSignOut", false)
+            if (ago >= 0 || signOut) {
+                runBlocking {
+                    if (ago >= 0) services.settings.setSignedInAt(System.currentTimeMillis() - ago * 86_400_000L)
+                    if (signOut) services.profiles.activeProfile()?.let { services.profiles.saveProfile(it.copy(password = "0.refused")) }
+                }
             }
         }
         setContent {
@@ -226,9 +246,20 @@ private fun HexCodeRoot(
             .background(HexTheme.colors.background),
     ) {
         if (prefs.firstRunDone) {
-            AfterFirstRun(services, lab, prefs, clips, draftText)
+            AfterFirstRun(services, lab, prefs, clips, draftText, pairLink)
         } else {
-            val vm = viewModel { FirstRunViewModel(HexFirstRunEnvironment(services), listingCache = services.folderListings) }
+            // Forget and a switch to another computer start first run afresh.
+            val generation by services.setupGeneration.collectAsStateWithLifecycle()
+            val vm =
+                viewModel(key = "first-run-$generation") {
+                    FirstRunViewModel(HexFirstRunEnvironment(services), listingCache = services.folderListings).also { fresh ->
+                        // Pair again switched computers: first run goes on at that computer's project page.
+                        services.resumeFirstRunAt?.let { server ->
+                            services.resumeFirstRunAt = null
+                            fresh.resumeAtProject(server)
+                        }
+                    }
+                }
             val state by vm.uiState.collectAsStateWithLifecycle()
             LaunchedEffect(pairLink) {
                 if (pairLink != null) {
@@ -250,12 +281,17 @@ private fun AfterFirstRun(
     prefs: HexPrefs,
     clips: Boolean,
     draftText: String?,
+    pairLink: String?,
 ) {
     val context = LocalContext.current
     var page by remember { mutableStateOf(Page.Home) }
+    // Pair again's scan screen, a full-screen cover over Settings or home.
+    var pairingAgain by remember { mutableStateOf(false) }
+    // Read the server's label again after Pair again.
+    var serverRead by remember { mutableIntStateOf(0) }
     // Each visit to a settings page starts it afresh.
     var visit by remember { mutableIntStateOf(0) }
-    var notice by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf<HexToastMessage?>(null) }
     val scope = rememberCoroutineScope()
     // The gallery's own Light / Dark switch, which starts from the app's theme.
     var galleryDark by remember { mutableStateOf(false) }
@@ -269,7 +305,7 @@ private fun AfterFirstRun(
                 else -> appDark
             },
     )
-    val server by produceState<ServerLabel?>(null, page) {
+    val server by produceState<ServerLabel?>(null, page, serverRead) {
         value = services.serverLabel()?.let { it.copy(version = it.version ?: prefs.serverVersion) }
     }
     val home by produceState<String?>(prefs.serverHome) {
@@ -286,7 +322,7 @@ private fun AfterFirstRun(
     val latest by rememberUpdatedState(prefs)
     // A new sample (or Off) is a new home: the session starts again from opening.
     val homeModel =
-        viewModel(key = "home-${sample?.label ?: "live"}") {
+        viewModel(key = "home-${sample?.label ?: "live"}-${services.setupGeneration.value}") {
             HomeViewModel(
                 if (clips) {
                     ClipDictation(context, services.voice, services::reloadSpeech, services.speechHoldMs, services.speechFailOnce)
@@ -364,8 +400,17 @@ private fun AfterFirstRun(
             page == Page.SettingsProject && pageState.step == FirstRunStep.Browse -> Page.SettingsBrowse
             else -> page
         }
-    val projectChanged = pageState.project?.let { stringResource(R.string.settings_project_changed, it.name) }
-    val developerOn = stringResource(R.string.settings_developer_on)
+    val projectChanged =
+        pageState.project?.let {
+            HexToastMessage(stringResource(R.string.settings_project_changed, it.name), HexToastTone.Steer)
+        }
+    val developerOn = HexToastMessage(stringResource(R.string.settings_developer_on), HexToastTone.Steer)
+    val pairedTitle = stringResource(R.string.server_paired)
+    val pairedDetail = stringResource(R.string.server_paired_sub, server?.name.orEmpty())
+    val addresses by produceState<ServerAddresses?>(null, page, serverRead) { value = services.serverAddresses() }
+    val homeUi by homeModel.uiState.collectAsStateWithLifecycle()
+    // Debug builds: `--es HexCodePair <link>` with first run done pairs again with that code.
+    var debugPair by remember { mutableStateOf(pairLink) }
     LaunchedEffect(pageState.step) {
         if (pageState.step == FirstRunStep.Done && (page == Page.SettingsProject || page == Page.SettingsModel)) {
             if (page == Page.SettingsProject) notice = projectChanged
@@ -401,7 +446,13 @@ private fun AfterFirstRun(
         Box(Modifier.fillMaxSize().background(HexTheme.colors.background)) {
             when (current) {
                 Page.Home -> {
-                    HomeScreen(homeModel, onSettings = { page = Page.Settings }, computer = computer)
+                    HomeScreen(
+                        homeModel,
+                        onSettings = { page = Page.Settings },
+                        computer = computer,
+                        serverName = server?.name,
+                        onPairAgain = { pairingAgain = true },
+                    )
                 }
                 Page.Settings ->
                     SettingsScreen(
@@ -443,11 +494,89 @@ private fun AfterFirstRun(
                         onDropStream = if (BuildConfig.DEBUG) homeModel::dropStream else null,
                         onHideDeveloperSettings = { scope.launch { services.developer.hide() } },
                         onBack = { page = Page.Home },
+                        newSession =
+                            prefs.project
+                                ?.let { project ->
+                                    NewSessionInfo(project.name, busy = homeUi.busy, waiting = homeUi.today.waiting)
+                                }?.takeIf { homeUi.today.setup is SessionSetup.Ready },
+                        onStartNewSession = homeModel::startNewSession,
+                        addresses = addresses,
+                        onPairAgain = { pairingAgain = true },
+                        onForget = {
+                            homeModel.shutDown()
+                            services.forget()
+                        },
                     )
                 Page.SettingsProject, Page.SettingsBrowse, Page.SettingsModel -> SettingsPage(pages, pageState, current)
                 Page.SettingsGallery -> HexGallery(galleryDark, { galleryDark = it }, onBack = { page = Page.Settings })
                 Page.SettingsSpeechLab -> LabScreen(services.voice, lab, onBack = { page = Page.Settings })
             }
+        }
+    }
+    if (pairingAgain || debugPair != null) {
+        PairAgainCover(
+            services,
+            debugLink = debugPair,
+            onClose = { paired ->
+                pairingAgain = false
+                debugPair = null
+                if (paired is PairedAgain.Same) {
+                    serverRead += 1
+                    homeModel.pairedAgain(paired.name)
+                    if (page != Page.Home) notice = HexToastMessage(pairedTitle, HexToastTone.Steer, pairedDetail, durationMs = 2_600)
+                }
+                // A switch ends first run's way: the app goes on at the new computer's project page.
+                if (paired is PairedAgain.Switched) homeModel.shutDown()
+            },
+        )
+    }
+}
+
+/**
+ * Pair again (app-plan.md, Settings and finish (M6) › Server): first run's scan screen and its checks as a full-screen
+ * cover, with Cancel. The same computer gets its new sign-in; another one asks "Switch to …?" first.
+ */
+@Composable
+private fun PairAgainCover(
+    services: HexServices,
+    debugLink: String?,
+    onClose: (PairedAgain?) -> Unit,
+) {
+    val vm =
+        viewModel(key = "pair-again-${System.identityHashCode(services)}-${remember { System.nanoTime() }}") {
+            FirstRunViewModel(HexFirstRunEnvironment(services), mode = PickerMode.PairAgain, listingCache = services.folderListings)
+        }
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(vm) {
+        vm.openScanner()
+        if (debugLink != null) vm.scanned(debugLink)
+    }
+    LaunchedEffect(state.step) { if (state.step == FirstRunStep.Done) onClose(state.paired) }
+    SystemBarIcons(darkScreen = true)
+    Box(Modifier.fillMaxSize()) {
+        if (state.step == FirstRunStep.Scan) {
+            ScanScreen(
+                scan = state.scan,
+                scanAttempt = state.scanAttempt,
+                onScanned = vm::scanned,
+                onScanAgain = vm::scanAgain,
+                onCameraDenied = vm::cameraDenied,
+                onCameraUnavailable = vm::cameraUnavailable,
+                onClose = vm::back,
+                closeLabel = stringResource(R.string.common_cancel),
+            )
+        }
+        val other = state.switchTo
+        HexTheme(dark = true) {
+            HexConfirmSheet(
+                visible = other != null,
+                title = stringResource(R.string.server_switch_title, other?.name.orEmpty()),
+                paragraphs = listOf(stringResource(R.string.server_switch_body, other?.name.orEmpty())),
+                cancelLabel = stringResource(R.string.common_cancel),
+                confirmLabel = stringResource(R.string.server_switch_confirm),
+                onCancel = vm::cancelSwitch,
+                onConfirm = vm::confirmSwitch,
+            )
         }
     }
 }

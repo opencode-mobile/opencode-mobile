@@ -4,43 +4,74 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.HexPrefs
+import dev.opencode.hexcode.app.ServerAddresses
 import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.components.HexBadge
+import dev.opencode.hexcode.designsystem.components.HexButton
+import dev.opencode.hexcode.designsystem.components.HexButtonSize
+import dev.opencode.hexcode.designsystem.components.HexButtonStyle
+import dev.opencode.hexcode.designsystem.components.HexConfirmSheet
 import dev.opencode.hexcode.designsystem.components.HexRow
 import dev.opencode.hexcode.designsystem.components.HexRowTrailing
 import dev.opencode.hexcode.designsystem.components.HexSectionLabel
+import dev.opencode.hexcode.designsystem.components.HexSheet
+import dev.opencode.hexcode.designsystem.components.HexSheetAction
 import dev.opencode.hexcode.designsystem.components.HexToastHost
 import dev.opencode.hexcode.designsystem.components.HexToastMessage
 import dev.opencode.hexcode.designsystem.components.HexToastTone
 import dev.opencode.hexcode.firstrun.PageTop
 import dev.opencode.hexcode.firstrun.ServerLabel
+import dev.opencode.hexcode.session.NewSessionOutcome
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
+import kotlinx.coroutines.launch
+
+/** What the Start a new session confirmation says about today's session. */
+data class NewSessionInfo(
+    val project: String,
+    /** The agent works there: it carries on. */
+    val busy: Boolean,
+    /** Messages waiting there still send there. */
+    val waiting: Int,
+)
 
 /**
- * Settings, the prototype's plain list. Project, Model, Reasoning and Appearance work; Start a new session, Server
- * and the three dictation rows are placeholders for now. Tapping Version 10 times unlocks the Developer section
- * ([developerSettings]), for whoever builds and tests the app.
+ * Settings, the prototype's plain list (app-plan.md, Settings and finish (M6)). Project, Model, Reasoning, Appearance,
+ * Start a new session and Server work; the three dictation rows are placeholders for now. Tapping Version 10 times
+ * unlocks the Developer section ([developerSettings]), for whoever builds and tests the app.
  */
 @Composable
 fun SettingsScreen(
@@ -48,7 +79,7 @@ fun SettingsScreen(
     server: ServerLabel?,
     modelName: String?,
     projectPath: String?,
-    notice: String?,
+    notice: HexToastMessage?,
     onNoticeShown: () -> Unit,
     onProject: () -> Unit,
     onModel: () -> Unit,
@@ -63,13 +94,28 @@ fun SettingsScreen(
     onDropStream: (() -> Unit)?,
     onHideDeveloperSettings: () -> Unit,
     onBack: () -> Unit,
+    /** Today's session, for Start a new session's confirmation; null while it isn't open. */
+    newSession: NewSessionInfo? = null,
+    /** Start a new session › Start new session; Settings closes unless creating it failed. */
+    onStartNewSession: suspend () -> NewSessionOutcome = { NewSessionOutcome.Failed },
+    /** Server details' addresses, the one in use first. */
+    addresses: ServerAddresses? = null,
+    onPairAgain: () -> Unit = {},
+    /** Forget this computer, after its confirmation. */
+    onForget: suspend () -> Unit = {},
 ) {
-    BackHandler(onBack = onBack)
+    var sheet by remember { mutableStateOf<SettingsSheet?>(null) }
+    var working by remember { mutableStateOf(false) }
+    BackHandler(enabled = sheet == null, onBack = onBack)
+    val scope = rememberCoroutineScope()
     var notYet by remember { mutableStateOf<HexToastMessage?>(null) }
     val notYetText = stringResource(R.string.settings_soon)
+    val soon = stringResource(R.string.a11y_soon)
     val placeholder = { notYet = HexToastMessage(notYetText, HexToastTone.Info) }
+    val failedTitle = stringResource(R.string.settings_new_session_failed)
+    val failedDetail = stringResource(R.string.settings_new_session_failed_sub)
     Box(Modifier.fillMaxSize().systemBarsPadding()) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().then(if (sheet != null) Modifier.clearAndSetSemantics {} else Modifier)) {
             PageTop(
                 stringResource(R.string.settings_title),
                 server?.let { label ->
@@ -85,7 +131,7 @@ fun SettingsScreen(
                     stringResource(R.string.settings_new_session),
                     null,
                     stringResource(R.string.settings_new_session_sub),
-                    placeholder,
+                    { if (newSession != null) sheet = SettingsSheet.NewSession },
                 )
                 HexSectionLabel(stringResource(R.string.settings_agent))
                 Row(HexIcons.cpu, stringResource(R.string.settings_model), modelName, null, onModel)
@@ -97,6 +143,7 @@ fun SettingsScreen(
                     stringResource(R.string.settings_speech_model_value),
                     stringResource(R.string.settings_speech_model_sub),
                     placeholder,
+                    soon,
                 )
                 Row(
                     HexIcons.book,
@@ -104,6 +151,7 @@ fun SettingsScreen(
                     stringResource(R.string.settings_language_english),
                     null,
                     placeholder,
+                    soon,
                 )
                 Row(
                     HexIcons.pencil,
@@ -111,6 +159,7 @@ fun SettingsScreen(
                     stringResource(R.string.settings_text_style_plain),
                     null,
                     placeholder,
+                    soon,
                 )
                 HexSectionLabel(stringResource(R.string.settings_app))
                 Row(
@@ -125,7 +174,7 @@ fun SettingsScreen(
                     stringResource(R.string.settings_server),
                     server?.name,
                     server?.let { serverDetails(it) },
-                    placeholder,
+                    { if (server != null) sheet = SettingsSheet.Server },
                 )
                 HexRow(
                     title = stringResource(R.string.settings_version),
@@ -146,15 +195,158 @@ fun SettingsScreen(
                 }
             }
         }
-        val changed = remember(notice) { notice?.let { HexToastMessage(it, HexToastTone.Steer) } }
+        // Start a new session (app-plan.md, Settings and finish (M6) › Start a new session).
+        val info = newSession
+        HexConfirmSheet(
+            visible = sheet == SettingsSheet.NewSession && info != null,
+            title = stringResource(R.string.settings_new_session_title),
+            paragraphs =
+                listOfNotNull(
+                    stringResource(R.string.settings_new_session_body, info?.project.orEmpty()),
+                    if (info?.busy == true) stringResource(R.string.settings_new_session_busy) else null,
+                    info?.waiting?.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.settings_new_session_waiting, it, it) },
+                ),
+            cancelLabel = stringResource(R.string.common_cancel),
+            confirmLabel = stringResource(R.string.settings_new_session_start),
+            onCancel = { sheet = null },
+            onConfirm = {
+                if (!working) {
+                    working = true
+                    scope.launch {
+                        val outcome = onStartNewSession()
+                        working = false
+                        if (outcome == NewSessionOutcome.Failed) {
+                            notYet = HexToastMessage(failedTitle, HexToastTone.Stop, failedDetail, durationMs = 3_200)
+                        } else {
+                            sheet = null
+                            onBack()
+                        }
+                    }
+                }
+            },
+            loading = working && sheet == SettingsSheet.NewSession,
+        )
+        ServerSheet(
+            visible = sheet == SettingsSheet.Server,
+            server = server,
+            addresses = addresses,
+            onDone = { sheet = null },
+            onPairAgain = {
+                sheet = null
+                onPairAgain()
+            },
+            onForget = { sheet = SettingsSheet.Forget },
+        )
+        HexConfirmSheet(
+            visible = sheet == SettingsSheet.Forget,
+            title = stringResource(R.string.settings_forget_title),
+            paragraphs = listOf(stringResource(R.string.settings_forget_message)),
+            cancelLabel = stringResource(R.string.common_cancel),
+            confirmLabel = stringResource(R.string.settings_forget_confirm),
+            onCancel = { sheet = SettingsSheet.Server },
+            onConfirm = {
+                if (!working) {
+                    working = true
+                    scope.launch {
+                        onForget()
+                        working = false
+                        sheet = null
+                    }
+                }
+            },
+            danger = true,
+            loading = working && sheet == SettingsSheet.Forget,
+        )
         HexToastHost(
-            message = notYet ?: changed,
+            message = notYet ?: notice,
             onDismissed = {
                 notYet = null
                 onNoticeShown()
             },
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
         )
+    }
+}
+
+/** The sheet open over Settings. */
+private enum class SettingsSheet { NewSession, Server, Forget }
+
+/**
+ * Server details (app-plan.md, Settings and finish (M6) › Server): the name, "<hostname> · OpenCode <version>", every
+ * address from the pairing code with the one in use first and badged, then Pair again and Forget this computer.
+ */
+@Composable
+private fun BoxScope.ServerSheet(
+    visible: Boolean,
+    server: ServerLabel?,
+    addresses: ServerAddresses?,
+    onDone: () -> Unit,
+    onPairAgain: () -> Unit,
+    onForget: () -> Unit,
+) {
+    val colors = HexTheme.colors
+    HexSheet(
+        visible = visible,
+        onDismiss = onDone,
+        title = stringResource(R.string.server_title),
+        trailing = HexSheetAction(stringResource(R.string.common_done), onDone),
+        footer = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                HexButton(
+                    onClick = onPairAgain,
+                    text = stringResource(R.string.server_pair_again),
+                    icon = HexIcons.scan,
+                    size = HexButtonSize.Regular,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                HexButton(
+                    onClick = onForget,
+                    text = stringResource(R.string.settings_forget_button),
+                    style = HexButtonStyle.Danger,
+                    size = HexButtonSize.Regular,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+    ) {
+        if (server != null) {
+            Text(server.name, style = HexTheme.type.pageTitle, color = colors.text1, modifier = Modifier.padding(horizontal = 2.dp))
+            serverDetails(server)?.let {
+                Text(it, style = HexTheme.type.caption, color = colors.text2, modifier = Modifier.padding(start = 2.dp, top = 2.dp))
+            }
+        }
+        val all = addresses?.all.orEmpty()
+        if (all.isNotEmpty()) {
+            Text(
+                stringResource(R.string.server_addresses).uppercase(),
+                style = HexTheme.type.sectionLabel,
+                color = colors.text3,
+                modifier = Modifier.padding(start = 2.dp, top = 18.dp, bottom = 6.dp).semantics { heading() },
+            )
+            all.forEach { address ->
+                androidx.compose.foundation.layout.Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(
+                                min = 32.dp,
+                            ).padding(horizontal = 2.dp)
+                            .semantics(mergeDescendants = true) {},
+                ) {
+                    Text(
+                        address,
+                        style = HexTheme.type.mono,
+                        color = colors.text1,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (address == addresses?.inUse) HexBadge(stringResource(R.string.server_in_use))
+                }
+            }
+        }
     }
 }
 
@@ -226,7 +418,7 @@ private object DeveloperCopy {
     const val HIDE = "Hide developer settings"
 }
 
-/** A settings row: what it is, its current value on the right, and a chevron. */
+/** A settings row: what it is, its current value on the right, and a chevron; [note] for a screen reader. */
 @Composable
 private fun Row(
     icon: ImageVector,
@@ -234,6 +426,7 @@ private fun Row(
     value: String?,
     subtitle: String?,
     onClick: () -> Unit,
+    note: String? = null,
 ) {
     HexRow(
         title = title,
@@ -242,6 +435,7 @@ private fun Row(
         value = value,
         trailing = HexRowTrailing.Chevron,
         onClick = onClick,
+        accessibilityNote = note,
     )
 }
 

@@ -14,6 +14,7 @@ import dev.opencode.hexcode.session.GoalCommand
 import dev.opencode.hexcode.session.GoalOutcome
 import dev.opencode.hexcode.session.GoalRefusal
 import dev.opencode.hexcode.session.GoalText
+import dev.opencode.hexcode.session.NewSessionOutcome
 import dev.opencode.hexcode.session.PendingItem
 import dev.opencode.hexcode.session.PromptImage
 import dev.opencode.hexcode.session.QuestionAnswers
@@ -437,6 +438,12 @@ enum class HomeNotice {
 
     /** "Answer copied" (iOS, and Android below 13, where the system doesn't confirm copies). */
     AskCopied,
+
+    /** "New session · The earlier one is kept on your computer.": Settings › Start a new session. */
+    NewSession,
+
+    /** "Paired again · Signed in to <name>.", the name in [HomeUiState.noticeDetail]. */
+    PairedAgain,
 }
 
 /** A take for the goal sheet's box: recording while the button is held, then being turned into text. */
@@ -1305,6 +1312,41 @@ class HomeViewModel(
     /** Try again, after "Couldn't open today's session". */
     fun retrySetup() {
         session?.retry()
+    }
+
+    /**
+     * Settings › Start a new session (app-plan.md, Settings and finish (M6)): the day's next session replaces today's on
+     * screen. What belonged to the old one closes (its sheets, Details); the draft stays, since it never left the
+     * phone. Started shows "New session" on home.
+     */
+    suspend fun startNewSession(): NewSessionOutcome {
+        val today = session ?: return NewSessionOutcome.Failed
+        val outcome = today.startNew()
+        if (outcome != NewSessionOutcome.Failed) {
+            nextNeeds?.cancel()
+            state.update {
+                it.copy(
+                    needs = null,
+                    detailsOpen = false,
+                    recent = emptyList(),
+                    goalSheet = null,
+                    draftMenu = false,
+                    notice = if (outcome == NewSessionOutcome.Started) HomeNotice.NewSession else it.notice,
+                )
+            }
+        }
+        return outcome
+    }
+
+    /** Pair again with the same computer: today's session opens again with the new sign-in. */
+    fun pairedAgain(name: String) {
+        session?.open()
+        notify(HomeNotice.PairedAgain, name)
+    }
+
+    /** The computer was forgotten or switched: today's session there is no longer followed. */
+    fun shutDown() {
+        session?.close()
     }
 
     val level: Float? get() = dictation.level

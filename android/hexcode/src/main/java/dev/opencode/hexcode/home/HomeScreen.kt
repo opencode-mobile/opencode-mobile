@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -129,6 +130,10 @@ fun HomeScreen(
     onSettings: () -> Unit,
     /** The paired computer's address, where link tiles for `localhost` open. */
     computer: String? = null,
+    /** The paired computer's name, for "Signed out of …" and the browser's errors. */
+    serverName: String? = null,
+    /** Signed out's Pair again. */
+    onPairAgain: () -> Unit = {},
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -137,6 +142,8 @@ fun HomeScreen(
     }
     var micOff by remember { mutableStateOf(false) }
     var attachOpen by remember { mutableStateOf(false) }
+    // A `localhost` tile's page, in the in-app browser over home.
+    var browser by remember { mutableStateOf<BrowserPage?>(null) }
     val attach = rememberAttachPickers(state.draft.roomForImages, vm::attach)
     val askMic =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -163,7 +170,15 @@ fun HomeScreen(
                 .fillMaxSize()
                 .systemBarsPadding(),
         ) {
-            Column(Modifier.fillMaxSize().padding(top = 10.dp, bottom = 6.dp)) {
+            // Behind an open sheet or the browser, nothing of home is reachable with TalkBack.
+            val covered =
+                attachOpen || state.detailsOpen || state.needs != null || state.goalSheet != null || browser != null
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (covered) Modifier.clearAndSetSemantics {} else Modifier)
+                    .padding(top = 10.dp, bottom = 6.dp),
+            ) {
                 val today = state.today
                 val now = rememberNow(if (today.agent is AgentStatus.Working) 1_000 else 15_000)
                 HomeTopBar(today.agent, now, Modifier.padding(start = edge, end = edge - 6.dp), onNeedsInput = { vm.openNeeds() }) {
@@ -202,7 +217,15 @@ fun HomeScreen(
                         ) { empty ->
                             Column(Modifier.fillMaxSize().padding(horizontal = edge)) {
                                 if (empty) {
-                                    StatusArea(today, now, vm, computer = computer, onOpenLink = { openLink(context, it, computer) })
+                                    StatusArea(
+                                        today,
+                                        now,
+                                        vm,
+                                        computer = computer,
+                                        onOpenLink = { url, label -> openLink(context, url, label, computer) { browser = it } },
+                                        serverName = serverName,
+                                        onPairAgain = onPairAgain,
+                                    )
                                 } else {
                                     Spacer(Modifier.height(hang))
                                     DraftView(state, vm)
@@ -317,6 +340,10 @@ fun HomeScreen(
             val newDayDetail = stringResource(if (state.today.newDayGoal) R.string.home_newday_detail_goal else R.string.home_newday_detail)
             val goalNotices = goalNoticeTexts()
             val askCopied = stringResource(R.string.ask_copied)
+            val newSession = stringResource(R.string.settings_new_session_done)
+            val newSessionSub = stringResource(R.string.settings_new_session_done_sub)
+            val paired = stringResource(R.string.server_paired)
+            val pairedSub = stringResource(R.string.server_paired_sub, state.noticeDetail.orEmpty())
             val undo = stringResource(R.string.common_undo)
             val needsGone = stringResource(R.string.needs_gone)
             val needsGoneSub = stringResource(R.string.needs_gone_sub)
@@ -353,7 +380,7 @@ fun HomeScreen(
                 quoted(state.noticeDetail)
                     ?: state.noticeImages.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.home_waiting_images, it, it) }
             val notice =
-                remember(state.notice, messageDetail, micOff, sentNoImagesSub, newDayDetail) {
+                remember(state.notice, messageDetail, micOff, sentNoImagesSub, newDayDetail, pairedSub) {
                     when (state.notice) {
                         HomeNotice.ChunkDeleted ->
                             HexToastMessage(deleted, HexToastTone.Undo, actionLabel = undo, actionIcon = HexIcons.undo, durationMs = 3_500)
@@ -404,6 +431,8 @@ fun HomeScreen(
                         HomeNotice.NothingToStop -> HexToastMessage(nothing, HexToastTone.Info, nothingSub)
                         HomeNotice.StopFailed -> HexToastMessage(stopFailed, HexToastTone.Stop, stopFailedSub)
                         HomeNotice.AskCopied -> HexToastMessage(askCopied, HexToastTone.Steer, durationMs = 1_600)
+                        HomeNotice.NewSession -> HexToastMessage(newSession, HexToastTone.Sun, newSessionSub, durationMs = 2_600)
+                        HomeNotice.PairedAgain -> HexToastMessage(paired, HexToastTone.Steer, pairedSub, durationMs = 2_600)
                         HomeNotice.GoalSetIdle,
                         HomeNotice.GoalSetBusy,
                         HomeNotice.GoalReplacedIdle,
@@ -458,6 +487,11 @@ fun HomeScreen(
         }
         // The red edge round the whole screen while Stop is held, over the bars too.
         if (state.stopHolding) HexStopEdge(corner = screenCorner(), reduceMotion = still)
+        // The in-app browser, full screen over home; it fades in (app-plan.md, Motion and Reduce Motion).
+        AnimatedVisibility(browser != null, enter = fadeIn(HexTheme.motion.fade()), exit = fadeOut(HexTheme.motion.fade())) {
+            val page = browser
+            if (page != null) InAppBrowser(page, serverName ?: stringResource(R.string.server_this_computer), onClose = { browser = null })
+        }
     }
 }
 

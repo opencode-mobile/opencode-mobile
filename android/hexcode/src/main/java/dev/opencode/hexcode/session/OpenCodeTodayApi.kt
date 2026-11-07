@@ -23,6 +23,15 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
+/** A `401` to the saved credentials becomes [SignedOutException]. */
+private suspend fun <T> signedIn(call: suspend () -> T): T =
+    try {
+        call()
+    } catch (error: ResponseException) {
+        if (error.response.status.value == 401) throw SignedOutException(error.message)
+        throw error
+    }
+
 /** Today's session over OpenCode v2.2.5's API (m2-api-notes.md); the calls themselves are in `:opencode-kit`. */
 class OpenCodeTodayApi(
     private val sessions: SessionsApi,
@@ -39,14 +48,16 @@ class OpenCodeTodayApi(
     ): SessionListingPage {
         ready()
         val page =
-            sessions.listSessionsPageV2(
-                directory = directory,
-                search = search,
-                rootsOnly = true,
-                archived = false,
-                limit = limit,
-                cursor = cursor,
-            )
+            signedIn {
+                sessions.listSessionsPageV2(
+                    directory = directory,
+                    search = search,
+                    rootsOnly = true,
+                    archived = false,
+                    limit = limit,
+                    cursor = cursor,
+                )
+            }
         return SessionListingPage(page.data.map { it.listing() }, page.cursor?.next?.takeIf { it.isNotBlank() })
     }
 
@@ -56,12 +67,12 @@ class OpenCodeTodayApi(
         model: ModelChoice?,
     ): SessionListing {
         ready()
-        return sessions.createSessionV2(directory = directory, title = title, model = model?.ref()).listing()
+        return signedIn { sessions.createSessionV2(directory = directory, title = title, model = model?.ref()) }.listing()
     }
 
     override suspend fun putMessageRules(sessionId: String) {
         ready()
-        sessions.putInstructionEntryV2(sessionId, SessionPrompts.MESSAGE_RULES_ID, SessionPrompts.MESSAGE_RULES)
+        signedIn { sessions.putInstructionEntryV2(sessionId, SessionPrompts.MESSAGE_RULES_ID, SessionPrompts.MESSAGE_RULES) }
     }
 
     /**

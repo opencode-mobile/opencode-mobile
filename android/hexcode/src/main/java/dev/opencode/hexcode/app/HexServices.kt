@@ -10,6 +10,7 @@ import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.hexcode.firstrun.ServerName
 import dev.opencode.hexcode.firstrun.ServerNaming
 import dev.opencode.hexcode.firstrun.ServerRouteCheck
+import dev.opencode.hexcode.home.BrowserData
 import dev.opencode.hexcode.home.ImageInput
 import dev.opencode.hexcode.home.TalkLog
 import dev.opencode.hexcode.session.DailySessionSetup
@@ -26,6 +27,7 @@ import dev.opencode.mobile.data.remote.ProjectsApi
 import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.connection.ConnectionProbeService
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectivityDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.PairingCodeRedeemService
 import dev.opencode.mobile.domain.connection.V2ServerContract
@@ -45,12 +47,18 @@ import dev.opencode.voiceengine.NoSpeechException
 import dev.opencode.voiceengine.VoiceEngine
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.post
+import io.ktor.http.HttpHeaders
+import io.ktor.http.encodeURLPath
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -165,6 +173,7 @@ class HexServices(
         val api = OpenCodeTodayApi(sessions, ready = { connectionLoaded.await() })
         return TodaySession(
             scope = scope,
+            beforeSetup = ::beforeSetup,
             setup = DailySessionSetup(api, settings),
             api = api,
             transport = EventsApiTransport({ events }, ready = { connectionLoaded.await() }),
@@ -212,7 +221,8 @@ class HexServices(
         return ServerLabel(
             name = ServerName.of(hostname, profile.serverUrls.firstOrNull() ?: profile.baseUrl),
             hostname = hostname?.lowercase()?.removeSuffix(".local"),
-            version = connection.currentServerVersion(),
+            // The version setup last read from `/api/info`, else the probe's.
+            version = settings.current().serverVersion ?: connection.currentServerVersion(),
         )
     }
 
@@ -224,6 +234,125 @@ class HexServices(
         connectionLoaded.await()
         val url = connection.current()?.baseUrl ?: return null
         return runCatching { java.net.URI(url).host }.getOrNull()?.removeSurrounding("[", "]")
+    }
+
+    /**
+     * At the start of every setup (app-plan.md, Settings and finish (M6) › Server): the version is read from
+     * `GET /api/info` and saved, and a sign-in more than a week old is renewed. Neither fails setup.
+     */
+    private suspend fun beforeSetup() {
+        connectionLoaded.await()
+        coroutineScope {
+            launch { runCatching { refreshVersion() } }
+            signIn.renewIfDue()
+        }
+    }
+
+    private suspend fun refreshVersion() {
+        val response = httpClient.get().get(V2ServerContract.INFO_PATH)
+        if (!response.status.isSuccess()) return
+        val version = (response.body<JsonObject>()["version"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return
+        if (version != settings.current().serverVersion) settings.setServerVersion(version)
+    }
+
+    /** The pairing sign-in's silent renewal, with the current credentials. */
+    val signIn =
+        SignInRenewal(
+            api =
+                object : SignInApi {
+                    override suspend fun pairCode(): String {
+                        val response = httpClient.get().post("api/pair")
+                        check(response.status.isSuccess()) { "POST /api/pair: HTTP ${response.status.value}" }
+                        return (response.body<JsonObject>()["code"] as? JsonPrimitive)?.content ?: error("No pairing code")
+                    }
+
+                    override suspend fun redeem(code: String): String {
+                        val response =
+                            httpClient.get().get("auth/connect/${code.encodeURLPath()}") {
+                                // text/html would set a cookie and redirect instead.
+                                headers[HttpHeaders.Accept] = "application/json"
+                            }
+                        check(response.status.isSuccess()) { "GET /auth/connect: HTTP ${response.status.value}" }
+                        return (response.body<JsonObject>()["token"] as? JsonPrimitive)?.content ?: error("No token")
+                    }
+                },
+            store =
+                object : SignInStore {
+                    override suspend fun signedInAt() = settings.signedInAt()
+
+                    override suspend fun token() = profiles.activeProfile()?.password?.takeIf { it.isNotEmpty() }
+
+                    override suspend fun saveToken(
+                        token: String,
+                        at: Long,
+                    ) {
+                        val profile = profiles.activeProfile() ?: return
+                        profiles.saveProfile(profile.copy(password = token))
+                        connection.reloadFromStore()
+                        httpClient.rebuild()
+                        sseClient.rebuild()
+                        settings.setSignedInAt(at)
+                    }
+                },
+        )
+
+    /** Changes each time the computer is forgotten or switched, so first run and home start afresh. */
+    val setupGeneration = MutableStateFlow(0)
+
+    /** After Pair again switched computers: first run goes on at its project page on this one. */
+    var resumeFirstRunAt: ServerLabel? = null
+
+    private val forgetting =
+        ComputerForgetting(
+            profiles,
+            credentials,
+            settings,
+            disconnect = {
+                connection.disconnect()
+                httpClient.rebuild()
+                sseClient.rebuild()
+            },
+            clearBrowser = { withContext(Dispatchers.Main) { BrowserData.clear(appContext) } },
+        )
+
+    /**
+     * Forget this computer: the profile and its password, the setup, the saved card, the Ask history, the last date and
+     * id, and the browser's website data. First run starts at Welcome.
+     */
+    suspend fun forget() {
+        forgetting.forget()
+        folderListings.clear()
+        setupGeneration.value += 1
+    }
+
+    /** The saved computer is the one [result] paired with (Pair again). */
+    suspend fun isSameComputer(result: dev.opencode.hexcode.firstrun.ConnectResult.Connected): Boolean {
+        val saved = profiles.activeProfile() ?: profiles.listProfiles().firstOrNull() ?: return false
+        return PairAgain.isSameComputer(saved.name, result.hostname, saved.serverUrls + saved.baseUrl, result.profile.serverUrls)
+    }
+
+    /** Pair again with another computer, after "Switch to …?": the old one goes, and first run goes on at Project. */
+    suspend fun switchServer(
+        result: dev.opencode.hexcode.firstrun.ConnectResult.Connected,
+        home: suspend () -> String?,
+    ) {
+        forgetting.switchTo {
+            useServer(result.profile)
+            settings.setServer(home = home(), version = result.version)
+            settings.setSignedInAt(System.currentTimeMillis())
+        }
+        folderListings.clear()
+        resumeFirstRunAt = ServerLabel(result.name, result.hostname?.lowercase()?.removeSuffix(".local"), result.version)
+        setupGeneration.value += 1
+    }
+
+    /** Server details: every address from the pairing code, the one in use first. */
+    suspend fun serverAddresses(): ServerAddresses {
+        connectionLoaded.await()
+        val profile = profiles.activeProfile() ?: return ServerAddresses(emptyList(), null)
+        val inUse = (connection.current()?.baseUrl ?: profile.baseUrl).let(ConnectionProfileIdentity::normalizeBaseUrl)
+        val all = (listOf(inUse) + profile.serverUrls.map(ConnectionProfileIdentity::normalizeBaseUrl)).distinct()
+        return ServerAddresses(all.map { it.trimEnd('/') }, inUse.trimEnd('/'))
     }
 
     /** Completes once the saved server is bound (or there is none), so calls made at startup reach it. */
@@ -252,6 +381,12 @@ class HexServices(
         sseClient.rebuild()
     }
 }
+
+/** Server details' addresses (URLs without the trailing slash), and the one in use. */
+data class ServerAddresses(
+    val all: List<String>,
+    val inUse: String?,
+)
 
 /** Reads `hostname` from `/api/info`. */
 class ApiInfoNaming(

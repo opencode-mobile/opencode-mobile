@@ -72,6 +72,8 @@ fun ScanScreen(
     onCameraDenied: () -> Unit,
     onCameraUnavailable: () -> Unit,
     onClose: () -> Unit,
+    /** The ✕'s name for a screen reader: "Close" in first run, "Cancel" for Pair again. */
+    closeLabel: String? = null,
 ) {
     val context = LocalContext.current
     val permission =
@@ -90,7 +92,7 @@ fun ScanScreen(
     }
     BackHandler(onBack = onClose)
     HexTheme(dark = true) {
-        ScanContent(scan, scanAttempt, hasCamera, onScanned, onScanAgain, onCameraUnavailable, onClose) {
+        ScanContent(scan, scanAttempt, hasCamera, onScanned, onScanAgain, onCameraUnavailable, onClose, closeLabel) {
             permission.launch(Manifest.permission.CAMERA)
         }
     }
@@ -105,6 +107,7 @@ private fun ScanContent(
     onScanAgain: () -> Unit,
     onCameraUnavailable: () -> Unit,
     onClose: () -> Unit,
+    closeLabel: String?,
     askCamera: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -123,7 +126,7 @@ private fun ScanContent(
         Reticle(found = scan is ScanUi.Connecting || scan is ScanUi.Connected)
         HexRoundButton(
             HexIcons.x,
-            stringResource(R.string.common_close),
+            closeLabel ?: stringResource(R.string.common_close),
             onClick = onClose,
             modifier =
                 Modifier

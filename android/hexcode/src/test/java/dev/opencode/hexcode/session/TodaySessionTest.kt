@@ -32,6 +32,7 @@ class TodaySessionTest {
     ) : DailySessionApi,
         LiveSessionApi {
         var fails = false
+        var signedOut = false
         var snapshot = LiveSnapshot(busySince = null, hasRun = true, children = emptyList(), pending = emptyList(), inbox = emptyList())
         var reply = "## Task\nNow: Working."
         var gate: CompletableDeferred<Unit>? = null
@@ -47,6 +48,7 @@ class TodaySessionTest {
             log += "list"
             gate?.await()
             if (fails) error("unreachable")
+            if (signedOut) throw SignedOutException("HTTP 401")
             return SessionListingPage(listed.filter { it.title.contains(search) }, null)
         }
 
@@ -925,5 +927,36 @@ class TodaySessionTest {
             runCurrent()
             assertEquals(SessionSetup.Ready("new1"), today.state.value.setup)
             assertFalse(log.any { it.startsWith("create") })
+        }
+
+    // app-plan.md, Settings and finish (M6) › Signed out.
+
+    @Test
+    fun aRefusedSignInShowsSignedOutAndOpeningAgainAfterPairingClearsIt() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50))).apply { signedOut = true }
+            var upkeep = 0
+            val today =
+                TodaySession(
+                    scope = backgroundScope,
+                    setup = DailySessionSetup(api, Memory(date)),
+                    api = api,
+                    transport = Transport(),
+                    directory = { project },
+                    model = { model },
+                    today = { date },
+                    clock = { testScheduler.currentTime },
+                    beforeSetup = { upkeep += 1 },
+                )
+            today.open()
+            runCurrent()
+            assertEquals(SessionSetup.SignedOut, today.state.value.setup)
+            assertNull(today.state.value.agent)
+            // Pair again replaced the token: setup runs again, after its upkeep.
+            api.signedOut = false
+            today.open()
+            runCurrent()
+            assertEquals(SessionSetup.Ready("s1"), today.state.value.setup)
+            assertEquals(2, upkeep)
         }
 }

@@ -165,7 +165,18 @@ sealed interface DailySessionResult {
 
     /** Finding, creating or putting the rules failed: "Couldn't open today's session" with Try again. */
     data object Failed : DailySessionResult
+
+    /** The server refused the saved credentials (`401`): "Signed out of <name>" with Pair again. */
+    data object SignedOut : DailySessionResult
 }
+
+/**
+ * The server answered `401` to the saved credentials: the sign-in expired (30 days without opening the app) or the
+ * server's password changed (app-plan.md, Settings and finish (M6) › Signed out).
+ */
+class SignedOutException(
+    message: String? = null,
+) : Exception(message)
 
 /** How Start a new session went. */
 sealed interface NewSessionResult {
@@ -219,6 +230,8 @@ class DailySessionSetup(
             opened.copy(previousId = previous)
         } catch (error: CancellationException) {
             throw error
+        } catch (_: SignedOutException) {
+            DailySessionResult.SignedOut
         } catch (_: Exception) {
             DailySessionResult.Failed
         }

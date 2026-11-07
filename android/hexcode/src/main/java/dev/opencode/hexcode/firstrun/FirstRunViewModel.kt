@@ -71,7 +71,24 @@ data class FirstRunUiState(
     val browser: FolderBrowserState? = null,
     val project: ProjectChoice? = null,
     val model: Loadable<ModelPickerState> = Loadable.Loading,
+    /** Pair again found another computer: "Switch to <name>?" waits for an answer. */
+    val switchTo: ConnectResult.Connected? = null,
+    /** Pair again is over ([FirstRunStep.Done]): how it went. */
+    val paired: PairedAgain? = null,
 )
+
+/** How Pair again ended. */
+sealed interface PairedAgain {
+    /** The same computer: its password and addresses were replaced; project, model and today's session stay. */
+    data class Same(
+        val name: String,
+    ) : PairedAgain
+
+    /** Another computer, after Switch: first run goes on at its project page there. */
+    data class Switched(
+        val name: String,
+    ) : PairedAgain
+}
 
 /** What first run needs from the app; [HexServices] in the app, fakes in tests. */
 interface FirstRunEnvironment {
@@ -96,11 +113,21 @@ interface FirstRunEnvironment {
     /** The model and level saved earlier, to start the model page on. */
     suspend fun savedModel(): ModelChoice? = null
 
+    /** Pair again: [result] is the computer already paired (the same hostname). */
+    suspend fun isSameComputer(result: ConnectResult.Connected): Boolean = false
+
+    /** Pair again with another computer: the old one and its password go, [result] is saved and used. */
+    suspend fun switchServer(result: ConnectResult.Connected) = useServer(result)
+
     fun now(): Long = System.currentTimeMillis()
 }
 
-/** First run walks every step; Settings opens one page (project or model) and closes it once a choice is saved. */
-enum class PickerMode { FirstRun, Settings }
+/**
+ * First run walks every step; Settings opens one page (project or model) and closes it once a choice is saved; Pair
+ * again is the scan screen alone, which replaces the sign-in of the same computer or, after a confirmation, switches to
+ * another.
+ */
+enum class PickerMode { FirstRun, Settings, PairAgain }
 
 /**
  * First run, the prototype's six steps: the rule and how to connect, scan and connect, pick a project (or browse
@@ -160,6 +187,18 @@ class FirstRunViewModel(
                 when (result) {
                     is ConnectResult.Failed -> state.update { it.copy(scan = ScanUi.Failed(result.failure)) }
                     is ConnectResult.Connected -> {
+                        if (mode == PickerMode.PairAgain && !env.isSameComputer(result)) {
+                            // Another computer: nothing is saved until Switch.
+                            val server = ServerLabel(result.name, result.hostname, result.version)
+                            state.update {
+                                it.copy(
+                                    scan = ScanUi.Connected(result.name, result.version),
+                                    server = server,
+                                    switchTo = result,
+                                )
+                            }
+                            return@launch
+                        }
                         try {
                             env.useServer(result)
                         } catch (error: CancellationException) {
@@ -171,11 +210,44 @@ class FirstRunViewModel(
                         val server = ServerLabel(result.name, result.hostname, result.version)
                         state.update { it.copy(scan = ScanUi.Connected(result.name, result.version), server = server) }
                         delay(connectedPause)
+                        if (mode == PickerMode.PairAgain) {
+                            state.update { it.copy(step = FirstRunStep.Done, paired = PairedAgain.Same(result.name)) }
+                            return@launch
+                        }
                         state.update { it.copy(step = FirstRunStep.Project) }
                         loadProjects()
                     }
                 }
             }
+    }
+
+    /** "Switch to …?" › Switch: the old computer goes and this one is used; first run goes on at its project page. */
+    fun confirmSwitch() {
+        val result = state.value.switchTo ?: return
+        connectJob =
+            viewModelScope.launch {
+                try {
+                    env.switchServer(result)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    state.update { it.copy(switchTo = null, scan = ScanUi.Failed(ConnectFailure.NotSaved)) }
+                    return@launch
+                }
+                state.update { it.copy(switchTo = null, step = FirstRunStep.Done, paired = PairedAgain.Switched(result.name)) }
+            }
+    }
+
+    /** "Switch to …?" › Cancel: nothing changed; the camera reads the next code. */
+    fun cancelSwitch() {
+        state.update { it.copy(switchTo = null) }
+        scanAgain()
+    }
+
+    /** After Pair again switched computers: first run goes on at the project page of the [server] just paired. */
+    fun resumeAtProject(server: ServerLabel) {
+        state.update { it.copy(step = FirstRunStep.Project, server = server) }
+        loadProjects()
     }
 
     fun scanAgain() {
@@ -192,6 +264,11 @@ class FirstRunViewModel(
         val step = state.value.step
         // In Settings, back from the project or model page closes it.
         if (mode == PickerMode.Settings && (step == FirstRunStep.Project || step == FirstRunStep.Model)) return close()
+        // Pair again's Cancel closes the cover, whatever the scan got to.
+        if (mode == PickerMode.PairAgain) {
+            connectJob?.cancel()
+            return close()
+        }
         when (step) {
             FirstRunStep.Welcome, FirstRunStep.Done -> Unit
             FirstRunStep.Scan -> {

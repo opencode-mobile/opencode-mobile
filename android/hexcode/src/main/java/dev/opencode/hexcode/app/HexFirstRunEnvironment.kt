@@ -23,9 +23,16 @@ class HexFirstRunEnvironment(
 
     override suspend fun useServer(result: ConnectResult.Connected) {
         services.useServer(result.profile)
+        // The sign-in is renewed once it's a week old (app-plan.md, Sign-in renewal).
+        services.settings.setSignedInAt(System.currentTimeMillis())
         val home = runCatching { services.filesystem.getPaths().home }.getOrNull()
         services.settings.setServer(home = home, version = result.version)
     }
+
+    override suspend fun isSameComputer(result: ConnectResult.Connected): Boolean = services.isSameComputer(result)
+
+    override suspend fun switchServer(result: ConnectResult.Connected) =
+        services.switchServer(result) { runCatching { services.filesystem.getPaths().home }.getOrNull() }
 
     override suspend fun saveProject(project: ProjectChoice) = services.settings.setProject(project)
 

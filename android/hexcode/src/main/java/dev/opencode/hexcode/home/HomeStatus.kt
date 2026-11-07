@@ -64,8 +64,6 @@ import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.designsystem.components.HexAgentState
-import dev.opencode.hexcode.designsystem.components.HexButton
-import dev.opencode.hexcode.designsystem.components.HexButtonSize
 import dev.opencode.hexcode.designsystem.components.HexCodeText
 import dev.opencode.hexcode.designsystem.components.HexDot
 import dev.opencode.hexcode.designsystem.components.HexDotTone
@@ -73,6 +71,7 @@ import dev.opencode.hexcode.designsystem.components.HexLinkKind
 import dev.opencode.hexcode.designsystem.components.HexLinkTile
 import dev.opencode.hexcode.designsystem.components.HexProgress
 import dev.opencode.hexcode.designsystem.components.HexProgressStep
+import dev.opencode.hexcode.designsystem.components.HexStatusFailure
 import dev.opencode.hexcode.designsystem.components.HexTileRow
 import dev.opencode.hexcode.designsystem.components.HexTopBar
 import dev.opencode.hexcode.designsystem.components.rememberTurn
@@ -154,7 +153,11 @@ internal fun StatusArea(
     modifier: Modifier = Modifier,
     /** The paired computer's address, which a tile for a `localhost` link shows and opens. */
     computer: String? = null,
-    onOpenLink: (String) -> Unit = {},
+    onOpenLink: (url: String, label: String) -> Unit = { _, _ -> },
+    /** The paired computer's name, for "Signed out of <name>". */
+    serverName: String? = null,
+    /** Signed out's Pair again. */
+    onPairAgain: () -> Unit = {},
 ) {
     val summary = today.summary
     val links = Links(computer, onOpenLink)
@@ -180,6 +183,17 @@ internal fun StatusArea(
                 CentredFit(start, count, modifier) { size, lines -> Summary(summary, now, vm, size, lines, links, work) }
             }
         is SessionSetup.Failed -> CentredFit(NowSize.Display, 1, modifier) { _, _ -> SetupFailed(today.setup.retrying, vm::retrySetup) }
+        // The sign-in expired or the password changed (app-plan.md, Settings and finish (M6) › Signed out).
+        SessionSetup.SignedOut ->
+            CentredFit(NowSize.Display, 1, modifier) { _, _ ->
+                HexStatusFailure(
+                    title = stringResource(R.string.server_signed_out, serverName ?: stringResource(R.string.server_this_computer)),
+                    detail = summaryText(stringResource(R.string.server_signed_out_sub)),
+                    buttonLabel = stringResource(R.string.server_pair_again),
+                    icon = HexIcons.scan,
+                    onClick = onPairAgain,
+                )
+            }
         is SessionSetup.Ready ->
             CentredFit(start, count, modifier) { size, lines ->
                 Summary(summary, now, vm, size, lines, links, work)
@@ -349,10 +363,10 @@ private enum class CardPhase {
     Waiting,
 }
 
-/** Where link tiles open: the paired [computer]'s address for `localhost` links, and [open] for a tap. */
+/** Where link tiles open: the paired [computer]'s address for `localhost` links, and [open] for a tap (url, label). */
 private class Links(
     val computer: String?,
-    val open: (String) -> Unit,
+    val open: (String, String) -> Unit,
 )
 
 /**
@@ -410,7 +424,7 @@ private fun Card(
                     host = tileHost(link.url, links.computer),
                     kind = if (SummaryLinks.isLocal(link.url)) HexLinkKind.Local else HexLinkKind.Web,
                     accessibilityLabel = stringResource(R.string.home_link_open, link.label),
-                    onClick = { links.open(link.url) },
+                    onClick = { links.open(link.url, link.label) },
                 )
             }
         }
@@ -662,16 +676,15 @@ private fun Refresh(
 
 /** "Couldn't open today's session", with Try again. */
 @Composable
-private fun SetupFailed(
+private fun ColumnScope.SetupFailed(
     retrying: Boolean,
     onRetry: () -> Unit,
 ) {
-    Text(stringResource(R.string.home_setup_failed), style = HexTheme.type.display, color = HexTheme.colors.text1)
-    HexButton(
-        onClick = onRetry,
-        text = stringResource(R.string.home_setup_retry),
+    HexStatusFailure(
+        title = stringResource(R.string.home_setup_failed),
+        buttonLabel = stringResource(R.string.home_setup_retry),
         icon = HexIcons.refresh,
-        size = HexButtonSize.Regular,
+        onClick = onRetry,
         loading = retrying,
     )
 }

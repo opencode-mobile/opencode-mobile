@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.opencode.hexcode.firstrun.ModelChoice
@@ -46,7 +47,8 @@ class HexSettings(
 ) : DeveloperSettingsStore,
     DailySessionMemory,
     SummaryStore,
-    AskStore {
+    AskStore,
+    SetupMemory {
     private val store = context.applicationContext.hexDataStore
 
     val prefs: Flow<HexPrefs> =
@@ -144,6 +146,36 @@ class HexSettings(
         store.edit { it[LAST_SUMMARY] = json.encodeToString(SavedSummary.serializer(), saved) }
     }
 
+    /** The server's OpenCode version, read from `GET /api/info` each time setup runs. */
+    suspend fun setServerVersion(version: String) {
+        store.edit { it[SERVER_VERSION] = version }
+    }
+
+    /** When the saved sign-in (the pairing token) was issued: at pairing and at each renewal. */
+    suspend fun signedInAt(): Long? = store.data.first()[SIGNED_IN_AT]
+
+    suspend fun setSignedInAt(at: Long) {
+        store.edit { it[SIGNED_IN_AT] = at }
+    }
+
+    override suspend fun forgetSetup() {
+        store.edit { prefs ->
+            listOf(
+                PROJECT,
+                MODEL,
+                MODEL_NAME,
+                SERVER_HOME,
+                SERVER_VERSION,
+                LAST_SESSION_DATE,
+                LAST_SUMMARY,
+                LAST_SESSION_ID,
+                ASKED,
+            ).forEach { prefs.remove(it) }
+            prefs.remove(FIRST_RUN_DONE)
+            prefs.remove(SIGNED_IN_AT)
+        }
+    }
+
     override suspend fun setDeveloperSettings(on: Boolean) {
         store.edit { if (on) it[DEVELOPER_SETTINGS] = true else it.remove(DEVELOPER_SETTINGS) }
     }
@@ -161,5 +193,6 @@ class HexSettings(
         val LAST_SUMMARY = stringPreferencesKey("summary_last")
         val LAST_SESSION_ID = stringPreferencesKey("session_last_id")
         val ASKED = stringPreferencesKey("ask_history")
+        val SIGNED_IN_AT = longPreferencesKey("signed_in_at")
     }
 }

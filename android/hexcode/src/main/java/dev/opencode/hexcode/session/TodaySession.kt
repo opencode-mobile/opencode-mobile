@@ -30,6 +30,9 @@ sealed interface SessionSetup {
     data class Failed(
         val retrying: Boolean = false,
     ) : SessionSetup
+
+    /** The server refused the saved credentials: "Signed out of <name>" with Pair again. */
+    data object SignedOut : SessionSetup
 }
 
 /** How Settings › Start a new session went. */
@@ -279,6 +282,8 @@ class TodaySession(
     askStore: AskStore? = null,
     /** A goal command whose event hasn't come this long after its `204` reads `get`. */
     private val goalSettleMs: Long = GOAL_SETTLE_MS,
+    /** Runs at the start of every setup: renewing the sign-in and reading the server's version. Never fails it. */
+    private val beforeSetup: suspend () -> Unit = {},
 ) {
     private val own = MutableStateFlow(TodayState())
 
@@ -358,6 +363,19 @@ class TodaySession(
         stream?.onEvent = ::received
     }
 
+    /** Stops following today's session: the stream closes and nothing more is asked (the computer was forgotten). */
+    fun close() {
+        opening?.cancel()
+        backgroundStop?.cancel()
+        backgroundStop = null
+        stream?.stop()
+        sessionId = null
+        live = null
+        summary.clear()
+        publish()
+        own.update { TodayState() }
+    }
+
     /** Finds or creates today's session and follows it. A new session shows the empty card; one that ran, a summary. */
     fun open() {
         if (opening?.isActive == true) return
@@ -381,7 +399,7 @@ class TodaySession(
         backgroundStop?.cancel()
         backgroundStop = null
         when (own.value.setup) {
-            SessionSetup.Failed(retrying = false) -> open()
+            SessionSetup.Failed(retrying = false), SessionSetup.SignedOut -> open()
             is SessionSetup.Ready ->
                 when {
                     day != today() -> open()
@@ -726,12 +744,24 @@ class TodaySession(
             it.copy(setup = if (it.setup is SessionSetup.Failed) SessionSetup.Failed(retrying = true) else SessionSetup.Opening)
         }
         stream?.stop()
+        try {
+            beforeSetup()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w(TAG, "before setup: ${error.message}")
+        }
         val date = today()
         val directory = directory()
         // The card saved for today's session in this project shows while setup runs.
         summary.preload(date, directory)
         when (val result = setup.open(date, directory, model())) {
             DailySessionResult.Failed -> own.update { it.copy(setup = SessionSetup.Failed()) }
+            DailySessionResult.SignedOut -> {
+                // Nothing of the session it can no longer read stays on screen.
+                summary.clear()
+                own.update { it.copy(setup = SessionSetup.SignedOut) }
+            }
             is DailySessionResult.Opened -> {
                 // Yesterday's goal is left as it is; the notice says when it's still running there.
                 val goalRunning = result.newDay && result.previousId?.let { goalActive(it, directory) } == true
