@@ -83,6 +83,9 @@ private struct HexGalleryContent: View {
             stopHold
             requestSheets
             details
+            menus
+            goals
+            askMessages
         }
         .padding(.bottom, 40)
     }
@@ -630,6 +633,81 @@ private struct HexGalleryContent: View {
                 }
             }
             caption("Section heads with a suffix and a count · icon, dot and to-do rows · time, button and › · done variant")
+        }
+    }
+
+    // MARK: M5
+
+    private var menus: some View {
+        section("Menu") {
+            HStack {
+                Spacer(minLength: 0)
+                HexMenu(items: [
+                    HexMenuItem(id: "ask", icon: .ask, title: "Ask on the side", detail: "Answered from the session, not sent to the agent") {},
+                    HexMenuItem(id: "goal", icon: .target, iconColor: HexColor.green, title: "Set as today’s goal", detail: "The agent keeps going until it’s done") {},
+                ])
+                .fixedSize()
+            }
+            HStack {
+                Spacer(minLength: 0)
+                HexMenu(items: [
+                    HexMenuItem(id: "ask", icon: .ask, title: "Ask on the side", detail: "Answered from the session, not sent to the agent", enabled: false) {},
+                    HexMenuItem(id: "goal", icon: .target, iconColor: HexColor.green, title: "Replace today’s goal", detail: "The agent keeps going until it’s done", enabled: false) {},
+                ])
+                .fixedSize()
+            }
+            caption("Open · items disabled while a chunk is still transcribing")
+        }
+    }
+
+    private var goals: some View {
+        section("Goal") {
+            HStack(spacing: 10) {
+                HexRoundButton(.target, label: "Goal") {}
+                HexRoundButton(.target, label: "Goal", on: true) {}
+            }
+            caption("Round button · on (the goal is active)")
+            VStack(spacing: 0) {
+                HexGoalLine(objective: nil) {}
+                HexGoalLine(objective: "Make login work offline and add tests for the token refresh", suffix: "starting", lit: true) {}
+                HexGoalLine(objective: "Make login work offline and add tests for the token refresh", suffix: "round 3", lit: true) {}
+                HexGoalLine(objective: "Make login work offline", suffix: "waiting", lit: true) {}
+                HexGoalLine(objective: "Make login work offline", suffix: "paused") {}
+                HexGoalLine(objective: "Make login work offline", suffix: "done", lit: true) {}
+            }
+            caption("Empty · starting · round 3 · waiting · paused · done")
+            HexGoalBox(label: "/goal", content: .empty("No goal yet."))
+            HexGoalBox(label: "/goal", status: "active · round 3 of 50", content: .text("Make login work offline and add tests for the token refresh"))
+            HexGoalBox(label: "/goal", status: "paused", content: .text("Make login work offline"), reason: "Stopped by the user")
+            HexGoalBox(label: "/goal", status: "done", content: .text("Create one.txt, two.txt and three.txt"), reason: "Verified all three files exist with the right contents.")
+            HexGoalBox(label: "new goal", status: "On this phone", content: .listening("Listening…"))
+            HexGoalBox(label: "new goal", status: "On this phone", content: .transcribing("Transcribing…"))
+            HexGoalBox(label: "today’s goal", status: "On this phone", content: .text("Ship the release notes"))
+            caption("Empty · active · paused with its reason · done with the evidence · Listening · Transcribing · a take's text")
+        }
+    }
+
+    private var askMessages: some View {
+        section("Ask message") {
+            HexAskMessage(question: "Why did the auth tests fail?", age: "now", state: .asking)
+            HexAskMessage(question: "Why did the auth tests fail?", age: "2m", state: .answered("One test still uses the old `session` helper; the agent is moving it to the new API client."))
+            HexAskMessage(
+                question: "Why did the auth tests fail?",
+                age: "2m",
+                state: .answered("One test still uses the old `session` helper; the agent is moving it to the new API client, then reruns the suite."),
+                isOpen: true
+            )
+            HexAskMessage(question: "Check the tests", age: "now", state: .problem(title: "No answer", detail: "Ask it another way, or send it as a message."))
+            HexAskMessage(question: "Anything new?", age: "now", state: .problem(title: "Couldn’t answer", detail: "Try again."))
+            caption("Asking · answered, folded · open · empty · failed")
+            HexDetailsSection(title: Text(verbatim: "Asked on the side"), suffix: Text(verbatim: "· only you see these"), count: "2") {
+                HexDetailRow(leading: .icon(.ask, HexColor.text3), title: Text(verbatim: "Why did the auth tests fail?"), detail: Text(verbatim: "One test still uses the old session helper.")) {
+                    HexDetailChevron()
+                }
+                HexDetailRow(leading: .icon(.ask, HexColor.text3), title: Text(verbatim: "What's in mathutils.py?"), detail: Text(verbatim: "add, sub, mul and clamp.")) {
+                    HexDetailChevron()
+                }
+            }
         }
     }
 
