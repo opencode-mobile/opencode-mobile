@@ -166,13 +166,18 @@ fun HexAskMessage(
                             overflow = TextOverflow.Ellipsis,
                         )
                 }
-                Text(
-                    "“$question” · $age",
-                    style = HexTheme.type.caption,
-                    color = colors.text3,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // The age stays whole; a long question is ellipsised before it.
+                Row {
+                    Text(
+                        "“$question”",
+                        style = HexTheme.type.caption,
+                        color = colors.text3,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Text(" · $age", style = HexTheme.type.caption, color = colors.text3, maxLines = 1)
+                }
             }
         }
         if (state == HexAskState.Failed || state == HexAskState.Empty) HexButton(onClick = onRetry, text = labels.retry)
