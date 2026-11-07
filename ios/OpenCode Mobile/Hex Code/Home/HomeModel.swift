@@ -465,7 +465,7 @@ final class HomeModel {
             return
         }
         parts[id] = nil
-        draft.finishTranscription(id, text: taken.text)
+        draft.finishTranscription(id, text: taken.text, paragraphs: taken.paragraphs)
         logReleaseToText(id, parts: taken.parts.count)
         if let take = audio.removeValue(forKey: id) { try? FileManager.default.removeItem(at: take.url) }
     }
@@ -584,6 +584,7 @@ final class HomeModel {
         guard canSend, let sender else { return }
         let saved = draft
         let text = saved.text
+        lastSent = SentMessage(text: text, paragraphs: saved.paragraphs, duration: saved.totalDuration)
         let mode = sendMode
         sendMode = .afterTurn
         draft = DictationDraft()
@@ -599,6 +600,18 @@ final class HomeModel {
     }
 
     private enum SentNotice { case idle, queued, now }
+
+    /// The last message sent from this phone, for the "You said" reader's paragraphs and length.
+    private(set) var lastSent: SentMessage?
+    /// The reader is open on the draft.
+    var showsDraftReader = false
+
+    /// The reader's paragraphs and meta for `text` (the You line): the phone's own message when it is
+    /// this one, else the text as one paragraph.
+    func sentReader(for text: String) -> SentMessage {
+        if let lastSent, lastSent.text == text { return lastSent }
+        return SentMessage(text: text, paragraphs: [text], duration: nil)
+    }
 
     /// What goes with the text: the draft's images, or none for a model that can't see them.
     private func outgoingImages(_ saved: DictationDraft) -> [OutgoingImage] {

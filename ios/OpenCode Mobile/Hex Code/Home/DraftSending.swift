@@ -95,3 +95,24 @@ struct ImageInput: Equatable, Sendable {
         )
     }
 }
+
+/// A message as sent, for the "You said" reader.
+struct SentMessage: Equatable, Sendable {
+    var text: String
+    var paragraphs: [String]
+    /// The draft's length; nil when it isn't known (a message from elsewhere).
+    var duration: TimeInterval?
+
+    var meta: String { ReaderMeta.text(duration: duration, words: ReaderMeta.words(text)) }
+}
+
+/// The You line (app plan, "Just sent"): the whole message up to 3 lines; a longer one is clamped
+/// to 3 lines with an ellipsis, with "N words · Read all ›" under it, which opens "You said".
+enum YouLine {
+    static let maxLines = 3
+
+    static func readAll(_ text: String) -> String {
+        let words = ReaderMeta.words(text)
+        return String(localized: "home.you.read_all", defaultValue: "\(words) words · Read all ›")
+    }
+}

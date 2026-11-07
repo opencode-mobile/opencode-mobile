@@ -22,6 +22,8 @@ struct DraftChunk: Identifiable, Equatable, Sendable {
     var previous: (text: String, duration: TimeInterval)?
     /// A locked take's text so far, from the parts transcribed while it records; nil until the first.
     var partial: String?
+    /// A locked take cut at pauses: its parts' texts, the reader's paragraphs. Nil for a take read whole.
+    var paragraphs: [String]?
 
     var text: String? {
         if case let .text(text) = state { return text }
@@ -31,7 +33,7 @@ struct DraftChunk: Identifiable, Equatable, Sendable {
     static func == (lhs: DraftChunk, rhs: DraftChunk) -> Bool {
         lhs.id == rhs.id && lhs.state == rhs.state && lhs.duration == rhs.duration
             && lhs.previous?.text == rhs.previous?.text && lhs.previous?.duration == rhs.previous?.duration
-            && lhs.partial == rhs.partial
+            && lhs.partial == rhs.partial && lhs.paragraphs == rhs.paragraphs
     }
 }
 
@@ -103,6 +105,14 @@ struct DictationDraft: Equatable, Sendable {
     }
     var wordCount: Int { text.split(whereSeparator: \.isWhitespace).count }
 
+    /// The reader's paragraphs: one per chunk, and a locked take's at its pauses.
+    var paragraphs: [String] {
+        chunks.flatMap { chunk -> [String] in
+            guard let text = chunk.text else { return [] }
+            return chunk.paragraphs ?? [text]
+        }
+    }
+
     /// Long enough for the word count in the label. Rows are `DraftLayout`'s call.
     var isLong: Bool {
         chunks.count > Self.longChunks || chunks.compactMap(\.text).joined(separator: " ").count > Self.longCharacters
@@ -168,7 +178,7 @@ struct DictationDraft: Equatable, Sendable {
     }
 
     /// The take's text arrived. Silence (no text) removes a new chunk and keeps a re-recorded one's earlier text.
-    mutating func finishTranscription(_ id: UUID, text: String) {
+    mutating func finishTranscription(_ id: UUID, text: String, paragraphs: [String]? = nil) {
         guard let index = index(of: id), chunks[index].state == .transcribing else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         chunks[index].partial = nil
@@ -177,6 +187,7 @@ struct DictationDraft: Equatable, Sendable {
         } else {
             chunks[index].state = .text(trimmed)
             chunks[index].previous = nil
+            chunks[index].paragraphs = paragraphs.flatMap { $0.count > 1 ? $0 : nil }
         }
     }
 

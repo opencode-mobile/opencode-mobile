@@ -20,6 +20,10 @@ struct HomeView: View {
     @State private var showsCamera = false
     /// A page on the computer, open in the in-app browser.
     @State private var browser: BrowserModel?
+    /// The draft is a long single take, shown as a 7-line window.
+    @State private var draftWindowed = false
+    /// "You said": the sent message whole.
+    @State private var youSaid: SentMessage?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
 
@@ -41,13 +45,21 @@ struct HomeView: View {
             }
             // The draft hangs from a line 26 % down and grows downward as you talk (the prototype's
             // `.fx-sp`); the status card and the setup failure are centred.
-            HangingLayout(fraction: drafting ? 0.26 : nil) {
+            // A long single take shows as a 7-line window, and then the whole draft block is centred,
+            // as the status card is.
+            HangingLayout(fraction: drafting && !draftWindowed ? 0.26 : nil) {
                 if drafting {
-                    DraftView(home: home)
+                    DraftView(home: home, windowed: $draftWindowed)
                         .transition(.opacity)
                 } else {
-                    HomeStatusView(session: session, onOpenLink: open, onNext: { home.addSuggestion($0) }, onPairAgain: onPairAgain)
-                        .transition(.opacity)
+                    HomeStatusView(
+                        session: session,
+                        onOpenLink: open,
+                        onNext: { home.addSuggestion($0) },
+                        onPairAgain: onPairAgain,
+                        onReadSent: { youSaid = home.sentReader(for: $0) }
+                    )
+                    .transition(.opacity)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,6 +159,38 @@ struct HomeView: View {
         .fullScreenCover(item: browserPresented) { token in
             BrowserScreen(model: token.model, onDone: { closeBrowser() })
         }
+        .hexSheet(isPresented: Binding(get: { home.showsDraftReader }, set: { home.showsDraftReader = $0 }), detents: [.large]) {
+            HexReader(
+                title: Text(LocalizedStringResource("reader.draft", defaultValue: "Draft")),
+                meta: ReaderMeta.text(duration: home.draft.totalDuration, words: home.draft.wordCount),
+                paragraphs: home.draft.paragraphs,
+                foot: HexReader.Foot(
+                    discardLabel: Text(LocalizedStringResource("draft.clear", defaultValue: "Clear the draft")),
+                    sendTitle: Text(LocalizedStringResource("home.send", defaultValue: "Send")),
+                    sendEnabled: home.canSend,
+                    onDiscard: {
+                        home.showsDraftReader = false
+                        home.clearDraft()
+                    },
+                    onSend: {
+                        home.showsDraftReader = false
+                        home.send()
+                    }
+                ),
+                onDone: { home.showsDraftReader = false }
+            )
+        }
+        .hexSheet(isPresented: Binding(get: { youSaid != nil }, set: { if !$0 { youSaid = nil } }), detents: [.large]) {
+            if let youSaid {
+                HexReader(
+                    title: Text(LocalizedStringResource("reader.sent", defaultValue: "You said")),
+                    meta: youSaid.meta,
+                    paragraphs: youSaid.paragraphs,
+                    onDone: { self.youSaid = nil }
+                )
+            }
+        }
+        .onChange(of: drafting) { _, now in if !now { home.showsDraftReader = false } }
         .hexFittedSheet(item: needsPresented) { item in
             NeedsSheet(item: item, session: session, home: home)
         }
@@ -301,13 +345,40 @@ struct HomeTopBar: View {
 /// The draft: a label, the chunks (as running text, or one row each once it is long), and the actions.
 struct DraftView: View {
     let home: HomeModel
+    /// Set while the draft shows as a 7-line window (a single take longer than 7 lines at 21).
+    @Binding var windowed: Bool
+
+    init(home: HomeModel, windowed: Binding<Bool> = .constant(false)) {
+        self.home = home
+        _windowed = windowed
+    }
 
     private var draft: DictationDraft { home.draft }
 
+    /// The single take's text as drawn, for measuring it against the window.
+    private var singleText: String? {
+        guard draft.chunks.count == 1, let chunk = draft.chunks.first else { return nil }
+        return chunk.text ?? chunk.partial
+    }
+
     var body: some View {
+        content
+            .background(alignment: .topLeading) {
+                if let singleText {
+                    DraftWindowProbe(text: singleText) { windowed = $0 }
+                }
+            }
+            .onChange(of: singleText == nil) { _, none in if none { windowed = false } }
+            .onDisappear { windowed = false }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         Group {
             if DraftLayout.of(chunkCount: draft.chunks.count, fitsAtSmallest: true) == .rows {
                 layout { ChunkListView(home: home) }
+            } else if windowed, singleText != nil {
+                layout { DraftWindow(home: home) }
             } else {
                 // Running text, stepping down in size until the draft (label, text and actions),
                 // as drawn, fits between its line and the dock; then rows, or a scrolling chunk.
@@ -319,7 +390,7 @@ struct DraftView: View {
                     case .rows:
                         layout { ChunkListView(home: home) }
                     default:
-                        layout { ScrollingDraftText(home: home) }
+                        layout { DraftWindow(home: home) }
                     }
                 }
             }
@@ -483,6 +554,8 @@ struct DraftView: View {
 struct DraftText: View {
     let home: HomeModel
     var style: HexTextStyle = .draft
+    /// Three lines of room by default, so the actions don't jump as text arrives.
+    var minHeight: CGFloat = DraftText.minHeight
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -500,8 +573,7 @@ struct DraftText: View {
                     .foregroundStyle(HexColor.text3)
             }
         }
-        // Three lines of room, so the actions don't jump as text arrives.
-        .frame(maxWidth: .infinity, minHeight: Self.minHeight, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
     }
 
     /// Three lines of the draft type, as in the prototype.
@@ -531,21 +603,6 @@ struct DraftText: View {
         case let .failed(message):
             return HexChunkItem(id: chunk.id, text: message, kind: .failed)
         }
-    }
-}
-
-/// A single chunk too long for the smallest size: its text scrolls inside the draft area, kept
-/// at the newest words.
-struct ScrollingDraftText: View {
-    let home: HomeModel
-
-    var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            DraftText(home: home, style: DraftSize.fit.style)
-        }
-        .defaultScrollAnchor(.bottom)
-        .defaultScrollAnchor(.bottom, for: .sizeChanges)
-        .frame(minHeight: DraftText.minHeight)
     }
 }
 
@@ -878,5 +935,92 @@ struct AskMessageView: View {
         guard let answer = ask.answerToCopy else { return }
         UIPasteboard.general.string = answer
         toasts.show(HexToastItem(tone: .steer, title: String(localized: "ask.copied", defaultValue: "Answer copied"), duration: 1.6))
+    }
+}
+
+/// Measures a single take at 21 (`nowMedium`) against 7 lines at the width it has (app plan, "Long
+/// drafts"): longer, and the draft shows as the 7-line window.
+private struct DraftWindowProbe: View {
+    let text: String
+    let onChange: (Bool) -> Void
+
+    @State private var textHeight: CGFloat = 0
+    @State private var windowHeight: CGFloat = .infinity
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Text(verbatim: text)
+                .hexFont(.nowMedium)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { textHeight = $0; report() }
+            Text(verbatim: Array(repeating: "Ag", count: DraftWindow.lines).joined(separator: "\n"))
+                .hexFont(.nowMedium)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { windowHeight = $0; report() }
+        }
+        .hidden()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    private func report() {
+        onChange(textHeight > windowHeight + 1)
+    }
+}
+
+/// A long single take (app plan, "Long drafts"): a 7-line window at 21 resting on the newest words.
+/// It scrolls back; its top edge fades, except once scrolled to the start. Under it, "Read all ·
+/// N words" opens the reader.
+struct DraftWindow: View {
+    static let lines = 7
+
+    let home: HomeModel
+
+    @State private var atStart = false
+    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 100
+
+    private var lineHeight: CGFloat {
+        let style = HexTextStyle.nowMedium
+        return style.size * (style.lineHeight ?? 1.28) * scale / 100
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.vertical, showsIndicators: false) {
+                DraftText(home: home, style: .nowMedium, minHeight: 0)
+            }
+            .defaultScrollAnchor(.bottom)
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
+            .frame(height: lineHeight * CGFloat(Self.lines))
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y <= -geometry.contentInsets.top + 1
+            } action: { _, start in
+                atStart = start
+            }
+            .mask {
+                if atStart {
+                    Rectangle()
+                } else {
+                    VStack(spacing: 0) {
+                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                            .frame(height: lineHeight * 2)
+                        Rectangle()
+                    }
+                }
+            }
+            if !home.isRecording {
+                Button { home.showsDraftReader = true } label: {
+                    HStack(spacing: 6) {
+                        HexIconView(.chevU, size: HexIconSize.small)
+                        Text(verbatim: String(localized: "draft.read_all", defaultValue: "Read all · \(home.draft.wordCount) words"))
+                            .hexFont(.footnote)
+                    }
+                    .foregroundStyle(HexColor.text3)
+                    .frame(minHeight: HexSize.touch)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(HexPressStyle())
+            }
+        }
     }
 }

@@ -11,6 +11,8 @@ struct HomeStatusView: View {
     var onNext: (String) -> Void = { _ in }
     /// Signed out's Pair again.
     var onPairAgain: () -> Void = {}
+    /// The You line's "Read all ›": the sent message whole.
+    var onReadSent: (String) -> Void = { _ in }
 
     var body: some View {
         Group {
@@ -54,7 +56,8 @@ struct HomeStatusView: View {
                             runningCount: session.runningCount,
                             onDetails: { session.openDetails() },
                             onOpenLink: onOpenLink,
-                            onNext: onNext
+                            onNext: onNext,
+                            onReadSent: onReadSent
                         )
                         hintCard(hint)
                     }
@@ -102,6 +105,7 @@ struct StatusCardView: View {
     let onDetails: () -> Void
     var onOpenLink: (CardLinks.Destination) -> Void = { _ in }
     var onNext: (String) -> Void = { _ in }
+    var onReadSent: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -109,13 +113,8 @@ struct StatusCardView: View {
             NowText(lines: layout.shown(card.lines), style: layout.size.style, rowLimit: layout.rowLimit)
                 .opacity(summary.isUpdating ? 0.35 : 1)
             if let sentMessage {
-                // Not tappable: it is what was just sent. The whole message, never cut.
-                Text(verbatim: sentIsGoal
-                    ? String(localized: "home.you.goal", defaultValue: "Goal: “\(sentMessage)”")
-                    : String(localized: "home.summary.you", defaultValue: "You: “\(sentMessage)”"))
-                    .hexFont(.body)
-                    .foregroundStyle(HexColor.text3)
-                    .fixedSize(horizontal: false, vertical: true)
+                // Not tappable as Next is: it is what was just sent. Up to 3 lines, then "Read all ›".
+                YouLineView(message: sentMessage, isGoal: sentIsGoal) { onReadSent(sentMessage) }
             } else if let next = card.next {
                 // Next is in the user's words: a tap puts it into the draft, never sends it.
                 Button { onNext(InlineMarkdown.plain(next)) } label: {
@@ -209,6 +208,58 @@ private struct DetailsLink: View {
         let details = String(localized: "home.details", defaultValue: "Details ›")
         guard runningCount > 0 else { return details }
         return String(localized: "home.details.running", defaultValue: "\(runningCount) running · ") + details
+    }
+}
+
+/// The You line (app plan, "Just sent"): "You: “…”" in `text3`, the whole message up to 3 lines. A
+/// longer one is clamped to 3 lines with an ellipsis, and "N words · Read all ›" (`footnote`, `text3`)
+/// under it opens the reader "You said". Measured as drawn, not by counting.
+struct YouLineView: View {
+    let message: String
+    var isGoal = false
+    let onReadAll: () -> Void
+
+    @State private var fullHeight: CGFloat = 0
+    @State private var shownHeight: CGFloat = 0
+
+    private var line: String {
+        isGoal
+            ? String(localized: "home.you.goal", defaultValue: "Goal: “\(message)”")
+            : String(localized: "home.summary.you", defaultValue: "You: “\(message)”")
+    }
+
+    private var clamped: Bool { fullHeight > shownHeight + 1 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(verbatim: line)
+                .hexFont(.body)
+                .foregroundStyle(HexColor.text3)
+                .lineLimit(YouLine.maxLines)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { shownHeight = $0 }
+                .background(alignment: .topLeading) {
+                    Text(verbatim: line)
+                        .hexFont(.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .hidden()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fullHeight = $0 }
+                }
+                // VoiceOver reads the whole message.
+                .accessibilityLabel(Text(verbatim: line))
+            if clamped {
+                Button(action: onReadAll) {
+                    Text(verbatim: YouLine.readAll(message))
+                        .hexFont(.footnote)
+                        .foregroundStyle(HexColor.text3)
+                        .frame(minHeight: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(HexPressStyle())
+            }
+        }
     }
 }
 

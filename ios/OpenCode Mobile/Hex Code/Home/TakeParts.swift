@@ -156,6 +156,11 @@ nonisolated struct TakeParts: Equatable, Sendable {
     /// The text so far: finished parts in order, joined with one space. A part still waiting keeps its place, so
     /// later text only shows once the parts before it have theirs.
     var text: String {
-        parts.prefix { $0.text != nil }.compactMap(\.text).filter { !$0.isEmpty }.joined(separator: " ")
+        paragraphs.joined(separator: " ")
+    }
+
+    /// The finished parts' texts, in order: the reader shows them as paragraphs, at the take's pauses.
+    var paragraphs: [String] {
+        parts.prefix { $0.text != nil }.compactMap(\.text).filter { !$0.isEmpty }
     }
 }
