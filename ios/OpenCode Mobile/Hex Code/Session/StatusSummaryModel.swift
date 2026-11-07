@@ -63,7 +63,9 @@ final class SummaryDefaults: SummaryStoring {
 
 /// The status summary on home and its ↻. `TodaySession` asks for it when a run ends, on ↻, and on
 /// open, foreground and reconnect only when something is new (`isCurrent`); never on a timer, and
-/// never on its own during a run. A refresh asked for while one runs is dropped. Before each
+/// never on its own during a run. A refresh asked for while one runs is dropped, except a run end:
+/// that one waits and runs once when the current refresh finishes, so a mid-run card (from ↻ or a
+/// goal round) never outlives the run. Before each
 /// request it reads the session's `time.updated`, kept with the card as its basis. A request that
 /// fails, times out (60 s) or answers with no text keeps the last card and its basis and shows
 /// "Couldn't update" — except an empty answer while the agent works (the server often gives one
@@ -98,6 +100,8 @@ final class StatusSummaryModel {
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let timeout: Duration
     @ObservationIgnored private var inFlight: Task<Void, Never>?
+    /// A run ended while a refresh was on its way: one more refresh runs when it finishes.
+    @ObservationIgnored private var runEndWaiting = false
 
     init(
         generator: (any SummaryGenerating)? = nil,
@@ -167,6 +171,7 @@ final class StatusSummaryModel {
     func showEmpty(timeZone: TimeZone = .current) {
         inFlight?.cancel()
         inFlight = nil
+        runEndWaiting = false
         isUpdating = false
         summary = .card(.empty(on: now(), timeZone: timeZone))
         updatedAt = now()
@@ -178,6 +183,7 @@ final class StatusSummaryModel {
     func clear() {
         inFlight?.cancel()
         inFlight = nil
+        runEndWaiting = false
         isUpdating = false
         summary = nil
         updatedAt = nil
@@ -185,9 +191,17 @@ final class StatusSummaryModel {
         failed = false
     }
 
-    /// Asks for a new summary. Dropped while one is on its way.
-    func refresh() async {
-        guard inFlight == nil, let generator else { return }
+    /// Asks for a new summary. Dropped while one is on its way, except a run end (`runEnd`): at
+    /// most one waits, and runs as a normal refresh once the one on its way finishes.
+    func refresh(runEnd: Bool = false) async {
+        guard let generator else { return }
+        guard inFlight == nil else {
+            if runEnd {
+                HexLog.summary.info("summary: the run ended during a refresh; refreshing again after it")
+                runEndWaiting = true
+            }
+            return
+        }
         isUpdating = true
         let timeout = timeout
         let busy = isWorking()
@@ -200,6 +214,10 @@ final class StatusSummaryModel {
         }
         inFlight = task
         await task.value
+        // A run that ended meanwhile gets its own card. Cleared or replaced meanwhile: it went.
+        guard runEndWaiting, inFlight == nil, !task.isCancelled else { return }
+        runEndWaiting = false
+        await refresh(runEnd: true)
     }
 
     private func finish(_ reply: String?, basis: SummaryBasis?) {

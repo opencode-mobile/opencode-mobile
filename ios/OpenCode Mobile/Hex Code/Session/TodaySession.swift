@@ -331,7 +331,9 @@ final class TodaySession {
         switch effect {
         case .runEnded:
             if sentMessage != nil { sentRunEnded = true }
-            Task { await summary.refresh() }
+            // Never dropped: a mid-run card from ↻ or a goal round still on its way is followed by
+            // this one.
+            Task { await summary.refresh(runEnd: true) }
         case let .delivered(id, text):
             inboxLeft(id)
             if let text = sentTexts.removeValue(forKey: id) ?? text {

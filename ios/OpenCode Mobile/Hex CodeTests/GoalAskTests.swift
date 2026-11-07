@@ -841,3 +841,93 @@ struct AskHistoryTests {
         #expect(h.session.ask.history.isEmpty)
     }
 }
+
+// MARK: Run end while a refresh runs
+
+/// A summary generator that holds every request until the test opens its gate, then answers
+/// with a full card (Next included).
+final class HeldSummary: SummaryGenerating, @unchecked Sendable {
+    let gate = Gate()
+    private let lock = NSLock()
+    private var count = 0
+
+    var calls: Int { lock.withLock { count } }
+
+    func generateSummary(prompt: String) async throws -> String {
+        lock.withLock { count += 1 }
+        await gate.wait()
+        return "## Task\nNow: Done it.\nNext: Ship it"
+    }
+}
+
+/// App plan, "When": a refresh asked for while one runs is dropped, except a run end, which waits
+/// and runs once when the current refresh finishes, so a mid-run card never outlives the run.
+@MainActor
+struct RunEndRefreshTests {
+    private func eventually(_ condition: @MainActor () -> Bool) async {
+        for _ in 0 ..< 300 where !condition() {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    @Test func aRunEndDuringAMidRunRefreshRunsOnceItFinishes() async {
+        let generator = HeldSummary()
+        let summary = StatusSummaryModel(generator: generator)
+        var busy = true
+        summary.isWorking = { busy }
+        let midRun = Task { await summary.refresh() }
+        await eventually { generator.calls == 1 }
+        busy = false
+        let runEnd = Task { await summary.refresh(runEnd: true) }
+        try? await Task.sleep(for: .milliseconds(30))
+        #expect(generator.calls == 1)
+        generator.gate.open()
+        await midRun.value
+        await runEnd.value
+        await eventually { generator.calls == 2 }
+        #expect(generator.calls == 2)
+        // The run-end card is a full one: it keeps its Next.
+        await eventually { !summary.isUpdating }
+        if case let .card(card)? = summary.summary { #expect(card.next == "Ship it") } else { Issue.record("expected a card") }
+    }
+
+    @Test func atMostOneRunEndWaits() async {
+        let generator = HeldSummary()
+        let summary = StatusSummaryModel(generator: generator)
+        let first = Task { await summary.refresh() }
+        await eventually { generator.calls == 1 }
+        await summary.refresh(runEnd: true)
+        await summary.refresh(runEnd: true)
+        generator.gate.open()
+        await first.value
+        await eventually { generator.calls == 2 }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(generator.calls == 2)
+    }
+
+    @Test func anyOtherRefreshIsStillDropped() async {
+        let generator = HeldSummary()
+        let summary = StatusSummaryModel(generator: generator)
+        let first = Task { await summary.refresh() }
+        await eventually { generator.calls == 1 }
+        await summary.refresh()
+        generator.gate.open()
+        await first.value
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(generator.calls == 1)
+    }
+
+    @Test func aWaitingRunEndGoesWithTheCard() async {
+        let generator = HeldSummary()
+        let summary = StatusSummaryModel(generator: generator)
+        let first = Task { await summary.refresh() }
+        await eventually { generator.calls == 1 }
+        await summary.refresh(runEnd: true)
+        // Another session opened: the request on its way and the waiting run end both go.
+        summary.clear()
+        generator.gate.open()
+        await first.value
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(generator.calls == 1)
+    }
+}
