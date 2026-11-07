@@ -26,6 +26,17 @@ struct HomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             HomeTopBar(session: session, onSettings: onSettings)
+            // Today's goal, under the top bar; hidden while you talk, with a draft, and while an
+            // Ask message shows.
+            if !drafting, session.ask.shown == nil, let line = session.goalLine {
+                HexGoalLine(
+                    objective: session.goal?.objective,
+                    suffix: line.suffix,
+                    lit: line.iconLit
+                ) { session.openGoalSheet() }
+                .padding(.top, 2)
+                .transition(.opacity)
+            }
             // The draft hangs from a line 26 % down and grows downward as you talk (the prototype's
             // `.fx-sp`); the status card and the setup failure are centred.
             HangingLayout(fraction: drafting ? 0.26 : nil) {
@@ -38,6 +49,12 @@ struct HomeView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if !drafting, session.ask.shown != nil {
+                // Between the status card and the waiting line; the card never changes.
+                AskMessageView(ask: session.ask, toasts: home.toasts)
+                    .padding(.bottom, 10)
+                    .transition(.opacity)
+            }
             if !drafting, session.waitingCount > 0 {
                 // Waiting messages open Details, where they can be cancelled.
                 WaitingLine(count: session.waitingCount, idle: session.agentState == .idle) { session.openDetails() }
@@ -82,6 +99,31 @@ struct HomeView: View {
         .hexScreenBackground()
         .animation(HexMotion.ease(HexMotion.fade), value: drafting)
         .animation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
+        .animation(HexMotion.ease(HexMotion.fade), value: session.goalLine)
+        .animation(HexMotion.ease(HexMotion.fade), value: session.ask.shown?.id)
+        // The draft's ⋯ menu opens above its button; a tap anywhere else closes it.
+        .overlayPreferenceValue(DraftMenuAnchor.self) { anchor in
+            if home.draftMenuOpen, drafting, let anchor {
+                GeometryReader { proxy in
+                    let button = proxy[anchor]
+                    ZStack(alignment: .topLeading) {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { home.draftMenuOpen = false }
+                        // Right-aligned with the draft's actions, as the prototype's `.dmenu`.
+                        DraftMenu(home: home)
+                            .frame(width: min(320, proxy.size.width - 2 * HexSpacing.screenHome))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .alignmentGuide(.leading) { $0[.trailing] - (proxy.size.width - HexSpacing.screenHome) }
+                            .alignmentGuide(.top) { $0[.bottom] - (button.minY - 8) }
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                }
+                .transition(.opacity)
+            }
+        }
+        .onChange(of: drafting) { _, now in if !now { home.draftMenuOpen = false } }
+        .onChange(of: home.isRecording) { _, now in if now { home.draftMenuOpen = false } }
         .animation(.easeOut(duration: 0.18), value: stopHold?.heldSince)
         // The microphone gets ready (not started) while home is on screen.
         .onAppear { home.prepareRecorder() }
@@ -109,8 +151,11 @@ struct HomeView: View {
         .hexSheet(isPresented: detailsPresented, onDismiss: { session.detailsDismissed() }) {
             DetailsSheet(session: session, home: home) { session.showsDetails = false }
         }
+        .hexFittedSheet(item: goalSheetPresented) { _ in
+            GoalSheet(session: session, home: home)
+        }
         // A sheet with its own notices is up: they show on it, not under it.
-        .onChange(of: session.presentedNeed != nil || session.showsDetails, initial: true) { _, up in
+        .onChange(of: session.presentedNeed != nil || session.showsDetails || session.showsGoalSheet, initial: true) { _, up in
             home.toasts.inSheet = up
         }
         .hexSheet(isPresented: $showsAttach, detents: [.height(AttachSheet.height)], onDismiss: openAttachRoute) {
@@ -135,6 +180,10 @@ struct HomeView: View {
 
     private var detailsPresented: Binding<Bool> {
         Binding(get: { session.showsDetails }, set: { session.showsDetails = $0 })
+    }
+
+    private var goalSheetPresented: Binding<GoalSheetToken?> {
+        Binding(get: { session.showsGoalSheet ? GoalSheetToken() : nil }, set: { if $0 == nil { session.showsGoalSheet = false } })
     }
 
     /// The paperclip: the Attach sheet, or the limit's notice with 4 images.
@@ -209,7 +258,7 @@ struct HomeView: View {
 }
 
 /// The agent's state on the left (Reconnecting…, Needs input, Working m:ss or Idle; empty while
-/// today's session is set up), ⚙ on the right. The goal button joins in a later milestone.
+/// today's session is set up), then ◎ (today's goal, `green` while it's active) and ⚙.
 struct HomeTopBar: View {
     let session: TodaySession
     let onSettings: () -> Void
@@ -221,6 +270,11 @@ struct HomeTopBar: View {
                 state: state?.topBar(at: context.date),
                 onTitle: state == .needsInput ? { session.openPendingInput() } : nil
             ) {
+                HexRoundButton(
+                    .target,
+                    label: LocalizedStringResource("goal.button", defaultValue: "Today’s goal"),
+                    on: session.goal?.isActive == true
+                ) { session.openGoalSheet() }
                 HexRoundButton(.gear, label: LocalizedStringResource("home.settings", defaultValue: "Settings"), action: onSettings)
             }
         }
@@ -387,6 +441,10 @@ struct DraftView: View {
                     }
                     .fixedSize()
                 }
+                // Ask on the side and Set as goal.
+                HexButton(icon: .more) { home.draftMenuOpen.toggle() }
+                    .accessibilityLabel(Text(LocalizedStringResource("draft.more", defaultValue: "More")))
+                    .anchorPreference(key: DraftMenuAnchor.self, value: .bounds) { $0 }
                 HexButton(
                     home.takesPending
                         ? LocalizedStringResource("home.send.transcribing", defaultValue: "Transcribing")
@@ -721,4 +779,98 @@ struct InAppBrowser: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+}
+
+/// Where the draft's ⋯ is, so its menu opens above it.
+struct DraftMenuAnchor: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
+    }
+}
+
+/// The draft's ⋯ menu (app plan, "Set as goal from a draft"): Ask on the side, and Set (or
+/// Replace) today's goal. Both wait for every chunk, as Send does.
+struct DraftMenu: View {
+    let home: HomeModel
+
+    var body: some View {
+        let enabled = home.canUseMenuItems
+        HexMenu(items: [
+            HexMenuItem(
+                id: "ask",
+                icon: .ask,
+                iconColor: HexColor.text2,
+                title: String(localized: "draft.menu.ask", defaultValue: "Ask on the side"),
+                detail: String(localized: "draft.menu.ask.sub", defaultValue: "Answered from the session, not sent to the agent"),
+                enabled: enabled
+            ) { home.askDraft() },
+            HexMenuItem(
+                id: "goal",
+                icon: .target,
+                iconColor: HexColor.green,
+                title: home.hasGoal
+                    ? String(localized: "draft.menu.goal.replace", defaultValue: "Replace today’s goal")
+                    : String(localized: "draft.menu.goal", defaultValue: "Set as today’s goal"),
+                detail: String(localized: "draft.menu.goal.sub", defaultValue: "The agent keeps going until it’s done"),
+                enabled: enabled
+            ) { home.setDraftAsGoal() },
+        ])
+    }
+}
+
+/// The goal sheet is open (a sheet needs an item).
+struct GoalSheetToken: Identifiable {
+    var id: Int { 0 }
+}
+
+/// The Ask message on home, with its age kept current.
+struct AskMessageView: View {
+    let ask: AskModel
+    let toasts: HexToaster
+
+    var body: some View {
+        if let entry = ask.shown {
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                HexAskMessage(
+                    question: entry.question,
+                    age: AskAge.text(since: entry.askedAt, at: context.date),
+                    state: Self.state(entry),
+                    isOpen: ask.isOpen,
+                    onOpen: { ask.expand() },
+                    onFold: { ask.fold() },
+                    onClose: { ask.close() },
+                    onCopy: copy,
+                    onRetry: { ask.retry() }
+                )
+            }
+        }
+    }
+
+    static func state(_ entry: AskEntry) -> HexAskMessage.State {
+        switch entry.state {
+        case .asking:
+            .asking
+        case let .answered(answer):
+            .answered(answer)
+        case .empty:
+            .problem(
+                title: String(localized: "ask.empty", defaultValue: "No answer"),
+                detail: String(localized: "ask.empty.sub", defaultValue: "Ask it another way, or send it as a message.")
+            )
+        case .failed:
+            .problem(
+                title: String(localized: "ask.failed", defaultValue: "Couldn’t answer"),
+                detail: String(localized: "ask.failed.sub", defaultValue: "Try again.")
+            )
+        }
+    }
+
+    /// Copy: the answer goes to the clipboard, with "Answer copied" (iOS doesn't confirm copies).
+    private func copy() {
+        guard let answer = ask.answerToCopy else { return }
+        UIPasteboard.general.string = answer
+        toasts.show(HexToastItem(tone: .steer, title: String(localized: "ask.copied", defaultValue: "Answer copied"), duration: 1.6))
+    }
 }

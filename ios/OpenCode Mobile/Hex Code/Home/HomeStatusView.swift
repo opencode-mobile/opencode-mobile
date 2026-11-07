@@ -43,6 +43,7 @@ struct HomeStatusView: View {
                             layout: layout,
                             labelState: session.pendingInput != nil ? .waiting : session.busySince != nil ? .working : .plain,
                             sentMessage: session.sentMessage,
+                            sentIsGoal: session.sentIsGoal,
                             summary: session.summary,
                             computerHost: session.computerHost,
                             todo: TodoProgress(session.todos),
@@ -86,6 +87,8 @@ struct StatusCardView: View {
     var labelState: CardLabelState = .plain
     /// The message in flight: "You: “…”" in place of Next.
     var sentMessage: String?
+    /// It is a goal set from a draft: "Goal: “…”".
+    var sentIsGoal = false
     let summary: StatusSummaryModel
     var computerHost: String?
     /// The agent's to-do list; nil for no row.
@@ -103,7 +106,9 @@ struct StatusCardView: View {
                 .opacity(summary.isUpdating ? 0.35 : 1)
             if let sentMessage {
                 // Not tappable: it is what was just sent. The whole message, never cut.
-                Text(verbatim: String(localized: "home.summary.you", defaultValue: "You: “\(sentMessage)”"))
+                Text(verbatim: sentIsGoal
+                    ? String(localized: "home.you.goal", defaultValue: "Goal: “\(sentMessage)”")
+                    : String(localized: "home.summary.you", defaultValue: "You: “\(sentMessage)”"))
                     .hexFont(.body)
                     .foregroundStyle(HexColor.text3)
                     .fixedSize(horizontal: false, vertical: true)

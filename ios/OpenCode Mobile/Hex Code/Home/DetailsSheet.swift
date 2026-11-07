@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Details (app plan, "Details"): Needs you, Waiting to send, Running now, the to-do list and
-/// Recent, each left out when empty, updating live while open. Opened from "Details ›", the to-do
+/// Details (app plan, "Details"): Needs you, Waiting to send, Asked on the side, Running now, the
+/// to-do list and Recent, each left out when empty, updating live while open. Opened from "Details ›", the to-do
 /// row and the waiting line.
 struct DetailsSheet: View {
     let session: TodaySession
@@ -23,6 +23,7 @@ struct DetailsSheet: View {
                 let sections = DetailsSection.shown(.init(
                     needs: session.pendingItems.count,
                     waiting: session.undeliveredMessages.count,
+                    asked: session.ask.history.count,
                     running: running.total,
                     todo: session.todos.count,
                     recent: session.recentSteps.count
@@ -53,7 +54,7 @@ struct DetailsSheet: View {
         switch section {
         case .needs: needs
         case .waiting: waiting
-        case .asked: EmptyView()
+        case .asked: asked
         case .running: runningNow(running, at: date)
         case .todo: todo
         case .recent: recent(at: date)
@@ -124,6 +125,28 @@ struct DetailsSheet: View {
         Task {
             try? await session.cancelWaiting(id)
             cancelling.remove(id)
+        }
+    }
+
+    // MARK: Asked on the side
+
+    /// Closed answers, newest first; a row shows its answer again, open, once Details has closed.
+    private var asked: some View {
+        HexDetailsSection(
+            title: Text(LocalizedStringResource("details.asked", defaultValue: "Asked on the side")),
+            suffix: Text(LocalizedStringResource("details.asked.suffix", defaultValue: "· only you see these")),
+            count: "\(session.ask.history.count)"
+        ) {
+            ForEach(session.ask.history) { entry in
+                Button { session.openAskFromDetails(entry.id) } label: {
+                    HexDetailRow(
+                        leading: .icon(.ask, HexColor.text3),
+                        title: Text(verbatim: entry.question),
+                        detail: Text(verbatim: InlineMarkdown.plain(entry.answer ?? ""))
+                    ) { HexDetailChevron() }
+                }
+                .buttonStyle(HexRowPressStyle())
+            }
         }
     }
 

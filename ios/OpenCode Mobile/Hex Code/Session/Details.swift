@@ -6,7 +6,7 @@ import OpenCodeKit
 enum DetailsSection: Equatable, Sendable, CaseIterable {
     case needs
     case waiting
-    /// Asked on the side comes with M5; it is always empty until then.
+    /// Asked on the side: the phone's closed answers (M5).
     case asked
     case running
     case todo
