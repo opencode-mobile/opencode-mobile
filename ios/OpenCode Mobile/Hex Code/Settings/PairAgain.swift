@@ -129,8 +129,17 @@ struct PairAgainView: View {
         )
         #if DEBUG
         // `-HexCodePairAgain <pairing link>`: Pair again reads that code (simulators have no camera).
+        // The `http://<host>/auth/connect/<code>` form survives the command line best.
         .task {
-            if let link = UserDefaults.standard.string(forKey: "HexCodePairAgain") { model.scanned(link) }
+            // A JSON payload on the command line arrives parsed as a dictionary.
+            let value = UserDefaults.standard.object(forKey: "HexCodePairAgain")
+            if let link = value as? String {
+                model.scanned(link)
+            } else if let object = value, JSONSerialization.isValidJSONObject(object),
+                      let data = try? JSONSerialization.data(withJSONObject: object),
+                      let link = String(data: data, encoding: .utf8) {
+                model.scanned(link)
+            }
         }
         #endif
         .alert(
