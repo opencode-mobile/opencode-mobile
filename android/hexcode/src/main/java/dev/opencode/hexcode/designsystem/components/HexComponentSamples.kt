@@ -92,6 +92,10 @@ val HexComponentSamples: List<HexSampleSection> =
         HexSampleSection("HexCode") { CodeBlockSample() },
         HexSampleSection("HexStopWarning, HexStopEdge") { StopWarningSample() },
         HexSampleSection("HexDetailsSection, HexDetailRow") { DetailsSample() },
+        HexSampleSection("HexMenu") { MenuSample() },
+        HexSampleSection("HexGoalLine") { GoalLineSample() },
+        HexSampleSection("HexGoalBox") { GoalBoxSample() },
+        HexSampleSection("HexAskMessage") { AskMessageSample() },
     )
 
 /** A section's heading, in the gallery and the previews: component names, so not upper-cased like HexSectionLabel. */
@@ -446,7 +450,7 @@ private fun ButtonSample() {
 @Composable
 private fun RoundButtonsSample() {
     Edge {
-        StateSample("HexRoundButton: default, selected") {
+        StateSample("HexRoundButton: default, on (an active goal)") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HexRoundButton(HexIcons.gear, "Settings", onClick = {})
                 HexRoundButton(HexIcons.target, "Goal", onClick = {}, selected = true)
@@ -1067,6 +1071,128 @@ private fun DetailsSample() {
                 code = true,
                 detail = "Edited · +2 −0",
                 time = "2m",
+            )
+        }
+    }
+}
+
+@Composable
+private fun MenuSample() {
+    Edge {
+        StateSample("HexMenu: open, an item disabled (HexMenuTone.Default, HexMenuTone.Green)") {
+            HexMenu(
+                listOf(
+                    HexMenuItem(
+                        HexIcons.ask,
+                        "Ask on the side",
+                        "Answered from the session, not sent to the agent",
+                        HexMenuTone.Default,
+                    ) {},
+                    HexMenuItem(HexIcons.target, "Set as today's goal", "The agent keeps going until it's done", HexMenuTone.Green) {},
+                ),
+            )
+            HexMenu(
+                listOf(
+                    HexMenuItem(HexIcons.ask, "Ask on the side", "Answered from the session, not sent to the agent", enabled = false) {},
+                    HexMenuItem(
+                        HexIcons.target,
+                        "Replace today's goal",
+                        "The agent keeps going until it's done",
+                        HexMenuTone.Green,
+                        enabled = false,
+                    ) {},
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun GoalLineSample() {
+    Edge {
+        StateSample("HexGoalLineState.Empty") { HexGoalLine(HexGoalLineState.Empty, "Set today's goal", onClick = {}) }
+        StateSample("HexGoalLineState.Active") {
+            HexGoalLine(HexGoalLineState.Active, "Ship the login screen with token refresh", onClick = {}, suffix = "round 3")
+        }
+        StateSample("HexGoalLineState.Active, starting") {
+            HexGoalLine(HexGoalLineState.Active, "Ship the login screen", onClick = {}, suffix = "starting")
+        }
+        StateSample("HexGoalLineState.Waiting") {
+            HexGoalLine(HexGoalLineState.Waiting, "Ship the login screen", onClick = {}, suffix = "waiting")
+        }
+        StateSample("HexGoalLineState.Paused") {
+            HexGoalLine(HexGoalLineState.Paused, "Ship the login screen", onClick = {}, suffix = "paused")
+        }
+        StateSample("HexGoalLineState.Done") { HexGoalLine(HexGoalLineState.Done, "Ship the login screen", onClick = {}, suffix = "done") }
+    }
+}
+
+@Composable
+private fun GoalBoxSample() {
+    Edge {
+        StateSample("HexGoalBoxState.Empty") { HexGoalBox(HexGoalBoxState.Empty, "No goal yet.") }
+        StateSample("HexGoalBoxState.Set") {
+            HexGoalBox(HexGoalBoxState.Set, "Ship the login screen with token refresh", label = "/goal", status = "active · round 3 of 50")
+        }
+        StateSample("HexGoalBoxState.Set, paused with its reason") {
+            HexGoalBox(
+                HexGoalBoxState.Set,
+                "Ship the login screen with token refresh",
+                label = "/goal",
+                status = "paused",
+                reason = "Reached the limit of 50 rounds",
+            )
+        }
+        StateSample("HexGoalBoxState.Listening") {
+            HexGoalBox(HexGoalBoxState.Listening, "Listening…", label = "new goal", status = "On this phone")
+        }
+        StateSample("HexGoalBoxState.Transcribing") {
+            HexGoalBox(HexGoalBoxState.Transcribing, "Transcribing…", label = "new goal", status = "On this phone")
+        }
+        StateSample("HexGoalBoxState.Filled") {
+            HexGoalBox(
+                HexGoalBoxState.Filled,
+                "Get the auth tests green and open a pull request",
+                label = "today's goal",
+                status = "On this phone",
+            )
+        }
+    }
+}
+
+@Composable
+private fun AskMessageSample() {
+    val labels =
+        HexAskLabels(
+            title = "Asked on the side · 2m",
+            status = "Reading the session…",
+            onlyYou = "Only you see this",
+            copy = "Copy",
+            retry = "Try again",
+            fold = "Fold",
+            close = "Close",
+        )
+    val answer = AnnotatedString("One test still uses the old session format, so the token refresh rejects it as expired.")
+    Edge {
+        StateSample("HexAskState.Asking") { HexAskMessage(HexAskState.Asking, "Why did the auth tests fail?", "now", labels) }
+        StateSample(
+            "HexAskState.Folded",
+        ) { HexAskMessage(HexAskState.Folded, "Why did the auth tests fail?", "now", labels, answer = answer) }
+        StateSample("HexAskState.Open") { HexAskMessage(HexAskState.Open, "Why did the auth tests fail?", "2m", labels, answer = answer) }
+        StateSample("HexAskState.Failed") {
+            HexAskMessage(
+                HexAskState.Failed,
+                "Why did the auth tests fail?",
+                "now",
+                labels.copy(status = "Couldn't answer", statusDetail = "Try again."),
+            )
+        }
+        StateSample("HexAskState.Empty") {
+            HexAskMessage(
+                HexAskState.Empty,
+                "Check whether the tests pass",
+                "now",
+                labels.copy(status = "No answer", statusDetail = "Ask it another way, or send it as a message."),
             )
         }
     }
