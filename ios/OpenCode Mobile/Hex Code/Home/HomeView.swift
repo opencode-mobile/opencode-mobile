@@ -20,7 +20,7 @@ struct HomeView: View {
     @State private var showsCamera = false
     /// A page on the computer, open in the in-app browser.
     @State private var browser: BrowserModel?
-    /// The draft is a long single take, shown as a 7-line window.
+    /// The draft is a long single take, shown as a 7-line window (its block is centred like any draft).
     @State private var draftWindowed = false
     /// "You said": the sent message whole.
     @State private var youSaid: SentMessage?
@@ -47,11 +47,10 @@ struct HomeView: View {
                 .padding(.top, 2)
                 .transition(.opacity)
             }
-            // The draft hangs from a line 26 % down and grows downward as you talk (the prototype's
-            // `.fx-sp`); the status card and the setup failure are centred.
-            // A long single take shows as a 7-line window, and then the whole draft block is centred,
-            // as the status card is.
-            HangingLayout(fraction: drafting && !draftWindowed ? 0.26 : nil) {
+            // The status card, the setup failure and every draft block (label, text or chunk rows,
+            // ✕ / Send) are centred as one unit between the top bar and the dock; a long single
+            // take shows as a 7-line window.
+            CentredLayout {
                 if drafting {
                     DraftView(home: home, windowed: $draftWindowed)
                         .transition(.opacity)
@@ -756,38 +755,25 @@ enum DraftClock {
     }
 }
 
-/// Places its content from a line `fraction` of the way down, and higher only when the content
-/// would not fit below it (a long draft), like the prototype's shrinking `.fx-sp` spacer. With no
-/// fraction, the content is centred (from the top when it is taller than the space), and it is
-/// offered the whole height, so a card can choose a size that fits.
-struct HangingLayout: Layout {
-    var fraction: CGFloat?
+/// Centres its content in the room it has, as one unit, and offers it the whole height so a card
+/// or draft can choose a size that fits; content taller than the room starts at the top (app plan,
+/// "Layout" and "Long drafts").
+struct CentredLayout: Layout {
+    /// The content's top within a room of `room` points.
+    static func top(contentHeight: CGFloat, room: CGFloat) -> CGFloat {
+        max(0, (room - contentHeight) / 2)
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions()
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard let fraction else {
-            for subview in subviews {
-                let offer = ProposedViewSize(width: bounds.width, height: bounds.height)
-                let height = min(subview.sizeThatFits(offer).height, bounds.height)
-                let top = max(0, (bounds.height - height) / 2)
-                subview.place(at: CGPoint(x: bounds.minX, y: bounds.minY + top), anchor: .topLeading, proposal: offer)
-            }
-            return
-        }
+        let offer = ProposedViewSize(width: bounds.width, height: bounds.height)
         for subview in subviews {
-            // Measured against the room under its line, so a draft that steps down in size to fit
-            // there stays on the line; one that can't moves up.
-            let room = bounds.height * (1 - fraction)
-            let height = min(subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: room)).height, bounds.height)
-            let top = min(bounds.height * fraction, max(0, bounds.height - height))
-            subview.place(
-                at: CGPoint(x: bounds.minX, y: bounds.minY + top),
-                anchor: .topLeading,
-                proposal: ProposedViewSize(width: bounds.width, height: bounds.height - top)
-            )
+            let height = min(subview.sizeThatFits(offer).height, bounds.height)
+            let top = Self.top(contentHeight: height, room: bounds.height)
+            subview.place(at: CGPoint(x: bounds.minX, y: bounds.minY + top), anchor: .topLeading, proposal: offer)
         }
     }
 }
