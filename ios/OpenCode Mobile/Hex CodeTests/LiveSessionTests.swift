@@ -91,8 +91,10 @@ struct LiveSessionStateTests {
     }
 
     @Test func theTypesAreTheExactListEachOnItsOwn() {
-        #expect(SessionEvent.types.count == 18)
+        // 18 for M2–M4, and the goal's event for M5.
+        #expect(SessionEvent.types.count == 19)
         #expect(SessionEvent.types.contains("session.tool.failed"))
+        #expect(SessionEvent.types.contains("rpc.opencode.goal.changed"))
         #expect(!SessionEvent.types.contains { $0.contains("*") || $0.contains(",") })
     }
 

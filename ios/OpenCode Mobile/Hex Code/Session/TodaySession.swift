@@ -64,6 +64,15 @@ final class TodaySession {
     /// While a message is in flight (app plan, "Just sent"): from its `session.inbox.delivered`
     /// until the card made after that run ends, the Next line reads "You: “…”".
     var sentMessage: String?
+    /// The You line is a goal set from a draft: "Goal: “…”".
+    private(set) var sentIsGoal = false
+    /// Today's goal; nil for none. From `get` on open and every reconnect, then from
+    /// `rpc.opencode.goal.changed`.
+    private(set) var goal: TodayGoal?
+    /// The goal sheet is open.
+    var showsGoalSheet = false
+    /// Ask on the side: the message on home and its history.
+    let ask: AskModel
     let summary: StatusSummaryModel
 
     @ObservationIgnored private let dailySetup: DailySessionSetup
@@ -72,6 +81,11 @@ final class TodaySession {
     @ObservationIgnored private let toasts: HexToaster
     @ObservationIgnored private let api: (any LiveSessionAPI)?
     @ObservationIgnored private let control: (any SessionControlAPI)?
+    @ObservationIgnored private let goals: (any GoalAPI)?
+    /// Each goal round counts as a turn end for the summary.
+    @ObservationIgnored private var goalRounds = GoalRounds()
+    /// Goal events seen, to tell whether one came after a command or during a `get`.
+    @ObservationIgnored private var goalEvents = 0
     @ObservationIgnored private let stream: LiveEventStream?
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let timeZone: TimeZone
@@ -108,12 +122,16 @@ final class TodaySession {
         toasts: HexToaster,
         api: (any LiveSessionAPI)? = nil,
         control: (any SessionControlAPI)? = nil,
+        goals: (any GoalAPI)? = nil,
         stream: LiveEventStream? = nil,
         now: @escaping () -> Date = Date.init,
-        timeZone: TimeZone = .current
+        timeZone: TimeZone = .current,
+        ask: AskModel? = nil
     ) {
         dailySetup = setup
         self.summary = summary
+        self.goals = goals
+        self.ask = ask ?? AskModel()
         self.directory = directory
         self.model = model
         self.toasts = toasts
@@ -127,6 +145,8 @@ final class TodaySession {
         stream?.onEvent = { [weak self] in self?.received($0) }
         summary.isWorking = { [weak self] in self?.busySince != nil }
         summary.onCard = { [weak self] busy in self?.cardMade(busy: busy) }
+        // An Ask finds the session gone (`404`): setup runs again, as for any request.
+        self.ask.onSessionGone = { [weak self] in Task { await self?.open() } }
     }
 
     /// The top bar's state; nil (empty) until today's session is open.
@@ -163,17 +183,28 @@ final class TodaySession {
         case .failed:
             setup = .failed(retrying: false)
         case let .opened(session, _, showsNewDayNotice):
+            // A goal still running on yesterday's session is left as it is; the notice says so.
+            let yesterdaysGoalRuns = showsNewDayNotice ? await yesterdaysGoalIsActive() : false
             day = today
             presentedNeed = nil
             recentSteps = []
             stopRetry = nil
+            // A goal belongs to its session; it is read again once the stream is up.
+            goal = nil
+            goalRounds = GoalRounds()
+            showsGoalSheet = false
             live = LiveSessionState(rootID: session.id, hasRun: session.busySince != nil)
             publish()
             streamUp = true
             setup = .ready(sessionID: session.id)
-            if showsNewDayNotice { toasts.show(Self.newDayNotice()) }
+            if showsNewDayNotice { toasts.show(Self.newDayNotice(goalRunning: yesterdaysGoalRuns)) }
             summary.open(sessionID: session.id)
             if let api { summary.generator = SessionSummaryGenerator(api: api, sessionID: session.id) }
+            ask.open(sessionID: session.id)
+            if let api {
+                let id = session.id
+                ask.generate = { prompt in try await api.generate(sessionID: id, prompt: prompt) }
+            }
             stream?.start()
             if stream == nil || live?.hasRun == false {
                 // A session that never ran shows its empty card now; with no stream, nothing will
@@ -251,6 +282,8 @@ final class TodaySession {
     private func connected() async {
         streamUp = true
         guard let api, let rootID = live?.rootID else { return }
+        // Today's goal is read on every (re)connect, beside the rest of the state.
+        Task { await readGoal() }
         guard let snapshot = try? await api.snapshot(rootID: rootID), live?.rootID == rootID else {
             // The state couldn't be read: whether anything is new is unknown.
             await refreshSummary()
@@ -291,6 +324,10 @@ final class TodaySession {
         if showsDetails, case let .toolFinished(sessionID) = event, sessionID == rootID {
             rereadRecent()
         }
+        // Only today's session's goal; subagents never have goals.
+        if case let .goalChanged(sessionID, newGoal) = event, sessionID == rootID {
+            goalChanged(newGoal)
+        }
         switch effect {
         case .runEnded:
             if sentMessage != nil { sentRunEnded = true }
@@ -316,8 +353,9 @@ final class TodaySession {
     }
 
     /// A later delivered message replaces the You line.
-    private func showSent(_ text: String) {
+    private func showSent(_ text: String, goal: Bool = false) {
         sentMessage = text
+        sentIsGoal = goal
         sentRunEnded = false
     }
 
@@ -325,6 +363,7 @@ final class TodaySession {
     private func cardMade(busy: Bool) {
         guard !busy, sentRunEnded else { return }
         sentMessage = nil
+        sentIsGoal = false
         sentRunEnded = false
     }
 
@@ -628,8 +667,12 @@ final class TodaySession {
         showsDetails = false
     }
 
-    /// Details has gone: a Needs you row's sheet opens now.
+    /// Details has gone: a Needs you row's sheet opens now, or an Asked on the side row shows.
     func detailsDismissed() {
+        if let ask = askAfterDetails {
+            askAfterDetails = nil
+            self.ask.openFromHistory(ask)
+        }
         guard let id = needAfterDetails else { return }
         needAfterDetails = nil
         openPendingInput(id)
@@ -678,6 +721,226 @@ final class TodaySession {
         return RunningNow.rows(liveState, at: date)
     }
 
+    // MARK: Goal
+
+    /// No goal event within this long of a `204`: the app reads `get`.
+    static let goalEventWait: Duration = .seconds(2)
+
+    /// The line under the top bar; nil for no line (no goal while the agent works, or before
+    /// today's session is open).
+    var goalLine: GoalLineState? {
+        guard case .ready = setup else { return nil }
+        return GoalLineState.of(goal, busy: agentBusy)
+    }
+
+    /// The top bar's ◎, the goal line.
+    func openGoalSheet() {
+        showsGoalSheet = true
+    }
+
+    /// The goal from an event replaces the one kept; a higher round refreshes the summary as a
+    /// mid-run card.
+    private func goalChanged(_ newGoal: TodayGoal?) {
+        goalEvents += 1
+        goal = newGoal
+        if goalRounds.observe(newGoal) {
+            HexLog.summary.info("goal: round \(newGoal?.rounds ?? 0); refreshing the summary")
+            Task { await summary.refresh() }
+        }
+    }
+
+    /// `get`: on open, every reconnect, after a `500`, and after a command whose event didn't come.
+    /// An event that arrives meanwhile is newer and wins.
+    func readGoal() async {
+        guard let goals, let rootID = live?.rootID else { return }
+        let events = goalEvents
+        let read: TodayGoal?
+        do {
+            read = try await goals.goal(sessionID: rootID, directory: directory())
+        } catch {
+            HexLog.summary.error("goal: couldn't read it: \(String(describing: error), privacy: .public)")
+            return
+        }
+        guard live?.rootID == rootID, goalEvents == events else { return }
+        goal = read
+        goalRounds.read(read)
+    }
+
+    /// Whether the goal on yesterday's session (the one open before a new day's) is still active.
+    private func yesterdaysGoalIsActive() async -> Bool {
+        guard let goals, let id = dailySetup.yesterdaySessionID else { return false }
+        let goal = try? await goals.goal(sessionID: id, directory: directory())
+        return goal?.isActive ?? false
+    }
+
+    /// Set or Replace, from the sheet's take or a draft (with its images). Refused on the phone when
+    /// it would read as a command or is too long. On `204` the sheet closes; a goal from a draft
+    /// makes the You line "Goal: “…”" until the next card.
+    @discardableResult
+    func setGoal(_ text: String, images: [OutgoingImage] = [], fromDraft: Bool = false) async -> GoalOutcome {
+        if let refusal = GoalText.refusal(text) {
+            toasts.show(Self.goalRefusedNotice(refusal))
+            return .refused(refusal)
+        }
+        let objective = GoalText.objective(text)
+        let old = goal
+        let busy = agentBusy
+        let outcome = await runGoal(.set(objective), images: images)
+        guard outcome == .done else { return outcome }
+        showsGoalSheet = false
+        toasts.show(Self.goalSetNotice(replaced: old != nil, busy: busy))
+        if fromDraft { showSent(objective, goal: true) }
+        if let old { await removeKickoff(of: old) }
+        return .done
+    }
+
+    /// Pause: the agent finishes this turn, then stops. The sheet stays open.
+    @discardableResult
+    func pauseGoal() async -> GoalOutcome {
+        let outcome = await runGoal(.pause)
+        if outcome == .done {
+            toasts.show(HexToastItem(
+                tone: .info,
+                title: String(localized: "goal.notice.paused", defaultValue: "Goal paused"),
+                detail: String(localized: "goal.notice.paused.sub", defaultValue: "The agent finishes this turn, then stops.")
+            ))
+        }
+        return outcome
+    }
+
+    /// Resume: 50 more rounds, counted from 1.
+    @discardableResult
+    func resumeGoal() async -> GoalOutcome {
+        let outcome = await runGoal(.resume)
+        if outcome == .done {
+            toasts.show(HexToastItem(
+                tone: .steer,
+                title: String(localized: "goal.notice.resumed", defaultValue: "Goal resumed"),
+                detail: String(localized: "goal.notice.resumed.sub", defaultValue: "The agent carries on.")
+            ))
+        }
+        return outcome
+    }
+
+    /// Clear: the sheet closes. A kickoff of the old goal still waiting in the inbox is taken back.
+    @discardableResult
+    func clearGoal() async -> GoalOutcome {
+        let old = goal
+        let busy = agentBusy
+        let outcome = await runGoal(.clear)
+        guard outcome == .done else { return outcome }
+        showsGoalSheet = false
+        toasts.show(HexToastItem(
+            tone: .steer,
+            title: String(localized: "goal.notice.cleared", defaultValue: "Goal cleared"),
+            detail: busy ? String(localized: "goal.notice.cleared.busy", defaultValue: "The agent finishes this turn.") : nil
+        ))
+        if let old { await removeKickoff(of: old) }
+        return .done
+    }
+
+    /// Sends `/goal`. A `500` means the goal changed elsewhere: `get`, and "The goal had already
+    /// changed". Without an event within 2 s of a `204`, `get`.
+    private func runGoal(_ command: GoalCommand, images: [OutgoingImage] = []) async -> GoalOutcome {
+        guard let goals, let sessionID else {
+            toasts.show(Self.goalFailedNotice())
+            return .failed
+        }
+        let events = goalEvents
+        do {
+            try await goals.goalCommand(sessionID: sessionID, text: command.text, images: images)
+        } catch GoalAPIError.stale {
+            HexLog.summary.info("goal: the goal had already changed")
+            await readGoal()
+            toasts.show(HexToastItem(
+                tone: .info,
+                title: String(localized: "goal.notice.stale", defaultValue: "The goal had already changed")
+            ))
+            return .stale
+        } catch {
+            HexLog.summary.error("goal: couldn't send the command: \(String(describing: error), privacy: .public)")
+            toasts.show(Self.goalFailedNotice())
+            return .failed
+        }
+        let sleep = sleep
+        Task { [weak self] in
+            try? await sleep(Self.goalEventWait)
+            guard let self, self.goalEvents == events, self.sessionID == sessionID else { return }
+            HexLog.summary.info("goal: no event after the command; reading it")
+            await self.readGoal()
+        }
+        return .done
+    }
+
+    /// After Clear or Replace: the old goal's kickoff, if it still waits in the inbox, is taken back,
+    /// or the agent would still run a turn on it.
+    private func removeKickoff(of old: TodayGoal) async {
+        guard let api, let sessionID else { return }
+        let waiting = (live?.inbox ?? []).filter { $0.goalID == old.id }
+        for item in waiting {
+            do {
+                try await api.cancelInbox(sessionID: sessionID, itemID: item.id)
+                _ = live?.apply(.inboxRemoved(sessionID: sessionID, id: item.id))
+            } catch {
+                HexLog.summary.error("goal: couldn't take back the old kickoff: \(String(describing: error), privacy: .public)")
+            }
+        }
+        if !waiting.isEmpty { publish() }
+    }
+
+    static func goalSetNotice(replaced: Bool, busy: Bool) -> HexToastItem {
+        HexToastItem(
+            tone: .steer,
+            title: replaced
+                ? String(localized: "goal.notice.replaced", defaultValue: "Goal replaced")
+                : String(localized: "goal.notice.set", defaultValue: "Goal set"),
+            detail: busy
+                ? String(localized: "goal.notice.set.busy", defaultValue: "The agent starts on it at its next step.")
+                : String(localized: "goal.notice.set.idle", defaultValue: "The agent keeps going until it’s done."),
+            duration: 3
+        )
+    }
+
+    static func goalFailedNotice() -> HexToastItem {
+        HexToastItem(
+            tone: .stop,
+            title: String(localized: "goal.notice.failed", defaultValue: "Couldn’t change the goal"),
+            detail: String(localized: "goal.notice.failed.sub", defaultValue: "Try again.")
+        )
+    }
+
+    static func goalRefusedNotice(_ refusal: GoalText.Refusal) -> HexToastItem {
+        switch refusal {
+        case .commandWord:
+            HexToastItem(
+                tone: .info,
+                title: String(localized: "goal.refused.word", defaultValue: "Say a longer goal"),
+                detail: String(localized: "goal.refused.word.sub", defaultValue: "A single word is read as a goal command.")
+            )
+        case .tooLong:
+            HexToastItem(
+                tone: .info,
+                title: String(localized: "goal.refused.long", defaultValue: "That’s too long for a goal"),
+                detail: String(localized: "goal.refused.long.sub", defaultValue: "Goals are limited to 4,000 characters.")
+            )
+        }
+    }
+
+    // MARK: Ask on the side
+
+    /// Asks the session a side question; nothing is sent to the agent.
+    func askOnTheSide(_ question: String) {
+        ask.ask(question)
+    }
+
+    /// An Asked on the side row: Details closes, then that answer shows open.
+    @ObservationIgnored private var askAfterDetails: UUID?
+
+    func openAskFromDetails(_ id: UUID) {
+        askAfterDetails = id
+        showsDetails = false
+    }
+
     // MARK: Sample sessions
 
     /// Sample sessions (Settings › Developer): put the state in directly.
@@ -692,11 +955,15 @@ final class TodaySession {
         recentSteps = steps
     }
 
-    static func newDayNotice() -> HexToastItem {
+    /// "New day, new session"; when yesterday's goal was still active, the detail says it keeps
+    /// running there.
+    static func newDayNotice(goalRunning: Bool = false) -> HexToastItem {
         HexToastItem(
             tone: .sun,
             title: String(localized: "home.newday.title", defaultValue: "New day, new session"),
-            detail: String(localized: "home.newday.detail", defaultValue: "Yesterday’s is kept on your computer."),
+            detail: goalRunning
+                ? String(localized: "home.newday.detail.goal", defaultValue: "Yesterday’s is kept on your computer. Its goal keeps running there.")
+                : String(localized: "home.newday.detail", defaultValue: "Yesterday’s is kept on your computer."),
             duration: 3.6
         )
     }

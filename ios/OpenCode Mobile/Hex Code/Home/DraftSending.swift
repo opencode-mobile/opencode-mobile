@@ -12,9 +12,23 @@ protocol MessageSending: AnyObject {
     func cancelWaiting(_ itemID: String) async throws
     /// Returns once the event stream is up.
     func waitForConnection() async
+    /// Today's session has a goal: the draft's menu offers Replace rather than Set.
+    var hasGoal: Bool { get }
+    /// Set as today's goal (with the draft's images); `.done` on `204`.
+    func setGoal(_ text: String, images: [OutgoingImage], fromDraft: Bool) async -> GoalOutcome
+    /// Ask on the side: answered from the session, not sent to the agent.
+    func askOnTheSide(_ question: String)
 }
 
-extension TodaySession: MessageSending {}
+extension MessageSending {
+    var hasGoal: Bool { false }
+    func setGoal(_ text: String, images: [OutgoingImage], fromDraft: Bool) async -> GoalOutcome { .failed }
+    func askOnTheSide(_ question: String) {}
+}
+
+extension TodaySession: MessageSending {
+    var hasGoal: Bool { goal != nil }
+}
 
 /// The After turn / Now switch on a draft while the agent works.
 enum SendMode: Hashable, Sendable {

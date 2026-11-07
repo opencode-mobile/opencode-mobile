@@ -736,6 +736,55 @@ final class HomeModel {
         ))
     }
 
+    // MARK: The draft's ⋯ menu
+
+    /// The draft's ⋯ menu is open.
+    var draftMenuOpen = false
+
+    /// Ask on the side and Set as goal wait for every chunk, as Send does, and need words.
+    var canUseMenuItems: Bool { canSend && !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var hasGoal: Bool { sender?.hasGoal ?? false }
+
+    /// Ask on the side: the draft's text goes to the session as a question; the draft clears and
+    /// the status card comes back.
+    func askDraft() {
+        draftMenuOpen = false
+        guard canUseMenuItems, let sender else { return }
+        let question = draft.text
+        discardDraftQuietly()
+        sender.askOnTheSide(question)
+    }
+
+    /// Set (or Replace) today's goal with the draft's text and images. A text that would read as a
+    /// goal command, or is too long, is refused and the draft kept; if the command fails, the draft
+    /// comes back.
+    func setDraftAsGoal() {
+        draftMenuOpen = false
+        guard canUseMenuItems, let sender else { return }
+        let saved = draft
+        if let refusal = GoalText.refusal(saved.text) {
+            toasts.show(TodaySession.goalRefusedNotice(refusal))
+            return
+        }
+        let images = outgoingImages(saved)
+        draft = DictationDraft()
+        showEarlier = false
+        lastDeleted = nil
+        sendMode = .afterTurn
+        Task {
+            let outcome = await sender.setGoal(saved.text, images: images, fromDraft: true)
+            if outcome != .done { draft.restore(contentsOf: saved) }
+        }
+    }
+
+    /// The draft leaves without a notice (it went somewhere).
+    private func discardDraftQuietly() {
+        draft = DictationDraft()
+        showEarlier = false
+        lastDeleted = nil
+        sendMode = .afterTurn
+    }
+
     // MARK: Draft
 
     func toggleChunk(_ id: UUID) { draft.toggleSelection(id) }

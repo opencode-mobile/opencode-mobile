@@ -182,7 +182,11 @@ final class FakeSessionServer: DailySessionService, LiveSessionAPI, @unchecked S
 @MainActor
 final class FakeMemory: DailySessionMemory {
     var lastOpenedDay: String?
-    init(_ day: String?) { lastOpenedDay = day }
+    var lastSessionID: String?
+    init(_ day: String?, session: String? = nil) {
+        lastOpenedDay = day
+        lastSessionID = session
+    }
 }
 
 /// The setup steps, in order, against a fake server.

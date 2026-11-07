@@ -266,6 +266,7 @@ enum TodaySessionDemo: String, CaseIterable {
 @MainActor
 private final class DemoMemory: DailySessionMemory {
     var lastOpenedDay: String?
+    var lastSessionID: String?
 
     init(lastOpenedDay: String?) {
         self.lastOpenedDay = lastOpenedDay

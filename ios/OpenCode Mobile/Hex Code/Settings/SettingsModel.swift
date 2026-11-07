@@ -134,7 +134,9 @@ final class HexMainModel {
             toasts: toasts,
             api: service,
             control: service,
-            stream: stream
+            goals: service,
+            stream: stream,
+            ask: AskModel(store: AskDefaults())
         )
         session.computerHost = URL(string: current.setup.profile.baseURL)?.host
         return session

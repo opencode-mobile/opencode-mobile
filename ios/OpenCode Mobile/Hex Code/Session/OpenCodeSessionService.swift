@@ -96,7 +96,15 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
             runningChildren: childIDs.filter(running.contains),
             pending: PendingItem.oldestFirst(pending),
             inbox: try await inbox.map {
-                InboxEntry(id: $0.id, delivery: $0.delivery ?? "queue", text: $0.text ?? "", files: $0.files, kind: $0.type ?? "user")
+                InboxEntry(
+                    id: $0.id,
+                    delivery: $0.delivery ?? "queue",
+                    text: $0.text ?? "",
+                    files: $0.files,
+                    kind: $0.type ?? "user",
+                    source: $0.metadata?.source,
+                    goalID: $0.metadata?.goalID
+                )
             },
             // A list that can't be read doesn't fail the rest; the last one stays.
             todos: try? await todos.map(TodoList.items) ?? [],
@@ -270,5 +278,25 @@ struct OpenCodeEventTransport: EventStreamTransport {
         onLine: @escaping @Sendable (String) async -> Void
     ) async throws -> SseAttemptOutcome {
         try await client.streamEvents(path: "api/event", directory: nil, types: types, onActivity: onActivity, onDataLine: onLine)
+    }
+}
+
+// MARK: GoalAPI
+
+extension OpenCodeSessionService: GoalAPI {
+    func goal(sessionID: String, directory: String) async throws -> TodayGoal? {
+        try await client.goal(sessionID: sessionID, directory: directory).map(TodayGoal.init)
+    }
+
+    /// The images go as `files`, as a prompt's do; the kickoff then reaches the agent with them.
+    func goalCommand(sessionID: String, text: String, images: [OutgoingImage]) async throws {
+        let files = try await Task.detached(priority: .userInitiated) {
+            try images.map { SessionStateAPIClient.PromptFile(uri: try $0.image.dataURL(), name: $0.name) }
+        }.value
+        do {
+            try await client.runCommand(sessionID: sessionID, name: "goal", text: text, files: files)
+        } catch let SessionStateAPIError.httpStatus(status, _) where status == 500 {
+            throw GoalAPIError.stale
+        }
     }
 }

@@ -86,7 +86,7 @@ struct StopRetry: Equatable, Sendable {
     mutating func observe(_ event: SessionEvent, at date: Date, busy: Bool) -> Bool {
         guard !used, date <= deadline else { return false }
         switch event {
-        case let .inboxEnqueued(sessionID, _, _, text, _, kind):
+        case let .inboxEnqueued(sessionID, _, _, text, _, kind, _):
             guard sessionID == rootID, kind == "synthetic", text.hasPrefix("<subagent") else { return false }
             noteSeen = true
             // Already running again: the note joined a run that started meanwhile.

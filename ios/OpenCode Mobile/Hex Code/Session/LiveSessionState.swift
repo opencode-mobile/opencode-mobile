@@ -103,8 +103,17 @@ enum SessionEvent: Equatable, Sendable {
     case formClosed(sessionID: String, id: String)
     /// A message joined the inbox; its files by name and type only, never their contents. `kind`
     /// is the item's `type`: `user`, or `synthetic` for a note the server made (a subagent's
-    /// `<subagent …>` note that it finished).
-    case inboxEnqueued(sessionID: String, id: String, delivery: String, text: String, files: [InboxFileV2] = [], kind: String = "user")
+    /// `<subagent …>` note that it finished). `metadata` says where the server's own items come
+    /// from: a goal's kickoff and continuations carry `source: "goal"`.
+    case inboxEnqueued(
+        sessionID: String,
+        id: String,
+        delivery: String,
+        text: String,
+        files: [InboxFileV2] = [],
+        kind: String = "user",
+        metadata: InboxMetadataV2? = nil
+    )
     /// `session.inbox.delivered`: the message reached the agent.
     case inboxDelivered(sessionID: String, id: String)
     /// `session.inbox.cancelled`.
@@ -118,6 +127,8 @@ enum SessionEvent: Equatable, Sendable {
     case todosWritten(sessionID: String, todos: [TodoItemV2])
     /// Any other `session.tool.success`, or a `session.tool.failed`: Details' Recent reads again.
     case toolFinished(sessionID: String)
+    /// `rpc.opencode.goal.changed`: the session's goal after any write; nil when it was cleared.
+    case goalChanged(sessionID: String, goal: TodayGoal?)
 
     /// The exact types home subscribes to, each sent as its own `types=` (the server refuses
     /// wildcards and lists).
@@ -140,6 +151,8 @@ enum SessionEvent: Equatable, Sendable {
         "shell.exited",
         "session.tool.failed",
         "session.tool.success",
+        // The server accepts any `rpc.*` name without checking it, so a typo here fails silently.
+        "rpc.opencode.goal.changed",
     ]
 
     /// Reads one `data:` payload; nil for types home doesn't use or a payload it can't read.
@@ -179,13 +192,15 @@ enum SessionEvent: Equatable, Sendable {
             let files = (payload?["files"] as? [[String: Any]] ?? []).map {
                 InboxFileV2(name: $0["name"] as? String, mime: $0["mime"] as? String)
             }
+            let metadata = payload?["metadata"] as? [String: Any]
             return .inboxEnqueued(
                 sessionID: sessionID,
                 id: id,
                 delivery: item?["delivery"] as? String ?? "queue",
                 text: text,
                 files: files,
-                kind: item?["type"] as? String ?? "user"
+                kind: item?["type"] as? String ?? "user",
+                metadata: metadata.map { InboxMetadataV2(source: $0["source"] as? String, goalID: $0["goalID"] as? String) }
             )
         case "session.inbox.delivered":
             guard let sessionID, let id = data["inboxID"] as? String else { return nil }
@@ -224,6 +239,12 @@ enum SessionEvent: Equatable, Sendable {
             return .todosWritten(sessionID: sessionID, todos: items)
         case "session.tool.failed":
             return sessionID.map { .toolFinished(sessionID: $0) }
+        case "rpc.opencode.goal.changed":
+            guard let sessionID else { return nil }
+            // `goal: null` means cleared.
+            guard let goal = data["goal"] as? [String: Any] else { return .goalChanged(sessionID: sessionID, goal: nil) }
+            guard let state: GoalStateV2 = decoded(goal) else { return nil }
+            return .goalChanged(sessionID: sessionID, goal: TodayGoal(state))
         default:
             return nil
         }
@@ -279,9 +300,14 @@ struct InboxEntry: Equatable, Sendable, Identifiable {
     var files: [InboxFileV2] = []
     /// `user`, or `synthetic` for a note the server made (a subagent's note that it finished).
     var kind: String = "user"
+    /// `goal` for a goal's kickoff and each round's continuation (`payload.metadata.source`).
+    var source: String?
+    /// The goal a kickoff starts (`payload.metadata.goalID`).
+    var goalID: String?
 
-    /// A message someone sent, not a note the server made.
-    var isMessage: Bool { kind != "synthetic" }
+    /// A message someone sent: not a note the server made, and not a goal's kickoff or
+    /// continuation, even one sent as a `user` item (a kickoff with images).
+    var isMessage: Bool { kind != "synthetic" && source != "goal" }
 
     /// How many of its files are images.
     var imageCount: Int { files.filter { $0.mime?.hasPrefix("image/") ?? true }.count }
@@ -432,15 +458,26 @@ struct LiveSessionState: Equatable, Sendable {
             guard owns(sessionID) else { return nil }
             pending.removeAll { $0.id == id }
             return nil
-        case let .inboxEnqueued(sessionID, id, delivery, text, files, kind):
+        case let .inboxEnqueued(sessionID, id, delivery, text, files, kind, metadata):
             guard sessionID == rootID, !inbox.contains(where: { $0.id == id }) else { return nil }
-            inbox.append(InboxEntry(id: id, delivery: delivery, text: text, files: files, kind: kind))
+            inbox.append(InboxEntry(
+                id: id,
+                delivery: delivery,
+                text: text,
+                files: files,
+                kind: kind,
+                source: metadata?.source,
+                goalID: metadata?.goalID
+            ))
             return nil
         case let .inboxDelivered(sessionID, id):
             guard sessionID == rootID else { return nil }
-            let text = inbox.first { $0.id == id }?.text
+            let entry = inbox.first { $0.id == id }
             inbox.removeAll { $0.id == id }
-            return .delivered(id: id, text: text.flatMap { $0.isEmpty ? nil : $0 })
+            // The server's own items (a subagent's note, a goal's kickoff or continuation) never
+            // set the You line.
+            if let entry, !entry.isMessage { return nil }
+            return .delivered(id: id, text: entry.flatMap { $0.text.isEmpty ? nil : $0.text })
         case let .inboxRemoved(sessionID, id):
             guard sessionID == rootID else { return nil }
             inbox.removeAll { $0.id == id }
@@ -469,7 +506,7 @@ struct LiveSessionState: Equatable, Sendable {
             guard sessionID == rootID else { return nil }
             self.todos = TodoList.items(todos)
             return nil
-        case .toolFinished:
+        case .toolFinished, .goalChanged:
             return nil
         }
     }

@@ -1,7 +1,8 @@
 import Foundation
 
 /// The text Hex Code sends to the agent, versioned in one place (see "The status summary" and
-/// "The message rules" in the app plan). Not UI copy, so English and never translated.
+/// "The message rules" in the app plan, and "Ask on the side"). Not UI copy, so English and never
+/// translated.
 /// Bump a version whenever its text changes, on both platforms.
 enum SessionPrompts {
     /// The status summary prompt, sent with `POST /api/session/{id}/generate`.
@@ -39,6 +40,24 @@ enum SessionPrompts {
         Add at most 2 Link lines, for URLs from the latest request or since that the user may want to open (a preview, a pull request, a page you found). Leave Link lines out when there are none. Never put a URL in Now or Next.
         Use no other formatting.
         """
+    }
+
+    /// The Ask on the side prompt, sent with `POST /api/session/{id}/generate` (app plan, "Ask on
+    /// the side"). The question goes after "Question: ". Plain text and no tools: `generate` runs no
+    /// tool loop, so a tool call comes back empty.
+    enum Ask {
+        /// 1: the first prompt (M5), tested live on 8 questions; none came back empty.
+        static let version = 1
+
+        static let wrapper = """
+        The user is asking a quick side question about the conversation so far. This message is not part of the session and isn't a request to act. Don't call any tools and don't take any actions: answer only from what you already know.
+        Reply in plain text in at most 2 short sentences (at most 280 characters). No Markdown, except backticks around a file name or command.
+        If the conversation doesn't say, say you don't know. If the question asks you to do something, say it needs to be sent as a message instead.
+        """
+
+        static func prompt(question: String) -> String {
+            wrapper + "\n\nQuestion: " + question
+        }
     }
 
     /// The notes Deny and Dismiss send when nothing was said (app plan, "Needs you and control"):

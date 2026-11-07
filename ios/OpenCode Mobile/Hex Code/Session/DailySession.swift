@@ -80,15 +80,18 @@ protocol DailySessionService: Sendable {
     func putMessageRules(sessionID: String) async throws
 }
 
-/// The date of the last session the app opened, kept on the phone.
+/// The date and id of the last session the app opened, kept on the phone.
 @MainActor
 protocol DailySessionMemory: AnyObject {
     var lastOpenedDay: String? { get set }
+    /// On a new day, the app reads yesterday's goal from it (app plan, "The goal" › New session).
+    var lastSessionID: String? { get set }
 }
 
 @MainActor
 final class DailySessionDefaults: DailySessionMemory {
     static let key = "hexcode.session.last_day"
+    static let sessionKey = "hexcode.session.last_id"
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -98,6 +101,11 @@ final class DailySessionDefaults: DailySessionMemory {
     var lastOpenedDay: String? {
         get { defaults.string(forKey: Self.key) }
         set { defaults.set(newValue, forKey: Self.key) }
+    }
+
+    var lastSessionID: String? {
+        get { defaults.string(forKey: Self.sessionKey) }
+        set { defaults.set(newValue, forKey: Self.sessionKey) }
     }
 }
 
@@ -120,6 +128,9 @@ final class DailySessionSetup {
     private let memory: any DailySessionMemory
     /// A session created for a new day by an earlier try that failed before it finished.
     private var noticeDueFor: String?
+    /// The session the app had open before the last open, when that open showed the new-day
+    /// notice: yesterday's session, whose goal may still be running.
+    private(set) var yesterdaySessionID: String?
 
     init(service: any DailySessionService, memory: any DailySessionMemory) {
         self.service = service
@@ -127,6 +138,8 @@ final class DailySessionSetup {
     }
 
     func open(today: String, directory: String, model: ModelChoice) async -> Outcome {
+        let previous = memory.lastSessionID
+        yesterdaySessionID = nil
         let session: SessionListing
         let created: Bool
         var notice: Bool
@@ -147,6 +160,8 @@ final class DailySessionSetup {
         }
         noticeDueFor = nil
         memory.lastOpenedDay = today
+        memory.lastSessionID = session.id
+        if notice, let previous, previous != session.id { yesterdaySessionID = previous }
         return .opened(session, created: created, showsNewDayNotice: notice)
     }
 
