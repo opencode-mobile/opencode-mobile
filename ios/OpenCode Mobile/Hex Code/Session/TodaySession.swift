@@ -103,6 +103,9 @@ final class TodaySession {
     /// The run the sent message started (or joined) has ended: the next card made while idle
     /// replaces the You line.
     @ObservationIgnored private var sentRunEnded = false
+    /// A message was sent to today's session from this phone since it opened: it is no longer
+    /// empty, even before its run starts.
+    @ObservationIgnored private var messageSent = false
     /// The latest inbox ids delivered or cancelled.
     @ObservationIgnored private var leftInbox: [String] = []
     /// Questions and approvals being answered from this phone: their leaving isn't "No longer needed".
@@ -194,6 +197,7 @@ final class TodaySession {
             goalRounds = GoalRounds()
             showsGoalSheet = false
             live = LiveSessionState(rootID: session.id, hasRun: session.busySince != nil)
+            messageSent = false
             publish()
             streamUp = true
             setup = .ready(sessionID: session.id)
@@ -206,7 +210,7 @@ final class TodaySession {
                 ask.generate = { prompt in try await api.generate(sessionID: id, prompt: prompt) }
             }
             stream?.start()
-            if stream == nil || live?.hasRun == false {
+            if stream == nil || isEmptySession {
                 // A session that never ran shows its empty card now; with no stream, nothing will
                 // tell us more.
                 await refreshSummary()
@@ -300,8 +304,11 @@ final class TodaySession {
     /// (the run's end refreshes), nor when the card was made while idle from the session's
     /// `time.updated` as it is now.
     private func summaryOnReconnect(updated: Int64?) async {
-        if live?.hasRun == false {
+        if isEmptySession {
             summary.showEmpty(timeZone: timeZone)
+        } else if live?.hasRun == false, busySince == nil {
+            // Sent to, but its run hasn't started: nothing to summarise yet.
+            summary.showWorkingOnMessage()
         } else if busySince != nil {
             HexLog.summary.info("summary: busy, no request")
             summary.showWorkingIfEmpty()
@@ -383,6 +390,7 @@ final class TodaySession {
             toasts.show(Self.goneNotice())
         }
         todos = live?.todos ?? []
+        if busySince != nil || waitingCount > 0 { summary.showWorkingOnMessage() }
         let date = now()
         runningCount = live?.runningCount(at: date) ?? 0
         shellTick?.cancel()
@@ -397,9 +405,15 @@ final class TodaySession {
         }
     }
 
+    /// A session that never ran and has nothing sent or waiting (app plan, "Empty session").
+    private var isEmptySession: Bool {
+        guard let live else { return false }
+        return !live.hasRun && !messageSent && live.inbox.isEmpty && live.busySince == nil
+    }
+
     /// The empty card for a session that never ran; else a new summary.
     private func refreshSummary() async {
-        if live?.hasRun == false {
+        if isEmptySession {
             summary.showEmpty(timeZone: timeZone)
         } else {
             await summary.refresh()
@@ -428,6 +442,8 @@ final class TodaySession {
         if UserDefaults.standard.bool(forKey: "HexCodeFailSends") { throw URLError(.notConnectedToInternet) }
         #endif
         let id = try await api.prompt(sessionID: sessionID, text: text, images: images, delivery: delivery)
+        messageSent = true
+        summary.showWorkingOnMessage()
         if !images.isEmpty, !leftInbox.contains(id) {
             waitingThumbnails[id] = images.prefix(DictationDraft.maxImages).map(\.image.thumbnail)
         }

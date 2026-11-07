@@ -83,6 +83,8 @@ final class StatusSummaryModel {
     private(set) var isUpdating = false
     /// The last request failed; the last card stays.
     private(set) var failed = false
+    /// The card shown is the empty session's ("Nothing running yet").
+    private(set) var showsEmpty = false
 
     @ObservationIgnored var generator: (any SummaryGenerating)?
     /// What the card shown was made from; nil with no card, or none known.
@@ -161,8 +163,18 @@ final class StatusSummaryModel {
 
     /// The agent is working and there is no card yet: say so, with no request.
     func showWorkingIfEmpty() {
+        if showsEmpty { return showWorkingOnMessage() }
         guard summary == nil else { return }
         summary = .card(.working(on: now(), timeZone: timeZone))
+        updatedAt = now()
+    }
+
+    /// A message went to the empty session, or it is busy: "Working on your message." in place of
+    /// the empty card, until the first summary arrives. Any other card stays.
+    func showWorkingOnMessage() {
+        guard showsEmpty else { return }
+        showsEmpty = false
+        summary = .card(.sent(on: now(), timeZone: timeZone))
         updatedAt = now()
     }
 
@@ -174,6 +186,7 @@ final class StatusSummaryModel {
         runEndWaiting = false
         isUpdating = false
         summary = .card(.empty(on: now(), timeZone: timeZone))
+        showsEmpty = true
         updatedAt = now()
         basis = nil
         failed = false
@@ -186,6 +199,7 @@ final class StatusSummaryModel {
         runEndWaiting = false
         isUpdating = false
         summary = nil
+        showsEmpty = false
         updatedAt = nil
         basis = nil
         failed = false
@@ -231,6 +245,8 @@ final class StatusSummaryModel {
             if working, summary == nil {
                 summary = .card(.working(on: now(), timeZone: timeZone))
                 updatedAt = now()
+            } else if working {
+                showWorkingOnMessage()
             }
             return
         }
@@ -245,6 +261,7 @@ final class StatusSummaryModel {
             parsed = .card(card)
         }
         summary = parsed
+        showsEmpty = false
         updatedAt = now()
         self.basis = basis
         failed = false

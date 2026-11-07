@@ -68,6 +68,15 @@ struct StatusCard: Equatable, Sendable, Codable {
         )
     }
 
+    /// A session that never ran, once a message is sent to it or it is busy, until its first
+    /// summary: under "Still working · <long date>". Never "Nothing running yet" while it works.
+    static func sent(on date: Date, timeZone: TimeZone = .current) -> StatusCard {
+        StatusCard(
+            title: longDate(date, timeZone: timeZone),
+            now: String(localized: "home.summary.sent.now", defaultValue: "Working on your message.")
+        )
+    }
+
     /// No card yet, and the server answered with no text because the agent is working.
     static func working(on date: Date, timeZone: TimeZone = .current) -> StatusCard {
         StatusCard(
