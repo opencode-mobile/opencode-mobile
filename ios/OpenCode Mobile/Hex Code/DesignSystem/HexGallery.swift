@@ -646,7 +646,7 @@ private struct HexGalleryContent: View {
                     HexMenuItem(id: "ask", icon: .ask, title: "Ask on the side", detail: "Answered from the session, not sent to the agent") {},
                     HexMenuItem(id: "goal", icon: .target, iconColor: HexColor.green, title: "Set as today’s goal", detail: "The agent keeps going until it’s done") {},
                 ])
-                .fixedSize()
+                .frame(width: 300)
             }
             HStack {
                 Spacer(minLength: 0)
@@ -654,7 +654,7 @@ private struct HexGalleryContent: View {
                     HexMenuItem(id: "ask", icon: .ask, title: "Ask on the side", detail: "Answered from the session, not sent to the agent", enabled: false) {},
                     HexMenuItem(id: "goal", icon: .target, iconColor: HexColor.green, title: "Replace today’s goal", detail: "The agent keeps going until it’s done", enabled: false) {},
                 ])
-                .fixedSize()
+                .frame(width: 300)
             }
             caption("Open · items disabled while a chunk is still transcribing")
         }
