@@ -45,14 +45,55 @@ object DailySession {
     fun title(date: LocalDate): String = date.toString()
 
     /**
-     * Today's session among [sessions], in the server's order (newest update first): the first with exactly that
-     * title and directory. The server compares directories as exact strings, so the phone does too.
+     * Where [title] stands among [date]'s sessions (app-plan.md, The daily session › Finding it): 1 for the plain date
+     * (`2026-11-07`), n for the date, a space and n in brackets, 2 or more (`2026-11-07 (2)`); null for any other title
+     * (`Notes 2026-11-07`, `2026-11-07 (1)`).
+     */
+    fun number(
+        date: LocalDate,
+        title: String,
+    ): Int? {
+        val plain = title(date)
+        if (title == plain) return 1
+        if (!title.startsWith("$plain (") || !title.endsWith(")")) return null
+        val digits = title.substring(plain.length + 2, title.length - 1)
+        if (digits.isEmpty() || digits.startsWith('0') || !digits.all { it in '0'..'9' }) return null
+        return digits.toIntOrNull()?.takeIf { it >= 2 }
+    }
+
+    /**
+     * Today's session among [sessions], in the server's order (newest update first): the one in [directory] with the
+     * **highest number** ([number]), and among equal numbers the first, the most recently updated (app-plan.md, More
+     * than one match). Never the most recently updated across numbers: an older session still running moves to the
+     * top of the list. The server compares directories as exact strings, so the phone does too.
      */
     fun match(
         today: LocalDate,
         directory: String,
         sessions: List<SessionListing>,
-    ): SessionListing? = sessions.firstOrNull { it.title == title(today) && it.directory == directory }
+    ): SessionListing? {
+        var best: SessionListing? = null
+        var bestNumber = 0
+        for (session in sessions) {
+            if (session.directory != directory) continue
+            val n = number(today, session.title) ?: continue
+            if (n > bestNumber) {
+                best = session
+                bestNumber = n
+            }
+        }
+        return best
+    }
+
+    /** The title Start a new session gives: the date and one more than the highest number found, or the plain date. */
+    fun nextTitle(
+        today: LocalDate,
+        directory: String,
+        sessions: List<SessionListing>,
+    ): String {
+        val highest = match(today, directory, sessions)?.let { number(today, it.title) } ?: return title(today)
+        return "${title(today)} (${highest + 1})"
+    }
 
     /** The app last opened a session on an earlier date than [today]. False before the first. */
     fun isNewDay(
@@ -126,6 +167,20 @@ sealed interface DailySessionResult {
     data object Failed : DailySessionResult
 }
 
+/** How Start a new session went. */
+sealed interface NewSessionResult {
+    /** [session] was created and has the rules: open it. */
+    data class Opened(
+        val session: SessionListing,
+    ) : NewSessionResult
+
+    /** Creating it failed: today's session is still open, nothing changed. */
+    data object CreateFailed : NewSessionResult
+
+    /** It was created, but its rules failed: "Couldn't open today's session", whose Try again finds it. */
+    data object RulesFailed : NewSessionResult
+}
+
 /**
  * Opens today's session: finds it, or creates it with the chosen model, and puts the message rules on it every time.
  * Silent: any failure is [DailySessionResult.Failed]. Try again finds the session again, so it never makes a second
@@ -189,19 +244,60 @@ class DailySessionSetup(
         }
     }
 
-    /** The first exact match, following the cursor only while a full page has none. An empty page is the end. */
+    /** Today's session ([DailySession.match]) among every page [list] reads. */
     private suspend fun find(
         today: LocalDate,
         directory: String,
-    ): SessionListing? {
+    ): SessionListing? = DailySession.match(today, directory, list(today, directory))
+
+    /**
+     * The day's sessions as the server lists them, newest update first: the next page is read while a page comes back
+     * full, up to [MAX_PAGES], since a higher number may be on a later page.
+     */
+    private suspend fun list(
+        today: LocalDate,
+        directory: String,
+    ): List<SessionListing> {
+        val all = mutableListOf<SessionListing>()
         var cursor: String? = null
         repeat(MAX_PAGES) {
             val page = api.sessionsPage(directory, DailySession.title(today), PAGE_SIZE, cursor)
-            DailySession.match(today, directory, page.sessions)?.let { return it }
-            if (page.sessions.size < PAGE_SIZE) return null
-            cursor = page.next ?: return null
+            all += page.sessions
+            if (page.sessions.size < PAGE_SIZE) return all
+            cursor = page.next ?: return all
         }
-        return null
+        return all
+    }
+
+    /**
+     * Settings › Start a new session (app-plan.md, Settings and finish (M6)): creates the day's next numbered session
+     * with [model] and puts the message rules on it. Today's session is never touched. The new session becomes the
+     * last one opened; the last date stays, so there's no new-day notice.
+     */
+    suspend fun startNew(
+        today: LocalDate,
+        directory: String,
+        model: ModelChoice?,
+    ): NewSessionResult {
+        val session =
+            try {
+                api.create(DailySession.nextTitle(today, directory, list(today, directory)), directory, model)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                return NewSessionResult.CreateFailed
+            }
+        // Once it exists it's the one the finder opens, so a failure from here on is a setup failure like any other.
+        noticeDueFor = null
+        remember(session.id)
+        return try {
+            api.putMessageRules(session.id)
+            NewSessionResult.Opened(session)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            NewSessionResult.RulesFailed
+        }
     }
 
     companion object {
