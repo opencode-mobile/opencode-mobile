@@ -108,3 +108,22 @@ private fun readReduced(context: Context): Boolean =
 object FullSpeed : MotionDurationScale {
     override val scaleFactor: Float = 1f
 }
+
+/**
+ * A screen reader that explores by touch (TalkBack) is on, watched for as long as the caller shows: the draft then
+ * shows as chunk rows with their own actions (app-plan.md, Accessibility › Draft chunks).
+ */
+@Composable
+fun rememberScreenReaderOn(): Boolean {
+    val context = LocalContext.current.applicationContext
+    val manager = remember(context) { context.getSystemService(android.view.accessibility.AccessibilityManager::class.java) }
+    var on by remember { mutableStateOf(manager?.isTouchExplorationEnabled == true) }
+    DisposableEffect(manager) {
+        val listener =
+            android.view.accessibility.AccessibilityManager
+                .TouchExplorationStateChangeListener { on = it }
+        manager?.addTouchExplorationStateChangeListener(listener)
+        onDispose { manager?.removeTouchExplorationStateChangeListener(listener) }
+    }
+    return on
+}

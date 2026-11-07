@@ -29,9 +29,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -192,6 +197,9 @@ fun HexChunkRow(
     state: HexChunkRowState,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    /** A screen reader's name for the row ("Chunk 2 of 3"); its value is the text, and [actions] are its own. */
+    accessibilityLabel: String? = null,
+    actions: List<CustomAccessibilityAction> = emptyList(),
 ) {
     val colors = HexTheme.colors
     val type = HexTheme.type
@@ -214,8 +222,18 @@ fun HexChunkRow(
                     },
                 ).then(if (selected) Modifier.border(1.dp, colors.tint(20f), shape) else Modifier)
                 .then(if (onClick != null) Modifier.clickable(source, null, role = Role.Button, onClick = onClick) else Modifier)
-                .semantics(mergeDescendants = true) { this.selected = selected }
-                .padding(6.dp),
+                .then(
+                    if (accessibilityLabel != null) {
+                        Modifier.clearAndSetSemantics {
+                            contentDescription = accessibilityLabel
+                            stateDescription = text
+                            this.selected = selected
+                            customActions = actions
+                        }
+                    } else {
+                        Modifier.semantics(mergeDescendants = true) { this.selected = selected }
+                    },
+                ).padding(6.dp),
     ) {
         Text(
             "$number",

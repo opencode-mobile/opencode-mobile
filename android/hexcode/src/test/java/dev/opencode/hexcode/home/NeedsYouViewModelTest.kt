@@ -579,6 +579,36 @@ class NeedsYouViewModelTest {
             }
         }
 
+    // app-plan.md, Settings and finish (M6) › Accessibility: Stop through the screen reader's confirmation.
+
+    @Test
+    fun aScreenReadersConfirmedStopRunsTheSameStepsWithoutTheHold() =
+        runTest(dispatcher) {
+            val (vm, _) = home()
+            try {
+                vm.stopConfirmed()
+                runCurrent()
+                assertEquals(listOf("interrupt ses_1"), server.calls)
+                assertEquals(HomeNotice.Stopped, vm.uiState.value.notice)
+            } finally {
+                done(vm)
+            }
+        }
+
+    @Test
+    fun aConfirmedStopWhileDimmedDoesNothing() =
+        runTest(dispatcher) {
+            server.busy = false
+            val (vm, _) = home()
+            try {
+                vm.stopConfirmed()
+                runCurrent()
+                assertTrue(server.calls.isEmpty())
+            } finally {
+                done(vm)
+            }
+        }
+
     @Test
     fun theWarningCountsThreeTwoOne() {
         assertEquals(3, StopCount.left(0))

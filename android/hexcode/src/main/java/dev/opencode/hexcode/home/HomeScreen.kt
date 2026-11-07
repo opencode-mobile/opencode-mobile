@@ -41,6 +41,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -67,11 +68,17 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -79,6 +86,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -123,6 +131,7 @@ import dev.opencode.hexcode.designsystem.components.HexToastHost
 import dev.opencode.hexcode.designsystem.components.HexToastMessage
 import dev.opencode.hexcode.designsystem.components.HexToastTone
 import dev.opencode.hexcode.designsystem.components.rememberHexTalkHold
+import dev.opencode.hexcode.designsystem.rememberScreenReaderOn
 import dev.opencode.hexcode.session.AgentStatus
 import dev.opencode.hexcode.session.GoalStatus
 import dev.opencode.hexcode.session.SessionSetup
@@ -189,11 +198,18 @@ fun HomeScreen(
                 Modifier
                     .fillMaxSize()
                     .then(if (covered) Modifier.clearAndSetSemantics {} else Modifier)
+                    // TalkBack lands on the top bar, then the talk button, then the rest (Accessibility › Focus order).
+                    .semantics { isTraversalGroup = true }
                     .padding(top = 10.dp, bottom = 6.dp),
             ) {
                 val today = state.today
                 val now = rememberNow(if (today.agent is AgentStatus.Working) 1_000 else 15_000)
-                HomeTopBar(today.agent, now, Modifier.padding(start = edge, end = edge - 6.dp), onNeedsInput = { vm.openNeeds() }) {
+                HomeTopBar(
+                    today.agent,
+                    now,
+                    Modifier.padding(start = edge, end = edge - 6.dp).semantics { traversalIndex = -2f },
+                    onNeedsInput = { vm.openNeeds() },
+                ) {
                     // ◎ is always there: green while the goal is active.
                     HexRoundButton(
                         HexIcons.target,
@@ -294,57 +310,69 @@ fun HomeScreen(
                         hintShown = false
                     }
                 }
-                Box(Modifier.padding(start = edge, end = edge, top = 12.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        val dock = HomeDock.of(state.talk)
-                        DockSide(dock.left, state, vm = vm, onAttach = { if (vm.openAttach()) attachOpen = true })
-                        HexTalkButton(
-                            state =
-                                when (state.talk) {
-                                    TalkMode.Holding -> HexTalkState.Holding
-                                    TalkMode.Locked -> HexTalkState.Locked
-                                    TalkMode.Idle -> if (state.draft.isEmpty) HexTalkState.Idle else HexTalkState.Draft
+                // The dock grows with the text size up to 1.5×, then stays (app-plan.md, Accessibility › Text size).
+                val density = LocalDensity.current
+                val dockDensity = remember(density) { Density(density.density, density.fontScale.coerceAtMost(DOCK_FONT_CAP)) }
+                CompositionLocalProvider(LocalDensity provides dockDensity) {
+                    Box(Modifier.padding(start = edge, end = edge, top = 12.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            val dock = HomeDock.of(state.talk)
+                            DockSide(dock.left, state, vm = vm, onAttach = { if (vm.openAttach()) attachOpen = true })
+                            HexTalkButton(
+                                state =
+                                    when (state.talk) {
+                                        TalkMode.Holding -> HexTalkState.Holding
+                                        TalkMode.Locked -> HexTalkState.Locked
+                                        TalkMode.Idle -> if (state.draft.isEmpty) HexTalkState.Idle else HexTalkState.Draft
+                                    },
+                                label = label,
+                                accessibilityLabel =
+                                    when (state.talk) {
+                                        // The clock is part of the button's label, not an item of its own.
+                                        // As a duration: "Recording, 3 seconds", not "0:03".
+                                        TalkMode.Locked ->
+                                            stringResource(
+                                                R.string.talk_a11y_recording_for,
+                                                spokenDuration(
+                                                    lockedNow - state.takeStartedAt,
+                                                ),
+                                            )
+                                        TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
+                                        TalkMode.Idle -> label
+                                    },
+                                // Recording never waits for the speech model; only turning a take into text does.
+                                enabled = true,
+                                level = { vm.level },
+                                onPress = {
+                                    if (micAllowed) {
+                                        vm.press()
+                                    } else {
+                                        askMic.launch(Manifest.permission.RECORD_AUDIO)
+                                        false
+                                    }
                                 },
-                            label = label,
-                            accessibilityLabel =
-                                when (state.talk) {
-                                    // The clock is part of the button's label, not an item of its own.
-                                    TalkMode.Locked -> stringResource(R.string.draft_recording, clock(lockedNow - state.takeStartedAt))
-                                    TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
-                                    TalkMode.Idle -> label
-                                },
-                            // Recording never waits for the speech model; only turning a take into text does.
-                            enabled = true,
-                            level = { vm.level },
-                            onPress = {
-                                if (micAllowed) {
-                                    vm.press()
-                                } else {
-                                    askMic.launch(Manifest.permission.RECORD_AUDIO)
-                                    false
-                                }
-                            },
-                            onRelease = { how -> vm.release(how.toTalkRelease()) },
-                            onTapLocked = vm::tapLocked,
-                            modifier = Modifier.weight(1f),
-                            hold = hold,
-                            clock = if (state.talk == TalkMode.Locked) clock(lockedNow - state.takeStartedAt) else null,
-                            dropActionLabel = stringResource(R.string.home_hold_drop),
-                            onDrop = vm::dropTakeNow,
-                        )
-                        DockSide(
-                            dock.right,
-                            state,
-                            vm = vm,
-                            onAttach = { if (vm.openAttach()) attachOpen = true },
-                        )
+                                onRelease = { how -> vm.release(how.toTalkRelease()) },
+                                onTapLocked = vm::tapLocked,
+                                modifier = Modifier.weight(1f).semantics { traversalIndex = -1f },
+                                hold = hold,
+                                clock = if (state.talk == TalkMode.Locked) clock(lockedNow - state.takeStartedAt) else null,
+                                dropActionLabel = stringResource(R.string.home_hold_drop),
+                                onDrop = vm::dropTakeNow,
+                            )
+                            DockSide(
+                                dock.right,
+                                state,
+                                vm = vm,
+                                onAttach = { if (vm.openAttach()) attachOpen = true },
+                            )
+                        }
+                        // 10 dp above the talk button, over where the waiting line and the draft actions are (both hidden while
+                        // a take records), so nothing moves.
+                        HoldHintLine(hintShown, hold, Modifier.align(Alignment.TopCenter))
                     }
-                    // 10 dp above the talk button, over where the waiting line and the draft actions are (both hidden while
-                    // a take records), so nothing moves.
-                    HoldHintLine(hintShown, hold, Modifier.align(Alignment.TopCenter))
                 }
             }
             val micOffText = stringResource(R.string.home_mic_off)
@@ -419,6 +447,7 @@ fun HomeScreen(
                                 actionLabel = undo,
                                 actionIcon = HexIcons.undo,
                                 durationMs = Sending.HOLD_MS,
+                                fixedDuration = true,
                             )
                         HomeNotice.SentNow -> HexToastMessage(sentNow, HexToastTone.Steer, messageDetail, durationMs = 2_600)
                         HomeNotice.Unsent -> HexToastMessage(unsent, HexToastTone.Undo, unsentSub, durationMs = 2_200)
@@ -647,6 +676,12 @@ private fun StopButton(
         }
     }
     val slack = with(LocalDensity.current) { STOP_SLIDE_OFF.toPx() }
+    val context = LocalContext.current
+    val label = stringResource(if (live) R.string.home_stop else R.string.stop_dimmed)
+    val title = stringResource(R.string.stop_confirm_title)
+    val body = stringResource(R.string.stop_confirm_body)
+    val stop = stringResource(R.string.stop_confirm_stop)
+    val keep = stringResource(R.string.stop_confirm_keep)
     HexIconButton(
         HexIcons.stop,
         stringResource(R.string.home_stop),
@@ -655,24 +690,55 @@ private fun StopButton(
         enabled = live,
         hold = if (state.stopHolding) ring.value else null,
         modifier =
-            Modifier.pointerInput(live) {
-                if (!live) return@pointerInput
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    if (!vm.stopPressed()) return@awaitEachGesture
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!change.pressed) break
-                        val p = change.position
-                        val dx = maxOf(0f, -p.x, p.x - size.width)
-                        val dy = maxOf(0f, -p.y, p.y - size.height)
-                        if (dx * dx + dy * dy > slack * slack) break
+            Modifier
+                // A screen reader can't hold for 3 s: activate asks first, which keeps the hold's safety, then runs
+                // the same steps (app-plan.md, Accessibility › Stop). Dimmed, it says so and has no action.
+                .clearAndSetSemantics {
+                    contentDescription = label
+                    role = Role.Button
+                    if (live) {
+                        onClick {
+                            android.app.AlertDialog
+                                .Builder(context)
+                                .setTitle(title)
+                                .setMessage(body)
+                                .setPositiveButton(stop) { _, _ -> vm.stopConfirmed() }
+                                .setNegativeButton(keep, null)
+                                .show()
+                            true
+                        }
                     }
-                    vm.stopReleased()
-                }
-            },
+                }.pointerInput(live) {
+                    if (!live) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        if (!vm.stopPressed()) return@awaitEachGesture
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            val p = change.position
+                            val dx = maxOf(0f, -p.x, p.x - size.width)
+                            val dy = maxOf(0f, -p.y, p.y - size.height)
+                            if (dx * dx + dy * dy > slack * slack) break
+                        }
+                        vm.stopReleased()
+                    }
+                },
     )
+}
+
+/** The dock's text stops growing at this scale. */
+private const val DOCK_FONT_CAP = 1.5f
+
+/** "3 seconds", "1 minute, 12 seconds": a take's length as a screen reader says it. */
+@Composable
+private fun spokenDuration(ms: Long): String {
+    val seconds = (ms.coerceAtLeast(0) / 1000).toInt()
+    val secs = pluralStringResource(R.plurals.a11y_seconds, seconds % 60, seconds % 60)
+    if (seconds < 60) return secs
+    val mins = pluralStringResource(R.plurals.a11y_minutes, seconds / 60, seconds / 60)
+    return if (seconds % 60 == 0) mins else "$mins, $secs"
 }
 
 /** Sliding this far off the stop button cancels the hold. */
@@ -702,7 +768,7 @@ private fun ColumnScope.DraftView(
     DraftLabel(state)
     if (draft.images.isNotEmpty()) AttachRow(draft.images, state.imageInput?.takeIf { !it.sees }?.model, vm::removeImage)
     // The draft takes the room between its line and the actions above the dock (app-plan.md, Long drafts).
-    DraftBody(draft, vm::selectChunk, onReadAll, Modifier.padding(top = 14.dp).weight(1f, fill = false))
+    DraftBody(draft, vm, onReadAll, Modifier.padding(top = 14.dp).weight(1f, fill = false))
     if (!draft.isListening) DraftActions(state, vm)
 }
 
@@ -770,10 +836,13 @@ private fun BoxScope.DraftReader(
 @Composable
 private fun DraftBody(
     draft: Draft,
-    onSelect: (Int) -> Unit,
+    vm: HomeViewModel,
     onReadAll: () -> Unit,
     modifier: Modifier,
 ) {
+    val onSelect: (Int) -> Unit = vm::selectChunk
+    // With TalkBack on, the draft is one row per chunk, each with Delete and Re-record (app-plan.md, Accessibility).
+    val screenReader = rememberScreenReaderOn()
     val type = HexTheme.type
     val styles =
         DraftSize.entries.associateWith { size ->
@@ -799,7 +868,11 @@ private fun DraftBody(
             }
         val windowLines = line * DraftShape.WINDOW_LINES
         val shape =
-            DraftShape.choose(
+            if (screenReader && draft.shown.isNotEmpty()) {
+                DraftShape.Rows
+            } else {
+                null
+            } ?: DraftShape.choose(
                 draft.shown.size,
                 draft.characters,
                 beyondWindow = {
@@ -814,7 +887,7 @@ private fun DraftBody(
                 when (shape) {
                     is DraftShape.Running -> DraftText(draft, onSelect, styles.getValue(shape.size))
                     DraftShape.Window -> DraftWindow(draft, onSelect, medium, windowLines.toDp(), onReadAll)
-                    DraftShape.Rows -> ChunkList(draft, onSelect)
+                    DraftShape.Rows -> ChunkList(draft, onSelect, vm)
                 }
             }.first().measure(constraints.copy(minHeight = 0))
         layout(shown.width, shown.height) { shown.place(0, 0) }
@@ -901,7 +974,7 @@ private fun DraftLabel(state: HomeUiState) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.height(18.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            modifier = Modifier.heightIn(min = 18.dp).semantics { liveRegion = LiveRegionMode.Polite },
         ) {
             when (kind) {
                 DraftLabel.Recording -> {
@@ -1000,7 +1073,10 @@ private fun DraftText(
 private fun ChunkList(
     draft: Draft,
     onSelect: (Int) -> Unit,
+    vm: HomeViewModel,
 ) {
+    val deleteLabel = stringResource(R.string.a11y_chunk_delete)
+    val rerecordLabel = stringResource(R.string.a11y_chunk_rerecord)
     val shown = draft.shown
     var showEarlier by remember { mutableStateOf(false) }
     val start = if (showEarlier) 0 else (shown.size - Draft.MAX_ROWS).coerceAtLeast(0)
@@ -1047,6 +1123,24 @@ private fun ChunkList(
                         else -> HexChunkRowState.Normal
                     },
                 onClick = if (tappable) ({ onSelect(index) }) else null,
+                accessibilityLabel = stringResource(R.string.a11y_chunk, index + 1, shown.size),
+                actions =
+                    if (tappable) {
+                        listOf(
+                            CustomAccessibilityAction(deleteLabel) {
+                                onSelect(index)
+                                vm.deleteChunk()
+                                true
+                            },
+                            CustomAccessibilityAction(rerecordLabel) {
+                                onSelect(index)
+                                vm.rerecord()
+                                true
+                            },
+                        )
+                    } else {
+                        emptyList()
+                    },
             )
         }
     }

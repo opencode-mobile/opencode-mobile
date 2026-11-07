@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -77,7 +78,8 @@ fun HexLinkTile(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier =
             modifier
-                .height(56.dp)
+                // A minimum, so a larger text size never clips it.
+                .heightIn(min = 56.dp)
                 .widthIn(max = 190.dp)
                 .clip(shape)
                 .background(fill)

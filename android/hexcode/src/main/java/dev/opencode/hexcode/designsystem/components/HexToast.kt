@@ -1,5 +1,7 @@
 package dev.opencode.hexcode.designsystem.components
 
+import android.os.Build
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -65,6 +68,8 @@ data class HexToastMessage(
     val actionIcon: ImageVector? = null,
     val durationMs: Long = DEFAULT_MS,
     val id: Long = System.nanoTime(),
+    /** Its time is a delay of its own (the 3 s Now hold): a screen reader doesn't make it longer. */
+    val fixedDuration: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_MS = 2_400L
@@ -131,13 +136,29 @@ fun HexToastHost(
     onAction: () -> Unit = {},
 ) {
     val dismissed by rememberUpdatedState(onDismissed)
+    val accessibility = LocalContext.current.getSystemService(AccessibilityManager::class.java)
     var shown by remember { mutableStateOf<HexToastMessage?>(null) }
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(message?.id) {
         val current = message ?: return@LaunchedEffect
         shown = current
         visible = true
-        delay(current.durationMs)
+        // A toast with an action (Undo) stays as long as the user's accessibility settings ask (Android 10 and later).
+        val duration =
+            if (current.actionLabel != null &&
+                !current.fixedDuration &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                accessibility != null
+            ) {
+                accessibility
+                    .getRecommendedTimeoutMillis(
+                        current.durationMs.toInt(),
+                        AccessibilityManager.FLAG_CONTENT_TEXT or AccessibilityManager.FLAG_CONTENT_CONTROLS,
+                    ).toLong()
+            } else {
+                current.durationMs
+            }
+        delay(duration)
         visible = false
         dismissed()
     }

@@ -147,6 +147,7 @@ private fun ApprovalBody(
             takeLabel = take?.let { stringResource(if (it.transcribing) R.string.needs_transcribing else R.string.needs_listening) },
             onHoldStart = { micReady() && vm.sheetTakeStart(target) },
             onHoldEnd = vm::sheetTakeEnd,
+            accessibilityHint = stringResource(R.string.a11y_say_hint),
         )
     }
 }
@@ -233,6 +234,7 @@ private fun QuestionPage(
                 onClick = vm::toggleOwnAnswer,
                 onHoldStart = { micReady() && vm.sheetTakeStart(target) },
                 onHoldEnd = vm::sheetTakeEnd,
+                accessibilityHint = stringResource(R.string.a11y_say_hint),
             )
         }
     }

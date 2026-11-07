@@ -34,7 +34,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -174,10 +179,15 @@ internal fun BoxScope.GoalSheetView(
     }
 }
 
-/** Where the goal sheet's hold-to-say button is, and whether it takes a hold, for the footer's gesture. */
+/**
+ * Where the goal sheet's hold-to-say button is, and whether it takes a hold, for the footer's gesture; and [toggle], a
+ * screen reader's activate, which starts the take or finishes it.
+ */
 private class HoldTarget {
     var bounds by mutableStateOf<Rect?>(null)
     var enabled by mutableStateOf(false)
+    var listening by mutableStateOf(false)
+    var toggle: () -> Unit = {}
 }
 
 /**
@@ -198,6 +208,14 @@ private fun GoalButtons(
     val target = remember { HoldTarget() }
     val view = LocalView.current
     val ready by rememberUpdatedState(micReady)
+    target.listening = edit?.take == GoalTake.Listening
+    target.toggle = {
+        if (target.listening) {
+            vm.sheetTakeEnd()
+        } else if (ready()) {
+            vm.goalTakeStart()
+        }
+    }
     var origin by remember { mutableStateOf(Offset.Zero) }
     Box(
         Modifier
@@ -283,15 +301,32 @@ private fun HoldToSay(
     enabled: Boolean = true,
 ) {
     target.enabled = enabled
-    HexButton(
-        onClick = {},
-        text = text,
-        icon = HexIcons.mic,
-        style = if (primary) HexButtonStyle.Primary else HexButtonStyle.Secondary,
-        size = HexButtonSize.Regular,
-        enabled = enabled,
-        modifier = Modifier.onGloballyPositioned { target.bounds = it.boundsInRoot() },
-    )
+    val hint = stringResource(R.string.a11y_say_hint)
+    // The footer takes the finger's hold; a screen reader activates the button instead: start, then finish
+    // (app-plan.md, Accessibility › Hold-to-dictate options). While a take records it stays usable to finish it.
+    Box(
+        Modifier.clearAndSetSemantics {
+            role = Role.Button
+            contentDescription = text
+            stateDescription = hint
+            if (enabled || target.listening) {
+                onClick {
+                    target.toggle()
+                    true
+                }
+            }
+        },
+    ) {
+        HexButton(
+            onClick = {},
+            text = text,
+            icon = HexIcons.mic,
+            style = if (primary) HexButtonStyle.Primary else HexButtonStyle.Secondary,
+            size = HexButtonSize.Regular,
+            enabled = enabled,
+            modifier = Modifier.onGloballyPositioned { target.bounds = it.boundsInRoot() },
+        )
+    }
 }
 
 /** The draft's ⋯ (app-plan.md, Set as goal from a draft): it opens and closes the menu ([DraftMenu]). */

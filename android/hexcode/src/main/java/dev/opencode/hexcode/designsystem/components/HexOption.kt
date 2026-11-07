@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexMotion
@@ -78,6 +79,8 @@ fun HexOption(
     onClick: (() -> Unit)? = null,
     onHoldStart: (() -> Boolean)? = null,
     onHoldEnd: (() -> Unit)? = null,
+    /** Read after the row by a screen reader on a row held to dictate: "Double-tap to start speaking, and again to finish". */
+    accessibilityHint: String? = null,
 ) {
     val colors = HexTheme.colors
     val shape = RoundedCornerShape(HexTheme.radius.l)
@@ -112,11 +115,16 @@ fun HexOption(
                 Modifier
                     .semantics {
                         role = Role.Button
-                        onClick?.let { tap ->
-                            this.onClick(label = null) {
-                                tap()
-                                true
+                        accessibilityHint?.let { stateDescription = it }
+                        // A screen reader can't hold: activate starts the take, activate again finishes it, as the talk
+                        // button (app-plan.md, Accessibility › Hold-to-dictate options).
+                        this.onClick(label = null) {
+                            when (take) {
+                                HexOptionTake.Listening -> end?.invoke()
+                                HexOptionTake.Transcribing -> Unit
+                                null -> start?.invoke()
                             }
+                            true
                         }
                     }.pointerInput(Unit) {
                         awaitEachGesture {

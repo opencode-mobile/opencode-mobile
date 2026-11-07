@@ -1283,6 +1283,16 @@ class HomeViewModel(
         state.update { it.copy(stopHolding = false, notice = if (held < STOP_TAP_MS) HomeNotice.StopTap else HomeNotice.StopCancelled) }
     }
 
+    /**
+     * Stop through a screen reader's confirmation ("Stop the agent?" › Stop, app-plan.md, Accessibility): the same steps
+     * as at 3 s, without the hold. Nothing while stop is dimmed.
+     */
+    fun stopConfirmed() {
+        val current = state.value
+        if (!current.stopLive || current.stopHolding || current.stopping) return
+        stopHeld()
+    }
+
     /** 3 s held: the warning goes as the interrupt is sent, and the notice says how it went. */
     private fun stopHeld() {
         val today = session

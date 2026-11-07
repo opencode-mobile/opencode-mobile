@@ -68,7 +68,8 @@ fun HexGoalLine(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(34.dp)
+                // A minimum, so a larger text size never clips it.
+                .heightIn(min = 34.dp)
                 .clickable(role = Role.Button, onClick = onClick)
                 .semantics(mergeDescendants = true) { suffix?.let { stateDescription = it } },
     ) {

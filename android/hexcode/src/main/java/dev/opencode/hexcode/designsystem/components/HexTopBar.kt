@@ -24,8 +24,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -97,9 +103,12 @@ fun HexTopBar(
     modifier: Modifier = Modifier,
     timer: String? = null,
     onStateClick: (() -> Unit)? = null,
+    /** What a screen reader hears for the state ("Working, 2 minutes"); the [label] and [timer] without it. */
+    accessibilityLabel: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val colors = HexTheme.colors
+    val spoken = accessibilityLabel ?: listOfNotNull(label, timer).joinToString(", ")
     val headColor =
         when (state) {
             HexAgentState.Idle, null -> colors.text2
@@ -121,8 +130,23 @@ fun HexTopBar(
             modifier =
                 Modifier
                     .weight(1f)
-                    .semantics(mergeDescendants = true) {}
-                    .then(
+                    .clearAndSetSemantics {
+                        if (state != null) {
+                            contentDescription = spoken
+                            heading()
+                            // Needs input and Reconnecting are announced as they come.
+                            if (state == HexAgentState.NeedsInput || state == HexAgentState.Reconnecting) {
+                                liveRegion = LiveRegionMode.Polite
+                            }
+                        }
+                        onStateClick?.let { click ->
+                            role = Role.Button
+                            onClick {
+                                click()
+                                true
+                            }
+                        }
+                    }.then(
                         if (onStateClick != null) {
                             Modifier.clickable(remember { MutableInteractionSource() }, null, role = Role.Button, onClick = onStateClick)
                         } else {

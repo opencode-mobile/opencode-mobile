@@ -54,7 +54,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -134,6 +140,8 @@ internal fun HomeTopBar(
                 modifier,
                 timer = status.clock(now),
                 actions = actions,
+                // Read as a duration in whole minutes, so it isn't new every second.
+                accessibilityLabel = stringResource(R.string.a11y_working, workingFor(status, now)),
             )
         AgentStatus.Idle -> HexTopBar(HexAgentState.Idle, stringResource(R.string.home_state_idle), modifier, actions = actions)
         // Today's session is being set up: the slot is empty.
@@ -406,7 +414,9 @@ private fun Card(
     nextTappable: Boolean = false,
 ) {
     val colors = HexTheme.colors
-    Label { CardLabel(title, work.phase) }
+    val nextHint = stringResource(R.string.a11y_next_hint)
+    // The title is a header for a screen reader (app-plan.md, Accessibility › Status card).
+    Label { Box(Modifier.semantics { heading() }) { CardLabel(title, work.phase) } }
     NowText(now, size, nowLines, Modifier.alpha(dim))
     val you = work.you
     when {
@@ -428,7 +438,13 @@ private fun Card(
                         .alpha(dim)
                         .then(
                             // Next is what the user might say: a tap puts it into the draft, never sends it.
-                            if (nextTappable) Modifier.clickable(role = Role.Button) { work.onNext(SummaryText.shown(next)) } else Modifier,
+                            if (nextTappable) {
+                                Modifier
+                                    .clickable(role = Role.Button) { work.onNext(SummaryText.shown(next)) }
+                                    .semantics { stateDescription = nextHint }
+                            } else {
+                                Modifier
+                            },
                         ),
             )
     }
@@ -439,7 +455,7 @@ private fun Card(
                     label = link.label,
                     host = tileHost(link.url, links.computer),
                     kind = if (SummaryLinks.isLocal(link.url)) HexLinkKind.Local else HexLinkKind.Web,
-                    accessibilityLabel = stringResource(R.string.home_link_open, link.label),
+                    accessibilityLabel = stringResource(R.string.home_link_open, "${link.label}, ${tileHost(link.url, links.computer)}"),
                     onClick = { links.open(link.url, link.label) },
                 )
             }
@@ -629,15 +645,36 @@ private fun TodoRow(
             is TodoLabel.Current ->
                 summaryTextIn(stringResource(R.string.home_todo_progress, label.position, label.count, SUMMARY_MARK), label.text)
         }
+    val spoken =
+        when (label) {
+            is TodoLabel.AllDone -> stringResource(R.string.home_todo_all_done, label.count)
+            is TodoLabel.Current ->
+                stringResource(
+                    R.string.a11y_todo,
+                    todos.count { it.status == TodoItem.Status.Completed },
+                    label.count,
+                    SummaryText.shown(label.text),
+                )
+        }
     HexProgress(
-        todos.map {
-            when (it.status) {
-                TodoItem.Status.Pending -> HexProgressStep.Pending
-                TodoItem.Status.InProgress -> HexProgressStep.Current
-                TodoItem.Status.Completed -> HexProgressStep.Done
-            }
-        },
-        text,
+        modifier =
+            Modifier.clearAndSetSemantics {
+                contentDescription = spoken
+                role = Role.Button
+                onClick {
+                    onClick()
+                    true
+                }
+            },
+        steps =
+            todos.map {
+                when (it.status) {
+                    TodoItem.Status.Pending -> HexProgressStep.Pending
+                    TodoItem.Status.InProgress -> HexProgressStep.Current
+                    TodoItem.Status.Completed -> HexProgressStep.Done
+                }
+            },
+        label = text,
         onClick = onClick,
     )
 }
@@ -708,6 +745,15 @@ private fun Refresh(
             label == RefreshLabel.Failed -> colors.amber
             else -> colors.text3
         }
+    val spoken = stringResource(R.string.a11y_refresh)
+    val value =
+        when (label) {
+            RefreshLabel.Updating -> text
+            RefreshLabel.Failed -> text
+            RefreshLabel.Now -> stringResource(R.string.a11y_refresh_value, text)
+            is RefreshLabel.MinutesAgo ->
+                stringResource(R.string.a11y_refresh_value, pluralStringResource(R.plurals.a11y_minutes_ago, label.minutes, label.minutes))
+        }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -715,7 +761,16 @@ private fun Refresh(
             Modifier
                 .clip(RoundedCornerShape(HexTheme.radius.s))
                 .clickable(source, null, role = Role.Button, onClick = onClick)
-                .padding(start = 8.dp, top = 6.dp, bottom = 6.dp),
+                .clearAndSetSemantics {
+                    // "Refresh the summary", "Updated 3 minutes ago" (app-plan.md, Accessibility › Status card).
+                    contentDescription = spoken
+                    stateDescription = value
+                    role = Role.Button
+                    onClick {
+                        onClick()
+                        true
+                    }
+                }.padding(start = 8.dp, top = 6.dp, bottom = 6.dp),
     ) {
         val turn =
             if (label == RefreshLabel.Updating) {
@@ -725,6 +780,20 @@ private fun Refresh(
             }
         Icon(HexIcons.refresh, null, tint = color, modifier = Modifier.size(HexTheme.size.iconSmall).rotate(turn))
         Text(text, style = HexTheme.type.mono, color = color, maxLines = 1)
+    }
+}
+
+/** "2 minutes" (or "40 seconds" in the first minute) since the run started, for a screen reader. */
+@Composable
+private fun workingFor(
+    status: AgentStatus.Working,
+    now: Long,
+): String {
+    val seconds = ((now - status.since) / 1000).coerceAtLeast(0).toInt()
+    return if (seconds < 60) {
+        pluralStringResource(R.plurals.a11y_seconds, seconds, seconds)
+    } else {
+        pluralStringResource(R.plurals.a11y_minutes, seconds / 60, seconds / 60)
     }
 }
 
