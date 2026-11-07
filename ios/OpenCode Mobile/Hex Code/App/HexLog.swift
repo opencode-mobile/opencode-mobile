@@ -9,6 +9,8 @@ enum HexLog {
     static let dictation = Logger(subsystem: subsystem, category: "dictation")
     /// The status summary's requests, and the ones not made because nothing is new.
     static let summary = Logger(subsystem: subsystem, category: "summary")
+    /// The server checks at setup: the address in use and the sign-in's renewal. Never the token.
+    static let server = Logger(subsystem: subsystem, category: "server")
 }
 
 /// Milliseconds between two `CACurrentMediaTime`-style uptimes.

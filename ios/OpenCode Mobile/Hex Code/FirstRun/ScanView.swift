@@ -9,6 +9,8 @@ struct ScanView: View {
     let onScanned: (String) -> Void
     let onScanAgain: () -> Void
     let onClose: () -> Void
+    /// Pair again shows "Cancel" in place of ✕.
+    var cancelTitle: LocalizedStringResource?
 
     var body: some View {
         ZStack {
@@ -18,8 +20,12 @@ struct ScanView: View {
                 .allowsHitTesting(false)
             VStack(spacing: 0) {
                 HStack {
-                    HexButton(icon: .x, size: .regular, action: onClose)
-                        .accessibilityLabel(Text(LocalizedStringResource("common.close", defaultValue: "Close")))
+                    if let cancelTitle {
+                        HexButton(cancelTitle, size: .regular, action: onClose)
+                    } else {
+                        HexButton(icon: .x, size: .regular, action: onClose)
+                            .accessibilityLabel(Text(LocalizedStringResource("common.close", defaultValue: "Close")))
+                    }
                     Spacer()
                 }
                 .padding(.horizontal, HexSpacing.screen)
@@ -32,6 +38,8 @@ struct ScanView: View {
         }
         .hexScreenBackground()
         .environment(\.colorScheme, .dark)
+        // The two-finger scrub closes it, as ✕ or Cancel does.
+        .accessibilityAction(.escape, onClose)
     }
 
     private var isConnected: Bool {

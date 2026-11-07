@@ -1,4 +1,5 @@
 import Foundation
+import OpenCodeKit
 
 /// A session as the server lists it, with what the daily rule needs.
 struct SessionListing: Equatable, Sendable {
@@ -146,6 +147,14 @@ final class DailySessionSetup {
     enum Outcome: Equatable, Sendable {
         case opened(SessionListing, created: Bool, showsNewDayNotice: Bool)
         case failed
+        /// The server answered `401`: the sign-in expired or the server's password changed.
+        case signedOut
+    }
+
+    /// A `401` with the saved credentials.
+    static func isSignedOut(_ error: any Error) -> Bool {
+        if case SessionStateAPIError.httpStatus(401, _)? = error as? SessionStateAPIError { return true }
+        return false
     }
 
     static let pageSize = 20
@@ -217,7 +226,7 @@ final class DailySessionSetup {
             }
             try await service.putMessageRules(sessionID: session.id)
         } catch {
-            return .failed
+            return Self.isSignedOut(error) ? .signedOut : .failed
         }
         noticeDueFor = nil
         memory.lastOpenedDay = today

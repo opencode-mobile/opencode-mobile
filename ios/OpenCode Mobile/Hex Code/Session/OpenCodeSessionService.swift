@@ -40,6 +40,11 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
         client = SessionStateAPIClient(fixedConnection: connection, urlSession: urlSession)
     }
 
+    /// Reads the connection at each request, so a new address or sign-in applies at once.
+    init(connection: @escaping @Sendable () -> ServerConnection?) {
+        client = SessionStateAPIClient(connectionProvider: connection)
+    }
+
     // MARK: DailySessionService
 
     func sessionsPage(directory: String, search: String, limit: Int, cursor: String?) async throws -> SessionListingPage {
@@ -270,6 +275,11 @@ struct OpenCodeEventTransport: EventStreamTransport {
     init(connection: ServerConnection) {
         let v2 = connection.withProtocol(.v2)
         client = EventsAPIClient(connectionProvider: { v2 })
+    }
+
+    /// Reads the connection at each (re)connect.
+    init(connection: @escaping @Sendable () -> ServerConnection?) {
+        client = EventsAPIClient(connectionProvider: { connection()?.withProtocol(.v2) })
     }
 
     func stream(

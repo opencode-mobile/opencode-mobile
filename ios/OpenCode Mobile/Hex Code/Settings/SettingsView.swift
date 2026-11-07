@@ -11,6 +11,8 @@ struct SettingsView: View {
     let onForgetServer: () -> Void
 
     @State private var showsServer = false
+    /// Pair again was tapped in Server details: the scan cover opens once the sheet has gone.
+    @State private var pairsAgain = false
     @State private var showsSpeechLab = false
 
     var body: some View {
@@ -86,11 +88,23 @@ struct SettingsView: View {
             }
         }
         .hexScreenBackground()
-        .hexSheet(isPresented: $showsServer) {
-            ServerDetailsView(setup: main.setup, onForget: {
-                showsServer = false
-                onForgetServer()
-            })
+        .hexSheet(isPresented: $showsServer, onDismiss: {
+            guard pairsAgain else { return }
+            pairsAgain = false
+            main.startPairAgain()
+        }) {
+            ServerDetailsView(
+                setup: main.setup,
+                onDone: { showsServer = false },
+                onPairAgain: {
+                    pairsAgain = true
+                    showsServer = false
+                },
+                onForget: {
+                    showsServer = false
+                    onForgetServer()
+                }
+            )
         }
         .hexFittedSheet(isPresented: $main.showsNewSession) {
             NewSessionSheet(main: main)
@@ -208,7 +222,8 @@ struct HexMainView: View {
                 home: main.home,
                 session: main.session,
                 voice: voice,
-                onSettings: { main.openSettings() }
+                onSettings: { main.openSettings() },
+                onPairAgain: { main.startPairAgain() }
             )
                 .hexPage()
                 .navigationDestination(for: HexMainModel.Route.self) { route in
@@ -216,6 +231,9 @@ struct HexMainView: View {
                 }
         }
         .hexToastHost(main.toasts)
+        .fullScreenCover(item: $main.pairAgain) { model in
+            PairAgainView(model: model, onCancel: { main.cancelPairAgain() })
+        }
         // The talk button sits just above the home indicator, where iOS holds a touch back until it
         // knows it isn't a home swipe, so a hold reached the button late. While home is the page on
         // screen it takes bottom-edge touches first; the home swipe then needs a second swipe. Set
@@ -289,57 +307,76 @@ private extension View {
     }
 }
 
-/// The paired server: its name, hostname, version and addresses, and Forget. The only place the
-/// app shows an address.
+/// The paired server (app plan, "Server details"): its name, hostname, version and addresses, then
+/// Pair again and Forget. The only place the app shows an address.
 struct ServerDetailsView: View {
     let setup: HexSetup
+    let onDone: () -> Void
+    let onPairAgain: () -> Void
     let onForget: () -> Void
 
     @State private var confirmsForget = false
 
     var body: some View {
-        HexSheet {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(verbatim: setup.serverName)
-                    .hexFont(.pageTitle)
-                    .foregroundStyle(HexColor.text1)
-                    .padding(.top, 8)
-                if let detail {
-                    Text(verbatim: detail)
-                        .hexFont(HexTextStyle.small.weight(.regular))
-                        .foregroundStyle(HexColor.text2)
-                        .padding(.top, 4)
-                }
-                HexSectionLabel(LocalizedStringResource("server.addresses", defaultValue: "Addresses"))
-                    .padding(.horizontal, -HexSpacing.screen)
-                ForEach(addresses, id: \.self) { address in
-                    HStack {
-                        Text(verbatim: address)
-                            .hexFont(HexTextStyle.small.weight(.regular).monospaced())
-                            .foregroundStyle(HexColor.text1)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .textSelection(.enabled)
-                        Spacer(minLength: 8)
-                        if address == inUse {
-                            HexBadge(LocalizedStringResource("server.in_use", defaultValue: "in use"))
-                        }
+        HexSheet(
+            title: Text(LocalizedStringResource("settings.server", defaultValue: "Server")),
+            leading: { EmptyView() },
+            trailing: { HexButton(LocalizedStringResource("common.done", defaultValue: "Done"), action: onDone) }
+        ) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(verbatim: setup.serverName)
+                        .hexFont(.pageTitle)
+                        .foregroundStyle(HexColor.text1)
+                        .accessibilityAddTraits(.isHeader)
+                    if let detail {
+                        Text(verbatim: detail)
+                            .hexFont(.caption)
+                            .foregroundStyle(HexColor.text2)
+                            .padding(.top, 4)
                     }
-                    .padding(.vertical, 6)
-                }
-                Spacer()
-                HexButton(
-                    LocalizedStringResource("settings.forget.button", defaultValue: "Forget this computer"),
-                    size: .regular,
-                    style: .danger,
-                    fullWidth: true
-                ) { confirmsForget = true }
+                    HexSectionLabel(LocalizedStringResource("server.addresses", defaultValue: "Addresses"))
+                        .padding(.horizontal, -HexSpacing.screen)
+                    ForEach(addresses, id: \.self) { address in
+                        HStack {
+                            Text(verbatim: address)
+                                .hexFont(.mono)
+                                .foregroundStyle(HexColor.text1)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
+                            Spacer(minLength: 8)
+                            if address == inUse {
+                                HexBadge(LocalizedStringResource("server.in_use", defaultValue: "in use"))
+                            }
+                        }
+                        .padding(.vertical, 6)
+                        .accessibilityElement(children: .combine)
+                    }
+                    VStack(spacing: 10) {
+                        HexButton(
+                            LocalizedStringResource("server.pair_again", defaultValue: "Pair again"),
+                            icon: .scan,
+                            size: .regular,
+                            fullWidth: true,
+                            action: onPairAgain
+                        )
+                        HexButton(
+                            LocalizedStringResource("settings.forget.button", defaultValue: "Forget this computer"),
+                            size: .regular,
+                            style: .danger,
+                            fullWidth: true
+                        ) { confirmsForget = true }
+                    }
+                    .padding(.top, 24)
                     .padding(.bottom, 8)
+                }
+                .padding(.horizontal, 2)
+                .padding(.top, 4)
             }
-            .padding(.horizontal, 2)
         }
         .confirmationDialog(
-            Text(LocalizedStringResource("settings.forget.title", defaultValue: "Pair again?")),
+            Text(LocalizedStringResource("settings.forget.title", defaultValue: "Forget this computer?")),
             isPresented: $confirmsForget,
             titleVisibility: .visible
         ) {
@@ -361,6 +398,7 @@ struct ServerDetailsView: View {
 
     private var inUse: String { trimmed(setup.profile.baseURL) }
 
+    /// The one in use first.
     private var addresses: [String] {
         var seen = Set<String>()
         return ([setup.profile.baseURL] + setup.profile.serverURLs).map(trimmed).filter { seen.insert($0).inserted }

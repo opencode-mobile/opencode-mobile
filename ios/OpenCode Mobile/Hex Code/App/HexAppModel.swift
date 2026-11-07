@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WebKit
 import OpenCodeKit
 import VoiceEngineKit
 
@@ -22,10 +23,12 @@ final class HexAppModel {
     let speech: SpeechModel
 
     @ObservationIgnored private let store: any HexSetupStoring
+    @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var speechTask: Task<Void, Never>?
 
-    init(store: any HexSetupStoring = HexSetupStore()) {
+    init(store: any HexSetupStoring = HexSetupStore(), defaults: UserDefaults = .standard) {
         self.store = store
+        self.defaults = defaults
         // Prepared images live only as long as their draft; any left from an earlier run go.
         ImagePreparer.emptyCache()
         let voice = VoiceEngine()
@@ -66,11 +69,48 @@ final class HexAppModel {
         }
     }
 
-    /// Forgets the server, project and model and starts first run again.
+    /// Forget this computer: the server and its password, the project and model, today's
+    /// session's memory, card and Ask history, and the in-app browser's website data. First run
+    /// starts again at Welcome.
     func startOver() async {
+        main?.close()
         await store.clear()
+        ForgetComputer.clearSessionData(defaults)
+        await Self.clearWebsiteData()
         main = nil
         beginFirstRun()
+    }
+
+    /// Kept between opens so a dev server's sign-in survives; Forget clears it.
+    static func clearWebsiteData() async {
+        let store = WKWebsiteDataStore.default()
+        await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+    }
+
+    /// Pair again found another computer and Switch was confirmed: first run's project and model
+    /// pages there, then today's session there. Backing out returns to the computer in use, which
+    /// stays saved until Start.
+    private func switchServer(to server: PairedServer) {
+        let firstRun = FirstRunModel(
+            store: store,
+            paired: server,
+            onCancel: { [weak self] in
+                guard let self, self.main != nil else { return }
+                self.firstRun = nil
+                self.phase = .main
+            },
+            onFinished: { [weak self] setup in
+                guard let self else { return }
+                // The old computer's session memory, card and Ask history don't apply there.
+                self.main?.close()
+                ForgetComputer.clearSessionData(self.defaults)
+                self.firstRun = nil
+                self.showMain(setup)
+            }
+        )
+        self.firstRun = firstRun
+        phase = .firstRun
+        Task { await firstRun.showPairedProjects() }
     }
 
     /// The speech model downloads once, in the background; later calls only load it.
@@ -101,12 +141,14 @@ final class HexAppModel {
 
     private func showMain(_ setup: HexSetup) {
         // `-HexCodeDemoSession <preset>` starts on a sample session (debug builds; see `TodaySessionDemo`).
-        main = HexMainModel(
+        let main = HexMainModel(
             setup: setup,
             home: HomeModel(recorder: TakeCapture(pauses: { [voice] in voice.makePauseFinder() }), speech: speech),
             samplePreset: TodaySessionDemo.launchPreset,
             store: store
         )
+        main.onSwitchServer = { [weak self] server in self?.switchServer(to: server) }
+        self.main = main
         phase = .main
     }
 }

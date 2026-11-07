@@ -54,7 +54,10 @@ final class HexMainModel {
     /// The navigation stack over home. Back and the edge swipe pop it directly.
     var path: [Route] = []
     private(set) var setup: HexSetup {
-        didSet { current.setup = setup }
+        didSet {
+            current.setup = setup
+            if setup.profile != oldValue.profile { followConnection() }
+        }
     }
     private(set) var projectPicker: ProjectPickerModel?
     private(set) var modelPage: ModelPageModel?
@@ -70,9 +73,18 @@ final class HexMainModel {
     let developer: DeveloperSettings
     let build: HexBuildInfo
 
+    /// Pair again's scan cover, while it is up.
+    var pairAgain: PairAgainModel?
+    /// Another computer was paired and Switch confirmed: first run's project and model pages
+    /// follow there (the app model takes it from here).
+    @ObservationIgnored var onSwitchServer: (PairedServer) -> Void = { _ in }
+
     @ObservationIgnored private let services: any FirstRunServices
     @ObservationIgnored private let store: any HexSetupStoring
     @ObservationIgnored private let current: CurrentSetup
+    @ObservationIgnored private let liveConnection: LiveConnection
+    @ObservationIgnored private let checks: any ServerChecking
+    @ObservationIgnored private let now: () -> Date
 
     init(
         setup: HexSetup,
@@ -82,18 +94,27 @@ final class HexMainModel {
         services: any FirstRunServices = LiveFirstRunServices(),
         store: any HexSetupStoring = HexSetupStore(),
         developer: DeveloperSettings? = nil,
-        build: HexBuildInfo? = nil
+        build: HexBuildInfo? = nil,
+        checks: any ServerChecking = LiveServerChecks(),
+        now: @escaping () -> Date = Date.init
     ) {
         self.setup = setup
         self.home = home
         let current = CurrentSetup(setup: setup)
         self.current = current
-        realSession = session ?? Self.liveSession(current, toasts: home.toasts)
+        let liveConnection = LiveConnection(setup.profile)
+        self.liveConnection = liveConnection
+        self.checks = checks
+        self.now = now
+        realSession = session ?? Self.liveSession(current, connection: liveConnection, toasts: home.toasts)
         self.developer = developer ?? DeveloperSettings()
         self.build = build ?? .current
         self.services = services
         self.store = store
         home.sender = realSession
+        realSession.serverName = setup.serverName
+        realSession.computerHost = URL(string: setup.profile.baseURL)?.host
+        realSession.serverCheck = { [weak self] in await self?.checkServer() ?? .ready }
         if let samplePreset { showSample(samplePreset) }
         Task { await refreshImageInput() }
     }
@@ -120,14 +141,14 @@ final class HexMainModel {
     /// What home shows: the sample session when one is on, else the real one.
     var session: TodaySession { sampleSession ?? realSession }
 
-    /// Today's session on the paired server, following the project and model chosen now.
-    private static func liveSession(_ current: CurrentSetup, toasts: HexToaster) -> TodaySession {
-        let connection = ServerConnection(profile: current.setup.profile, serverProtocol: .v2)
-        let service = connection.map { OpenCodeSessionService(connection: $0) }
-        let stream = connection.map { LiveEventStream(transport: OpenCodeEventTransport(connection: $0)) }
-        stream?.watchNetwork()
-        let session = TodaySession(
-            setup: DailySessionSetup(service: service ?? UnpairedSessionService(), memory: DailySessionDefaults()),
+    /// Today's session on the paired server, following the project and model chosen now, and the
+    /// address and sign-in in use.
+    private static func liveSession(_ current: CurrentSetup, connection: LiveConnection, toasts: HexToaster) -> TodaySession {
+        let service = OpenCodeSessionService(connection: { connection.current })
+        let stream = LiveEventStream(transport: OpenCodeEventTransport(connection: { connection.current }))
+        stream.watchNetwork()
+        return TodaySession(
+            setup: DailySessionSetup(service: service, memory: DailySessionDefaults()),
             summary: StatusSummaryModel(store: SummaryDefaults()),
             directory: { current.setup.project.path },
             model: { current.setup.model },
@@ -138,8 +159,64 @@ final class HexMainModel {
             stream: stream,
             ask: AskModel(store: AskDefaults())
         )
-        session.computerHost = URL(string: current.setup.profile.baseURL)?.host
-        return session
+    }
+
+    /// The clients read the new address or sign-in from here on; tiles and the signed-out line follow.
+    private func followConnection() {
+        liveConnection.update(setup.profile)
+        realSession.computerHost = URL(string: setup.profile.baseURL)?.host
+        realSession.serverName = setup.serverName
+    }
+
+    /// Before each setup (`ServerUpkeep`): the version, the address in use and the sign-in's
+    /// renewal, saved when they changed.
+    func checkServer() async -> UpkeepOutcome {
+        let before = setup
+        let (next, outcome) = await ServerUpkeep.run(before, checks: checks, now: now())
+        // Settings may have changed the project or model meanwhile: only the server's parts apply.
+        var merged = setup
+        merged.profile = next.profile
+        merged.serverVersion = next.serverVersion
+        merged.signedInAt = next.signedInAt
+        if merged != setup { _ = await save(merged) }
+        return outcome
+    }
+
+    /// Closes today's session's stream before this model goes (Forget, or a switch to another computer).
+    func close() {
+        realSession.close()
+    }
+
+    // MARK: Pair again
+
+    /// Server details' Pair again, and Signed out's: first run's scan as a full-screen cover.
+    func startPairAgain() {
+        pairAgain = PairAgainModel(
+            current: setup,
+            pairing: services.pairing,
+            onSameComputer: { [weak self] server in await self?.pairedAgain(server) },
+            onSwitch: { [weak self] server in
+                self?.pairAgain = nil
+                self?.onSwitchServer(server)
+            }
+        )
+    }
+
+    func cancelPairAgain() {
+        pairAgain = nil
+    }
+
+    /// The same computer: its new sign-in and addresses replace the old ones (the old profile and
+    /// its password go); the project, model and today's session stay.
+    func pairedAgain(_ server: PairedServer) async {
+        let next = PairAgain.replacing(setup, with: server, now: now())
+        guard await save(next) else {
+            pairAgain = nil
+            return
+        }
+        pairAgain = nil
+        toasts.show(PairAgain.pairedNotice(name: setup.serverName))
+        await realSession.open()
     }
 
     /// The Sample session row: the next preset, then Off.
@@ -156,6 +233,7 @@ final class HexMainModel {
         }
         let sample = preset.make(toasts: toasts)
         sample.computerHost = realSession.computerHost ?? "192.168.1.2"
+        sample.serverName = setup.serverName
         sampleSession = sample
         home.sender = sample
         Task { await preset.start(sample) }
@@ -309,22 +387,5 @@ private final class CurrentSetup {
 
     init(setup: HexSetup) {
         self.setup = setup
-    }
-}
-
-/// A saved server that no longer makes a connection: setup fails, with Try again.
-private struct UnpairedSessionService: DailySessionService {
-    struct Unpaired: Error {}
-
-    func sessionsPage(directory: String, search: String, limit: Int, cursor: String?) async throws -> SessionListingPage {
-        throw Unpaired()
-    }
-
-    func createSession(title: String, directory: String, model: ModelChoice) async throws -> SessionListing {
-        throw Unpaired()
-    }
-
-    func putMessageRules(sessionID: String) async throws {
-        throw Unpaired()
     }
 }

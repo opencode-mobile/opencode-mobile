@@ -21,6 +21,8 @@ final class TodaySession {
         /// "Couldn't open today's session" with Try again; `retrying` while Try again runs.
         case failed(retrying: Bool)
         case ready(sessionID: String)
+        /// "Signed out of <name>" with Pair again: the server answered `401` to the saved sign-in.
+        case signedOut
     }
 
     /// The stream closes this long after the app goes to the background.
@@ -51,6 +53,11 @@ final class TodaySession {
     var waitingCount = 0
     /// The paired computer's address: a tile's `localhost` link opens there.
     var computerHost: String?
+    /// The paired computer's name, for "Signed out of <name>".
+    var serverName: String?
+    /// Runs before each setup: the server's version, the address in use and the sign-in's renewal
+    /// (`ServerUpkeep`). Signed out stops setup there.
+    @ObservationIgnored var serverCheck: (() async -> UpkeepOutcome)?
     /// Those messages, in order.
     var waitingMessages: [InboxEntry] = []
     /// Every message not delivered yet (after this turn or at the next step), for Details.
@@ -182,9 +189,17 @@ final class TodaySession {
         let directory = directory()
         // Today's saved card for this project shows at once, while setup finds the session.
         summary.preopen(day: today, directory: directory)
+        if let serverCheck, await serverCheck() == .signedOut {
+            summary.clear()
+            setup = .signedOut
+            return
+        }
         switch await dailySetup.open(today: today, directory: directory, model: model()) {
         case .failed:
             setup = .failed(retrying: false)
+        case .signedOut:
+            summary.clear()
+            setup = .signedOut
         case let .opened(session, _, showsNewDayNotice):
             // A goal still running on yesterday's session is left as it is; the notice says so.
             let yesterdaysGoalRuns = showsNewDayNotice ? await yesterdaysGoalIsActive() : false
@@ -319,6 +334,12 @@ final class TodaySession {
         default:
             break
         }
+    }
+
+    /// This session is no longer shown (Forget, or another computer): its stream closes.
+    func close() {
+        backgroundStop?.cancel()
+        stream?.stop()
     }
 
     /// The stream closes after the background grace; events missed meanwhile are read back on

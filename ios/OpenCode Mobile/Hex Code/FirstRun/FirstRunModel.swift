@@ -81,6 +81,8 @@ final class FirstRunModel {
     @ObservationIgnored private let store: any HexSetupStoring
     @ObservationIgnored private let onScanStarted: () -> Void
     @ObservationIgnored private let onFinished: (HexSetup) -> Void
+    /// Pair again's switch to another computer: backing out of the project list returns to home.
+    @ObservationIgnored private let onCancel: (() -> Void)?
     @ObservationIgnored private let connectedPause: Duration
     @ObservationIgnored private var pairingTask: Task<Void, Never>?
 
@@ -96,6 +98,31 @@ final class FirstRunModel {
         self.connectedPause = connectedPause
         self.onScanStarted = onScanStarted
         self.onFinished = onFinished
+        onCancel = nil
+    }
+
+    /// Pair again paired another computer and Switch was confirmed: the flow starts at its
+    /// project page. Backing out of it calls `onCancel`.
+    init(
+        services: any FirstRunServices = LiveFirstRunServices(),
+        store: any HexSetupStoring = HexSetupStore(),
+        paired server: PairedServer,
+        onCancel: @escaping () -> Void,
+        onFinished: @escaping (HexSetup) -> Void
+    ) {
+        self.services = services
+        self.store = store
+        connectedPause = .zero
+        onScanStarted = {}
+        self.onFinished = onFinished
+        self.onCancel = onCancel
+        self.server = server
+        step = .project
+    }
+
+    /// The paired computer's projects, for a switch from Pair again.
+    func showPairedProjects() async {
+        await showProjects()
     }
 
     private var connection: ServerConnection? {
@@ -165,6 +192,7 @@ final class FirstRunModel {
 
     /// Back from the project list: scan again, since the code was used.
     func backFromProjects() {
+        if let onCancel { return onCancel() }
         projectPicker = nil
         server = nil
         step = .scan
@@ -206,7 +234,8 @@ final class FirstRunModel {
             serverHostname: server.hostname,
             project: project,
             model: choice,
-            modelName: modelPage?.selectedModelName
+            modelName: modelPage?.selectedModelName,
+            signedInAt: Date()
         )
         do {
             try await store.save(setup)

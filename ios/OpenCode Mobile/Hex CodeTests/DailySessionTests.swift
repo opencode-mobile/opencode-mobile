@@ -109,6 +109,8 @@ final class FakeSessionServer: DailySessionService, LiveSessionAPI, @unchecked S
     var pages: [SessionListingPage] = []
     var calls: [Call] = []
     var failsList = false
+    /// Thrown by the list, in place of `Failure`.
+    var listError: (any Error)?
     var failsCreate = false
     var failsRules = false
     var snapshot = LiveSnapshot(busySince: nil, hasRun: false, children: [], pending: [], inbox: [])
@@ -123,6 +125,7 @@ final class FakeSessionServer: DailySessionService, LiveSessionAPI, @unchecked S
 
     func sessionsPage(directory: String, search: String, limit: Int, cursor: String?) async throws -> SessionListingPage {
         calls.append(.list(search: search, cursor: cursor))
+        if let listError { throw listError }
         if failsList { throw Failure() }
         if !pages.isEmpty { return pages.removeFirst() }
         return SessionListingPage(sessions: listed, next: listed.isEmpty ? nil : "next")

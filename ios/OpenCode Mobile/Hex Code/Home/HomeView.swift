@@ -9,6 +9,8 @@ struct HomeView: View {
     let session: TodaySession
     let voice: VoiceEngine
     let onSettings: () -> Void
+    /// Signed out's Pair again.
+    var onPairAgain: () -> Void = {}
 
     @State private var showsAttach = false
     /// The stop button's 3 s hold.
@@ -44,7 +46,7 @@ struct HomeView: View {
                     DraftView(home: home)
                         .transition(.opacity)
                 } else {
-                    HomeStatusView(session: session, onOpenLink: open, onNext: { home.addSuggestion($0) })
+                    HomeStatusView(session: session, onOpenLink: open, onNext: { home.addSuggestion($0) }, onPairAgain: onPairAgain)
                         .transition(.opacity)
                 }
             }

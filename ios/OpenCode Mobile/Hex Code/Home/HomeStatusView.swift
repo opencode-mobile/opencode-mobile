@@ -9,6 +9,8 @@ struct HomeStatusView: View {
     var onOpenLink: (CardLinks.Destination) -> Void = { _ in }
     /// Next was tapped: its text goes into the draft.
     var onNext: (String) -> Void = { _ in }
+    /// Signed out's Pair again.
+    var onPairAgain: () -> Void = {}
 
     var body: some View {
         Group {
@@ -18,6 +20,8 @@ struct HomeStatusView: View {
                 summary(hint: nil)
             case let .failed(retrying):
                 SetupFailedView(retrying: retrying) { Task { await session.retry() } }
+            case .signedOut:
+                SignedOutView(name: session.serverName ?? "", onPairAgain: onPairAgain)
             case .ready:
                 summary(hint: session.pendingInput)
             }
@@ -484,18 +488,30 @@ struct SetupFailedView: View {
     let onRetry: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(LocalizedStringResource("home.setup.failed", defaultValue: "Couldn’t open today’s session"))
-                .hexFont(.display)
-                .foregroundStyle(HexColor.text1)
-            HexButton(
-                LocalizedStringResource("home.setup.retry", defaultValue: "Try again"),
-                icon: .refresh,
-                size: .regular,
-                loading: retrying,
-                action: onRetry
-            )
-        }
+        HexStatusFailure(
+            title: Text(LocalizedStringResource("home.setup.failed", defaultValue: "Couldn’t open today’s session")),
+            buttonTitle: LocalizedStringResource("home.setup.retry", defaultValue: "Try again"),
+            icon: .refresh,
+            loading: retrying,
+            action: onRetry
+        )
+    }
+}
+
+/// "Signed out of <name>" (app plan, "Signed out"): the sign-in expired, or the server's password
+/// changed. Pair again works as in Server details.
+struct SignedOutView: View {
+    let name: String
+    let onPairAgain: () -> Void
+
+    var body: some View {
+        HexStatusFailure(
+            title: Text(LocalizedStringResource("server.signed_out", defaultValue: "Signed out of \(name)")),
+            detail: String(localized: "server.signed_out.sub", defaultValue: "Run `opencode pair` on the computer, then pair again."),
+            buttonTitle: LocalizedStringResource("server.pair_again", defaultValue: "Pair again"),
+            icon: .scan,
+            action: onPairAgain
+        )
     }
 }
 
