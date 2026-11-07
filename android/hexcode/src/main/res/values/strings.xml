@@ -126,6 +126,7 @@
     <string name="home_setup_retry">Try again</string>
     <string name="home_summary_empty_now">New session. Nothing running yet.</string>
     <string name="home_summary_empty_next">Say what to do.</string>
+    <string name="home_summary_started_now">Working on your message.</string>
     <string name="home_summary_working_now">The agent is working.</string>
     <string name="home_summary_working_next">The summary updates when this run ends.</string>
     <string name="home_summary_working">Still working · %1$s</string>

@@ -267,11 +267,12 @@ private fun Summary(
                 links,
                 nextTappable = true,
             )
+        // Once a message went or it runs, a new session is no longer empty (app-plan.md, Empty session).
         is StatusSummary.Empty ->
             Card(
                 card.title,
-                listOf(NowLine(stringResource(R.string.home_summary_empty_now))),
-                stringResource(R.string.home_summary_empty_next),
+                listOf(NowLine(stringResource(if (card.started) R.string.home_summary_started_now else R.string.home_summary_empty_now))),
+                if (card.started) null else stringResource(R.string.home_summary_empty_next),
                 work,
                 dim,
                 label,

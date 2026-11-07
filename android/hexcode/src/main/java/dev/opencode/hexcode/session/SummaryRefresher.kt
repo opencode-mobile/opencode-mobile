@@ -155,8 +155,12 @@ class SummaryRefresher(
         store(moved)
     }
 
-    /** No card yet while the session is busy: say it's working, without a request; the run's end refreshes. */
+    /**
+     * No card yet while the session is busy: say it's working, without a request; the run's end refreshes. A new
+     * session's empty card says it's working on the message instead ([markStarted]).
+     */
     fun showWorking() {
+        markStarted()
         if (mutable.value.summary != null || mutable.value.loading) return
         mutable.value = SummaryState(StatusSummary.working(today()), updatedAt = clock())
         shownFor = sessionId
@@ -224,6 +228,17 @@ class SummaryRefresher(
         mutable.value = SummaryState(StatusSummary.empty(date), updatedAt = clock())
         shownFor = sessionId
         saved = null
+    }
+
+    /**
+     * A message went to a new session, or it started running: its empty card reads "Working on your message." until
+     * the first summary (app-plan.md, Empty session). Any other card stays as it is.
+     */
+    fun markStarted() {
+        mutable.update { state ->
+            val empty = state.summary as? StatusSummary.Empty
+            if (empty == null || empty.started) state else state.copy(summary = empty.copy(started = true))
+        }
     }
 
     /** A run ended while a request was on its way: one more request runs as soon as that one finishes. */

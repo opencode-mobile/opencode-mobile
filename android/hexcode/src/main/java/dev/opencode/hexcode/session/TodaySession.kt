@@ -32,6 +32,18 @@ sealed interface SessionSetup {
     ) : SessionSetup
 }
 
+/** How Settings › Start a new session went. */
+enum class NewSessionOutcome {
+    /** The new session is open: "New session · The earlier one is kept on your computer." */
+    Started,
+
+    /** Creating it failed; today's session is still open: "Couldn't start a new session". */
+    Failed,
+
+    /** It was created but couldn't be opened: "Couldn't open today's session" with Try again. */
+    SetupFailed,
+}
+
 /** Everything home shows about today's session. */
 data class TodayState(
     val setup: SessionSetup = SessionSetup.Opening,
@@ -323,6 +335,10 @@ class TodaySession(
     /** The objective of each kickoff this phone set, by inbox item, for "Goal: “…”" when it's delivered. */
     private val goalSent = java.util.concurrent.ConcurrentHashMap<String, String>()
 
+    /** This phone sent today's session a message since it opened. */
+    @Volatile
+    private var sentHere = false
+
     /** The local date today's session was opened for. */
     private var day: LocalDate? = null
     private var opening: Job? = null
@@ -416,7 +432,13 @@ class TodaySession(
         text: String,
         delivery: String,
         images: List<PromptImage> = emptyList(),
-    ): String = api.send(sessionId ?: error("Today's session isn't open"), text, delivery, images).also { sent[it] = text }
+    ): String =
+        api.send(sessionId ?: error("Today's session isn't open"), text, delivery, images).also {
+            sent[it] = text
+            // A new session's empty card no longer says nothing is running (app-plan.md, Empty session).
+            sentHere = true
+            summary.markStarted()
+        }
 
     /** Takes back a message waiting in the inbox; once the DELETE works it leaves [TodayState.queued] at once. */
     suspend fun cancelQueued(itemId: String) {
@@ -711,29 +733,71 @@ class TodaySession(
         when (val result = setup.open(date, directory, model())) {
             DailySessionResult.Failed -> own.update { it.copy(setup = SessionSetup.Failed()) }
             is DailySessionResult.Opened -> {
-                val session = result.session
                 // Yesterday's goal is left as it is; the notice says when it's still running there.
                 val goalRunning = result.newDay && result.previousId?.let { goalActive(it, directory) } == true
-                day = date
-                sessionId = session.id
-                live = LiveSessionState(session.id, hasRun = session.busySince != null)
-                you = null
-                youGoal = false
-                youRunEnded = false
-                sent.clear()
-                goalSent.clear()
-                goalSetting = null
-                summary.open(session.id, date, directory)
-                asking.open(session.id)
-                publish(streamUp = true)
-                own.update { it.copy(setup = SessionSetup.Ready(session.id), newDayNotice = result.newDay, newDayGoal = goalRunning) }
-                stream?.start()
-                // With a stream, the first summary waits for its read-back, which says whether the agent is working
-                // (an empty reply then isn't a failure); the saved card shows meanwhile. A session that never ran
-                // shows its empty card now.
-                if (stream == null || live?.hasRun == false) refreshSummary()
+                adopt(result.session, date, directory, result.newDay, goalRunning)
             }
         }
+    }
+
+    /**
+     * Settings › Start a new session (app-plan.md, Settings and finish (M6)): creates the day's next numbered session
+     * and follows it instead. The session before is never changed: no interrupt, no archive, no inbox cancel, and its
+     * goal keeps running. Everything shown starts empty; the draft is home's and stays.
+     */
+    suspend fun startNew(): NewSessionOutcome {
+        if (opening?.isActive == true) return NewSessionOutcome.Failed
+        val date = today()
+        val directory = directory()
+        val result = setup.startNew(date, directory, model())
+        return when (result) {
+            NewSessionResult.CreateFailed -> NewSessionOutcome.Failed
+            NewSessionResult.RulesFailed -> {
+                // As a setup failure: Try again finds the new session, the highest number.
+                stream?.stop()
+                sessionId = null
+                live = null
+                summary.clear()
+                publish()
+                own.update { it.copy(setup = SessionSetup.Failed()) }
+                NewSessionOutcome.SetupFailed
+            }
+            is NewSessionResult.Opened -> {
+                stream?.stop()
+                adopt(result.session, date, directory, newDay = false, goalRunning = false)
+                NewSessionOutcome.Started
+            }
+        }
+    }
+
+    /** Follows [session] from now on: everything about the one before goes, then the stream opens and reads its state. */
+    private suspend fun adopt(
+        session: SessionListing,
+        date: LocalDate,
+        directory: String,
+        newDay: Boolean,
+        goalRunning: Boolean,
+    ) {
+        day = date
+        sessionId = session.id
+        live = LiveSessionState(session.id, hasRun = session.busySince != null)
+        you = null
+        youGoal = false
+        youRunEnded = false
+        sentHere = false
+        sent.clear()
+        goalSent.clear()
+        goalSetting = null
+        stopWatch = null
+        summary.open(session.id, date, directory)
+        asking.open(session.id)
+        publish(streamUp = true)
+        own.update { it.copy(setup = SessionSetup.Ready(session.id), newDayNotice = newDay, newDayGoal = goalRunning) }
+        stream?.start()
+        // With a stream, the first summary waits for its read-back, which says whether the agent is working
+        // (an empty reply then isn't a failure); the saved card shows meanwhile. A session that never ran
+        // shows its empty card now.
+        if (stream == null || live?.hasRun == false) refreshSummary()
     }
 
     private suspend fun connected() {
@@ -754,7 +818,7 @@ class TodaySession(
         } catch (_: Exception) {
             // The stream is up; the next event or reconnect brings the rest. Without the read-back nothing says the
             // card is current, so it's asked for.
-            if (live?.hasRun == false) summary.showEmpty(day ?: today()) else summary.refresh()
+            if (live?.hasRun == false) showEmpty() else summary.refresh()
             return
         }
         refreshSummary(updatedAt)
@@ -804,6 +868,8 @@ class TodaySession(
 
     private fun publish(streamUp: Boolean? = null) {
         val state = live
+        // A new session that runs is no longer empty: its card says it's working on the message.
+        if (state?.busySince != null) summary.markStarted()
         own.update {
             it.copy(
                 streamUp = streamUp ?: it.streamUp,
@@ -834,6 +900,12 @@ class TodaySession(
         }
     }
 
+    /** A new session's card; once this phone sent it a message, "Working on your message." (Empty session). */
+    private fun showEmpty() {
+        summary.showEmpty(day ?: today())
+        if (sentHere) summary.markStarted()
+    }
+
     /**
      * On open, reconnect and foreground (app-plan.md, When and Nothing new): the empty card for a session that never
      * ran; while it's busy nothing (the run's end refreshes); idle, a request unless the saved card is up to date with
@@ -842,7 +914,7 @@ class TodaySession(
     private fun refreshSummary(updatedAt: Long? = null) {
         val state = live
         when {
-            state?.hasRun == false -> summary.showEmpty(day ?: today())
+            state?.hasRun == false -> showEmpty()
             state?.busySince != null -> {
                 Log.i(TAG, "busy: no summary request; the run's end refreshes")
                 summary.showWorking()

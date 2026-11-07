@@ -47,7 +47,7 @@ class TodaySessionTest {
             log += "list"
             gate?.await()
             if (fails) error("unreachable")
-            return SessionListingPage(listed.filter { it.title == search }, null)
+            return SessionListingPage(listed.filter { it.title.contains(search) }, null)
         }
 
         override suspend fun create(
@@ -56,11 +56,16 @@ class TodaySessionTest {
             model: ModelChoice?,
         ): SessionListing {
             log += "create $title"
+            if (createFails) error("HTTP 500")
             return SessionListing("new${next++}", title, directory, 1).also { listed.add(0, it) }
         }
 
+        var createFails = false
+        var rulesFail = false
+
         override suspend fun putMessageRules(sessionId: String) {
             log += "rules $sessionId"
+            if (rulesFail) error("HTTP 500")
         }
 
         var snapshotFails = false
@@ -127,6 +132,14 @@ class TodaySessionTest {
 
         override suspend fun setLastOpenedOn(date: LocalDate) {
             last = date
+        }
+
+        var lastId: String? = null
+
+        override suspend fun lastSessionId() = lastId
+
+        override suspend fun setLastSessionId(id: String) {
+            lastId = id
         }
     }
 
@@ -786,5 +799,131 @@ class TodaySessionTest {
             transport.connected()
             runCurrent()
             assertEquals(2, log.count { it.startsWith("summary") })
+        }
+
+    // app-plan.md, Today's session on screen › Empty session: never "Nothing running yet" once a message went.
+
+    @Test
+    fun anEmptySessionSaysWorkingOnYourMessageOnceAMessageIsSent() =
+        runTest {
+            val api = Api()
+            api.snapshot = api.snapshot.copy(hasRun = false)
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            assertEquals(StatusSummary.Empty("Thursday 5 November"), today.state.value.summary.summary)
+            today.send("Make a quiz", "steer")
+            runCurrent()
+            assertEquals(StatusSummary.Empty("Thursday 5 November", started = true), today.state.value.summary.summary)
+        }
+
+    @Test
+    fun anEmptySessionThatStartsRunningSaysWorkingOnYourMessage() =
+        runTest {
+            val api = Api()
+            api.snapshot = api.snapshot.copy(hasRun = false)
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            transport.connected()
+            transport.send(event("session.execution.started", """{"sessionID":"new1"}""", created = 1_000))
+            runCurrent()
+            assertEquals(StatusSummary.Empty("Thursday 5 November", started = true), today.state.value.summary.summary)
+        }
+
+    @Test
+    fun anEmptyCardReadBackAsBusyOnReconnectSaysWorkingOnYourMessage() =
+        runTest {
+            val api = Api()
+            api.snapshot = api.snapshot.copy(hasRun = false)
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            api.snapshot = api.snapshot.copy(busySince = 50, hasRun = true)
+            transport.end()
+            runCurrent()
+            advanceTimeBy(1_300)
+            transport.connected()
+            runCurrent()
+            assertEquals(StatusSummary.Empty("Thursday 5 November", started = true), today.state.value.summary.summary)
+            assertEquals(0, log.count { it.startsWith("summary") })
+        }
+
+    // app-plan.md, Settings and finish (M6) › Start a new session.
+
+    @Test
+    fun aNewSessionIsTheNextNumberStartsEmptyAndTheStreamFollowsIt() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            api.snapshot = api.snapshot.copy(busySince = 50, inbox = listOf(InboxEntry("m1", "queue")))
+            val memory = Memory(date)
+            val transport = Transport()
+            val today = session(api, transport, memory)
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            transport.send("""{"type":"session.inbox.delivered","data":{"sessionID":"s1","inboxID":"m0"}}""")
+            assertEquals(1, today.state.value.waiting)
+            log.clear()
+            api.snapshot =
+                LiveSnapshot(busySince = null, hasRun = false, children = emptyList(), pending = emptyList(), inbox = emptyList())
+            assertEquals(NewSessionOutcome.Started, today.startNew())
+            runCurrent()
+            assertEquals(listOf("list", "create 2026-11-05 (2)", "rules new1", "stream"), log)
+            transport.connected()
+            runCurrent()
+            val state = today.state.value
+            assertEquals(SessionSetup.Ready("new1"), state.setup)
+            assertEquals(0, state.waiting)
+            assertNull(state.you)
+            assertNull(state.busySince)
+            assertFalse(state.newDayNotice)
+            assertEquals(StatusSummary.Empty("Thursday 5 November"), state.summary.summary)
+            assertEquals("snapshot new1", log.last())
+            assertEquals("new1", memory.lastId)
+            assertEquals(date, memory.last)
+            // The old session is never touched: no interrupt, no inbox cancel.
+            assertFalse(log.any { it.contains("s1") })
+        }
+
+    @Test
+    fun creatingANewSessionFailsAndTodaysStaysOpen() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            api.createFails = true
+            assertEquals(NewSessionOutcome.Failed, today.startNew())
+            assertEquals(SessionSetup.Ready("s1"), today.state.value.setup)
+        }
+
+    @Test
+    fun theNewSessionsRulesFailingIsASetupFailureAndTryAgainMakesNoThird() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            api.rulesFail = true
+            assertEquals(NewSessionOutcome.SetupFailed, today.startNew())
+            runCurrent()
+            assertEquals(SessionSetup.Failed(), today.state.value.setup)
+            api.rulesFail = false
+            log.clear()
+            today.retry()
+            runCurrent()
+            assertEquals(SessionSetup.Ready("new1"), today.state.value.setup)
+            assertFalse(log.any { it.startsWith("create") })
         }
 }

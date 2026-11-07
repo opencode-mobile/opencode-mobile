@@ -73,11 +73,16 @@ sealed interface StatusSummary {
         val links: List<SummaryLink> = emptyList(),
     ) : StatusSummary
 
-    /** A session with nothing in it yet: [title] is the long date; Now and Next are the screen's own copy. */
+    /**
+     * A session with nothing in it yet: [title] is the long date; Now and Next are the screen's own copy. Once a
+     * message went or the session runs it is [started]: Now reads "Working on your message." until the first summary
+     * (app-plan.md, Empty session), never "Nothing running yet".
+     */
     @Serializable
     @SerialName("empty")
     data class Empty(
         val title: String,
+        val started: Boolean = false,
     ) : StatusSummary
 
     /**
