@@ -27,7 +27,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -57,11 +60,15 @@ fun HexRow(
     selected: Boolean = false,
     minHeight: Dp = HexTheme.size.row,
     onClick: (() -> Unit)? = null,
+    /** Read after the row with a screen reader: "Not in this version yet" on a placeholder. */
+    accessibilityNote: String? = null,
 ) {
     val colors = HexTheme.colors
     val type = HexTheme.type
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
+    // A screen reader hears "<title>, <value>", then the second line, then any note (app-plan.md, Accessibility).
+    val spoken = listOfNotNull(listOfNotNull(title, value).joinToString(", "), subtitle, accessibilityNote).joinToString(". ")
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -72,8 +79,11 @@ fun HexRow(
                 .background(if (pressed) colors.hover else Color.Transparent)
                 .then(
                     if (onClick != null) Modifier.clickable(source, null, role = Role.Button, onClick = onClick) else Modifier,
-                ).semantics(mergeDescendants = true) { this.selected = selected }
-                .padding(horizontal = HexTheme.space.screen, vertical = 6.dp),
+                ).clearAndSetSemantics {
+                    this.selected = selected
+                    contentDescription = spoken
+                    if (onClick != null) role = Role.Button
+                }.padding(horizontal = HexTheme.space.screen, vertical = 6.dp),
     ) {
         if (icon != null) {
             Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {

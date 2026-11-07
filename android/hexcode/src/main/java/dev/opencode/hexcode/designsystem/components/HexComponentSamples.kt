@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -96,6 +97,9 @@ val HexComponentSamples: List<HexSampleSection> =
         HexSampleSection("HexGoalLine") { GoalLineSample() },
         HexSampleSection("HexGoalBox") { GoalBoxSample() },
         HexSampleSection("HexAskMessage") { AskMessageSample() },
+        HexSampleSection("HexConfirmSheet, HexReader") { ConfirmAndReaderSample() },
+        HexSampleSection("HexStatusFailure") { StatusFailureSample() },
+        HexSampleSection("HexBrowser") { BrowserSample() },
     )
 
 /** A section's heading, in the gallery and the previews: component names, so not upper-cased like HexSectionLabel. */
@@ -1194,6 +1198,128 @@ private fun AskMessageSample() {
                 "now",
                 labels.copy(status = "No answer", statusDetail = "Ask it another way, or send it as a message."),
             )
+        }
+    }
+}
+
+/** Which of the M6 sheets the sample shows. */
+private enum class SampleSheet { Confirm, Danger, Draft, YouSaid }
+
+/** The confirmation sheet (Start a new session, Forget) and the reader (a long draft, the message sent), in a box. */
+@Composable
+private fun ConfirmAndReaderSample() {
+    var shown by remember { mutableStateOf<SampleSheet?>(null) }
+    val shape = RoundedCornerShape(HexTheme.radius.l)
+    Box(
+        Modifier
+            .padding(horizontal = HexTheme.space.screen)
+            .fillMaxWidth()
+            .height(460.dp)
+            .clip(shape)
+            .border(1.dp, HexTheme.colors.line, shape)
+            .consumeWindowInsets(WindowInsets.navigationBars),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                SampleSheet.Confirm to "Confirm, primary",
+                SampleSheet.Danger to "Confirm, danger",
+                SampleSheet.Draft to "Reader with its foot",
+                SampleSheet.YouSaid to "Reader, You said",
+            ).forEach { (kind, label) -> HexButton(onClick = { shown = kind }, text = label) }
+        }
+        HexConfirmSheet(
+            visible = shown == SampleSheet.Confirm || shown == SampleSheet.Danger,
+            title = if (shown == SampleSheet.Danger) "Forget this computer?" else "Start a new session?",
+            paragraphs =
+                if (shown == SampleSheet.Danger) {
+                    listOf("Hex Code forgets the server, project and model on this phone. Sessions stay on your computer.")
+                } else {
+                    listOf(
+                        "Today’s session stays on your computer as it is. The new one starts empty in hexcode, with the same model.",
+                        "The agent is still working there and carries on.",
+                    )
+                },
+            cancelLabel = "Cancel",
+            confirmLabel = if (shown == SampleSheet.Danger) "Forget" else "Start new session",
+            onCancel = { shown = null },
+            onConfirm = { shown = null },
+            danger = shown == SampleSheet.Danger,
+        )
+        val words =
+            listOf(
+                "So the quiz should have three rounds, one for music, one for films and one for the family.",
+                "Each round has five questions, and the last one in each round is worth double.",
+            )
+        HexReader(
+            visible = shown == SampleSheet.Draft || shown == SampleSheet.YouSaid,
+            title = if (shown == SampleSheet.YouSaid) "You said" else "Draft",
+            meta = "2:31 · 35 words",
+            paragraphs = words,
+            doneLabel = "Done",
+            onDone = { shown = null },
+            foot = if (shown == SampleSheet.Draft) HexReaderFoot("Clear the draft", { shown = null }, "Send", { shown = null }) else null,
+        )
+    }
+}
+
+/** The status area's failures: Couldn't open today's session (retrying) and Signed out. */
+@Composable
+private fun StatusFailureSample() {
+    Edge {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            HexStatusFailure("Couldn’t open today’s session", "Try again", HexIcons.refresh, onClick = {}, loading = true)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            HexStatusFailure(
+                "Signed out of Bold Quokka",
+                "Pair again",
+                HexIcons.scan,
+                onClick = {},
+                detail = AnnotatedString("Run opencode pair on the computer, then pair again."),
+            )
+        }
+    }
+}
+
+/** The in-app browser's chrome: loading, loaded with nowhere to go back, and the error. */
+@Composable
+private fun BrowserSample() {
+    val labels = HexBrowserLabels("Done", "Reload", "Back", "Forward", "Open in browser", "Loading")
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(horizontal = HexTheme.space.screen)) {
+        listOf(0.4f to false, null to true).forEach { (progress, error) ->
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
+                    .clip(RoundedCornerShape(HexTheme.radius.l))
+                    .border(1.dp, HexTheme.colors.line),
+            ) {
+                HexBrowser(
+                    title = "Birthday quiz",
+                    host = "192.168.0.47:5173",
+                    progress = progress,
+                    canGoBack = progress != null,
+                    canGoForward = false,
+                    labels = labels,
+                    onDone = {},
+                    onReload = {},
+                    onBack = {},
+                    onForward = {},
+                    onOpenSystem = {},
+                    error =
+                        if (error) {
+                            HexBrowserError(
+                                "Couldn’t reach port 5173 on Bold Quokka",
+                                "The dev server may only listen on the computer itself. Start it so it listens on the network (for Vite, add --host), then try again.",
+                                "Try again",
+                            ) {}
+                        } else {
+                            null
+                        },
+                ) {
+                    Box(Modifier.fillMaxSize().background(Color.White))
+                }
+            }
         }
     }
 }
