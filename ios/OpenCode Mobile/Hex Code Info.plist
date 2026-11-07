@@ -9,5 +9,12 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<!-- The launch screen is the home's plain background (app plan, "Cold start"), which stays
+	     until the home's first state is ready. The colour matches `HexColor.background`. -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 </dict>
 </plist>

@@ -829,6 +829,17 @@
         }
       }
     },
+    "details.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading"
+          }
+        }
+      }
+    },
     "details.more": {
       "extractionState": "manual",
       "localizations": {

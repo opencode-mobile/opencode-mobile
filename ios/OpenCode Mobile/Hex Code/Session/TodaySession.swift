@@ -45,6 +45,12 @@ final class TodaySession {
     }
     /// The latest edits, commands and subagent starts, for Details.
     private(set) var recentSteps: [RecentStep] = []
+    /// Running now and Recent have been read for today's session (app plan, Details "Size and
+    /// first load"): until then Details shows a spinner, not "Nothing running right now.". They are
+    /// read when the session opens and 1 s after each run ends, so Details usually opens with them.
+    private(set) var detailsRead = false
+    /// The stream has read the state back once since today's session was found.
+    private(set) var stateRead = false
     /// The state Details reads Running now from.
     private(set) var liveState: LiveSessionState?
     /// When the current run started; nil while the session is idle.
@@ -123,6 +129,8 @@ final class TodaySession {
     @ObservationIgnored private var stopRetry: StopRetry?
     /// Reads Recent again a moment after a tool finishes, while Details is open.
     @ObservationIgnored private var recentReread: Task<Void, Never>?
+    /// Reads Running now and Recent 1 s after a run ends.
+    @ObservationIgnored private var detailsPrefetch: Task<Void, Never>?
 
     init(
         setup: DailySessionSetup,
@@ -170,6 +178,16 @@ final class TodaySession {
         return nil
     }
 
+    /// The home's first state is ready (app plan, "Cold start"): today's session found, its state
+    /// read back and its card known (saved, empty, working or new), or setup failed, or signed out.
+    var hasFirstState: Bool {
+        switch setup {
+        case .opening: false
+        case .failed, .signedOut: true
+        case .ready: stateRead && (summary.summary != nil || !summary.isUpdating)
+        }
+    }
+
     // MARK: Opening
 
     /// On open, on Try again, and back in front on a new date: find or create today's session and
@@ -215,6 +233,11 @@ final class TodaySession {
         day = today
         presentedNeed = nil
         recentSteps = []
+        detailsPrefetch?.cancel()
+        detailsPrefetch = nil
+        // Without a stream or control API (the sample sessions) nothing more will be read.
+        detailsRead = control == nil
+        stateRead = stream == nil
         stopRetry = nil
         // A goal belongs to its session; it is read again once the stream is up.
         goal = nil
@@ -384,13 +407,18 @@ final class TodaySession {
         Task { await readGoal() }
         guard let snapshot = try? await api.snapshot(rootID: rootID), live?.rootID == rootID else {
             // The state couldn't be read: whether anything is new is unknown.
+            if live?.rootID == rootID { stateRead = true }
             await refreshSummary()
             return
         }
         live?.apply(snapshot)
         waitingThumbnails = waitingThumbnails.filter { id, _ in snapshot.inbox.contains { $0.id == id } }
         publish()
-        if showsDetails { Task { await refreshDetails() } }
+        // Read ahead when the session opens, so Details opens with them; again on a reconnect
+        // while it is open.
+        if showsDetails || !detailsRead { Task { await refreshDetails() } }
+        // Set with the summary's first step, in the same turn, so the card is never seen undecided.
+        stateRead = true
         await summaryOnReconnect(updated: snapshot.updated)
     }
 
@@ -432,6 +460,7 @@ final class TodaySession {
         switch effect {
         case .runEnded:
             if sentMessage != nil { sentRunEnded = true }
+            prefetchDetailsAfterRun()
             // Never dropped: a mid-run card from ↻ or a goal round still on its way is followed by
             // this one.
             Task { await summary.refresh(runEnd: true) }
@@ -810,8 +839,22 @@ final class TodaySession {
             live?.apply(running: running)
             publish()
         }
-        if let recent = await recent, live?.rootID == rootID {
-            recentSteps = RecentSteps.make(recent)
+        let recentTools = await recent
+        guard live?.rootID == rootID else { return }
+        if let recentTools {
+            recentSteps = RecentSteps.make(recentTools)
+        }
+        // Both have answered (a failed read too): Details stops its spinner.
+        detailsRead = true
+    }
+
+    /// Running now and Recent again 1 s after a run ends, open or not, so Details opens current.
+    private func prefetchDetailsAfterRun() {
+        detailsPrefetch?.cancel()
+        detailsPrefetch = Task { [weak self, sleep = self.sleep] in
+            try? await sleep(RecentSteps.rereadDelay)
+            guard !Task.isCancelled, let self else { return }
+            await self.refreshDetails()
         }
     }
 

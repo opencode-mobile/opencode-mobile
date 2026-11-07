@@ -115,6 +115,8 @@ final class FakeSessionServer: DailySessionService, LiveSessionAPI, @unchecked S
     var failsRules = false
     var snapshot = LiveSnapshot(busySince: nil, hasRun: false, children: [], pending: [], inbox: [])
     var reply = "## Task\nNow: Doing it."
+    /// How long each generate takes; none by default.
+    var generateDelay: Duration?
     private var created = 0
 
     init() {}
@@ -152,6 +154,7 @@ final class FakeSessionServer: DailySessionService, LiveSessionAPI, @unchecked S
 
     func generate(sessionID: String, prompt: String) async throws -> String {
         calls.append(.generate(sessionID))
+        if let generateDelay { try await Task.sleep(for: generateDelay) }
         return reply
     }
 

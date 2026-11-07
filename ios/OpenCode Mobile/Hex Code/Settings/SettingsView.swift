@@ -218,6 +218,9 @@ struct HexMainView: View {
     let onForgetServer: () -> Void
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Cold start: the plain background until home's first state is ready, then home in one piece.
+    @State private var coldStart = ColdStart()
 
     var body: some View {
         NavigationStack(path: $main.path) {
@@ -226,7 +229,9 @@ struct HexMainView: View {
                 session: main.session,
                 voice: voice,
                 onSettings: { main.openSettings() },
-                onPairAgain: { main.startPairAgain() }
+                onPairAgain: { main.startPairAgain() },
+                revealed: coldStart.showsHome,
+                cardShown: coldStart.showsCard
             )
                 .hexPage()
                 .navigationDestination(for: HexMainModel.Route.self) { route in
@@ -242,7 +247,25 @@ struct HexMainView: View {
         // screen it takes bottom-edge touches first; the home swipe then needs a second swipe. Set
         // here, outside the navigation stack, so it reaches the window's root controller.
         .defersSystemGestures(on: main.path.isEmpty ? .bottom : [])
+        // Until then the launch screen's look: the plain background, nothing on it.
+        .opacity(coldStart.showsHome ? 1 : 0)
+        .allowsHitTesting(coldStart.showsHome)
+        .accessibilityHidden(!coldStart.showsHome)
+        .background { HexColor.background.ignoresSafeArea() }
         .task { await main.realSession.open() }
+        .task {
+            try? await Task.sleep(for: ColdStart.limit)
+            coldStart.timedOut()
+        }
+        .onChange(of: main.session.hasFirstState, initial: true) { _, ready in
+            guard ready, !coldStart.showsCard else { return }
+            // Shown whole at once; a card arriving after the limit fades in (instant with Reduce Motion).
+            var next = coldStart
+            let fades = next.ready()
+            withAnimation(fades ? HexMotion.animation(HexMotion.fade, reduced: reduceMotion) : nil) {
+                coldStart = next
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:

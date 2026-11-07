@@ -10,6 +10,10 @@ struct HomeView: View {
     let onSettings: () -> Void
     /// Signed out's Pair again.
     var onPairAgain: () -> Void = {}
+    /// On screen (app plan, "Cold start"): false while the launch look holds.
+    var revealed = true
+    /// The card (or setup failure) has arrived; until then its place stays empty.
+    var cardShown = true
 
     @State private var showsAttach = false
     /// The stop button's 3 s hold.
@@ -37,13 +41,23 @@ struct HomeView: View {
         VStack(spacing: 0) {
             HomeTopBar(session: session, onSettings: onSettings)
             // Today's goal, under the top bar; hidden while you talk, with a draft, and while an
-            // Ask message shows.
-            if !drafting, session.ask.shown == nil, let line = session.goalLine {
-                HexGoalLine(
-                    objective: session.goal?.objective,
-                    suffix: line.suffix,
-                    lit: line.iconLit
-                ) { session.openGoalSheet() }
+            // Ask message shows. With no line (before today's session is open, or no goal while the
+            // agent works) its height stays, so nothing moves when it fills in.
+            if !drafting, session.ask.shown == nil {
+                Group {
+                    if let line = session.goalLine {
+                        HexGoalLine(
+                            objective: session.goal?.objective,
+                            suffix: line.suffix,
+                            lit: line.iconLit
+                        ) { session.openGoalSheet() }
+                    } else {
+                        HexGoalLine(objective: nil) {}
+                            .hidden()
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
                 .padding(.top, 2)
                 .transition(.opacity)
             }
@@ -62,6 +76,8 @@ struct HomeView: View {
                         onPairAgain: onPairAgain,
                         onReadSent: { youSaid = home.sentReader(for: $0) }
                     )
+                    .opacity(cardShown ? 1 : 0)
+                    .accessibilityHidden(!cardShown)
                     .transition(.opacity)
                 }
             }
@@ -132,8 +148,8 @@ struct HomeView: View {
             Text(LocalizedStringResource("stop.confirm.body", defaultValue: "It stops now, with its subagents. Background shells keep running."))
         }
         // VoiceOver lands on the talk button first, after the top bar.
-        .task {
-            guard voiceOver else { return }
+        .task(id: revealed) {
+            guard voiceOver, revealed else { return }
             try? await Task.sleep(for: .milliseconds(600))
             talkFocused = true
         }

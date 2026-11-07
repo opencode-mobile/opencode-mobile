@@ -101,6 +101,9 @@ struct ControlHarness {
         await eventually { transport.connections == 1 }
         transport.send(EventLines.connected)
         await eventually { server.calls.contains(.snapshot("ses_a")) }
+        // Opening reads Running now and Recent ahead for Details; tests count the calls after it.
+        await eventually { session.detailsRead }
+        control.calls.removeAll { $0 == .running("ses_a") || $0 == .recent("ses_a") }
         try? await Task.sleep(for: .milliseconds(30))
     }
 

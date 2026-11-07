@@ -28,23 +28,38 @@ struct DetailsSheet: View {
                     todo: session.todos.count,
                     recent: session.recentSteps.count
                 ))
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if sections.isEmpty {
-                            Text(LocalizedStringResource("details.empty", defaultValue: "Nothing running right now."))
-                                .hexFont(.footnote)
-                                .foregroundStyle(HexColor.text3)
-                                .padding(.horizontal, 2)
+                if sections.isEmpty, !session.detailsRead {
+                    // The first reads haven't returned: a small spinner in the middle, never the
+                    // empty line (app plan, Details "Size and first load").
+                    HexSpinner()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityElement()
+                        .accessibilityLabel(Text(LocalizedStringResource("details.loading", defaultValue: "Loading")))
+                        .transition(.opacity)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if sections.isEmpty {
+                                Text(LocalizedStringResource("details.empty", defaultValue: "Nothing running right now."))
+                                    .hexFont(.footnote)
+                                    .foregroundStyle(HexColor.text3)
+                                    .padding(.horizontal, 2)
+                            }
+                            ForEach(sections, id: \.self) { section in
+                                view(section, running: running, at: context.date)
+                            }
                         }
-                        ForEach(sections, id: \.self) { section in
-                            view(section, running: running, at: context.date)
-                        }
+                        .padding(.bottom, 24)
+                        // Sections and rows that arrive later fade in; instant with Reduce Motion.
+                        .hexAnimation(HexMotion.ease(HexMotion.fade), value: sections)
+                        .hexAnimation(HexMotion.ease(HexMotion.fade), value: running.rows.map(\.id))
+                        .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.recentSteps.map(\.id))
                     }
-                    .padding(.bottom, 24)
-                    .hexAnimation(HexMotion.ease(HexMotion.fade), value: sections)
+                    .scrollBounceBehavior(.basedOnSize)
+                    .transition(.opacity)
                 }
-                .scrollBounceBehavior(.basedOnSize)
             }
+            .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.detailsRead)
         }
         .hexToastHost(home.toasts, sheet: true)
     }
