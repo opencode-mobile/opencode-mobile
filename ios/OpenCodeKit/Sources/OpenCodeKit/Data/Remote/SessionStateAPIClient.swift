@@ -228,19 +228,41 @@ public nonisolated struct SessionStateAPIClient: Sendable {
         }
     }
 
-    /// `POST /api/session/{id}/prompt` with `text`, `delivery`, and `files` when there are any.
-    /// Every prompt goes through the inbox; the answer is that inbox item, whose id `cancelInbox`
-    /// takes. A file the server refuses fails the whole prompt (`400`, `field: "files"`).
-    public func prompt(sessionID: String, text: String, delivery: Delivery, files: [PromptFile] = []) async throws -> InboxItemV2 {
+    /// A prompt's `metadata`, kept with the message for clients to read back. Uploaded files are
+    /// named in `attachments` (their paths are also in the text, for the agent); OpenCode's desktop
+    /// app shows them as chips when `displayText` and `comments` are both present.
+    public nonisolated struct PromptMetadata: Encodable, Sendable, Equatable {
+        public var displayText: String?
+        public var comments: [JSONValueDTO]?
+        public var attachments: [PromptAttachment]?
+
+        public init(displayText: String? = nil, comments: [JSONValueDTO]? = nil, attachments: [PromptAttachment]? = nil) {
+            self.displayText = displayText
+            self.comments = comments
+            self.attachments = attachments
+        }
+    }
+
+    /// `POST /api/session/{id}/prompt` with `text`, `delivery`, and `files` and `metadata` when
+    /// there are any. Every prompt goes through the inbox; the answer is that inbox item, whose id
+    /// `cancelInbox` takes. A file the server refuses fails the whole prompt (`400`, `field: "files"`).
+    public func prompt(
+        sessionID: String,
+        text: String,
+        delivery: Delivery,
+        files: [PromptFile] = [],
+        metadata: PromptMetadata? = nil
+    ) async throws -> InboxItemV2 {
         nonisolated struct Body: Encodable {
             let text: String
             let files: [PromptFile]?
             let delivery: String
+            let metadata: PromptMetadata?
         }
         let envelope: APIDataEnvelope<InboxItemV2> = try await send(
             path: "api/session/\(sessionID)/prompt",
             method: "POST",
-            body: Body(text: text, files: files.isEmpty ? nil : files, delivery: delivery.rawValue)
+            body: Body(text: text, files: files.isEmpty ? nil : files, delivery: delivery.rawValue, metadata: metadata)
         )
         return envelope.data
     }

@@ -1,12 +1,17 @@
 import Foundation
 
 /// The raw answer of `POST /api/experimental/fs/write`; the domain adapter classifies it.
-nonisolated struct AttachmentUploadHTTPResult: Sendable, Equatable {
-    let statusCode: Int
-    let body: Data
+public nonisolated struct AttachmentUploadHTTPResult: Sendable, Equatable {
+    public let statusCode: Int
+    public let body: Data
+
+    public init(statusCode: Int, body: Data) {
+        self.statusCode = statusCode
+        self.body = body
+    }
 }
 
-nonisolated protocol AttachmentUploadAPI: Sendable {
+public nonisolated protocol AttachmentUploadAPI: Sendable {
     /// Streams `fileURL` as `application/octet-stream` to `path` (relative to, or absolute on, the
     /// server). Any HTTP status comes back as a result; transport failures and cancellation throw.
     func write(
@@ -17,13 +22,13 @@ nonisolated protocol AttachmentUploadAPI: Sendable {
     ) async throws -> AttachmentUploadHTTPResult
 }
 
-nonisolated enum AttachmentUploadAPIError: Error {
+public nonisolated enum AttachmentUploadAPIError: Error {
     case noActiveConnection
     case invalidResponse
 }
 
-nonisolated struct AttachmentUploadAPIClient: AttachmentUploadAPI {
-    static let session: URLSession = {
+public nonisolated struct AttachmentUploadAPIClient: AttachmentUploadAPI {
+    public static let session: URLSession = {
         let configuration = URLSessionConfiguration.default
         // Per-request inactivity timeout: a stalled upload fails instead of hanging the chip.
         configuration.timeoutIntervalForRequest = 60
@@ -37,12 +42,12 @@ nonisolated struct AttachmentUploadAPIClient: AttachmentUploadAPI {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let urlSession: URLSession
 
-    init(connectionProvider: @escaping @Sendable () -> ServerConnection?, urlSession: URLSession = Self.session) {
+    public init(connectionProvider: @escaping @Sendable () -> ServerConnection?, urlSession: URLSession = Self.session) {
         self.connectionProvider = connectionProvider
         self.urlSession = urlSession
     }
 
-    func write(
+    public func write(
         fileURL: URL,
         path: String,
         directory: String?,
@@ -79,7 +84,7 @@ nonisolated struct AttachmentUploadAPIClient: AttachmentUploadAPI {
 
     /// `path` goes in the query with only unreserved characters left bare, so a `+`, `&` or
     /// space in a filename survives the round trip.
-    static func appendingPath(_ path: String, to url: URL) -> URL? {
+    public static func appendingPath(_ path: String, to url: URL) -> URL? {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
         let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
         let encoded = path.addingPercentEncoding(withAllowedCharacters: allowed) ?? path

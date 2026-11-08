@@ -412,18 +412,22 @@ public nonisolated struct InboxItemV2: Decodable, Sendable, Equatable {
 public nonisolated struct InboxMetadataV2: Decodable, Sendable, Equatable {
     public var source: String?
     public var goalID: String?
+    /// Uploaded files a client named in the prompt's `metadata.attachments`; empty for none.
+    public var attachments: [PromptAttachment]
 
-    public init(source: String? = nil, goalID: String? = nil) {
+    public init(source: String? = nil, goalID: String? = nil, attachments: [PromptAttachment] = []) {
         self.source = source
         self.goalID = goalID
+        self.attachments = attachments
     }
 
-    private enum CodingKeys: String, CodingKey { case source, goalID }
+    private enum CodingKeys: String, CodingKey { case source, goalID, attachments }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         source = try? container.decodeIfPresent(String.self, forKey: .source)
         goalID = try? container.decodeIfPresent(String.self, forKey: .goalID)
+        attachments = ((try? container.decodeIfPresent([Lossy<PromptAttachment>].self, forKey: .attachments)) ?? []).compactMap(\.value)
     }
 }
 
@@ -484,5 +488,37 @@ public nonisolated struct InboxFileV2: Decodable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try? container.decodeIfPresent(String.self, forKey: .name)
         mime = try? container.decodeIfPresent(String.self, forKey: .mime)
+    }
+}
+
+/// An uploaded file named in a prompt's `metadata.attachments`: `{name, mime, path}`, as OpenCode's
+/// own app and OpenCode Mobile write it. `path` is where the server holds the bytes.
+public nonisolated struct PromptAttachment: Codable, Sendable, Equatable {
+    public var name: String
+    public var mime: String
+    public var path: String
+
+    public init(name: String, mime: String, path: String) {
+        self.name = name
+        self.mime = mime
+        self.path = path
+    }
+
+    private enum CodingKeys: String, CodingKey { case name, mime, path }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        path = try container.decode(String.self, forKey: .path)
+        name = (try? container.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        mime = (try? container.decodeIfPresent(String.self, forKey: .mime)) ?? ""
+    }
+}
+
+/// One entry of a list that may hold entries of another shape: those decode as nil.
+private nonisolated struct Lossy<Value: Decodable>: Decodable {
+    let value: Value?
+
+    init(from decoder: Decoder) throws {
+        value = try? Value(from: decoder)
     }
 }
