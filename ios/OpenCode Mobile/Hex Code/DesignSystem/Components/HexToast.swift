@@ -151,16 +151,18 @@ final class HexToaster {
 }
 
 extension View {
-    /// Shows the toaster's notice over the top of this view, 8 pt under the safe area. A sheet that
-    /// sets `inSheet` hosts them itself (`sheet: true`) while it is up, so they aren't hidden under it.
-    func hexToastHost(_ toaster: HexToaster, sheet: Bool = false) -> some View {
-        modifier(HexToastHost(toaster: toaster, sheet: sheet))
+    /// Shows the toaster's notice over the top of this view, `top` pt under the safe area: just under the
+    /// screen's top bar, so it never covers it, or 8 pt from a sheet's top. A sheet that sets `inSheet`
+    /// hosts them itself (`sheet: true`) while it is up, so they aren't hidden under it.
+    func hexToastHost(_ toaster: HexToaster, sheet: Bool = false, top: CGFloat = 8) -> some View {
+        modifier(HexToastHost(toaster: toaster, sheet: sheet, top: top))
     }
 }
 
 private struct HexToastHost: ViewModifier {
     let toaster: HexToaster
     let sheet: Bool
+    let top: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
@@ -169,7 +171,7 @@ private struct HexToastHost: ViewModifier {
                 if let item = toaster.current, !toaster.isHeld, toaster.inSheet == sheet {
                     HexToast(item: item, onAction: { toaster.performAction() })
                         .padding(.horizontal, 12)
-                        .padding(.top, 8)
+                        .padding(.top, top)
                         .id(item.id)
                         // With Reduce Motion it fades only.
                         .transition(HexMotion.transition(.offset(y: -4).combined(with: .opacity), reduced: reduceMotion))

@@ -126,7 +126,8 @@ fun HexToast(
 
 /**
  * Shows [message] as a [HexToast] for its `durationMs`, then calls [onDismissed]; tapping its action calls [onAction]
- * and dismisses it. Put it at the top of the screen, over the content, 12 dp from each side.
+ * and dismisses it. Put it just under the screen's top bar (never over it), or 8 dp from a sheet's top, over the content,
+ * 12 dp from each side.
  */
 @Composable
 fun HexToastHost(

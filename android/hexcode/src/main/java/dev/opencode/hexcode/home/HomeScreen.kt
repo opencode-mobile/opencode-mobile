@@ -530,7 +530,8 @@ fun HomeScreen(
                 },
                 onAction = vm::noticeAction,
                 // Toasts are hidden while Stop is held.
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp).alpha(if (state.stopHolding) 0f else 1f),
+                // Just under the top bar, where Stop's countdown card shows, so it never covers the bar.
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 58.dp).alpha(if (state.stopHolding) 0f else 1f),
             )
             // Stop's countdown card, under the top bar, while the button is held.
             AnimatedVisibility(

@@ -25,6 +25,12 @@ struct HexTopBarState: Equatable {
 /// The home top bar's height, for what sits just under it (the stop countdown).
 enum HexTopBarMetrics {
     static let homeHeight: CGFloat = HexSize.touch + 2
+    /// A page's bar (`.pk-top`): 56 pt plus 4 pt above it.
+    static let pageHeight: CGFloat = 60
+    /// Where a notice sits on home: 4 pt under the bar, as Stop's countdown card.
+    static let homeToastTop: CGFloat = homeHeight + 4
+    /// Where a notice sits on a page: 4 pt under its bar.
+    static let pageToastTop: CGFloat = pageHeight + 4
 }
 
 /// Top bar. Two forms:

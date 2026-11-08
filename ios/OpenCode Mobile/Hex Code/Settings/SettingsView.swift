@@ -238,7 +238,8 @@ struct HexMainView: View {
                     page(route).hexPage()
                 }
         }
-        .hexToastHost(main.toasts)
+        // Notices sit under the top bar: home's, or the open page's.
+        .hexToastHost(main.toasts, top: main.path.isEmpty ? HexTopBarMetrics.homeToastTop : HexTopBarMetrics.pageToastTop)
         .fullScreenCover(item: $main.pairAgain) { model in
             PairAgainView(model: model, onCancel: { main.cancelPairAgain() })
         }

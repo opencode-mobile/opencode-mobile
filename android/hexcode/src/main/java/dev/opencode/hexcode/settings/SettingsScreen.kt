@@ -263,7 +263,8 @@ fun SettingsScreen(
                 notYet = null
                 onNoticeShown()
             },
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
+            // Just under the page's top bar (4 dp above it, 56 dp tall), so it never covers the bar.
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
         )
     }
 }
