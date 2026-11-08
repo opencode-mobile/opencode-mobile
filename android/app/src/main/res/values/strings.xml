@@ -1,6 +1,8 @@
 <resources>
     <string name="app_name">OpenCode Mobile</string>
     <string name="bottom_sheet_close">Close</string>
+    <string name="bottom_sheet_collapse">Collapse</string>
+    <string name="bottom_sheet_expand">Expand</string>
     <string name="top_bar_back">Back</string>
 
     <!-- Keys match iOS Localizable.xcstrings: iOS `area.name` is Android `area_name`.

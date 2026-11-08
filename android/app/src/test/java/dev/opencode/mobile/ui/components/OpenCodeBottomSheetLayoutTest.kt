@@ -144,18 +144,6 @@ class OpenCodeBottomSheetLayoutTest {
     }
 
     @Test
-    fun dragDismisses_pastTheDistanceOrOnAFastFling() {
-        val distance = 96f
-        val velocity = 1_200f
-        assertEquals(false, openCodeBottomSheetDragDismisses(95f, 0f, distance, velocity))
-        assertEquals(true, openCodeBottomSheetDragDismisses(96f, 0f, distance, velocity))
-        assertEquals(true, openCodeBottomSheetDragDismisses(10f, 1_200f, distance, velocity))
-        assertEquals(false, openCodeBottomSheetDragDismisses(10f, 1_199f, distance, velocity))
-        // An upward fling never dismisses.
-        assertEquals(false, openCodeBottomSheetDragDismisses(10f, -3_000f, distance, velocity))
-    }
-
-    @Test
     fun centeredScroll_centersTheRowAndNeverScrollsAboveTheTop() {
         // Row 48 tall at 600 in a 300 viewport: center 624 sits at 150.
         assertEquals(474f, openCodeBottomSheetCenteredScroll(600f, 48f, 300f), 0.01f)

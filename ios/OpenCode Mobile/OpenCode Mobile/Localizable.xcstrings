@@ -667,6 +667,28 @@
         }
       }
     },
+    "bottom_sheet.collapse" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse"
+          }
+        }
+      }
+    },
+    "bottom_sheet.expand" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expand"
+          }
+        }
+      }
+    },
     "changes.accessibility.file" : {
       "extractionState" : "manual",
       "localizations" : {
