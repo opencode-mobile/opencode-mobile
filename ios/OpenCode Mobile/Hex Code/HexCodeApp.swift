@@ -51,7 +51,8 @@ struct HexRootView: View {
         Group {
             switch app.phase {
             case .launching:
-                HexColor.background.ignoresSafeArea()
+                // The launch screen's look while the setup loads.
+                HexColor.background.ignoresSafeArea().overlay { LaunchLogo() }
             case .firstRun:
                 if let firstRun = app.firstRun {
                     FirstRunView(model: firstRun)

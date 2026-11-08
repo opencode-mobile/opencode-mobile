@@ -9,12 +9,15 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
-	<!-- The launch screen is the home's plain background (app plan, "Cold start"), which stays
-	     until the home's first state is ready. The colour matches `HexColor.background`. -->
+	<!-- The launch screen is the logo (the app icon as a rounded tile, 96 pt) centred on the home's
+	     background (app plan, "Cold start"). The colour matches `HexColor.background`; the home's
+	     wait state draws the same image at the same place until its first state is ready. -->
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
 		<string>LaunchBackground</string>
+		<key>UIImageName</key>
+		<string>LaunchLogo</string>
 	</dict>
 </dict>
 </plist>

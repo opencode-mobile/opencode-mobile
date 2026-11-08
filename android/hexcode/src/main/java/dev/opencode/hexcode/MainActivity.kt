@@ -101,6 +101,15 @@ class MainActivity : ComponentActivity() {
         val coldStart = ColdStartGate(SystemClock::uptimeMillis)
         val splash = installSplashScreen()
         if (savedInstanceState == null) splash.setKeepOnScreenCondition(coldStart::holding) else coldStart.ready()
+        // The splash fades out over 0.2 s as home appears; instant with Reduce Motion (the animator scale at 0).
+        splash.setOnExitAnimationListener { provider ->
+            provider.view
+                .animate()
+                .alpha(0f)
+                .setDuration(ColdStart.SPLASH_FADE_MS)
+                .withEndAction(provider::remove)
+                .start()
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(TRANSPARENT, TRANSPARENT),

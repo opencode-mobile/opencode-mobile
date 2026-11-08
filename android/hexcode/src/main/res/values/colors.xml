@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- The icon's tile: the launcher icon's background and the splash logo's circle. -->
     <color name="ic_launcher_background">#FF0E0F11</color>
     <!-- The app's `bg` (HexColors.Light / Dark): the splash and the window behind the first frame. -->
     <color name="shell_background">#FFFBFBFC</color>

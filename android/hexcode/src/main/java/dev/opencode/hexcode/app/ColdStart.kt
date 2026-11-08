@@ -34,6 +34,9 @@ object ColdStart {
     /** The longest the splash waits for the first state. */
     const val TIMEOUT_MS = 1_500L
 
+    /** How long the splash, with its logo, fades out as the home appears. */
+    const val SPLASH_FADE_MS = 200L
+
     /**
      * The first state is ready: today's session found and its summary read (a card, or a failure with none), or
      * "Couldn't open today's session", or Signed out. A card saved for today shown while setup runs isn't: the top bar
