@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -41,8 +42,8 @@ import org.junit.Test
 
 /**
  * Behavior of the shared bottom sheet that the pure height math cannot cover: one composition
- * of the body, height choice and latch, keyboard policy, every dismiss path, and modal
- * accessibility.
+ * of the body, height choice and latch, half and full stops under header and body drags,
+ * keyboard policy, every dismiss path, and modal accessibility.
  */
 class OpenCodeBottomSheetTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
@@ -291,6 +292,119 @@ class OpenCodeBottomSheetTest {
         }
         rule.runOnIdle { assertEquals(1, dismissals) }
         assertSheetLeaves()
+    }
+
+    private fun showHalf(rows: Int = 30) {
+        rule.setContent {
+            OpenCodeTheme {
+                OpenCodeBottomSheet(
+                    visible = true,
+                    title = "Detents",
+                    onDismissRequest = {},
+                    height = OpenCodeBottomSheetHeight.Half,
+                ) {
+                    ProbedBody(BodyProbe(), rows)
+                }
+            }
+        }
+        rule.waitForIdle()
+    }
+
+    @Test
+    fun half_dragsByItsHeaderToFullAndBackToHalf() {
+        showHalf()
+        val window = windowHeight()
+        val halfTop = sheetTop("Detents")
+        assertTrue("opens at half", halfTop > window / 3 && halfTop < window / 2 + 24.dp)
+
+        // Slow drags settle on the nearer stop.
+        rule.onNodeWithText("Detents").performTouchInput {
+            swipe(start = center, end = center - Offset(0f, (window * 0.35f).toPx()), durationMillis = 900)
+        }
+        rule.waitForIdle()
+        val fullTop = sheetTop("Detents")
+        assertTrue("expands to full", fullTop < window * 0.15f)
+
+        rule.onNodeWithText("Detents").performTouchInput {
+            swipe(start = center, end = center + Offset(0f, (window * 0.3f).toPx()), durationMillis = 900)
+        }
+        rule.waitForIdle()
+        assertEquals(halfTop.value, sheetTop("Detents").value, 2f)
+    }
+
+    @Test
+    fun half_growsBeforeItsBodyScrolls_andShrinksWhenPulledDownAtTheTop() {
+        showHalf()
+        val window = windowHeight()
+        val halfTop = sheetTop("Detents")
+        val firstRowOffset = sheetTop("Row 0") - halfTop
+
+        rule.onNodeWithText("Row 2").performTouchInput {
+            swipe(start = center, end = center - Offset(0f, (window * 0.3f).toPx()), durationMillis = 900)
+        }
+        rule.waitForIdle()
+        val fullTop = sheetTop("Detents")
+        assertTrue("a body drag expands the sheet", fullTop < window * 0.15f)
+        assertEquals("the body did not scroll", firstRowOffset.value, (sheetTop("Row 0") - fullTop).value, 2f)
+
+        rule.onNodeWithText("Row 2").performTouchInput {
+            swipe(start = center, end = center + Offset(0f, (window * 0.3f).toPx()), durationMillis = 900)
+        }
+        rule.waitForIdle()
+        assertEquals("pulled down at the top, it collapses", halfTop.value, sheetTop("Detents").value, 2f)
+    }
+
+    @Test
+    fun half_flickDownFromHalfDismisses() {
+        var dismissals = 0
+        var visible by mutableStateOf(true)
+        rule.setContent {
+            OpenCodeTheme {
+                OpenCodeBottomSheet(
+                    visible = visible,
+                    title = "Detents",
+                    onDismissRequest = {
+                        dismissals += 1
+                        visible = false
+                    },
+                    height = OpenCodeBottomSheetHeight.Half,
+                ) {
+                    ProbedBody(BodyProbe(), rows = 30)
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText("Detents").performTouchInput {
+            swipe(start = center, end = center + Offset(0f, 120.dp.toPx()), durationMillis = 60)
+        }
+        rule.runOnIdle { assertEquals(1, dismissals) }
+    }
+
+    @Test
+    fun expandAndCollapse_areAccessibilityActionsOnTheTitle() {
+        showHalf()
+        val window = windowHeight()
+        val halfTop = sheetTop("Detents")
+
+        fun perform(label: String) {
+            val actions = rule.onNodeWithText("Detents").fetchSemanticsNode().config[SemanticsActions.CustomActions]
+            val action = actions.single()
+            assertEquals(label, action.label)
+            rule.runOnUiThread { action.action() }
+            rule.waitForIdle()
+        }
+
+        perform("Expand")
+        assertTrue(sheetTop("Detents") < window * 0.15f)
+        perform("Collapse")
+        assertEquals(halfTop.value, sheetTop("Detents").value, 2f)
+    }
+
+    @Test
+    fun compactSheet_hasNoExpandAction() {
+        showDismissible {}
+        val config = rule.onNodeWithText("Dismiss me").fetchSemanticsNode().config
+        assertTrue(SemanticsActions.CustomActions !in config)
     }
 
     @Test

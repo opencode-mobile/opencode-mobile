@@ -31,11 +31,21 @@ class OpenCodeBottomSheetKeyboardHeightTest {
     ) = assertEquals(expected.value, actual.value, 0.01f)
 
     @Test
-    fun keepAndDismiss_ignoreTheKeyboard() {
+    fun keepAndDismiss_keepTheRestingHeightWhileItFitsAboveTheKeyboard() {
         listOf(OpenCodeBottomSheetKeyboard.Keep, OpenCodeBottomSheetKeyboard.Dismiss).forEach { policy ->
             assertDp(resting, height(ime = keyboard, policy = policy))
             assertDp(resting, height(ime = 120.dp, policy = policy))
         }
+    }
+
+    @Test
+    fun keep_capsAFullHeightSheetToTheRoomAboveTheKeyboard() {
+        val full = 820.dp
+        // 860 available - 320 keyboard = 540 left above it.
+        assertDp(540.dp, height(ime = keyboard, policy = OpenCodeBottomSheetKeyboard.Keep, restingHeight = full))
+        assertDp(full, height(ime = 0.dp, settled = 0.dp, policy = OpenCodeBottomSheetKeyboard.Keep, restingHeight = full))
+        // Dismiss sheets hide the keyboard, so they never adjust.
+        assertDp(full, height(ime = keyboard, policy = OpenCodeBottomSheetKeyboard.Dismiss, restingHeight = full))
     }
 
     @Test
@@ -59,12 +69,14 @@ class OpenCodeBottomSheetKeyboardHeightTest {
     }
 
     @Test
-    fun expand_neverShrinksBelowResting() {
-        assertDp(resting, height(ime = 700.dp, settled = 700.dp))
-        assertDp(resting, height(ime = 900.dp, settled = 900.dp))
-        assertDp(resting, height(ime = 350.dp, settled = 700.dp))
-        val frames = (0..20).map { step -> height(ime = 700.dp * (step / 20f), settled = 700.dp) }
-        assertTrue(frames.all { it.value >= resting.value - 0.01f })
+    fun expand_shrinksAFullHeightSheetToTheRoomAboveTheKeyboard() {
+        val full = 820.dp
+        assertDp(available - keyboard, height(ime = keyboard, restingHeight = full))
+        val frames = (0..20).map { step -> height(ime = keyboard * (step / 20f), restingHeight = full) }
+        assertTrue(frames.zipWithNext().all { (a, b) -> b <= a })
+        assertDp(full, frames.first())
+        // A keyboard taller than the window still leaves the sheet one row.
+        assertDp(48.dp, height(ime = 900.dp, settled = 900.dp))
     }
 
     @Test
