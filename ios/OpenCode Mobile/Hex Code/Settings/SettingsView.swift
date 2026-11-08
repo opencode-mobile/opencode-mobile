@@ -244,16 +244,16 @@ struct HexMainView: View {
         // here, outside the navigation stack, so it reaches the window's root controller.
         .defersSystemGestures(on: main.path.isEmpty ? .bottom : [])
         // Until then the launch screen's look: the logo on the plain background.
+        // Home fades in over the logo (instant with Reduce Motion): the logo stays behind it, so it is
+        // never drawn on top of the content, and home's opaque background hides it once shown.
         .opacity(coldStart.showsHome ? 1 : 0)
+        .animation(HexMotion.animation(HexMotion.fade, reduced: reduceMotion), value: coldStart.showsHome)
         .allowsHitTesting(coldStart.showsHome)
         .accessibilityHidden(!coldStart.showsHome)
-        .overlay {
-            // It fades out as home appears (instant with Reduce Motion).
-            LaunchLogo()
-                .opacity(coldStart.showsHome ? 0 : 1)
-                .animation(HexMotion.animation(HexMotion.fade, reduced: reduceMotion), value: coldStart.showsHome)
+        .background {
+            HexColor.background.ignoresSafeArea()
+                .overlay { LaunchLogo() }
         }
-        .background { HexColor.background.ignoresSafeArea() }
         .task { await main.realSession.open() }
         .task {
             try? await Task.sleep(for: ColdStart.limit)
