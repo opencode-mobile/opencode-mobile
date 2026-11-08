@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// A bottom sheet on `panel`: radius 20 at the top, a grab bar, and a head with the title and
-/// up to one action on each side. Shown with `.hexSheet(isPresented:)`, on the system sheet.
+/// A bottom sheet on `panel` in the system sheet's shape (radius 20 at the top before iOS 26), a
+/// grab bar, and a head with the title and up to one action on each side. Shown with
+/// `.hexSheet(isPresented:)`, on the system sheet.
 ///
 /// A request sheet (a question or approval, the prototype's `.rq-head`) has a request head
 /// instead: the title on the left in `headline`, an optional count in `mono` `text3`, and a 36 pt
@@ -82,18 +83,40 @@ struct HexSheet<Leading: View, Trailing: View, Content: View>: View {
 }
 
 /// An approval sheet's amber top edge: a 1 pt `amber` 60 % line following the sheet's rounded top,
-/// with a soft `amber` 25 % glow just inside it.
+/// with a soft `amber` 25 % glow just inside it. From iOS 26 it follows the system sheet's own
+/// corners, concentric with the screen's (radius 20 where no sheet is around it, as in the
+/// gallery).
 struct HexAmberEdge: View {
     var body: some View {
-        let top = UnevenRoundedRectangle(topLeadingRadius: HexRadius.sheet, topTrailingRadius: HexRadius.sheet, style: .continuous)
+        if #available(iOS 26, *) {
+            // The system doesn't say how round its corners are, so the line fades out down them.
+            edge(ConcentricRectangle(corners: .concentric(minimum: .fixed(HexRadius.sheet))), corner: 40, fades: true)
+        } else {
+            edge(
+                UnevenRoundedRectangle(topLeadingRadius: HexRadius.sheet, topTrailingRadius: HexRadius.sheet, style: .continuous),
+                corner: HexRadius.sheet,
+                fades: false
+            )
+        }
+    }
+
+    /// The glow and the line along `shape`'s top, down to the foot of its top corners (`corner`), or
+    /// fading out by then.
+    private func edge(_ shape: some Shape, corner: CGFloat, fades: Bool) -> some View {
         ZStack(alignment: .top) {
             LinearGradient(colors: [HexColor.amber.opacity(0.25), HexColor.amber.opacity(0)], startPoint: .top, endPoint: .bottom)
                 .frame(height: 18)
-                .clipShape(top)
-            top
-                .stroke(HexColor.amber.opacity(0.6), lineWidth: 2)
-                .frame(height: HexRadius.sheet * 2)
-                .mask(alignment: .top) { Rectangle().frame(height: HexRadius.sheet + 1) }
+            shape.stroke(HexColor.amber.opacity(0.6), lineWidth: 2)
+        }
+        .frame(height: corner * 2)
+        .clipShape(shape)
+        .mask(alignment: .top) {
+            if fades {
+                LinearGradient(stops: [.init(color: .black, location: 0.4), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: corner)
+            } else {
+                Rectangle().frame(height: corner + 1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .top)
         .ignoresSafeArea()
@@ -137,8 +160,7 @@ extension View {
             content()
                 .presentationDetents(detents)
                 .presentationDragIndicator(.hidden)
-                .presentationCornerRadius(HexRadius.sheet)
-                .presentationBackground(HexColor.panel)
+                .hexSheetChrome()
         }
     }
 
@@ -182,7 +204,20 @@ private struct HexFittedSheetContent<Content: View>: View {
         .scrollBounceBehavior(.basedOnSize)
         .presentationDetents([.height(height)])
             .presentationDragIndicator(.hidden)
-            .presentationCornerRadius(HexRadius.sheet)
-            .presentationBackground(HexColor.panel)
+            .hexSheetChrome()
+    }
+}
+
+private extension View {
+    /// Hex's panel behind the system sheet. From iOS 26 the system sheet floats 8 pt in from the screen's sides and
+    /// foot with corners concentric with the screen's, and a corner radius of Hex's own would put radius 20
+    /// on all four corners instead (hex-design-system.md, `HexSheet` (shape)), so only older systems get it.
+    @ViewBuilder func hexSheetChrome() -> some View {
+        if #available(iOS 26, *) {
+            presentationBackground(HexColor.panel)
+        } else {
+            presentationCornerRadius(HexRadius.sheet)
+                .presentationBackground(HexColor.panel)
+        }
     }
 }
