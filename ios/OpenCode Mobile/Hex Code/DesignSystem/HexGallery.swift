@@ -343,6 +343,25 @@ private struct HexGalleryContent: View {
                 HexThumbnail(image: nil, size: .small)
             }
             caption("Small (24 pt), in Waiting to send")
+            HStack(spacing: 8) {
+                HexThumbnail(file: .init(ext: "PDF"), name: "report.pdf", onRemove: {})
+                HexThumbnail(file: .init(ext: "ZIP"), name: "build.zip", progress: 0.45, onRemove: {})
+                HexThumbnail(file: .init(ext: "MOV", isVideo: true), name: "Video 1.mov", onRemove: {})
+                HexThumbnail(file: .init(ext: ""), name: "Makefile", progress: 0.1, onRemove: {})
+                Text(verbatim: "Uploading · 45%")
+                    .hexFont(.caption)
+                    .foregroundStyle(HexColor.text3)
+                    .lineLimit(2)
+                    .padding(.leading, 4)
+            }
+            .padding(.top, 5)
+            caption("Files: ready · uploading (ring) · a video · no extension, uploading")
+            HStack(spacing: 6) {
+                HexThumbnail(file: .init(ext: "PDF"), name: "report.pdf", size: .small)
+                HexThumbnail(file: .init(ext: "MOV", isVideo: true), name: "Video 1.mov", size: .small)
+                HexThumbnail(file: .init(ext: "CSV"), name: "data.csv", size: .small, progress: 0.6)
+            }
+            caption("Small file tiles: the icon only")
         }
     }
 

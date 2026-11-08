@@ -22,6 +22,7 @@ struct HomeView: View {
     @State private var attachRoute: AttachRoute?
     @State private var showsPhotos = false
     @State private var showsCamera = false
+    @State private var showsFiles = false
     /// A page on the computer, open in the in-app browser.
     @State private var browser: BrowserModel?
     /// The draft is a long single take, shown as a 7-line window (its block is centred like any draft).
@@ -74,7 +75,7 @@ struct HomeView: View {
                         onOpenLink: open,
                         onNext: { home.addSuggestion($0) },
                         onPairAgain: onPairAgain,
-                        onReadSent: { youSaid = home.sentReader(for: $0) }
+                        onReadSent: { youSaid = home.sentReader(for: $0, attachments: session.sentAttachments) }
                     )
                     .opacity(cardShown ? 1 : 0)
                     .accessibilityHidden(!cardShown)
@@ -230,6 +231,7 @@ struct HomeView: View {
                 HexReader(
                     title: Text(LocalizedStringResource("reader.sent", defaultValue: "You said")),
                     meta: youSaid.meta,
+                    note: youSaid.withLine,
                     paragraphs: youSaid.paragraphs,
                     onDone: { self.youSaid = nil }
                 )
@@ -251,6 +253,7 @@ struct HomeView: View {
         }
         .hexSheet(isPresented: $showsAttach, detents: [.height(AttachSheet.height)], onDismiss: openAttachRoute) {
             AttachSheet(
+                filesAvailable: home.canAttachFiles,
                 onPick: { route in
                     attachRoute = route
                     showsAttach = false
@@ -258,7 +261,8 @@ struct HomeView: View {
                 onClose: { showsAttach = false }
             )
         }
-        .attachPhotosPicker(isPresented: $showsPhotos, limit: home.draft.remainingImages) { home.attach($0) }
+        .attachPhotosPicker(isPresented: $showsPhotos, limit: home.draft.remainingAttachments) { home.attach($0) }
+        .attachFilesPicker(isPresented: $showsFiles) { home.attach(files: $0) }
         .fullScreenCover(isPresented: $showsCamera) {
             CameraPicker(onPhoto: { home.attach([PickedImage(photo: $0)]) }, onClose: { showsCamera = false })
                 .ignoresSafeArea()
@@ -298,6 +302,7 @@ struct HomeView: View {
         switch attachRoute {
         case .photos?: showsPhotos = true
         case .camera?: showsCamera = true
+        case .files?: showsFiles = true
         case nil: break
         }
         attachRoute = nil
@@ -468,7 +473,7 @@ struct DraftView: View {
         VStack(alignment: .leading, spacing: 14) {
             label
                 .frame(minHeight: HomeLabel.height)
-            if !draft.images.isEmpty {
+            if !draft.images.isEmpty || !draft.files.isEmpty {
                 DraftImagesRow(home: home)
             }
             content()
@@ -604,6 +609,8 @@ struct DraftView: View {
                         ? LocalizedStringResource("home.send.transcribing", defaultValue: "Transcribing")
                         : home.imagesPending
                         ? LocalizedStringResource("home.send.preparing", defaultValue: "Preparing")
+                        : home.filesPending
+                        ? LocalizedStringResource("home.send.uploading", defaultValue: "Uploading")
                         : LocalizedStringResource("home.send", defaultValue: "Send"),
                     icon: .send,
                     style: .primary,
@@ -794,15 +801,18 @@ struct CentredLayout: Layout {
     }
 }
 
-/// The draft's images (app plan, "Attach" › Thumbnails on the draft): 40 pt thumbnails with ✕,
-/// a spinner while preparing, then one caption. Dimmed, with a caption that says so, when today's
-/// model can't see images.
+/// The draft's attachments (app plan, "Attach" › Thumbnails on the draft, and "Attach files
+/// (M7)" › Draft row): 40 pt image thumbnails, then file tiles, each with ✕; a spinner while an
+/// image is prepared, a ring while a file uploads; then one caption. Images are dimmed, with a
+/// caption that says so, when today's model can't see them (files still go).
 struct DraftImagesRow: View {
     let home: HomeModel
 
     var body: some View {
         let images = home.draft.images
+        let files = home.draft.files
         let canSee = home.imageInput.canSee
+        let percent = home.draft.uploadPercent
         HStack(spacing: 8) {
             ForEach(images) { image in
                 HexThumbnail(
@@ -812,18 +822,30 @@ struct DraftImagesRow: View {
                 )
                 .transition(.opacity)
             }
-            Text(verbatim: canSee
-                ? String(localized: "home.attach.caption", defaultValue: "\(images.count) images · go with your next message")
+            ForEach(files) { file in
+                HexThumbnail(
+                    file: .init(ext: file.extensionLabel, isVideo: file.kind == .video),
+                    name: file.name,
+                    progress: file.isUploading ? file.progress : nil,
+                    onRemove: { home.removeFile(file.id) }
+                )
+                .transition(.opacity)
+            }
+            Text(verbatim: canSee || images.isEmpty || percent != nil
+                ? AttachmentText.caption(images: images.count, files: files, uploadPercent: percent)
                 : String(localized: "home.attach.no_vision", defaultValue: "\(home.imageInput.modelName) can’t see images · they won’t be sent"))
                 .hexFont(.caption)
                 .foregroundStyle(HexColor.text3)
                 .lineLimit(2)
-                .truncationMode(.tail)
+                // One file's name is cut in the middle, keeping its extension.
+                .truncationMode(files.count == 1 && images.isEmpty ? .middle : .tail)
+                // VoiceOver reads "Uploading · 45%" as "Uploading, 45 percent".
                 .padding(.leading, 4)
         }
         // Room for the ✕ over the top corner.
         .padding(.top, 5)
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: images)
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: files.map(\.id))
     }
 }
 

@@ -39,6 +39,13 @@ protocol ServerChecking: Sendable {
     /// Another of the pairing's addresses that answers and accepts the sign-in; nil when the one in
     /// use is the best or none answers.
     func resolveAddress(_ profile: ConnectionProfile) async -> String?
+    /// The release-dependent v2 features, for the upload route and `paths.tmp` (app plan, "Attach
+    /// files (M7)"); nil when the API contract can't be read.
+    func features(_ connection: ServerConnection) async -> V2ServerFeatures?
+}
+
+extension ServerChecking {
+    func features(_ connection: ServerConnection) async -> V2ServerFeatures? { nil }
 }
 
 /// Before today's session is set up: read the server's version (and, while it doesn't answer, move
@@ -129,6 +136,10 @@ struct LiveServerChecks: ServerChecking {
         )
         guard let winner = resolution.chosen, resolution.reachableProtocol != nil else { return nil }
         return winner
+    }
+
+    func features(_ connection: ServerConnection) async -> V2ServerFeatures? {
+        try? await probing.probeV2Features(connection: connection)
     }
 
     private static func data(_ request: URLRequest) async throws -> Data {

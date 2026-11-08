@@ -15,6 +15,8 @@ struct HexReader: View {
 
     let title: Text
     var meta: String?
+    /// A `footnote` line under the head, such as "You said"'s "With report.pdf".
+    var note: String?
     let paragraphs: [String]
     var foot: Foot?
     let onDone: () -> Void
@@ -42,7 +44,17 @@ struct HexReader: View {
                 HexButton(LocalizedStringResource("common.done", defaultValue: "Done"), action: onDone)
             }
             .padding(.horizontal, 18)
-            .padding(.bottom, 10)
+            .padding(.bottom, note == nil ? 10 : 4)
+            if let note {
+                Text(verbatim: note)
+                    .hexFont(.footnote)
+                    .foregroundStyle(HexColor.text3)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 10)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(paragraphs.indices, id: \.self) { index in

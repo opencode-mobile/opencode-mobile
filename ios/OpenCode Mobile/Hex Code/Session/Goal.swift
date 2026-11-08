@@ -27,7 +27,8 @@ struct TodayGoal: Equatable, Sendable {
 
     init(id: String, objective: String, status: Status, reason: String? = nil, rounds: Int = 0, maxRounds: Int = 50, updatedAt: Int64? = nil) {
         self.id = id
-        self.objective = objective
+        // A goal set with files carries their path lines; the goal line and sheet show it without.
+        self.objective = AttachedFiles.strip(objective).text
         self.status = status
         self.reason = reason
         self.rounds = rounds

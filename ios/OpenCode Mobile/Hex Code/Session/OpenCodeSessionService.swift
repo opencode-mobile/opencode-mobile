@@ -10,8 +10,8 @@ protocol LiveSessionAPI: Sendable {
     func switchModel(sessionID: String, model: ModelChoice) async throws
     /// The session's `time.updated` (epoch ms).
     func sessionUpdated(sessionID: String) async throws -> Int64
-    /// Sends a message with its images; returns its inbox id.
-    func prompt(sessionID: String, text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String
+    /// Sends a message with its images and uploaded files; returns its inbox id.
+    func prompt(sessionID: String, text: String, images: [OutgoingImage], files: [OutgoingFile], delivery: Delivery) async throws -> String
     /// Takes back a message not delivered yet.
     func cancelInbox(sessionID: String, itemID: String) async throws
 }
@@ -108,7 +108,8 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
                     files: $0.files,
                     kind: $0.type ?? "user",
                     source: $0.metadata?.source,
-                    goalID: $0.metadata?.goalID
+                    goalID: $0.metadata?.goalID,
+                    attachments: $0.metadata?.attachments ?? []
                 )
             },
             // A list that can't be read doesn't fail the rest; the last one stays.
@@ -157,12 +158,20 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
     }
 
     /// The images travel inside the prompt as `data:` URLs (app plan, "Attach" › Sending), read
-    /// from the phone's cache here, off the main thread.
-    func prompt(sessionID: String, text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String {
-        let files = try await Task.detached(priority: .userInitiated) {
+    /// from the phone's cache here, off the main thread. Uploaded files go as a path line each
+    /// after the text, and in `metadata.attachments` (app plan, "Attach files (M7)" › The prompt).
+    func prompt(sessionID: String, text: String, images: [OutgoingImage], files: [OutgoingFile] = [], delivery: Delivery) async throws -> String {
+        let inline = try await Task.detached(priority: .userInitiated) {
             try images.map { SessionStateAPIClient.PromptFile(uri: try $0.image.dataURL(), name: $0.name) }
         }.value
-        return try await client.prompt(sessionID: sessionID, text: text, delivery: delivery == .queue ? .queue : .steer, files: files).id
+        let displayText = text.hasPrefix(HomeModel.correctionPrefix) ? String(text.dropFirst(HomeModel.correctionPrefix.count)) : text
+        return try await client.prompt(
+            sessionID: sessionID,
+            text: AttachedFiles.promptText(text, paths: files.map(\.path)),
+            delivery: delivery == .queue ? .queue : .steer,
+            files: inline,
+            metadata: AttachedFiles.metadata(displayText: displayText, files: files)
+        ).id
     }
 
     func cancelInbox(sessionID: String, itemID: String) async throws {

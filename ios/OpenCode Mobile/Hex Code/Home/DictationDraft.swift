@@ -71,8 +71,11 @@ struct DictationDraft: Equatable, Sendable {
     static let longCharacters = 220
     /// Rows the long list shows at most.
     static let maxRows = 8
-    /// Images per message at most (app plan, "Attach" › Limit).
-    static let maxImages = 4
+    /// Attachments per message at most, images, videos and files together (app plan, "Attach
+    /// files (M7)" › Limits).
+    static let maxAttachments = 4
+    /// Images per message at most: the same row.
+    static let maxImages = maxAttachments
 
     private(set) var chunks: [DraftChunk] = []
     /// The chunk tapped for Delete or Re-record.
@@ -82,18 +85,34 @@ struct DictationDraft: Equatable, Sendable {
     private(set) var isRerecording = false
     /// Screenshots and photos, in the order they were picked.
     private(set) var images: [DraftImage] = []
+    /// Files and videos, uploading or uploaded, in the order they were picked.
+    private(set) var files: [DraftFile] = []
 
-    var isEmpty: Bool { chunks.isEmpty && images.isEmpty }
+    var isEmpty: Bool { chunks.isEmpty && images.isEmpty && files.isEmpty }
     var isListening: Bool { recordingID != nil }
     var isTranscribing: Bool { chunks.contains { $0.state == .transcribing } }
     var isWaiting: Bool { chunks.contains { $0.state == .waiting } }
     var hasFailed: Bool { chunks.contains { if case .failed = $0.state { true } else { false } } }
     /// An image is still being prepared: Send reads "Preparing".
     var isPreparing: Bool { images.contains(where: \.isPreparing) }
-    /// Every chunk has text and every image is prepared: what Send will wait for.
-    var isComplete: Bool { !isEmpty && chunks.allSatisfy { $0.text != nil } && !isPreparing }
-    /// Images that can still be added.
-    var remainingImages: Int { max(0, Self.maxImages - images.count) }
+    /// A file is still uploading: Send reads "Uploading".
+    var isUploading: Bool { files.contains(where: \.isUploading) }
+    /// Every chunk has text, every image is prepared and every file uploaded: what Send will wait for.
+    var isComplete: Bool { !isEmpty && chunks.allSatisfy { $0.text != nil } && !isPreparing && !isUploading }
+    var attachmentCount: Int { images.count + files.count }
+    /// Images, videos and files that can still be added.
+    var remainingAttachments: Int { max(0, Self.maxAttachments - attachmentCount) }
+    /// The same room, for the photo picker.
+    var remainingImages: Int { remainingAttachments }
+    /// All running uploads together, 0 to 100; nil when none runs.
+    var uploadPercent: Int? {
+        let running = files.filter(\.isUploading)
+        guard !running.isEmpty else { return nil }
+        let total = running.reduce(Int64(0)) { $0 + $1.totalBytes }
+        guard total > 0 else { return 0 }
+        let sent = running.reduce(Int64(0)) { $0 + min($1.sentBytes, $1.totalBytes) }
+        return Int((Double(sent) / Double(total) * 100).rounded(.down))
+    }
     var selectedIndex: Int? { selectedID.flatMap(index(of:)) }
     var recordingIndex: Int? { recordingID.flatMap(index(of:)) }
 
@@ -241,11 +260,21 @@ struct DictationDraft: Equatable, Sendable {
         chunks.insert(chunk, at: min(max(0, index), chunks.count))
     }
 
-    /// Puts a draft that didn't go back, ahead of anything said since. Its images come first;
-    /// images added since that would go past the limit are dropped.
+    /// Puts a draft that didn't go back, ahead of anything said since. Its images and files come
+    /// first (the files with their uploaded paths); attachments added since that would go past the
+    /// limit are dropped.
     mutating func restore(contentsOf saved: DictationDraft) {
         chunks = saved.chunks + chunks
-        images = Array((saved.images + images).prefix(Self.maxImages))
+        var room = Self.maxAttachments
+        let savedImages = Array(saved.images.prefix(room))
+        room -= savedImages.count
+        let savedFiles = Array(saved.files.prefix(room))
+        room -= savedFiles.count
+        let newImages = Array(images.filter { image in !savedImages.contains { $0.id == image.id } }.prefix(room))
+        room -= newImages.count
+        let newFiles = Array(files.filter { file in !savedFiles.contains { $0.id == file.id } }.prefix(room))
+        images = savedImages + newImages
+        files = savedFiles + newFiles
         selectedID = nil
     }
 
@@ -254,6 +283,7 @@ struct DictationDraft: Equatable, Sendable {
         guard !isListening else { return }
         chunks = []
         images = []
+        files = []
         selectedID = nil
     }
 
@@ -262,7 +292,7 @@ struct DictationDraft: Equatable, Sendable {
     /// Adds an image that is being prepared. False at the limit.
     @discardableResult
     mutating func addImage(_ image: DraftImage) -> Bool {
-        guard images.count < Self.maxImages, !images.contains(where: { $0.id == image.id }) else { return false }
+        guard attachmentCount < Self.maxAttachments, !images.contains(where: { $0.id == image.id }) else { return false }
         images.append(image)
         return true
     }
@@ -278,6 +308,37 @@ struct DictationDraft: Equatable, Sendable {
     /// ✕ on a thumbnail, or an image that couldn't be read.
     mutating func removeImage(_ id: UUID) {
         images.removeAll { $0.id == id }
+    }
+
+    // MARK: Files
+
+    /// Adds a file that starts uploading. False at the limit.
+    @discardableResult
+    mutating func addFile(_ file: DraftFile) -> Bool {
+        guard attachmentCount < Self.maxAttachments, !files.contains(where: { $0.id == file.id }) else { return false }
+        files.append(file)
+        return true
+    }
+
+    /// The upload's progress, in bytes. Ignored once it is done.
+    mutating func updateUpload(_ id: UUID, sent: Int64, total: Int64) {
+        guard let index = files.firstIndex(where: { $0.id == id }), files[index].isUploading else { return }
+        files[index].sentBytes = sent
+        files[index].totalBytes = total
+    }
+
+    /// The file is on the server. False when it was removed meanwhile.
+    @discardableResult
+    mutating func finishUpload(_ id: UUID, path: String) -> Bool {
+        guard let index = files.firstIndex(where: { $0.id == id }) else { return false }
+        files[index].path = path
+        files[index].sentBytes = files[index].totalBytes
+        return true
+    }
+
+    /// ✕ on a file tile, or an upload that failed.
+    mutating func removeFile(_ id: UUID) {
+        files.removeAll { $0.id == id }
     }
 
     // MARK: Long list

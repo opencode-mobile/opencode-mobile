@@ -1875,6 +1875,97 @@
         }
       }
     },
+    "home.attach.caption.file": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · goes with your next message"
+          }
+        }
+      }
+    },
+    "home.attach.caption.files": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld file · goes with your next message"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld files · go with your next message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.attach.caption.mixed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, %2$@ · go with your next message"
+          }
+        }
+      }
+    },
+    "home.attach.count.files": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld file"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.attach.count.images": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld image"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld images"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "home.attach.failed": {
       "extractionState": "manual",
       "localizations": {
@@ -1886,13 +1977,57 @@
         }
       }
     },
+    "home.attach.file_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t add this file"
+          }
+        }
+      }
+    },
+    "home.attach.file_label": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, file"
+          }
+        }
+      }
+    },
+    "home.attach.files": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files"
+          }
+        }
+      }
+    },
+    "home.attach.files.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs a newer OpenCode"
+          }
+        }
+      }
+    },
     "home.attach.limit": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "4 images is the most per message"
+            "value": "4 attachments is the most per message"
           }
         }
       }
@@ -1914,7 +2049,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photos"
+            "value": "Photos and videos"
           }
         }
       }
@@ -1930,6 +2065,17 @@
         }
       }
     },
+    "home.attach.remove_file": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove %@"
+          }
+        }
+      }
+    },
     "home.attach.title": {
       "extractionState": "manual",
       "localizations": {
@@ -1937,6 +2083,39 @@
           "stringUnit": {
             "state": "translated",
             "value": "Attach"
+          }
+        }
+      }
+    },
+    "home.attach.upload_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t upload %@"
+          }
+        }
+      }
+    },
+    "home.attach.upload_failed.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the connection to your computer, then attach it again."
+          }
+        }
+      }
+    },
+    "home.attach.uploading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploading · %lld%%"
           }
         }
       }
@@ -2278,6 +2457,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transcribing"
+          }
+        }
+      }
+    },
+    "home.send.uploading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploading"
           }
         }
       }
@@ -2799,6 +2989,29 @@
         }
       }
     },
+    "home.waiting.files": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld file"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "home.waiting.idle": {
       "extractionState": "manual",
       "localizations": {
@@ -2851,6 +3064,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld words · Read all ›"
+          }
+        }
+      }
+    },
+    "home.you.with_many": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "With %lld attachment"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "With %lld attachments"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.you.with_one": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With %@"
           }
         }
       }

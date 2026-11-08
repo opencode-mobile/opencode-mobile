@@ -6,23 +6,24 @@ import OpenCodeKit
 protocol MessageSending: AnyObject {
     /// The agent is working (or waiting on you): a message can go after this turn or now.
     var agentBusy: Bool { get }
-    /// Sends a message with its images (none when the model can't see them); returns its inbox id.
-    func send(_ text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String
+    /// Sends a message with its images (none when the model can't see them) and its uploaded
+    /// files; returns its inbox id.
+    func send(_ text: String, images: [OutgoingImage], files: [OutgoingFile], delivery: Delivery) async throws -> String
     /// Takes back a message still waiting to send.
     func cancelWaiting(_ itemID: String) async throws
     /// Returns once the event stream is up.
     func waitForConnection() async
     /// Today's session has a goal: the draft's menu offers Replace rather than Set.
     var hasGoal: Bool { get }
-    /// Set as today's goal (with the draft's images); `.done` on `204`.
-    func setGoal(_ text: String, images: [OutgoingImage], fromDraft: Bool) async -> GoalOutcome
+    /// Set as today's goal (with the draft's images and files); `.done` on `204`.
+    func setGoal(_ text: String, images: [OutgoingImage], files: [OutgoingFile], fromDraft: Bool) async -> GoalOutcome
     /// Ask on the side: answered from the session, not sent to the agent.
     func askOnTheSide(_ question: String)
 }
 
 extension MessageSending {
     var hasGoal: Bool { false }
-    func setGoal(_ text: String, images: [OutgoingImage], fromDraft: Bool) async -> GoalOutcome { .failed }
+    func setGoal(_ text: String, images: [OutgoingImage], files: [OutgoingFile], fromDraft: Bool) async -> GoalOutcome { .failed }
     func askOnTheSide(_ question: String) {}
 }
 
@@ -102,6 +103,10 @@ struct SentMessage: Equatable, Sendable {
     var paragraphs: [String]
     /// The draft's length; nil when it isn't known (a message from elsewhere).
     var duration: TimeInterval?
+    /// What went with it, by name: "With report.pdf" or "With 3 attachments" under the meta.
+    var attachments: [String] = []
+
+    var withLine: String? { AttachmentText.with(attachments) }
 
     var meta: String { ReaderMeta.text(duration: duration, words: ReaderMeta.words(text)) }
 }

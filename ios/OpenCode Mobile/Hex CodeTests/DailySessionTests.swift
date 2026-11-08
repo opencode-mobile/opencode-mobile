@@ -172,11 +172,13 @@ final class FakeSessionServer: DailySessionService, LiveSessionAPI, @unchecked S
 
     var prompts: [(text: String, delivery: Delivery)] = []
     var promptImages: [[OutgoingImage]] = []
+    var promptFiles: [[OutgoingFile]] = []
     var cancelled: [String] = []
 
-    func prompt(sessionID: String, text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String {
+    func prompt(sessionID: String, text: String, images: [OutgoingImage], files: [OutgoingFile], delivery: Delivery) async throws -> String {
         prompts.append((text, delivery))
         promptImages.append(images)
+        promptFiles.append(files)
         return "msg_\(prompts.count)"
     }
 

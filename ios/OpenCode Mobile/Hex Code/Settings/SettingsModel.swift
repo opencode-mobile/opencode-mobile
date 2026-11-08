@@ -114,6 +114,16 @@ final class HexMainModel {
         realSession.serverCheck = { [weak self] in await self?.checkServer() ?? .ready }
         if let samplePreset { showSample(samplePreset) }
         Task { await refreshImageInput() }
+        Task { await refreshFileUploads() }
+    }
+
+    /// Whether files can be uploaded, from the server's API contract and `paths.tmp` (app plan,
+    /// "Attach files (M7)"): Files is dimmed until then, and on a server without them.
+    func refreshFileUploads() async {
+        guard let connection, let features = await checks.features(connection) else { return }
+        let live = liveConnection
+        let current = current
+        home.uploader = HomeModel.uploader(features: features, connection: { live.current }, directory: { current.setup.project.path })
     }
 
     /// Whether today's model can see images, from the server's model list (app plan, "Attach").
@@ -213,6 +223,7 @@ final class HexMainModel {
         }
         pairAgain = nil
         toasts.show(PairAgain.pairedNotice(name: setup.serverName))
+        await refreshFileUploads()
         await realSession.open()
     }
 

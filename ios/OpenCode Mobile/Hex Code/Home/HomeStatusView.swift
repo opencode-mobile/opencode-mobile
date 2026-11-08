@@ -49,6 +49,7 @@ struct HomeStatusView: View {
                             layout: layout,
                             labelState: session.pendingInput != nil ? .waiting : session.busySince != nil ? .working : .plain,
                             sentMessage: session.sentMessage,
+                            sentAttachments: session.sentAttachments,
                             sentIsGoal: session.sentIsGoal,
                             summary: session.summary,
                             computerHost: session.computerHost,
@@ -94,6 +95,8 @@ struct StatusCardView: View {
     var labelState: CardLabelState = .plain
     /// The message in flight: "You: “…”" in place of Next.
     var sentMessage: String?
+    /// What went with it, by name.
+    var sentAttachments: [String] = []
     /// It is a goal set from a draft: "Goal: “…”".
     var sentIsGoal = false
     let summary: StatusSummaryModel
@@ -117,7 +120,7 @@ struct StatusCardView: View {
                 .accessibilityLabel(Text(verbatim: layout.shown(card.lines).map { InlineMarkdown.plain($0.text) }.joined(separator: "\n")))
             if let sentMessage {
                 // Not tappable as Next is: it is what was just sent. Up to 3 lines, then "Read all ›".
-                YouLineView(message: sentMessage, isGoal: sentIsGoal) { onReadSent(sentMessage) }
+                YouLineView(message: sentMessage, attachments: sentAttachments, isGoal: sentIsGoal) { onReadSent(sentMessage) }
             } else if let next = card.next {
                 // Next is in the user's words: a tap puts it into the draft, never sends it.
                 Button { onNext(InlineMarkdown.plain(next)) } label: {
@@ -221,6 +224,8 @@ private struct DetailsLink: View {
 /// under it opens the reader "You said". Measured as drawn, not by counting.
 struct YouLineView: View {
     let message: String
+    /// "With report.pdf" or "With 3 attachments" under it.
+    var attachments: [String] = []
     var isGoal = false
     let onReadAll: () -> Void
 
@@ -237,7 +242,41 @@ struct YouLineView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(verbatim: line)
+            if !message.isEmpty { quote }
+            if clamped || !attachments.isEmpty {
+                // Beside "N words · Read all ›" when both show.
+                HStack(spacing: 6) {
+                    if clamped {
+                        Button(action: onReadAll) {
+                            Text(verbatim: YouLine.readAll(message))
+                                .hexFont(.footnote)
+                                .foregroundStyle(HexColor.text3)
+                                .frame(minHeight: 24)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(HexPressStyle())
+                    }
+                    if clamped, AttachmentText.with(attachments) != nil {
+                        Text(verbatim: "·")
+                            .hexFont(.footnote)
+                            .foregroundStyle(HexColor.text3)
+                            .accessibilityHidden(true)
+                    }
+                    if let with = AttachmentText.with(attachments) {
+                        Text(verbatim: with)
+                            .hexFont(.footnote)
+                            .foregroundStyle(HexColor.text3)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(minHeight: 24)
+                    }
+                }
+            }
+        }
+    }
+
+    private var quote: some View {
+        Text(verbatim: line)
                 .hexFont(.body)
                 .foregroundStyle(HexColor.text3)
                 .lineLimit(YouLine.maxLines)
@@ -254,17 +293,6 @@ struct YouLineView: View {
                 }
                 // VoiceOver reads the whole message.
                 .accessibilityLabel(Text(verbatim: line))
-            if clamped {
-                Button(action: onReadAll) {
-                    Text(verbatim: YouLine.readAll(message))
-                        .hexFont(.footnote)
-                        .foregroundStyle(HexColor.text3)
-                        .frame(minHeight: 24)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(HexPressStyle())
-            }
-        }
     }
 }
 

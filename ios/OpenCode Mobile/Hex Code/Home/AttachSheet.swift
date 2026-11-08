@@ -1,16 +1,23 @@
+import CoreTransferable
+import os
 import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// Where the Attach sheet goes next, once it has closed.
 enum AttachRoute: Equatable {
     case photos
     case camera
+    case files
 }
 
-/// The paperclip's sheet (app plan, "Attach"): Photos (the system photo picker) and Take photo
-/// (the system camera). No in-app grid: neither needs photo library access.
+/// The paperclip's sheet (app plan, "Attach files (M7)"): Photos and videos (the system photo
+/// picker), Take photo (the system camera) and Files (the system file picker). No in-app grid:
+/// none of them needs photo library or file access.
 struct AttachSheet: View {
+    /// Files is on: the server declares the upload route and `paths.tmp`.
+    var filesAvailable = true
     let onPick: (AttachRoute) -> Void
     let onClose: () -> Void
 
@@ -23,7 +30,7 @@ struct AttachSheet: View {
             }
         ) {
             VStack(spacing: 0) {
-                HexRow(icon: .img, LocalizedStringResource("home.attach.photos", defaultValue: "Photos")) {
+                HexRow(icon: .img, LocalizedStringResource("home.attach.photos", defaultValue: "Photos and videos")) {
                     onPick(.photos)
                 }
                 // Dimmed where there is no camera (the simulator).
@@ -32,12 +39,22 @@ struct AttachSheet: View {
                 }
                 .disabled(!CameraPicker.isAvailable)
                 .opacity(CameraPicker.isAvailable ? 1 : 0.35)
+                // Dimmed, saying why, on a server without the upload route or `paths.tmp`.
+                HexRow(
+                    icon: .doc,
+                    LocalizedStringResource("home.attach.files", defaultValue: "Files"),
+                    value: filesAvailable ? nil : String(localized: "home.attach.files.unavailable", defaultValue: "Needs a newer OpenCode")
+                ) {
+                    onPick(.files)
+                }
+                .disabled(!filesAvailable)
+                .opacity(filesAvailable ? 1 : 0.35)
             }
         }
     }
 
-    /// Two rows under the head.
-    static let height: CGFloat = 176
+    /// Three rows under the head.
+    static let height: CGFloat = 232
 }
 
 nonisolated extension PickedImage {
@@ -56,18 +73,69 @@ nonisolated extension PickedImage {
     }
 }
 
+nonisolated extension PickedAttachment {
+    /// Photo picker items, in order: a video is a file (its exact bytes, uploaded), named "Video
+    /// 1.mov", "Video 2.mp4"…; anything else an image.
+    static func from(_ items: [PhotosPickerItem]) -> [PickedAttachment] {
+        var videos = 0
+        return items.map { item in
+            guard let movie = item.supportedContentTypes.first(where: { $0.conforms(to: .movie) || $0.conforms(to: .video) }) else {
+                return .image(PickedImage(item: item))
+            }
+            videos += 1
+            return .file(PickedFile(video: item, type: movie, number: videos))
+        }
+    }
+}
+
+nonisolated extension PickedFile {
+    /// A video from Photos and videos: the picker's movie file, exported as is (`.mov` or `.mp4`)
+    /// into the cache. Photos gives no file name, so it is "Video <n>.<ext>".
+    init(video item: PhotosPickerItem, type: UTType, number: Int) {
+        let ext = type.preferredFilenameExtension ?? "mov"
+        self.init(name: "Video \(number).\(ext)", mime: Self.mime(type), kind: .video) {
+            guard let movie = try await item.loadTransferable(type: PickedMovie.self) else { throw Unreadable() }
+            return movie.file
+        }
+    }
+}
+
+/// A movie from the photo picker, copied into the cache as it is.
+nonisolated struct PickedMovie: Transferable {
+    let file: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .movie) { received in
+            PickedMovie(file: try PickedFile.copyIntoCache(received.file, name: received.file.lastPathComponent))
+        }
+    }
+}
+
 extension View {
-    /// The system photo picker for the Attach sheet's Photos: images and screenshots, `.compatible`
-    /// encoding (JPEG in place of HEIC), up to `limit`, in the order picked.
-    func attachPhotosPicker(isPresented: Binding<Bool>, limit: Int, onPicked: @escaping ([PickedImage]) -> Void) -> some View {
+    /// The system photo picker for the Attach sheet's Photos and videos: images, screenshots and
+    /// videos, `.compatible` encoding (JPEG in place of HEIC), up to `limit`, in the order picked.
+    func attachPhotosPicker(isPresented: Binding<Bool>, limit: Int, onPicked: @escaping ([PickedAttachment]) -> Void) -> some View {
         modifier(AttachPhotosPicker(isPresented: isPresented, limit: limit, onPicked: onPicked))
+    }
+
+    /// The system file picker for the Attach sheet's Files: any file but not folders, several at
+    /// once, each copied into the cache as soon as it is picked. No permission.
+    func attachFilesPicker(isPresented: Binding<Bool>, onPicked: @escaping ([PickedFile]) -> Void) -> some View {
+        fileImporter(isPresented: isPresented, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            switch result {
+            case let .success(urls):
+                onPicked(urls.map { PickedFile(url: $0) })
+            case let .failure(error):
+                HexLog.dictation.error("attach: the file picker failed: \(String(describing: error), privacy: .public)")
+            }
+        }
     }
 }
 
 private struct AttachPhotosPicker: ViewModifier {
     @Binding var isPresented: Bool
     let limit: Int
-    let onPicked: ([PickedImage]) -> Void
+    let onPicked: ([PickedAttachment]) -> Void
 
     @State private var selection: [PhotosPickerItem] = []
 
@@ -78,13 +146,13 @@ private struct AttachPhotosPicker: ViewModifier {
                 selection: $selection,
                 maxSelectionCount: max(1, limit),
                 selectionBehavior: .ordered,
-                matching: .any(of: [.screenshots, .images]),
+                matching: .any(of: [.screenshots, .images, .videos]),
                 preferredItemEncoding: .compatible
             )
             .onChange(of: selection) { _, items in
                 guard !items.isEmpty else { return }
                 selection = []
-                onPicked(items.map(PickedImage.init(item:)))
+                onPicked(PickedAttachment.from(items))
             }
     }
 }

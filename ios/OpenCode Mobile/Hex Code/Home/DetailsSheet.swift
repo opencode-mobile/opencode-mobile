@@ -108,13 +108,18 @@ struct DetailsSheet: View {
                         .foregroundStyle(HexColor.text3)
                         .frame(width: 16)
                     VStack(alignment: .leading, spacing: 4) {
-                        if !message.text.isEmpty {
-                            Text(verbatim: message.text)
+                        if !message.shownText.isEmpty {
+                            Text(verbatim: message.shownText)
                                 .hexFont(HexTextStyle.row.weight(.medium))
                                 .foregroundStyle(HexColor.text1)
                                 .lineLimit(2)
                         }
-                        WaitingImages(thumbnails: session.waitingThumbnails[message.id], count: message.imageCount)
+                        WaitingImages(
+                            thumbnails: session.waitingThumbnails[message.id],
+                            files: session.waitingFiles[message.id],
+                            count: message.imageCount,
+                            fileCount: message.attachedFileNames.count
+                        )
                         Text(message.delivery == "queue"
                             ? LocalizedStringResource("details.waiting.queue", defaultValue: "Queue · after this turn")
                             : LocalizedStringResource("details.waiting.steer", defaultValue: "Steer · lands at the next step"))
@@ -248,21 +253,28 @@ struct DetailsSheet: View {
     }
 }
 
-/// A waiting message's images: the phone's own thumbnails (24 pt, at most 4), or for one sent
-/// from elsewhere their count.
+/// A waiting message's attachments: the phone's own image thumbnails then file tiles (24 pt, at
+/// most 4 together), or for one sent from elsewhere their count ("2 images, 1 file").
 struct WaitingImages: View {
     let thumbnails: [UIImage]?
+    var files: [OutgoingFile]?
     let count: Int
+    var fileCount = 0
 
     var body: some View {
-        if let thumbnails, !thumbnails.isEmpty {
+        let images = thumbnails ?? []
+        let tiles = files ?? []
+        if !images.isEmpty || !tiles.isEmpty {
             HStack(spacing: 6) {
-                ForEach(thumbnails.indices.prefix(DictationDraft.maxImages), id: \.self) { index in
-                    HexThumbnail(image: thumbnails[index], size: .small)
+                ForEach(images.indices.prefix(DictationDraft.maxAttachments), id: \.self) { index in
+                    HexThumbnail(image: images[index], size: .small)
+                }
+                ForEach(tiles.indices.prefix(max(0, DictationDraft.maxAttachments - images.count)), id: \.self) { index in
+                    HexThumbnail(file: .init(ext: tiles[index].extensionLabel, isVideo: tiles[index].kind == .video), name: tiles[index].name, size: .small)
                 }
             }
-        } else if count > 0 {
-            Text(verbatim: HomeModel.imageCountText(count))
+        } else if count + fileCount > 0 {
+            Text(verbatim: AttachmentText.count(images: count, files: fileCount))
                 .hexFont(.caption)
                 .foregroundStyle(HexColor.text3)
         }

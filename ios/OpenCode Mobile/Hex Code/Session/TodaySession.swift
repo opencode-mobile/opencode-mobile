@@ -70,6 +70,8 @@ final class TodaySession {
     private(set) var undeliveredMessages: [InboxEntry] = []
     /// The phone's thumbnails of the images it sent, by inbox id, until delivered or cancelled.
     private(set) var waitingThumbnails: [String: [UIImage]] = [:]
+    /// The files the phone sent, by inbox id, for their 24 pt tiles, until delivered or cancelled.
+    private(set) var waitingFiles: [String: [OutgoingFile]] = [:]
     /// The agent's to-do list (`todowrite`), cancelled items left out; empty for none.
     var todos: [TodoItem] = []
     /// Subagents and shell commands running, for the Details link.
@@ -79,6 +81,8 @@ final class TodaySession {
     var sentMessage: String?
     /// The You line is a goal set from a draft: "Goal: “…”".
     private(set) var sentIsGoal = false
+    /// What went with the You line's message, by name: "With report.pdf" or "With 3 attachments".
+    private(set) var sentAttachments: [String] = []
     /// Today's goal; nil for none. From `get` on open and every reconnect, then from
     /// `rpc.opencode.goal.changed`.
     private(set) var goal: TodayGoal?
@@ -111,6 +115,8 @@ final class TodaySession {
     @ObservationIgnored private var shellTick: Task<Void, Never>?
     /// What the phone sent, by inbox id, until it is delivered.
     @ObservationIgnored private var sentTexts: [String: String] = [:]
+    /// The names of what went with each, by inbox id.
+    @ObservationIgnored private var sentNames: [String: [String]] = [:]
     /// The last delivered message whose text wasn't known yet (its send hadn't returned).
     @ObservationIgnored private var deliveredWithoutText: String?
     /// The run the sent message started (or joined) has ended: the next card made while idle
@@ -248,8 +254,11 @@ final class TodaySession {
             sentIsGoal = false
             sentRunEnded = false
             sentTexts = [:]
+            sentNames = [:]
+            sentAttachments = []
             deliveredWithoutText = nil
             waitingThumbnails = [:]
+            waitingFiles = [:]
             showsDetails = false
         }
         live = LiveSessionState(rootID: session.id, hasRun: session.busySince != nil)
@@ -413,6 +422,7 @@ final class TodaySession {
         }
         live?.apply(snapshot)
         waitingThumbnails = waitingThumbnails.filter { id, _ in snapshot.inbox.contains { $0.id == id } }
+        waitingFiles = waitingFiles.filter { id, _ in snapshot.inbox.contains { $0.id == id } }
         publish()
         // Read ahead when the session opens, so Details opens with them; again on a reconnect
         // while it is open.
@@ -464,10 +474,14 @@ final class TodaySession {
             // Never dropped: a mid-run card from ↻ or a goal round still on its way is followed by
             // this one.
             Task { await summary.refresh(runEnd: true) }
-        case let .delivered(id, text):
+        case let .delivered(id, text, attachments):
             inboxLeft(id)
+            let names = sentNames.removeValue(forKey: id) ?? attachments
             if let text = sentTexts.removeValue(forKey: id) ?? text {
-                showSent(text)
+                showSent(text, attachments: names)
+            } else if !names.isEmpty {
+                // Attachments alone, from elsewhere.
+                showSent("", attachments: names)
             } else {
                 deliveredWithoutText = id
             }
@@ -480,13 +494,16 @@ final class TodaySession {
     /// after that keeps none.
     private func inboxLeft(_ id: String) {
         waitingThumbnails[id] = nil
+        waitingFiles[id] = nil
         leftInbox.append(id)
         if leftInbox.count > 20 { leftInbox.removeFirst() }
     }
 
     /// A later delivered message replaces the You line.
-    private func showSent(_ text: String, goal: Bool = false) {
-        sentMessage = text
+    private func showSent(_ text: String, goal: Bool = false, attachments: [String] = []) {
+        // A message from elsewhere carries its path lines; the names show under it instead.
+        sentMessage = AttachedFiles.strip(text).text
+        sentAttachments = attachments
         sentIsGoal = goal
         sentRunEnded = false
     }
@@ -495,6 +512,7 @@ final class TodaySession {
     private func cardMade(busy: Bool) {
         guard !busy, sentRunEnded else { return }
         sentMessage = nil
+        sentAttachments = []
         sentIsGoal = false
         sentRunEnded = false
     }
@@ -557,25 +575,30 @@ final class TodaySession {
     /// The agent is working (or waiting on you): a message can go after this turn or now.
     var agentBusy: Bool { busySince != nil || pendingInput != nil }
 
-    /// Sends a message, with its images, to today's session; returns its inbox id.
-    func send(_ text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String {
+    /// Sends a message, with its images and uploaded files, to today's session; returns its inbox id.
+    func send(_ text: String, images: [OutgoingImage], files: [OutgoingFile] = [], delivery: Delivery) async throws -> String {
         guard let api, let sessionID else { throw NotOpen() }
         #if DEBUG
         // `-HexCodeFailSends YES`: every send fails, as without a network.
         if UserDefaults.standard.bool(forKey: "HexCodeFailSends") { throw URLError(.notConnectedToInternet) }
         #endif
-        let id = try await api.prompt(sessionID: sessionID, text: text, images: images, delivery: delivery)
+        let id = try await api.prompt(sessionID: sessionID, text: text, images: images, files: files, delivery: delivery)
         messageSent = true
         summary.showWorkingOnMessage()
         if !images.isEmpty, !leftInbox.contains(id) {
             waitingThumbnails[id] = images.prefix(DictationDraft.maxImages).map(\.image.thumbnail)
         }
+        if !files.isEmpty, !leftInbox.contains(id) {
+            waitingFiles[id] = Array(files.prefix(DictationDraft.maxAttachments))
+        }
+        let names = images.map(\.name) + files.map(\.name)
         if deliveredWithoutText == id {
             // Delivered before the send returned, with no text from the inbox.
             deliveredWithoutText = nil
-            showSent(text)
+            showSent(text, attachments: names)
         } else {
             sentTexts[id] = text
+            sentNames[id] = names
         }
         return id
     }
@@ -585,6 +608,7 @@ final class TodaySession {
         guard let api, let sessionID else { throw NotOpen() }
         try await api.cancelInbox(sessionID: sessionID, itemID: itemID)
         sentTexts[itemID] = nil
+        sentNames[itemID] = nil
         inboxLeft(itemID)
         // The cancelled event removes it too; this doesn't wait for it.
         _ = live?.apply(.inboxRemoved(sessionID: sessionID, id: itemID))
@@ -932,7 +956,7 @@ final class TodaySession {
     /// it would read as a command or is too long. On `204` the sheet closes; a goal from a draft
     /// makes the You line "Goal: “…”" until the next card.
     @discardableResult
-    func setGoal(_ text: String, images: [OutgoingImage] = [], fromDraft: Bool = false) async -> GoalOutcome {
+    func setGoal(_ text: String, images: [OutgoingImage] = [], files: [OutgoingFile] = [], fromDraft: Bool = false) async -> GoalOutcome {
         if let refusal = GoalText.refusal(text) {
             toasts.show(Self.goalRefusedNotice(refusal))
             return .refused(refusal)
@@ -940,7 +964,7 @@ final class TodaySession {
         let objective = GoalText.objective(text)
         let old = goal
         let busy = agentBusy
-        let outcome = await runGoal(.set(objective), images: images)
+        let outcome = await runGoal(.set(objective), images: images, files: files)
         guard outcome == .done else { return outcome }
         showsGoalSheet = false
         toasts.show(Self.goalSetNotice(replaced: old != nil, busy: busy))
@@ -996,14 +1020,15 @@ final class TodaySession {
 
     /// Sends `/goal`. A `500` means the goal changed elsewhere: `get`, and "The goal had already
     /// changed". Without an event within 2 s of a `204`, `get`.
-    private func runGoal(_ command: GoalCommand, images: [OutgoingImage] = []) async -> GoalOutcome {
+    /// The draft's files go as path lines after the objective, as OpenCode Mobile does for commands.
+    private func runGoal(_ command: GoalCommand, images: [OutgoingImage] = [], files: [OutgoingFile] = []) async -> GoalOutcome {
         guard let goals, let sessionID else {
             toasts.show(Self.goalFailedNotice())
             return .failed
         }
         let events = goalEvents
         do {
-            try await goals.goalCommand(sessionID: sessionID, text: command.text, images: images)
+            try await goals.goalCommand(sessionID: sessionID, text: AttachedFiles.promptText(command.text, paths: files.map(\.path)), images: images)
         } catch GoalAPIError.stale {
             HexLog.summary.info("goal: the goal had already changed")
             await readGoal()

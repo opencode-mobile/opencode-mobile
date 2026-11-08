@@ -234,15 +234,15 @@ struct AttachDraftTests {
         #expect(home.canSend)
     }
 
-    @Test func fourImagesIsTheMost() async {
+    @Test func fourAttachmentsIsTheMost() async {
         let home = make()
         home.attach((0 ..< 5).map { _ in picked() })
         #expect(home.draft.images.count == 4)
-        #expect(home.toast?.title == "4 images is the most per message")
+        #expect(home.toast?.title == "4 attachments is the most per message")
         #expect(home.draft.remainingImages == 0)
         home.toasts.dismiss()
         #expect(home.attachTapped() == false)
-        #expect(home.toast?.title == "4 images is the most per message")
+        #expect(home.toast?.title == "4 attachments is the most per message")
         await eventually { !home.imagesPending }
         home.removeImage(home.draft.images[0].id)
         #expect(home.attachTapped())

@@ -483,14 +483,17 @@ final class FakeGoalSender: MessageSending {
     var hasGoal = false
     var outcome = GoalOutcome.done
     private(set) var goals: [(text: String, images: [String])] = []
+    /// The files of each goal set.
+    private(set) var goalFiles: [[OutgoingFile]] = []
     private(set) var questions: [String] = []
 
-    func send(_ text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String { "msg_1" }
+    func send(_ text: String, images: [OutgoingImage], files: [OutgoingFile], delivery: Delivery) async throws -> String { "msg_1" }
     func cancelWaiting(_ itemID: String) async throws {}
     func waitForConnection() async {}
 
-    func setGoal(_ text: String, images: [OutgoingImage], fromDraft: Bool) async -> GoalOutcome {
+    func setGoal(_ text: String, images: [OutgoingImage], files: [OutgoingFile], fromDraft: Bool) async -> GoalOutcome {
         goals.append((text, images.map(\.name)))
+        goalFiles.append(files)
         return outcome
     }
 

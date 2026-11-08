@@ -11,12 +11,15 @@ final class FakeSender: MessageSending {
     private(set) var sent: [(text: String, delivery: Delivery)] = []
     /// The images of each message sent.
     private(set) var sentImages: [[OutgoingImage]] = []
+    /// The uploaded files of each message sent.
+    private(set) var sentFiles: [[OutgoingFile]] = []
     private(set) var cancelled: [String] = []
 
-    func send(_ text: String, images: [OutgoingImage], delivery: Delivery) async throws -> String {
+    func send(_ text: String, images: [OutgoingImage], files: [OutgoingFile], delivery: Delivery) async throws -> String {
         if fails { throw CancellationError() }
         sent.append((text, delivery))
         sentImages.append(images)
+        sentFiles.append(files)
         return "msg_\(sent.count)"
     }
 

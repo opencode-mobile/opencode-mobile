@@ -200,7 +200,16 @@ enum SessionEvent: Equatable, Sendable {
                 text: text,
                 files: files,
                 kind: item?["type"] as? String ?? "user",
-                metadata: metadata.map { InboxMetadataV2(source: $0["source"] as? String, goalID: $0["goalID"] as? String) }
+                metadata: metadata.map {
+                    InboxMetadataV2(
+                        source: $0["source"] as? String,
+                        goalID: $0["goalID"] as? String,
+                        attachments: ($0["attachments"] as? [[String: Any]] ?? []).compactMap { entry in
+                            guard let path = entry["path"] as? String, !path.isEmpty else { return nil }
+                            return PromptAttachment(name: entry["name"] as? String ?? "", mime: entry["mime"] as? String ?? "", path: path)
+                        }
+                    )
+                }
             )
         case "session.inbox.delivered":
             guard let sessionID, let id = data["inboxID"] as? String else { return nil }
@@ -309,8 +318,15 @@ struct InboxEntry: Equatable, Sendable, Identifiable {
     /// continuation, even one sent as a `user` item (a kickoff with images).
     var isMessage: Bool { kind != "synthetic" && source != "goal" }
 
+    /// Uploaded files named in its `metadata.attachments`.
+    var attachments: [PromptAttachment] = []
+
     /// How many of its files are images.
     var imageCount: Int { files.filter { $0.mime?.hasPrefix("image/") ?? true }.count }
+    /// The text as shown: without its trailing path lines.
+    var shownText: String { AttachedFiles.strip(text).text }
+    /// Its uploaded files' names, from `metadata.attachments` or the path lines.
+    var attachedFileNames: [String] { AttachedFiles.names(text: text, attachments: attachments) }
 }
 
 /// The state read back on every (re)connect.
@@ -347,8 +363,9 @@ struct LiveSessionState: Equatable, Sendable {
     enum Effect: Equatable, Sendable {
         /// A run of today's session ended: refresh the summary.
         case runEnded
-        /// A message reached today's session's agent, with its text when the inbox had it.
-        case delivered(id: String, text: String?)
+        /// A message reached today's session's agent, with its text when the inbox had it and the
+        /// names of what went with it.
+        case delivered(id: String, text: String?, attachments: [String] = [])
     }
 
     let rootID: String
@@ -467,7 +484,8 @@ struct LiveSessionState: Equatable, Sendable {
                 files: files,
                 kind: kind,
                 source: metadata?.source,
-                goalID: metadata?.goalID
+                goalID: metadata?.goalID,
+                attachments: metadata?.attachments ?? []
             ))
             return nil
         case let .inboxDelivered(sessionID, id):
@@ -477,7 +495,11 @@ struct LiveSessionState: Equatable, Sendable {
             // The server's own items (a subagent's note, a goal's kickoff or continuation) never
             // set the You line.
             if let entry, !entry.isMessage { return nil }
-            return .delivered(id: id, text: entry.flatMap { $0.text.isEmpty ? nil : $0.text })
+            return .delivered(
+                id: id,
+                text: entry.flatMap { $0.text.isEmpty ? nil : $0.text },
+                attachments: entry.map { $0.files.compactMap(\.name) + $0.attachedFileNames } ?? []
+            )
         case let .inboxRemoved(sessionID, id):
             guard sessionID == rootID else { return nil }
             inbox.removeAll { $0.id == id }

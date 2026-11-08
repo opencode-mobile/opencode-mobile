@@ -51,6 +51,16 @@ final class HomeModel {
     @ObservationIgnored weak var sender: (any MessageSending)?
     /// Whether today's model can see images; set from the model list.
     var imageInput = ImageInput.unknown
+    /// Uploads files to the computer; nil when the server doesn't declare the upload route or
+    /// `paths.tmp` (app plan, "Attach files (M7)").
+    var uploader: (any FileUploading)? {
+        didSet { filesRouteChanged = false }
+    }
+    /// The server answered an upload with `400`, `404`, `405` or `415`: Files is dimmed for this
+    /// connection.
+    private(set) var filesRouteChanged = false
+    /// The Attach sheet's Files row is on.
+    var canAttachFiles: Bool { uploader != nil && !filesRouteChanged }
 
     @ObservationIgnored private let recorder: any TakeRecording
     /// The speech model. Recording never waits for it.
@@ -77,6 +87,8 @@ final class HomeModel {
     @ObservationIgnored private let prepareImage: @Sendable (PickedImage.Content) async throws -> PreparedImage
     /// Images being prepared, by draft image id.
     @ObservationIgnored private var preparing: [UUID: Task<Void, Never>] = [:]
+    /// Files being copied and uploaded, by draft file id.
+    @ObservationIgnored private var uploads: [UUID: Task<Void, Never>] = [:]
 
     init(
         recorder: any TakeRecording,
@@ -566,15 +578,17 @@ final class HomeModel {
     /// What a Now starts with.
     static let correctionPrefix = "[Correction] "
 
-    /// Every chunk has text, every image is prepared and nothing records: Send is on. Images
-    /// alone don't make a message for a model that can't see them.
+    /// Every chunk has text, every image is prepared, every file uploaded and nothing records:
+    /// Send is on. Images alone don't make a message for a model that can't see them; files do.
     var canSend: Bool {
-        draft.isComplete && !isRecording && !(draft.chunks.isEmpty && !imageInput.canSee)
+        draft.isComplete && !isRecording && !(draft.chunks.isEmpty && draft.files.isEmpty && !imageInput.canSee)
     }
     /// A take still turning into text: Send reads "Transcribing".
     var takesPending: Bool { isRecording || draft.isWaiting || draft.isTranscribing }
     /// An image still being prepared: Send reads "Preparing".
     var imagesPending: Bool { draft.isPreparing }
+    /// A file still uploading: Send reads "Uploading".
+    var filesPending: Bool { draft.isUploading }
     var agentBusy: Bool { sender?.agentBusy ?? false }
 
     /// Send: the draft clears at once and goes out. An idle agent gets it at once (`steer`, which
@@ -584,7 +598,12 @@ final class HomeModel {
         guard canSend, let sender else { return }
         let saved = draft
         let text = saved.text
-        lastSent = SentMessage(text: text, paragraphs: saved.paragraphs, duration: saved.totalDuration)
+        lastSent = SentMessage(
+            text: text,
+            paragraphs: saved.paragraphs,
+            duration: saved.totalDuration,
+            attachments: outgoingImages(saved).map(\.name) + saved.files.map(\.name)
+        )
         let mode = sendMode
         sendMode = .afterTurn
         draft = DictationDraft()
@@ -607,10 +626,10 @@ final class HomeModel {
     var showsDraftReader = false
 
     /// The reader's paragraphs and meta for `text` (the You line): the phone's own message when it is
-    /// this one, else the text as one paragraph.
-    func sentReader(for text: String) -> SentMessage {
+    /// this one, else the text as one paragraph, with what went with it.
+    func sentReader(for text: String, attachments: [String] = []) -> SentMessage {
         if let lastSent, lastSent.text == text { return lastSent }
-        return SentMessage(text: text, paragraphs: [text], duration: nil)
+        return SentMessage(text: text, paragraphs: [text], duration: nil, attachments: attachments)
     }
 
     /// What goes with the text: the draft's images, or none for a model that can't see them.
@@ -618,9 +637,9 @@ final class HomeModel {
         imageInput.canSee ? OutgoingImage.from(saved.images) : []
     }
 
-    /// The notice's detail: the text in quotes, or for images alone their count.
-    private static func detail(_ text: String, imageCount: Int) -> String {
-        if text.isEmpty, imageCount > 0 { return imageCountText(imageCount) }
+    /// The notice's detail: the text in quotes, or for attachments alone their count.
+    private static func detail(_ text: String, imageCount: Int, fileCount: Int = 0) -> String {
+        if text.isEmpty, imageCount + fileCount > 0 { return AttachmentText.count(images: imageCount, files: fileCount) }
         return "“\(text)”"
     }
 
@@ -631,10 +650,11 @@ final class HomeModel {
     private func post(_ text: String, delivery: Delivery, saved: DictationDraft, notice: SentNotice) async {
         guard let sender else { return restoreAfterFailure(saved) }
         let images = outgoingImages(saved)
+        let files = OutgoingFile.from(saved.files)
         let withheld = images.isEmpty && !saved.images.isEmpty
         let id: String
         do {
-            id = try await sender.send(text, images: images, delivery: delivery)
+            id = try await sender.send(text, images: images, files: files, delivery: delivery)
         } catch {
             HexLog.dictation.error("send: failed: \(String(describing: error), privacy: .public)")
             return restoreAfterFailure(saved)
@@ -654,7 +674,7 @@ final class HomeModel {
             )
             return
         }
-        let detail = Self.detail(text, imageCount: images.count)
+        let detail = Self.detail(text, imageCount: images.count, fileCount: files.count)
         switch notice {
         case .idle:
             toasts.show(HexToastItem(
@@ -667,7 +687,7 @@ final class HomeModel {
             toasts.show(HexToastItem(
                 tone: .steer,
                 title: String(localized: "home.sent.now", defaultValue: "Sent · lands at the next step"),
-                detail: Self.detail(saved.text, imageCount: images.count),
+                detail: Self.detail(saved.text, imageCount: images.count, fileCount: files.count),
                 duration: 2.6
             ))
         case .queued:
@@ -709,7 +729,7 @@ final class HomeModel {
             HexToastItem(
                 tone: .steer,
                 title: String(localized: "home.sending.now", defaultValue: "Sending now…"),
-                detail: Self.detail(text, imageCount: outgoingImages(saved).count),
+                detail: Self.detail(text, imageCount: outgoingImages(saved).count, fileCount: saved.files.count),
                 action: .init(title: String(localized: "common.undo", defaultValue: "Undo"), icon: .undo),
                 duration: 3,
                 fixedDuration: true
@@ -781,12 +801,13 @@ final class HomeModel {
             return
         }
         let images = outgoingImages(saved)
+        let files = OutgoingFile.from(saved.files)
         draft = DictationDraft()
         showEarlier = false
         lastDeleted = nil
         sendMode = .afterTurn
         Task {
-            let outcome = await sender.setGoal(saved.text, images: images, fromDraft: true)
+            let outcome = await sender.setGoal(saved.text, images: images, files: files, fromDraft: true)
             if outcome != .done { draft.restore(contentsOf: saved) }
         }
     }
@@ -854,6 +875,8 @@ final class HomeModel {
         draft.clear()
         for task in preparing.values { task.cancel() }
         preparing.removeAll()
+        for task in uploads.values { task.cancel() }
+        uploads.removeAll()
         for take in audio.values { try? FileManager.default.removeItem(at: take.url) }
         audio.removeAll()
         queue.removeAll()
@@ -870,19 +893,19 @@ final class HomeModel {
 
     // MARK: Attach
 
-    /// The paperclip: true opens the Attach sheet; with 4 images it shows the limit instead.
+    /// The paperclip: true opens the Attach sheet; with 4 attachments it shows the limit instead.
     func attachTapped() -> Bool {
-        guard draft.remainingImages > 0 else {
-            showImageLimit()
+        guard draft.remainingAttachments > 0 else {
+            showAttachLimit()
             return false
         }
         return true
     }
 
-    private func showImageLimit() {
+    private func showAttachLimit() {
         toasts.show(HexToastItem(
             tone: .info,
-            title: String(localized: "home.attach.limit", defaultValue: "4 images is the most per message")
+            title: String(localized: "home.attach.limit", defaultValue: "4 attachments is the most per message")
         ))
     }
 
@@ -890,22 +913,40 @@ final class HomeModel {
     /// main thread. Past the limit they are left out, with its notice; one that can't be read
     /// leaves with "Couldn't add this image".
     func attach(_ picked: [PickedImage]) {
+        attach(picked.map(PickedAttachment.image))
+    }
+
+    /// Picked files (from Files, or videos from Photos and videos) join the draft at once as file
+    /// tiles and start uploading.
+    func attach(files picked: [PickedFile]) {
+        attach(picked.map(PickedAttachment.file))
+    }
+
+    /// Images and files, in the order picked: as many as there is room for, then the limit's notice.
+    func attach(_ picked: [PickedAttachment]) {
         guard !picked.isEmpty else { return }
-        if picked.count > draft.remainingImages { showImageLimit() }
-        for item in picked.prefix(draft.remainingImages) {
-            let image = DraftImage(kind: item.kind)
-            guard draft.addImage(image) else { continue }
-            let prepareImage = prepareImage
-            preparing[image.id] = Task { [weak self] in
-                let result: Result<PreparedImage, any Error>
-                do {
-                    let content = try await item.load()
-                    result = .success(try await prepareImage(content))
-                } catch {
-                    result = .failure(error)
-                }
-                self?.finishPreparing(image.id, result)
+        if picked.count > draft.remainingAttachments { showAttachLimit() }
+        for item in picked.prefix(draft.remainingAttachments) {
+            switch item {
+            case let .image(image): add(image)
+            case let .file(file): add(file)
             }
+        }
+    }
+
+    private func add(_ item: PickedImage) {
+        let image = DraftImage(kind: item.kind)
+        guard draft.addImage(image) else { return }
+        let prepareImage = prepareImage
+        preparing[image.id] = Task { [weak self] in
+            let result: Result<PreparedImage, any Error>
+            do {
+                let content = try await item.load()
+                result = .success(try await prepareImage(content))
+            } catch {
+                result = .failure(error)
+            }
+            self?.finishPreparing(image.id, result)
         }
     }
 
@@ -931,4 +972,83 @@ final class HomeModel {
         preparing.removeValue(forKey: id)?.cancel()
         draft.removeImage(id)
     }
+
+    /// A file tile: copied into the cache, then uploaded at once (never blocking talking). The
+    /// cached copy goes once the upload is done.
+    private func add(_ item: PickedFile) {
+        let file = DraftFile(name: AttachedFiles.fileName(item.name), mime: item.mime.isEmpty ? AttachedFiles.fallbackMime : item.mime, kind: item.kind)
+        guard draft.addFile(file) else { return }
+        let id = file.id
+        uploads[id] = Task { [weak self] in
+            let copy: URL
+            do {
+                copy = try await item.copy()
+            } catch {
+                guard !Task.isCancelled else { return }
+                HexLog.dictation.error("attach: couldn't read a file: \(String(describing: error), privacy: .public)")
+                self?.fileUnreadable(id)
+                return
+            }
+            defer { PickedFile.removeCopy(copy) }
+            guard !Task.isCancelled, let self else { return }
+            guard let uploader = self.uploader, !self.filesRouteChanged else {
+                self.uploadFailed(id, name: file.name, error: FileUploadError.routeChanged)
+                return
+            }
+            let size = (try? copy.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+            self.draft.updateUpload(id, sent: 0, total: size)
+            do {
+                let path = try await uploader.upload(file: copy, name: file.name) { [weak self] sent, total in
+                    Task { @MainActor [weak self] in self?.draft.updateUpload(id, sent: sent, total: max(total, size)) }
+                }
+                self.uploads[id] = nil
+                if !Task.isCancelled { self.draft.finishUpload(id, path: path) }
+            } catch {
+                self.uploads[id] = nil
+                guard !Task.isCancelled, !Self.isCancellation(error) else { return }
+                self.uploadFailed(id, name: file.name, error: error)
+            }
+        }
+    }
+
+    private static func isCancellation(_ error: any Error) -> Bool {
+        error is CancellationError || (error as? URLError)?.code == .cancelled
+    }
+
+    private func fileUnreadable(_ id: UUID) {
+        uploads[id] = nil
+        guard draft.files.contains(where: { $0.id == id }) else { return }
+        draft.removeFile(id)
+        toasts.show(HexToastItem(
+            tone: .stop,
+            title: String(localized: "home.attach.file_failed", defaultValue: "Couldn’t add this file")
+        ))
+    }
+
+    /// The tile leaves with "Couldn't upload <name>". A changed route dims Files for this connection.
+    private func uploadFailed(_ id: UUID, name: String, error: any Error) {
+        uploads[id] = nil
+        HexLog.dictation.error("attach: couldn't upload a file: \(String(describing: error), privacy: .public)")
+        if error as? FileUploadError == .routeChanged { filesRouteChanged = true }
+        guard draft.files.contains(where: { $0.id == id }) else { return }
+        draft.removeFile(id)
+        toasts.show(HexToastItem(
+            tone: .stop,
+            title: String(localized: "home.attach.upload_failed", defaultValue: "Couldn’t upload \(name)"),
+            detail: String(localized: "home.attach.upload_failed.sub", defaultValue: "Check the connection to your computer, then attach it again.")
+        ))
+    }
+
+    /// ✕ on a file tile: while uploading, the upload is cancelled; after it, the tile goes and the
+    /// server's copy stays.
+    func removeFile(_ id: UUID) {
+        uploads.removeValue(forKey: id)?.cancel()
+        draft.removeFile(id)
+    }
+}
+
+/// Something picked in the Attach sheet: an image to look at, or a file (or video) to upload.
+enum PickedAttachment: Sendable {
+    case image(PickedImage)
+    case file(PickedFile)
 }
