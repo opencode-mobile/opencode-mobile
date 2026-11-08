@@ -86,6 +86,11 @@ data class V2TextPromptRequestDto(
     val delivery: String,
     /** Left out when there are none; the default isn't encoded. */
     val files: List<V2PromptFileDto>? = null,
+    /**
+     * The prompt's `metadata`, stored with the message as it is: clients read `attachments: [{name, mime, path}]`
+     * and `displayText` from it. Left out when null.
+     */
+    val metadata: JsonObject? = null,
 )
 
 /**

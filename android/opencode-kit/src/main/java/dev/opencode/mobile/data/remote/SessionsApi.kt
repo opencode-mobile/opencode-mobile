@@ -616,11 +616,16 @@ class SessionsApi private constructor(
         delivery: String,
         /** Images and other files that go with the text, in the same request. */
         files: List<V2PromptFileDto> = emptyList(),
+        /** The prompt's `metadata` (uploaded files' `attachments`, `displayText`); left out when null. */
+        metadata: JsonObject? = null,
     ): V2InboxItemDto =
         httpClient
             .get()
             .post("api/session/$id/prompt") {
-                setJsonBody(json, V2TextPromptRequestDto(text = text, delivery = delivery, files = files.ifEmpty { null }))
+                setJsonBody(
+                    json,
+                    V2TextPromptRequestDto(text = text, delivery = delivery, files = files.ifEmpty { null }, metadata = metadata),
+                )
             }.bodyOnSuccess<ApiDataEnvelope<V2InboxItemDto>>()
             .data
 

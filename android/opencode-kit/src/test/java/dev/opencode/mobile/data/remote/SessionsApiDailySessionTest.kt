@@ -264,6 +264,32 @@ class SessionsApiDailySessionTest {
         }
 
     @Test
+    fun aPromptWithMetadataSendsItAsGiven() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            val api =
+                api { request ->
+                    captured += request
+                    respond(
+                        """{"data":{"id":"msg_3","type":"user","payload":{"text":"Look"},"delivery":"queue"}}""",
+                        HttpStatusCode.OK,
+                        jsonHeaders,
+                    )
+                }
+            val metadata =
+                Json
+                    .parseToJsonElement(
+                        """{"displayText":"Look","comments":[],"attachments":[{"name":"a.zip","mime":"application/zip","path":"/t/uploads/u/a.zip"}]}""",
+                    ).jsonObject
+
+            api.promptTextV2("ses_1", "Look\nAttached file: `/t/uploads/u/a.zip`", "queue", metadata = metadata)
+
+            val sent = Json.parseToJsonElement(captured.single().body.readText()).jsonObject
+            assertEquals(metadata, sent["metadata"])
+            assertEquals(setOf("text", "delivery", "metadata"), sent.keys)
+        }
+
+    @Test
     fun aPromptWithImagesSendsThemAsDataUrlsWithNamesAndNoLineBreaks() =
         runTest {
             val captured = mutableListOf<HttpRequestData>()
