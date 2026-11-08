@@ -108,6 +108,7 @@ import dev.opencode.hexcode.designsystem.components.HexChunkRow
 import dev.opencode.hexcode.designsystem.components.HexChunkRowState
 import dev.opencode.hexcode.designsystem.components.HexDot
 import dev.opencode.hexcode.designsystem.components.HexDotTone
+import dev.opencode.hexcode.designsystem.components.HexFileThumbnail
 import dev.opencode.hexcode.designsystem.components.HexGoalLine
 import dev.opencode.hexcode.designsystem.components.HexGoalLineState
 import dev.opencode.hexcode.designsystem.components.HexHoldHint
@@ -138,6 +139,7 @@ import dev.opencode.hexcode.designsystem.components.rememberHexTalkHold
 import dev.opencode.hexcode.designsystem.rememberScreenReaderOn
 import dev.opencode.hexcode.session.AgentStatus
 import dev.opencode.hexcode.session.GoalStatus
+import dev.opencode.hexcode.session.PromptFiles
 import dev.opencode.hexcode.session.SessionSetup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -169,7 +171,7 @@ fun HomeScreen(
     var browser by remember { mutableStateOf<BrowserPage?>(null) }
     // The reader: the whole draft ("Draft") or the message just sent ("You said").
     var reader by remember { mutableStateOf<ReaderOpen?>(null) }
-    val attach = rememberAttachPickers(state.draft.roomForImages, vm::attach)
+    val attach = rememberAttachPickers(state.draft.room, vm::attach, vm::attachMedia, vm::attachFiles)
     val askMic =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             micAllowed = it
@@ -428,14 +430,15 @@ fun HomeScreen(
             val sendFailedSub = stringResource(R.string.home_send_failed_sub)
             val attachLimit = stringResource(R.string.home_attach_limit)
             val attachFailed = stringResource(R.string.home_attach_failed)
+            val fileFailed = stringResource(R.string.home_attach_file_failed)
+            val uploadFailed = stringResource(R.string.home_attach_upload_failed, state.noticeDetail.orEmpty())
+            val uploadFailedSub = stringResource(R.string.home_attach_upload_failed_sub)
             val sentNoImages = stringResource(R.string.home_sent_no_images)
             val sentNoImagesSub = stringResource(R.string.home_sent_no_images_sub, state.imageInput?.model.orEmpty())
-            // A message of only images says how many in place of its text.
-            val messageDetail =
-                quoted(state.noticeDetail)
-                    ?: state.noticeImages.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.home_waiting_images, it, it) }
+            // A message of only images or files says how many in place of its text.
+            val messageDetail = quoted(state.noticeDetail) ?: attachmentCount(state.noticeImages, state.noticeFiles)
             val notice =
-                remember(state.notice, messageDetail, micOff, sentNoImagesSub, newDayDetail, pairedSub) {
+                remember(state.notice, messageDetail, micOff, sentNoImagesSub, newDayDetail, pairedSub, uploadFailed) {
                     when (state.notice) {
                         HomeNotice.ChunkDeleted ->
                             HexToastMessage(deleted, HexToastTone.Undo, actionLabel = undo, actionIcon = HexIcons.undo, durationMs = 3_500)
@@ -468,6 +471,8 @@ fun HomeScreen(
                         HomeNotice.SendFailed -> HexToastMessage(sendFailed, HexToastTone.Stop, sendFailedSub, durationMs = 3_200)
                         HomeNotice.AttachLimit -> HexToastMessage(attachLimit, HexToastTone.Info)
                         HomeNotice.AttachFailed -> HexToastMessage(attachFailed, HexToastTone.Stop)
+                        HomeNotice.FileFailed -> HexToastMessage(fileFailed, HexToastTone.Stop)
+                        HomeNotice.UploadFailed -> HexToastMessage(uploadFailed, HexToastTone.Stop, uploadFailedSub, durationMs = 3_200)
                         HomeNotice.SentNoImages -> HexToastMessage(sentNoImages, HexToastTone.Info, sentNoImagesSub, durationMs = 2_600)
                         HomeNotice.QueuedNoImages ->
                             HexToastMessage(
@@ -507,6 +512,7 @@ fun HomeScreen(
                 }
             AttachSheet(
                 attachOpen,
+                filesAvailable = state.filesAvailable != false,
                 onPhotos = {
                     attachOpen = false
                     attach.photos()
@@ -514,6 +520,10 @@ fun HomeScreen(
                 onCamera = {
                     attachOpen = false
                     attach.camera()
+                },
+                onFiles = {
+                    attachOpen = false
+                    attach.files()
                 },
                 onClose = { attachOpen = false },
             )
@@ -780,7 +790,9 @@ private fun ColumnScope.DraftView(
 ) {
     val draft = state.draft
     DraftLabel(state)
-    if (draft.images.isNotEmpty()) AttachRow(draft.images, state.imageInput?.takeIf { !it.sees }?.model, vm::removeImage)
+    if (draft.images.isNotEmpty() || draft.files.isNotEmpty()) {
+        AttachRow(draft, state.seesImages, state.imageInput?.model.orEmpty(), vm::removeImage, vm::removeFile)
+    }
     // The draft takes the room between its line and the actions above the dock (app-plan.md, Long drafts).
     DraftBody(draft, vm, onReadAll, Modifier.padding(top = 14.dp).weight(1f, fill = false))
     if (!draft.isListening) DraftActions(state, vm)
@@ -806,7 +818,8 @@ private fun BoxScope.DraftReader(
     LaunchedEffect(open, draft.isEmpty, you) {
         if ((open == ReaderOpen.Draft && draft.isEmpty) || (open == ReaderOpen.YouSaid && you == null)) onClose()
     }
-    val text = if (open == ReaderOpen.YouSaid) you.orEmpty() else draft.text
+    // The message without its files' path lines, and what went with it under the meta (app-plan.md, Attach files).
+    val text = if (open == ReaderOpen.YouSaid) PromptFiles.strip(you.orEmpty()) else draft.text
     val words = Words.count(text)
     val wordsText = pluralStringResource(R.plurals.reader_words, words, words)
     HexReader(
@@ -839,6 +852,7 @@ private fun BoxScope.DraftReader(
             } else {
                 null
             },
+        note = if (open == ReaderOpen.YouSaid) youWith(state.today.youWith) else null,
     )
 }
 
@@ -1161,15 +1175,19 @@ private fun ChunkList(
 }
 
 /**
- * The draft's images (app-plan.md, Attach › Thumbnails on the draft): 40 dp squares, each with ✕ and a spinner while
- * it's prepared, then one caption: "2 images · go with your next message", or, for a model that can't see images
- * ([noVision] is its name), dimmed squares and "<Model> can't see images · they won't be sent".
+ * The draft's attachments (app-plan.md, Attach and Attach files › Draft row): images as 40 dp squares, each with ✕ and
+ * a spinner while it's prepared, then files as tiles with their extension and, while they upload, a ring. One caption
+ * after them ([AttachCaption]): "2 images · go with your next message", "report.pdf · goes with your next message",
+ * "Uploading · 45%"; or, for a model that can't see images ([model] is its name), dimmed images and "<Model> can't
+ * see images · they won't be sent".
  */
 @Composable
 private fun AttachRow(
-    images: List<DraftImage>,
-    noVision: String?,
-    onRemove: (Long) -> Unit,
+    draft: Draft,
+    seesImages: Boolean,
+    model: String,
+    onRemoveImage: (Long) -> Unit,
+    onRemoveFile: (Long) -> Unit,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1177,20 +1195,39 @@ private fun AttachRow(
         modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
     ) {
         val remove = stringResource(R.string.home_attach_remove)
-        images.forEach { image ->
+        draft.images.forEach { image ->
             HexThumbnail(
                 rememberThumbnail(image.file, HexThumbnailSize.Regular.side),
                 preparing = image.preparing,
-                dimmed = noVision != null,
-                onRemove = { onRemove(image.id) },
+                dimmed = !seesImages,
+                onRemove = { onRemoveImage(image.id) },
                 removeLabel = remove,
             )
         }
+        draft.files.forEach { file ->
+            HexFileThumbnail(
+                file.extension,
+                video = file.video,
+                progress = if (file.uploading) (if (file.total > 0) file.sent.toFloat() / file.total else 0f) else null,
+                label = stringResource(R.string.home_attach_file_label, file.name),
+                onRemove = { onRemoveFile(file.id) },
+                removeLabel = stringResource(R.string.home_attach_remove_file, file.name),
+            )
+        }
+        val caption = AttachCaption.of(draft, seesImages)
         Text(
-            if (noVision != null) {
-                stringResource(R.string.home_attach_no_vision, noVision)
-            } else {
-                pluralStringResource(R.plurals.home_attach_caption, images.size, images.size)
+            when (caption) {
+                is AttachCaption.Uploading -> stringResource(R.string.home_attach_uploading, caption.percent)
+                AttachCaption.NoVision -> stringResource(R.string.home_attach_no_vision, model)
+                is AttachCaption.Images -> pluralStringResource(R.plurals.home_attach_caption, caption.count, caption.count)
+                is AttachCaption.File -> stringResource(R.string.home_attach_caption_file, MiddleEllipsis.of(caption.name, 28))
+                is AttachCaption.Files -> pluralStringResource(R.plurals.home_attach_caption_files, caption.count, caption.count)
+                is AttachCaption.Mixed ->
+                    stringResource(
+                        R.string.home_attach_caption_mixed,
+                        pluralStringResource(R.plurals.home_attach_count_images, caption.images, caption.images),
+                        pluralStringResource(R.plurals.home_attach_count_files, caption.files, caption.files),
+                    )
             },
             style = HexTheme.type.caption,
             color = HexTheme.colors.text3,
@@ -1201,12 +1238,36 @@ private fun AttachRow(
     }
 }
 
-/** The Attach sheet (app-plan.md, Attach): Photos opens the system photo picker, Take photo the camera. */
+/**
+ * "2 images", "1 file" or "2 images, 1 file" for a message's attachments, in place of its text when it has none;
+ * null with none.
+ */
+@Composable
+fun attachmentCount(
+    images: Int,
+    files: Int,
+): String? =
+    when {
+        images > 0 && files > 0 ->
+            pluralStringResource(R.plurals.home_attach_count_images, images, images) + ", " +
+                pluralStringResource(R.plurals.home_attach_count_files, files, files)
+        images > 0 -> pluralStringResource(R.plurals.home_waiting_images, images, images)
+        files > 0 -> pluralStringResource(R.plurals.home_waiting_files, files, files)
+        else -> null
+    }
+
+/**
+ * The Attach sheet (app-plan.md, Attach files): Photos and videos opens the system photo picker, Take photo the
+ * camera, and Files the system file picker; Files is dimmed, reading "Needs a newer OpenCode", when the server can't
+ * take uploads ([filesAvailable]).
+ */
 @Composable
 private fun BoxScope.AttachSheet(
     open: Boolean,
+    filesAvailable: Boolean,
     onPhotos: () -> Unit,
     onCamera: () -> Unit,
+    onFiles: () -> Unit,
     onClose: () -> Unit,
 ) {
     HexSheet(
@@ -1224,39 +1285,50 @@ private fun BoxScope.AttachSheet(
             onClick = if (camera) onCamera else null,
             modifier = Modifier.alpha(if (camera) 1f else 0.35f),
         )
+        HexRow(
+            stringResource(R.string.home_attach_files),
+            icon = HexIcons.doc,
+            value = if (filesAvailable) null else stringResource(R.string.home_attach_files_unavailable),
+            onClick = if (filesAvailable) onFiles else null,
+            modifier = Modifier.alpha(if (filesAvailable) 1f else 0.35f),
+        )
     }
 }
 
-/** Opens the photo picker or the camera; what they return goes to [onPicked] as `content://` URIs. */
+/** Opens the photo picker, the camera or the file picker. */
 private class AttachPickers(
     val photos: () -> Unit,
     val camera: () -> Unit,
+    val files: () -> Unit,
 )
 
 /**
- * The system pickers (app-plan.md, Attach › Pickers): the Photo Picker, images only, up to [room] (one at a time when
- * only one fits, since the multiple picker takes two or more); and the camera, writing into the cache. Hex Code declares
- * CAMERA for pairing, and an app that declares it must hold it to open the camera, so it's asked for first.
+ * The system pickers (app-plan.md, Attach files › Pickers): the Photo Picker, images and videos, up to [room] (one at a
+ * time when only one fits, since the multiple picker takes two or more), each with the type it reports so a video can
+ * be told from an image; the camera, writing into the cache ([onTaken]); and the file picker, any file ([onFiles]).
+ * None needs a permission, but Hex Code declares CAMERA for pairing, and an app that declares it must hold it to open
+ * the camera, so it's asked for first.
  */
 @Composable
 private fun rememberAttachPickers(
     room: Int,
-    onPicked: (List<String>) -> Unit,
+    onTaken: (List<String>) -> Unit,
+    onMedia: (List<PickedMedia>) -> Unit,
+    onFiles: (List<String>) -> Unit,
 ): AttachPickers {
     val context = LocalContext.current
-    val images = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-    val many =
-        rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(room.coerceAtLeast(2))) { uris ->
-            onPicked(uris.map { it.toString() })
-        }
-    val one =
-        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { onPicked(listOf(it.toString())) } }
+    val media = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+    val picked = { uris: List<android.net.Uri> -> onMedia(uris.map { PickedMedia(it.toString(), context.contentResolver.getType(it)) }) }
+    val many = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(room.coerceAtLeast(2))) { picked(it) }
+    val one = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let { picked(listOf(it)) } }
+    val documents =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> onFiles(uris.map { it.toString() }) }
     var target by rememberSaveable { mutableStateOf<String?>(null) }
     val takePicture =
         rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
             val uri = target
             target = null
-            if (taken && uri != null) onPicked(listOf(uri))
+            if (taken && uri != null) onTaken(listOf(uri))
         }
     val openCamera = {
         val uri = AndroidImagePreparer.cameraTarget(context)
@@ -1265,7 +1337,8 @@ private fun rememberAttachPickers(
     }
     val askCamera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) openCamera() }
     return AttachPickers(
-        photos = { if (room >= 2) many.launch(images) else one.launch(images) },
+        photos = { if (room >= 2) many.launch(media) else one.launch(media) },
+        files = { documents.launch(arrayOf("*/*")) },
         camera = {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                 openCamera()
@@ -1341,10 +1414,10 @@ private fun DraftActionRow(
                 )
             }
             DraftMore(vm)
-            // Send waits for every chunk's text and every image: it reads "Transcribing" while a chunk is still on its
-            // way, else "Preparing" while an image is.
+            // Send waits for every chunk's text, every image and every file: it reads "Transcribing" while a chunk is
+            // still on its way, else "Preparing" while an image is, else "Uploading" while a file is.
             val transcribing = draft.isListening || draft.isTranscribing || draft.isWaiting
-            val pending = transcribing || draft.isPreparing
+            val pending = transcribing || draft.isPreparing || draft.isUploading
             HexButton(
                 onClick = vm::send,
                 text =
@@ -1352,6 +1425,7 @@ private fun DraftActionRow(
                         when {
                             transcribing -> R.string.home_send_transcribing
                             draft.isPreparing -> R.string.home_send_preparing
+                            draft.isUploading -> R.string.home_send_uploading
                             else -> R.string.home_send
                         },
                     ),

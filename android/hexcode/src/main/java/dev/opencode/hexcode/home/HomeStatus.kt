@@ -86,6 +86,7 @@ import dev.opencode.hexcode.designsystem.components.rememberTurn
 import dev.opencode.hexcode.session.AgentStatus
 import dev.opencode.hexcode.session.NowLine
 import dev.opencode.hexcode.session.PendingItem
+import dev.opencode.hexcode.session.PromptFiles
 import dev.opencode.hexcode.session.RefreshLabel
 import dev.opencode.hexcode.session.SessionSetup
 import dev.opencode.hexcode.session.StatusSummary
@@ -189,6 +190,7 @@ internal fun StatusArea(
             vm::openDetails,
             youGoal = today.youGoal,
             onReadYou = onReadYou,
+            youWith = today.youWith,
         )
     val nowLines =
         when (val card = summary.summary) {
@@ -376,6 +378,8 @@ private class Work(
     val youGoal: Boolean = false,
     /** Opens the reader with the whole message. */
     val onReadYou: () -> Unit = {},
+    /** What went with [you]: "With report.pdf" or "With 3 attachments" under it. */
+    val youWith: List<String> = emptyList(),
 )
 
 /** What the label over Now adds while the session isn't idle. */
@@ -418,7 +422,8 @@ private fun Card(
     // The title is a header for a screen reader (app-plan.md, Accessibility › Status card).
     Label { Box(Modifier.semantics { heading() }) { CardLabel(title, work.phase) } }
     NowText(now, size, nowLines, Modifier.alpha(dim))
-    val you = work.you
+    // The path lines of files that went with it aren't shown (app-plan.md, Attach files › Showing the text).
+    val you = work.you?.let(PromptFiles::strip)
     when {
         // The message just sent stands in for Next until the card made after its run (Just sent); it isn't tappable.
         you != null ->
@@ -427,6 +432,7 @@ private fun Card(
                 you,
                 dim,
                 work.onReadYou,
+                youWith(work.youWith),
             )
         next != null ->
             HexCodeText(
@@ -465,9 +471,19 @@ private fun Card(
     Meta(label, onRefresh) { DetailsLink(work.running, onClick = work.onDetails) }
 }
 
+/** "With report.pdf" for one attachment, "With 3 attachments" for more; null for none (app-plan.md, Attach files). */
+@Composable
+fun youWith(names: List<String>): String? =
+    when (names.size) {
+        0 -> null
+        1 -> stringResource(R.string.home_you_with_one, names.single().ifBlank { stringResource(R.string.home_attach_files) })
+        else -> pluralStringResource(R.plurals.home_you_with_many, names.size, names.size)
+    }
+
 /**
  * The message just sent (app-plan.md, Just sent): the whole of it up to [YOU_LINES] lines; a longer one is clamped with
- * an ellipsis, and "N words · Read all ›" under it opens the reader. Not tappable otherwise.
+ * an ellipsis, and "N words · Read all ›" under it opens the reader. Not tappable otherwise. [with] ("With
+ * report.pdf") sits under it, beside "N words · Read all ›" when both show.
  */
 @Composable
 private fun YouLine(
@@ -475,31 +491,49 @@ private fun YouLine(
     message: String,
     dim: Float,
     onReadAll: () -> Unit,
+    with: String? = null,
 ) {
     val colors = HexTheme.colors
     var clamped by remember(line) { mutableStateOf(false) }
-    Text(
-        line,
-        style = HexTheme.type.body,
-        color = colors.text3,
-        maxLines = YOU_LINES,
-        overflow = TextOverflow.Ellipsis,
-        onTextLayout = { clamped = it.hasVisualOverflow },
-        modifier = Modifier.alpha(dim),
-    )
-    if (clamped) {
-        val words = Words.count(message)
+    // A message of only files shows only what went with it.
+    if (message.isNotBlank()) {
         Text(
-            pluralStringResource(R.plurals.home_you_read_all, words, words),
-            style = HexTheme.type.footnote,
+            line,
+            style = HexTheme.type.body,
             color = colors.text3,
-            modifier =
-                Modifier
-                    .alpha(dim)
-                    .clip(RoundedCornerShape(HexTheme.radius.s))
-                    .clickable(role = Role.Button, onClick = onReadAll)
-                    .padding(vertical = 4.dp),
+            maxLines = YOU_LINES,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { clamped = it.hasVisualOverflow },
+            modifier = Modifier.alpha(dim),
         )
+    }
+    if (!clamped && with == null) return
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (with != null) {
+            Text(
+                with,
+                style = HexTheme.type.footnote,
+                color = colors.text3,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.alpha(dim).padding(vertical = 4.dp).weight(1f, fill = false),
+            )
+        }
+        if (clamped) {
+            val words = Words.count(message)
+            Text(
+                pluralStringResource(R.plurals.home_you_read_all, words, words),
+                style = HexTheme.type.footnote,
+                color = colors.text3,
+                maxLines = 1,
+                modifier =
+                    Modifier
+                        .alpha(dim)
+                        .clip(RoundedCornerShape(HexTheme.radius.s))
+                        .clickable(role = Role.Button, onClick = onReadAll)
+                        .padding(vertical = 4.dp),
+            )
+        }
     }
 }
 

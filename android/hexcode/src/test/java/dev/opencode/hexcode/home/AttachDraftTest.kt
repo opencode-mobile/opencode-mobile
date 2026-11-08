@@ -14,11 +14,11 @@ class AttachDraftTest {
     fun aDraftTakesFourImagesAtMost() {
         val (three, first) = Draft().addImages(3)
         assertEquals(listOf(1L, 2L, 3L), first)
-        assertEquals(1, three.roomForImages)
+        assertEquals(1, three.room)
         val (four, second) = three.addImages(3)
         assertEquals("only the room left is taken", listOf(4L), second)
         assertEquals(4, four.images.size)
-        assertEquals(0, four.roomForImages)
+        assertEquals(0, four.room)
         assertEquals(emptyList<Long>(), four.addImages(1).second)
     }
 

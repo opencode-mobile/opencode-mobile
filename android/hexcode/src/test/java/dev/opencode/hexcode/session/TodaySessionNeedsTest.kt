@@ -64,6 +64,7 @@ class TodaySessionNeedsTest {
             text: String,
             delivery: String,
             images: List<PromptImage>,
+            metadata: JsonObject?,
         ) = "msg_1"
 
         override suspend fun cancelQueued(

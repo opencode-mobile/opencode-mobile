@@ -15,7 +15,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
@@ -28,6 +27,7 @@ import dev.opencode.hexcode.designsystem.components.HexDetailRow
 import dev.opencode.hexcode.designsystem.components.HexDetailsSection
 import dev.opencode.hexcode.designsystem.components.HexDot
 import dev.opencode.hexcode.designsystem.components.HexDotTone
+import dev.opencode.hexcode.designsystem.components.HexFileThumbnail
 import dev.opencode.hexcode.designsystem.components.HexSheet
 import dev.opencode.hexcode.designsystem.components.HexSheetAction
 import dev.opencode.hexcode.designsystem.components.HexSheetSize
@@ -37,6 +37,7 @@ import dev.opencode.hexcode.session.DetailsBody
 import dev.opencode.hexcode.session.DetailsSection
 import dev.opencode.hexcode.session.DetailsSections
 import dev.opencode.hexcode.session.PendingItem
+import dev.opencode.hexcode.session.PromptFiles
 import dev.opencode.hexcode.session.RecentOutcome
 import dev.opencode.hexcode.session.RecentStep
 import dev.opencode.hexcode.session.RunningNow
@@ -166,28 +167,28 @@ private fun Waiting(
     HexDetailsSection(stringResource(R.string.details_waiting), count = inbox.size.toString()) {
         inbox.forEachIndexed { index, item ->
             val own = state.queuedImages[item.id].orEmpty()
-            val images = item.images
+            val ownFiles = state.queuedFiles[item.id].orEmpty()
+            // Its text without the files' path lines; a message of only attachments says how many.
+            val text = PromptFiles.strip(item.text)
             HexDetailRow(
-                AnnotatedString(
-                    item.text.ifEmpty {
-                        if (images >
-                            0
-                        ) {
-                            pluralStringResource(R.plurals.home_waiting_images, images, images)
-                        } else {
-                            ""
-                        }
-                    },
-                ),
+                AnnotatedString(text.ifEmpty { attachmentCount(item.images, PromptFiles.names(item.text).size).orEmpty() }),
                 leading = { Icon(HexIcons.send, null, tint = HexTheme.colors.text3, modifier = Modifier.size(HexTheme.size.iconSmall)) },
                 titleLines = 2,
                 detail = stringResource(if (item.delivery == "steer") R.string.details_waiting_steer else R.string.details_waiting_queue),
                 below =
-                    if (own.isNotEmpty()) {
+                    if (own.isNotEmpty() || ownFiles.isNotEmpty()) {
                         {
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                own.take(Draft.MAX_IMAGES).forEach { image ->
+                                own.take(Draft.MAX_ATTACHMENTS).forEach { image ->
                                     HexThumbnail(rememberThumbnail(image.file, HexThumbnailSize.Small.side), size = HexThumbnailSize.Small)
+                                }
+                                ownFiles.take(Draft.MAX_ATTACHMENTS - own.size.coerceAtMost(Draft.MAX_ATTACHMENTS)).forEach { file ->
+                                    HexFileThumbnail(
+                                        file.extension,
+                                        size = HexThumbnailSize.Small,
+                                        video = file.video,
+                                        label = stringResource(R.string.home_attach_file_label, file.name),
+                                    )
                                 }
                             }
                         }

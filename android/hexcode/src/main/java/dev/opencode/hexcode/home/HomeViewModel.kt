@@ -16,6 +16,7 @@ import dev.opencode.hexcode.session.GoalRefusal
 import dev.opencode.hexcode.session.GoalText
 import dev.opencode.hexcode.session.NewSessionOutcome
 import dev.opencode.hexcode.session.PendingItem
+import dev.opencode.hexcode.session.PromptFiles
 import dev.opencode.hexcode.session.PromptImage
 import dev.opencode.hexcode.session.QuestionAnswers
 import dev.opencode.hexcode.session.RecentStep
@@ -32,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
@@ -49,6 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
@@ -369,11 +372,20 @@ enum class HomeNotice {
     /** "Couldn't send · Your draft is kept." */
     SendFailed,
 
-    /** "4 images is the most per message". */
+    /** "4 attachments is the most per message". */
     AttachLimit,
 
     /** "Couldn't add this image". */
     AttachFailed,
+
+    /** "Couldn't add this file": it couldn't be read. */
+    FileFailed,
+
+    /**
+     * "Couldn't upload <name> · Check the connection to your computer, then attach it again.", the name in
+     * [HomeUiState.noticeDetail].
+     */
+    UploadFailed,
 
     /** "Sent without the images · <Model> can't see them" ([HomeUiState.imageInput]). */
     SentNoImages,
@@ -515,12 +527,21 @@ data class HomeUiState(
     val noticeDetail: String? = null,
     /** A message of only images: the notice's second line says how many ("2 images") in place of its text. */
     val noticeImages: Int = 0,
+    /** The same for its files ("1 file", "2 images, 1 file"). */
+    val noticeFiles: Int = 0,
     /** Waiting to send rows whose Cancel (the DELETE) is running: their Cancel shows a spinner. */
     val cancelling: Set<String> = emptySet(),
     /** Whether today's session's model can see images; null until known, which counts as yes. */
     val imageInput: ImageInput? = null,
     /** The phone's copy of the images each queued message took, by inbox item, for the Waiting to send sheet. */
     val queuedImages: Map<String, List<DraftImage>> = emptyMap(),
+    /** The files each queued message took, by inbox item, for their tiles in Waiting to send. */
+    val queuedFiles: Map<String, List<DraftFile>> = emptyMap(),
+    /**
+     * Files can be attached: the server declares the upload route and gives `paths.tmp`, and no upload has found the
+     * route changed. Null until it's known, which doesn't dim the row.
+     */
+    val filesAvailable: Boolean? = null,
     /** The approval or question sheet, while open. */
     val needs: NeedsSheet? = null,
     /** What was said for each approval's Say why, by request id: Deny's note. */
@@ -590,6 +611,8 @@ class HomeViewModel(
     private val images: ImagePreparer = NoImagePreparer,
     /** Whether today's session's model can see images; null when that isn't known (it then counts as yes). */
     private val imageInput: suspend () -> ImageInput? = { null },
+    /** Copies picked files into the cache and uploads them to the computer (app-plan.md, Attach files). */
+    private val files: FileAttacher = NoFileAttacher,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     private val state = MutableStateFlow(HomeUiState(speech = dictation.speech.value))
@@ -620,6 +643,12 @@ class HomeViewModel(
     /** Inbox items the queued images map has seen in today's inbox: once one leaves it, its images can go. */
     private val seenQueued = mutableSetOf<String>()
 
+    /** The same for the queued files map. */
+    private val seenQueuedFiles = mutableSetOf<String>()
+
+    /** Each file's copy and upload, by draft file id, so its ✕ can cancel it. */
+    private val uploads = mutableMapOf<Long, Job>()
+
     /** Drafts being sent, which come back if sending fails. */
     private val inFlight = mutableListOf<Draft>()
 
@@ -643,7 +672,8 @@ class HomeViewModel(
                         it.copy(
                             today = next,
                             notice = if (next.newDayNotice) HomeNotice.NewDay else it.notice,
-                            queuedImages = keptQueuedImages(it.queuedImages, next),
+                            queuedImages = keptQueued(it.queuedImages, next, seenQueued),
+                            queuedFiles = keptQueued(it.queuedFiles, next, seenQueuedFiles),
                         )
                     }
                     if (state.value.queuedImages.size != before.size) sweepImages()
@@ -655,24 +685,43 @@ class HomeViewModel(
             }
             today.open()
         }
-        // Images prepared before the app last closed went with no draft.
+        // Images prepared and files copied before the app last closed went with no draft.
         sweepImages()
+        viewModelScope.launch { files.discardAll() }
         checkImageInput()
+        checkFiles()
     }
 
     /**
      * The phone's copy of each queued message's images, until the message is delivered or cancelled: it leaves today's
      * inbox after being in it, or nothing is waiting any more while the agent is idle.
      */
-    private fun keptQueuedImages(
-        kept: Map<String, List<DraftImage>>,
+    private fun <T> keptQueued(
+        kept: Map<String, List<T>>,
         today: TodayState,
-    ): Map<String, List<DraftImage>> {
+        seen: MutableSet<String>,
+    ): Map<String, List<T>> {
         val waiting = today.queued.map { it.id }.toSet()
-        seenQueued += kept.keys.filter { it in waiting }
+        seen += kept.keys.filter { it in waiting }
         val idle = today.busySince == null && today.pendingInput == null
-        return kept.filterKeys { id -> id in waiting || (id !in seenQueued && !idle) }.also {
-            seenQueued.retainAll(it.keys)
+        return kept.filterKeys { id -> id in waiting || (id !in seen && !idle) }.also {
+            seen.retainAll(it.keys)
+        }
+    }
+
+    /** Asks whether files can be uploaded; a failed check leaves it unknown. */
+    private fun checkFiles() {
+        viewModelScope.launch {
+            val available =
+                try {
+                    files.available()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w(AttachLog.TAG, "couldn't check the upload route: ${error.message}")
+                    return@launch
+                }
+            state.update { it.copy(filesAvailable = if (it.filesAvailable == false) false else available) }
         }
     }
 
@@ -693,11 +742,11 @@ class HomeViewModel(
     }
 
     /**
-     * The paperclip: opens the Attach sheet (true), or with [Draft.MAX_IMAGES] on the draft shows "4 images is the most
-     * per message" (false).
+     * The paperclip: opens the Attach sheet (true), or with [Draft.MAX_ATTACHMENTS] on the draft shows "4 attachments is
+     * the most per message" (false).
      */
     fun openAttach(): Boolean {
-        if (state.value.draft.roomForImages == 0) {
+        if (state.value.draft.room == 0) {
             notify(HomeNotice.AttachLimit, null)
             return false
         }
@@ -709,7 +758,115 @@ class HomeViewModel(
      * the main thread. Past the room left they're left out, with the limit notice; one that can't be read leaves the
      * draft with "Couldn't add this image".
      */
-    fun attach(sources: List<String>) {
+    fun attach(sources: List<String>) = attachMedia(sources.map { PickedMedia(it, null) })
+
+    /**
+     * Picks from Photos and videos (app-plan.md, Attach files): images are prepared and sent inline as [attach] does;
+     * videos are uploaded as files. Past the room left they're left out, with the limit notice.
+     */
+    fun attachMedia(picked: List<PickedMedia>) {
+        if (picked.isEmpty()) return
+        val taken = picked.take(state.value.draft.room)
+        if (taken.size < picked.size) notify(HomeNotice.AttachLimit, null)
+        val (videos, images) = taken.partition { it.video }
+        addImages(images.map { it.uri })
+        addFiles(videos.map { it.uri }, video = true)
+    }
+
+    /**
+     * Picks from Files (app-plan.md, Attach files): each goes on the draft at once with its ring, is copied into the
+     * cache and uploaded with its exact bytes, whatever it is. Past the room left they're left out, with the limit
+     * notice.
+     */
+    fun attachFiles(sources: List<String>) {
+        if (sources.isEmpty()) return
+        val taken = sources.take(state.value.draft.room)
+        if (taken.size < sources.size) notify(HomeNotice.AttachLimit, null)
+        addFiles(taken, video = false)
+    }
+
+    private fun addFiles(
+        sources: List<String>,
+        video: Boolean,
+    ) {
+        if (sources.isEmpty()) return
+        var ids: List<Long> = emptyList()
+        state.update {
+            val (draft, added) = it.draft.addFiles(sources.size, video)
+            ids = added
+            it.copy(draft = draft)
+        }
+        ids.zip(sources).forEach { (id, source) ->
+            uploads[id] = viewModelScope.launch { upload(id, source) }
+        }
+    }
+
+    /**
+     * Copies file [id] from [source] and uploads it; the cached copy goes once it's done, however it ends. One that
+     * can't be read leaves with "Couldn't add this file"; a failed upload with "Couldn't upload <name>", and a route that
+     * has changed also dims Files.
+     */
+    private suspend fun upload(
+        id: Long,
+        source: String,
+    ) {
+        val staged =
+            try {
+                files.stage(source)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                Log.w(AttachLog.TAG, "couldn't copy a file: ${error.message}", error)
+                uploads.remove(id)
+                state.update { it.copy(draft = it.draft.removeFile(id)) }
+                notify(HomeNotice.FileFailed, null)
+                return
+            }
+        try {
+            if (!state.value.draft.hasFile(id)) return
+            state.update { it.copy(draft = it.draft.fileStaged(id, staged.name, staged.mime, staged.size)) }
+            var shown = -1L
+            val path =
+                files.upload(staged) { sent, total ->
+                    // A state change per whole percent, not per buffer written.
+                    val percent = if (total > 0) sent * 100 / total else 0
+                    if (percent != shown) {
+                        shown = percent
+                        state.update { it.copy(draft = it.draft.fileProgress(id, sent, total)) }
+                    }
+                }
+            state.update { it.copy(draft = it.draft.fileUploaded(id, path)) }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w(AttachLog.TAG, "couldn't upload a file: ${error.message}", error)
+            val unavailable = error is UploadUnavailableException
+            state.update {
+                it.copy(draft = it.draft.removeFile(id), filesAvailable = if (unavailable) false else it.filesAvailable)
+            }
+            notify(HomeNotice.UploadFailed, staged.name)
+        } finally {
+            uploads.remove(id)
+            withContext(NonCancellable) { files.discard(staged) }
+        }
+    }
+
+    /** A file's ✕: while it uploads the upload is cancelled; after, it leaves the draft (the computer's copy stays). */
+    fun removeFile(id: Long) {
+        uploads.remove(id)?.cancel()
+        state.update { it.copy(draft = it.draft.removeFile(id)) }
+    }
+
+    /** Cancels the uploads of files no longer on the draft. */
+    private fun cancelUploadsOffDraft() {
+        val onDraft =
+            state.value.draft.files
+                .map { it.id }
+                .toSet()
+        uploads.keys.filter { it !in onDraft }.forEach { uploads.remove(it)?.cancel() }
+    }
+
+    private fun addImages(sources: List<String>) {
         if (sources.isEmpty()) return
         var ids: List<Long> = emptyList()
         state.update {
@@ -717,7 +874,6 @@ class HomeViewModel(
             ids = added
             it.copy(draft = draft)
         }
-        if (ids.size < sources.size) notify(HomeNotice.AttachLimit, null)
         ids.zip(sources).forEach { (id, source) ->
             viewModelScope.launch {
                 try {
@@ -1147,8 +1303,10 @@ class HomeViewModel(
         val current = state.value
         if (!current.draftReady) return
         val draft = current.draft
-        val text = draft.text.trim()
-        refusal(text)?.let {
+        val objective = draft.text.trim()
+        // The draft's files go as path lines after the objective (app-plan.md, Attach files › Set as goal).
+        val text = PromptFiles.text(objective, draft.files.mapNotNull { it.prompt })
+        (refusal(objective) ?: refusal(text))?.let {
             state.update { s -> s.copy(draftMenu = false) }
             notify(it, null)
             return
@@ -1781,20 +1939,27 @@ class HomeViewModel(
         val text = draft.text
         val withImages = if (current.seesImages) AttachNames.of(draft.images) else emptyList()
         val dropped = draft.images.isNotEmpty() && withImages.isEmpty()
+        // Uploaded files go as path lines after the text, and in `metadata` (app-plan.md, Attach files › The prompt).
+        val withFiles = draft.files.mapNotNull { it.prompt }
+        val message = Message(PromptFiles.text(text, withFiles), withImages, PromptFiles.metadata(text, withFiles))
+        val files = withFiles.size
         state.update { it.copy(draft = it.draft.clear(), sendMode = SendMode.AfterTurn) }
         when (plan) {
             SendPlan.Idle ->
                 viewModelScope.launch {
-                    if (deliver(plan, text, withImages, draft) != null) {
-                        notify(if (dropped) HomeNotice.SentNoImages else HomeNotice.SentIdle, text, withImages.size)
+                    if (deliver(plan, message, draft) != null) {
+                        notify(if (dropped) HomeNotice.SentNoImages else HomeNotice.SentIdle, text, withImages.size, files)
                         sweepImages()
                     }
                 }
             SendPlan.Queue ->
                 viewModelScope.launch {
-                    val id = deliver(plan, text, withImages, draft) ?: return@launch
+                    val id = deliver(plan, message, draft) ?: return@launch
                     if (withImages.isNotEmpty()) {
                         state.update { it.copy(queuedImages = it.queuedImages + (id to draft.images)) }
+                    }
+                    if (draft.files.isNotEmpty()) {
+                        state.update { it.copy(queuedFiles = it.queuedFiles + (id to draft.files)) }
                     }
                     undoable = Undoable.Queued(id, draft)
                     notify(if (dropped) HomeNotice.QueuedNoImages else HomeNotice.Queued, null)
@@ -1808,32 +1973,39 @@ class HomeViewModel(
                         undoable = null
                         // Held through a reconnect, it goes once the stream is back.
                         session?.awaitStream()
-                        if (deliver(plan, text, withImages, draft) != null) {
-                            notify(if (dropped) HomeNotice.SentNoImages else HomeNotice.SentNow, text, withImages.size)
+                        if (deliver(plan, message, draft) != null) {
+                            notify(if (dropped) HomeNotice.SentNoImages else HomeNotice.SentNow, text, withImages.size, files)
                             sweepImages()
                         }
                     }
                 undoable = Undoable.Held(job, draft)
-                notify(HomeNotice.SendingNow, text, withImages.size)
+                notify(HomeNotice.SendingNow, text, withImages.size, files)
             }
         }
     }
 
+    /** What a Send puts in the request: the text with its path lines, the images, and the files' `metadata`. */
+    private class Message(
+        val text: String,
+        val images: List<PromptImage>,
+        val metadata: JsonObject?,
+    )
+
     /**
-     * Sends [text] and [images] as [plan] says; on failure the [draft] comes back with "Couldn't send". Returns the inbox
-     * item's id. The caller lets the images go ([sweepImages]) once it has kept what it needs of them.
+     * Sends [message] as [plan] says; on failure the [draft] comes back with "Couldn't send", its files already
+     * uploaded. Returns the inbox item's id. The caller lets the images go ([sweepImages]) once it has kept what it
+     * needs of them.
      */
     private suspend fun deliver(
         plan: SendPlan,
-        text: String,
-        images: List<PromptImage>,
+        message: Message,
         draft: Draft,
     ): String? {
         val today = session
         inFlight += draft
         return try {
             today ?: error("No session to send to")
-            today.send(Sending.text(plan, text), Sending.delivery(plan), images)
+            today.send(Sending.text(plan, message.text), Sending.delivery(plan), message.images, message.metadata)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -1853,7 +2025,10 @@ class HomeViewModel(
         notice: HomeNotice,
         detail: String?,
         images: Int = 0,
-    ) = state.update { it.copy(notice = notice, noticeDetail = detail?.ifBlank { null }, noticeImages = images) }
+        files: Int = 0,
+    ) = state.update {
+        it.copy(notice = notice, noticeDetail = detail?.ifBlank { null }, noticeImages = images, noticeFiles = files)
+    }
 
     /** The notice whose action just ran: its dismissal mustn't clear the notice the action put up instead. */
     private var actioned: HomeNotice? = null
@@ -1881,7 +2056,9 @@ class HomeViewModel(
                         session?.cancelQueued(taking.itemId)
                         // Its images come back onto the draft with the text, so they can be sent again.
                         restore(taking.draft)
-                        state.update { it.copy(queuedImages = it.queuedImages - taking.itemId) }
+                        state.update {
+                            it.copy(queuedImages = it.queuedImages - taking.itemId, queuedFiles = it.queuedFiles - taking.itemId)
+                        }
                         notify(HomeNotice.TakenBack, null)
                     } catch (error: CancellationException) {
                         throw error
@@ -1955,6 +2132,7 @@ class HomeViewModel(
 
     fun clearDraft() {
         state.update { it.copy(draft = it.draft.clear()) }
+        cancelUploadsOffDraft()
         failedParts.keys.retainAll(
             state.value.draft.chunks
                 .map { it.id }
@@ -1974,7 +2152,7 @@ class HomeViewModel(
             undoable = null
             sweepImages()
         }
-        state.update { it.copy(notice = null, noticeDetail = null, noticeImages = 0) }
+        state.update { it.copy(notice = null, noticeDetail = null, noticeImages = 0, noticeFiles = 0) }
     }
 
     override fun onCleared() {

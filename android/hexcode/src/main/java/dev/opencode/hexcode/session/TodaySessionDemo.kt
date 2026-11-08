@@ -7,6 +7,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import java.time.LocalDate
 
 /**
@@ -337,6 +338,7 @@ private class DemoLive(
         text: String,
         delivery: String,
         images: List<PromptImage>,
+        metadata: JsonObject?,
     ) = "msg_sample"
 
     override suspend fun cancelQueued(

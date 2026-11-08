@@ -27,6 +27,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.JsonObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -122,6 +123,7 @@ class SendingTest {
             text: String,
             delivery: String,
             images: List<PromptImage>,
+            metadata: JsonObject?,
         ): String {
             if (fail) error("The computer can't be reached.")
             sent += text to delivery

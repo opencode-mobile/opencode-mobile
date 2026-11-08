@@ -13,6 +13,7 @@ import dev.opencode.hexcode.firstrun.ServerRouteCheck
 import dev.opencode.hexcode.home.BrowserData
 import dev.opencode.hexcode.home.ImageInput
 import dev.opencode.hexcode.home.TalkLog
+import dev.opencode.hexcode.home.UploadRoute
 import dev.opencode.hexcode.session.DailySessionSetup
 import dev.opencode.hexcode.session.EventsApiTransport
 import dev.opencode.hexcode.session.OpenCodeTodayApi
@@ -20,6 +21,7 @@ import dev.opencode.hexcode.session.TodaySession
 import dev.opencode.hexcode.session.TodaySessionDemo
 import dev.opencode.mobile.data.local.DataStoreConnectionProfileStore
 import dev.opencode.mobile.data.local.EncryptedSecureCredentialStore
+import dev.opencode.mobile.data.remote.AttachmentUploadApi
 import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.ModelsApi
@@ -202,6 +204,45 @@ class HexServices(
         option ?: return null
         return ImageInput(name ?: option.modelLabel, option.supportsImageInput)
     }
+
+    private val uploadApi = AttachmentUploadApi(httpClient)
+
+    /** `paths.tmp` per server address, once read; addresses where an upload found the route changed. */
+    private val uploadTmp = ConcurrentHashMap<String, String>()
+    private val noUploads = ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * Where Files uploads go (app-plan.md, Attach files › Upload): `paths.tmp`, read with the upload route from the
+     * server's API contract by the kit once per address, and the kit's streamed write.
+     */
+    val uploads =
+        object : UploadRoute {
+            override suspend fun tmp(): String? {
+                connectionLoaded.await()
+                val server = connection.current() ?: return null
+                val key = server.baseUrl
+                if (key in noUploads) return null
+                uploadTmp[key]?.let { return it }
+                val features = probing.probeV2Features(server)
+                val tmp = features.attachmentUploadTmp ?: return null
+                return tmp.also { uploadTmp[key] = it }
+            }
+
+            override fun changed() {
+                connection.current()?.baseUrl?.let { noUploads += it }
+            }
+
+            override suspend fun write(
+                serverPath: String,
+                file: java.io.File,
+                directory: String,
+                onProgress: (sent: Long, total: Long) -> Unit,
+            ): Pair<Int, String?> {
+                connectionLoaded.await()
+                val response = uploadApi.write(serverPath, file, directory, onProgress)
+                return response.status to response.path
+            }
+        }
 
     /** Folder listings Browse folders has seen this session, shared by first run and Settings. */
     val folderListings = ConcurrentHashMap<String, DirectoryListing>()

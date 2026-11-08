@@ -205,11 +205,12 @@ class OpenCodeTodayApi(
         text: String,
         delivery: String,
         images: List<PromptImage>,
+        metadata: JsonObject?,
     ): String {
         ready()
         // About 3 MB for 4 photos once encoded: small enough to build in memory (attach-notes.md, OpenCode Mobile).
         val files = withContext(Dispatchers.IO) { images.map { V2PromptFileDto(uri = it.dataUrl(), name = it.name) } }
-        return sessions.promptTextV2(sessionId, text, delivery, files).id
+        return sessions.promptTextV2(sessionId, text, delivery, files, metadata).id
     }
 
     override suspend fun cancelQueued(

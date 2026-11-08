@@ -496,6 +496,16 @@ private fun ThumbnailSample() {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 HexThumbnail(shot, size = HexThumbnailSize.Small)
                 HexThumbnail(photo, size = HexThumbnailSize.Small)
+                HexFileThumbnail("PDF", size = HexThumbnailSize.Small)
+                HexFileThumbnail("MP4", size = HexThumbnailSize.Small, video = true)
+            }
+        }
+        StateSample("HexFileThumbnail: a file, a video, uploading at 45 %, no extension") {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
+                HexFileThumbnail("PDF", label = "report.pdf, file", onRemove = {}, removeLabel = "Remove report.pdf")
+                HexFileThumbnail("MOV", video = true, onRemove = {}, removeLabel = "Remove clip.mov")
+                HexFileThumbnail("ZIP", progress = 0.45f, onRemove = {}, removeLabel = "Remove logs.zip")
+                HexFileThumbnail("", onRemove = {}, removeLabel = "Remove Makefile")
             }
         }
     }
@@ -1270,6 +1280,7 @@ private fun ConfirmAndReaderSample() {
             doneLabel = "Done",
             onDone = { shown = null },
             foot = if (shown == SampleSheet.Draft) HexReaderFoot("Clear the draft", { shown = null }, "Send", { shown = null }) else null,
+            note = if (shown == SampleSheet.YouSaid) "With report.pdf" else null,
         )
     }
 }

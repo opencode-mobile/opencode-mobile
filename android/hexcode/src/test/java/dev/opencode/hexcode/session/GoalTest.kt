@@ -21,6 +21,13 @@ class GoalTest {
     }
 
     @Test
+    fun aGoalSetWithFilesShowsItsObjectiveWithoutThePathLines() {
+        val withFiles = Goal("g1", "Ship it\nAttached file: `/t/uploads/u/spec.pdf`", GoalStatus.Active)
+        assertEquals("Ship it", withFiles.shownObjective)
+        assertEquals("Ship the login screen", goal(GoalStatus.Active).shownObjective)
+    }
+
+    @Test
     fun anActiveGoalShowsTheServersRoundsWithStartingAtZero() {
         assertEquals(GoalLine.Phase(GoalPhase.Starting), GoalLine.of(goal(GoalStatus.Active, 0), busy = true))
         assertEquals(GoalLine.Phase(GoalPhase.Round(1, 50)), GoalLine.of(goal(GoalStatus.Active, 1), busy = true))

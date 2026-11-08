@@ -172,6 +172,10 @@
         <item quantity="one">%1$d image</item>
         <item quantity="other">%1$d images</item>
     </plurals>
+    <plurals name="home_waiting_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
     <!-- Needs you (app-plan.md, Needs you and control › Approvals and Questions) -->
     <string name="needs_hide">Hide</string>
     <string name="needs_count">%1$d of %2$d</string>
@@ -246,13 +250,41 @@
 
     <!-- Attach (app-plan.md, Attach) -->
     <string name="home_attach_title">Attach</string>
-    <string name="home_attach_photos">Photos</string>
+    <string name="home_attach_photos">Photos and videos</string>
     <string name="home_attach_camera">Take photo</string>
     <plurals name="home_attach_caption">
         <item quantity="one">%1$d image · goes with your next message</item>
         <item quantity="other">%1$d images · go with your next message</item>
     </plurals>
-    <string name="home_attach_limit">4 images is the most per message</string>
+    <string name="home_attach_files">Files</string>
+    <string name="home_attach_files_unavailable">Needs a newer OpenCode</string>
+    <string name="home_attach_caption_file">%1$s · goes with your next message</string>
+    <plurals name="home_attach_caption_files">
+        <item quantity="one">%1$d file · goes with your next message</item>
+        <item quantity="other">%1$d files · go with your next message</item>
+    </plurals>
+    <string name="home_attach_caption_mixed">%1$s, %2$s · go with your next message</string>
+    <plurals name="home_attach_count_images">
+        <item quantity="one">%1$d image</item>
+        <item quantity="other">%1$d images</item>
+    </plurals>
+    <plurals name="home_attach_count_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <string name="home_attach_uploading">Uploading · %1$d%%</string>
+    <string name="home_attach_file_failed">Couldn’t add this file</string>
+    <string name="home_attach_upload_failed">Couldn’t upload %1$s</string>
+    <string name="home_attach_upload_failed_sub">Check the connection to your computer, then attach it again.</string>
+    <string name="home_attach_file_label">%1$s, file</string>
+    <string name="home_attach_remove_file">Remove %1$s</string>
+    <string name="home_send_uploading">Uploading</string>
+    <string name="home_you_with_one">With %1$s</string>
+    <plurals name="home_you_with_many">
+        <item quantity="one">With %1$d attachment</item>
+        <item quantity="other">With %1$d attachments</item>
+    </plurals>
+    <string name="home_attach_limit">4 attachments is the most per message</string>
     <string name="home_attach_failed">Couldn’t add this image</string>
     <string name="home_attach_no_vision">%1$s can’t see images · they won’t be sent</string>
     <string name="home_attach_remove">Remove image</string>

@@ -69,6 +69,7 @@ import dev.opencode.hexcode.firstrun.ProjectPicker
 import dev.opencode.hexcode.firstrun.ProjectScreen
 import dev.opencode.hexcode.firstrun.ScanScreen
 import dev.opencode.hexcode.firstrun.ServerLabel
+import dev.opencode.hexcode.home.AndroidFileAttacher
 import dev.opencode.hexcode.home.AndroidImagePreparer
 import dev.opencode.hexcode.home.ClipDictation
 import dev.opencode.hexcode.home.FileMicrophone
@@ -358,6 +359,7 @@ private fun AfterFirstRun(
                 takes = FileTakeStore(File(context.filesDir, "takes")),
                 images = AndroidImagePreparer(context.applicationContext),
                 imageInput = { services.imageInput(latest.project?.path, latest.model, latest.modelName) },
+                files = AndroidFileAttacher(context.applicationContext, services.uploads, directory = { latest.project?.path.orEmpty() }),
                 makeSession = { scope ->
                     sample?.start(scope)
                         ?: services.todaySession(scope, directory = { latest.project?.path.orEmpty() }, model = { latest.model })

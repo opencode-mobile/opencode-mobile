@@ -33,7 +33,8 @@ data class HexReaderFoot(
 /**
  * A sheet that shows a long text whole (`HexReader`, long-dictation prototype A): a head row with the [title]
  * (`bodyStrong`), a `mono` `text3` [meta] ("2:31 · 235 words") and Done on the right; the [paragraphs] in `body`
- * `text1`, scrolling; and an optional [foot] under a `line` border. Used for a long draft ("Draft", with the foot)
+ * `text1`, scrolling, after an optional [note] in `footnote` `text3` ("With report.pdf"); and an optional [foot] under a
+ * `line` border. Used for a long draft ("Draft", with the foot)
  * and the message just sent ("You said", without). It opens at half the screen and drags to full; the text
  * scrolls inside it. Put it last in a full-screen `Box`.
  */
@@ -46,6 +47,7 @@ fun BoxScope.HexReader(
     doneLabel: String,
     onDone: () -> Unit,
     foot: HexReaderFoot? = null,
+    note: String? = null,
 ) {
     val colors = HexTheme.colors
     HexSheet(
@@ -97,6 +99,7 @@ fun BoxScope.HexReader(
                     .toDp()
             }
         Column(verticalArrangement = Arrangement.spacedBy(em * 0.8f), modifier = Modifier.padding(horizontal = 4.dp)) {
+            if (note != null) Text(note, style = HexTheme.type.footnote, color = colors.text3)
             paragraphs.forEach { Text(it, style = HexTheme.type.body, color = colors.text1) }
         }
     }

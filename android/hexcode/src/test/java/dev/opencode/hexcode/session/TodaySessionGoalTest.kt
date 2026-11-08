@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -85,6 +86,7 @@ class TodaySessionGoalTest {
             text: String,
             delivery: String,
             images: List<PromptImage>,
+            metadata: JsonObject?,
         ) = "msg_1"
 
         override suspend fun cancelQueued(

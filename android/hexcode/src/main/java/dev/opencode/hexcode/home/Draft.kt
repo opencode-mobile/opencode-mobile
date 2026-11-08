@@ -65,17 +65,32 @@ data class Draft(
     /** The take being recorded, until it ends. */
     val live: Chunk? = null,
     val deleted: DeletedChunk? = null,
-    /** Screenshots and photos that go with the message, at most [MAX_IMAGES] (app-plan.md, Attach). */
+    /** Screenshots and photos that go with the message (app-plan.md, Attach). */
     val images: List<DraftImage> = emptyList(),
+    /** Files and videos, uploaded to the computer (app-plan.md, Attach files); with [images], at most [MAX_ATTACHMENTS]. */
+    val files: List<DraftFile> = emptyList(),
     private val nextId: Long = 1,
 ) {
-    val isEmpty: Boolean get() = chunks.isEmpty() && live == null && images.isEmpty()
+    val isEmpty: Boolean get() = chunks.isEmpty() && live == null && images.isEmpty() && files.isEmpty()
 
     /** An image is still being prepared: Send waits, reading "Preparing". */
     val isPreparing: Boolean get() = images.any { it.preparing }
 
-    /** How many more images this message can take. */
-    val roomForImages: Int get() = (MAX_IMAGES - images.size).coerceAtLeast(0)
+    /** A file is still uploading: Send waits, reading "Uploading". */
+    val isUploading: Boolean get() = files.any { it.uploading }
+
+    /** Every running upload together, 0 to 100; null when none runs. */
+    val uploadPercent: Int?
+        get() {
+            val running = files.filter { it.uploading }
+            if (running.isEmpty()) return null
+            val total = running.sumOf { it.total }
+            if (total <= 0) return 0
+            return (running.sumOf { it.sent.coerceAtMost(it.total) } * 100 / total).toInt().coerceIn(0, 100)
+        }
+
+    /** How many more images, videos and files this message can take. */
+    val room: Int get() = (MAX_ATTACHMENTS - images.size - files.size).coerceAtLeast(0)
 
     val isListening: Boolean get() = live != null
 
@@ -87,21 +102,70 @@ data class Draft(
     /** A chunk failed with its audio kept, so Try again can turn it into text. */
     val canRetry: Boolean get() = chunks.any { (it.state as? ChunkState.Failed)?.retry == true }
 
-    /** Every chunk has its text and every image is prepared, so the draft could be sent, asked or set as a goal. */
-    val isSettled: Boolean get() = !isListening && !isTranscribing && !isWaiting && !isPreparing
+    /**
+     * Every chunk has its text, every image is prepared and every file uploaded, so the draft could be sent, asked or
+     * set as a goal.
+     */
+    val isSettled: Boolean get() = !isListening && !isTranscribing && !isWaiting && !isPreparing && !isUploading
 
     /**
-     * Send can go: everything is settled, and there is text, or images a model that [seesImages] gets. A draft of only
-     * images sends an empty `text`; to a model that can't see them there would be nothing to send.
+     * Send can go: everything is settled, and there is text, files (whatever the model), or images a model that
+     * [seesImages] gets. A draft of only images sends an empty `text`; to a model that can't see them there would be
+     * nothing to send.
      */
-    fun canSend(seesImages: Boolean): Boolean = isSettled && (text.isNotBlank() || (seesImages && images.isNotEmpty()))
+    fun canSend(seesImages: Boolean): Boolean =
+        isSettled && (text.isNotBlank() || files.isNotEmpty() || (seesImages && images.isNotEmpty()))
 
     /** Adds [count] images, each preparing, up to the room left; their ids, in order, come back with the draft. */
     fun addImages(count: Int): Pair<Draft, List<Long>> {
-        val ids = (0 until count.coerceAtMost(roomForImages)).map { nextId + it }
+        val ids = (0 until count.coerceAtMost(room)).map { nextId + it }
         val added = ids.map { DraftImage(it) }
         return copy(images = images + added, nextId = nextId + ids.size) to ids
     }
+
+    /** Adds [count] files, each uploading, up to the room left; [video] from the photo picker. Their ids come back. */
+    fun addFiles(
+        count: Int,
+        video: Boolean = false,
+    ): Pair<Draft, List<Long>> {
+        val ids = (0 until count.coerceAtMost(room)).map { nextId + it }
+        val added = ids.map { DraftFile(it, video = video) }
+        return copy(files = files + added, nextId = nextId + ids.size) to ids
+    }
+
+    /** File [id] is in the cache: its [name], type and size are known, and it uploads. */
+    fun fileStaged(
+        id: Long,
+        name: String,
+        mime: String,
+        size: Long,
+    ): Draft =
+        withFile(id) {
+            it.copy(name = name, mime = mime, total = size, video = it.video || mime.startsWith("video/"))
+        }
+
+    /** File [id] has [sent] of [total] bytes on the computer. */
+    fun fileProgress(
+        id: Long,
+        sent: Long,
+        total: Long,
+    ): Draft = withFile(id) { it.copy(sent = sent, total = total) }
+
+    /** File [id] is on the computer at [path]. */
+    fun fileUploaded(
+        id: Long,
+        path: String,
+    ): Draft = withFile(id) { it.copy(path = path, sent = it.total) }
+
+    /** A file's ✕, or one that couldn't be copied or uploaded. */
+    fun removeFile(id: Long): Draft = copy(files = files.filterNot { it.id == id })
+
+    fun hasFile(id: Long): Boolean = files.any { it.id == id }
+
+    private fun withFile(
+        id: Long,
+        change: (DraftFile) -> DraftFile,
+    ): Draft = copy(files = files.map { if (it.id == id) change(it) else it })
 
     /** Image [id] is ready: its JPEG is [file], from a photo or a screenshot ([kind]). */
     fun imagePrepared(
@@ -220,10 +284,18 @@ data class Draft(
 
     /**
      * [earlier] back as it was before Send, followed by anything recorded or attached since. A message holds at most
-     * [MAX_IMAGES]: the earlier draft's images come first, and any past the limit are left out.
+     * [MAX_ATTACHMENTS]: the earlier draft's images and files come first (files with their uploaded paths), and any past
+     * the limit are left out.
      */
-    fun restored(earlier: Draft): Draft =
-        copy(chunks = earlier.chunks + chunks, selected = null, images = (earlier.images + images).take(MAX_IMAGES))
+    fun restored(earlier: Draft): Draft {
+        val kept = (earlier.images + earlier.files + images + files).take(MAX_ATTACHMENTS)
+        return copy(
+            chunks = earlier.chunks + chunks,
+            selected = null,
+            images = kept.filterIsInstance<DraftImage>(),
+            files = kept.filterIsInstance<DraftFile>(),
+        )
+    }
 
     /** Try again: failed takes with their audio wait for the model again. */
     fun retryFailed(): Draft =
@@ -275,8 +347,8 @@ data class Draft(
         /** Rows a long draft shows at once; earlier ones fold into "↑ N earlier". */
         const val MAX_ROWS = 8
 
-        /** Images per message (app-plan.md, Attach › Limit). */
-        const val MAX_IMAGES = 4
+        /** Images, videos and files per message, together (app-plan.md, Attach files › Limits). */
+        const val MAX_ATTACHMENTS = 4
     }
 }
 

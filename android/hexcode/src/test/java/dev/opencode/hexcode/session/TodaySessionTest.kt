@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -103,6 +104,7 @@ class TodaySessionTest {
             text: String,
             delivery: String,
             images: List<PromptImage>,
+            metadata: JsonObject?,
         ) = "msg_1"
 
         var cancelFails = false
@@ -780,6 +782,43 @@ class TodaySessionTest {
             transport.send("""{"type":"session.inbox.delivered","data":{"sessionID":"s1","inboxID":"$id"}}""")
             runCurrent()
             assertEquals("Rename it", today.state.value.you)
+        }
+
+    @Test
+    fun theYouLineKnowsTheImagesAndFilesThatWentWithIt() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            transport.send(
+                """{"type":"session.inbox.enqueued","data":{"sessionID":"s1","inboxID":"m1","item":{"type":"user",""" +
+                    """"payload":{"text":"Look\nAttached file: `/t/uploads/u1/report.pdf`","files":[{"name":"Photo 1.jpg",""" +
+                    """"mime":"image/jpeg","data":"AAAA"}]},"delivery":"steer"}}}""",
+            )
+            transport.send("""{"type":"session.inbox.delivered","data":{"sessionID":"s1","inboxID":"m1"}}""")
+            runCurrent()
+            assertEquals("Look\nAttached file: `/t/uploads/u1/report.pdf`", today.state.value.you)
+            assertEquals(listOf("Photo 1.jpg", "report.pdf"), today.state.value.youWith)
+        }
+
+    @Test
+    fun theYouLineOfWhatThePhoneSentKnowsItsImages() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            val id = today.send("Look\nAttached file: `/t/a.zip`", "steer", listOf(PromptImage("Photo 1.jpg", java.io.File("/x.jpg"))))
+            transport.send("""{"type":"session.inbox.delivered","data":{"sessionID":"s1","inboxID":"$id"}}""")
+            runCurrent()
+            assertEquals(listOf("Photo 1.jpg", "a.zip"), today.state.value.youWith)
         }
 
     @Test

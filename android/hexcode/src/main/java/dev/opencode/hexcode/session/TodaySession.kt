@@ -93,6 +93,11 @@ data class TodayState(
     val goal: Goal? = null,
     /** [you] is a goal set from this phone: "Goal: “…”" in place of "You: “…”". */
     val youGoal: Boolean = false,
+    /**
+     * The names of what went with [you]: its images, then its uploaded files (from its path lines), for "With
+     * report.pdf" or "With 3 attachments" under it (app-plan.md, Attach files › You line).
+     */
+    val youWith: List<String> = emptyList(),
     /** With [newDayNotice]: yesterday's goal was still active, and keeps running there. */
     val newDayGoal: Boolean = false,
     /** The Ask message under the status card, while one shows. */
@@ -123,14 +128,15 @@ interface LiveSessionApi {
     ): String
 
     /**
-     * `POST /api/session/{id}/prompt` with [text], [delivery] (`queue` or `steer`) and [images] in the same request;
-     * returns the inbox item's id.
+     * `POST /api/session/{id}/prompt` with [text], [delivery] (`queue` or `steer`) and [images] in the same request,
+     * and [metadata] when files went with it (app-plan.md, Attach files › The prompt); returns the inbox item's id.
      */
     suspend fun send(
         sessionId: String,
         text: String,
         delivery: String,
         images: List<PromptImage> = emptyList(),
+        metadata: JsonObject? = null,
     ): String
 
     /** `DELETE /api/session/{id}/inbox/{item}`: takes back a message that hasn't been delivered. */
@@ -328,9 +334,13 @@ class TodaySession(
     /** What the phone sent, by inbox item, for the You line when it's delivered. */
     private val sent = java.util.concurrent.ConcurrentHashMap<String, String>()
 
+    /** The names of the images the phone sent with each message, by inbox item. */
+    private val sentImages = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
+
     /** The message the You line shows, and whether its run has ended (the next card made while idle clears it). */
     private var you: String? = null
     private var youGoal = false
+    private var youWith: List<String> = emptyList()
     private var youRunEnded = false
 
     /** The objective this phone is setting, until its kickoff shows up in the inbox. */
@@ -354,6 +364,7 @@ class TodaySession(
             if (!busy && youRunEnded) {
                 you = null
                 youGoal = false
+                youWith = emptyList()
                 youRunEnded = false
                 publish()
             }
@@ -443,16 +454,18 @@ class TodaySession(
     }
 
     /**
-     * Sends [text] with [images] to today's session with [delivery]; returns the inbox item's id, which [cancelQueued]
-     * takes back. Throws when the session isn't open or the server refuses it.
+     * Sends [text] with [images] (and the uploaded files' [metadata]) to today's session with [delivery]; returns the
+     * inbox item's id, which [cancelQueued] takes back. Throws when the session isn't open or the server refuses it.
      */
     suspend fun send(
         text: String,
         delivery: String,
         images: List<PromptImage> = emptyList(),
+        metadata: JsonObject? = null,
     ): String =
-        api.send(sessionId ?: error("Today's session isn't open"), text, delivery, images).also {
+        api.send(sessionId ?: error("Today's session isn't open"), text, delivery, images, metadata).also {
             sent[it] = text
+            if (images.isNotEmpty()) sentImages[it] = images.map { image -> image.name }
             // A new session's empty card no longer says nothing is running (app-plan.md, Empty session).
             sentHere = true
             summary.markStarted()
@@ -813,9 +826,11 @@ class TodaySession(
         live = LiveSessionState(session.id, hasRun = session.busySince != null)
         you = null
         youGoal = false
+        youWith = emptyList()
         youRunEnded = false
         sentHere = false
         sent.clear()
+        sentImages.clear()
         goalSent.clear()
         goalSetting = null
         stopWatch = null
@@ -868,14 +883,14 @@ class TodaySession(
             // "You: …" from now until the card made after this run ends; a later message replaces it. The goal's own
             // items aren't in the inbox kept here, so they never set it.
             val goal = goalSent.remove(event.id)
-            val text =
-                goal ?: current.inbox
-                    .firstOrNull { it.id == event.id }
-                    ?.text
-                    ?.ifEmpty { null } ?: sent[event.id]
+            val entry = current.inbox.firstOrNull { it.id == event.id }
+            val text = goal ?: entry?.text?.ifEmpty { null } ?: sent[event.id]
+            val images = entry?.files?.map { it.name ?: "" }?.takeIf { it.isNotEmpty() } ?: sentImages[event.id].orEmpty()
+            sentImages.remove(event.id)
             if (text != null) {
                 you = text
                 youGoal = goal != null
+                youWith = (if (goal != null) emptyList() else images) + PromptFiles.names(text)
                 youRunEnded = false
             }
         }
@@ -910,6 +925,7 @@ class TodaySession(
                 todos = state?.todos.orEmpty(),
                 you = you,
                 youGoal = you != null && youGoal,
+                youWith = if (you != null) youWith else emptyList(),
                 goal = state?.goal,
                 pending = state?.pending.orEmpty(),
                 rootId = state?.rootId,

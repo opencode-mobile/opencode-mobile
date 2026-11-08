@@ -35,6 +35,9 @@ data class Goal(
     val rounds: Int = 0,
     val maxRounds: Int = MAX_ROUNDS,
 ) {
+    /** The objective as the line and the sheet show it: without the path lines of files set with it. */
+    val shownObjective: String get() = PromptFiles.strip(objective)
+
     /** The reason the sheet shows: only for a paused or finished goal, as the server gives it. */
     val shownReason: String? get() = reason?.trim()?.ifEmpty { null }?.takeIf { status != GoalStatus.Active }
 

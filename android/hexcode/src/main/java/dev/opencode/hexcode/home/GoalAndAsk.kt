@@ -99,7 +99,7 @@ internal fun GoalLineRow(
                     GoalPhase.Paused -> HexGoalLineState.Paused
                     GoalPhase.Done -> HexGoalLineState.Done
                 },
-                goal?.objective.orEmpty(),
+                goal?.shownObjective.orEmpty(),
                 onClick,
                 modifier,
                 suffix =
@@ -155,7 +155,7 @@ internal fun BoxScope.GoalSheetView(
         } else if (goal != null) {
             HexGoalBox(
                 HexGoalBoxState.Set,
-                goal.objective,
+                goal.shownObjective,
                 label = stringResource(R.string.goal_box_label),
                 status =
                     when (val phase = goal.phase(state.today.busySince != null)) {
