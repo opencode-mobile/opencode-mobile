@@ -50,6 +50,7 @@ import dev.opencode.hexcode.designsystem.components.HexRowTrailing
 import dev.opencode.hexcode.designsystem.components.HexSectionLabel
 import dev.opencode.hexcode.designsystem.components.HexSheet
 import dev.opencode.hexcode.designsystem.components.HexSheetAction
+import dev.opencode.hexcode.designsystem.components.HexSheetSize
 import dev.opencode.hexcode.designsystem.components.HexToastHost
 import dev.opencode.hexcode.designsystem.components.HexToastMessage
 import dev.opencode.hexcode.designsystem.components.HexToastTone
@@ -284,6 +285,8 @@ private fun BoxScope.ServerSheet(
         onDismiss = onDone,
         title = stringResource(R.string.server_title),
         trailing = HexSheetAction(stringResource(R.string.common_done), onDone),
+        // A content sheet: opens at half the screen and drags to full (hex-design-system.md, HexSheet sizes).
+        size = HexSheetSize.Medium,
         footer = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 HexButton(

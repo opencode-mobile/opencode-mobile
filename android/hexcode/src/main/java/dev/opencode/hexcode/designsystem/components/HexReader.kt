@@ -34,7 +34,8 @@ data class HexReaderFoot(
  * A sheet that shows a long text whole (`HexReader`, long-dictation prototype A): a head row with the [title]
  * (`bodyStrong`), a `mono` `text3` [meta] ("2:31 · 235 words") and Done on the right; the [paragraphs] in `body`
  * `text1`, scrolling; and an optional [foot] under a `line` border. Used for a long draft ("Draft", with the foot)
- * and the message just sent ("You said", without). Put it last in a full-screen `Box`.
+ * and the message just sent ("You said", without). It opens at half the screen and drags to full; the text
+ * scrolls inside it. Put it last in a full-screen `Box`.
  */
 @Composable
 fun BoxScope.HexReader(
@@ -51,6 +52,8 @@ fun BoxScope.HexReader(
         visible = visible,
         onDismiss = onDone,
         title = title,
+        // A content sheet: opens at half the screen and drags to full (hex-design-system.md, HexSheet sizes).
+        size = HexSheetSize.Medium,
         head = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

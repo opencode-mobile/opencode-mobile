@@ -204,7 +204,7 @@ struct HomeView: View {
         .fullScreenCover(item: browserPresented) { token in
             BrowserScreen(model: token.model, onDone: { closeBrowser() })
         }
-        .hexSheet(isPresented: Binding(get: { home.showsDraftReader }, set: { home.showsDraftReader = $0 }), detents: [.large]) {
+        .hexSheet(isPresented: Binding(get: { home.showsDraftReader }, set: { home.showsDraftReader = $0 })) {
             HexReader(
                 title: Text(LocalizedStringResource("reader.draft", defaultValue: "Draft")),
                 meta: ReaderMeta.text(duration: home.draft.totalDuration, words: home.draft.wordCount),
@@ -225,7 +225,7 @@ struct HomeView: View {
                 onDone: { home.showsDraftReader = false }
             )
         }
-        .hexSheet(isPresented: Binding(get: { youSaid != nil }, set: { if !$0 { youSaid = nil } }), detents: [.large]) {
+        .hexSheet(isPresented: Binding(get: { youSaid != nil }, set: { if !$0 { youSaid = nil } })) {
             if let youSaid {
                 HexReader(
                     title: Text(LocalizedStringResource("reader.sent", defaultValue: "You said")),
