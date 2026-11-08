@@ -3,7 +3,7 @@ import SwiftUI
 import VoiceEngineKit
 
 /// Settings: a plain list for now. Project, model and appearance work; the rest are placeholders.
-/// Version ends App; ten quick taps on it show the Developer section after it.
+/// Version ends App and does nothing when tapped; the Developer section always follows it.
 struct SettingsView: View {
     @Bindable var main: HexMainModel
     let voice: VoiceEngine
@@ -81,11 +81,9 @@ struct SettingsView: View {
                         LocalizedStringResource("settings.version", defaultValue: "Version"),
                         value: main.build.versionLabel,
                         trailing: .none
-                    ) { main.tapVersion() }
+                    )
 
-                    if main.developer.isUnlocked {
-                        developerSection
-                    }
+                    developerSection
                 }
                 .padding(.bottom, 24)
             }
@@ -148,9 +146,6 @@ struct SettingsView: View {
             main.realSession.dropStream()
         }
         #endif
-        HexRow(icon: .lock, verbatim: "Hide developer settings", trailing: .none) {
-            main.developer.hide()
-        }
     }
 
     /// The hostname and OpenCode version, under the server's name.

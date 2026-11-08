@@ -4002,17 +4002,6 @@
         }
       }
     },
-    "settings.developer.on": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Developer settings on"
-          }
-        }
-      }
-    },
     "settings.dictation": {
       "extractionState": "manual",
       "localizations": {

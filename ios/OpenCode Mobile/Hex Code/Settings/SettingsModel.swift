@@ -70,7 +70,6 @@ final class HexMainModel {
     /// Not saved, so the app always starts on the real session.
     private(set) var samplePreset: TodaySessionDemo?
     private(set) var sampleSession: TodaySession?
-    let developer: DeveloperSettings
     let build: HexBuildInfo
 
     /// Pair again's scan cover, while it is up.
@@ -93,7 +92,6 @@ final class HexMainModel {
         samplePreset: TodaySessionDemo? = nil,
         services: any FirstRunServices = LiveFirstRunServices(),
         store: any HexSetupStoring = HexSetupStore(),
-        developer: DeveloperSettings? = nil,
         build: HexBuildInfo? = nil,
         checks: any ServerChecking = LiveServerChecks(),
         now: @escaping () -> Date = Date.init
@@ -107,7 +105,6 @@ final class HexMainModel {
         self.checks = checks
         self.now = now
         realSession = session ?? Self.liveSession(current, connection: liveConnection, toasts: home.toasts)
-        self.developer = developer ?? DeveloperSettings()
         self.build = build ?? .current
         self.services = services
         self.store = store
@@ -340,13 +337,7 @@ final class HexMainModel {
         path = []
     }
 
-    // MARK: Version and developer settings
-
-    /// A tap on the Version row; the tenth quick one turns developer settings on.
-    func tapVersion() {
-        guard developer.tapVersion() else { return }
-        toasts.show(HexToastItem(tone: .steer, title: String(localized: "settings.developer.on", defaultValue: "Developer settings on")))
-    }
+    // MARK: Developer settings
 
     func openGallery() { path.append(.gallery) }
 

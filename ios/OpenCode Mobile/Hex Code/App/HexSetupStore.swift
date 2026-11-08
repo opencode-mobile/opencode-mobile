@@ -96,8 +96,8 @@ struct HexSetupStore: HexSetupStoring {
 }
 
 /// What Forget this computer also clears on the phone (app plan, "Forget this computer"): today's
-/// session's last date and id, its saved card and its Ask history. The speech model, Appearance
-/// and the developer unlock stay.
+/// session's last date and id, its saved card and its Ask history. The speech model and Appearance
+/// stay.
 enum ForgetComputer {
     static let keys = [DailySessionDefaults.key, DailySessionDefaults.sessionKey, SummaryDefaults.key, AskDefaults.key]
 

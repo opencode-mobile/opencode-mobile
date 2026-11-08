@@ -85,7 +85,6 @@ class HexServices(
         }
 
     val settings = HexSettings(appContext, json)
-    val developer = DeveloperSettings(settings)
     private val credentials = EncryptedSecureCredentialStore(appContext)
     val profiles = DataStoreConnectionProfileStore(appContext, json, credentials)
     private val projectAdapter = ProjectDomainAdapter()

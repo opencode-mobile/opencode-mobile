@@ -426,7 +426,6 @@ private fun AfterFirstRun(
         pageState.project?.let {
             HexToastMessage(stringResource(R.string.settings_project_changed, it.name), HexToastTone.Steer)
         }
-    val developerOn = HexToastMessage(stringResource(R.string.settings_developer_on), HexToastTone.Steer)
     val pairedTitle = stringResource(R.string.server_paired)
     val pairedDetail = stringResource(R.string.server_paired_sub, server?.name.orEmpty())
     val addresses by produceState<ServerAddresses?>(null, page, serverRead) { value = services.serverAddresses() }
@@ -496,11 +495,6 @@ private fun AfterFirstRun(
                             val next = Appearance.entries[(prefs.appearance.ordinal + 1) % Appearance.entries.size]
                             scope.launch { services.settings.setAppearance(next) }
                         },
-                        onVersion = {
-                            val now = SystemClock.elapsedRealtime()
-                            scope.launch { if (services.developer.tapVersion(now)) notice = developerOn }
-                        },
-                        developerSettings = prefs.developerSettings,
                         onGallery = {
                             galleryDark = appDark
                             page = Page.SettingsGallery
@@ -514,7 +508,6 @@ private fun AfterFirstRun(
                                 sample.let { if (it == null) presets.first() else presets.getOrNull(it.ordinal + 1) }
                         },
                         onDropStream = if (BuildConfig.DEBUG) homeModel::dropStream else null,
-                        onHideDeveloperSettings = { scope.launch { services.developer.hide() } },
                         onBack = { page = Page.Home },
                         newSession =
                             prefs.project

@@ -8,7 +8,7 @@ import dev.opencode.mobile.domain.connection.SecureCredentialStore
 interface SetupMemory {
     /**
      * Forgets the project, the model, first run being done, the server's home and version, the sign-in date, the saved
-     * card, the Ask history and the last date and session id. Keeps Appearance and the developer unlock.
+     * card, the Ask history and the last date and session id. Keeps Appearance.
      */
     suspend fun forgetSetup()
 }

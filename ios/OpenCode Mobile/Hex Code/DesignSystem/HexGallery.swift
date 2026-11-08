@@ -424,7 +424,7 @@ private struct HexGalleryContent: View {
             action: .init(title: "Undo", icon: .undo),
             duration: 3.5
         ),
-        HexToastItem(tone: .steer, title: "Developer settings on"),
+        HexToastItem(tone: .steer, title: "Now in hexcode"),
         HexToastItem(
             tone: .info,
             title: "A notice with a long detail line",

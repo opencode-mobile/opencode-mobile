@@ -19,7 +19,8 @@ struct HexRow: View {
     var trailing: HexRowTrailing = .chevron
     /// A placeholder row: VoiceOver adds "Not in this version yet".
     var soon = false
-    let action: () -> Void
+    /// Nil for a row that only shows a value, such as Settings' Version: no button, no press feedback.
+    let action: (() -> Void)?
     @Environment(\.dynamicTypeSize) private var typeSize
 
     init(
@@ -28,7 +29,7 @@ struct HexRow: View {
         subtitle: String? = nil,
         value: String? = nil,
         trailing: HexRowTrailing = .chevron,
-        action: @escaping () -> Void
+        action: (() -> Void)? = nil
     ) {
         self.init(icon: icon, text: Text(title), subtitle: subtitle, value: value, trailing: trailing, action: action)
     }
@@ -40,7 +41,7 @@ struct HexRow: View {
         subtitle: String? = nil,
         value: String? = nil,
         trailing: HexRowTrailing = .chevron,
-        action: @escaping () -> Void
+        action: (() -> Void)? = nil
     ) {
         self.init(icon: icon, text: Text(verbatim: title), subtitle: subtitle, value: value, trailing: trailing, action: action)
     }
@@ -51,7 +52,7 @@ struct HexRow: View {
         subtitle: String? = nil,
         value: String? = nil,
         trailing: HexRowTrailing = .chevron,
-        action: @escaping () -> Void
+        action: (() -> Void)? = nil
     ) {
         self.icon = icon
         self.title = title
@@ -62,52 +63,57 @@ struct HexRow: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                if let icon {
-                    HexIconView(icon, size: HexIconSize.regular)
-                        .foregroundStyle(HexColor.text2)
-                        .frame(width: 24)
+        if let action {
+            Button(action: action) { content }
+                .buttonStyle(HexRowPressStyle())
+                .modifier(HexRowAccessibility(title: title, value: value, hint: hint))
+        } else {
+            content
+                .accessibilityElement(children: .ignore)
+                .modifier(HexRowAccessibility(title: title, value: value, hint: hint))
+        }
+    }
+
+    private var content: some View {
+        HStack(spacing: 12) {
+            if let icon {
+                HexIconView(icon, size: HexIconSize.regular)
+                    .foregroundStyle(HexColor.text2)
+                    .frame(width: 24)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                title
+                    .hexFont(HexTextStyle.row.weight(.medium))
+                    .foregroundStyle(HexColor.text1)
+                if let subtitle {
+                    Text(verbatim: subtitle)
+                        .hexFont(.footnote)
+                        .foregroundStyle(HexColor.text3)
+                        .lineLimit(stacked ? nil : 1)
+                        .truncationMode(.middle)
                 }
-                VStack(alignment: .leading, spacing: 1) {
-                    title
-                        .hexFont(HexTextStyle.row.weight(.medium))
-                        .foregroundStyle(HexColor.text1)
-                    if let subtitle {
-                        Text(verbatim: subtitle)
-                            .hexFont(.footnote)
-                            .foregroundStyle(HexColor.text3)
-                            .lineLimit(stacked ? nil : 1)
-                            .truncationMode(.middle)
-                    }
-                    // At accessibility text sizes the value goes under the title, so neither is squeezed.
-                    if stacked, let value {
-                        Text(verbatim: value)
-                            .hexFont(.row)
-                            .foregroundStyle(HexColor.text2)
-                    }
-                }
-                Spacer(minLength: 8)
-                if !stacked, let value {
+                // At accessibility text sizes the value goes under the title, so neither is squeezed.
+                if stacked, let value {
                     Text(verbatim: value)
                         .hexFont(.row)
                         .foregroundStyle(HexColor.text2)
-                        .lineLimit(1)
-                        .frame(maxWidth: 160, alignment: .trailing)
-                        .fixedSize(horizontal: true, vertical: false)
                 }
-                HexRowTrailingView(trailing: trailing)
             }
-            .padding(.horizontal, HexSpacing.screen)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, minHeight: HexSize.row, alignment: .leading)
-            .contentShape(Rectangle())
+            Spacer(minLength: 8)
+            if !stacked, let value {
+                Text(verbatim: value)
+                    .hexFont(.row)
+                    .foregroundStyle(HexColor.text2)
+                    .lineLimit(1)
+                    .frame(maxWidth: 160, alignment: .trailing)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            HexRowTrailingView(trailing: trailing)
         }
-        .buttonStyle(HexRowPressStyle())
-        // "<title>, <value>", with the second line as the hint.
-        .accessibilityLabel(title)
-        .accessibilityValue(Text(verbatim: value ?? ""))
-        .accessibilityHint(Text(verbatim: hint))
+        .padding(.horizontal, HexSpacing.screen)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: HexSize.row, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var stacked: Bool { typeSize.isAccessibilitySize }
@@ -122,6 +128,20 @@ struct HexRow: View {
         var row = self
         row.soon = true
         return row
+    }
+}
+
+/// "<title>, <value>", with the second line as the hint.
+private struct HexRowAccessibility: ViewModifier {
+    let title: Text
+    let value: String?
+    let hint: String
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityLabel(title)
+            .accessibilityValue(Text(verbatim: value ?? ""))
+            .accessibilityHint(Text(verbatim: hint))
     }
 }
 

@@ -70,8 +70,8 @@ data class NewSessionInfo(
 
 /**
  * Settings, the prototype's plain list (app-plan.md, Settings and finish (M6)). Project, Model, Reasoning, Appearance,
- * Start a new session and Server work; the three dictation rows are placeholders for now. Tapping Version 10 times
- * unlocks the Developer section ([developerSettings]), for whoever builds and tests the app.
+ * Start a new session and Server work; the three dictation rows are placeholders for now. Version does nothing when
+ * tapped; the Developer section always follows it, for whoever builds and tests the app.
  */
 @Composable
 fun SettingsScreen(
@@ -84,15 +84,12 @@ fun SettingsScreen(
     onProject: () -> Unit,
     onModel: () -> Unit,
     onAppearance: () -> Unit,
-    onVersion: () -> Unit,
-    developerSettings: Boolean,
     onGallery: () -> Unit,
     onSpeechLab: () -> Unit,
     sampleSession: String,
     onSampleSession: () -> Unit,
     /** Debug builds only: "Drop event stream". */
     onDropStream: (() -> Unit)?,
-    onHideDeveloperSettings: () -> Unit,
     onBack: () -> Unit,
     /** Today's session, for Start a new session's confirmation; null while it isn't open. */
     newSession: NewSessionInfo? = null,
@@ -180,19 +177,15 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_version),
                     icon = HexIcons.info,
                     value = "${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE})",
-                    onClick = onVersion,
                 )
-                if (developerSettings) {
-                    DeveloperSection(
-                        onGallery,
-                        onSpeechLab,
-                        sampleSession,
-                        onSampleSession,
-                        onDropStream,
-                        { notYet = HexToastMessage(DeveloperCopy.BUILD_COPIED, HexToastTone.Steer) },
-                        onHideDeveloperSettings,
-                    )
-                }
+                DeveloperSection(
+                    onGallery,
+                    onSpeechLab,
+                    sampleSession,
+                    onSampleSession,
+                    onDropStream,
+                    { notYet = HexToastMessage(DeveloperCopy.BUILD_COPIED, HexToastTone.Steer) },
+                )
             }
         }
         // Start a new session (app-plan.md, Settings and finish (M6) › Start a new session).
@@ -360,7 +353,6 @@ private fun DeveloperSection(
     onSampleSession: () -> Unit,
     onDropStream: (() -> Unit)?,
     onBuildCopied: () -> Unit,
-    onHide: () -> Unit,
 ) {
     val context = LocalContext.current
     HexSectionLabel(DeveloperCopy.SECTION)
@@ -400,7 +392,6 @@ private fun DeveloperSection(
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) onBuildCopied()
         },
     )
-    HexRow(title = DeveloperCopy.HIDE, icon = HexIcons.eye, onClick = onHide)
 }
 
 /** Settings › Developer is for whoever builds and tests the app: English only, not in the string resources. */
@@ -416,7 +407,6 @@ private object DeveloperCopy {
     const val DROP_STREAM_SUBTITLE = "As if the network dropped, for 10 s. Debug builds only."
     const val BUILD = "Build"
     const val BUILD_COPIED = "Build copied"
-    const val HIDE = "Hide developer settings"
 }
 
 /** A settings row: what it is, its current value on the right, and a chevron; [note] for a screen reader. */
