@@ -158,4 +158,28 @@ class SummaryTextTest {
         assertEquals(emptyList<SummaryLink>(), read.links)
         assertEquals(listOf(NowLine("N")), read.now)
     }
+
+    @Test
+    fun anArtifactsLinkIsDroppedWhateverTheHostBeforeTheFirstTwoAreTaken() {
+        assertEquals(null, SummaryLinks.fromLine("Login preview | http://localhost:3000/api/experimental/artifacts/art_1/view/"))
+        val reply =
+            "## Login\nNow: Published the preview at http://192.168.1.20:4096/api/experimental/artifacts/art_1/view/ for you.\n" +
+                "Next: Check it.\nLink: Preview | http://localhost:3000/api/experimental/artifacts/art_1/view/\n" +
+                "Link: Pull request | https://github.com/o/r/pull/1\nLink: Docs | https://example.com/docs\n"
+        val card = StatusSummary.parse(reply) as StatusSummary.Card
+        assertEquals(
+            listOf(SummaryLink("Pull request", "https://github.com/o/r/pull/1"), SummaryLink("Docs", "https://example.com/docs")),
+            card.links,
+        )
+        assertEquals("Published the preview at 192.168.1.20:4096 for you.", card.nowText)
+    }
+
+    @Test
+    fun aLineThatIsOnlyAnArtifactsUrlIsNoTile() {
+        val card =
+            StatusSummary.parse(
+                "## T\nNow: Done.\nNext: Look.\nhttp://localhost:3000/api/experimental/artifacts/art_1/view/",
+            ) as StatusSummary.Card
+        assertEquals(emptyList<SummaryLink>(), card.links)
+    }
 }

@@ -237,10 +237,13 @@ sealed interface StatusSummary {
                     ?.groupValues
                     ?.get(1)
                     ?.trim() ?: line
-            MARKDOWN_LINK_LINE.matchEntire(text)?.let { return SummaryLink(it.groupValues[1], it.groupValues[2]) }
-            URL_LINE.matchEntire(text)?.let { return SummaryLink(SummaryLinks.host(it.groupValues[1]), it.groupValues[1]) }
+            MARKDOWN_LINK_LINE.matchEntire(text)?.let { return SummaryLink(it.groupValues[1], it.groupValues[2]).unlessArtifact() }
+            URL_LINE.matchEntire(text)?.let { return SummaryLink(SummaryLinks.host(it.groupValues[1]), it.groupValues[1]).unlessArtifact() }
             return null
         }
+
+        /** An artifact's link is dropped: the artifact tile covers it (app-plan.md, Artifacts (M8) › Links). */
+        private fun SummaryLink.unlessArtifact(): SummaryLink? = takeUnless { SummaryLinks.isArtifact(url) }
 
         /** One line of Now: a bullet without its marker, or a plain line. */
         private fun nowLine(line: String): NowLine {

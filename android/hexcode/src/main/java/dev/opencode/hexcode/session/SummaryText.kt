@@ -121,18 +121,21 @@ object SummaryLinks {
     private val TRAILING = setOf('.', ',', ';', ':', '!', '?')
     private val LOCAL_HOSTS = setOf("localhost", "127.0.0.1", "0.0.0.0")
 
-    /** The link a `Link:` line's [value] gives, or null when its URL isn't `http://` or `https://`. */
+    /**
+     * The link a `Link:` line's [value] gives, or null when its URL isn't `http://` or `https://`, or is an artifact's
+     * (the artifact tile covers it).
+     */
     fun fromLine(value: String): SummaryLink? {
         val bar = value.lastIndexOf('|')
         val label = if (bar >= 0) value.substring(0, bar).trim() else ""
         val url = (if (bar >= 0) value.substring(bar + 1) else value).trim()
-        if (!isWeb(url)) return null
+        if (!isWeb(url) || isArtifact(url)) return null
         return SummaryLink(label.ifEmpty { host(url) }, url)
     }
 
     /**
      * [sentence] with its links taken out: a Markdown link (or image) keeps its label, a bare URL becomes its host;
-     * and the links, in order.
+     * and the links, in order, without artifacts' (whose host is the agent's guess; the artifact tile covers them).
      */
     fun pull(sentence: String): Pair<String, List<SummaryLink>> {
         val found = mutableListOf<SummaryLink>()
@@ -148,8 +151,16 @@ object SummaryLinks {
                 found += SummaryLink(host(url), url)
                 host(url) + it.value.substring(url.length)
             }
-        return text to found
+        return text to found.filterNot { isArtifact(it.url) }
     }
+
+    /**
+     * Whether [url]'s path is an artifact's, `/api/experimental/artifacts/…`, whatever the host (app-plan.md, Artifacts
+     * (M8) › Links): the agent guesses the host, so such links are dropped before the first 2 are taken.
+     */
+    fun isArtifact(url: String): Boolean = runCatching { URI(url).rawPath }.getOrNull()?.startsWith(ARTIFACT_PATH) == true
+
+    private const val ARTIFACT_PATH = "/api/experimental/artifacts/"
 
     /** [links] with each URL once, the first kept. */
     fun distinct(links: List<SummaryLink>): List<SummaryLink> = links.distinctBy { it.url }
