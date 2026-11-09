@@ -153,8 +153,6 @@
     <string name="home_servers_sheet_switch_to">Switch to</string>
     <string name="home_servers_sheet_manage">Manage in Settings</string>
     <string name="home_more_options">More options</string>
-    <string name="home_new_session">New session</string>
-    <string name="home_no_projects">No projects</string>
     <string name="home_filter_sheet_title">Filter by project</string>
     <string name="home_empty_title">No projects yet</string>
     <string name="home_empty_message">Tap the Add project icon below to choose a folder on your server.</string>
@@ -165,7 +163,6 @@
     <string name="home_probe_failed_edit_connection">Edit connection</string>
     <string name="home_error_load_projects">Unable to load projects</string>
     <string name="home_error_project_load_failed">Couldn’t load sessions</string>
-    <string name="home_error_reconnect_to_create">Reconnect to create a session</string>
     <string name="home_remove_project_title">Remove from home?</string>
     <string name="home_remove_project_message">Remove \"%1$s\" from home? Its sessions stay on the server.</string>
     <string name="home_snackbar_removed">Removed \"%1$s\" from home</string>
@@ -177,8 +174,6 @@
         <item quantity="one">%1$d project</item>
         <item quantity="other">%1$d projects</item>
     </plurals>
-    <string name="home_run_in">Run in</string>
-    <string name="home_other_projects">Other projects</string>
     <string name="home_main_checkout">main checkout</string>
     <plurals name="home_worktree_count">
         <item quantity="one">%1$d worktree</item>
@@ -506,8 +501,28 @@
         <item quantity="one">Scroll to end, %1$d new message</item>
         <item quantity="other">Scroll to end, %1$d new messages</item>
     </plurals>
+    <!-- New session draft (#1004): Session Chat before its first send. -->
+    <string name="home_error_reconnect_to_create">Reconnect to create a session</string>
     <string name="timeline_state_creating_title">Starting session…</string>
     <string name="timeline_state_creating_subtitle">Creating on server…</string>
+    <string name="new_session_title">New session</string>
+    <string name="new_session_draft_subtitle">Draft · created when you send</string>
+    <string name="new_session_discard_draft">Discard draft</string>
+    <string name="new_session_run_in_caption">Run session in</string>
+    <string name="new_session_project">Project</string>
+    <string name="new_session_worktree">Worktree</string>
+    <string name="new_session_starts_from">Starts from</string>
+    <string name="new_session_local">Local</string>
+    <string name="new_session_new_worktree">New worktree</string>
+    <string name="new_session_not_git">None · not a Git repo</string>
+    <string name="new_session_created_on_send">Created when you send</string>
+    <string name="new_session_search_projects">Search projects</string>
+    <string name="new_session_no_project_matches">No matching projects</string>
+    <string name="new_session_add_project">Add project…</string>
+    <string name="new_session_run_in_project">Run in %1$s</string>
+    <string name="new_session_current_checkout">%1$s · current checkout</string>
+    <string name="new_session_new_worktree_subtitle">Isolated copy, created when you send</string>
+    <string name="new_session_worktrees_section">Worktrees</string>
     <string name="timeline_state_loading_title">Loading messages</string>
     <string name="timeline_state_loading_subtitle">Fetching timeline…</string>
     <string name="timeline_state_error_title">Unable to load messages</string>

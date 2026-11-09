@@ -293,13 +293,8 @@ private fun SessionChatTimelineStateContent(
     modifier: Modifier,
 ) {
     when (props.timeline) {
-        SessionChatTimelineState.Creating ->
-            OpenCodeStatusStack(
-                title = stringResource(R.string.timeline_state_creating_title),
-                subtitle = stringResource(R.string.timeline_state_creating_subtitle),
-                testTag = "sessionChatCreating",
-                modifier = modifier.fillMaxSize(),
-            )
+        // The screen shows the draft's Run session in card instead of a timeline.
+        SessionChatTimelineState.Draft -> Box(modifier = modifier.fillMaxSize())
 
         SessionChatTimelineState.Loading ->
             OpenCodeStatusStack(

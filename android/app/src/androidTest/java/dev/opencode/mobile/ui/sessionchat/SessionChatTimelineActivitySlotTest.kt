@@ -43,7 +43,7 @@ class SessionChatTimelineActivitySlotTest {
 
         listOf(
             SessionChatTimelineState.Loading,
-            SessionChatTimelineState.Creating,
+            SessionChatTimelineState.Draft,
             SessionChatTimelineState.Empty,
             SessionChatTimelineState.Error,
         ).forEach { state ->

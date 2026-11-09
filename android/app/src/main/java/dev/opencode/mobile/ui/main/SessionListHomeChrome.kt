@@ -1,13 +1,17 @@
 package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProjectPickerState
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeWorktree
 import dev.opencode.mobile.domain.home.HomeWorktreeCopy
+import dev.opencode.mobile.domain.session.NewSessionDraftStart
+import dev.opencode.mobile.domain.session.NewSessionPlace
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRow
 import dev.opencode.mobile.ui.components.SessionListScopeLoad
+import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.UiTextLookup
 import dev.opencode.mobile.ui.text.resolve
@@ -49,34 +53,10 @@ object SessionListHomeChrome {
     sealed class NewSessionAction {
         data object None : NewSessionAction()
 
-        data class Create(
-            val worktree: String,
+        /** Opens the New session draft (#1004); a fresh draft starts at [start]. */
+        data class OpenDraft(
+            val start: NewSessionDraftStart,
         ) : NewSessionAction()
-
-        /** Opens the New session sheet in [mode]. */
-        data class PresentSheet(
-            val mode: NewSessionSheetMode,
-        ) : NewSessionAction()
-    }
-
-    /** What the New session sheet lists. */
-    sealed class NewSessionSheetMode {
-        /**
-         * The project list. After a hold ([holdPick]) a pick opens the project's Run in list
-         * while Worktrees is on; after a tap every pick starts on the project's main checkout.
-         */
-        data class Projects(
-            val holdPick: Boolean,
-        ) : NewSessionSheetMode()
-
-        /**
-         * [projectId]'s worktrees under "Run in" (main checkout first) and "New worktree…", then
-         * "Other projects" when [showsOtherProjects].
-         */
-        data class RunIn(
-            val projectId: String,
-            val showsOtherProjects: Boolean,
-        ) : NewSessionSheetMode()
     }
 
     sealed class TerminalAction {
@@ -228,63 +208,55 @@ object SessionListHomeChrome {
     }
 
     /**
-     * Tap on New session: the filtered worktree, else the target project's main checkout. Nothing
-     * is asked, except the project choice from the All scope with several projects.
+     * New session: the draft, starting (when there is none yet) in the filtered worktree, else
+     * the filtered project's main checkout; in the All scope, where the most recent of [sessions]
+     * runs, else the first project's main checkout. Never asks anything.
      */
     fun newSessionAction(
         projects: List<Project>,
         selectedFilterId: String,
         worktreesEnabled: Boolean = true,
+        sessions: List<SessionListSession> = emptyList(),
     ): NewSessionAction {
-        if (projects.isEmpty()) {
-            return NewSessionAction.None
-        }
+        if (projects.isEmpty()) return NewSessionAction.None
         if (worktreesEnabled && selectedFilterId != SessionListFilterTab.ALL_ID) {
-            projects
-                .firstNotNullOfOrNull { project -> project.worktrees.firstOrNull { it.scopeId == selectedFilterId } }
-                ?.let { return NewSessionAction.Create(it.directory) }
+            projects.forEach { project ->
+                project.worktrees.firstOrNull { it.scopeId == selectedFilterId }?.let { worktree ->
+                    return NewSessionAction.OpenDraft(start(project, worktree.worktree, worktreesEnabled))
+                }
+            }
         }
-        targetProject(projects, selectedFilterId)?.let { return NewSessionAction.Create(it.mainCheckoutDirectory) }
-        return NewSessionAction.PresentSheet(NewSessionSheetMode.Projects(holdPick = false))
+        if (selectedFilterId != SessionListFilterTab.ALL_ID) {
+            targetProject(projects, selectedFilterId)?.let { return NewSessionAction.OpenDraft(start(it, null, worktreesEnabled)) }
+        }
+        val recent = sessions.filter { it.updatedAtEpochMs != null }.maxByOrNull { it.updatedAtEpochMs ?: Long.MIN_VALUE }
+        if (recent != null) {
+            val directory = ServerPathPolicy.canonical(recent.directory.trim())
+            val owner =
+                projects.firstOrNull { project -> project.worktrees.any { it.directory == directory } }
+                    ?: projects.firstOrNull { it.id == recent.worktree || it.worktree == recent.worktree }
+            if (owner != null) {
+                val worktree = owner.worktrees.firstOrNull { it.directory == directory }?.worktree
+                return NewSessionAction.OpenDraft(start(owner, worktree, worktreesEnabled))
+            }
+        }
+        return NewSessionAction.OpenDraft(start(projects.first(), null, worktreesEnabled))
     }
 
-    /**
-     * Hold on New session: while Worktrees is on, the target project's Run in list (with the
-     * other projects below it), even with one checkout, so "New worktree…" is reachable. Else
-     * the project list. Null handler with nothing to choose.
-     */
-    fun newSessionLongPressAction(
-        projects: List<Project>,
-        selectedFilterId: String = SessionListFilterTab.ALL_ID,
-        worktreesEnabled: Boolean = true,
-    ): NewSessionAction {
-        val target = targetProject(projects, selectedFilterId)
-        if (worktreesEnabled && target != null) {
-            return NewSessionAction.PresentSheet(
-                NewSessionSheetMode.RunIn(projectId = target.id, showsOtherProjects = projects.size >= 2),
-            )
-        }
-        if (projects.size >= 2) {
-            return NewSessionAction.PresentSheet(NewSessionSheetMode.Projects(holdPick = true))
-        }
-        return NewSessionAction.None
-    }
-
-    /**
-     * A project picked in the New session sheet: after a hold with Worktrees on, it asks where
-     * to run (its checkouts and "New worktree…"); otherwise the session starts on its main
-     * checkout.
-     */
-    fun projectPickAction(
+    /** [project] with [worktree] as the place: its main checkout is Local; none while worktrees are off. */
+    private fun start(
         project: Project,
-        holdPick: Boolean,
-        worktreesEnabled: Boolean = true,
-    ): NewSessionAction =
-        if (holdPick && worktreesEnabled) {
-            NewSessionAction.PresentSheet(NewSessionSheetMode.RunIn(projectId = project.id, showsOtherProjects = false))
-        } else {
-            NewSessionAction.Create(project.mainCheckoutDirectory)
-        }
+        worktree: HomeWorktree?,
+        worktreesEnabled: Boolean,
+    ): NewSessionDraftStart {
+        val place =
+            if (worktreesEnabled && worktree != null && !worktree.isMain && worktree.directory != project.mainCheckoutDirectory) {
+                NewSessionPlace.Worktree(worktree.directory, worktree.branch)
+            } else {
+                NewSessionPlace.Local
+            }
+        return NewSessionDraftStart(projectKey = project.id, projectDirectory = project.mainCheckoutDirectory, place = place)
+    }
 
     fun terminalAction(projects: List<Project>): TerminalAction {
         if (projects.isEmpty()) {

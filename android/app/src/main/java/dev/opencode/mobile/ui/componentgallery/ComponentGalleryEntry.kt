@@ -51,6 +51,7 @@ enum class ComponentGalleryEntryId {
     ListItem,
     SelectableCard,
     OptionCard,
+    PickerCard,
     ListGroup,
     SectionHeader,
     ReorderableList,
@@ -292,6 +293,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.OptionCard,
             title = "Option Card",
             description = "Bordered single-choice card with radio, title and tag, subtitle, and illustration preview.",
+            category = ComponentGalleryCategory.Lists,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.PickerCard,
+            title = "Picker Card",
+            description = "Caption, rounded card of label-over-value rows with icon tiles that open pickers, and a path footnote.",
             category = ComponentGalleryCategory.Lists,
         ),
         ComponentGalleryEntry(

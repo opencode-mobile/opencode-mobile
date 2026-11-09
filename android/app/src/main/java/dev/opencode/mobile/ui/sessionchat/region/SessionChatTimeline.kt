@@ -205,7 +205,8 @@ class SessionChatTimeline(
     private var networkCacheSyncConfirmed = false
     private var catchUpSyncing = false
 
-    fun bindCreating(worktree: String) {
+    /** The New session draft: no session to observe; the screen shows the Run session in card. */
+    fun bindDraft(worktree: String) {
         observeJob?.cancel()
         transformJob?.cancel()
         pendingRequiredDisplayApplies.clear()
@@ -226,16 +227,9 @@ class SessionChatTimeline(
         BlockDecorationCache.clear()
         _state.value = SessionChatTimelineRegionState()
         _state.update {
-            it.copy(timeline = SessionChatTimelineState.Creating, errorMessage = null)
+            it.copy(timeline = SessionChatTimelineState.Draft, errorMessage = null)
         }
-        logI("bind creating worktree=$worktree")
-    }
-
-    fun showCreateFailed(message: String) {
-        _state.update {
-            it.copy(timeline = SessionChatTimelineState.Error, errorMessage = message)
-        }
-        logI("create failed message=$message")
+        logI("bind draft worktree=$worktree")
     }
 
     fun bind(

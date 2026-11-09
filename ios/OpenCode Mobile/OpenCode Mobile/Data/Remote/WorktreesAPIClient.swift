@@ -56,7 +56,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         }
     }
 
-    func createV2(projectID: String, from: String, name: String, branch: String?) async throws -> String {
+    func createV2(projectID: String, from: String, name: String?, branch: String?) async throws -> String {
         guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
         var request = connection.authorizedRequest(path: "api/worktree", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -71,7 +71,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         }
     }
 
-    func createV1(directory: String, name: String) async throws -> CreatedWorktree {
+    func createV1(directory: String, name: String?) async throws -> CreatedWorktree {
         guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
         var request = connection.authorizedRequest(path: "experimental/worktree", method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -144,13 +144,15 @@ private nonisolated struct WorktreeDirectoryDTO: Decodable {
 private nonisolated struct WorktreeCreateV2Body: Encodable {
     let projectID: String
     let from: String
-    let name: String
+    /// Omitted when nil: the server names the checkout.
+    let name: String?
     /// Omitted when nil: the server starts from `from`'s HEAD.
     let branch: String?
 }
 
 private nonisolated struct WorktreeCreateV1Body: Encodable {
-    let name: String
+    /// Omitted when nil: the server names the checkout.
+    let name: String?
 }
 
 private nonisolated struct WorktreeCreatedV1DTO: Decodable {

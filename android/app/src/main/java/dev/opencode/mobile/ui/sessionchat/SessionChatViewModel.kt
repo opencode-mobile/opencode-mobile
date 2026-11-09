@@ -8,8 +8,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.command.ClientSlashAction
+import dev.opencode.mobile.domain.command.ComposerShellCommand
 import dev.opencode.mobile.domain.command.CommandRepository
+import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
@@ -22,6 +25,7 @@ import dev.opencode.mobile.domain.event.namedProjectId
 import dev.opencode.mobile.domain.event.sessionMoved
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
+import dev.opencode.mobile.domain.home.HomeWorktreesFeed
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.NoOpSessionViewReporter
@@ -34,6 +38,8 @@ import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentLimits
+import dev.opencode.mobile.domain.message.AttachmentUpload
 import dev.opencode.mobile.domain.message.AttachmentIngestionResult
 import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.FollowUpDelivery
@@ -48,6 +54,7 @@ import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
+import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
@@ -55,6 +62,11 @@ import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.UnavailableProjectRepository
+import dev.opencode.mobile.domain.session.NewSessionCreatedSession
+import dev.opencode.mobile.domain.session.NewSessionDraft
+import dev.opencode.mobile.domain.session.NewSessionDraftStart
+import dev.opencode.mobile.domain.session.NewSessionDraftStore
+import dev.opencode.mobile.domain.session.NewSessionPlace
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
@@ -70,7 +82,9 @@ import dev.opencode.mobile.domain.shell.EmptyAgentShellRepository
 import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
+import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeCreateError
 import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
@@ -93,6 +107,7 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
+import dev.opencode.mobile.ui.worktree.WorktreeBaseOptions
 import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
@@ -154,6 +169,8 @@ class SessionChatViewModel
         private val serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
         private val attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
         agentShellRepository: AgentShellRepository = EmptyAgentShellRepository,
+        private val newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
+        private val homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -409,7 +426,22 @@ class SessionChatViewModel
         private var renameDraftEditReported = false
         private var forkDraftEditReported = false
         private var questionCustomEditReportedRequestId: String? = null
-        private var optimisticCreateJob: kotlinx.coroutines.Job? = null
+
+        // New session draft (#1004): Session Chat before its first send. Null once the session exists.
+        private var newSessionDraft: NewSessionDraft? = null
+        private var draftProfileId: String? = null
+        private var draftSheet: NewSessionDraftSheet? = null
+        private var draftProjectQuery: String = ""
+        private var draftBaseOptions: WorktreeBaseOptions? = null
+        private var draftBaseJob: Job? = null
+        private var draftSubmitJob: Job? = null
+
+        /** The first send is creating the worktree or session, until its prompt shows (or fails). */
+        private var draftSubmitting = false
+        private var draftSendError: UiText? = null
+
+        /** Binding a draft rewrites the composer; its intermediate states are not the draft's. */
+        private var draftSyncPaused = false
         private var pendingSend: PendingSend? = null
         private var armedSendAcceptance: ArmedSendAcceptance? = null
         private val newSessionModelSelectionResolver = newSessionModelSelectionResolver
@@ -506,6 +538,13 @@ class SessionChatViewModel
                 ) { _, _, _, _, _ -> }.collect { publishUiState() }
             }
             viewModelScope.launch {
+                // The draft's Worktree sheet shows running sessions per worktree.
+                homeWorktreesFeed.snapshot.collect { if (newSessionDraft != null) publishUiState() }
+            }
+            viewModelScope.launch {
+                composer.state.collect { syncNewSessionDraft() }
+            }
+            viewModelScope.launch {
                 snapshotFlow { SessionChatDisplayPreferences.collapseConsecutiveToolCalls }
                     .distinctUntilChanged()
                     .collect { enabled ->
@@ -535,7 +574,7 @@ class SessionChatViewModel
             worktree: String,
         ) {
             if (OptimisticSessionCreate.isPlaceholder(sessionId)) {
-                bindOptimisticCreate(sessionTitle, worktree)
+                bindNewSessionDraft(sessionTitle, worktree)
                 return
             }
             if (boundSessionId == sessionId && routeWorktree == worktree) {
@@ -643,19 +682,26 @@ class SessionChatViewModel
             publishUiState()
         }
 
-        private fun bindOptimisticCreate(
+        /**
+         * New session (#1004): the profile's draft, or a fresh one at [worktree]. Nothing is created
+         * on the server until the first send. A route that binds again (or after the first send
+         * promoted this screen to the created session) changes nothing.
+         */
+        private fun bindNewSessionDraft(
             sessionTitle: String,
             worktree: String,
         ) {
-            if ((boundWorktree == worktree || routeWorktree == worktree) && boundSessionId != null) {
-                return
-            }
-            optimisticCreateJob?.cancel()
-            boundSessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
+            if (routeWorktree == worktree && boundSessionId != null) return
+            val profileId = currentProfileId()
+            val draft =
+                newSessionDraftStore.claim(
+                    profileId = profileId,
+                    owner = this,
+                    start = NewSessionDraftStart.forDirectory(homeProjectsSnapshot.projects.value, worktree),
+                )
+            draftProfileId = profileId
             boundSessionTitle = sessionTitle
-            boundWorktree = worktree
             routeWorktree = worktree
-            transcriptWorktree = worktree
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
@@ -670,49 +716,89 @@ class SessionChatViewModel
             resetWorkingFooter()
             worktreeMove.reset()
             worktreeCreate.dismiss()
-            logI("bind optimistic create worktree=$worktree title=$sessionTitle")
-            seedProjectIdentity(worktree)
+            draftSheet = null
+            draftProjectQuery = ""
+            draftSubmitting = false
+            draftSendError = null
+            shellMessages.value = emptyList()
+            logI("bind new session draft directory=${draft.directory}")
             _uiState.value =
-                SessionChatUiState
-                    .initial(
-                        sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                        sessionTitle = sessionTitle,
-                        timeline = SessionChatTimelineState.Creating,
-                    ).copy(
-                        projectLabel = projectIdentity.label,
-                        projectLetter = projectIdentity.letter,
-                        projectLetterAccent = projectIdentity.accent,
-                        worktreeCheckout = projectIdentity.isWorktreeCheckout,
-                    )
-            scheduleProjectIdentityRefine(worktree)
-            timeline.bindCreating(worktree)
-            composer.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
-            sessionInfo.bindCreating(sessionTitle, worktree)
-            reviewChanges.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
-            repoStrip.bind(worktree, startExpanded = true)
-            commands.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
-            shells.reset()
-            optimisticCreateJob =
-                viewModelScope.launch {
-                    runCatching {
-                        withContext(ioDispatcher) {
-                            val profile = connectionSessionCoordinator.currentProfile()
-                            val session = sessionRepository.createSession(directory = worktree)
-                            val selection = profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
-                            if (profile != null && selection != null) {
-                                newSessionModelSelectionResolver.seedSession(profile, worktree, session.id, selection)
-                            }
-                            session
-                        }
-                    }.onSuccess { session ->
-                        logI("optimistic create success id=${session.id}")
-                        promoteOptimisticSession(session.id, session.title, worktree)
-                    }.onFailure { error ->
-                        if (error is CancellationException) throw error
-                        logI("optimistic create failed error=${error.message}")
-                        timeline.showCreateFailed(createSessionErrorMessage(error))
-                    }
-                }
+                SessionChatUiState.initial(
+                    sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                    sessionTitle = sessionTitle,
+                    timeline = SessionChatTimelineState.Draft,
+                )
+            newSessionDraft = draft
+            bindDraftDirectory(draft, force = true)
+            publishUiState()
+        }
+
+        /** Binds the regions to [draft]'s checkout (models, commands and files come from there). */
+        private fun bindDraftDirectory(
+            draft: NewSessionDraft,
+            force: Boolean = false,
+        ) {
+            val directory = draft.directory
+            if (!force && boundWorktree == directory) return
+            boundSessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
+            boundWorktree = directory
+            transcriptWorktree = directory
+            draftSyncPaused = true
+            try {
+                timeline.bindDraft(directory)
+                composer.bindDraft(directory, draft.composer, draft.attachments, draft.modelSelection)
+                sessionInfo.bindDraft(boundSessionTitle.orEmpty(), directory)
+                reviewChanges.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, directory)
+                commands.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, directory)
+                shells.reset()
+            } finally {
+                draftSyncPaused = false
+            }
+            viewModelScope.launch { composer.loadCatalog() }
+        }
+
+        private fun currentProfileId(): String = connectionSessionCoordinator.currentProfile()?.id.orEmpty()
+
+        /** Copies what the composer holds (text, attachments, model) into the draft and its store. */
+        private fun syncNewSessionDraft() {
+            if (draftSyncPaused) return
+            val draft = newSessionDraft ?: return
+            val composerState = composer.state.value.composer
+            val selection =
+                composerState.selectedModel?.takeIf { composerState.isModelSelectionReady }?.let { selected ->
+                    val picked =
+                        SessionModelSelection(
+                            providerId = selected.option.providerId,
+                            modelId = selected.option.modelId,
+                            variant = composerState.selectedVariant,
+                            agentId = composerState.selectedMode,
+                        )
+                    // The same pick keeps when it was made.
+                    val previous = draft.modelSelection
+                    val unchanged = previous != null && previous.copy(savedAtEpochMs = null) == picked
+                    if (unchanged) previous else picked.copy(savedAtEpochMs = nowMs())
+                } ?: draft.modelSelection
+            val next =
+                draft.copy(
+                    composer =
+                        ComposerDraft(
+                            text = composerState.text,
+                            agentMentions = composerState.agentMentions,
+                            fileMentions = composerState.fileMentions,
+                            skillMentions = composerState.skillMentions,
+                        ),
+                    // An upload still streaming belongs to this screen; the draft keeps finished ones.
+                    attachments = composerState.attachments.filter { it.upload !is AttachmentUpload.Uploading },
+                    modelSelection = selection,
+                )
+            if (next == draft) return
+            updateNewSessionDraft(next)
+        }
+
+        private fun updateNewSessionDraft(draft: NewSessionDraft) {
+            newSessionDraft = draft
+            val profileId = draftProfileId ?: return
+            newSessionDraftStore.save(profileId, this, draft)
         }
 
         private fun createSessionErrorMessage(error: Throwable): String =
@@ -723,28 +809,41 @@ class SessionChatViewModel
                 else -> error.message ?: "Unable to create session"
             }
 
-        private fun promoteOptimisticSession(
+        /**
+         * The draft's first send created session [sessionId] in [directory]: this screen becomes
+         * that session, as if it had been opened from Home, and the draft is done.
+         */
+        private fun promoteNewSessionDraft(
             sessionId: String,
             sessionTitle: String,
-            worktree: String,
+            directory: String,
         ) {
+            draftProfileId?.let { newSessionDraftStore.release(it, this) }
+            draftProfileId = null
+            newSessionDraft = null
+            draftSheet = null
+            draftBaseJob?.cancel()
+            draftBaseOptions = null
             boundSessionId = sessionId
             boundSessionTitle = sessionTitle
+            boundWorktree = directory
+            transcriptWorktree = directory
             resetWorkingFooter()
-            sessionReadyStore.setFocusedSession(sessionId, worktree)
+            sessionReadyStore.setFocusedSession(sessionId, directory)
             sessionViewReporter.focus(sessionId)
-            timeline.bind(sessionId, worktree)
-            composer.bind(sessionId, worktree)
-            sessionInfo.bind(sessionId, sessionTitle, worktree)
-            reviewChanges.bind(sessionId, worktree)
-            commands.bind(sessionId, worktree)
-            inbox.bind(sessionId, worktree)
+            seedProjectIdentity(directory)
+            scheduleProjectIdentityRefine(directory)
+            timeline.bind(sessionId, directory)
+            composer.adoptCreatedSession(sessionId, directory)
+            sessionInfo.bind(sessionId, sessionTitle, directory)
+            reviewChanges.bind(sessionId, directory)
+            repoStrip.bind(directory, startExpanded = false)
+            commands.bind(sessionId, directory)
+            inbox.bind(sessionId, directory)
             sideQuestions.bind(sessionId)
-            bindShells(sessionId, worktree)
-            syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
-            viewModelScope.launch {
-                composer.loadCatalog()
-            }
+            bindShells(sessionId, directory)
+            syncCoordinator.markFocused(ProjectionKey.Transcript(directory, sessionId))
+            publishUiState()
         }
 
         private fun bindShells(
@@ -811,7 +910,7 @@ class SessionChatViewModel
         fun clearSessionReadyFocus() {
             // Only release our own focus: the next Session Chat (child, parent, fork) may
             // already have focused itself before this screen leaves composition.
-            boundSessionId?.let {
+            boundSessionId?.takeIf { hasCreatedSession() }?.let {
                 sessionReadyStore.releaseFocusedSession(it)
                 sessionViewReporter.release(it)
             }
@@ -821,15 +920,10 @@ class SessionChatViewModel
             timeline.loadMessages()
         }
 
-        /** Error-state Retry. Create failures start the session again. Load failures refetch the timeline. */
+        /** Error-state Retry: refetches the timeline. */
         fun retryFailedTimeline() {
             val sessionId = boundSessionId
-            if (sessionId == null || OptimisticSessionCreate.isPlaceholder(sessionId)) {
-                val worktree = boundWorktree ?: return
-                boundSessionId = null
-                bindOptimisticCreate(boundSessionTitle.orEmpty(), worktree)
-                return
-            }
+            if (sessionId == null || OptimisticSessionCreate.isPlaceholder(sessionId)) return
             loadMessages()
         }
 
@@ -933,7 +1027,9 @@ class SessionChatViewModel
             sideQuestions.dismissFailed()
         }
 
-        private fun supportsSideQuestion(): Boolean = activeConnectionManager.currentCapabilities().supportsSideQuestion
+        /** A draft has no session to ask about. */
+        private fun supportsSideQuestion(): Boolean =
+            newSessionDraft == null && activeConnectionManager.currentCapabilities().supportsSideQuestion
 
         /** Session Chat left the screen: the open answer was read; requests keep running. */
         fun leaveSideQuestions() {
@@ -1214,10 +1310,7 @@ class SessionChatViewModel
                 parameters = mapOf(ProductAnalytics.Param.CLIENT_SLASH to action.name.lowercase()),
             )
             when (action) {
-                ClientSlashAction.New -> {
-                    if (!isConnectionLive()) return
-                    commands.runNew()
-                }
+                ClientSlashAction.New -> commands.runNew(prepareNewSessionDraft())
                 ClientSlashAction.Fork -> {
                     if (!isConnectionLive()) return
                     forkDraftEditReported = false
@@ -1487,7 +1580,7 @@ class SessionChatViewModel
             if (timelineStylePickerChecked) return
             when (state) {
                 SessionChatTimelineState.Loading, SessionChatTimelineState.Error -> return
-                SessionChatTimelineState.Creating, SessionChatTimelineState.Empty -> {
+                SessionChatTimelineState.Draft, SessionChatTimelineState.Empty -> {
                     timelineStylePickerChecked = true
                     return
                 }
@@ -1567,6 +1660,7 @@ class SessionChatViewModel
         fun consumeSnackbar() {
             logAction(ProductAnalytics.Action.CHAT_DISMISS_SNACKBAR)
             suppressedSnackbarKey = lastSnackbarKey
+            draftSendError = null
             turnDiffNotice = null
             branchCopiedNotice = null
             chipTimelineIntroNotice = null
@@ -1696,13 +1790,22 @@ class SessionChatViewModel
         }
 
         fun sendPrompt() {
-            if (!hasCreatedSession()) return
+            if (newSessionDraft != null) {
+                sendNewSessionDraft()
+                return
+            }
+            sendToBoundSession()
+        }
+
+        /** Sends the composer to the bound session; false when nothing was sent. */
+        private fun sendToBoundSession(): Boolean {
+            if (!hasCreatedSession()) return false
             // A side question never becomes a prompt, including a typed `/btw` this server cannot answer.
             if (sideQuestions.state.value.ui.composerMode ||
                 SideQuestion.questionInDraft(composer.state.value.composer.text) != null
             ) {
                 if (sessionInfo.state.value.composerEnabled) askSideQuestion()
-                return
+                return false
             }
             val composerState = composer.state.value.composer
             logAction(
@@ -1713,20 +1816,20 @@ class SessionChatViewModel
                         ProductAnalytics.Param.MODE to composerState.selectedMode,
                     ),
             )
-            if (!sessionInfo.state.value.composerEnabled) return
-            if (pendingSend != null || composer.state.value.isSending) return
+            if (!sessionInfo.state.value.composerEnabled) return false
+            if (pendingSend != null || composer.state.value.isSending) return false
             if (inbox.state.value.permissionRequests
                     .isNotEmpty() ||
                 inbox.state.value.questionRequests
                     .isNotEmpty()
             ) {
-                return
+                return false
             }
-            val sessionId = boundSessionId ?: return
-            val worktree = boundWorktree ?: return
+            val sessionId = boundSessionId ?: return false
+            val worktree = boundWorktree ?: return false
             val shouldQueue = !sessionInfo.state.value.canMutate
             val capabilities = activeConnectionManager.currentCapabilities()
-            composer.sendPrompt(
+            return composer.sendPrompt(
                 sessionId = sessionId,
                 worktree = worktree,
                 isSessionBusy = sessionInfo.state.value.sessionStatusLabel != null,
@@ -1740,6 +1843,8 @@ class SessionChatViewModel
                     }
                 },
                 onOptimisticRows = { rows ->
+                    // A draft's first prompt shows: the draft's sending state hands over to the send's.
+                    draftSubmitting = false
                     armSendAcceptance()
                     if (shouldQueue) {
                         pendingSend = PendingSend(queuedAtMs = System.currentTimeMillis())
@@ -1759,6 +1864,7 @@ class SessionChatViewModel
                     publishUiState()
                 },
                 onSendFailed = { optimisticId, error ->
+                    draftSubmitting = false
                     armedSendAcceptance = null
                     pendingSend = null
                     // Server and transport errors stay the timeline error; app text goes to the snackbar.
@@ -1769,6 +1875,271 @@ class SessionChatViewModel
                 serverAlreadyAccepted = ::serverAlreadyAccepted,
                 beforePrompt = { commands.commitPendingRevert(sessionId, worktree) },
             )
+        }
+
+        // New session draft (#1004): the Run session in card, its sheets, and the first send.
+
+        private fun draftUiState(): NewSessionDraftUiState? {
+            val draft = newSessionDraft ?: return null
+            return NewSessionDraftPresentation.ui(
+                draft = draft,
+                projects = homeProjectsSnapshot.projects.value,
+                worktreesEnabled = HomeDisplayPreferences.showsWorktrees,
+                serverCanCreate = worktreeRepository.canCreate.value,
+                protocol = activeConnectionManager.protocolHint(),
+                runningCounts = runningCountsByDirectory(),
+                sheet = draftSheet,
+                projectQuery = draftProjectQuery,
+                baseOptions = draftBaseOptions,
+                submitting = draftSubmitting,
+            )
+        }
+
+        private fun runningCountsByDirectory(): Map<String, Int> =
+            homeWorktreesFeed.snapshot.value.sessions
+                .filter { it.isRunning }
+                .groupingBy { ServerPathPolicy.canonical(it.directory) }
+                .eachCount()
+
+        /** Card → Project row. */
+        fun openNewSessionProjectSheet() {
+            if (newSessionDraft == null || draftSubmitting) return
+            draftProjectQuery = ""
+            draftSheet = NewSessionDraftSheet.Project
+            publishUiState()
+        }
+
+        /** Card → Worktree row; a project that is not a Git repository has none to pick. */
+        fun openNewSessionWorktreeSheet() {
+            val draft = draftUiState() ?: return
+            if (!draft.worktreeEnabled || draftSubmitting) return
+            draftSheet = NewSessionDraftSheet.Worktree
+            publishUiState()
+        }
+
+        /** Card → Starts from row (a new worktree on v2). */
+        fun openNewSessionBaseBranchSheet() {
+            val draft = draftUiState() ?: return
+            if (draft.startsFrom == null || draftSubmitting) return
+            draftSheet = NewSessionDraftSheet.BaseBranch
+            loadNewSessionBaseBranches()
+            publishUiState()
+        }
+
+        fun dismissNewSessionSheet() {
+            if (draftSheet == null) return
+            draftSheet = null
+            draftBaseJob?.cancel()
+            publishUiState()
+        }
+
+        fun updateNewSessionProjectQuery(query: String) {
+            draftProjectQuery = query
+            publishUiState()
+        }
+
+        /** Project sheet → a project: it runs on that project's main checkout. */
+        fun selectNewSessionProject(projectKey: String) {
+            val draft = newSessionDraft ?: return
+            val project = homeProjectsSnapshot.projects.value.firstOrNull { it.key == projectKey } ?: return
+            draftSheet = null
+            if (project.key != draft.projectKey) {
+                val next = draft.movedTo(project.key, project.mainCheckoutDirectory, NewSessionPlace.Local)
+                updateNewSessionDraft(next)
+                bindDraftDirectory(next)
+            }
+            publishUiState()
+        }
+
+        /** Worktree sheet → Local, New worktree, or an existing worktree. */
+        fun selectNewSessionPlace(place: NewSessionPlace) {
+            val draft = newSessionDraft ?: return
+            draftSheet = null
+            // Picking New worktree again keeps the base already chosen.
+            val next = if (place is NewSessionPlace.NewWorktree) draft.place as? NewSessionPlace.NewWorktree ?: place else place
+            if (next != draft.place) {
+                val moved = draft.movedTo(draft.projectKey, draft.projectDirectory, next)
+                updateNewSessionDraft(moved)
+                bindDraftDirectory(moved)
+            }
+            publishUiState()
+        }
+
+        /** Starts from sheet → a branch; null (or the main checkout's own branch) is the default. */
+        fun selectNewSessionBaseBranch(ref: String?) {
+            val draft = newSessionDraft ?: return
+            val place = draft.place as? NewSessionPlace.NewWorktree ?: return
+            val project = NewSessionDraftPresentation.project(draft, homeProjectsSnapshot.projects.value)
+            val mainBranch = NewSessionDraftPresentation.mainBranch(project)
+            val picked = ref?.takeIf { it.isNotBlank() && it != mainBranch }
+            draftSheet = null
+            draftBaseJob?.cancel()
+            if (picked != place.baseBranch) {
+                updateNewSessionDraft(draft.movedTo(draft.projectKey, draft.projectDirectory, NewSessionPlace.NewWorktree(picked)))
+            }
+            publishUiState()
+        }
+
+        private fun loadNewSessionBaseBranches() {
+            val draft = newSessionDraft ?: return
+            val directory = NewSessionDraftPresentation.project(draft, homeProjectsSnapshot.projects.value).mainCheckoutDirectory
+            draftBaseJob?.cancel()
+            draftBaseOptions = WorktreeBaseOptions.Loading
+            draftBaseJob =
+                viewModelScope.launch {
+                    val options =
+                        try {
+                            WorktreeBaseOptions.Loaded(withContext(ioDispatcher) { worktreeRepository.baseBranches(directory) })
+                        } catch (cancellation: CancellationException) {
+                            throw cancellation
+                        } catch (_: Exception) {
+                            WorktreeBaseOptions.Failed
+                        }
+                    draftBaseOptions = options
+                    publishUiState()
+                }
+        }
+
+        /** Project sheet → Add project…: the project Home's Add project flow adds becomes the draft's. */
+        fun requestNewSessionAddProject() {
+            val profileId = draftProfileId ?: return
+            syncNewSessionDraft()
+            newSessionDraftStore.requestAddProject(profileId)
+            draftSheet = null
+            publishUiState()
+        }
+
+        /** ⋯ → Discard draft: the draft is gone; the screen goes back. */
+        fun discardNewSessionDraft() {
+            val draft = newSessionDraft ?: return
+            draftSubmitJob?.cancel()
+            draftProfileId?.let { newSessionDraftStore.release(it, this) }
+            draftProfileId = null
+            draftSheet = null
+            draft.attachments.forEach { AttachmentLimits.discard(it.localPath) }
+            publishUiState()
+        }
+
+        /** The draft screen goes away: a draft with no text and no attachments is not kept. */
+        private fun leaveNewSessionDraft() {
+            val profileId = draftProfileId ?: return
+            syncNewSessionDraft()
+            newSessionDraftStore.discardIfEmpty(profileId, this)
+        }
+
+        /**
+         * Ctrl+N or `/new` from a session: the profile's draft (it wins), else a fresh one in this
+         * session's place. Returns the draft's checkout, which the route names.
+         */
+        fun prepareNewSessionDraft(): String {
+            val directory = boundWorktree.orEmpty()
+            val start = NewSessionDraftStart.forDirectory(homeProjectsSnapshot.projects.value, directory)
+            return newSessionDraftStore.open(currentProfileId(), start).directory
+        }
+
+        /**
+         * The draft's first send: creates the new worktree (if chosen), then the session in its
+         * checkout, then sends the prompt through the normal path. A failure keeps the draft and
+         * shows the error with Retry; what was already created is reused on the next try.
+         */
+        private fun sendNewSessionDraft() {
+            if (newSessionDraft == null || draftSubmitting) return
+            val composerState = composer.state.value.composer
+            if (!composerState.canSend || composerState.selectedModel == null || !composerState.isModelSelectionReady) return
+            if (!sessionInfo.state.value.composerEnabled) return
+            syncNewSessionDraft()
+            draftSubmitting = true
+            draftSendError = null
+            draftSheet = null
+            publishUiState()
+            draftSubmitJob =
+                viewModelScope.launch {
+                    val created =
+                        try {
+                            createNewSessionDraftSession()
+                        } catch (cancellation: CancellationException) {
+                            throw cancellation
+                        } catch (error: Throwable) {
+                            logI("new session draft create failed error=${error.message}")
+                            draftSubmitting = false
+                            draftSendError =
+                                (error as? NewSessionDraftWorktreeFailure)?.text
+                                    ?: UiText.verbatim(createSessionErrorMessage(error))
+                            publishUiState()
+                            return@launch
+                        }
+                    logI("new session draft created session=${created.id}")
+                    val shellCommand = ComposerShellCommand.isShellMode(composer.state.value.composer.text)
+                    promoteNewSessionDraft(created.id, created.title, created.directory)
+                    // The prompt's own sending state takes over once its row shows.
+                    if (!sendToBoundSession() || shellCommand) {
+                        draftSubmitting = false
+                        publishUiState()
+                    }
+                }
+        }
+
+        private suspend fun createNewSessionDraftSession(): NewSessionCreatedSession {
+            val draft = newSessionDraft ?: throw CancellationException("draft gone")
+            val project = NewSessionDraftPresentation.project(draft, homeProjectsSnapshot.projects.value)
+            val place =
+                NewSessionDraftPresentation.effectivePlace(
+                    draft = draft,
+                    project = project,
+                    worktreesEnabled = HomeDisplayPreferences.showsWorktrees,
+                    serverCanCreate = worktreeRepository.canCreate.value,
+                )
+            val directory =
+                when (place) {
+                    NewSessionPlace.Local -> project.mainCheckoutDirectory
+                    is NewSessionPlace.Worktree -> place.directory
+                    is NewSessionPlace.NewWorktree -> draft.createdWorktree?.directory ?: createDraftWorktree(project, place)
+                }
+            newSessionDraft?.createdSession?.takeIf { it.directory == directory }?.let { return it }
+            val session = withContext(ioDispatcher) { sessionRepository.createSession(directory = directory) }
+            val created = NewSessionCreatedSession(id = session.id, title = session.title, directory = directory)
+            newSessionDraft?.let { updateNewSessionDraft(it.copy(createdSession = created)) }
+            // Seed the session's model the way any new session gets one: the draft's pick, else the preference.
+            val profile = connectionSessionCoordinator.currentProfile()
+            if (profile != null) {
+                withContext(ioDispatcher) {
+                    val selection = newSessionDraft?.modelSelection ?: newSessionModelSelectionResolver.resolve(profile, directory)
+                    if (selection != null) newSessionModelSelectionResolver.seedSession(profile, directory, session.id, selection)
+                }
+            }
+            return created
+        }
+
+        /** V2 creates from the main checkout at the chosen base; v1 from the current checkout. The server names it. */
+        private suspend fun createDraftWorktree(
+            project: dev.opencode.mobile.domain.home.HomeProject,
+            place: NewSessionPlace.NewWorktree,
+        ): String {
+            val v2 = activeConnectionManager.protocolHint() == ServerProtocol.V2
+            val created =
+                try {
+                    withContext(ioDispatcher) {
+                        worktreeRepository.create(
+                            CreateWorktreeRequest(
+                                projectId = project.projectId,
+                                sourceDirectory = project.mainCheckoutDirectory,
+                                name = "",
+                                baseRef = place.baseBranch.takeIf { v2 },
+                            ),
+                        )
+                    }
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (error: Exception) {
+                    val message =
+                        ((error as? WorktreeCreateError)?.message ?: error.message?.takeIf { it.isNotBlank() })
+                            ?.let(UiText::verbatim)
+                            ?: UiText.resource(R.string.worktree_unknown_error)
+                    throw NewSessionDraftWorktreeFailure(UiText.resource(R.string.worktree_create_failed, message))
+                }
+            homeProjectsSnapshot.requestWorktreeRefresh(project.mainCheckoutDirectory)
+            newSessionDraft?.let { updateNewSessionDraft(it.copy(createdWorktree = created)) }
+            return created.directory
         }
 
         private fun armSendAcceptance() {
@@ -2271,6 +2642,7 @@ class SessionChatViewModel
                 } else {
                     // Other regions still report plain strings; they are shown as is.
                     when {
+                        draftSendError != null -> draftSendError
                         infoState.unarchiveFailed -> UiText.resource(R.string.archived_sessions_unarchive_failed)
                         infoState.lifecycleErrorMessage != null -> UiText.verbatim(infoState.lifecycleErrorMessage)
                         worktreeMove.state.value.errorMessage != null -> TimelineText.verbatim(worktreeMove.state.value.errorMessage)
@@ -2290,6 +2662,7 @@ class SessionChatViewModel
             val snackbar =
                 resolveSnackbar(
                     transientError,
+                    retryNewSessionDraft = transientError != null && transientError == draftSendError,
                     sideQuestions.state.value.notice,
                     TimelineText.verbatim(composerState.followUpNotice ?: worktreeMove.state.value.notice)
                         ?: commandsState.actionSuccessMessage
@@ -2383,7 +2756,7 @@ class SessionChatViewModel
                             activeConnectionManager.currentCapabilities().supportsFollowUpDelivery,
                         attachmentUploadAvailable = attachmentUploads.isAvailable(),
                     ),
-                isSending = composerState.isSending,
+                isSending = composerState.isSending || draftSubmitting,
                 isRefreshing = timelineState.isRefreshing,
                 hasOlder = timelineState.hasOlder,
                 isLoadingOlder = timelineState.isLoadingOlder,
@@ -2499,9 +2872,10 @@ class SessionChatViewModel
                 dictation = dictation,
                 sideQuestions =
                     sideQuestions.state.value.ui.let { side ->
-                        val supported = activeConnectionManager.currentCapabilities().supportsSideQuestion
+                        val supported = supportsSideQuestion()
                         side.copy(supported = supported, composerMode = side.composerMode && supported)
                     },
+                newSessionDraft = draftUiState(),
             )
         }
 
@@ -2693,6 +3067,7 @@ class SessionChatViewModel
 
         private fun resolveSnackbar(
             transientError: UiText?,
+            retryNewSessionDraft: Boolean,
             sideQuestionNotice: SessionChatSideQuestionNotice?,
             successNotice: UiText?,
         ): SessionChatSnackbar? {
@@ -2739,6 +3114,7 @@ class SessionChatViewModel
                         SessionChatSnackbarTone.Default
                     },
                 id = snackbarSequence,
+                action = SessionChatSnackbarAction.RetryNewSessionDraft.takeIf { retryNewSessionDraft },
             )
         }
 
@@ -2761,6 +3137,7 @@ class SessionChatViewModel
         }
 
         override fun onCleared() {
+            leaveNewSessionDraft()
             invalidateDictationInsert()
             dictation = null
             composer.flushDraft()
@@ -2988,3 +3365,8 @@ internal object EmptyProjectFilesRepository : dev.opencode.mobile.domain.filesys
     ): dev.opencode.mobile.domain.filesystem.ProjectFileContent =
         throw dev.opencode.mobile.domain.filesystem.ProjectFilesException("No project files", detail = "No project files")
 }
+
+/** Creating the draft's new worktree failed; [text] says so with the server's reason. */
+private class NewSessionDraftWorktreeFailure(
+    val text: UiText,
+) : Exception()

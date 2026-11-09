@@ -124,6 +124,9 @@ class SessionChatComposer(
     private var loadedCatalog: ModelSelectionCatalog? = null
     private var loadedSelectableAgents = false
     private var cachedSelection: SessionModelSelection? = null
+
+    /** The New session draft's model, variant and agent; stands in for a session's saved selection. */
+    private var draftSelection: SessionModelSelection? = null
     private var newSessionPreference: SessionModelSelection? = null
     private var initialSelectionState = InitialSelectionState.LoadingCache
     private var latestTimelineState: SessionChatTimelineRegionState? = null
@@ -183,7 +186,10 @@ class SessionChatComposer(
             scope.launch { persistDraft(previousSessionId, previousWorktree, snapshot) }
         }
         cancelUploads()
-        discardStoredAttachments(_state.value.composer.attachments)
+        // A New session draft keeps its attachments in memory for the next draft screen.
+        if (previousSessionId == null || !OptimisticSessionCreate.isPlaceholder(previousSessionId)) {
+            discardStoredAttachments(_state.value.composer.attachments)
+        }
         boundSessionId = sessionId
         boundWorktree = worktree
         loadedCatalog = null
@@ -214,6 +220,55 @@ class SessionChatComposer(
         loadSelectableAgents(force = true)
         applyOrLoadDraft(preserve)
         startCatalogEventRefresh()
+    }
+
+    /**
+     * The New session draft in [worktree]: nothing exists on the server yet. Restores the draft's
+     * text, attachments and model selection; picks persist in memory only, except the new-session
+     * preference a model pick updates as in any session.
+     */
+    fun bindDraft(
+        worktree: String,
+        draft: ComposerDraft,
+        attachments: List<Attachment>,
+        selection: SessionModelSelection?,
+    ) {
+        val placeholder = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
+        if (boundSessionId == placeholder && boundWorktree == worktree) return
+        draftSelection = selection
+        bind(placeholder, worktree)
+        if (draft.text.isNotEmpty()) {
+            applyDraft(draft)
+            draftRevision += 1
+        }
+        if (attachments.isNotEmpty()) {
+            attachments.forEach { attachmentRevisions[it.id] = nextAttachmentRevision++ }
+            updateComposer { it.copy(attachments = attachments) }
+        }
+    }
+
+    /**
+     * The draft's first send created session [sessionId] in [worktree]: the composer keeps its
+     * text, attachments and selection and now belongs to that session, so the send goes through
+     * the normal path.
+     */
+    fun adoptCreatedSession(
+        sessionId: String,
+        worktree: String,
+    ) {
+        val previousWorktree = boundWorktree
+        boundSessionId = sessionId
+        boundWorktree = worktree
+        draftSelection = null
+        logI("adopt created session=$sessionId worktree=$worktree")
+        if (previousWorktree != worktree) {
+            fileSearchJob?.cancel()
+            fileSearchGeneration++
+            _state.update { it.copy(fileSuggestions = emptyList(), fileSuggestionQuery = null) }
+            loadServerCommands(force = true)
+            loadMentionableAgents(force = true)
+        }
+        if (_state.value.composer.selectedModel != null) persistCurrentSelection(updatePreference = false)
     }
 
     /**
@@ -486,9 +541,9 @@ class SessionChatComposer(
         val historyHints = latestHistoryHints ?: return
 
         when (timelineState.timeline) {
-            SessionChatTimelineState.Creating,
             SessionChatTimelineState.Loading,
             -> return
+            SessionChatTimelineState.Draft,
             SessionChatTimelineState.Error,
             SessionChatTimelineState.Empty,
             SessionChatTimelineState.Ready,
@@ -573,7 +628,9 @@ class SessionChatComposer(
         if (chosen !is InitialSelection.Cached && staleCached == null) {
             persistCurrentSelection(updatePreference = false)
         } else if (chosen is InitialSelection.Cached) {
-            boundSessionId?.let { modelCatalogStore.rememberSelection(boundWorktree, it, chosen.value) }
+            boundSessionId
+                ?.takeUnless(OptimisticSessionCreate::isPlaceholder)
+                ?.let { modelCatalogStore.rememberSelection(boundWorktree, it, chosen.value) }
         }
     }
 
@@ -1157,15 +1214,14 @@ class SessionChatComposer(
         holdUntil: suspend () -> Boolean = { true },
         serverAlreadyAccepted: () -> Boolean = { false },
         beforePrompt: suspend () -> Unit = {},
-    ) {
+    ): Boolean {
         if (ComposerShellCommand.isShellMode(_state.value.composer.text)) {
-            runShellCommand(
+            return runShellCommand(
                 sessionId = sessionId,
                 worktree = worktree,
                 isSessionBusy = isSessionBusy,
                 supportsFollowUp = supportsFollowUp,
             )
-            return
         }
         val composer = _state.value.composer
         val submittedText = composer.text
@@ -1190,10 +1246,10 @@ class SessionChatComposer(
                 .mapNotNull { attachment ->
                     attachmentRevisions[attachment.id]?.let { attachment.id to it }
                 }.toMap()
-        val selectedModel = composer.selectedModel ?: return
-        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
-        if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending || !composer.isModelSelectionReady) return
-        if (composer.hasPendingUploads) return
+        val selectedModel = composer.selectedModel ?: return false
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return false
+        if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending || !composer.isModelSelectionReady) return false
+        if (composer.hasPendingUploads) return false
 
         val collapsedDisplay =
             CommandInvocationCollapser.collapseSkillMentions(prompt, skillsForSend)
@@ -1412,6 +1468,7 @@ class SessionChatComposer(
                 )
             }
         }
+        return true
     }
 
     /**
@@ -1427,15 +1484,15 @@ class SessionChatComposer(
         worktree: String,
         isSessionBusy: Boolean,
         supportsFollowUp: Boolean,
-    ) {
+    ): Boolean {
         val composer = _state.value.composer
-        val command = ComposerShellCommand.command(composer.text) ?: return
-        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
-        if (_state.value.isSending || !composer.isModelSelectionReady) return
+        val command = ComposerShellCommand.command(composer.text) ?: return false
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return false
+        if (_state.value.isSending || !composer.isModelSelectionReady) return false
         // Like the TUI and web app, a command runs now or not at all; it cannot wait in the queue.
         if (supportsFollowUp && isSessionBusy && composer.followUpDelivery == FollowUpDelivery.Queue) {
             _state.update { it.copy(errorMessage = SHELL_CANNOT_QUEUE_ERROR) }
-            return
+            return false
         }
         val submittedText = composer.text
         val submittedMentions = composer.agentMentions
@@ -1475,6 +1532,7 @@ class SessionChatComposer(
                 _state.update { it.copy(errorMessage = errorMessage(throwable)) }
             }
         }
+        return true
     }
 
     /** Leaves shell mode by dropping the leading `!`; the rest of the draft stays. */
@@ -1771,12 +1829,19 @@ class SessionChatComposer(
                 return
             }
         val identity = ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
+        // A draft has no saved session selection: its own pick lives in memory.
+        val isDraft = OptimisticSessionCreate.isPlaceholder(sessionId)
+        val draftPick = draftSelection
         scope.launch {
             val loaded =
                 withContext(ioDispatcher) {
                     val session =
-                        runCatching {
-                            sessionModelSelectionStore.loadSession(identity, worktree, sessionId)
+                        if (isDraft) {
+                            Result.success(draftPick)
+                        } else {
+                            runCatching {
+                                sessionModelSelectionStore.loadSession(identity, worktree, sessionId)
+                            }
                         }
                     val preference =
                         runCatching {
@@ -1796,7 +1861,7 @@ class SessionChatComposer(
                 }
             if (!isCurrentBinding(sessionId, worktree)) return@launch
             // The in-memory selection is newer when its write is still in flight or failed.
-            val remembered = modelCatalogStore.lastSelection(worktree, sessionId)
+            val remembered = if (isDraft) null else modelCatalogStore.lastSelection(worktree, sessionId)
             cachedSelection =
                 listOfNotNull(loaded.session, remembered).maxByOrNull { it.savedAtEpochMs ?: Long.MIN_VALUE }
             newSessionPreference = loaded.preference
@@ -1825,6 +1890,17 @@ class SessionChatComposer(
                 agentId = _state.value.composer.selectedMode,
                 savedAtEpochMs = timestamp,
             )
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) {
+            // A draft keeps its pick in memory (the screen model copies it into the draft).
+            cachedSelection = selection
+            if (!updatePreference) return
+            scope.launch {
+                runCatching {
+                    withContext(ioDispatcher) { sessionModelSelectionStore.saveNewSessionPreference(identity, worktree, selection) }
+                }.onFailure { logW("saveNewSessionPreference failed error=${it.message ?: it::class.simpleName}") }
+            }
+            return
+        }
         modelCatalogStore.rememberSelection(worktree, sessionId, selection)
         scope.launch {
             runCatching {

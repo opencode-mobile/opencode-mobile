@@ -695,9 +695,15 @@ extension Container {
                 worktreeRepository: self.worktreeRepository(),
                 foregroundEventStream: self.foregroundEventStream(),
                 worktreeInventoryCache: self.worktreeInventoryCache(),
-                homeWorktreesFeed: self.homeWorktreesFeed()
+                homeWorktreesFeed: self.homeWorktreesFeed(),
+                newSessionDraftStore: self.newSessionDraftStore()
             )
         }
+    }
+
+    /// New session drafts (#1004), one per Connection Profile, in memory for the app's life.
+    var newSessionDraftStore: Factory<NewSessionDraftStore> {
+        onMainActor { NewSessionDraftStore() }.singleton
     }
 
     var lastTurnReviewChangesStore: Factory<LastTurnReviewChangesStore> {
@@ -741,7 +747,8 @@ extension Container {
                 worktreeRepository: self.worktreeRepository(),
                 projectRepository: self.projectRepository(),
                 worktreeInventoryCache: self.worktreeInventoryCache(),
-                agentShellRepository: self.agentShellRepository()
+                agentShellRepository: self.agentShellRepository(),
+                newSessionDraftStore: self.newSessionDraftStore()
             )
         }
     }
@@ -889,6 +896,7 @@ extension Container {
         Task { @MainActor in
             await shared.connectionSessionCoordinator().clearConnectionData()
             await shared.sessionCache().clearAll()
+            shared.newSessionDraftStore().clearAll()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
             AnalyticsConsentPreferences.shared.clear()

@@ -231,12 +231,14 @@ enum SessionChatSnackbarTone: Equatable {
 enum SessionChatSnackbarAction: Equatable {
     /// Ask a failed `/btw` question again.
     case retrySideQuestion(UUID)
+    /// Run a New session draft's failed first send again (#1004).
+    case retryNewSession
     /// Send a prompt the server has not answered again.
     case retryStalledSend
 
     var label: String {
         switch self {
-        case .retrySideQuestion, .retryStalledSend: "Retry"
+        case .retrySideQuestion, .retryNewSession, .retryStalledSend: "Retry"
         }
     }
 }
@@ -430,6 +432,10 @@ struct SessionChatUiState: Equatable {
     var dictation: ComposerDictationUiState? = nil
     /// `/btw` side questions: composer mode, chips above the composer and the answer sheet.
     var sideQuestions = SessionChatSideQuestionsUiState()
+    /// Set while the screen is a New session draft (#1004): nothing exists on the server yet.
+    var draft: SessionChatDraftUiState? = nil
+    /// The checkout the screen is bound to. A draft moves it; its first send may create it.
+    var directory: String = ""
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
     var blocksChipTimelineIntro: Bool {

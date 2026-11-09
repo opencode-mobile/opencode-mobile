@@ -48,6 +48,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case selectableCard
     case optionCard
     case listGroup
+    case runSessionInCard
     case sectionHeader
     case reorderableList
     case choiceBadge
@@ -261,6 +262,12 @@ let componentGalleryEntries = [
         id: .listGroup,
         title: "List Group",
         description: "Bordered and separated container for related List Item rows.",
+        category: .lists
+    ),
+    ComponentGalleryEntry(
+        id: .runSessionInCard,
+        title: "Run Session In Card",
+        description: "Where a New session draft runs: project, worktree and base rows with icon tiles.",
         category: .lists
     ),
     ComponentGalleryEntry(

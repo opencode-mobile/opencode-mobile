@@ -152,6 +152,8 @@ struct ComponentGalleryDetailView: View {
             OptionCardGalleryView()
         case .listGroup:
             ListGroupGalleryView()
+        case .runSessionInCard:
+            RunSessionInCardGalleryView()
         case .sectionHeader:
             SectionHeaderGalleryView()
         case .reorderableList:

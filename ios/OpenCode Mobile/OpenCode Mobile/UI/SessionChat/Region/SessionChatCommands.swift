@@ -9,7 +9,7 @@ final class SessionChatCommands {
     private(set) var state = SessionChatCommandsRegionState()
 
     private var sessionID: String
-    private let worktree: String
+    private var worktree: String
     private let sessionRepository: any SessionRepository
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     private let activeConnectionManager: ActiveConnectionManager
@@ -50,6 +50,10 @@ final class SessionChatCommands {
         self.activeConnectionManager = activeConnectionManager
         self.mcpRepository = mcpRepository
         self.composerDraftStore = composerDraftStore
+    }
+
+    func retarget(worktree: String) {
+        self.worktree = worktree
     }
 
     func rebind(sessionID: String) {

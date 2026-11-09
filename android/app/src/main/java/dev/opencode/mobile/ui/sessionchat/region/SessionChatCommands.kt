@@ -296,9 +296,9 @@ class SessionChatCommands(
         }
     }
 
-    fun runNew() {
+    /** `/new`: the New session draft, whose checkout is [worktree]. */
+    fun runNew(worktree: String) {
         dismissCommands()
-        val worktree = boundWorktree ?: return
         _state.update { it.copy(actionErrorMessage = null, actionSuccessMessage = null) }
         _state.update {
             it.copy(

@@ -16,9 +16,8 @@ struct ProjectListHomeView: View {
     @State private var stackedChatViewModels: [String: SessionChatViewModel] = [:]
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
     @State private var serversRefreshToken = 0
-    @State private var showNewSessionProjectPicker = false
-    /// What the New session sheet lists: the projects, or one project's Run in list.
-    @State private var newSessionSheetMode = SessionListHomeChrome.NewSessionSheetMode.projects(holdPick: false)
+    /// A New session draft's Project sheet opened Add project; it takes the added path.
+    @State private var draftAddProjectCallback: (@MainActor (String) -> Void)?
     @State private var showProjectPicker = false
     /// Expanded project, Show all and Edit in the project picker; reset on every open.
     @State private var projectPickerState = HomeProjectPickerState()
@@ -274,14 +273,6 @@ struct ProjectListHomeView: View {
                 )
             }
             .openCodeBottomSheet(
-                isPresented: newSessionPickerBinding,
-                title: newSessionSheetTitle,
-                leadingAction: WorktreeCreateSheetChrome.backAction(viewModel.worktreeCreate),
-                keyboard: WorktreeCreateSheetChrome.keyboard(viewModel.worktreeCreate)
-            ) {
-                newSessionSheetContent
-            }
-            .openCodeBottomSheet(
                 isPresented: serversSheetBinding,
                 title: "servers.title"
             ) {
@@ -477,6 +468,25 @@ struct ProjectListHomeView: View {
         .environment(\.refreshHomeWorktrees, { [viewModel] directory in
             await viewModel.refreshWorktreeInventory(containing: directory)
         })
+        // A New session draft's Project sheet adds projects through Home (#1004)…
+        .environment(\.homeAddProject, HomeAddProjectAction { onAdded in
+            draftAddProjectCallback = onAdded
+            Task { await viewModel.showAddProjectSheet() }
+        })
+        // …and its Worktree sheet shows the running count per checkout.
+        .environment(\.homeRunningCounts, homeRunningCounts)
+        .onChange(of: viewModel.lastAddedProject) { _, added in
+            guard let added, let callback = draftAddProjectCallback else { return }
+            draftAddProjectCallback = nil
+            callback(added.path)
+        }
+    }
+
+    /// Running sessions per canonical checkout.
+    private var homeRunningCounts: [String: Int] {
+        homeWorktreesSnapshot.sessions
+            .filter(\.isRunning)
+            .reduce(into: [:]) { counts, session in counts[session.directory, default: 0] += 1 }
     }
 
     private var serversSheetBinding: Binding<Bool> {
@@ -824,8 +834,8 @@ struct ProjectListHomeView: View {
         HomeKeyboardShortcutContext.projectTabs(liveHomeFilter.tabs)
     }
 
-    /// ⌘N: a new session in the open chat's project, else the dock's selection,
-    /// exactly as the New session button.
+    /// ⌘N: the New session draft in the open chat's checkout, else where the dock's New
+    /// session starts. A kept draft wins either way.
     private func newSessionFromKeyboard() {
         // A subagent chat pushed over the open chat would hide the new session.
         NotificationCenter.default.post(name: .openCodeNewSessionFromKeyboard, object: nil)
@@ -833,26 +843,45 @@ struct ProjectListHomeView: View {
             topRoute: homeRoutes.last?.session,
             splitSelection: isSplitLayout ? selectedSession : nil
         )
+        let openChatModel = openChat.flatMap { chat in
+            isSplitLayout ? splitSelection?.viewModel : stackedChatViewModels[chat.navigationID]
+        }
+        // The open chat is the draft already.
+        if openChatModel?.isDraft == true { return }
+        let filter = liveHomeFilter
         if let directory = HomeKeyboardShortcutContext.newSessionDirectory(
-            openChatDirectory: openChat?.directory,
+            // A promoted draft may run in a worktree its first send created.
+            openChatDirectory: openChatModel?.uiState.directory ?? openChat?.directory,
             openChatWorktree: openChat?.worktree
         ) {
-            Task { await viewModel.createSession(in: directory) }
+            viewModel.openNewSessionDraft(
+                NewSessionDraftStart.fromDirectory(
+                    directory,
+                    projects: filter.projects,
+                    worktreesEnabled: filter.worktreesEnabled
+                )
+            )
             return
         }
-        let filter = liveHomeFilter
-        switch SessionListHomeChrome.newSessionAction(
-            projects: filter.projects,
-            selectedFilterId: filter.selectedId,
-            worktreesEnabled: filter.worktreesEnabled
-        ) {
-        case .none:
-            break
-        case .presentPicker:
-            presentNewSessionProjectPicker()
-        case let .create(directory):
-            Task { await viewModel.createSession(in: directory) }
-        }
+        openNewSessionDraft(projects: filter.projects, selectedFilterId: filter.selectedId, worktreesEnabled: filter.worktreesEnabled)
+    }
+
+    /// The dock's New session (and ⌘N on Home): the filter's project or worktree; in All, the
+    /// place of the most recent session.
+    private func openNewSessionDraft(projects: [HomeProject], selectedFilterId: String, worktreesEnabled: Bool) {
+        guard let start = NewSessionDraftStart.fromHome(
+            projects: projects,
+            selectedFilterId: selectedFilterId,
+            worktreesEnabled: worktreesEnabled,
+            recentSessions: homeSessions.map { session in
+                NewSessionRecentSession(
+                    projectKey: session.worktree,
+                    directory: session.directory,
+                    updatedAtEpochMs: session.updatedAtEpochMs
+                )
+            }
+        ) else { return }
+        viewModel.openNewSessionDraft(start)
     }
 
     private var sessionSearch: SessionSearchModel {
@@ -957,12 +986,6 @@ struct ProjectListHomeView: View {
 
     private var selectedSessionNavigationID: String {
         selectedSession?.navigationID ?? "none"
-    }
-
-    /// The New worktree form's title while it shows, else "New session".
-    private var newSessionSheetTitle: OpenCodeText {
-        guard let formTitle = viewModel.worktreeCreate.state?.title else { return "home.new_session" }
-        return formTitle
     }
 
     private var forkDialogError: OpenCodeText? {
@@ -1084,100 +1107,6 @@ struct ProjectListHomeView: View {
         }
     }
 
-    @ViewBuilder
-    private var newSessionSheetContent: some View {
-        let projects = viewModel.homeProjects
-        let worktreesEnabled = homeDisplayPreferences.showsWorktrees
-        if viewModel.worktreeCreate.isPresented {
-            WorktreeCreateForm(model: viewModel.worktreeCreate) {
-                Task {
-                    if await viewModel.submitNewWorktree() {
-                        showNewSessionProjectPicker = false
-                    }
-                }
-            }
-        } else if case let .runIn(projectKey, _) = newSessionSheetMode,
-           let runIn = projects.first(where: { $0.key == projectKey })
-        {
-            OpenCodeSectionHeader(title: "home.run_in")
-            ForEach(HomeRunInOption.options(for: runIn, sessions: homeSessions)) { option in
-                OpenCodeListItem(
-                    title: .verbatim(option.title),
-                    subtitle: option.subtitle,
-                    caption: option.trailing,
-                    startDecorator: .icon(.callSplit),
-                    action: {
-                        ProductAnalytics.logUserAction(
-                            screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-                            actionId: ProductAnalytics.Action.newSessionPickerSelectProject
-                        )
-                        showNewSessionProjectPicker = false
-                        Task { await viewModel.createSession(in: option.directory) }
-                    }
-                )
-                .accessibilityIdentifier("newSessionRunInRow")
-            }
-            NewWorktreeRow(
-                availability: viewModel.newWorktreeAvailability(for: runIn, worktreesEnabled: worktreesEnabled),
-                accessibilityIdentifier: "newWorktreeRow",
-                action: { viewModel.openNewWorktree(projectKey: runIn.key) }
-            )
-            let others = SessionListHomeChrome.otherProjects(projects, mode: newSessionSheetMode)
-            if !others.isEmpty {
-                OpenCodeSectionHeader(title: "home.other_projects")
-                newSessionProjectEntries(others, holdPick: true, worktreesEnabled: worktreesEnabled)
-            }
-        } else if projects.isEmpty {
-            OpenCodeBottomSheetEntry(title: "home.no_projects", enabled: false, action: {})
-        } else {
-            newSessionProjectEntries(projects, holdPick: newSessionSheetMode.isHoldPick, worktreesEnabled: worktreesEnabled)
-        }
-    }
-
-    private func newSessionProjectEntries(
-        _ projects: [HomeProject],
-        holdPick: Bool,
-        worktreesEnabled: Bool
-    ) -> some View {
-        ForEach(projects) { project in
-            OpenCodeBottomSheetEntry(
-                title: .verbatim(project.displayName),
-                startDecorator: .icon(.folder),
-                action: {
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-                        actionId: ProductAnalytics.Action.newSessionPickerSelectProject
-                    )
-                    switch SessionListHomeChrome.pick(project, holdPick: holdPick, worktreesEnabled: worktreesEnabled) {
-                    case let .show(mode):
-                        newSessionSheetMode = mode
-                    case let .create(directory):
-                        showNewSessionProjectPicker = false
-                        Task { await viewModel.createSession(in: directory) }
-                    }
-                }
-            )
-            .accessibilityIdentifier("newSessionProjectRow")
-        }
-    }
-
-    private func presentNewSessionProjectPicker(
-        _ mode: SessionListHomeChrome.NewSessionSheetMode = .projects(holdPick: false)
-    ) {
-        newSessionSheetMode = mode
-        viewModel.worktreeCreate.dismiss()
-        ProductAnalytics.logUserAction(
-            screenId: ProductAnalytics.Screen.home,
-            actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
-        )
-        ProductAnalytics.logScreenView(
-            screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-            presentation: ProductAnalytics.Presentation.sheet,
-            trigger: ProductAnalytics.Trigger.present
-        )
-        showNewSessionProjectPicker = true
-    }
-
     private var addProjectBrowsingBinding: Binding<Bool> {
         Binding(
             get: { viewModel.isAddProjectPresented && viewModel.addProjectSheet.isBrowsing },
@@ -1244,22 +1173,6 @@ struct ProjectListHomeView: View {
                     resetProjectPickerState()
                 }
                 showProjectPicker = presented
-            }
-        )
-    }
-
-    private var newSessionPickerBinding: Binding<Bool> {
-        Binding(
-            get: { showNewSessionProjectPicker },
-            set: { presented in
-                if !presented {
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-                        actionId: ProductAnalytics.Action.newSessionPickerDismiss
-                    )
-                    viewModel.worktreeCreate.dismiss()
-                }
-                showNewSessionProjectPicker = presented
             }
         )
     }
@@ -1374,11 +1287,6 @@ struct ProjectListHomeView: View {
             projects: projects,
             worktreesEnabled: worktreesEnabled
         )
-        let holdMode = SessionListHomeChrome.newSessionLongPressAction(
-            projects: projects,
-            selectedFilterId: selectedFilterId,
-            worktreesEnabled: worktreesEnabled
-        )
         SessionList(
             sessions: sessions,
             filterTabs: filterTabs,
@@ -1423,21 +1331,7 @@ struct ProjectListHomeView: View {
             },
             onAddProject: { Task { await viewModel.showAddProjectSheet() } },
             onNewSession: {
-                switch SessionListHomeChrome.newSessionAction(
-                    projects: projects,
-                    selectedFilterId: selectedFilterId,
-                    worktreesEnabled: worktreesEnabled
-                ) {
-                case .none:
-                    break
-                case .presentPicker:
-                    presentNewSessionProjectPicker()
-                case let .create(directory):
-                    Task { await viewModel.createSession(in: directory) }
-                }
-            },
-            onNewSessionLongPress: holdMode.map { mode in
-                { presentNewSessionProjectPicker(mode) }
+                openNewSessionDraft(projects: projects, selectedFilterId: selectedFilterId, worktreesEnabled: worktreesEnabled)
             },
             onRetryScopeLoad: { scopeID in
                 let paths = projects.first { $0.key == scopeID }?.memberPaths ?? [scopeID]

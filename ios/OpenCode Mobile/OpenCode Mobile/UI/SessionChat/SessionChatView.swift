@@ -82,8 +82,12 @@ struct SessionChatView: View {
     /// Set once the server moved this session to another worktree; the chat rebinds there.
     @State private var movedWorktree: String?
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+    /// The New session draft sheet open from the Run session in card (#1004).
+    @State private var draftSheet: NewSessionCardRowKind?
     @Environment(\.homeProjects) private var homeProjects
     @Environment(\.refreshHomeWorktrees) private var refreshHomeWorktrees
+    @Environment(\.homeAddProject) private var homeAddProject
+    @Environment(\.homeRunningCounts) private var homeRunningCounts
 
     private let session: SessionListItem
     private let injectedViewModel: SessionChatViewModel?
@@ -125,6 +129,19 @@ struct SessionChatView: View {
 
     private var hasViewModel: Bool {
         viewModelStorage != nil || injectedViewModel != nil
+    }
+
+    /// Nothing exists on the server yet (#1004).
+    private var isDraft: Bool {
+        viewModel.uiState.draft != nil
+    }
+
+    private var draftContext: NewSessionDraftContext {
+        NewSessionDraftContext(
+            projects: homeProjects,
+            worktreesEnabled: homeDisplayPreferences.showsWorktrees,
+            runningCounts: homeRunningCounts
+        )
     }
 
     /// Temporarily off: bar currently only shows context usage.
@@ -190,9 +207,21 @@ struct SessionChatView: View {
         return session.navigationID + "@" + movedWorktree
     }
 
-    /// The session as opened, or in the worktree the server moved it to.
+    /// The session as opened, in the worktree the server moved it to, or where a New session
+    /// draft moved (or its first send created) the checkout.
     private var boundSession: SessionListItem {
-        guard let movedWorktree else { return session }
+        guard let movedWorktree else {
+            guard hasViewModel else { return session }
+            let directory = viewModel.uiState.directory
+            guard !directory.isEmpty, directory != session.worktree else { return session }
+            return SessionListItem(
+                id: viewModel.uiState.sessionID,
+                title: session.title,
+                worktree: directory,
+                parentID: session.parentID,
+                directory: directory
+            )
+        }
         return SessionListItem(
             id: SessionChatMoveToWorktree.reboundSessionID(
                 routeID: session.id,
@@ -234,6 +263,20 @@ struct SessionChatView: View {
                 if !enabled { attachmentDropSummary = nil }
             }
             .feedbackSheet(model: $feedbackModel)
+            .newSessionDraftSheets(
+                draft: viewModel.uiState.draft,
+                presented: $draftSheet,
+                addProject: homeAddProject,
+                onSelectProject: { viewModel.selectDraftProject(key: $0) },
+                onProjectAdded: { viewModel.selectDraftProject(addedPath: $0) },
+                onSelectPlace: { viewModel.selectDraftPlace($0) },
+                onSelectBase: { viewModel.selectDraftBaseBranch($0) },
+                onLoadBases: { viewModel.loadDraftBaseBranches() }
+            )
+            .onChange(of: draftContext, initial: true) { _, context in
+                viewModel.updateDraftContext(context)
+                viewModel.refreshWorktreeInventory = refreshHomeWorktrees
+            }
             .sessionChatImageViewer(
                 state: viewModel.uiState.imageViewer,
                 loader: viewModel.attachmentImageLoader,
@@ -255,12 +298,17 @@ struct SessionChatView: View {
                 entries: sessionOverflowMenuEntries
             ) {
                 OpenCodeTopBar(
-                    title: .verbatim(
-                        titleMenu?.title
-                            ?? (viewModel.uiState.sessionTitle.isEmpty ? session.title : viewModel.uiState.sessionTitle)
-                    ),
-                    subtitle: .verbatim(ifPresent: viewModel.uiState.projectLabel),
+                    title: isDraft
+                        ? OpenCodeText(NewSessionDraftCopy.title)
+                        : .verbatim(
+                            titleMenu?.title
+                                ?? (viewModel.uiState.sessionTitle.isEmpty ? session.title : viewModel.uiState.sessionTitle)
+                        ),
+                    subtitle: isDraft
+                        ? OpenCodeText(NewSessionDraftCopy.draftSubtitle)
+                        : .verbatim(ifPresent: viewModel.uiState.projectLabel),
                     subtitleLeading: {
+                        if isDraft { return nil }
                         if viewModel.uiState.worktreeCheckout {
                             return .worktree
                         }
@@ -357,141 +405,21 @@ struct SessionChatView: View {
 
     private var sessionChatTimelineArea: some View {
         ZStack(alignment: .bottom) {
-            SessionChatTimelineView(
-                props: SessionChatTimelineViewProps(
-                    timeline: viewModel.uiState.timeline,
-                    messages: viewModel.uiState.messages,
-                    timelineFrame: viewModel.uiState.timelineFrame,
-                    isRefreshing: viewModel.uiState.isRefreshing,
-                    hasOlder: viewModel.uiState.hasOlder,
-                    isLoadingOlder: viewModel.uiState.isLoadingOlder,
-                    errorMessage: viewModel.uiState.errorMessage,
-                    sessionBranchPill: viewModel.uiState.sessionBranchPill,
-                    syncingIndicatorLabel: viewModel.uiState.syncingIndicatorLabel,
-                    workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
-                    workingIndicatorCollapsed: viewModel.uiState.workingIndicatorCollapsed,
-                    workingIndicatorFading: viewModel.uiState.workingIndicatorFading,
-                    isTurnActive: viewModel.uiState.sessionStatusLabel != nil,
-                    isAwaitingUser: viewModel.uiState.permissionRequest != nil
-                        || viewModel.uiState.questionRequest != nil,
-                    sessionTodosVisible: sessionTodosPillVisible,
-                    sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
-                    sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
-                    sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
-                    hideFloatStack: showSessionTodosSheet || showSubagentsSheet
-                        || viewModel.uiState.shellOutput != nil,
-                    hideLiveRetryFailures: viewModel.uiState.retryCard != nil,
-                    hideRetryCountdown: viewModel.uiState.isRetrying,
-                    // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
-                    // uses this as-is (no extra scrollToEndPillBottomPadding).
-                    bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight)
-                        + snackbarOverlayHeight
-                        + composerHomeIndicatorLift
-                        + keyboardOverlap,
-                    bottomOverlayAnimation: composerMorphing
-                        ? OpenCodeSessionComposer.morphAnimation
-                        : keyboardGlideAnimation,
-                    activityItems: sessionChatActivityItems,
+            if let draft = viewModel.uiState.draft {
+                NewSessionDraftContent(
+                    draft: draft,
                     keyboardVisible: keyboardOverlap > 0,
-                    onActivityTap: handleActivityTap,
-                    onActivityClose: handleActivityClose,
-                    onRefresh: { await viewModel.refreshMessages() },
-                    onRetry: { await viewModel.retryFailedTimeline() },
-                    onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
-                    onSessionBranchTap: {
-                        logChatAction(ProductAnalytics.Action.chatOpenChanges)
-                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: boundSession.worktree)
-                    },
-                    onSessionBranchCopied: { viewModel.branchNameCopied() },
-                    onSessionTodosTap: {
-                        guard !blocksSessionTodosSheet else { return }
-                        logChatAction(ProductAnalytics.Action.chatOpenTodos)
-                        ProductAnalytics.logScreenView(
-                            screenId: ProductAnalytics.Screen.sessionTodos,
-                            presentation: ProductAnalytics.Presentation.sheet,
-                            trigger: ProductAnalytics.Trigger.present
-                        )
-                        showSessionTodosSheet = true
-                    },
-                    onMessageActionsTap: { target in
-                        logChatAction(ProductAnalytics.Action.chatOpenMessageActions)
-                        ProductAnalytics.logScreenView(
-                            screenId: ProductAnalytics.Screen.sessionMessageActions,
-                            presentation: ProductAnalytics.Presentation.sheet,
-                            trigger: ProductAnalytics.Trigger.present
-                        )
-                        messageActionsTarget = target
-                    },
-                    onToolDetailTap: { target in
-                        logChatAction(ProductAnalytics.Action.chatOpenToolDetail)
-                        ProductAnalytics.logScreenView(
-                            screenId: ProductAnalytics.Screen.sessionToolDetail,
-                            presentation: ProductAnalytics.Presentation.sheet,
-                            trigger: ProductAnalytics.Trigger.present
-                        )
-                        toolDetailTarget = target
-                    },
-                    onToolGroupTap: { target in
-                        logChatAction(ProductAnalytics.Action.chatOpenToolGroup)
-                        toolGroupTarget = target
-                    },
-                    onSkillsTap: { target in
-                        logChatAction(ProductAnalytics.Action.chatOpenSkills)
-                        ProductAnalytics.logScreenView(
-                            screenId: ProductAnalytics.Screen.sessionSkills,
-                            presentation: ProductAnalytics.Presentation.sheet,
-                            trigger: ProductAnalytics.Trigger.present
-                        )
-                        skillsTarget = target
-                    },
-                    onChildSessionTap: { sessionID, title in
-                        logChatAction(ProductAnalytics.Action.chatOpenChildSession)
-                        childSessionTarget = ChildSessionNavigationTarget(
-                            sessionID: sessionID,
-                            sessionTitle: title,
-                            worktree: boundSession.worktree,
-                            optimisticNavigationInstanceID: nil,
-                            parentID: session.id
-                        )
-                    },
-                    onChangesReviewTap: { assistantMessageID, initialFilePath in
-                        logChatAction(ProductAnalytics.Action.chatOpenChangesFromTool)
-                        openLastTurnChanges(
-                            assistantMessageID: assistantMessageID,
-                            initialFilePath: initialFilePath
-                        )
-                    },
-                    onUserScrollDismissKeyboard: {
-                        // Composer UITextView is outside the timeline collection
-                        // view; keyboardDismissMode alone does not resign it.
-                        UIApplication.shared.sendAction(
-                            #selector(UIResponder.resignFirstResponder),
-                            to: nil,
-                            from: nil,
-                            for: nil
-                        )
-                    },
-                    supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
-                    expandedStepParagraphs: viewModel.uiState.expandedStepParagraphs,
-                    onExpandStepParagraph: { paragraphID, chipCount in
-                        viewModel.expandStepParagraph(paragraphID, chipCount: chipCount)
-                    },
-                    unfoldedStepRails: viewModel.uiState.unfoldedStepRails,
-                    onToggleStepRailFold: { railID in viewModel.toggleStepRailFold(railID) },
-                    presentedActivityCard: viewModel.uiState.presentedActivityCard,
-                    activityCardDetailStepId: viewModel.uiState.activityCardDetailStepId,
-                    childActivities: viewModel.uiState.childActivities,
-                    activityCardFooters: viewModel.uiState.activityCardFooters,
-                    debouncedStepIDs: viewModel.uiState.debouncedStepIDs,
-                    onOpenActivityCard: { cardID in viewModel.openActivityCard(cardID) },
-                    onDismissActivityCard: { viewModel.dismissActivityCard() },
-                    onOpenActivityCardStep: { stepID in viewModel.openActivityCardStep(stepID) },
-                    onCloseActivityCardStep: { viewModel.closeActivityCardStep() },
-                    noticeModelNames: TimelineNoticeModelNames(options: viewModel.uiState.composer.modelOptions)
+                    // keyboardOverlapPadding already lifts this area above the keyboard;
+                    // adding the overlap again pushed the card under the header.
+                    bottomInset: sessionChatTimelineBottomInset(composerOverlayHeight)
+                        + snackbarOverlayHeight
+                        + composerHomeIndicatorLift,
+                    onOpenRow: { kind in draftSheet = kind }
                 )
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .ignoresSafeArea(edges: .bottom)
+                .transition(.opacity)
+            } else {
+                sessionChatTimeline
+            }
 
             OpenCodeBottomFade(
                 height: sessionChatTimelineBottomInset(composerOverlayHeight)
@@ -507,6 +435,8 @@ struct SessionChatView: View {
                     switch viewModel.uiState.snackbar?.action {
                     case let .retrySideQuestion(id):
                         viewModel.retrySideQuestions(id: id)
+                    case .retryNewSession:
+                        Task { await viewModel.retryDraftSend() }
                     case .retryStalledSend:
                         viewModel.retryStalledSend()
                     case nil:
@@ -611,6 +541,144 @@ struct SessionChatView: View {
             .animation(OpenCodeSessionComposer.morphAnimation, value: viewModel.uiState.dictation != nil)
             .padding(.bottom, composerHomeIndicatorLift)
         }
+    }
+
+    private var sessionChatTimeline: some View {
+        SessionChatTimelineView(
+            props: SessionChatTimelineViewProps(
+                timeline: viewModel.uiState.timeline,
+                messages: viewModel.uiState.messages,
+                timelineFrame: viewModel.uiState.timelineFrame,
+                isRefreshing: viewModel.uiState.isRefreshing,
+                hasOlder: viewModel.uiState.hasOlder,
+                isLoadingOlder: viewModel.uiState.isLoadingOlder,
+                errorMessage: viewModel.uiState.errorMessage,
+                sessionBranchPill: viewModel.uiState.sessionBranchPill,
+                syncingIndicatorLabel: viewModel.uiState.syncingIndicatorLabel,
+                workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
+                workingIndicatorCollapsed: viewModel.uiState.workingIndicatorCollapsed,
+                workingIndicatorFading: viewModel.uiState.workingIndicatorFading,
+                isTurnActive: viewModel.uiState.sessionStatusLabel != nil,
+                isAwaitingUser: viewModel.uiState.permissionRequest != nil
+                    || viewModel.uiState.questionRequest != nil,
+                sessionTodosVisible: sessionTodosPillVisible,
+                sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
+                sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
+                sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
+                hideFloatStack: showSessionTodosSheet || showSubagentsSheet
+                    || viewModel.uiState.shellOutput != nil,
+                hideLiveRetryFailures: viewModel.uiState.retryCard != nil,
+                hideRetryCountdown: viewModel.uiState.isRetrying,
+                // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
+                // uses this as-is (no extra scrollToEndPillBottomPadding).
+                bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight)
+                    + snackbarOverlayHeight
+                    + composerHomeIndicatorLift
+                    + keyboardOverlap,
+                bottomOverlayAnimation: composerMorphing
+                    ? OpenCodeSessionComposer.morphAnimation
+                    : keyboardGlideAnimation,
+                activityItems: sessionChatActivityItems,
+                keyboardVisible: keyboardOverlap > 0,
+                onActivityTap: handleActivityTap,
+                onActivityClose: handleActivityClose,
+                onRefresh: { await viewModel.refreshMessages() },
+                onRetry: { await viewModel.retryFailedTimeline() },
+                onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
+                onSessionBranchTap: {
+                    logChatAction(ProductAnalytics.Action.chatOpenChanges)
+                    changesTarget = viewModel.uiState.changesNavigationTarget(worktree: boundSession.worktree)
+                },
+                onSessionBranchCopied: { viewModel.branchNameCopied() },
+                onSessionTodosTap: {
+                    guard !blocksSessionTodosSheet else { return }
+                    logChatAction(ProductAnalytics.Action.chatOpenTodos)
+                    ProductAnalytics.logScreenView(
+                        screenId: ProductAnalytics.Screen.sessionTodos,
+                        presentation: ProductAnalytics.Presentation.sheet,
+                        trigger: ProductAnalytics.Trigger.present
+                    )
+                    showSessionTodosSheet = true
+                },
+                onMessageActionsTap: { target in
+                    logChatAction(ProductAnalytics.Action.chatOpenMessageActions)
+                    ProductAnalytics.logScreenView(
+                        screenId: ProductAnalytics.Screen.sessionMessageActions,
+                        presentation: ProductAnalytics.Presentation.sheet,
+                        trigger: ProductAnalytics.Trigger.present
+                    )
+                    messageActionsTarget = target
+                },
+                onToolDetailTap: { target in
+                    logChatAction(ProductAnalytics.Action.chatOpenToolDetail)
+                    ProductAnalytics.logScreenView(
+                        screenId: ProductAnalytics.Screen.sessionToolDetail,
+                        presentation: ProductAnalytics.Presentation.sheet,
+                        trigger: ProductAnalytics.Trigger.present
+                    )
+                    toolDetailTarget = target
+                },
+                onToolGroupTap: { target in
+                    logChatAction(ProductAnalytics.Action.chatOpenToolGroup)
+                    toolGroupTarget = target
+                },
+                onSkillsTap: { target in
+                    logChatAction(ProductAnalytics.Action.chatOpenSkills)
+                    ProductAnalytics.logScreenView(
+                        screenId: ProductAnalytics.Screen.sessionSkills,
+                        presentation: ProductAnalytics.Presentation.sheet,
+                        trigger: ProductAnalytics.Trigger.present
+                    )
+                    skillsTarget = target
+                },
+                onChildSessionTap: { sessionID, title in
+                    logChatAction(ProductAnalytics.Action.chatOpenChildSession)
+                    childSessionTarget = ChildSessionNavigationTarget(
+                        sessionID: sessionID,
+                        sessionTitle: title,
+                        worktree: boundSession.worktree,
+                        optimisticNavigationInstanceID: nil,
+                        parentID: session.id
+                    )
+                },
+                onChangesReviewTap: { assistantMessageID, initialFilePath in
+                    logChatAction(ProductAnalytics.Action.chatOpenChangesFromTool)
+                    openLastTurnChanges(
+                        assistantMessageID: assistantMessageID,
+                        initialFilePath: initialFilePath
+                    )
+                },
+                onUserScrollDismissKeyboard: {
+                    // Composer UITextView is outside the timeline collection
+                    // view; keyboardDismissMode alone does not resign it.
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil,
+                        from: nil,
+                        for: nil
+                    )
+                },
+                supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
+                expandedStepParagraphs: viewModel.uiState.expandedStepParagraphs,
+                onExpandStepParagraph: { paragraphID, chipCount in
+                    viewModel.expandStepParagraph(paragraphID, chipCount: chipCount)
+                },
+                unfoldedStepRails: viewModel.uiState.unfoldedStepRails,
+                onToggleStepRailFold: { railID in viewModel.toggleStepRailFold(railID) },
+                presentedActivityCard: viewModel.uiState.presentedActivityCard,
+                activityCardDetailStepId: viewModel.uiState.activityCardDetailStepId,
+                childActivities: viewModel.uiState.childActivities,
+                activityCardFooters: viewModel.uiState.activityCardFooters,
+                debouncedStepIDs: viewModel.uiState.debouncedStepIDs,
+                onOpenActivityCard: { cardID in viewModel.openActivityCard(cardID) },
+                onDismissActivityCard: { viewModel.dismissActivityCard() },
+                onOpenActivityCardStep: { stepID in viewModel.openActivityCardStep(stepID) },
+                onCloseActivityCardStep: { viewModel.closeActivityCardStep() },
+                noticeModelNames: TimelineNoticeModelNames(options: viewModel.uiState.composer.modelOptions)
+            )
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(edges: .bottom)
     }
 
     /// Bottom-left activity the screen owns: collapsed requests, `/btw` side questions and queued prompts.
@@ -1203,7 +1271,24 @@ struct SessionChatView: View {
         content
             .onChange(of: viewModel.uiState.pendingSessionReplace) { _, _ in
                 if let target = viewModel.uiState.pendingSessionReplace {
-                    childSessionTarget = target
+                    if OptimisticSessionCreate.isPlaceholder(target.sessionID) {
+                        // `/new`: the draft starts in this chat's checkout unless one is kept.
+                        let directory = NewSessionDraftLauncher.open(
+                            start: NewSessionDraftStart.fromDirectory(
+                                target.worktree,
+                                projects: homeProjects,
+                                worktreesEnabled: homeDisplayPreferences.showsWorktrees
+                            )
+                        )
+                        childSessionTarget = ChildSessionNavigationTarget(
+                            sessionID: target.sessionID,
+                            sessionTitle: target.sessionTitle,
+                            worktree: directory,
+                            optimisticNavigationInstanceID: target.optimisticNavigationInstanceID
+                        )
+                    } else {
+                        childSessionTarget = target
+                    }
                     viewModel.consumePendingSessionReplace()
                 }
             }
@@ -1556,6 +1641,21 @@ struct SessionChatView: View {
     }
 
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
+        if isDraft {
+            return [
+                OpenCodeOverflowMenuEntry(
+                    title: OpenCodeText(NewSessionDraftCopy.discardDraft),
+                    icon: .delete,
+                    enabled: viewModel.uiState.draft?.isCreating == false,
+                    destructive: true,
+                    accessibilityIdentifier: "newSessionDiscardDraft",
+                    action: {
+                        menuExpanded = false
+                        viewModel.discardDraft()
+                    }
+                ),
+            ]
+        }
         let sessionCreated = !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID)
         let lifecycleEnabled = sessionCreated && !viewModel.uiState.isLifecycleActionInFlight
         var entries = [
@@ -1694,7 +1794,7 @@ struct SessionChatView: View {
     private var promptAttachEnabled: Bool {
         let composer = viewModel.uiState.composer
         return composerAttachmentSources.isAttachEnabled &&
-            !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
+            (isDraft || !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID)) &&
             composer.isModelSelectionReady &&
             !composer.isShellMode &&
             !viewModel.uiState.sideQuestions.composerMode
@@ -1826,8 +1926,9 @@ struct SessionChatView: View {
             // A side question answers with the session's own model, so it needs no model pick.
             let sideQuestionSendEnabled =
                 !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            // A New session draft sends too: its first send creates the session.
             let sessionReady =
-                !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
+                (isDraft || !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID)) &&
                 viewModel.uiState.timeline != .creating &&
                 viewModel.uiState.composerEnabled &&
                 viewModel.uiState.pendingSend == nil

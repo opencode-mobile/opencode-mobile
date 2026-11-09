@@ -44,6 +44,10 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.composer.ComposerDraft
+import dev.opencode.mobile.domain.session.NewSessionDraftStart
+import dev.opencode.mobile.domain.session.NewSessionDraftStore
+import dev.opencode.mobile.domain.session.NewSessionPlace
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -62,10 +66,7 @@ import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
-import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
-import dev.opencode.mobile.domain.worktree.CreatedWorktree
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
-import dev.opencode.mobile.domain.worktree.WorktreeCreateError
 import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
@@ -1608,6 +1609,7 @@ class MainScreenViewModelTest {
     private fun kotlinx.coroutines.test.TestScope.viewModelWithOneProject(
         newSessions: List<Session>,
         timing: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
+        drafts: NewSessionDraftStore = NewSessionDraftStore(),
     ): Pair<MainScreenViewModel, FakeSessionRepository> {
         val repository =
             FakeSessionRepository(
@@ -1621,6 +1623,7 @@ class MainScreenViewModelTest {
                 connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
                 sessionRepository = repository,
                 projectFirstLoadTiming = timing,
+                newSessionDraftStore = drafts,
             )
         advanceUntilIdle()
         return viewModel to repository
@@ -1731,17 +1734,19 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun createSession_usesFocusedWorktreeAndClearsError() =
+    fun openNewSession_opensTheDraftAndCreatesNothing() =
         runTest(testDispatcher) {
             val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            val drafts = NewSessionDraftStore()
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
                     sessionRepository = sessionRepository,
+                    newSessionDraftStore = drafts,
                 )
             advanceUntilIdle()
             assertEquals(0, viewModel.revealNewestToken.value)
-            viewModel.createSession("/repo")
+            viewModel.openNewSession(NewSessionDraftStart("/repo", "/repo"))
             advanceUntilIdle()
             assertEquals(emptyList<String>(), sessionRepository.createdDirectories)
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
@@ -1749,6 +1754,101 @@ class MainScreenViewModelTest {
             assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, loaded.pendingOpenSession?.sessionId)
             assertEquals("/repo", loaded.pendingOpenSession?.worktree)
             assertNull(loaded.projectSessionCreateError)
+            assertEquals("/repo", drafts.draft("")?.projectDirectory)
+        }
+
+    @Test
+    fun openNewSession_restoresTheProfilesDraftOverTheHomeFilter() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            drafts.open("", NewSessionDraftStart("/other", "/other"))
+            drafts.update("") { it.copy(composer = ComposerDraft("half a thought")) }
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to emptyList()),
+                    newSessionDraftStore = drafts,
+                )
+            advanceUntilIdle()
+
+            viewModel.openNewSession(NewSessionDraftStart("/repo", "/repo"))
+            advanceUntilIdle()
+
+            assertEquals("/other", (viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession?.worktree)
+            assertEquals("half a thought", drafts.draft("")?.composer?.text)
+        }
+
+    @Test
+    fun worktreesNewSessionHere_keepsTheDraftTextAndRunsInThatWorktree() =
+        runTest(testDispatcher) {
+            val worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun loadRefreshed(
+                        addedPath: String,
+                        projectId: String?,
+                        mainWorktree: String?,
+                    ): WorktreeLoad = WorktreeLoad.Loaded(listOf("/repo", "/wt/brave-otter"), listsSessions = false)
+                }
+            val drafts = NewSessionDraftStore()
+            drafts.open("", NewSessionDraftStart("proj", "/repo"))
+            drafts.update("") { it.copy(composer = ComposerDraft("keep me")) }
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionsByWorktree = mapOf("/repo" to emptyList()),
+                    worktreeRepository = worktrees,
+                    serverProtocol = ServerProtocol.V2,
+                    newSessionDraftStore = drafts,
+                )
+            advanceUntilIdle()
+
+            viewModel.openNewSessionHere("/wt/brave-otter")
+            advanceUntilIdle()
+
+            val draft = drafts.draft("")!!
+            assertEquals("keep me", draft.composer.text)
+            assertEquals(NewSessionPlace.Worktree("/wt/brave-otter", null), draft.place)
+            assertEquals("/repo", draft.projectDirectory)
+            assertEquals("/wt/brave-otter", (viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession?.worktree)
+        }
+
+    @Test
+    fun draftAddProject_opensTheSheetAndTheAddedProjectBecomesTheDrafts() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            val (viewModel, _) = viewModelWithOneProject(newSessions = emptyList(), drafts = drafts)
+            drafts.open("", NewSessionDraftStart("/one", "/one"))
+            drafts.update("") { it.copy(composer = ComposerDraft("for the new one")) }
+
+            drafts.requestAddProject("")
+            advanceUntilIdle()
+            assertTrue(loaded(viewModel).showAddProjectSheet)
+
+            viewModel.addProject("/new")
+            advanceUntilIdle()
+
+            val draft = drafts.draft("")!!
+            assertEquals("/new", draft.projectDirectory)
+            assertEquals("for the new one", draft.composer.text)
+            assertEquals("/new", loaded(viewModel).pendingOpenSession?.worktree)
+        }
+
+    @Test
+    fun draftAddProject_dismissedSheetLeavesTheDraftAlone() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            val (viewModel, _) = viewModelWithOneProject(newSessions = emptyList(), drafts = drafts)
+            drafts.open("", NewSessionDraftStart("/one", "/one"))
+
+            drafts.requestAddProject("")
+            advanceUntilIdle()
+            viewModel.dismissAddProjectSheet()
+            viewModel.addProject("/new")
+            advanceUntilIdle()
+
+            assertEquals("/one", drafts.draft("")?.projectDirectory)
+            assertNull(loaded(viewModel).pendingOpenSession)
         }
 
     @Test
@@ -2897,85 +2997,6 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun runInNewWorktreeCreatesThenStartsASessionThereAndListsIt() =
-        runTest(testDispatcher) {
-            var listed = listOf("/repo")
-            val requests = mutableListOf<CreateWorktreeRequest>()
-            val worktrees =
-                object : WorktreeRepository by UnavailableWorktreeRepository {
-                    override suspend fun loadRefreshed(
-                        addedPath: String,
-                        projectId: String?,
-                        mainWorktree: String?,
-                    ): WorktreeLoad = WorktreeLoad.Loaded(listed, listsSessions = false)
-
-                    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree {
-                        requests += request
-                        listed = listed + "/wt/brave-otter"
-                        return CreatedWorktree("/wt/brave-otter", "brave-otter", branch = null)
-                    }
-                }
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
-                    sessionsByWorktree = mapOf("/repo" to emptyList()),
-                    worktreeRepository = worktrees,
-                    serverProtocol = ServerProtocol.V2,
-                )
-            advanceUntilIdle()
-
-            viewModel.openRunInNewWorktree("proj")
-            advanceUntilIdle()
-            val form = viewModel.worktreeCreateForm.value!!
-            assertEquals("/repo", form.sourceDirectory)
-            viewModel.updateNewWorktreeName("brave-otter")
-            viewModel.submitNewWorktree()
-            advanceUntilIdle()
-
-            assertEquals(listOf(CreateWorktreeRequest("proj", "/repo", "brave-otter", baseRef = null)), requests)
-            assertNull(viewModel.worktreeCreateForm.value)
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("/wt/brave-otter", loaded.pendingOpenSession?.worktree)
-            assertEquals(
-                listOf("/repo", "/wt/brave-otter"),
-                loaded.projects
-                    .single()
-                    .worktrees
-                    .map { it.directory },
-            )
-        }
-
-    @Test
-    fun runInNewWorktreeFailureStartsNoSession() =
-        runTest(testDispatcher) {
-            val worktrees =
-                object : WorktreeRepository by UnavailableWorktreeRepository {
-                    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree =
-                        throw WorktreeCreateError("Worktrees are only supported for git projects")
-                }
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
-                    sessionsByWorktree = mapOf("/repo" to emptyList()),
-                    worktreeRepository = worktrees,
-                    serverProtocol = ServerProtocol.V1,
-                )
-            advanceUntilIdle()
-
-            viewModel.openRunInNewWorktree("proj")
-            viewModel.submitNewWorktree()
-            advanceUntilIdle()
-
-            assertEquals(
-                "Couldn't create the worktree: Worktrees are only supported for git projects",
-                viewModel.worktreeCreateForm.value?.errorMessage?.english(),
-            )
-            assertNull((viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession)
-        }
-
-    @Test
     fun loadedWorktreeInventoriesAreSharedForSessionChat() =
         runTest(testDispatcher) {
             val cache =
@@ -3083,6 +3104,7 @@ class MainScreenViewModelTest {
         worktreeInventoryCache: dev.opencode.mobile.domain.worktree.WorktreeInventoryCache =
             dev.opencode.mobile.domain.worktree
                 .WorktreeInventoryCache(),
+        newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
     ): MainScreenViewModel {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore, connectionProbing)
         runBlocking {
@@ -3158,6 +3180,7 @@ class MainScreenViewModelTest {
             worktreeRepository = worktreeRepository,
             projectFirstLoadTiming = projectFirstLoadTiming,
             worktreeInventoryCache = worktreeInventoryCache,
+            newSessionDraftStore = newSessionDraftStore,
         ).apply { homeRowsDispatcher = testDispatcher }
     }
 }

@@ -46,7 +46,6 @@ nonisolated enum WorktreeCreateCopy {
     static var nameChars: LocalizedStringResource {
         LocalizedStringResource("worktree.name_chars", defaultValue: "Use letters, numbers, dots, dashes or underscores")
     }
-    static var submitRunIn: LocalizedStringResource { LocalizedStringResource("worktree.submit_run_in", defaultValue: "Create and start") }
     static var submitMove: LocalizedStringResource { LocalizedStringResource("worktree.submit_move", defaultValue: "Create and move") }
     static var submitting: LocalizedStringResource { LocalizedStringResource("worktree.submitting", defaultValue: "Creating\u{2026}") }
 
