@@ -44,14 +44,3 @@ light and dark appearances through the shared gallery theme control.
 
 The visible surface, separators, clipping, and empty behavior are shared. No
 intentional divergence is planned.
-
-## Completion Ledger
-
-- Public API and states: complete.
-- Token and typography mapping: complete; typography is row-owned.
-- iOS and Android implementations: complete.
-- Gallery and previews: complete.
-- Parity and divergences: complete; none known.
-- Automated checks: production iOS and Android builds pass. Android
-  instrumentation compilation is blocked by the pre-existing unrelated
-  `MainScreenTest` signature mismatch, so the native UI check remains blocked.

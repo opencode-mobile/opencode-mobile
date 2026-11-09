@@ -56,12 +56,3 @@ context.
 ## Parity And Divergence
 
 Same conceptual API on both platforms. No intentional divergences.
-
-## Completion Ledger
-
-- Public API and states: complete.
-- Token and typography mapping: complete.
-- iOS and Android implementations: complete.
-- Gallery and previews: complete.
-- Parity and divergences: complete; none known.
-- Automated checks: covered by platform build for affected surfaces.
