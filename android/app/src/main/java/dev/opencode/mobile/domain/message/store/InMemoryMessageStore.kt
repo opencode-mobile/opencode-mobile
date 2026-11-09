@@ -305,6 +305,8 @@ class InMemoryMessageStore
             val order = messageOrders[sessionId]!!
             val inserted = messageId !in order
             val previous = infoCaches[sessionId]!![messageId]
+            // A notice row stays a notice: v2 `inbox.delivered` of a goal kickoff is a bare user info.
+            if (!info.role.equals(NOTICE_ROLE, ignoreCase = true) && isNotice(sessionId, messageId, previous)) return null
             // v2 infos are partial projections: keep fields an update omits.
             val priorTime = previous?.get("time") ?: baseTimeJson(sessionId, messageId)
             val merged =
@@ -493,6 +495,16 @@ class InMemoryMessageStore
                 }
             }
             order.add(messageId)
+        }
+
+        private fun isNotice(
+            sessionId: String,
+            messageId: String,
+            info: JsonObject?,
+        ): Boolean {
+            val infoRole = info?.get("role")?.jsonPrimitive?.contentOrNull
+            if (infoRole != null) return infoRole.equals(NOTICE_ROLE, ignoreCase = true)
+            return baseMessages[sessionId]?.firstOrNull { it.id == messageId }?.role == MessageRole.Notice
         }
 
         private fun isUser(
@@ -1246,6 +1258,7 @@ class InMemoryMessageStore
         private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty() || failure != null
 
         companion object {
+            private const val NOTICE_ROLE = "notice"
             private val AGENT_KEYS = listOf("agent", "mode")
             private val MODEL_KEYS = listOf("model", "modelID", "providerID", "variant")
         }

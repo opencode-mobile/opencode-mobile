@@ -50,6 +50,25 @@ object SessionGoalLimits {
     const val COMMAND = "goal"
 }
 
+/**
+ * Whether a `/goal …` send shows the composer's optimistic bubble. The server writes no user
+ * message for a control (pause, resume, clear) or for a kickoff without attachments (its Goal
+ * set row is the echo), so such a bubble would never retire. A kickoff with attachments is the
+ * user's prompt and keeps it. Every other command keeps it.
+ */
+object SessionGoalCommandEcho {
+    fun shows(
+        command: String,
+        arguments: String,
+        carriesPromptParts: Boolean,
+    ): Boolean {
+        if (!command.equals(SessionGoalLimits.COMMAND, ignoreCase = true)) return true
+        val text = arguments.trim()
+        if (SessionGoalAction.entries.any { it.commandText.equals(text, ignoreCase = true) }) return false
+        return carriesPromptParts
+    }
+}
+
 /** Why a goal paused, read from the server's reason. */
 enum class SessionGoalPauseKind {
     ByUser,

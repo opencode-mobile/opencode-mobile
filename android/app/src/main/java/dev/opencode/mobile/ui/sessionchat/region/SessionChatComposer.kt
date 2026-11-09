@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
+import dev.opencode.mobile.domain.goal.SessionGoalCommandEcho
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
@@ -1323,7 +1324,16 @@ class SessionChatComposer(
                     errorMessage = null,
                 )
             }
-            onOptimisticRows(enriched)
+            // A `/goal` kickoff without attachments, or a goal control, gets no user message to retire the bubble.
+            val showsEcho =
+                (intent as? ComposerSubmitIntent.ServerCommand)?.let { command ->
+                    SessionGoalCommandEcho.shows(
+                        command = command.command,
+                        arguments = command.arguments,
+                        carriesPromptParts = attachments.isNotEmpty() || skillsForSend.isNotEmpty(),
+                    )
+                } ?: true
+            onOptimisticRows(if (showsEcho) enriched else emptyList())
             try {
                 if (!holdUntil()) {
                     restoreFailedSubmission(

@@ -316,7 +316,8 @@ internal fun SessionChatGoalSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                GoalActionButton(goalState, SessionGoalAction.Clear, OpenCodeButtonContrast.Destructive, onAction)
+                // Destructive but not the primary action: red text on the neutral fill.
+                GoalActionButton(goalState, SessionGoalAction.Clear, OpenCodeButtonContrast.DestructiveLow, onAction)
                 Spacer(modifier = Modifier.weight(1f))
                 when (goal.status) {
                     SessionGoalStatus.Active ->
