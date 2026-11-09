@@ -409,10 +409,11 @@ struct SessionChatView: View {
                 NewSessionDraftContent(
                     draft: draft,
                     keyboardVisible: keyboardOverlap > 0,
+                    // keyboardOverlapPadding already lifts this area above the keyboard;
+                    // adding the overlap again pushed the card under the header.
                     bottomInset: sessionChatTimelineBottomInset(composerOverlayHeight)
                         + snackbarOverlayHeight
-                        + composerHomeIndicatorLift
-                        + keyboardOverlap,
+                        + composerHomeIndicatorLift,
                     onOpenRow: { kind in draftSheet = kind }
                 )
                 .transition(.opacity)

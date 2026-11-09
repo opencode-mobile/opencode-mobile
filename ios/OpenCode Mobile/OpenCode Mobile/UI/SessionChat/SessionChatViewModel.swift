@@ -71,6 +71,9 @@ final class SessionChatViewModel {
     private var draftCreating = false
     private var draftErrorMessage: String?
     private var draftBaseBranches: NewSessionBaseBranchesLoad = .idle
+    /// The probed protocol: the connection's stored one can still be unset when the draft opens,
+    /// which hid Starts from on v2.
+    private var draftServerProtocol: ServerProtocol?
     private var draftBaseBranchesTask: Task<Void, Never>?
     /// Refreshes Home's checkouts of a directory after a draft's first send created a worktree.
     /// The screen sets it from Home's environment.
@@ -1910,6 +1913,13 @@ final class SessionChatViewModel {
         sessionInfo.startObservingConnection()
         composer.startCatalogLoads()
         publishUiState()
+        Task { [weak self] in
+            guard let manager = self?.activeConnectionManager else { return }
+            let detected = await manager.currentProtocolOrProbe()
+            guard let self, self.draftServerProtocol != detected else { return }
+            self.draftServerProtocol = detected
+            self.publishUiState()
+        }
     }
 
     /// Home's projects, the Worktrees setting and running counts, for the card and its sheets.
@@ -2080,7 +2090,7 @@ final class SessionChatViewModel {
                             projectID: project?.projectID,
                             sourceDirectory: current.projectDirectory,
                             name: nil,
-                            baseRef: activeConnectionManager.serverProtocol == .v2 ? base : nil
+                            baseRef: await activeConnectionManager.currentProtocolOrProbe() == .v2 ? base : nil
                         )
                     )
                     OpenCodeLog.sessionChat.info("draft worktree created directory=\(created.directory)")
@@ -2146,7 +2156,7 @@ final class SessionChatViewModel {
         return NewSessionDraftPresentation.uiState(
             draft: draft,
             context: draftContext,
-            serverProtocol: activeConnectionManager.serverProtocol ?? .v1,
+            serverProtocol: draftServerProtocol ?? activeConnectionManager.serverProtocol ?? .v1,
             serverCanCreateWorktrees: worktreeRepository.canCreateWorktrees,
             isCreating: draftCreating,
             baseBranches: draftBaseBranches
