@@ -1101,6 +1101,10 @@
     <string name="settings_build">Build</string>
     <string name="settings_source_code_title">Source Code</string>
     <string name="settings_source_code_subtitle">GPL-3.0 on GitHub</string>
+    <string name="settings_rate_app_title">Rate on Google Play</string>
+    <string name="settings_rate_app_subtitle">A review helps others find the app</string>
+    <string name="settings_star_on_github_title">Star on GitHub</string>
+    <string name="settings_follow_on_x_title">Follow on X</string>
     <string name="diagnostics_title">Diagnostic Logs</string>
     <string name="diagnostics_loading">Loading diagnostic logs</string>
     <string name="diagnostics_entries_title">Entries</string>

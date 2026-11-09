@@ -55,6 +55,9 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case restart = "lucide_restart"
     case minimize = "lucide_minimize"
     case dragHandle = "lucide_drag_handle"
+    case star = "lucide_star"
+    case rateReview = "lucide_rate_review"
+    case atSign = "lucide_at_sign"
 
     var accessibilityIdentifier: String { rawValue }
 }
