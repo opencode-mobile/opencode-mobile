@@ -43,6 +43,8 @@ object ToolPartIdentity {
         input: JsonObject?,
     ): Boolean = name.equals("question", ignoreCase = true) || hasQuestions(input)
 
+    fun isQuestion(tool: MessagePart.Tool): Boolean = isQuestion(tool.toolName, tool.input)
+
     fun calledTitle(name: String): String = if (isPlaceholder(name)) "Tool" else "Called $name"
 
     /** TUI never paints a card whose name is still the dummy `"tool"`. */
