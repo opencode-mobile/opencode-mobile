@@ -103,13 +103,3 @@ nonisolated struct SystemSessionReadyClock: SessionReadyClock {
         Date().timeIntervalSince1970 * 1000
     }
 }
-
-final class MutableSessionReadyClock: SessionReadyClock, @unchecked Sendable {
-    var nowEpochMsValue: Double
-
-    init(nowEpochMsValue: Double) {
-        self.nowEpochMsValue = nowEpochMsValue
-    }
-
-    func nowEpochMs() -> Double { nowEpochMsValue }
-}

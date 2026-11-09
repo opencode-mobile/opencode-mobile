@@ -22,8 +22,6 @@ protocol MessagesAPI: Sendable {
         order: String?,
         cursor: String?
     ) async throws -> (messages: [V2SessionMessageDTO], nextCursor: String?)
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> MessageDTO
-    func sendMessage(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws -> MessageDTO
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, attachments: [Attachment], directory: String?) async throws
     func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String?) async throws
@@ -181,14 +179,6 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
             directory: nil
         )
         return envelope.data
-    }
-
-    func getMessage(sessionID: String, messageID: String, directory: String? = nil) async throws -> MessageDTO {
-        try await get(path: "session/\(sessionID)/message/\(messageID)", directory: directory)
-    }
-
-    func sendMessage(sessionID: String, body: SendMessageRequestDTO, directory: String? = nil) async throws -> MessageDTO {
-        try await post(path: "session/\(sessionID)/message", body: body, directory: directory)
     }
 
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String? = nil) async throws {

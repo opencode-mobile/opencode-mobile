@@ -49,15 +49,6 @@ Ring size is locked at ~32pt in the implementation.
 - Preview: Home copy and Session copy samples; light and dark via gallery theme
   controls.
 
-## Completion Ledger
-
-- Public API and applicable states: complete.
-- Token and typography mapping: complete.
-- iOS and Android implementations: complete.
-- Gallery entries and previews: complete.
-- Parity and divergences: complete; none intentional.
-- Automated checks: tracked with feature implementation.
-
 ## Parity And Divergence
 
 None. Track temporary feature wiring gaps on the GitHub issue.

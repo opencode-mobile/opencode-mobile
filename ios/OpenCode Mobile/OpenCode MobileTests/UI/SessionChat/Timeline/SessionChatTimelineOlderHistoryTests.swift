@@ -288,14 +288,6 @@ private final class OlderHistoryMessageRepository: MessageRepository, @unchecked
         initial.map(\.message)
     }
 
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
-        initial.map(\.message).first { $0.id == messageID }!
-    }
-
-    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
-        Message(id: "sent", role: .user, text: text, model: nil, mode: nil, sentAtEpochMs: 0)
-    }
-
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
 
     func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}
@@ -351,14 +343,6 @@ private final class ConfirmableOlderHistoryRepository: MessageRepository, @unche
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         initial.map(\.message)
-    }
-
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
-        initial.map(\.message).first { $0.id == messageID }!
-    }
-
-    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
-        Message(id: "sent", role: .user, text: text, model: nil, mode: nil, sentAtEpochMs: 0)
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
