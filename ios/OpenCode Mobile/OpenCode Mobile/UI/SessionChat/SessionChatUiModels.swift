@@ -231,10 +231,12 @@ enum SessionChatSnackbarTone: Equatable {
 enum SessionChatSnackbarAction: Equatable {
     /// Ask a failed `/btw` question again.
     case retrySideQuestion(UUID)
+    /// Send a prompt the server has not answered again.
+    case retryStalledSend
 
     var label: String {
         switch self {
-        case .retrySideQuestion: "Retry"
+        case .retrySideQuestion, .retryStalledSend: "Retry"
         }
     }
 }
@@ -798,6 +800,8 @@ struct SessionChatComposerRegionState: Equatable {
     )
     var isSending: Bool = false
     var sendProgressPercent: Int? = nil
+    /// Set while a prompt upload has gone unanswered; each new value shows "Still sending…" again.
+    var sendStallNotice: Int? = nil
     var isAborting: Bool = false
     var errorMessage: String?
     var abortErrorMessage: String?
