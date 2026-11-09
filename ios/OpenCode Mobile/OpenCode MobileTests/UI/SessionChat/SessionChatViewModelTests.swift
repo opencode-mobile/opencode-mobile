@@ -3548,98 +3548,319 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.pendingSessionReplace == nil)
     }
 
-    @Test func startObservingOptimisticCreate_promotesSessionAndLoadsMessages() async {
-        let sessionRepository = FakeChatSessionRepository(
-            createSessionResult: Session(
-                id: "ses-new", title: "Created", slug: nil, projectID: nil,
-                directory: "/repo", parentID: nil, updatedAtEpochMs: nil
-            )
-        )
+    // MARK: New session draft (#1004)
+
+    @Test func draft_observingCreatesNothingAndKeepsTheComposerLive() async {
+        let sessionRepository = FakeChatSessionRepository()
         let viewModel = makeViewModel(
-            messageRepository: FakeMessageRepository(),
+            messageRepository: FakeMessageRepository(messages: []),
             sessionRepository: sessionRepository,
             sessionID: OptimisticSessionCreate.placeholderSessionID,
             sessionTitle: "New Session"
         )
         defer { viewModel.stopObserving() }
+
+        viewModel.startObserving()
         await viewModel.loadMessages()
 
-        #expect(viewModel.uiState.sessionID == "ses-new")
-        #expect(viewModel.uiState.timeline == .empty || viewModel.uiState.timeline == .ready)
-        #expect(sessionRepository.createSessionCallCount == 1)
+        #expect(await waitUntil { viewModel.uiState.composer.isModelSelectionReady })
+        #expect(sessionRepository.createSessionCallCount == 0)
+        #expect(viewModel.uiState.sessionID == OptimisticSessionCreate.placeholderSessionID)
+        #expect(viewModel.uiState.draft != nil)
+        #expect(viewModel.uiState.timeline == .empty)
+        #expect(viewModel.uiState.composerEnabled)
+        #expect(viewModel.uiState.directory == "/repo")
     }
 
-    @Test func startObservingOptimisticCreate_failureStaysOnChatWithError() async {
-        let repository = FakeMessageRepository()
-        let sessionRepository = FakeChatSessionRepository(
-            createSessionError: .http(statusCode: 500, message: "boom")
+    @Test func draft_firstSendCreatesTheSessionThenSendsThePromptAndClearsTheDraft() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository(createSessionResult: Session(
+            id: "ses-new", title: "Created", slug: nil, projectID: nil,
+            directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+        ))
+        let store = NewSessionDraftStore()
+        let viewModel = makeDraftViewModel(repository, sessionRepository: sessionRepository, store: store)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(await waitUntil { viewModel.uiState.composer.isModelSelectionReady })
+
+        viewModel.updateComposerText("Build it")
+        #expect(store.draft(forProfile: Self.draftProfileKey)?.composer.text == "Build it")
+        await viewModel.sendPrompt()
+
+        #expect(await waitUntil { repository.sendPromptAsyncCalled })
+        #expect(sessionRepository.createSessionCallCount == 1)
+        #expect(sessionRepository.createSessionDirectory == "/repo")
+        #expect(repository.sentSessionID == "ses-new")
+        #expect(repository.sentDirectory == "/repo")
+        #expect(repository.sentOptions?.text == "Build it")
+        #expect(repository.sentOptions?.model?.modelID == "claude-sonnet")
+        #expect(viewModel.uiState.sessionID == "ses-new")
+        #expect(viewModel.uiState.draft == nil)
+        #expect(store.draft(forProfile: Self.draftProfileKey) == nil)
+    }
+
+    @Test func draft_newWorktreeOnV2CreatesItFromTheBaseThenTheSessionThereThenThePrompt() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository(createSessionResult: Session(
+            id: "ses-wt", title: "Created", slug: nil, projectID: nil,
+            directory: "/wt/quiet-falcon", parentID: nil, updatedAtEpochMs: nil
+        ))
+        let worktrees = DraftWorktreeRepository(created: .success(
+            CreatedWorktree(directory: "/wt/quiet-falcon", name: "quiet-falcon", branch: nil)
+        ))
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(projectKey: "prj", projectDirectory: "/repo", place: .newWorktree(baseBranch: "release")),
+            forProfile: Self.draftProfileKey
         )
-        let viewModel = makeViewModel(
+        let viewModel = makeDraftViewModel(
+            repository,
+            sessionRepository: sessionRepository,
+            store: store,
+            serverProtocol: .v2,
+            worktreeRepository: worktrees
+        )
+        defer { viewModel.stopObserving() }
+        viewModel.updateDraftContext(NewSessionDraftContext(projects: [Self.draftProject]))
+        let refreshed = DraftRefreshLog()
+        viewModel.refreshWorktreeInventory = { refreshed.directories.append($0) }
+        await viewModel.loadMessages()
+        #expect(await waitUntil { viewModel.uiState.composer.isModelSelectionReady })
+        #expect(viewModel.uiState.draft?.rows.map(\.kind) == [.project, .worktree, .startsFrom])
+
+        viewModel.updateComposerText("Try it in a worktree")
+        await viewModel.sendPrompt()
+
+        #expect(await waitUntil { repository.sendPromptAsyncCalled })
+        #expect(worktrees.createRequests == [
+            CreateWorktreeRequest(projectID: "prj", sourceDirectory: "/repo", name: nil, baseRef: "release"),
+        ])
+        #expect(refreshed.directories == ["/wt/quiet-falcon"])
+        #expect(sessionRepository.createSessionDirectory == "/wt/quiet-falcon")
+        #expect(repository.sentSessionID == "ses-wt")
+        #expect(repository.sentDirectory == "/wt/quiet-falcon")
+        #expect(viewModel.uiState.directory == "/wt/quiet-falcon")
+        #expect(viewModel.uiState.draft == nil)
+    }
+
+    @Test func draft_newWorktreeOnV1CreatesFromTheCurrentCheckoutWithoutABase() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository()
+        let worktrees = DraftWorktreeRepository(created: .success(
+            CreatedWorktree(directory: "/wt/calm-river", name: "calm-river", branch: "opencode/calm-river")
+        ))
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(projectKey: "prj", projectDirectory: "/repo", place: .newWorktree(baseBranch: "release")),
+            forProfile: Self.draftProfileKey
+        )
+        let viewModel = makeDraftViewModel(
+            repository,
+            sessionRepository: sessionRepository,
+            store: store,
+            serverProtocol: .v1,
+            worktreeRepository: worktrees
+        )
+        defer { viewModel.stopObserving() }
+        viewModel.updateDraftContext(NewSessionDraftContext(projects: [Self.draftProject]))
+        await viewModel.loadMessages()
+        #expect(await waitUntil { viewModel.uiState.composer.isModelSelectionReady })
+        // v1 cannot pick a base, so there is no Starts from row.
+        #expect(viewModel.uiState.draft?.rows.map(\.kind) == [.project, .worktree])
+
+        viewModel.updateComposerText("v1 worktree")
+        await viewModel.sendPrompt()
+
+        #expect(await waitUntil { repository.sendPromptAsyncCalled })
+        #expect(worktrees.createRequests.map(\.baseRef) == [nil])
+        #expect(worktrees.createRequests.map(\.name) == [nil])
+        #expect(sessionRepository.createSessionDirectory == "/wt/calm-river")
+        #expect(repository.sentDirectory == "/wt/calm-river")
+    }
+
+    @Test func draft_failedSessionCreateKeepsTheDraftAndRetryReusesTheWorktree() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository(createSessionError: .http(statusCode: 500, message: "boom"))
+        let worktrees = DraftWorktreeRepository(created: .success(
+            CreatedWorktree(directory: "/wt/brave-otter", name: "brave-otter", branch: nil)
+        ))
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(projectKey: "prj", projectDirectory: "/repo", place: .newWorktree(baseBranch: nil)),
+            forProfile: Self.draftProfileKey
+        )
+        let viewModel = makeDraftViewModel(
+            repository,
+            sessionRepository: sessionRepository,
+            store: store,
+            serverProtocol: .v2,
+            worktreeRepository: worktrees
+        )
+        defer { viewModel.stopObserving() }
+        viewModel.updateDraftContext(NewSessionDraftContext(projects: [Self.draftProject]))
+        await viewModel.loadMessages()
+        #expect(await waitUntil { viewModel.uiState.composer.isModelSelectionReady })
+        viewModel.updateComposerText("Keep this")
+
+        await viewModel.sendPrompt()
+
+        #expect(viewModel.uiState.draft != nil)
+        #expect(viewModel.uiState.draft?.isCreating == false)
+        #expect(viewModel.uiState.isSending == false)
+        #expect(viewModel.uiState.composer.text == "Keep this")
+        #expect(viewModel.uiState.snackbar?.message == "boom")
+        #expect(viewModel.uiState.snackbar?.action == .retryNewSession)
+        #expect(repository.sendPromptAsyncCalled == false)
+        #expect(worktrees.createRequests.count == 1)
+        #expect(store.draft(forProfile: Self.draftProfileKey)?.createdWorktree?.directory == "/wt/brave-otter")
+        #expect(store.draft(forProfile: Self.draftProfileKey)?.composer.text == "Keep this")
+
+        sessionRepository.createSessionError = nil
+        await viewModel.retryDraftSend()
+
+        #expect(await waitUntil { repository.sendPromptAsyncCalled })
+        #expect(worktrees.createRequests.count == 1)
+        #expect(sessionRepository.createSessionCallCount == 2)
+        #expect(sessionRepository.createSessionDirectory == "/wt/brave-otter")
+        #expect(repository.sentDirectory == "/wt/brave-otter")
+    }
+
+    @Test func draft_failedWorktreeCreateCreatesNoSessionAndKeepsTheDraft() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository()
+        let worktrees = DraftWorktreeRepository(created: .failure(WorktreeCreateError(message: "fatal: invalid reference: nope")))
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(projectKey: "prj", projectDirectory: "/repo", place: .newWorktree(baseBranch: "nope")),
+            forProfile: Self.draftProfileKey
+        )
+        let viewModel = makeDraftViewModel(
+            repository,
+            sessionRepository: sessionRepository,
+            store: store,
+            serverProtocol: .v2,
+            worktreeRepository: worktrees
+        )
+        defer { viewModel.stopObserving() }
+        viewModel.updateDraftContext(NewSessionDraftContext(projects: [Self.draftProject]))
+        await viewModel.loadMessages()
+        #expect(await waitUntil { viewModel.uiState.composer.isModelSelectionReady })
+        viewModel.updateComposerText("x")
+
+        await viewModel.sendPrompt()
+
+        #expect(sessionRepository.createSessionCallCount == 0)
+        #expect(viewModel.uiState.draft != nil)
+        #expect(viewModel.uiState.snackbar?.message == "Couldn't create the worktree: fatal: invalid reference: nope")
+        #expect(store.draft(forProfile: Self.draftProfileKey)?.createdWorktree == nil)
+    }
+
+    @Test func draft_restoresTheKeptDraftAndBindsWhereItRuns() async {
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(
+                projectKey: "prj",
+                projectDirectory: "/repo",
+                place: .worktree(directory: "/repo-wt", branch: "feature/x"),
+                composer: ComposerDraft(text: "Restored text")
+            ),
+            forProfile: Self.draftProfileKey
+        )
+
+        let viewModel = makeDraftViewModel(FakeMessageRepository(messages: []), store: store)
+        defer { viewModel.stopObserving() }
+
+        #expect(viewModel.uiState.composer.text == "Restored text")
+        #expect(viewModel.uiState.directory == "/repo-wt")
+    }
+
+    @Test func draft_pickingAnotherProjectMovesTheDraftToItsMainCheckout() async {
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(projectKey: "prj", projectDirectory: "/repo", place: .newWorktree(baseBranch: nil)),
+            forProfile: Self.draftProfileKey
+        )
+        let viewModel = makeDraftViewModel(FakeMessageRepository(messages: []), store: store)
+        defer { viewModel.stopObserving() }
+        let other = HomeProject(
+            key: "path:/other",
+            projectID: nil,
+            displayName: "other",
+            memberPaths: ["/other"],
+            isRepository: false,
+            worktrees: [HomeWorktree(directory: "/other", branch: nil, isMain: true)]
+        )
+        viewModel.updateDraftContext(NewSessionDraftContext(projects: [Self.draftProject, other]))
+        viewModel.updateComposerText("carry me")
+
+        viewModel.selectDraftProject(key: "path:/other")
+
+        #expect(viewModel.uiState.directory == "/other")
+        #expect(viewModel.uiState.composer.text == "carry me")
+        #expect(store.draft(forProfile: Self.draftProfileKey)?.place == .local)
+        #expect(store.draft(forProfile: Self.draftProfileKey)?.projectKey == "path:/other")
+    }
+
+    @Test func draft_discardClearsTheDraftAndLeaves() async {
+        let store = NewSessionDraftStore()
+        let viewModel = makeDraftViewModel(FakeMessageRepository(messages: []), store: store)
+        defer { viewModel.stopObserving() }
+        viewModel.updateComposerText("throw away")
+        #expect(store.draft(forProfile: Self.draftProfileKey) != nil)
+
+        viewModel.discardDraft()
+
+        #expect(store.draft(forProfile: Self.draftProfileKey) == nil)
+        #expect(viewModel.uiState.shouldLeaveSession)
+        #expect(viewModel.uiState.composer.text.isEmpty)
+    }
+
+    @Test func draft_newAndSessionActionsDoNothing() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeDraftViewModel(FakeMessageRepository(messages: []), sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.runClientSlashAction(.new)
+        viewModel.runClientSlashAction(.compact)
+        viewModel.archiveSession()
+
+        #expect(viewModel.uiState.pendingSessionReplace == nil)
+        #expect(sessionRepository.createSessionCallCount == 0)
+        #expect(sessionRepository.archiveCallCount == 0)
+    }
+
+    private static var draftProfileKey: String {
+        NewSessionDraftStore.key(for: ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""))
+    }
+
+    /// A Git project at `/repo` with a worktree at `/repo-wt`.
+    private static var draftProject: HomeProject {
+        let resolution = HomeProjectResolution(id: "prj", canonical: "/repo", isRepository: true)
+        return HomeProjectGrouping.group(
+            addedPaths: ["/repo", "/repo-wt"],
+            resolutions: ["/repo": resolution, "/repo-wt": resolution],
+            branches: ["/repo": "main", "/repo-wt": "feature/x"]
+        )[0]
+    }
+
+    private func makeDraftViewModel(
+        _ repository: FakeMessageRepository,
+        sessionRepository: FakeChatSessionRepository = FakeChatSessionRepository(),
+        store: NewSessionDraftStore? = nil,
+        serverProtocol: ServerProtocol = .v1,
+        worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository()
+    ) -> SessionChatViewModel {
+        let store = store ?? NewSessionDraftStore()
+        return makeViewModel(
             messageRepository: repository,
             sessionRepository: sessionRepository,
             sessionID: OptimisticSessionCreate.placeholderSessionID,
-            sessionTitle: "New Session"
+            sessionTitle: "New Session",
+            serverProtocol: serverProtocol,
+            worktreeRepository: worktreeRepository,
+            newSessionDraftStore: store
         )
-        defer { viewModel.stopObserving() }
-        await viewModel.loadMessages()
-
-        #expect(viewModel.uiState.shouldLeaveSession == false)
-        #expect(viewModel.uiState.timeline == .error)
-        #expect(viewModel.uiState.errorMessage == "boom")
-        #expect(viewModel.uiState.sessionID == OptimisticSessionCreate.placeholderSessionID)
-
-        viewModel.updateComposerText("hi")
-        await viewModel.sendPrompt()
-        viewModel.archiveSession()
-        viewModel.deleteSession()
-        #expect(repository.sendPromptAsyncCalled == false)
-        #expect(sessionRepository.archiveCallCount == 0)
-        #expect(sessionRepository.deleteCallCount == 0)
-    }
-
-    @Test func startObservingOptimisticCreate_transportFailureShowsReachabilityError() async {
-        let sessionRepository = FakeChatSessionRepository(
-            createSessionError: .transport("offline")
-        )
-        let viewModel = makeViewModel(
-            messageRepository: FakeMessageRepository(),
-            sessionRepository: sessionRepository,
-            sessionID: OptimisticSessionCreate.placeholderSessionID,
-            sessionTitle: "New Session"
-        )
-        defer { viewModel.stopObserving() }
-        await viewModel.loadMessages()
-
-        #expect(viewModel.uiState.shouldLeaveSession == false)
-        #expect(viewModel.uiState.timeline == .error)
-        #expect(viewModel.uiState.errorMessage == "Unable to reach the server")
-    }
-
-    @Test func startObservingAgainWhileCreatingOrAfterPromotion_issuesSingleCreate() async {
-        let sessionRepository = FakeChatSessionRepository(
-            createSessionResult: Session(
-                id: "ses-new", title: "Created", slug: nil, projectID: nil,
-                directory: "/repo", parentID: nil, updatedAtEpochMs: nil
-            )
-        )
-        let viewModel = makeViewModel(
-            messageRepository: FakeMessageRepository(),
-            sessionRepository: sessionRepository,
-            sessionID: OptimisticSessionCreate.placeholderSessionID,
-            sessionTitle: "New Session"
-        )
-        defer { viewModel.stopObserving() }
-
-        viewModel.startObserving()
-        viewModel.startObserving()
-        await viewModel.loadMessages()
-        #expect(viewModel.uiState.sessionID == "ses-new")
-        #expect(sessionRepository.createSessionCallCount == 1)
-
-        viewModel.startObserving()
-        await viewModel.loadMessages()
-        #expect(viewModel.uiState.sessionID == "ses-new")
-        #expect(sessionRepository.createSessionCallCount == 1)
     }
 
     @Test func runClientSlashAction_fork_confirmAndOpen_navigatesToForkedSession() async {
@@ -5832,7 +6053,8 @@ struct SessionChatViewModelTests {
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
         worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
         sideQuestionStore: SideQuestionStore? = nil,
-        agentShellRepository: (any AgentShellRepository)? = nil
+        agentShellRepository: (any AgentShellRepository)? = nil,
+        newSessionDraftStore: NewSessionDraftStore? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -5893,7 +6115,8 @@ struct SessionChatViewModelTests {
             catalogRetryDelaysMs: catalogRetryDelaysMs,
             worktreeRepository: worktreeRepository,
             worktreeInventoryCache: worktreeInventoryCache,
-            agentShellRepository: agentShellRepository ?? UnavailableAgentShellRepository()
+            agentShellRepository: agentShellRepository ?? UnavailableAgentShellRepository(),
+            newSessionDraftStore: newSessionDraftStore
         )
         viewModel.startObserving()
         return viewModel
@@ -6260,6 +6483,8 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     let holdSend: Bool
     var sendPromptAsyncCalled = false
     var sentOptions: PromptSendOptions?
+    var sentSessionID: String?
+    var sentDirectory: String?
     var shellRequests: [(options: ShellCommandOptions, directory: String?)] = []
     var shellError: Error?
     private var listMessagesCallCount = 0
@@ -6355,6 +6580,8 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
         sendPromptAsyncCalled = true
         sentOptions = options
+        sentSessionID = sessionID
+        sentDirectory = directory
         if let handler = PromptSendProgressReporting.handler, !options.attachments.isEmpty {
             handler(1, 4)
         }
@@ -6755,7 +6982,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     var onCommitRevert: (() -> Void)?
     private(set) var summarizeRequest: SummarizeRequest?
     private let getSessionError: SessionError?
-    private let createSessionError: SessionError?
+    var createSessionError: SessionError?
     private let forkSessionError: SessionError?
     private let revertError: SessionError?
     private let unrevertError: SessionError?
@@ -7256,6 +7483,34 @@ private struct AddedPathsConnectionProfileStore: ConnectionProfileStore {
     func removeWorktree(serverBaseURL: String, worktree: String) async {}
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
     func clearAll() async {}
+}
+
+/// Directories Home was asked to refresh after a draft created a worktree.
+private final class DraftRefreshLog {
+    var directories: [String] = []
+}
+
+/// Answers worktree creates for New session draft tests (#1004) and records them.
+private final class DraftWorktreeRepository: WorktreeRepository, @unchecked Sendable {
+    private let created: Result<CreatedWorktree, Error>
+    private(set) var createRequests: [CreateWorktreeRequest] = []
+
+    init(created: Result<CreatedWorktree, Error>) {
+        self.created = created
+    }
+
+    func load(addedPath: String, projectID: String?) async -> WorktreeLoad { .unloaded }
+    func loadRefreshed(addedPath: String, projectID: String?) async -> WorktreeLoad { .unloaded }
+    func refresh(projectID: String) async -> Bool { false }
+    func refetch(projectID: String) async -> WorktreeLoad { .unloaded }
+    func onDisconnected() {}
+    func onConnection(key: String) {}
+    func create(_ request: CreateWorktreeRequest) async throws -> CreatedWorktree {
+        createRequests.append(request)
+        return try created.get()
+    }
+    func baseBranches(directory: String) async throws -> [String] { ["main", "release"] }
+    var canCreateWorktrees: Bool { true }
 }
 
 /// Every inventory load waits until `open()`, then answers `load`.

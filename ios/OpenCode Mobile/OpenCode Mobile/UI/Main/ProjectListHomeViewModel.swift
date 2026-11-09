@@ -465,12 +465,10 @@ final class ProjectListHomeViewModel {
     private let worktreeInventoryCache: WorktreeInventoryCache
     /// The Worktrees screen reads Home's projects and sessions here and asks Home to act.
     let homeWorktreesFeed: HomeWorktreesFeed
-    /// New worktree form of the Run in sheet.
-    let worktreeCreate: WorktreeCreateModel
     /// Session search over Home's pane (#929).
     let sessionSearch: SessionSearchModel
-    /// False once a v1 server answered 404 for its worktree routes.
-    private(set) var serverCanCreateWorktrees = true
+    /// New session drafts (#1004), one per Connection Profile.
+    private let newSessionDraftStore: NewSessionDraftStore
     private let foregroundEventStream: (any ForegroundEventStream)?
     private let sessionCache: any SessionCache
     private let sessionAdapter = SessionDomainAdapter()
@@ -547,8 +545,10 @@ final class ProjectListHomeViewModel {
         foregroundEventStream: (any ForegroundEventStream)? = nil,
         branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
         worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
-        homeWorktreesFeed: HomeWorktreesFeed? = nil
+        homeWorktreesFeed: HomeWorktreesFeed? = nil,
+        newSessionDraftStore: NewSessionDraftStore? = nil
     ) {
+        self.newSessionDraftStore = newSessionDraftStore ?? NewSessionDraftStore()
         self.addProjectListingDebounce = addProjectListingDebounce
         self.projectLoadTiming = projectLoadTiming
         self.projectRepository = projectRepository
@@ -564,12 +564,10 @@ final class ProjectListHomeViewModel {
         self.worktreeRepository = worktreeRepository
         self.worktreeInventoryCache = worktreeInventoryCache
         self.homeWorktreesFeed = homeWorktreesFeed ?? HomeWorktreesFeed()
-        self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
         self.sessionSearch = SessionSearchModel(
             repository: sessionRepository,
             archivedSessionsSupported: { activeConnectionManager.capabilities.supportsArchivedSessions }
         )
-        self.serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
         self.foregroundEventStream = foregroundEventStream
         let projects = projectRepository
         let sessions = sessionRepository
@@ -685,7 +683,6 @@ final class ProjectListHomeViewModel {
                 self?.stopLiveObservations()
                 self?.worktreeMarks.onDisconnected()
                 self?.worktreeInventoryCache.clear()
-                self?.worktreeCreate.dismiss()
                 self?.worktreeInventories.removeAll()
                 self?.worktreeProjectIDs.removeAll()
                 self?.clearHomeProjectInputs()
@@ -1081,6 +1078,7 @@ final class ProjectListHomeViewModel {
             // A newly added project always takes the scope, even from All.
             pendingSelectedFilterOverridesAll = true
             pendingSelectedFilterId = worktree
+            lastAddedProject = HomeAddedProject(path: worktree)
             if let joined {
                 removalSnackbar = OpenCodeSnackbarMessage(text: HomeProjectCopy.joinedExisting(joined.displayName))
             }
@@ -1102,13 +1100,18 @@ final class ProjectListHomeViewModel {
         await sessionLiveStore.invalidate(directory: worktree)
     }
 
-    func createSession(in worktree: String) async {
-        guard liveUpdates.chrome.canMutate else {
-            logCreateSession(outcome: ProductAnalytics.Outcome.blocked)
-            setProjectSessionCreateError(
-                String(localized: "home.error.reconnect_to_create", defaultValue: "Reconnect to create a session")
-            )
-            return
+    /// New session (#1004): opens Session Chat as a draft. Nothing is created on the server until
+    /// its first send. A kept draft (text or attachments) wins over `start`; `forcePlace` keeps
+    /// its content but moves it to `start`'s place (Worktrees "New session here").
+    func openNewSessionDraft(_ start: NewSessionDraft, forcePlace: Bool = false) {
+        let directory: String = if let profile = activeConnectionManager.currentProfile() {
+            newSessionDraftStore.open(
+                profile: NewSessionDraftStore.key(for: profile),
+                start: start,
+                forcePlace: forcePlace
+            ).directory
+        } else {
+            start.directory
         }
         setProjectSessionCreateError(nil)
         logCreateSession(outcome: "started")
@@ -1116,48 +1119,9 @@ final class ProjectListHomeViewModel {
         pendingSessionOpen = SessionListItem(
             id: OptimisticSessionCreate.placeholderSessionID,
             title: OptimisticSessionCreate.placeholderTitle,
-            worktree: worktree,
+            worktree: directory,
             optimisticNavigationInstanceID: UUID()
         )
-    }
-
-    // MARK: New worktree (Run in)
-
-    /// The Run in sheet's New worktree row for `project`.
-    func newWorktreeAvailability(for project: HomeProject, worktreesEnabled: Bool) -> NewWorktreeAvailability {
-        NewWorktreeAvailability.runIn(
-            worktreesEnabled: worktreesEnabled,
-            isRepository: project.isRepository,
-            projectID: project.projectID,
-            serverCanCreate: serverCanCreateWorktrees
-        )
-    }
-
-    /// Switches the Run in sheet to the New worktree form, creating from the main checkout.
-    func openNewWorktree(projectKey: String) {
-        guard let project = homeProjects.first(where: { $0.key == projectKey }) else { return }
-        let source = project.mainCheckoutDirectory
-        worktreeCreate.open(
-            origin: .runIn(projectKey: projectKey),
-            serverProtocol: activeConnectionManager.serverProtocol ?? .v1,
-            projectID: project.projectID,
-            sourceDirectory: source,
-            sourceBranch: project.worktree(at: source)?.branch
-        )
-    }
-
-    /// Creates the worktree, refreshes the project's checkouts, then starts a session there.
-    /// True when the sheet should close.
-    func submitNewWorktree() async -> Bool {
-        guard case let .runIn(projectKey)? = worktreeCreate.state?.origin else { return false }
-        guard let created = await worktreeCreate.submit() else {
-            serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
-            return false
-        }
-        await refreshWorktreeInventory(projectKey: projectKey)
-        worktreeCreate.dismiss()
-        await createSession(in: created.directory)
-        return true
     }
 
     /// Home has listed some project's worktrees.
@@ -1184,7 +1148,10 @@ final class ProjectListHomeViewModel {
             pendingSelectedFilterOverridesAll = true
             pendingSelectedFilterId = HomeScope.worktree(projectKey: projectKey, directory: directory).id
         case let .newSession(directory):
-            await createSession(in: directory)
+            openNewSessionDraft(
+                NewSessionDraftStart.fromDirectory(directory, projects: homeProjects, worktreesEnabled: true),
+                forcePlace: true
+            )
         case let .removed(_, directory):
             worktreeMarks.retain(removedDirectories: homeWorktreesFeed.removedDirectories)
             await refreshWorktreeInventory(containing: directory)
@@ -1223,6 +1190,8 @@ final class ProjectListHomeViewModel {
     }
 
     private(set) var pendingSessionOpen: SessionListItem?
+    /// The project Add project last added; a New session draft that asked for it takes it.
+    private(set) var lastAddedProject: HomeAddedProject?
     private(set) var pendingSelectedFilterId: String?
     /// True when `pendingSelectedFilterId` must replace the All scope too (a newly added project).
     private(set) var pendingSelectedFilterOverridesAll = false
@@ -2101,9 +2070,6 @@ final class ProjectListHomeViewModel {
     }
 
     private func applyWorktreeMark(_ update: WorktreeMarkUpdate) {
-        if serverCanCreateWorktrees != worktreeRepository.canCreateWorktrees {
-            serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
-        }
         worktreeInventories[update.addedPath] = update.inventory
         worktreeInventoryCache.record(update.inventory, addedPath: update.addedPath, server: serverBaseURL)
         if let projectID = update.projectID {
@@ -2499,4 +2465,10 @@ private struct ProjectLoadTracker {
     var timers: [Task<Void, Never>] = []
 
     var isPending: Bool { !failed && !completing }
+}
+
+/// One finished Add project, so the same path added twice still reads as a change.
+struct HomeAddedProject: Equatable {
+    let path: String
+    let id = UUID()
 }

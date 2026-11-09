@@ -39,7 +39,8 @@ nonisolated struct CreateWorktreeRequest: Equatable, Sendable {
     let projectID: String?
     /// Checkout the new one is made from (v2 `from`, v1 `directory`).
     let sourceDirectory: String
-    let name: String
+    /// Nil (or blank) lets the server name the checkout.
+    let name: String?
     /// v2 start ref; nil starts from the source checkout's HEAD.
     let baseRef: String?
 }
@@ -92,9 +93,9 @@ protocol WorktreeRemote: Sendable {
     /// V1 `GET /experimental/worktree?directory=`.
     func listV1(directory: String) async -> V1WorktreeHTTP
     /// V2 `POST /api/worktree`; returns the new checkout's directory.
-    func createV2(projectID: String, from: String, name: String, branch: String?) async throws -> String
-    /// V1 `POST /experimental/worktree?directory=`.
-    func createV1(directory: String, name: String) async throws -> CreatedWorktree
+    func createV2(projectID: String, from: String, name: String?, branch: String?) async throws -> String
+    /// V1 `POST /experimental/worktree?directory=`. A nil name lets the server pick one.
+    func createV1(directory: String, name: String?) async throws -> CreatedWorktree
     /// V2 `GET /api/vcs/branch` at `directory`.
     func branchesV2(directory: String) async throws -> [String]
     /// V2 `DELETE /api/worktree` with `{projectID, directory, force}`. Throws `WorktreeRemoteError`.

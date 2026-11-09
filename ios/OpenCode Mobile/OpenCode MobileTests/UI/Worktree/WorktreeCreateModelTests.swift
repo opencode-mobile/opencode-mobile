@@ -9,11 +9,11 @@ struct WorktreeCreateModelTests {
 
     @Test func prefillsARandomAdjectiveNounName() {
         let model = WorktreeCreateModel(repository: FormWorktreeRepository(), randomIndex: { _ in 0 })
-        model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v1, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
+        model.open(origin: .move(sessionID: "ses"), serverProtocol: .v1, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
         #expect(model.state?.name == "brave-otter")
 
         let last = WorktreeCreateModel(repository: FormWorktreeRepository(), randomIndex: { $0 - 1 })
-        last.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v1, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: nil)
+        last.open(origin: .move(sessionID: "ses"), serverProtocol: .v1, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: nil)
         #expect(last.state?.name == "zesty-willow")
     }
 
@@ -57,7 +57,7 @@ struct WorktreeCreateModelTests {
         #expect(state.baseValue.resolved == "main")
         #expect(state.baseNote.resolved == "opencode v1 uses the current checkout")
         #expect(!state.baseSelectable)
-        #expect(state.submitTitle.resolved == "Create and start")
+        #expect(state.submitTitle.resolved == "Create and move")
 
         let unknown = openV1(sourceBranch: nil)
         #expect(unknown.state?.baseValue.resolved == "Current checkout")
@@ -94,7 +94,7 @@ struct WorktreeCreateModelTests {
 
     @Test func detachedSourceDefaultsToTheCurrentCheckout() {
         let model = WorktreeCreateModel(repository: FormWorktreeRepository(), randomIndex: { _ in 0 })
-        model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "HEAD")
+        model.open(origin: .move(sessionID: "ses"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "HEAD")
         #expect(model.state?.baseValue.resolved == "Current checkout")
         #expect(model.state?.baseRows.first?.title.resolved == "Current checkout")
     }
@@ -102,7 +102,7 @@ struct WorktreeCreateModelTests {
     @Test func baseSelectionReturnsToTheFormAndTheSourceBranchIsTheDefault() async {
         let repository = FormWorktreeRepository(branches: ["main", "feature/x"])
         let model = WorktreeCreateModel(repository: repository, randomIndex: { _ in 0 })
-        model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
+        model.open(origin: .move(sessionID: "ses"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
 
         model.showBasePicker()
         #expect(model.state?.basePickerVisible == true)
@@ -125,7 +125,7 @@ struct WorktreeCreateModelTests {
     @Test func failedBaseListKeepsTheDefaultPickableAndRetriesOnOpen() async {
         let repository = FormWorktreeRepository(branchesFail: true)
         let model = WorktreeCreateModel(repository: repository, randomIndex: { _ in 0 })
-        model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
+        model.open(origin: .move(sessionID: "ses"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
         #expect(await waitFor { model.state?.baseOptionsState == .failed })
         #expect(model.state?.baseRows.map(\.ref) == [nil])
 
@@ -139,7 +139,7 @@ struct WorktreeCreateModelTests {
 
     @Test func backLeavesTheBaseListThenTheForm() {
         let model = WorktreeCreateModel(repository: FormWorktreeRepository(), randomIndex: { _ in 0 })
-        model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
+        model.open(origin: .move(sessionID: "ses"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
         model.showBasePicker()
 
         model.back()
@@ -155,7 +155,7 @@ struct WorktreeCreateModelTests {
             created: .success(CreatedWorktree(directory: "/wt/brave-otter", name: "brave-otter", branch: nil))
         )
         let model = WorktreeCreateModel(repository: repository, randomIndex: { _ in 0 })
-        model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
+        model.open(origin: .move(sessionID: "ses"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
         model.selectBase("origin/main")
 
         let created = await model.submit()
@@ -175,7 +175,7 @@ struct WorktreeCreateModelTests {
             created: .success(CreatedWorktree(directory: "/wt/x", name: "x", branch: "opencode/x"))
         )
         let model = WorktreeCreateModel(repository: repository, randomIndex: { _ in 0 })
-        model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v1, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
+        model.open(origin: .move(sessionID: "ses"), serverProtocol: .v1, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
         model.selectBase("dev")
 
         _ = await model.submit()
@@ -197,7 +197,7 @@ struct WorktreeCreateModelTests {
     @Test func failedCreateKeepsTheValuesAndExplains() async throws {
         let repository = FormWorktreeRepository(created: .failure(WorktreeCreateError(message: "fatal: invalid reference: nope")))
         let model = WorktreeCreateModel(repository: repository, randomIndex: { _ in 0 })
-        model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
+        model.open(origin: .move(sessionID: "ses"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "main")
         model.updateName("my-tree")
         model.selectBase("nope")
 
@@ -218,7 +218,7 @@ struct WorktreeCreateModelTests {
             gateCreate: true
         )
         let model = WorktreeCreateModel(repository: repository, randomIndex: { _ in 0 })
-        model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: nil)
+        model.open(origin: .move(sessionID: "ses"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: nil)
 
         let submit = Task { await model.submit() }
         #expect(await waitFor { model.state?.submitting == true && repository.requests.count == 1 })
@@ -268,7 +268,7 @@ struct WorktreeCreateModelTests {
 
     private func openV1(repository: FormWorktreeRepository = FormWorktreeRepository(), sourceBranch: String? = "main") -> WorktreeCreateModel {
         let model = WorktreeCreateModel(repository: repository, randomIndex: { _ in 0 })
-        model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v1, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: sourceBranch)
+        model.open(origin: .move(sessionID: "ses"), serverProtocol: .v1, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: sourceBranch)
         return model
     }
 
