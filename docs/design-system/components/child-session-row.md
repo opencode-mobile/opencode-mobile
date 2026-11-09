@@ -80,18 +80,3 @@ letter avatar and chevron are hidden from the accessibility tree.
 
 Shared semantics for layout, optional content, and tap behavior are aligned
 across iOS and Android. No intentional divergences for this component.
-
-## Completion Ledger
-
-- Public API and applicable states: complete (one layout; display-only or
-  feature-owned tap).
-- Token and typography mapping: complete; uses `childSessionRow.*` geometry
-  plus shared surface, text, and icon tokens with `type.heading` /
-  `type.caption`.
-- iOS and Android implementations: complete.
-- Gallery and previews: complete with interactive content and tappable
-  controls plus light/dark gallery theme support.
-- Parity and divergences: complete; none known.
-- Automated checks: Android unit tests for letter derivation and
-  accessibility-label composition; Session Chat mapping tests on both
-  platforms.

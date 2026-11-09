@@ -6544,14 +6544,6 @@ private final class SyncingTestMessageRepository: MessageRepository, @unchecked 
         try await fake.listMessages(sessionID: sessionID, directory: directory)
     }
 
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
-        try await fake.getMessage(sessionID: sessionID, messageID: messageID, directory: directory)
-    }
-
-    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
-        try await fake.sendMessage(sessionID: sessionID, text: text, directory: directory)
-    }
-
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
         try await fake.sendPromptAsync(sessionID: sessionID, options: options, directory: directory)
     }
@@ -6628,14 +6620,6 @@ private final class FakeObservingMessageRepository: MessageRepository, @unchecke
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         [Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: nil)]
-    }
-
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
-        fatalError()
-    }
-
-    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
-        fatalError()
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
@@ -6796,14 +6780,6 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
             throw MessageError.transport("load failed")
         }
         return messages
-    }
-
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
-        fatalError()
-    }
-
-    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
-        fatalError()
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {

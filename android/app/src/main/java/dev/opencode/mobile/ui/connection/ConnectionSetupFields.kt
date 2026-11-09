@@ -37,6 +37,7 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.PairingQRPayload
 import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeCodeSnippet
 import dev.opencode.mobile.ui.components.OpenCodeServerAddressInput
@@ -301,7 +302,7 @@ private fun CredentialSegmentControl(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(OpenCodeSmallShape)
                         .background(if (isSelected) selectedFill else Color.Transparent)
                         .clickable(
                             enabled = enabled,

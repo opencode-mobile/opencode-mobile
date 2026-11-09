@@ -129,12 +129,3 @@ reviewed via Top Bar gallery / home shell, not this entry.
 
 Shared layout and callbacks. Intentional material difference for glass vs raised
 surface is recorded in `../divergences.md`.
-
-## Completion Ledger
-
-- Public API and states: complete.
-- Token and typography mapping: complete via dock, fade, and row tokens.
-- iOS and Android implementations: complete.
-- Gallery and previews: complete for list + dock (no embedded top bar).
-- Parity and divergences: intentional glass materials documented.
-- Automated checks: covered by platform build/test for affected surfaces.

@@ -53,16 +53,3 @@ appearances.
 
 The public API, geometry, state meaning, actions, semantic roles, and
 accessibility meaning are shared. No intentional divergence is planned.
-
-## Completion Ledger
-
-- Public API and applicable states: complete.
-- Token mapping: complete; typography is not applicable for icon-only content.
-- iOS and Android implementations: complete.
-- Gallery entries and previews: complete.
-- Parity and divergences: complete; none known.
-- Automated checks: production iOS and Android builds and focused state tests
-  pass. The iOS screen UI test is enabled in the shared scheme. Android
-  instrumentation compilation is blocked by the pre-existing unrelated
-  `MainScreenTest` signature mismatch, so the Android native UI check remains
-  blocked.
