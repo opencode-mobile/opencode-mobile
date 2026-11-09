@@ -103,6 +103,7 @@ import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDeta
 import dev.opencode.mobile.ui.componentgallery.components.MessageNoteGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ModalGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OptionCardGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.PickerCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.PageIndicatorGalleryScreen
@@ -771,6 +772,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.SelectableCard ->
                                                             SelectableCardGalleryScreen()
                                                         ComponentGalleryEntryId.OptionCard -> OptionCardGalleryScreen()
+                                                        ComponentGalleryEntryId.PickerCard -> PickerCardGalleryScreen()
                                                         ComponentGalleryEntryId.ListGroup -> ListGroupGalleryScreen()
                                                         ComponentGalleryEntryId.SectionHeader -> SectionHeaderGalleryScreen()
                                                         ComponentGalleryEntryId.ReorderableList -> ReorderableListGalleryScreen()
