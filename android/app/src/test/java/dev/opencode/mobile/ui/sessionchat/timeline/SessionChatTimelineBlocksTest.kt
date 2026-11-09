@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.PresentationBlockId
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.text.UiText

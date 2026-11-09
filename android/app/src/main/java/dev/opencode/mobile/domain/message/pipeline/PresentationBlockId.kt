@@ -1,4 +1,4 @@
-package dev.opencode.mobile.ui.sessionchat
+package dev.opencode.mobile.domain.message
 
 /**
  * Deterministic presentation [blockID] encoding for Phase 5.
@@ -50,13 +50,4 @@ object PresentationBlockId {
 
     /** Unstructured fallback when displayable parts lack stable IDs. */
     fun messageFallback(messageId: String): String = "m:$messageId"
-}
-
-sealed class SessionChatTimelineBlocksResult {
-    data class Ok(
-        val blocks: List<SessionChatTimelineBlock>,
-    ) : SessionChatTimelineBlocksResult()
-
-    /** Displayable parts were missing stable server part IDs. */
-    data object MissingPartIds : SessionChatTimelineBlocksResult()
 }

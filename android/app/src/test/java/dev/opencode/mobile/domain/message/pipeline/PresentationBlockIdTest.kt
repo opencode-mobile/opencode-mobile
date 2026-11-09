@@ -1,4 +1,4 @@
-package dev.opencode.mobile.ui.sessionchat
+package dev.opencode.mobile.domain.message
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

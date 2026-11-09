@@ -64,7 +64,7 @@ import dev.opencode.mobile.ui.sessionchat.LatestAgentHint
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistorySource
-import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
+import dev.opencode.mobile.domain.message.PresentationBlockId
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerState

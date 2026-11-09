@@ -8,6 +8,9 @@ import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.PresentationBlockId
+import dev.opencode.mobile.domain.message.TimelineSegment
+import dev.opencode.mobile.domain.message.TimelineSegments
 import dev.opencode.mobile.domain.message.PromptSkill
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
@@ -425,8 +428,6 @@ data class SessionChatSkillUse(
 enum class ToolChipFamily { Explore, Change, Command, Agent, Skill }
 
 object SessionChatTimelineBlocks {
-    private val contextToolNames = setOf("read", "glob", "grep", "websearch")
-
     /**
      * Neutral copy for a tool the user stopped or declined (never the raw abort text). [declined]
      * is the domain's permission-denied flag; v2 sends the deny note, not a "rejected" text.
@@ -543,121 +544,41 @@ object SessionChatTimelineBlocks {
             }
         }
 
-        val allowToolCards = role == MessageRole.Assistant
+        val segments =
+            TimelineSegments.segments(role, parts, collapseConsecutiveToolCalls)
+                ?: return SessionChatTimelineBlocksResult.MissingPartIds
         val blocks = mutableListOf<SessionChatTimelineBlock>()
-        val pendingText = mutableListOf<Pair<String, String>>()
-
-        fun flushText(): Boolean {
-            if (pendingText.isEmpty()) return true
-            val merged = pendingText.joinToString("\n") { it.second }
-            val ids = pendingText.map { it.first }
-            pendingText.clear()
-            if (merged.isNotEmpty()) {
-                blocks +=
-                    SessionChatTimelineBlock.Text(
-                        blockID = PresentationBlockId.mergedText(ids),
-                        text = merged,
-                    )
-            }
-            return true
-        }
-
-        var index = 0
-        while (index < parts.size) {
-            when (val part = parts[index]) {
-                is MessagePart.Text -> {
-                    if (part.isDisplayable) {
-                        val trimmed = part.text.trim()
-                        if (trimmed.isNotEmpty()) {
-                            val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                            pendingText += partId to trimmed
-                        }
-                    }
-                    index += 1
+        for (segment in segments) {
+            when (segment) {
+                is TimelineSegment.Text ->
+                    blocks += SessionChatTimelineBlock.Text(blockID = segment.blockId, text = segment.text)
+                is TimelineSegment.ToolGroup -> {
+                    val group = toToolGroup(segment.tools) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                    blocks += group
+                    toolGallery(group)?.let { blocks += it }
                 }
-                is MessagePart.Tool -> {
-                    if (!allowToolCards || !isVisibleTool(part)) {
-                        index += 1
-                        continue
-                    }
-                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    if (isGroupableTool(part, collapseConsecutiveToolCalls)) {
-                        val groupTools = mutableListOf<MessagePart.Tool>()
-                        var lookAhead = index
-                        while (lookAhead < parts.size) {
-                            val candidatePart = parts[lookAhead]
-                            if (isTransparentPart(candidatePart)) {
-                                lookAhead += 1
-                                continue
-                            }
-                            val candidate = candidatePart as? MessagePart.Tool ?: break
-                            if (!isGroupableTool(candidate, collapseConsecutiveToolCalls)) break
-                            groupTools += candidate
-                            lookAhead += 1
-                        }
-                        if (groupTools.size >= 2) {
-                            val group = toToolGroup(groupTools) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                            blocks += group
-                            toolGallery(group)?.let { blocks += it }
-                            index = lookAhead
-                        } else {
-                            val block = toToolBlock(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                            blocks += block
-                            toolGallery(block)?.let { blocks += it }
-                            index += 1
-                        }
-                    } else {
-                        val block = toToolBlock(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                        blocks += block
-                        toolGallery(block)?.let { blocks += it }
-                        index += 1
-                    }
+                is TimelineSegment.Tool -> {
+                    val block = toToolBlock(segment.tool) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                    blocks += block
+                    toolGallery(block)?.let { blocks += it }
                 }
-                is MessagePart.File -> {
-                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    var lookAhead = index
-                    val run = mutableListOf<SessionChatAttachmentItem>()
-                    while (lookAhead < parts.size) {
-                        val file = parts[lookAhead] as? MessagePart.File ?: break
-                        run += AttachmentPresentationMapper.from(file)
-                        lookAhead += 1
-                    }
-                    blocks += attachmentBlocks(run)
-                    index = lookAhead
+                is TimelineSegment.Files ->
+                    blocks += attachmentBlocks(segment.files.map(AttachmentPresentationMapper::from))
+                is TimelineSegment.Reasoning -> {
+                    val part = segment.part
+                    blocks +=
+                        SessionChatTimelineBlock.Reasoning(
+                            blockID = PresentationBlockId.direct(segment.partId),
+                            text = ThoughtPartChrome.displayText(part),
+                            isStreaming = part.isStreaming,
+                            durationMs = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs),
+                        )
                 }
-                is MessagePart.Reasoning -> {
-                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    // Live thought is footer chrome (Thinking); only settled thoughts become rows.
-                    if (ThoughtPartChrome.isVisible(part) && !part.isStreaming) {
-                        val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                        val text = ThoughtPartChrome.displayText(part)
-                        blocks +=
-                            SessionChatTimelineBlock.Reasoning(
-                                blockID = PresentationBlockId.direct(partId),
-                                text = text,
-                                isStreaming = part.isStreaming,
-                                durationMs = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs),
-                            )
-                    }
-                    index += 1
-                }
-                is MessagePart.Compaction -> {
-                    // v1 marks compaction on the user message that asked for it;
-                    // only the v2 compaction item (an assistant row) gets a marker.
-                    if (allowToolCards) {
-                        if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                        blocks += compactionCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                    }
-                    index += 1
-                }
-                is MessagePart.Notice -> {
-                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    blocks += noticeBlock(part)
-                    index += 1
-                }
+                is TimelineSegment.Compaction ->
+                    blocks += compactionCard(segment.part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                is TimelineSegment.Notice -> blocks += noticeBlock(segment.part)
             }
         }
-        if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
         return SessionChatTimelineBlocksResult.Ok(blocks)
     }
 
@@ -1315,7 +1236,7 @@ object SessionChatTimelineBlocks {
         when {
             isChildSessionTool(name) -> ToolChipFamily.Agent
             name == "skill" -> ToolChipFamily.Skill
-            name in contextToolNames || name == "webfetch" -> ToolChipFamily.Explore
+            name in TimelineSegments.contextToolNames || name == "webfetch" -> ToolChipFamily.Explore
             name == "edit" || name == "write" || name == "apply_patch" || name == "patch" -> ToolChipFamily.Change
             else -> ToolChipFamily.Command
         }
@@ -1938,41 +1859,9 @@ object SessionChatTimelineBlocks {
         return duration.takeIf { it >= 0 }
     }
 
-    private fun isLiveReasoning(part: MessagePart.Reasoning): Boolean = ThoughtPartChrome.isVisible(part)
-
     private fun isVisibleTool(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isVisibleOnTimeline(tool)
 
-    /**
-     * Parts that never become timeline blocks. Grouping looks through them so
-     * hidden todos, empty text, and compaction markers do not split a visible
-     * tool run (web filters to renderable parts before grouping).
-     */
-    private fun isTransparentPart(part: MessagePart): Boolean =
-        when (part) {
-            is MessagePart.Compaction -> true
-            is MessagePart.Notice -> false
-            is MessagePart.Text -> !part.isDisplayable || part.text.isBlank()
-            is MessagePart.Tool -> !isVisibleTool(part)
-            is MessagePart.File -> false
-            is MessagePart.Reasoning -> !isLiveReasoning(part)
-        }
-
-    private fun isContextTool(toolName: String): Boolean = toolName.lowercase() in contextToolNames
-
-    /**
-     * A visible tool can join a group. Child-session tools (`task` / v2
-     * `subagent`) never group so their child-session tap stays available; when
-     * collapse is on every other visible tool groups, otherwise only context
-     * tools do.
-     */
-    private fun isGroupableTool(
-        tool: MessagePart.Tool,
-        collapse: Boolean,
-    ): Boolean {
-        if (isChildSessionTool(tool.toolName)) return false
-        if (collapse) return true
-        return isContextTool(tool.toolName)
-    }
+    private fun isContextTool(toolName: String): Boolean = TimelineSegments.isContextTool(toolName)
 
     private fun toToolGroup(tools: List<MessagePart.Tool>): SessionChatTimelineBlock.ToolGroup? {
         val memberIds = tools.map { it.id ?: return null }
@@ -2341,10 +2230,7 @@ object SessionChatTimelineBlocks {
             title.contains(" – ")
     }
 
-    private fun isChildSessionTool(toolName: String): Boolean {
-        val name = toolName.lowercase()
-        return name == "task" || name == "subagent"
-    }
+    private fun isChildSessionTool(toolName: String): Boolean = TimelineSegments.isChildSessionTool(toolName)
 
     private fun childSessionId(tool: MessagePart.Tool): String? = tool.childSessionId
 
