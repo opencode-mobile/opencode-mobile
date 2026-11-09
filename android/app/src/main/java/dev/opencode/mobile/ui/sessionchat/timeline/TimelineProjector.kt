@@ -394,7 +394,7 @@ object TimelineProjector {
             is SessionChatTimelineBlock.ImageGallery ->
                 "ig:${block.blockID}:${block.images.size}"
             is SessionChatTimelineBlock.ToolCard ->
-                "c:${block.blockID}:${block.errorText != null}:${block.additions}:${block.deletions}"
+                "c:${block.blockID}:${block.errorText != null}:${block.noteText != null}:${block.additions}:${block.deletions}"
             is SessionChatTimelineBlock.ToolGroup ->
                 "g:${block.blockID}:${block.count}:${block.errorText != null}"
             is SessionChatTimelineBlock.ChildSessionRow ->
@@ -418,7 +418,7 @@ object TimelineProjector {
     private fun stepParagraphChipFingerprint(block: SessionChatTimelineBlock.StepParagraph): String =
         block.chips.joinToString(",") { chip ->
             "${chip.status.ordinal}:${chip.additions}:${chip.deletions}:${chip.trailingText != null}"
-        } + ":${block.errorLines.size}"
+        } + ":${block.errorLines.size}:${block.noteLines.size}"
 
     /** Step count, status, branch and detail presence change rail rows and their height. */
     private fun stepRailFingerprint(block: SessionChatTimelineBlock.StepRail): String =
@@ -696,7 +696,7 @@ object TimelineProjector {
             is SessionChatTimelineBlock.ImageGallery ->
                 "ig:${block.blockID}:${block.images.size}"
             is SessionChatTimelineBlock.ToolCard ->
-                "c:${block.blockID}:${block.errorText != null}:${block.additions}:${block.deletions}"
+                "c:${block.blockID}:${block.errorText != null}:${block.noteText != null}:${block.additions}:${block.deletions}"
             is SessionChatTimelineBlock.ToolGroup ->
                 "g:${block.blockID}:${block.count}:${block.errorText != null}"
             is SessionChatTimelineBlock.ChildSessionRow ->

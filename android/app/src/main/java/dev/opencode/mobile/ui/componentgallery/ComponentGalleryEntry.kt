@@ -70,6 +70,7 @@ enum class ComponentGalleryEntryId {
     TreeRow,
     FileTabs,
     Button,
+    SplitButton,
     TextInput,
     ServerAddressInput,
     EmptyState,
@@ -189,6 +190,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.Button,
             title = "Button",
             description = "Reusable action component with text and icon variants.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SplitButton,
+            title = "Split Button",
+            description = "Compact text button with a ▾ menu half; long-press opens the menu too.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(

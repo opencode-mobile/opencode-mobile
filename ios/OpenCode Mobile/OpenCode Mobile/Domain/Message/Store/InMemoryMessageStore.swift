@@ -607,6 +607,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     timeEndEpochMs: tool.timeEndEpochMs,
                     isInterrupted: tool.isInterrupted,
                     isMalformed: tool.isMalformed,
+                    decline: tool.decline,
                     images: tool.images
                 )
             )
@@ -1173,6 +1174,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         timeEndEpochMs: tool.timeEndEpochMs,
                         isInterrupted: tool.isInterrupted,
                         isMalformed: tool.isMalformed,
+                        decline: tool.decline,
                         images: tool.images
                     )
                 )
@@ -1202,6 +1204,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         timeEndEpochMs: prior.timeEndEpochMs ?? next.timeEndEpochMs,
                         isInterrupted: prior.isInterrupted,
                         isMalformed: prior.isMalformed,
+                        decline: prior.decline,
                         images: prior.images
                     )
                 )
@@ -1225,6 +1228,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     timeEndEpochMs: next.timeEndEpochMs ?? prior.timeEndEpochMs,
                     isInterrupted: next.isInterrupted,
                     isMalformed: next.isMalformed || prior.isMalformed,
+                    decline: next.decline ?? (next.isInterrupted ? prior.decline : nil),
                     // Images arrive once, with the settled call; a later update without them keeps them.
                     images: next.images.isEmpty ? prior.images : next.images
                 )

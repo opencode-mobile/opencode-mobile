@@ -1072,6 +1072,7 @@ struct SessionChatView: View {
             .modifier(promptChordPublisher(.promptPrimary))
             .modifier(promptChordPublisher(.promptAlwaysAllow))
             .modifier(promptChordPublisher(.promptReject))
+            .modifier(promptChordPublisher(.promptRejectWithNote))
             // Esc twice interrupts the running turn, like the TUI; same path as Stop.
             .onChange(of: isOnScreen && keyboardInterruptAvailable, initial: true) { _, available in
                 OpenCodeEscapeRouter.shared.setInterrupt(
@@ -1752,7 +1753,9 @@ struct SessionChatView: View {
                     },
                     submitting: viewModel.uiState.permissionSubmitting,
                     actionsEnabled: viewModel.uiState.canMutate,
-                    errorMessage: viewModel.uiState.permissionErrorMessage
+                    errorMessage: viewModel.uiState.permissionErrorMessage,
+                    note: viewModel.uiState.permissionNote.flatMap { $0.requestID == request.id ? $0.text : nil },
+                    otherPendingInSessionCount: viewModel.uiState.permissionOtherPendingInSessionCount
                 )
             )
         } else if kind == .question, let request = viewModel.uiState.questionRequest {
@@ -1975,6 +1978,14 @@ struct SessionChatView: View {
             Task { await viewModel.denyPermission(requestID: requestID, sessionID: sessionID) }
         case let .alwaysAllowPermission(requestID, sessionID):
             Task { await viewModel.alwaysAllowPermission(requestID: requestID, sessionID: sessionID) }
+        case let .openPermissionNote(requestID, sessionID):
+            viewModel.openPermissionNote(requestID: requestID, sessionID: sessionID)
+        case let .permissionNoteChanged(requestID, text):
+            viewModel.updatePermissionNote(requestID: requestID, text: text)
+        case let .cancelPermissionNote(requestID):
+            viewModel.cancelPermissionNote(requestID: requestID)
+        case let .sendPermissionNote(requestID, sessionID):
+            Task { await viewModel.sendPermissionNote(requestID: requestID, sessionID: sessionID) }
         case let .hidePermission(requestID):
             viewModel.hidePermissionDock(requestID: requestID)
         case let .hideQuestion(requestID):

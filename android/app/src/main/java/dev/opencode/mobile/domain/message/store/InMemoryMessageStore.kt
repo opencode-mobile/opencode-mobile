@@ -1086,6 +1086,8 @@ class InMemoryMessageStore
                             timeEndEpochMs = incoming.timeEndEpochMs ?: existing.timeEndEpochMs,
                             isInterrupted = incoming.isInterrupted,
                             isMalformed = incoming.isMalformed || existing.isMalformed,
+                            isDeclined = incoming.isDeclined,
+                            userNote = incoming.userNote ?: existing.userNote.takeIf { incoming.isDeclined },
                             // Only the terminal update carries files; a later bare update keeps them.
                             images = incoming.images.ifEmpty { existing.images },
                         )

@@ -222,8 +222,9 @@ class DefaultSessionRepository
             permissionId: String,
             decision: PermissionDecision,
             directory: String?,
+            message: String?,
         ): Boolean =
-            mapped { remote.respondToPermission(sessionId, permissionId, decision, directory) }
+            mapped { remote.respondToPermission(sessionId, permissionId, decision, directory, message) }
 
         override suspend fun replyToQuestion(
             requestId: String,

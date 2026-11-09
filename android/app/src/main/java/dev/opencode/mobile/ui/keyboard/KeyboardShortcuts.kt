@@ -78,6 +78,15 @@ enum class KeyboardShortcutAction(
     /** Ctrl+Backspace: Deny a permission; Dismiss a question. */
     PromptReject(titleRes = R.string.keyboard_shortcuts_deny, keyCode = KeyEvent.KEYCODE_DEL, ctrl = true, group = KeyboardShortcutGroupKind.Prompt),
 
+    /** Ctrl+Alt+Backspace: open "Deny with a note" on a permission (#946). */
+    PromptRejectWithNote(
+        titleRes = R.string.keyboard_shortcuts_deny_with_note,
+        keyCode = KeyEvent.KEYCODE_DEL,
+        ctrl = true,
+        alt = true,
+        group = KeyboardShortcutGroupKind.Prompt,
+    ),
+
     /** Ctrl+,: wherever Settings is reachable. */
     Settings(titleRes = R.string.keyboard_shortcuts_settings, keyCode = KeyEvent.KEYCODE_COMMA, ctrl = true, group = KeyboardShortcutGroupKind.Go),
 
@@ -152,7 +161,7 @@ enum class KeyboardShortcutTextFocus {
     None,
     Composer,
 
-    /** The "Type your own answer" field of a question prompt. */
+    /** The "Type your own answer" field of a question prompt, or a permission's deny note. */
     CustomAnswer,
     OtherTextField,
 }
@@ -192,7 +201,9 @@ object KeyboardShortcutRules {
         when (focusedInput) {
             OpenCodeFocusedTextInput.Field -> KeyboardShortcutTextFocus.OtherTextField
             OpenCodeFocusedTextInput.SessionComposer -> KeyboardShortcutTextFocus.Composer
-            OpenCodeFocusedTextInput.QuestionCustomAnswer -> KeyboardShortcutTextFocus.CustomAnswer
+            OpenCodeFocusedTextInput.QuestionCustomAnswer,
+            OpenCodeFocusedTextInput.PermissionNote,
+            -> KeyboardShortcutTextFocus.CustomAnswer
             null ->
                 if (nativeTextEditorFocused) {
                     KeyboardShortcutTextFocus.OtherTextField

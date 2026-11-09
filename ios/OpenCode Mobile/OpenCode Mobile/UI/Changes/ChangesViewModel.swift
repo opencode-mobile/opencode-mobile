@@ -514,7 +514,7 @@ private struct PreviewChangesRepository: SessionRepository {
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool { false }
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { false }
     func unrevertSession(id: String) async throws -> Bool { false }
-    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool { false }
+    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?, message: String?) async throws -> Bool { false }
 }
 #endif
 

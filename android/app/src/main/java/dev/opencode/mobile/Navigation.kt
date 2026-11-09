@@ -74,6 +74,7 @@ import dev.opencode.mobile.ui.componentgallery.components.BackgroundWorkPillGall
 import dev.opencode.mobile.ui.componentgallery.components.BottomFadeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SplitButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ShellRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TaskRowGalleryScreen
@@ -793,6 +794,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.TreeRow -> TreeRowGalleryScreen()
                                                         ComponentGalleryEntryId.FileTabs -> FileTabsGalleryScreen()
                                                         ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
+                                                        ComponentGalleryEntryId.SplitButton -> SplitButtonGalleryScreen()
                                                         ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
                                                         ComponentGalleryEntryId.ServerAddressInput ->
                                                             ServerAddressInputGalleryScreen()

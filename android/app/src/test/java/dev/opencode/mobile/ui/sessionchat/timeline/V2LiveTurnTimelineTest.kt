@@ -434,6 +434,73 @@ class V2LiveTurnTimelineTest {
     }
 
     @Test
+    fun deniedWithNote_isDeclinedWithTheNote_liveAndAfterReload() {
+        apply(prompt("u1", "Push the branch.", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val fields = """"assistantMessageID":"a1","id":"call_9","name":"bash""""
+        apply(
+            listOf(
+                envelope("session.tool.called", 1_121, """$fields,"input":{"command":"git push"}"""),
+                envelope(
+                    "session.tool.failed",
+                    1_200,
+                    """$fields,"error":{"type":"permission.rejected","message":"Run the tests first"}""",
+                ),
+            ),
+        )
+
+        val live = liveTool("a1")
+        assertTrue(live.isInterrupted)
+        assertTrue(live.isDeclined)
+        assertEquals("Run the tests first", live.userNote)
+        val card = toolCard("a1")
+        assertTrue(card.isInterrupted)
+        assertEquals("Declined", card.errorText?.english())
+        assertEquals("Your note: Run the tests first", card.noteText?.english())
+        val paragraph = chipBodies(store.messages(SESSION))[1].blocks.stepParagraphs().single()
+        assertTrue(paragraph.errorLines.isEmpty())
+        assertEquals(listOf("Your note: Run the tests first"), paragraph.noteLines.map { it.english() })
+
+        val rest =
+            restMessages(
+                """
+                [
+                  {"id":"u1","type":"user","text":"Push the branch.","time":{"created":1000}},
+                  {"id":"a1","type":"assistant",
+                   "content":[{"type":"tool","id":"call_9","name":"bash","state":{"status":"error","input":{"command":"git push"},
+                      "error":{"type":"permission.rejected","message":"Run the tests first"}}}],
+                   "time":{"created":1100,"completed":1200}}
+                ]
+                """,
+            )
+        val restTool = rest[1].parts.filterIsInstance<MessagePart.Tool>().single()
+        assertTrue(restTool.isInterrupted)
+        assertTrue(restTool.isDeclined)
+        assertEquals("Run the tests first", restTool.userNote)
+        val restCard = toolCards(rest[1]).single()
+        assertEquals("Declined", restCard.errorText?.english())
+        assertEquals("Your note: Run the tests first", restCard.noteText?.english())
+    }
+
+    @Test
+    fun plainDeny_isDeclinedWithoutANote() {
+        apply(prompt("u1", "Push the branch.", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val fields = """"assistantMessageID":"a1","id":"call_9","name":"bash""""
+        apply(
+            listOf(
+                envelope("session.tool.called", 1_121, """$fields,"input":{"command":"git push"}"""),
+                envelope("session.tool.failed", 1_200, """$fields,"error":{"type":"permission.rejected","message":""}"""),
+            ),
+        )
+
+        val card = toolCard("a1")
+        assertTrue(card.isInterrupted)
+        assertEquals("Declined", card.errorText?.english())
+        assertEquals(null, card.noteText)
+    }
+
+    @Test
     fun streamingShellArguments_growOnThePendingCardUntilCalledSettlesThem() {
         apply(prompt("u1", "List files", at = 1_000))
         apply(step("a1", at = 1_100))

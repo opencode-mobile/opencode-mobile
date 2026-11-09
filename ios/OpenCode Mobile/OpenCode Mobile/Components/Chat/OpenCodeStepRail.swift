@@ -15,6 +15,7 @@ enum OpenCodeStepRailStatus: String, CaseIterable, Sendable {
 /// in; a fold row is an item of its own.
 enum OpenCodeStepRailItem: Equatable, Sendable, Identifiable {
     /// A tool or thought: one line with an optional detail, diff stat and live elapsed.
+    /// `note` is a muted second line, such as the note the user sent when denying the tool.
     case step(
         id: String,
         title: String,
@@ -25,7 +26,8 @@ enum OpenCodeStepRailItem: Equatable, Sendable, Identifiable {
         startedAtMs: Int64? = nil,
         endedAtMs: Int64? = nil,
         isBranch: Bool = false,
-        isActionable: Bool = true
+        isActionable: Bool = true,
+        note: String? = nil
     )
     /// A child session: a nested card on the rail with agent name, elapsed and detail line.
     case childSession(
@@ -45,7 +47,7 @@ enum OpenCodeStepRailItem: Equatable, Sendable, Identifiable {
 
     var id: String {
         switch self {
-        case .step(let id, _, _, _, _, _, _, _, _, _): id
+        case .step(let id, _, _, _, _, _, _, _, _, _, _): id
         case .childSession(let id, _, _, _, _, _, _, _): id
         case .fold: "fold"
         case .thinking: "thinking"
@@ -109,7 +111,7 @@ struct OpenCodeStepRail: View {
 
 private extension OpenCodeStepRailItem {
     var joinsRunning: Bool {
-        guard case .step(_, _, _, let status, _, _, _, _, _, _) = self else { return false }
+        guard case .step(_, _, _, let status, _, _, _, _, _, _, _) = self else { return false }
         return status == .running || status == .pending
     }
 }
@@ -188,7 +190,7 @@ private struct StepRailRow: View {
     let onChildSessionTap: (String) -> Void
 
     private var isBranch: Bool {
-        if case .step(_, _, _, _, _, _, _, _, let isBranch, _) = item { return isBranch }
+        if case .step(_, _, _, _, _, _, _, _, let isBranch, _, _) = item { return isBranch }
         return false
     }
 
@@ -198,7 +200,7 @@ private struct StepRailRow: View {
 
     private var action: (() -> Void)? {
         switch item {
-        case .step(let id, _, _, _, _, _, _, _, _, let actionable):
+        case .step(let id, _, _, _, _, _, _, _, _, let actionable, _):
             actionable ? { onStepTap(id) } : nil
         case .childSession(let id, _, _, _, _, _, _, let actionable):
             actionable ? { onChildSessionTap(id) } : nil
@@ -243,7 +245,7 @@ private struct StepRailRow: View {
 
     private var dot: StepRailDot.Tone {
         switch item {
-        case .step(_, _, _, let status, _, _, _, _, _, _),
+        case .step(_, _, _, let status, _, _, _, _, _, _, _),
              .childSession(_, _, _, let status, _, _, _, _):
             StepRailDot.Tone(status)
         case .fold(_, let status):
@@ -256,10 +258,11 @@ private struct StepRailRow: View {
     @ViewBuilder
     private var content: some View {
         switch item {
-        case let .step(_, title, detail, status, additions, deletions, startedAtMs, endedAtMs, _, _):
+        case let .step(_, title, detail, status, additions, deletions, startedAtMs, endedAtMs, _, _, note):
             StepRailStepLine(
                 title: title,
                 detail: detail,
+                note: note,
                 status: status,
                 additions: additions,
                 deletions: deletions,
@@ -408,6 +411,7 @@ private struct StepRailDot: View {
 private struct StepRailStepLine: View {
     let title: String
     let detail: String?
+    let note: String?
     let status: OpenCodeStepRailStatus
     let additions: Int?
     let deletions: Int?
@@ -432,6 +436,24 @@ private struct StepRailStepLine: View {
     }
 
     private func line(elapsed: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            mainLine(elapsed: elapsed)
+            if let note, !note.isEmpty {
+                Text(note)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeaker)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            stepRailAccessibilityLabel(title: title, detail: detail, status: status, elapsed: elapsed, note: note)
+        )
+    }
+
+    private func mainLine(elapsed: String?) -> some View {
         HStack(spacing: StepRailMetrics.contentSpacing) {
             HStack(spacing: 6) {
                 Text(title)
@@ -474,10 +496,6 @@ private struct StepRailStepLine: View {
                     .fixedSize()
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            stepRailAccessibilityLabel(title: title, detail: detail, status: status, elapsed: elapsed)
-        )
     }
 
     private var diffText: Text? {
@@ -561,12 +579,13 @@ private struct StepRailChildSessionCard: View {
     }
 }
 
-/// Title, detail, status word and elapsed time, comma-separated.
+/// Title, detail, status word, elapsed time and note, comma-separated.
 func stepRailAccessibilityLabel(
     title: String,
     detail: String?,
     status: OpenCodeStepRailStatus,
-    elapsed: String?
+    elapsed: String?,
+    note: String? = nil
 ) -> String {
     let statusWord: String =
         switch status {
@@ -576,7 +595,7 @@ func stepRailAccessibilityLabel(
         case .failed: String(localized: "component.activity_status.failed", defaultValue: "failed")
         case .interrupted: String(localized: "component.activity_status.stopped", defaultValue: "stopped")
         }
-    return [title, detail, statusWord, elapsed]
+    return [title, detail, statusWord, elapsed, note]
         .compactMap { $0 }
         .filter { !$0.isEmpty }
         .joined(separator: ", ")
@@ -608,6 +627,10 @@ func stepRailAccessibilityLabel(
                     .fold(count: 3, status: .failed),
                     .step(id: "5", title: "TimelineBlocks.swift", status: .completed, additions: 18, deletions: 4),
                     .step(id: "6", title: "Ran swift test", detail: "2 failures", status: .failed),
+                    .step(
+                        id: "6b", title: "Ran npm test", detail: "Declined", status: .interrupted,
+                        note: "Your note: Run the tests with --watch=false instead"
+                    ),
                     .step(id: "7", title: "Thought · 2.1s", status: .completed),
                 ],
                 isLive: true,

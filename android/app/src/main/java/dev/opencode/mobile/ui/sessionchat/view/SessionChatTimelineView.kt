@@ -70,6 +70,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
@@ -1119,6 +1120,7 @@ private fun AssistantMessageContent(
                             additions = block.additions,
                             deletions = block.deletions,
                             errorText = block.errorText?.resolve(),
+                            noteText = block.noteText?.resolve(),
                             onClick = toolCardAction(block),
                         )
                     is SessionChatTimelineBlock.ToolGroup ->
@@ -1719,6 +1721,16 @@ private fun StepParagraphBlock(
                 text = line.resolve(),
                 style = MaterialTheme.typography.bodySmall,
                 color = openCodeColor("error"),
+                modifier = Modifier.padding(horizontal = StepParagraphTextPaddingHorizontal),
+            )
+        }
+        block.noteLines.forEach { line ->
+            Text(
+                text = line.resolve(),
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-weak"),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = StepParagraphTextPaddingHorizontal),
             )
         }

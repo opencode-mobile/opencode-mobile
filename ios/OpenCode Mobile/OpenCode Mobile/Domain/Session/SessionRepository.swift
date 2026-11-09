@@ -43,7 +43,15 @@ protocol SessionRepository: Sendable {
     /// explicit commit; v1 applies the revert itself when the next prompt arrives, so it has
     /// nothing to commit.
     func commitRevert(id: String) async throws -> Bool
-    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool
+    /// Answers a permission request. `message` is the note sent with a `.deny` (the agent gets it
+    /// as the tool error and keeps going); it is trimmed, and blank or non-deny notes are dropped.
+    func respondToPermission(
+        sessionID: String,
+        permissionID: String,
+        decision: PermissionDecision,
+        directory: String?,
+        message: String?
+    ) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?, questions: [QuestionInfo]) async throws -> Bool
@@ -129,6 +137,21 @@ extension SessionRepository {
 
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool {
         try await respondToPermission(sessionID: sessionID, permissionID: permissionID, decision: decision, directory: nil)
+    }
+
+    func respondToPermission(
+        sessionID: String,
+        permissionID: String,
+        decision: PermissionDecision,
+        directory: String?
+    ) async throws -> Bool {
+        try await respondToPermission(
+            sessionID: sessionID,
+            permissionID: permissionID,
+            decision: decision,
+            directory: directory,
+            message: nil
+        )
     }
 
     func replyToQuestion(questionID: String, answers: [[String]]) async throws -> Bool {
@@ -323,14 +346,16 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool {
         try await run {
             try await remote.respondToPermission(
                 sessionID: sessionID,
                 permissionID: permissionID,
                 decision: decision,
-                directory: directory
+                directory: directory,
+                message: message
             )
         }
     }

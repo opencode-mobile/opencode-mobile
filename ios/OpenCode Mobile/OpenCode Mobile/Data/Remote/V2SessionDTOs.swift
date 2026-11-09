@@ -196,6 +196,13 @@ nonisolated struct V2PermissionSourceDTO: Decodable, Sendable {
 
 nonisolated struct V2PermissionReplyRequestDTO: Encodable, Sendable {
     let decision: String
+    /// Note sent with a `reject`. The v2 body allows no extra properties, so the key is left out when nil.
+    let message: String?
+
+    init(decision: String, message: String? = nil) {
+        self.decision = decision
+        self.message = message
+    }
 }
 
 nonisolated struct V2CompactSessionRequestDTO: Encodable, Sendable {

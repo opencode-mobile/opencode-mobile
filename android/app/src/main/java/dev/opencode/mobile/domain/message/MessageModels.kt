@@ -187,6 +187,10 @@ sealed class MessagePart {
         val isInterrupted: Boolean = false,
         /** The model emitted a tool call the server could not run (`executed: false`). */
         val isMalformed: Boolean = false,
+        /** The user denied this call's permission (implies [isInterrupted]). */
+        val isDeclined: Boolean = false,
+        /** The note the user denied it with ("Deny with a note"); null for a plain deny. */
+        val userNote: String? = null,
         /**
          * Images the tool returned (v1 `attachments`, v2 `content[type=file]`), in order. Only
          * images the app can show; other returned files are dropped. Each carries its data URL.

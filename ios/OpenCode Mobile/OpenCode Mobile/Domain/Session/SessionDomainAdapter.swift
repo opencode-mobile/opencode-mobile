@@ -185,6 +185,15 @@ nonisolated struct SessionDomainAdapter: Sendable {
         }
     }
 
+    /// The note sent with a reply: only a deny carries one, trimmed, and a blank note is no note.
+    func permissionReplyMessage(_ message: String?, decision: PermissionDecision) -> String? {
+        guard decision == .deny,
+              let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty
+        else { return nil }
+        return trimmed
+    }
+
     func permissionRequest(from dto: PermissionRequestDTO) -> PermissionRequest {
         PermissionRequest(
             id: dto.id,

@@ -213,6 +213,7 @@ internal fun SessionChatToolGroupScreen(
                         additions = card.additions,
                         deletions = card.deletions,
                         errorText = card.errorText?.resolve(),
+                        noteText = card.noteText?.resolve(),
                         onClick =
                             toolGroupMemberOnClick(
                                 card = card,

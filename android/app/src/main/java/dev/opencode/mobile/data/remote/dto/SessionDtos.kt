@@ -90,6 +90,8 @@ data class RevertSessionRequestDto(
 @Serializable
 data class PermissionResponseRequestDto(
     val reply: String,
+    /** Deny with a note: the model gets it as the tool error and keeps going. Omitted when null. */
+    val message: String? = null,
 )
 
 @Serializable

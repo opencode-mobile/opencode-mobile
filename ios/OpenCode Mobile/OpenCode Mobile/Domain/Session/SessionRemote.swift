@@ -144,13 +144,15 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool {
         try await selected().respondToPermission(
             sessionID: sessionID,
             permissionID: permissionID,
             decision: decision,
-            directory: directory
+            directory: directory,
+            message: message
         )
     }
 

@@ -512,7 +512,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .attachment(let id, let file):
                 "a:\(id):\(file.id):\(file.previewData != nil)"
             case .toolCard(let id, let card):
-                "c:\(id):\(card.errorText != nil):\(card.additions ?? -1):\(card.deletions ?? -1)"
+                "c:\(id):\(card.errorText != nil):\(card.declineNote != nil):\(card.additions ?? -1):\(card.deletions ?? -1)"
             case .toolGroup(let id, let group):
                 "g:\(id):\(group.count):\(group.errorText != nil)"
             case .childSessionRow(let id, let row):
@@ -520,14 +520,14 @@ nonisolated enum SessionChatTimelineProjector {
             case .reasoning(let id, _, _, _):
                 "n:\(id)"
             case .stepParagraph(let id, let paragraph):
-                "s:\(id):\(paragraph.text != nil):\(paragraph.renderedMarkdown != nil):\(paragraph.errorLines.count):"
+                "s:\(id):\(paragraph.text != nil):\(paragraph.renderedMarkdown != nil):\(paragraph.errorLines.count):\(paragraph.declineNoteLines.count):"
                     + paragraph.chips.map {
                         "\($0.status.rawValue)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
                     }.joined(separator: ",")
             case .stepRail(let id, let rail):
                 "sr:\(id):"
                     + rail.steps.map {
-                        "\($0.id)/\($0.status.rawValue)/\($0.isBranch)/\($0.detail != nil)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
+                        "\($0.id)/\($0.status.rawValue)/\($0.isBranch)/\($0.detail != nil)/\($0.card?.declineNote != nil)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
                     }.joined(separator: ",")
             case .activityCard(let id, let card):
                 "ac:\(id):"

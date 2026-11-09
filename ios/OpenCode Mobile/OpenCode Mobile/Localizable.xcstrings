@@ -1821,6 +1821,85 @@
         }
       }
     },
+    "component.composer.deny_note_also_denies" : {
+      "comment" : "%lld counts the other waiting permission requests of the session that the deny also rejects.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Also denies %lld other waiting request."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Also denies %lld other waiting requests."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "component.composer.deny_note_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tell OpenCode what to do differently"
+          }
+        }
+      }
+    },
+    "component.composer.deny_options" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More deny options"
+          }
+        }
+      }
+    },
+    "component.composer.deny_with_note_menu" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deny with a note…"
+          }
+        }
+      }
+    },
+    "component.composer.deny_with_note_menu_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tell the agent what to do instead"
+          }
+        }
+      }
+    },
+    "component.composer.deny_with_note_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deny with a note"
+          }
+        }
+      }
+    },
     "component.composer.dictate" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6116,6 +6195,17 @@
         }
       }
     },
+    "keyboard_shortcuts.deny_with_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deny with a Note"
+          }
+        }
+      }
+    },
     "keyboard_shortcuts.dismiss_question" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6234,6 +6324,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Search Sessions"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.send_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Note"
           }
         }
       }
@@ -13369,6 +13470,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unknown tool"
+          }
+        }
+      }
+    },
+    "tool.user_note" : {
+      "comment" : "%@ is the note the user sent when denying the tool's permission.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your note: %@"
           }
         }
       }
