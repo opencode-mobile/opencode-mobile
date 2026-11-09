@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
-import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.SilentWorldSignals
 import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.message.DisplayMessagePreparing
@@ -139,7 +138,6 @@ class PlaygroundSession(
             sessionTodoLiveStore = PlaygroundTodoStore(world),
             sessionStatusLiveStore = PlaygroundSessionStatusStore(world),
             foregroundEventStream = eventStream,
-            eventDomainAdapter = EventDomainAdapter(json),
             connectionSessionCoordinator = connectionSessionCoordinator,
             sessionModelSelectionStore = modelSelectionStore,
             composerDraftStore = draftStore,

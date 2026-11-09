@@ -32,7 +32,6 @@ final class SessionChatViewModel {
     private let sessionReadyStore: any SessionReadyStore
     private let sessionViewReporter: any SessionViewReporter
     private let foregroundEventStream: any ForegroundEventStream
-    private let eventAdapter = EventDomainAdapter()
     /// Invalidates in-flight `withObservationTracking` for the collapse preference.
     private var collapsePreferenceGeneration = 0
     private var lastSnackbarKey: String?
@@ -911,7 +910,7 @@ final class SessionChatViewModel {
         sessionMoveTask = Task { [weak self] in
             guard let self else { return }
             for await event in self.foregroundEventStream.events() {
-                guard let moved = self.eventAdapter.sessionMoved(from: event),
+                guard let moved = event.sessionMoved,
                       moved.sessionID == self.sessionID
                 else { continue }
                 self.applySessionMoved(to: moved.directory)
@@ -1947,11 +1946,11 @@ final class SessionChatViewModel {
         worktreeEventTask = Task { [weak self] in
             guard let self else { return }
             for await event in self.foregroundEventStream.events() {
-                if let revert = self.eventAdapter.sessionRevertUpdate(from: event) {
+                if let revert = event.sessionRevertUpdate {
                     await MainActor.run { self.commands.applyRevertUpdate(revert) }
                     continue
                 }
-                guard event.type == "worktree.updated", let projectID = event.namedProjectID else { continue }
+                guard event.isWorktreeUpdated, let projectID = event.namedProjectID else { continue }
                 let known = await MainActor.run { self.checkoutProjectIDs.contains(projectID) }
                 guard known else { continue }
                 await MainActor.run { self.refreshProjectIdentity() }

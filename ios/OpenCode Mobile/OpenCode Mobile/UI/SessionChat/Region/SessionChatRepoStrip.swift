@@ -7,8 +7,6 @@ import Foundation
 /// is dirty; an active session starts collapsed. The user toggle wins over both defaults.
 @MainActor
 final class SessionChatRepoStrip {
-    static let branchUpdatedEvent = "vcs.branch.updated"
-
     var onChange: (() -> Void)?
 
     private(set) var state = SessionChatRepoStripRegionState()
@@ -51,7 +49,7 @@ final class SessionChatRepoStrip {
         eventTask = Task { [weak self] in
             for await event in foregroundEventStream.events() {
                 if Task.isCancelled { return }
-                guard event.type == Self.branchUpdatedEvent else { continue }
+                guard event.isBranchUpdated else { continue }
                 self?.refresh()
             }
         }

@@ -26,7 +26,6 @@ struct SessionChatGoalRegionState: Equatable {
 final class SessionChatGoal {
     nonisolated static let retryDelaysMs = [1_000, 2_000, 4_000]
     nonisolated static let commandTimeoutMs = 15_000
-    static let reconnectEvents: Set<String> = ["server.connected", "stream.reconnected"]
 
     var onChange: (() -> Void)?
 
@@ -201,7 +200,7 @@ final class SessionChatGoal {
     }
 
     private func handle(_ event: OpencodeEvent) {
-        if Self.reconnectEvents.contains(event.type) {
+        if event.isStreamReconnect {
             refetch()
             return
         }

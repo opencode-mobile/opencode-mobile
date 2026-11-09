@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.SkillMention
+import dev.opencode.mobile.domain.event.triggersModelCatalogRefresh
 import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
 import dev.opencode.mobile.domain.goal.SessionGoalCommandEcho
 import dev.opencode.mobile.domain.agent.SelectableAgent
@@ -353,7 +354,7 @@ class SessionChatComposer(
         catalogEventJob =
             scope.launch {
                 stream.events
-                    .filter { it.type in CATALOG_UPDATE_EVENTS || it.type in CATALOG_RECONNECT_EVENTS }
+                    .filter { it.triggersModelCatalogRefresh }
                     .collect { event ->
                         logI("model catalog refresh reason=${event.type}")
                         loadCatalog(keepLoadedCatalogOnFailure = true, force = true)
@@ -2228,17 +2229,6 @@ class SessionChatComposer(
     }
 
     companion object {
-        /**
-         * Server catalog events after which the model list is refetched. A freshly started
-         * server can answer the first `GET model` before its catalog is ready, then announce it.
-         */
-        val CATALOG_UPDATE_EVENTS = setOf("model.updated", "provider.updated")
-
-        /**
-         * Stream (re)connects after which the model list is refetched: catalog events the server
-         * sent while the stream was down (a restart) are never replayed.
-         */
-        val CATALOG_RECONNECT_EVENTS = setOf("server.connected", "stream.reconnected")
         val DEFAULT_CATALOG_RETRY_DELAYS_MS = listOf(1_000L, 2_000L, 4_000L)
         private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
         const val ModelFilterThreshold = 10

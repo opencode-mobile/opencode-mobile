@@ -1428,65 +1428,14 @@ class EventDomainAdapter(
         return primitive.contentOrNull != "null"
     }
 
-    /**
-     * Title change carried by a `session.updated` event for a concrete session id.
-     * Returns null when the event is not a usable title update.
-     */
-    fun sessionTitleUpdate(event: OpencodeEvent): SessionTitleUpdate? {
-        if (event.type != "session.updated") return null
-        val info = event.rawProperties?.get("info")?.jsonObject ?: return null
+    /** See [OpencodeEvent.sessionTitleUpdate]. */
+    fun sessionTitleUpdate(event: OpencodeEvent): SessionTitleUpdate? = event.sessionTitleUpdate()
 
-        fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
-        val sessionId =
-            event.sessionId
-                ?: info.string("id")
-                ?: info.string("sessionID")
-                ?: info.string("sessionId")
-                ?: return null
-        val title = info.string("title") ?: return null
-        return SessionTitleUpdate(sessionId = sessionId, title = title)
-    }
+    /** See [OpencodeEvent.sessionRevertUpdate]. */
+    fun sessionRevertUpdate(event: OpencodeEvent): SessionRevertUpdate? = event.sessionRevertUpdate()
 
-    /**
-     * Pending-revert change. v1 `session.updated` carries the whole session, so an absent
-     * `info.revert` means none; v2 stages, clears and commits with dedicated events. A partial
-     * `info` (the v2 `session.renamed` projection) says nothing about the revert and is ignored.
-     */
-    fun sessionRevertUpdate(event: OpencodeEvent): SessionRevertUpdate? {
-        fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
-        return when (event.type) {
-            "session.updated" -> {
-                val info = event.rawProperties?.get("info") as? JsonObject ?: return null
-                if (info["time"] == null) return null
-                val sessionId = event.sessionId ?: info.string("id") ?: return null
-                val messageId = (info["revert"] as? JsonObject)?.string("messageID")
-                SessionRevertUpdate(sessionId = sessionId, messageId = messageId)
-            }
-            "session.revert.staged" -> {
-                val sessionId = event.sessionId ?: return null
-                val messageId =
-                    (event.rawProperties?.get("revert") as? JsonObject)?.string("messageID") ?: return null
-                SessionRevertUpdate(sessionId = sessionId, messageId = messageId)
-            }
-            "session.revert.cleared", "session.revert.committed" -> {
-                val sessionId = event.sessionId ?: return null
-                SessionRevertUpdate(sessionId = sessionId, messageId = null)
-            }
-            else -> null
-        }
-    }
-
-    /** Session removed on the server. v1 carries the id only in `info.id`; v2 sends `sessionID`. */
-    fun sessionDeletedId(event: OpencodeEvent): String? {
-        if (event.type != "session.deleted") return null
-        val info = event.rawProperties?.get("info") as? JsonObject
-
-        fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
-        return event.sessionId
-            ?: info?.string("id")
-            ?: info?.string("sessionID")
-            ?: info?.string("sessionId")
-    }
+    /** See [OpencodeEvent.sessionDeletedId]. */
+    fun sessionDeletedId(event: OpencodeEvent): String? = event.sessionDeletedId()
 
     /**
      * v2 `session.viewed` read acknowledgement: the session was seen up to the run

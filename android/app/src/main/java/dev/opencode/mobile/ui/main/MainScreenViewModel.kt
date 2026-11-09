@@ -19,6 +19,7 @@ import dev.opencode.mobile.domain.event.IdleForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SessionMovedUpdate
+import dev.opencode.mobile.domain.event.isWorktreeUpdated
 import dev.opencode.mobile.domain.event.namedProjectId
 import dev.opencode.mobile.domain.event.sessionMoved
 import dev.opencode.mobile.domain.filesystem.DirectoryNotFoundException
@@ -1543,7 +1544,7 @@ class MainScreenViewModel
                                 return@collect
                             }
                             val projectId = event.namedProjectId() ?: return@collect
-                            if (event.type != "worktree.updated") return@collect
+                            if (!event.isWorktreeUpdated) return@collect
                             if (!worktreeLoader.knows(projectId)) return@collect
                             worktreeLoader.refetch(projectId).forEach(::applyPathLoad)
                         }

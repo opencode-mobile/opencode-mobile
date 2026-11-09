@@ -3,14 +3,18 @@ package dev.opencode.mobile.ui.sessionchat.region
 import android.util.Log
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
-import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.SessionArchiveChange
+import dev.opencode.mobile.domain.event.isUserAbortSessionError
+import dev.opencode.mobile.domain.event.sessionArchiveChange
+import dev.opencode.mobile.domain.event.sessionDeletedId
+import dev.opencode.mobile.domain.event.sessionErrorMessage
+import dev.opencode.mobile.domain.event.sessionTitleUpdate
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
@@ -32,15 +36,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 
 class SessionInfo(
     private val sessionRepository: SessionRepository,
     private val sessionStatusLiveStore: SessionStatusLiveStore,
     private val foregroundEventStream: ForegroundEventStream,
-    private val eventDomainAdapter: EventDomainAdapter,
     private val scope: CoroutineScope,
     private val liveUpdates: LiveUpdates = FixedLiveUpdates(),
 ) {
@@ -430,28 +430,30 @@ class SessionInfo(
                                 "SSE event observed session=$sessionId type=${event.type} " +
                                     "eventSession=${event.sessionId ?: "-"} scope=$eventScope",
                             )
-                            if (event.type == "session.error" &&
+                            val sessionError = event.sessionErrorMessage()
+                            if (sessionError != null &&
                                 event.sessionId == sessionId &&
-                                !isUserAbort(event.rawProperties)
+                                !event.isUserAbortSessionError
                             ) {
-                                _state.update { it.copy(errorMessage = sessionErrorMessage(event.rawProperties)) }
+                                _state.update { it.copy(errorMessage = sessionError) }
                             }
                             applySessionUpdatedTitle(event, sessionId)
                             // Archived or restored anywhere: the event decides; a read right after it can lag.
                             if (event.sessionId == sessionId) {
-                                when (event.type) {
-                                    SESSION_UNARCHIVED -> {
+                                when (event.sessionArchiveChange) {
+                                    SessionArchiveChange.Unarchived -> {
                                         archiveStateGeneration++
                                         _state.update { it.copy(archivedAtEpochMs = null) }
                                     }
-                                    SESSION_ARCHIVED -> {
+                                    SessionArchiveChange.Archived -> {
                                         val generation = ++archiveStateGeneration
                                         launch { loadArchivedAt(sessionId, worktree, generation) }
                                     }
+                                    null -> Unit
                                 }
                             }
                             // Another client deleted the open session: leave instead of showing a dead chat.
-                            if (eventDomainAdapter.sessionDeletedId(event) == sessionId) {
+                            if (event.sessionDeletedId() == sessionId) {
                                 logI("session deleted elsewhere session=$sessionId; leaving")
                                 requestLeaveSession()
                             }
@@ -511,7 +513,7 @@ class SessionInfo(
         event: OpencodeEvent,
         sessionId: String,
     ) {
-        val update = eventDomainAdapter.sessionTitleUpdate(event) ?: return
+        val update = event.sessionTitleUpdate() ?: return
         if (update.sessionId != sessionId) return
         if (update.title == _state.value.sessionTitle) return
         boundSessionTitle = update.title
@@ -544,27 +546,6 @@ class SessionInfo(
             else -> throwable.message ?: "Something went wrong"
         }
 
-    /** The user's own Stop/Deny: the timeline shows it neutrally, so no error toast. */
-    private fun isUserAbort(properties: JsonObject?): Boolean {
-        val error = properties?.get("error") as? JsonObject
-        return ToolInterruption.isUserAbortError(
-            type = (error?.get("type") as? JsonPrimitive)?.contentOrNull,
-            name = (error?.get("name") as? JsonPrimitive)?.contentOrNull,
-        )
-    }
-
-    private fun sessionErrorMessage(properties: JsonObject?): String {
-        val error = properties?.get("error") as? JsonObject
-        val data = error?.get("data") as? JsonObject
-        return sequenceOf(
-            (data?.get("message") as? JsonPrimitive)?.contentOrNull,
-            (error?.get("message") as? JsonPrimitive)?.contentOrNull,
-            (properties?.get("message") as? JsonPrimitive)?.contentOrNull,
-            (error?.get("name") as? JsonPrimitive)?.contentOrNull,
-            (error?.get("type") as? JsonPrimitive)?.contentOrNull,
-        ).firstOrNull { !it.isNullOrBlank() } ?: "Session work failed"
-    }
-
     private fun logI(message: String) {
         DiagnosticLog.info(DiagnosticLogArea.Chat, message)
     }
@@ -586,7 +567,5 @@ class SessionInfo(
         private const val EMPTY_TITLE_ERROR = "Enter a session title"
         const val ARCHIVE_ERROR = "Couldn't archive session."
         const val DELETE_ERROR = "Couldn't delete session."
-        private const val SESSION_ARCHIVED = "session.archived"
-        private const val SESSION_UNARCHIVED = "session.unarchived"
     }
 }

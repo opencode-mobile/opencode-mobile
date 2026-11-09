@@ -8696,7 +8696,6 @@ class SessionChatViewModelTest {
             sessionReadyStore = sessionReadyStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
-            eventDomainAdapter = EventDomainAdapter(json),
             connectionSessionCoordinator = connectionSessionCoordinator,
             sessionModelSelectionStore = sessionModelSelectionStore,
             composerDraftStore = composerDraftStore,

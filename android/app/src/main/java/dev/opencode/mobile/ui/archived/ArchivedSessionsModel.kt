@@ -4,6 +4,7 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.triggersArchivedListRefresh
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.session.ArchivedSessionList
@@ -139,7 +140,7 @@ class ArchivedSessionsModel(
         load()
         scope.launch {
             events.collect { event ->
-                if (event.type in REFRESH_EVENT_TYPES) scheduleRefresh()
+                if (event.triggersArchivedListRefresh) scheduleRefresh()
             }
         }
     }
@@ -426,8 +427,6 @@ class ArchivedSessionsModel(
     }
 
     companion object {
-        /** Live events after which the archived list may have changed. */
-        val REFRESH_EVENT_TYPES = setOf("session.archived", "session.unarchived", "session.deleted")
         const val REFRESH_DEBOUNCE_MS = 300L
         private val LOAD_ERROR = UiText.resource(R.string.archived_sessions_load_failed)
         private val UNARCHIVE_ERROR = UiText.resource(R.string.archived_sessions_unarchive_failed)
