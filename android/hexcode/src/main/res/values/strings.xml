@@ -112,6 +112,7 @@
     <string name="home_state_working">Working</string>
     <string name="home_state_needs_input">Needs input</string>
     <string name="home_state_reconnecting">Reconnecting…</string>
+    <string name="home_state_connecting">Connecting…</string>
     <string name="home_settings">Settings</string>
     <string name="home_attach">Attach</string>
     <string name="home_stop">Stop</string>

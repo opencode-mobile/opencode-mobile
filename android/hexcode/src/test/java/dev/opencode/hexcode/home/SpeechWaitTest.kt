@@ -60,6 +60,12 @@ class SpeechWaitTest {
             reloads += 1
             speech.value = nextReload
         }
+
+        var loadsNow = 0
+
+        override fun loadNow() {
+            loadsNow += 1
+        }
     }
 
     private val store = MemoryTakeStore()
@@ -74,6 +80,18 @@ class SpeechWaitTest {
         press()
         release(TalkRelease.End)
     }
+
+    @Test
+    fun aTalkPressLoadsTheModelAtOnceWithoutWaitingForTheDelayAfterStartUp() =
+        runTest(dispatcher) {
+            val engine = Engine()
+            val vm = HomeViewModel(engine, takes = store) { 0 }
+            assertEquals(0, engine.loadsNow)
+            vm.press()
+            assertEquals(1, engine.loadsNow)
+            // Recording didn't wait for it.
+            assertTrue(engine.recording)
+        }
 
     @Test
     fun aTakeWhileTheModelLoadsWaitsThenGetsItsText() =

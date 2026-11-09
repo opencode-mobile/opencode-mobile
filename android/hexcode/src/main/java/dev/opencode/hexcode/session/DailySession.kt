@@ -236,6 +236,19 @@ class DailySessionSetup(
             DailySessionResult.Failed
         }
 
+    /**
+     * Today's saved session: the one the phone last opened, when that was on [today]; null when it isn't known. Read
+     * from the phone only, so the home can show its saved card before setup reaches the server.
+     */
+    suspend fun savedSessionId(today: LocalDate): String? =
+        try {
+            if (memory.lastOpenedOn() == today) memory.lastSessionId() else null
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+
     /** The session opened before [current], as the phone saved it; null when it isn't known or is the same one. */
     private suspend fun previousOf(current: String): String? =
         try {

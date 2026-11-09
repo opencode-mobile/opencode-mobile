@@ -88,8 +88,8 @@ fun HexTopBar(
     }
 }
 
-/** The agent's state in home's top bar. */
-enum class HexAgentState { Idle, Working, NeedsInput, Reconnecting }
+/** The agent's state in home's top bar. Connecting is the cold start's, until today's session is read back. */
+enum class HexAgentState { Idle, Working, NeedsInput, Reconnecting, Connecting }
 
 /**
  * Home's top bar (`.tb`): the state slot (an icon, the [label] and an optional mono [timer]) on the left, round
@@ -111,7 +111,7 @@ fun HexTopBar(
     val spoken = accessibilityLabel ?: listOfNotNull(label, timer).joinToString(", ")
     val headColor =
         when (state) {
-            HexAgentState.Idle, null -> colors.text2
+            HexAgentState.Idle, HexAgentState.Connecting, null -> colors.text2
             HexAgentState.Working -> colors.text1
             HexAgentState.NeedsInput, HexAgentState.Reconnecting -> colors.amber
         }
@@ -182,13 +182,19 @@ private fun StateIcon(state: HexAgentState) {
                     .padding(4.dp)
                     .background(colors.amber, CircleShape),
             )
-        HexAgentState.Working, HexAgentState.Reconnecting -> {
+        HexAgentState.Working, HexAgentState.Reconnecting, HexAgentState.Connecting -> {
             // It means "working", so it turns with Reduce Motion too.
             val turn = rememberTurn(if (state == HexAgentState.Working) 1600 else 900)
             Icon(
                 HexIcons.spin,
                 null,
-                tint = if (state == HexAgentState.Working) colors.green else colors.amber,
+                tint =
+                    when (state) {
+                        HexAgentState.Working -> colors.green
+                        // Connecting is the Reconnecting arc, quiet: nothing is wrong yet.
+                        HexAgentState.Connecting -> colors.text3
+                        else -> colors.amber
+                    },
                 modifier = Modifier.size(16.dp).rotate(turn),
             )
         }

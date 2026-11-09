@@ -168,14 +168,17 @@ class SummaryRefresher(
 
     /**
      * The app opens, before setup has found today's session: the saved card shows at once, with its age, if it was
-     * saved for a session of [date] in [directory]. Anything else on screen goes.
+     * saved for a session of [date] in [directory] and that session is [savedSession], today's saved session, when
+     * the phone knows it (app-plan.md, Home › Cold start). Anything else on screen goes.
      */
     suspend fun preload(
         date: LocalDate,
         directory: String,
+        savedSession: String? = null,
     ) {
         clear()
         val saved = load() ?: return
+        if (savedSession != null && saved.sessionId != savedSession) return
         if (saved.date == date.toString() && saved.directory == directory) show(saved)
     }
 

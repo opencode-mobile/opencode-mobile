@@ -19,7 +19,7 @@ import java.time.LocalDate
 
 /** How far opening today's session got. */
 sealed interface SessionSetup {
-    /** Finding or creating today's session. Silent: the status area and the top bar state are empty. */
+    /** Finding or creating today's session. Silent: the status area is empty and the top bar says Connecting…. */
     data object Opening : SessionSetup
 
     data class Ready(
@@ -104,6 +104,13 @@ data class TodayState(
     val ask: AskMessage? = null,
     /** The closed Ask answers, newest first, for Details' Asked on the side. */
     val asked: List<AskedAnswer> = emptyList(),
+    /**
+     * What's saved on the phone has been read: the saved card shows if it's today's saved session's (app-plan.md,
+     * Home › Cold start). The splash waits for this, never for the network.
+     */
+    val restored: Boolean = false,
+    /** The open session's state has been read back once since the stream opened; until then the top bar says Connecting…. */
+    val readBack: Boolean = false,
 ) {
     /** The goal line, or null for none: no goal while the agent works. */
     val goalLine: GoalLine? get() = GoalLine.of(goal, busySince != null)
@@ -111,9 +118,19 @@ data class TodayState(
     /** What runs besides the session at [now], for "N running · Details ›": subagents, and shells after 10 s. */
     fun running(now: Long): Int = subagentsRunning + shellStarts.count { now - it >= SHELL_SHOWN_MS }
 
-    /** The top bar's state; null (an empty slot) until today's session is open. */
+    /**
+     * The top bar's state: Connecting… while today's session is being opened and until its state is first read back
+     * (Reconnecting… if the stream goes down before that), then [AgentStatus.of]. Null (an empty slot) with "Couldn't
+     * open today's session" or Signed out.
+     */
     val agent: AgentStatus?
-        get() = if (setup is SessionSetup.Ready) AgentStatus.of(streamUp, pendingInput != null, busySince) else null
+        get() =
+            when (setup) {
+                SessionSetup.Opening -> AgentStatus.Connecting
+                is SessionSetup.Ready ->
+                    if (streamUp && !readBack) AgentStatus.Connecting else AgentStatus.of(streamUp, pendingInput != null, busySince)
+                is SessionSetup.Failed, SessionSetup.SignedOut -> null
+            }
 }
 
 /** What the live session reads from the server besides setup; [OpenCodeTodayApi] in the app. */
@@ -757,6 +774,12 @@ class TodaySession(
             it.copy(setup = if (it.setup is SessionSetup.Failed) SessionSetup.Failed(retrying = true) else SessionSetup.Opening)
         }
         stream?.stop()
+        val date = today()
+        val directory = directory()
+        // What's saved on the phone first, before anything waits for the network (app-plan.md, Home › Cold start): the
+        // card saved for today's saved session in this project shows while setup runs.
+        summary.preload(date, directory, setup.savedSessionId(date))
+        own.update { it.copy(restored = true) }
         try {
             beforeSetup()
         } catch (error: CancellationException) {
@@ -764,10 +787,6 @@ class TodaySession(
         } catch (error: Exception) {
             Log.w(TAG, "before setup: ${error.message}")
         }
-        val date = today()
-        val directory = directory()
-        // The card saved for today's session in this project shows while setup runs.
-        summary.preload(date, directory)
         when (val result = setup.open(date, directory, model())) {
             DailySessionResult.Failed -> own.update { it.copy(setup = SessionSetup.Failed()) }
             DailySessionResult.SignedOut -> {
@@ -836,8 +855,12 @@ class TodaySession(
         stopWatch = null
         summary.open(session.id, date, directory)
         asking.open(session.id)
+        own.update { it.copy(readBack = false) }
         publish(streamUp = true)
-        own.update { it.copy(setup = SessionSetup.Ready(session.id), newDayNotice = newDay, newDayGoal = goalRunning) }
+        // Without a stream nothing is read back: the top bar shows the state at once.
+        own.update {
+            it.copy(setup = SessionSetup.Ready(session.id), newDayNotice = newDay, newDayGoal = goalRunning, readBack = stream == null)
+        }
         stream?.start()
         // With a stream, the first summary waits for its read-back, which says whether the agent is working
         // (an empty reply then isn't a failure); the saved card shows meanwhile. A session that never ran
@@ -863,9 +886,11 @@ class TodaySession(
         } catch (_: Exception) {
             // The stream is up; the next event or reconnect brings the rest. Without the read-back nothing says the
             // card is current, so it's asked for.
+            own.update { it.copy(readBack = true) }
             if (live?.hasRun == false) showEmpty() else summary.refresh()
             return
         }
+        own.update { it.copy(readBack = true) }
         refreshSummary(updatedAt)
     }
 

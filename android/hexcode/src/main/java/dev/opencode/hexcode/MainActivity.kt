@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color.TRANSPARENT
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -43,6 +44,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.ColdStart
@@ -86,26 +88,35 @@ import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.voiceengine.EngineOptions
 import dev.opencode.voiceengine.SpeechLab
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import java.time.LocalDate
+import kotlin.coroutines.resume
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // A cold start keeps the system splash until home's first state is ready, at most 1.5 s, so home appears in one
-        // piece (app-plan.md, Home › Cold start). The activity made again (a rotation, a theme change) has no splash.
+        // A cold start keeps the system splash only while the app reads what's saved on the phone, never for the
+        // network (app-plan.md, Home › Cold start). The activity made again (a rotation, a theme change) has no splash.
         val coldStart = ColdStartGate(SystemClock::uptimeMillis)
         val splash = installSplashScreen()
         if (savedInstanceState == null) splash.setKeepOnScreenCondition(coldStart::holding) else coldStart.ready()
-        // The splash fades out over 0.2 s as home appears; instant with Reduce Motion (the animator scale at 0).
+        // The home fades in over the splash's logo in 0.2 s; the logo is never drawn over it. Instant with Reduce
+        // Motion (the animator scale at 0).
         splash.setOnExitAnimationListener { provider ->
-            provider.view
+            val content = findViewById<View>(android.R.id.content)
+            provider.view.translationZ = -1f
+            content.alpha = 0f
+            content
                 .animate()
-                .alpha(0f)
+                .alpha(1f)
                 .setDuration(ColdStart.SPLASH_FADE_MS)
                 .withEndAction(provider::remove)
                 .start()
@@ -116,7 +127,18 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.auto(TRANSPARENT, TRANSPARENT),
         )
         val services = (application as HexCodeApplication).services
-        val lab = SpeechLab(this)
+        // Everything that isn't saved on the phone waits for the home's first frame: the saved server is bound then
+        // (every request waits for that), and the speech model loads about 1 s later.
+        val drawn = CompletableDeferred<Unit>()
+        lifecycleScope.launch {
+            coldStart.awaitGone()
+            afterNextFrame()
+            reportFullyDrawn()
+            drawn.complete(Unit)
+            services.speechLaunch.afterFirstFrame()
+        }
+        // The lab reads its clips and external storage; only its own screens need it, so not before the first frame.
+        val lab = lazy(LazyThreadSafetyMode.NONE) { SpeechLab(this) }
         // debug builds: `--es HexCodeSample <file in filesDir>` runs a recorded WAV as a take (emulators have no voice)
         val sample = if (BuildConfig.DEBUG) intent.getStringExtra("HexCodeSample") else null
         // debug builds: `--es HexCodeLab <model ids, comma separated, or all>` opens the lab and tests those models
@@ -211,7 +233,7 @@ class MainActivity : ComponentActivity() {
                     Tool.Lab ->
                         LabScreen(
                             services.voice,
-                            lab,
+                            lab.value,
                             onBack = { tool = null },
                             autoRun = labRun,
                             autoOptions = labOptions,
@@ -221,10 +243,16 @@ class MainActivity : ComponentActivity() {
                         SystemBarIcons(darkScreen = true)
                         DictationScreen(services.voice, sampleFile = sample, onOpenLab = { tool = Tool.Lab })
                     }
-                    null -> prefs?.let { HexCodeRoot(services, lab, it, pairLink, clips, draftText, coldStart) }
+                    null -> prefs?.let { HexCodeRoot(services, lab, it, pairLink, clips, draftText, coldStart, drawn) }
                 }
             }
         }
+    }
+
+    /** Returns once the next frame has been drawn. */
+    private suspend fun afterNextFrame() {
+        awaitFrame()
+        suspendCancellableCoroutine { done -> window.decorView.post { done.resume(Unit) } }
     }
 
     private enum class Tool { Dictation, Lab }
@@ -251,15 +279,18 @@ private enum class Page(
 @Composable
 private fun HexCodeRoot(
     services: HexServices,
-    lab: SpeechLab,
+    lab: Lazy<SpeechLab>,
     prefs: HexPrefs,
     pairLink: String?,
     clips: Boolean,
     draftText: String?,
     coldStart: ColdStartGate,
+    drawn: Deferred<Unit>,
 ) {
     LaunchedEffect(Unit) {
-        // The saved server's address check can take seconds; nothing on screen waits for it.
+        // After the first frame (Cold start): reading the saved password opens the Keystore, and the saved server's
+        // address check can take seconds; nothing on screen waits for either.
+        drawn.await()
         services.appScope.launch { services.loadConnection() }
     }
     val pairedAtLaunch = remember { prefs.firstRunDone }
@@ -303,7 +334,7 @@ private fun HexCodeRoot(
 @Composable
 private fun AfterFirstRun(
     services: HexServices,
-    lab: SpeechLab,
+    lab: Lazy<SpeechLab>,
     prefs: HexPrefs,
     clips: Boolean,
     draftText: String?,
@@ -352,7 +383,14 @@ private fun AfterFirstRun(
         viewModel(key = "home-${sample?.label ?: "live"}-${services.setupGeneration.value}") {
             HomeViewModel(
                 if (clips) {
-                    ClipDictation(context, services.voice, services::reloadSpeech, services.speechHoldMs, services.speechFailOnce)
+                    ClipDictation(
+                        context,
+                        services.voice,
+                        services::reloadSpeech,
+                        services.speechHoldMs,
+                        services.speechFailOnce,
+                        services.speechLaunch::now,
+                    )
                 } else {
                     val app = context.applicationContext
                     VoiceEngineDictation(
@@ -363,6 +401,7 @@ private fun AfterFirstRun(
                         services::reloadSpeech,
                         services.speechHoldMs,
                         services.speechFailOnce,
+                        services.speechLaunch::now,
                     )
                 },
                 takes = FileTakeStore(File(context.filesDir, "takes")),
@@ -375,7 +414,7 @@ private fun AfterFirstRun(
                 },
             )
         }
-    // The splash goes once today's session is found and its summary read, or setup failed or was signed out.
+    // The splash goes once what's saved on the phone is read (the saved card, if it's today's saved session's).
     LaunchedEffect(homeModel) {
         homeModel.uiState.first { ColdStart.settled(it.today) }
         coldStart.ready()
@@ -535,7 +574,7 @@ private fun AfterFirstRun(
                     )
                 Page.SettingsProject, Page.SettingsBrowse, Page.SettingsModel -> SettingsPage(pages, pageState, current)
                 Page.SettingsGallery -> HexGallery(galleryDark, { galleryDark = it }, onBack = { page = Page.Settings })
-                Page.SettingsSpeechLab -> LabScreen(services.voice, lab, onBack = { page = Page.Settings })
+                Page.SettingsSpeechLab -> LabScreen(services.voice, lab.value, onBack = { page = Page.Settings })
             }
         }
     }

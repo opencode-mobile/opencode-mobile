@@ -590,7 +590,9 @@ private fun TopBarSample() {
             onStateClick = {},
         ) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
         HexTopBar(HexAgentState.Reconnecting, "Reconnecting…", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
-        StateName("home: empty state slot, while today's session is being set up")
+        StateName("home: a cold start, until today's session is read back")
+        HexTopBar(HexAgentState.Connecting, "Connecting…", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
+        StateName("home: empty state slot, with \"Couldn't open today's session\" or Signed out")
         HexTopBar(null, "", homeEdge) { HexRoundButton(HexIcons.gear, "Settings", onClick = {}) }
     }
 }

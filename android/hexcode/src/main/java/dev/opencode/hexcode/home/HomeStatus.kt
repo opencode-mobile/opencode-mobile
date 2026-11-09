@@ -113,7 +113,10 @@ internal fun rememberNow(periodMs: Long): Long {
     return now
 }
 
-/** Home's top bar for the agent's [status]: Reconnecting…, Needs input, Working with the turn's clock, or Idle. */
+/**
+ * Home's top bar for the agent's [status]: Connecting… (a cold start, until the first read-back), Reconnecting…, Needs
+ * input, Working with the turn's clock, or Idle.
+ */
 @Composable
 internal fun HomeTopBar(
     status: AgentStatus?,
@@ -124,6 +127,8 @@ internal fun HomeTopBar(
     actions: @Composable RowScope.() -> Unit,
 ) {
     when (status) {
+        AgentStatus.Connecting ->
+            HexTopBar(HexAgentState.Connecting, stringResource(R.string.home_state_connecting), modifier, actions = actions)
         AgentStatus.Reconnecting ->
             HexTopBar(HexAgentState.Reconnecting, stringResource(R.string.home_state_reconnecting), modifier, actions = actions)
         AgentStatus.NeedsInput ->
@@ -145,7 +150,7 @@ internal fun HomeTopBar(
                 accessibilityLabel = stringResource(R.string.a11y_working, workingFor(status, now)),
             )
         AgentStatus.Idle -> HexTopBar(HexAgentState.Idle, stringResource(R.string.home_state_idle), modifier, actions = actions)
-        // Today's session is being set up: the slot is empty.
+        // "Couldn't open today's session" or Signed out: the slot is empty.
         null -> HexTopBar(null, "", modifier, actions = actions)
     }
 }

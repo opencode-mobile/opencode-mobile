@@ -2,6 +2,12 @@ package dev.opencode.hexcode.session
 
 /** What home's top bar says about the agent (app-plan.md, Today's session on screen). */
 sealed interface AgentStatus {
+    /**
+     * Today's session is being opened, or its state hasn't been read back yet (app-plan.md, Home › Cold start): the
+     * Reconnecting arc in `text3`, not amber.
+     */
+    data object Connecting : AgentStatus
+
     /** The event stream is down. */
     data object Reconnecting : AgentStatus
 

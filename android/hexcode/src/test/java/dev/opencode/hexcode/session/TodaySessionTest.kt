@@ -179,6 +179,7 @@ class TodaySessionTest {
         transport: Transport?,
         memory: Memory = Memory(date.minusDays(1)),
         store: SummaryStore? = null,
+        beforeSetup: suspend () -> Unit = {},
     ) = TodaySession(
         scope = backgroundScope,
         setup = DailySessionSetup(api, memory),
@@ -189,6 +190,7 @@ class TodaySessionTest {
         today = { date },
         clock = { testScheduler.currentTime },
         summaryStore = store,
+        beforeSetup = beforeSetup,
     )
 
     private fun event(
@@ -211,18 +213,116 @@ class TodaySessionTest {
             assertTrue(today.state.value.newDayNotice)
         }
 
+    // app-plan.md, Home › Cold start.
+
     @Test
-    fun whileSetupRunsTheTopBarStateIsEmpty() =
+    fun untilTheFirstReadBackTheTopBarSaysConnecting() =
         runTest {
             val api = Api().apply { gate = CompletableDeferred() }
-            val today = session(api, Transport())
+            val transport = Transport()
+            val today = session(api, transport)
             today.open()
             runCurrent()
             assertEquals(SessionSetup.Opening, today.state.value.setup)
-            assertNull(today.state.value.agent)
+            assertEquals(AgentStatus.Connecting, today.state.value.agent)
             api.gate?.complete(Unit)
             runCurrent()
+            // Found, the stream opening: still no read-back.
+            assertEquals(SessionSetup.Ready("new1"), today.state.value.setup)
+            assertEquals(AgentStatus.Connecting, today.state.value.agent)
+            transport.connected()
+            runCurrent()
             assertEquals(AgentStatus.Idle, today.state.value.agent)
+        }
+
+    @Test
+    fun aFailedReadBackStillEndsConnecting() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50))).apply { snapshotFails = true }
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            transport.connected()
+            runCurrent()
+            assertEquals(AgentStatus.Idle, today.state.value.agent)
+        }
+
+    @Test
+    fun theStreamDownBeforeTheFirstReadBackIsReconnecting() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport().apply { refuse = true }
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            assertEquals(AgentStatus.Reconnecting, today.state.value.agent)
+        }
+
+    @Test
+    fun theSavedCardForTodaysSavedSessionShowsBeforeAnythingReachesTheNetwork() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val saved = SavedSummary("s1", StatusSummary.Fallback(listOf(NowLine("Earlier."))), -300_000, "2026-11-05", project)
+            val memory = Memory(date).apply { lastId = "s1" }
+            // The sign-in renewal and the version read wait for the saved server, which binds after the first frame.
+            val connection = CompletableDeferred<Unit>()
+            val today = session(api, Transport(), memory, Store(saved), beforeSetup = { connection.await() })
+            assertFalse(today.state.value.restored)
+            today.open()
+            runCurrent()
+            assertTrue(today.state.value.restored)
+            assertEquals(saved.summary, today.state.value.summary.summary)
+            assertEquals(AgentStatus.Connecting, today.state.value.agent)
+            assertEquals(emptyList<String>(), log)
+            connection.complete(Unit)
+            runCurrent()
+            assertEquals(SessionSetup.Ready("s1"), today.state.value.setup)
+            assertEquals(saved.summary, today.state.value.summary.summary)
+        }
+
+    @Test
+    fun withNoSavedCardTheSavedStateIsReadAtOnceAndTheCardAreaStaysEmpty() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val connection = CompletableDeferred<Unit>()
+            val today = session(api, Transport(), Memory(date), Store(), beforeSetup = { connection.await() })
+            today.open()
+            runCurrent()
+            assertTrue(today.state.value.restored)
+            assertNull(today.state.value.summary.summary)
+            assertEquals(emptyList<String>(), log)
+        }
+
+    @Test
+    fun aCardSavedForAnotherSessionThanTodaysSavedOneWaitsUntilTodaysSessionIsKnown() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            api.gate = CompletableDeferred()
+            val saved = SavedSummary("s1", StatusSummary.Fallback(listOf(NowLine("Earlier."))), 0, "2026-11-05", project)
+            // Start a new session opened s2 after this card was saved.
+            val memory = Memory(date).apply { lastId = "s2" }
+            val today = session(api, Transport(), memory, Store(saved))
+            today.open()
+            runCurrent()
+            assertTrue(today.state.value.restored)
+            assertNull(today.state.value.summary.summary)
+            api.gate?.complete(Unit)
+            runCurrent()
+            // Today's session turned out to be s1 after all: its card shows now (and fades in).
+            assertEquals(SessionSetup.Ready("s1"), today.state.value.setup)
+            assertEquals(saved.summary, today.state.value.summary.summary)
+        }
+
+    @Test
+    fun setupFailureLeavesTheTopBarStateEmpty() =
+        runTest {
+            val api = Api().apply { fails = true }
+            val today = session(api, Transport())
+            today.open()
+            runCurrent()
+            assertEquals(SessionSetup.Failed(), today.state.value.setup)
+            assertNull(today.state.value.agent)
         }
 
     @Test

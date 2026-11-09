@@ -117,10 +117,17 @@ class HexServices(
     var takeProbe = false
 
     /**
-     * At process start (app-plan.md, The speech model): loads the speech model, once per process, when it's on the
-     * phone or first run is done. Before that, first run's scan step starts the download ([loadSpeech]).
+     * The speech model's first load in this process (app-plan.md, Dictation › Load): about 1 s after the first frame
+     * ([DeferredLoad.afterFirstFrame], from the activity), or at once when the talk button is pressed before then
+     * ([DeferredLoad.now]), so it doesn't compete with start-up.
      */
-    fun loadSpeechAtLaunch() {
+    val speechLaunch = DeferredLoad(appScope, ColdStart.SPEECH_DELAY_MS, ::loadSpeechAtLaunch)
+
+    /**
+     * Loads the speech model, once per process, when it's on the phone or first run is done ([speechLaunch] calls
+     * it). Before that, first run's scan step starts the download ([loadSpeech]).
+     */
+    private fun loadSpeechAtLaunch() {
         appScope.launch {
             val installed = voice.store.isInstalled(voice.activeModel.value)
             if (installed || settings.current().firstRunDone) loadSpeech()

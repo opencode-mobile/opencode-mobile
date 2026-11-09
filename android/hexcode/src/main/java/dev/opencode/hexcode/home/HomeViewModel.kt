@@ -95,6 +95,12 @@ interface Dictation {
 
     /** Try again: loads the speech model again. */
     fun reload()
+
+    /**
+     * The talk button was pressed: the speech model starts loading now if it hasn't yet, instead of about 1 s after
+     * the first frame (app-plan.md, Dictation › Load). The take waits for it as for any load.
+     */
+    fun loadNow() = Unit
 }
 
 /** The engine's model state as dictation sees it. */
@@ -120,6 +126,8 @@ class VoiceEngineDictation(
     holdMs: Long = 0,
     /** Debug builds (`--ez HexCodeSpeechFail`): the first load counts as failed, until Try again. */
     failOnce: Boolean = false,
+    /** Starts the speech model's first load now, if it hasn't started (a talk press before its delay ran out). */
+    private val startLoad: () -> Unit = {},
 ) : Dictation {
     private val audio = Executors.newSingleThreadExecutor { Thread(it, "hex-audio") }.asCoroutineDispatcher()
     private val scope = CoroutineScope(SupervisorJob() + audio)
@@ -171,6 +179,8 @@ class VoiceEngineDictation(
     override val speech: StateFlow<SpeechStatus> get() = gate.speech
 
     override fun reload() = gate.reload()
+
+    override fun loadNow() = startLoad()
 
     override fun start(onFailed: (Throwable) -> Unit) {
         val asked = SystemClock.uptimeMillis()
@@ -1617,6 +1627,7 @@ class HomeViewModel(
         if (current.draft.isListening) return false
         state.update { it.copy(draft = it.draft.startTake(), talk = TalkMode.Holding, takeStartedAt = clock()) }
         dictation.start { microphoneFailed() }
+        dictation.loadNow()
         listenForPauses()
         return true
     }
@@ -2213,6 +2224,7 @@ class ClipDictation(
     loadModel: () -> Unit,
     holdMs: Long = 0,
     failOnce: Boolean = false,
+    private val startLoad: () -> Unit = {},
 ) : Dictation {
     private val clips = SpeechModels.clips(context)
     private var next = 0
@@ -2250,4 +2262,6 @@ class ClipDictation(
     override val speech: StateFlow<SpeechStatus> get() = gate.speech
 
     override fun reload() = gate.reload()
+
+    override fun loadNow() = startLoad()
 }

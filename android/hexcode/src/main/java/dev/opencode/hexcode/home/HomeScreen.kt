@@ -287,13 +287,21 @@ fun HomeScreen(
                         ) {
                             if (ask != null) AskMessageView(ask, vm, Modifier.padding(start = edge, end = edge, top = 10.dp))
                         }
-                        if (state.draft.isEmpty && today.waiting > 0) {
-                            WaitingLine(
-                                today.waiting,
-                                idle = today.busySince == null && today.pendingInput == null,
-                                onClick = vm::openDetails,
-                                modifier = Modifier.padding(start = edge, end = edge, top = 10.dp),
-                            )
+                        // The waiting line's height is always held, so the card above doesn't move when it fills in
+                        // (app-plan.md, Home › Cold start).
+                        Box(Modifier.padding(start = edge, end = edge, top = 10.dp)) {
+                            WaitingLine(1, idle = false, onClick = {}, modifier = Modifier.alpha(0f).clearAndSetSemantics {})
+                            androidx.compose.animation.AnimatedVisibility(
+                                state.draft.isEmpty && today.waiting > 0,
+                                enter = fadeIn(HexTheme.motion.fade()),
+                                exit = fadeOut(HexTheme.motion.fade()),
+                            ) {
+                                WaitingLine(
+                                    today.waiting.coerceAtLeast(1),
+                                    idle = today.busySince == null && today.pendingInput == null,
+                                    onClick = vm::openDetails,
+                                )
+                            }
                         }
                     }
                 }
