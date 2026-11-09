@@ -74,6 +74,8 @@ struct SessionChatTimelineViewProps {
     let onCloseActivityCardStep: () -> Void
     /// Catalog names for model-switch notices.
     let noticeModelNames: TimelineNoticeModelNames
+    /// The session's `/goal`: pill, Goal set rows and status row.
+    let goal: SessionChatGoalTimelineContext
 
     init(
         timeline: SessionChatTimelineState,
@@ -130,7 +132,8 @@ struct SessionChatTimelineViewProps {
         onDismissActivityCard: @escaping () -> Void = {},
         onOpenActivityCardStep: @escaping (String) -> Void = { _ in },
         onCloseActivityCardStep: @escaping () -> Void = {},
-        noticeModelNames: TimelineNoticeModelNames = .empty
+        noticeModelNames: TimelineNoticeModelNames = .empty,
+        goal: SessionChatGoalTimelineContext = .none
     ) {
         self.timeline = timeline
         self.messages = messages
@@ -187,6 +190,7 @@ struct SessionChatTimelineViewProps {
         self.onOpenActivityCardStep = onOpenActivityCardStep
         self.onCloseActivityCardStep = onCloseActivityCardStep
         self.noticeModelNames = noticeModelNames
+        self.goal = goal
     }
 }
 
@@ -282,6 +286,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var previousExpandedStepParagraphs: [String: Int] = [:]
     @State private var previousStepRailState: SessionChatStepRailViewState = .empty
     @State private var previousNoticeModelNames: TimelineNoticeModelNames = .empty
+    @State private var previousGoalRowKeys: [String: String] = [:]
     @State private var topOverlayInset: CGFloat = 0
     /// Syncing label the bottom-right slot shows, lagging the prop by the show delay
     /// and minimum visible time in `SessionChatSyncingPillTiming`.
@@ -297,6 +302,7 @@ private struct SessionChatTimelineReadyView: View {
     /// and its measured top inset keeps the timeline from shifting under the sheet.
     private var contextItems: [SessionChatContextItem] {
         SessionChatPillSlots.context(
+            goal: props.goal.state?.pill,
             todos: props.sessionTodosVisible
                 ? (props.sessionTodoCompletedCount, props.sessionTodoTotalCount)
                 : nil,
@@ -403,7 +409,7 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     private var displayMessages: [SessionChatRow] {
-        var rows = props.messages
+        var rows = SessionChatGoalTimeline.withStatusRow(props.messages, goal: props.goal.state)
         if let label = mountedWorkingLabel {
             rows.append(
                 SessionChatRow(
@@ -415,6 +421,11 @@ private struct SessionChatTimelineReadyView: View {
             )
         }
         return rows
+    }
+
+    /// Goal set and status rows keyed by how the goal makes them look.
+    private var goalRowKeys: [String: String] {
+        SessionChatGoalTimeline.renderKeys(rows: displayMessages, goal: props.goal.state)
     }
 
     /// List identity per row: a server echo keeps the cell of the optimistic row it replaced.
@@ -472,6 +483,7 @@ private struct SessionChatTimelineReadyView: View {
                     names: props.noticeModelNames,
                     previous: previousNoticeModelNames
                 )
+                .addingGoalRows(keys: goalRowKeys, previous: previousGoalRowKeys)
                 .aliasingRowIDs(props.timelineFrame.listIDAliases),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
@@ -498,7 +510,8 @@ private struct SessionChatTimelineReadyView: View {
                     stepRailState: stepRailState,
                     onToggleStepRailFold: props.onToggleStepRailFold,
                     onOpenActivityCard: props.onOpenActivityCard,
-                    noticeModelNames: props.noticeModelNames
+                    noticeModelNames: props.noticeModelNames,
+                    goal: props.goal
                 )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -561,6 +574,7 @@ private struct SessionChatTimelineReadyView: View {
             previousExpandedStepParagraphs = props.expandedStepParagraphs
             previousStepRailState = stepRailState
             previousNoticeModelNames = props.noticeModelNames
+            previousGoalRowKeys = goalRowKeys
             updateDisplayedSyncingLabel(props.syncingIndicatorLabel)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
@@ -586,6 +600,9 @@ private struct SessionChatTimelineReadyView: View {
         .onChange(of: props.noticeModelNames) { _, newValue in
             previousNoticeModelNames = newValue
         }
+        .onChange(of: goalRowKeys) { _, newValue in
+            previousGoalRowKeys = newValue
+        }
         .onChange(of: props.messages.count) { _, newCount in
             logScroll("message-count changed count=\(newCount)")
         }
@@ -606,7 +623,8 @@ private struct SessionChatTimelineReadyView: View {
             ),
             onTodosTap: props.onSessionTodosTap,
             onBranchTap: props.onSessionBranchTap,
-            onBranchCopied: props.onSessionBranchCopied
+            onBranchCopied: props.onSessionBranchCopied,
+            onGoalTap: props.goal.onOpen
         )
 
         if #available(iOS 26, *) {
@@ -711,9 +729,14 @@ private struct SessionChatTimelineHostRow: View {
     let onToggleStepRailFold: (String) -> Void
     let onOpenActivityCard: (String) -> Void
     let noticeModelNames: TimelineNoticeModelNames
+    var goal: SessionChatGoalTimelineContext = .none
 
     var body: some View {
-        if message.id == SessionChatStatusChrome.workingRowID {
+        if SessionChatGoalTimeline.isStatusRow(message) {
+            if let state = goal.state, state.hasStatusRow {
+                SessionChatGoalStatusRow(state: state, onAction: goal.onAction, onNewGoal: goal.onNewGoal)
+            }
+        } else if message.id == SessionChatStatusChrome.workingRowID {
             OpenCodeWorkingIndicator(
                 label: message.text,
                 state: message.isLayoutCollapsed
@@ -722,7 +745,7 @@ private struct SessionChatTimelineHostRow: View {
                 fading: workingIndicatorFading
             )
         } else if message.role == .notice {
-            SessionChatNoticeRow(blocks: message.blocks, modelNames: noticeModelNames)
+            SessionChatNoticeRow(blocks: message.blocks, modelNames: noticeModelNames, goal: goal)
         } else {
             HStack {
                 if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
@@ -798,6 +821,16 @@ private struct SessionChatMessageRow: View {
     var body: some View {
         Group {
             switch message.role {
+            case .user where goalKickoffObjective != nil:
+                // A `/goal` kickoff with attachments: the objective only, never the server's
+                // instruction text.
+                OpenCodeOutgoingMessage(
+                    content: outgoingMedia + [.text(id: "goal-objective", text: goalKickoffObjective ?? "")],
+                    metadataLabel: message.metadataLabel,
+                    sentAt: message.sentAtEpochMs.map { Date(timeIntervalSince1970: TimeInterval($0) / 1_000) },
+                    header: .goal(label: SessionChatGoalCopy.bubbleLabel)
+                )
+                .frame(maxWidth: .infinity, alignment: .trailing)
             case .user:
                 OpenCodeOutgoingMessage(
                     content: outgoingContent,
@@ -850,6 +883,24 @@ private struct SessionChatMessageRow: View {
                     text: message.text
                 )
             }
+        }
+    }
+}
+
+private extension SessionChatMessageRow {
+    /// The objective of a `/goal` kickoff the server sent as the user's prompt (it had
+    /// attachments); nil for any other prompt.
+    var goalKickoffObjective: String? {
+        // Rows carry no message metadata, so the kickoff is known by its instruction text and
+        // the objective is the one inside it.
+        SessionGoalKickoff.displayObjective(kickoffText: message.text, goalID: nil, current: nil)
+    }
+
+    /// The attachments of a user row, without its text.
+    var outgoingMedia: [OpenCodeOutgoingMessageContent] {
+        outgoingContent.filter { item in
+            if case .text = item { return false }
+            return true
         }
     }
 }
@@ -1005,7 +1056,7 @@ private struct AssistantMessageContent: View {
                         subtitle: card.subtitle?.resolved,
                         additions: card.additions,
                         deletions: card.deletions,
-                        errorText: card.errorText?.resolved,
+                        errorText: card.errorTextWithDeclineNote,
                         action: toolCardAction(for: card)
                     )
                 case .toolGroup(let blockID, let group):
@@ -1380,6 +1431,13 @@ private struct StepParagraphBlock: View {
                     .lineLimit(3)
                     .padding(.horizontal, Self.chipRowHorizontalPadding)
             }
+            ForEach(Array(paragraph.declineNoteLines.enumerated()), id: \.offset) { _, line in
+                Text(openCode: line.openCode)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .lineLimit(3)
+                    .padding(.horizontal, Self.chipRowHorizontalPadding)
+            }
         }
     }
 
@@ -1435,7 +1493,8 @@ private extension SessionChatStepRailRow {
                 startedAtMs: step.kind == .thought ? nil : startedAtMs,
                 endedAtMs: endedAtMs,
                 isBranch: step.isBranch,
-                isActionable: actionable(step)
+                isActionable: actionable(step),
+                note: step.card?.declineNote?.resolved
             )
         }
     }
@@ -1615,16 +1674,40 @@ private struct FailureMarkTap: ViewModifier {
 private struct SessionChatNoticeRow: View {
     let blocks: [SessionChatTimelineBlock]
     let modelNames: TimelineNoticeModelNames
+    var goal: SessionChatGoalTimelineContext = .none
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(blocks, id: \.blockID) { block in
                 if case .notice(_, let notice) = block {
-                    SessionChatNoticeLine(notice: notice, modelNames: modelNames)
+                    if case let .goalSet(goalID, description) = notice.kind {
+                        SessionChatGoalSetLine(goalID: goalID, description: description, goal: goal)
+                    } else {
+                        SessionChatNoticeLine(notice: notice, modelNames: modelNames)
+                    }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A `/goal` kickoff row. The current goal's row opens the goal sheet; an earlier goal's row
+/// is dimmed, tagged "ended", and not tappable.
+private struct SessionChatGoalSetLine: View {
+    let goalID: String
+    let description: String
+    let goal: SessionChatGoalTimelineContext
+
+    var body: some View {
+        let isCurrent = goal.state?.goal.id == goalID
+        OpenCodeTimelineNotice(
+            variant: isCurrent ? .goal : .goalEnded,
+            label: SessionChatGoalCopy.goalSet,
+            value: SessionChatGoalCopy.goalSetValue(description),
+            onActivate: isCurrent ? goal.onOpen : nil,
+            tag: isCurrent ? nil : SessionChatGoalCopy.ended
+        )
     }
 }
 

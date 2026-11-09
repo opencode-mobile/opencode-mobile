@@ -3,7 +3,7 @@ package dev.opencode.mobile.domain.message
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.SkillMention
-import kotlinx.serialization.json.Json
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -156,6 +156,11 @@ sealed class MessagePart {
         val isSynthetic: Boolean = false,
         /** Server-marked non-display text. Hidden in UI. */
         val isIgnored: Boolean = false,
+        /**
+         * Set on a `/goal` kickoff sent as the user's prompt (it had attachments): [text] is then
+         * the objective, never the server's instruction text, and the bubble is labelled Goal.
+         */
+        val goalKickoffId: String? = null,
     ) : MessagePart() {
         val isDisplayable: Boolean
             get() = !isSynthetic && !isIgnored
@@ -178,6 +183,10 @@ sealed class MessagePart {
         val isInterrupted: Boolean = false,
         /** The model emitted a tool call the server could not run (`executed: false`). */
         val isMalformed: Boolean = false,
+        /** The user denied this call's permission (implies [isInterrupted]). */
+        val isDeclined: Boolean = false,
+        /** The note the user denied it with ("Deny with a note"); null for a plain deny. */
+        val userNote: String? = null,
         /**
          * Images the tool returned (v1 `attachments`, v2 `content[type=file]`), in order. Only
          * images the app can show; other returned files are dropped. Each carries its data URL.
@@ -355,7 +364,7 @@ data class SessionFailure(
     companion object {
         private const val MAX_BODY = 4_000
         private const val SECONDS_LIMIT_MS = 90_000L
-        private val json = Json { ignoreUnknownKeys = true }
+        private val json = serverPayloadJson()
 
         /** "Try again in N s", minutes above 90 s; null once the wait is over. */
         fun retryAfterLabel(remainingMs: Long): String? {

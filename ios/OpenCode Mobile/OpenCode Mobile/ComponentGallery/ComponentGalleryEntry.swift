@@ -48,6 +48,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case selectableCard
     case optionCard
     case listGroup
+    case runSessionInCard
     case sectionHeader
     case reorderableList
     case choiceBadge
@@ -65,6 +66,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case treeRow
     case fileTabs
     case button
+    case splitButton
     case textInput
     case serverAddressInput
     case emptyState
@@ -185,6 +187,12 @@ let componentGalleryEntries = [
         category: .controls
     ),
     ComponentGalleryEntry(
+        id: .splitButton,
+        title: "Split Button",
+        description: "Compact button with a ▾ half that opens a menu of related actions; long-press opens it too.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
         id: .choiceBadge,
         title: "Choice Badge",
         description: "Selectable pill for compact single-choice controls.",
@@ -254,6 +262,12 @@ let componentGalleryEntries = [
         id: .listGroup,
         title: "List Group",
         description: "Bordered and separated container for related List Item rows.",
+        category: .lists
+    ),
+    ComponentGalleryEntry(
+        id: .runSessionInCard,
+        title: "Run Session In Card",
+        description: "Where a New session draft runs: project, worktree and base rows with icon tiles.",
         category: .lists
     ),
     ComponentGalleryEntry(

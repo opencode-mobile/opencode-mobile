@@ -17,7 +17,9 @@
 
     <application>
         <!-- Collection starts disabled; OpenCodeReleaseObservability enables it per the
-             analytics consent setting at launch (#755). -->
+             analytics consent setting at launch (#755). Android's Crashlytics setter
+             applies immediately. Do not copy firebase_crashlytics_collection_enabled
+             into the iOS Info.plist: that SDK latches the flag at configure (#988). -->
         <meta-data
             android:name="firebase_crashlytics_collection_enabled"
             android:value="false" />

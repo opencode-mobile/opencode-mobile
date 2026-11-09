@@ -248,6 +248,7 @@ private final class TodoLiveStoreFakeSessionRepository: SessionRepository, @unch
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool { fatalError() }
 }

@@ -87,7 +87,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -130,6 +132,12 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.abs
 
+/** A line under the composer field; [isError] tints it, e.g. a draft over the server's limit. */
+data class OpenCodeSessionComposerNote(
+    val text: String,
+    val isError: Boolean = false,
+)
+
 sealed interface OpenCodeSessionComposerState {
     data class Prompt(
         val text: String,
@@ -165,6 +173,15 @@ sealed interface OpenCodeSessionComposerState {
         val suggestionsOpen: Boolean = false,
         /** This session's sent prompts, oldest first, for ↑ / ↓ recall with a hardware keyboard. */
         val promptHistory: List<String> = emptyList(),
+        /** Replaces the default empty-field placeholder, e.g. "Reply, then resume the goal…". */
+        val placeholder: String? = null,
+        /**
+         * Muted hint drawn right after a draft that is only a command waiting for its argument,
+         * e.g. `/goal ` → "Describe what “done” looks like…".
+         */
+        val argumentHint: String? = null,
+        /** A line under the field, such as a character count near a limit. */
+        val note: OpenCodeSessionComposerNote? = null,
     ) : OpenCodeSessionComposerState
 
     /** The descendant subagent session asking a permission or question; Open shows that session. */
@@ -197,6 +214,13 @@ sealed interface OpenCodeSessionComposerState {
         val submitting: Boolean = false,
         val actionsEnabled: Boolean = true,
         val errorMessage: String? = null,
+        /**
+         * The "Deny with a note" draft; non-null shows the note step instead of the Deny / Always /
+         * Allow once buttons.
+         */
+        val note: String? = null,
+        /** Other waiting requests of the same session; denying this one rejects them too. */
+        val otherPendingInSessionCount: Int = 0,
     ) : OpenCodeSessionComposerState
 
     data class QuestionOption(
@@ -289,6 +313,28 @@ sealed interface OpenCodeSessionComposerAction {
     ) : OpenCodeSessionComposerAction
 
     data class AlwaysAllowPermission(
+        val requestId: String,
+        val sessionId: String,
+    ) : OpenCodeSessionComposerAction
+
+    /** "Deny with a note…" from the Deny menu: show the note step. */
+    data class OpenPermissionNote(
+        val requestId: String,
+        val sessionId: String,
+    ) : OpenCodeSessionComposerAction
+
+    data class PermissionNoteChanged(
+        val requestId: String,
+        val text: String,
+    ) : OpenCodeSessionComposerAction
+
+    /** Back from the note step to the permission prompt; nothing is answered. */
+    data class CancelPermissionNote(
+        val requestId: String,
+    ) : OpenCodeSessionComposerAction
+
+    /** Deny the request with the note. */
+    data class SendPermissionNote(
         val requestId: String,
         val sessionId: String,
     ) : OpenCodeSessionComposerAction
@@ -818,21 +864,41 @@ private fun PromptEntryContent(
                     if (state.text.isBlank()) {
                         Text(
                             text =
-                                stringResource(
-                                    if (state.sideQuestionMode) {
-                                        R.string.component_composer_side_question_placeholder
-                                    } else {
-                                        R.string.component_composer_placeholder
-                                    },
-                                ),
+                                when {
+                                    state.sideQuestionMode -> stringResource(R.string.component_composer_side_question_placeholder)
+                                    state.placeholder != null -> state.placeholder
+                                    else -> stringResource(R.string.component_composer_placeholder)
+                                },
                             style = MaterialTheme.typography.bodyLarge,
                             color = openCodeColor("text-weak"),
+                        )
+                    } else if (state.argumentHint != null) {
+                        // The draft drawn invisibly, so the hint starts where the typed text ends.
+                        Text(
+                            text =
+                                buildAnnotatedString {
+                                    withStyle(SpanStyle(color = Color.Transparent)) { append(state.text) }
+                                    append(state.argumentHint)
+                                },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = openCodeColor("text-weak"),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clearAndSetSemantics {},
                         )
                     }
                     innerTextField()
                 }
             },
         )
+        state.note?.let { note ->
+            Text(
+                text = note.text,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (note.isError) openCodeColor("error") else openCodeColor("text-weak"),
+            )
+        }
     }
 
     PickerChipsRow(state = state, onAction = onAction)
@@ -1222,6 +1288,19 @@ private fun PermissionApprovalContent(
     state: OpenCodeSessionComposerState.Permission,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
+    val note = state.note
+    if (note != null) {
+        PermissionNoteContent(state = state, note = note, onAction = onAction)
+    } else {
+        PermissionPromptContent(state = state, onAction = onAction)
+    }
+}
+
+@Composable
+private fun PermissionPromptContent(
+    state: OpenCodeSessionComposerState.Permission,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+) {
     val actionsEnabled = state.actionsEnabled && !state.submitting
     val showsAlways = state.alwaysPatterns.isNotEmpty()
     // Reading order: Deny, Always (when offered), Allow once.
@@ -1236,6 +1315,13 @@ private fun PermissionApprovalContent(
     }
     KeyboardShortcutHandler(KeyboardShortcutAction.PromptReject, enabled = actionsEnabled, title = UiText.resource(R.string.keyboard_shortcuts_deny)) {
         onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId))
+    }
+    KeyboardShortcutHandler(
+        KeyboardShortcutAction.PromptRejectWithNote,
+        enabled = actionsEnabled,
+        title = UiText.resource(R.string.keyboard_shortcuts_deny_with_note),
+    ) {
+        onAction(OpenCodeSessionComposerAction.OpenPermissionNote(state.requestId, state.sessionId))
     }
     PromptKeyboardColumn(keyboard) {
         state.attribution?.let { RequestAttributionRow(it, onAction) }
@@ -1293,13 +1379,10 @@ private fun PermissionApprovalContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OpenCodeButton(
-                OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_deny)),
-                onClick = {
-                    onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId))
-                },
+            PermissionDenyButton(
+                state = state,
                 enabled = actionsEnabled,
-                contrast = OpenCodeButtonContrast.Low,
+                onAction = onAction,
                 modifier = Modifier.focusRequester(keyboard.target(0)),
             )
             Spacer(Modifier.weight(1f))
@@ -1328,6 +1411,189 @@ private fun PermissionApprovalContent(
         }
         RequestPageDots(position = state.queuePosition, count = state.queueCount)
     }
+}
+
+/** Split Deny: one tap denies; ▾ or a long-press opens Deny / Deny with a note…. */
+@Composable
+private fun PermissionDenyButton(
+    state: OpenCodeSessionComposerState.Permission,
+    enabled: Boolean,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var menuOpen by remember(state.requestId) { mutableStateOf(false) }
+    // A reply in flight or a lost connection closes the menu; it does not reopen by itself.
+    LaunchedEffect(enabled) { if (!enabled) menuOpen = false }
+    val denyTitle = stringResource(R.string.component_composer_deny)
+    val entries =
+        listOf(
+            OpenCodeOverflowMenuEntry(
+                title = denyTitle,
+                icon = OpenCodeIcons.Close,
+                enabled = enabled,
+                testTag = "sessionComposerDenyMenuDeny",
+                onClick = { onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId)) },
+            ),
+            OpenCodeOverflowMenuEntry(
+                title = stringResource(R.string.component_composer_deny_with_note_menu),
+                subtitle = stringResource(R.string.component_composer_deny_with_note_menu_subtitle),
+                icon = OpenCodeIcons.Edit,
+                enabled = enabled,
+                testTag = "sessionComposerDenyMenuWithNote",
+                onClick = { onAction(OpenCodeSessionComposerAction.OpenPermissionNote(state.requestId, state.sessionId)) },
+            ),
+        )
+    OpenCodeAnchoredOverflowHost(
+        expanded = menuOpen && enabled,
+        onDismissRequest = { menuOpen = false },
+        entries = entries,
+    ) {
+        OpenCodeSplitButton(
+            title = denyTitle,
+            menuContentDescription = stringResource(R.string.component_composer_deny_options),
+            onClick = { onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId)) },
+            onMenu = { menuOpen = true },
+            enabled = enabled,
+            contrast = OpenCodeButtonContrast.Low,
+            modifier = modifier.testTag("sessionComposerDeny"),
+        )
+    }
+}
+
+/**
+ * "Deny with a note": the permission's summary, a note field (focused on open), and Cancel /
+ * Send. Return sends, Shift+Return adds a line, Esc goes back to the prompt without answering.
+ */
+@Composable
+private fun PermissionNoteContent(
+    state: OpenCodeSessionComposerState.Permission,
+    note: String,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+) {
+    val sendEnabled = state.actionsEnabled && !state.submitting && note.isNotBlank()
+    val currentSendEnabled by rememberUpdatedState(sendEnabled)
+    val hardwareKeyboard = rememberOpenCodeHardwareKeyboardConnected()
+    val reportNoteFocus = rememberOpenCodeTextInputFocusReport(OpenCodeFocusedTextInput.PermissionNote)
+    val leaveField = rememberOpenCodeLeaveTextInput()
+    val softwareKeyboard = LocalSoftwareKeyboardController.current
+    val field = remember { FocusRequester() }
+    val send = { onAction(OpenCodeSessionComposerAction.SendPermissionNote(state.requestId, state.sessionId)) }
+    val cancel = {
+        leaveField()
+        onAction(OpenCodeSessionComposerAction.CancelPermissionNote(state.requestId))
+    }
+    // The note step opens on purpose (menu or Ctrl+Alt+Backspace), so the field takes focus and
+    // the soft keyboard comes up. Wait a frame for the Deny menu's popup to hand window focus back.
+    LaunchedEffect(state.requestId) {
+        withFrameNanos { }
+        if (field.tryRequestFocus()) softwareKeyboard?.show()
+    }
+    KeyboardShortcutHandler(
+        KeyboardShortcutAction.PromptPrimary,
+        enabled = sendEnabled,
+        title = UiText.resource(R.string.keyboard_shortcuts_send_note),
+    ) {
+        send()
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag("sessionComposerPermissionNote"),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        state.attribution?.let { RequestAttributionRow(it, onAction) }
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                stringResource(R.string.component_composer_deny_with_note_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            PermissionNoteSummary(state)
+            OpenCodeTextInput(
+                value = note,
+                onValueChange = { text -> onAction(OpenCodeSessionComposerAction.PermissionNoteChanged(state.requestId, text)) },
+                hint = stringResource(R.string.component_composer_deny_note_placeholder),
+                enabled = !state.submitting,
+                modifier =
+                    Modifier
+                        .focusRequester(field)
+                        .onFocusChanged { reportNoteFocus(it.hasFocus) }
+                        .onInterceptKeyBeforeSoftKeyboard { event ->
+                            customAnswerKey(
+                                event = event,
+                                hardwareKeyboard = hardwareKeyboard,
+                                onSave = { if (currentSendEnabled) send() },
+                                onLeave = cancel,
+                            )
+                        }.testTag("sessionComposerPermissionNoteField"),
+                minLines = QuestionCustomMinLines,
+                maxLines = QuestionCustomMaxLines,
+            )
+            if (state.otherPendingInSessionCount > 0) {
+                Text(
+                    pluralStringResource(
+                        R.plurals.component_composer_deny_note_also_denies,
+                        state.otherPendingInSessionCount,
+                        state.otherPendingInSessionCount,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = openCodeColor("text-weak"),
+                )
+            }
+            state.errorMessage?.let {
+                Text(it, color = openCodeColor("error"), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().focusGroup(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OpenCodeButton(
+                OpenCodeButtonVariant.CompactText(stringResource(R.string.common_cancel)),
+                onClick = cancel,
+                enabled = !state.submitting,
+                contrast = OpenCodeButtonContrast.Low,
+                modifier = Modifier.testTag("sessionComposerPermissionNoteCancel"),
+            )
+            Spacer(Modifier.weight(1f))
+            if (state.submitting) {
+                CircularProgressIndicator(modifier = Modifier.padding(horizontal = 8.dp), strokeWidth = 2.dp)
+            }
+            OpenCodeButton(
+                OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_send)),
+                onClick = send,
+                enabled = sendEnabled,
+                modifier = Modifier.testTag("sessionComposerPermissionNoteSend"),
+            )
+        }
+    }
+}
+
+/** "bash  git push origin main": the permission kind, then its first pattern or file in code type. */
+@Composable
+private fun PermissionNoteSummary(state: OpenCodeSessionComposerState.Permission) {
+    val target = state.files.firstOrNull()?.path ?: state.patterns.firstOrNull()
+    val muted = openCodeColor("text-weak")
+    Text(
+        text =
+            buildAnnotatedString {
+                append(state.permission.replace('_', ' '))
+                if (!target.isNullOrBlank()) {
+                    append("  ")
+                    withStyle(
+                        SpanStyle(
+                            fontFamily = PermissionCodeStyle.fontFamily,
+                            fontSize = PermissionCodeStyle.fontSize,
+                            color = muted,
+                        ),
+                    ) { append(target) }
+                }
+            },
+        style = MaterialTheme.typography.bodyMedium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 /** The permission or question request this content answers; null for the prompt input and lockout. */

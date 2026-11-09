@@ -64,6 +64,8 @@ sealed class SessionChatTimelineBlock {
         val changesInitialFilePath: String? = null,
         /** [status] is Error because the user stopped or declined it; render neutral. */
         val isInterrupted: Boolean = false,
+        /** "Your note: …" under a call the user denied with a note; muted, under [errorText]. */
+        val noteText: UiText? = null,
         val isMalformed: Boolean = false,
         /**
          * v2 is still streaming this tool's arguments: [subtitle] is the value
@@ -107,6 +109,14 @@ sealed class SessionChatTimelineBlock {
     data class Notice(
         override val blockID: String,
         val notice: TimelineNotice,
+    ) : SessionChatTimelineBlock()
+
+    /**
+     * A paused or met goal's status row (#1007). It is built from the goal state, not a
+     * message ([SessionChatGoalTimeline]); the row reads the goal from Session Chat.
+     */
+    data class GoalStatus(
+        override val blockID: String,
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
@@ -168,6 +178,8 @@ sealed class SessionChatTimelineBlock {
         val renderedMarkdown: MarkdownDocument? = null,
         val chips: List<ToolChip>,
         val errorLines: List<UiText>,
+        /** "Your note: …" for each chip the user denied with a note; muted, after [errorLines]. */
+        val noteLines: List<UiText> = emptyList(),
         val textBlockID: String? = null,
         val expansionID: String = blockID,
         val exploreSummary: ExploreSummary? = null,
@@ -386,10 +398,16 @@ enum class ToolChipFamily { Explore, Change, Command, Agent, Skill }
 object SessionChatTimelineBlocks {
     private val contextToolNames = setOf("read", "glob", "grep", "websearch")
 
-    /** Neutral copy for a tool the user stopped or declined (never the raw abort text). */
-    internal fun interruptedToolText(error: String?): UiText {
+    /**
+     * Neutral copy for a tool the user stopped or declined (never the raw abort text). [declined]
+     * is the domain's permission-denied flag; v2 sends the deny note, not a "rejected" text.
+     */
+    internal fun interruptedToolText(
+        error: String?,
+        declined: Boolean = false,
+    ): UiText {
         val text = error.orEmpty()
-        return if (text.contains("declined", ignoreCase = true) || text.contains("rejected", ignoreCase = true)) {
+        return if (declined || text.contains("declined", ignoreCase = true) || text.contains("rejected", ignoreCase = true)) {
             UiText.resource(R.string.tool_status_declined)
         } else {
             UiText.resource(R.string.tool_status_stopped)
@@ -648,6 +666,7 @@ object SessionChatTimelineBlocks {
                     text = text,
                     chips = chips,
                     errorLines = chips.mapNotNull(::chipErrorLine),
+                    noteLines = chips.mapNotNull { chip -> chip.card.noteText },
                     textBlockID = if (text != null) PresentationBlockId.mergedText(textIds) else null,
                     expansionID = PresentationBlockId.stepParagraph(listOf(partIds.first())),
                     exploreSummary = exploreSummary,
@@ -878,7 +897,7 @@ object SessionChatTimelineBlocks {
             val toolsSoFar = (tool.metadata?.get("summary") as? JsonArray)?.size?.takeIf { it > 0 }
             val detail =
                 when {
-                    status == SessionChatStepStatus.Failed -> card.errorText?.let(::firstLine) ?: TimelineText.verbatim(description)
+                    status == SessionChatStepStatus.Failed -> failedStepDetail(card) ?: TimelineText.verbatim(description)
                     status.isInFlight && toolsSoFar != null ->
                         TimelineText.joined(
                             listOfNotNull(
@@ -1028,7 +1047,7 @@ object SessionChatTimelineBlocks {
     ): UiText? {
         if (status == SessionChatStepStatus.Failed) {
             if (card.isMalformed) return UiText.resource(R.string.tool_error_malformed)
-            return card.errorText?.let(::firstLine)
+            return failedStepDetail(card)
         }
         if (status != SessionChatStepStatus.Completed) return null
         return when (name) {
@@ -1061,6 +1080,10 @@ object SessionChatTimelineBlocks {
             .lineSequence()
             .map { it.trim() }
             .firstOrNull { it.isNotEmpty() }
+
+    /** A failed step's one line: the error, then "Your note: …" when the user denied it with one. */
+    private fun failedStepDetail(card: SessionChatTimelineBlock.ToolCard): UiText? =
+        TimelineText.joined(listOfNotNull(card.errorText?.let(::firstLine), card.noteText?.let(::firstLine)))
 
     /** First line of server text; app text is already one line. */
     private fun firstLine(text: UiText): UiText? =
@@ -1671,6 +1694,7 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlock.StopNote,
             is SessionChatTimelineBlock.FailureLine,
             is SessionChatTimelineBlock.Notice,
+            is SessionChatTimelineBlock.GoalStatus,
             -> false
         }
 
@@ -2080,7 +2104,7 @@ object SessionChatTimelineBlocks {
         val errorText =
             when {
                 failedExit != null -> UiText.resource(R.string.tool_error_exit_code, failedExit)
-                interrupted -> interruptedToolText(tool.error)
+                interrupted -> interruptedToolText(tool.error, declined = tool.isDeclined)
                 tool.status == ToolStatus.Error -> TimelineText.verbatim(tool.error?.takeIf { it.isNotEmpty() })
                 else -> null
             }
@@ -2099,6 +2123,7 @@ object SessionChatTimelineBlocks {
             opensChangesReview = chrome.opensChangesReview,
             changesInitialFilePath = chrome.changesInitialFilePath,
             isInterrupted = interrupted,
+            noteText = tool.userNote?.takeIf { interrupted }?.let { UiText.resource(R.string.tool_user_note, it) },
             isMalformed = tool.isMalformed,
             isReceivingArguments = receivingArguments,
             presentation = ToolResultInspector.fromTool(tool, chrome.title),

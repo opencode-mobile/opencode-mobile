@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.message.ToolArgumentsPreview
 import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolResultImages
+import dev.opencode.mobile.domain.goal.SessionGoalKickoff
 import dev.opencode.mobile.domain.message.V2ContentPartId
 import dev.opencode.mobile.domain.message.V2TimelineNotices
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -47,6 +48,12 @@ class EventDomainAdapter(
      * carries only the shell, while the server updates the item it started.
      */
     private val runningShellMessageIds = ConcurrentHashMap<String, String>()
+
+    /**
+     * Goal set notice per v2 inbox id, remembered from the kickoff's enqueue:
+     * `inbox.delivered` carries only the id, and must not turn the row into a user message.
+     */
+    private val goalKickoffNotices = ConcurrentHashMap<String, TimelineNotice.GoalSet>()
 
     fun parseEvent(dataLine: String): OpencodeEvent? = parseEvents(dataLine).firstOrNull()
 
@@ -194,13 +201,17 @@ class EventDomainAdapter(
             "session.inbox.enqueued",
             "session.inbox.delivery.changed",
             ->
-                // A `synthetic` item is server-injected context (a finished shell command's
-                // output, Plan mode's reminder), not a prompt the user queued: no pending chrome.
-                userPromptEvents(properties, waiting = !isSyntheticInboxItem(properties))
+                goalKickoffEvents(properties, delivered = false)
+                    // A `synthetic` item is server-injected context (a finished shell command's
+                    // output, Plan mode's reminder), not a prompt the user queued: no pending chrome.
+                    ?: userPromptEvents(properties, waiting = !isSyntheticInboxItem(properties))
             "session.next.prompted",
             "session.inbox.delivered",
-            -> userPromptEvents(properties, waiting = false)
-            "session.inbox.cancelled" -> listOf(inboxCancelled(properties))
+            -> goalKickoffEvents(properties, delivered = true) ?: userPromptEvents(properties, waiting = false)
+            "session.inbox.cancelled" -> {
+                userMessageId(properties)?.let(goalKickoffNotices::remove)
+                listOf(inboxCancelled(properties))
+            }
             "session.next.step.started",
             "session.step.started",
             -> stepStarted(properties)
@@ -361,6 +372,30 @@ class EventDomainAdapter(
         return event("session.created", projected)
     }
 
+    /**
+     * The goal plugin's kickoff reaches `/api/event` as a synthetic inbox item with a
+     * description and goal metadata: a Goal set notice under the inbox id, which is the id
+     * REST records the delivered message under. Null for any other item.
+     */
+    private fun goalKickoffEvents(
+        properties: JsonObject,
+        delivered: Boolean,
+    ): List<OpencodeEvent>? {
+        val messageId = userMessageId(properties) ?: return null
+        val notice =
+            goalKickoffNotice(properties)?.also { goalKickoffNotices[messageId] = it }
+                ?: goalKickoffNotices[messageId]
+                ?: return null
+        if (delivered) goalKickoffNotices.remove(messageId)
+        return noticeEvents(notice, properties, envelopeId = null, messageId = messageId)
+    }
+
+    private fun goalKickoffNotice(properties: JsonObject): TimelineNotice.GoalSet? {
+        if (!isSyntheticInboxItem(properties)) return null
+        val payload = promptObject(properties) ?: return null
+        return V2TimelineNotices.goalSet(payload["metadata"] as? JsonObject, payload.string("description"))
+    }
+
     private fun inboxCancelled(properties: JsonObject): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val messageId = userMessageId(properties)
@@ -407,13 +442,19 @@ class EventDomainAdapter(
         val messageId = userMessageId(properties)
         val parts = mutableListOf<OpencodeEvent>()
         val rawText = prompt?.string("text") ?: properties.string("text")
-        val uploads = UploadedAttachments.parse(prompt?.get("metadata") as? JsonObject ?: properties["metadata"] as? JsonObject)
-        val text = rawText?.let { UploadedAttachments.stripLines(it, uploads) }
+        val metadata = prompt?.get("metadata") as? JsonObject ?: properties["metadata"] as? JsonObject
+        val uploads = UploadedAttachments.parse(metadata)
+        // A goal kickoff sent with attachments carries the plugin's instructions: show the objective only.
+        val goalKickoffId = V2TimelineNotices.goalKickoffId(metadata)
+        val text =
+            rawText?.let { UploadedAttachments.stripLines(it, uploads) }?.let { prompt ->
+                if (goalKickoffId != null) SessionGoalKickoff.objective(prompt) ?: prompt else prompt
+            }
         // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
         // context, not something the user typed: keep the part but mark it hidden.
         val synthetic = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
         text?.takeIf { it.isNotBlank() }?.let {
-            parts += userTextPartUpdated(sessionId, messageId, it, synthetic = synthetic)
+            parts += userTextPartUpdated(sessionId, messageId, it, synthetic = synthetic, goalKickoffId = goalKickoffId)
         }
         if (prompt == null && uploads.isEmpty()) return parts
         val files = prompt?.get("files") as? JsonArray
@@ -432,6 +473,7 @@ class EventDomainAdapter(
         messageId: String?,
         text: String,
         synthetic: Boolean = false,
+        goalKickoffId: String? = null,
     ): OpencodeEvent {
         val part =
             buildJsonObject {
@@ -441,6 +483,7 @@ class EventDomainAdapter(
                 put("type", "text")
                 put("text", text)
                 if (synthetic) put("synthetic", true)
+                goalKickoffId?.let { put("goalID", it) }
             }
         return event("message.part.updated", buildJsonObject { put("part", part) })
     }
@@ -551,6 +594,7 @@ class EventDomainAdapter(
      * stamps `time.created` (the envelope time) so a live reply orders after the
      * prompt it answers; later partial infos omit `time` and the store keeps it.
      */
+
     /**
      * A structured compaction error with no id has no timeline row. Toast it, the same way a
      * step failure toasts when the assistant row cannot be created.
@@ -666,7 +710,10 @@ class EventDomainAdapter(
         val partId = properties.string("id") ?: callId
         val errorObject = properties["error"] as? JsonObject
         val error = errorObject?.string("message")?.let(SessionFailure::unwrap)
-        val interrupted = status == "error" && ToolInterruption.isAbortedType(errorObject?.string("type"))
+        val errorType = errorObject?.string("type")
+        val interrupted = status == "error" && ToolInterruption.isUserInterruptionType(errorType)
+        val declined = status == "error" && ToolInterruption.isPermissionRejectedType(errorType)
+        val userNote = if (declined) ToolInterruption.userNote(errorType, errorObject?.string("message")) else null
         val malformed =
             SessionFailure.isMalformedTool(
                 type = errorObject?.string("type"),
@@ -710,6 +757,8 @@ class EventDomainAdapter(
             // v2 `tool.progress` carries the live title in metadata (v1: state.title).
             title = metadata?.string("title")?.takeIf { it.isNotEmpty() },
             interrupted = interrupted,
+            declined = declined,
+            userNote = userNote,
         )
     }
 
@@ -958,9 +1007,9 @@ class EventDomainAdapter(
         notice: TimelineNotice?,
         properties: JsonObject,
         envelopeId: String?,
+        messageId: String? = messageIdFromEnvelope(envelopeId),
     ): List<OpencodeEvent> {
-        if (notice == null) return emptyList()
-        val messageId = messageIdFromEnvelope(envelopeId) ?: return emptyList()
+        if (notice == null || messageId == null) return emptyList()
         val sessionId = sessionIdFromProperties(properties)
         val info =
             buildJsonObject {
@@ -1018,6 +1067,8 @@ class EventDomainAdapter(
         interrupted: Boolean = false,
         malformed: Boolean = false,
         attachments: JsonArray? = null,
+        declined: Boolean = false,
+        userNote: String? = null,
     ): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val state =
@@ -1026,6 +1077,8 @@ class EventDomainAdapter(
                 attachments?.let { put("attachments", it) }
                 if (interrupted) put("interrupted", true)
                 if (malformed) put("malformed", true)
+                if (declined) put("declined", true)
+                userNote?.let { put("userNote", it) }
                 title?.let { put("title", it) }
                 if (input is JsonObject) put("input", input)
                 output?.let { put("output", it) }

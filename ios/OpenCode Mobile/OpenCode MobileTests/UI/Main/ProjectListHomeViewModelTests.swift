@@ -166,8 +166,8 @@ struct ProjectListHomeViewModelTests {
         }
     }
 
-    @Test func refresh_loadsAllSessions() async {
-        let sessions = (1 ... 7).map {
+    @Test func refresh_loadsTheNewestWindowOfRootSessions() async {
+        let sessions = (1 ... 60).map {
             Session(id: "\($0)", title: "S\($0)", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: Int64($0))
         }
         let viewModel = makeViewModel(
@@ -179,7 +179,7 @@ struct ProjectListHomeViewModelTests {
         // Disk-first paints empty cache immediately; wait for live SWR to fill sections.
         let populated = await waitUntil {
             if case let .loaded(sections, _, _, _) = viewModel.state {
-                return sections.first?.allSessions.count == 7
+                return sections.first?.allSessions.count == HomeSessionPaging.pageSize
             }
             return false
         }
@@ -188,7 +188,10 @@ struct ProjectListHomeViewModelTests {
             Issue.record("Expected loaded")
             return
         }
-        #expect(sections.first?.allSessions.count == 7)
+        #expect(sections.first?.allSessions.first?.id == "60")
+        #expect(sections.first?.allSessions.last?.id == "11")
+        #expect(sections.first?.hasMoreSessions == true)
+        #expect(sections.first?.oldestWindowUpdatedAtEpochMs == 11)
     }
 
     @Test func refresh_excludesArchivedSessionsFromActiveLists() async {
@@ -461,8 +464,11 @@ struct ProjectListHomeViewModelTests {
         #expect(await waitUntil { Set(vcs.waitingDirectories) == ["/repo", "/wt/tax", "/wt/export"] })
         vcs.open()
 
+        // Rows are built off the main actor, so they can land after the branches.
         let shown = await waitUntil {
             viewModel.homeProjects.first?.worktrees.map(\.branch) == ["main", "feature/export", "feature/tax-rounding"]
+                && homeSession(viewModel, id: "s-tax") != nil
+                && homeSession(viewModel, id: "s-main") != nil
         }
         #expect(shown)
         guard case let .loaded(sections, _, _, _) = viewModel.state else {
@@ -521,8 +527,10 @@ struct ProjectListHomeViewModelTests {
 
         await viewModel.refresh()
 
+        // Rows are built off the main actor, so they can land after the branches.
         let shown = await waitUntil {
             viewModel.homeProjects.first?.worktrees.map(\.branch) == ["main", "feature/tax-rounding"]
+                && homeSession(viewModel, id: "s-tax") != nil
         }
         #expect(shown)
         guard case let .loaded(sections, _, _, _) = viewModel.state else {
@@ -535,93 +543,6 @@ struct ProjectListHomeViewModelTests {
         #expect(await waitUntil { calls.count("/notes") == 3 })
         try? await Task.sleep(for: .milliseconds(50))
         #expect(calls.count("/notes") == 3)
-    }
-
-    // MARK: New worktree (#752)
-
-    @Test func newWorktreeFromRunInCreatesRefetchesAndStartsThere() async {
-        let worktrees = ScriptedWorktreeRepository(
-            loads: [.loaded(directories: ["/repo"], listsSessions: false)],
-            created: .success(CreatedWorktree(directory: "/data/worktree/abc/brave-otter", name: "brave-otter", branch: nil))
-        )
-        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
-        let viewModel = makeViewModel(
-            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
-            serverProtocol: .v2,
-            worktreeRepository: worktrees
-        )
-        await viewModel.refresh()
-        #expect(await waitUntil {
-            viewModel.homeProjects.first?.projectID == "prj_repo" && worktrees.loadedPaths.contains("/repo")
-        })
-        let project = viewModel.homeProjects[0]
-        #expect(project.worktrees.count == 1)
-        #expect(viewModel.newWorktreeAvailability(for: project, worktreesEnabled: true).enabled)
-
-        viewModel.openNewWorktree(projectKey: "prj_repo")
-        #expect(viewModel.worktreeCreate.state?.origin == .runIn(projectKey: "prj_repo"))
-        #expect(viewModel.worktreeCreate.state?.sourceDirectory == "/repo")
-        #expect(viewModel.worktreeCreate.state?.serverProtocol == .v2)
-
-        let closes = await viewModel.submitNewWorktree()
-
-        #expect(closes)
-        #expect(worktrees.createRequests.map(\.projectID) == ["prj_repo"])
-        #expect(worktrees.createRequests.map(\.sourceDirectory) == ["/repo"])
-        #expect(worktrees.refetchedProjectIDs == ["prj_repo"])
-        #expect(viewModel.worktreeCreate.state == nil)
-        #expect(viewModel.pendingSessionOpen?.worktree == "/data/worktree/abc/brave-otter")
-        #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
-    }
-
-    @Test func newWorktreeOnV1ReloadsTheAddedPathsAfterCreating() async {
-        let worktrees = ScriptedWorktreeRepository(
-            loads: [.loaded(directories: [], listsSessions: true)],
-            created: .success(CreatedWorktree(directory: "/wt/fix", name: "fix", branch: "opencode/fix"))
-        )
-        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
-        let viewModel = makeViewModel(
-            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
-            serverProtocol: .v1,
-            worktreeRepository: worktrees
-        )
-        await viewModel.refresh()
-        #expect(await waitUntil { worktrees.loadedPaths.count >= 1 && viewModel.homeProjects.first?.projectID == "prj_repo" })
-        let loadsBefore = worktrees.loadedPaths.count
-
-        viewModel.openNewWorktree(projectKey: "prj_repo")
-        #expect(viewModel.worktreeCreate.state?.branchValue.resolved.hasPrefix("opencode/") == true)
-        #expect(await viewModel.submitNewWorktree())
-
-        #expect(worktrees.loadedPaths.count >= loadsBefore + 1)
-        #expect(worktrees.refetchedProjectIDs.isEmpty)
-        #expect(viewModel.pendingSessionOpen?.worktree == "/wt/fix")
-    }
-
-    @Test func failedNewWorktreeStartsNothingAndKeepsTheForm() async {
-        let worktrees = ScriptedWorktreeRepository(
-            loads: [.loaded(directories: ["/repo"], listsSessions: false)],
-            created: .failure(WorktreeCreateError(message: "fatal: invalid reference: nope"))
-        )
-        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
-        let viewModel = makeViewModel(
-            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
-            serverProtocol: .v2,
-            worktreeRepository: worktrees
-        )
-        await viewModel.refresh()
-        #expect(await waitUntil { viewModel.homeProjects.first?.projectID == "prj_repo" })
-
-        viewModel.openNewWorktree(projectKey: "prj_repo")
-        let closes = await viewModel.submitNewWorktree()
-
-        #expect(!closes)
-        #expect(viewModel.pendingSessionOpen == nil)
-        #expect(worktrees.refetchedProjectIDs.isEmpty)
-        #expect(viewModel.worktreeCreate.state?.errorMessage?.resolved == "Couldn't create the worktree: fatal: invalid reference: nope")
     }
 
     @Test func removingAMergedProjectRemovesEveryMemberPath() async {
@@ -1533,7 +1454,9 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.addProjectSheet.fieldText == "/home/")
     }
 
-    @Test func createSession_usesFocusedWorktreeAndClearsError() async {
+    // MARK: New session draft (#1004)
+
+    @Test func newSession_opensADraftAndCreatesNothing() async {
         let sessionRepository = FakeSessionRepository()
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
@@ -1542,7 +1465,9 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         #expect(viewModel.revealNewestToken == 0)
-        await viewModel.createSession(in: "/repo")
+
+        viewModel.openNewSessionDraft(NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo"))
+
         #expect(sessionRepository.createdDirectories.isEmpty)
         #expect(viewModel.revealNewestToken == 1)
         #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
@@ -1555,21 +1480,61 @@ struct ProjectListHomeViewModelTests {
         #expect(createError == nil)
     }
 
-    @Test func createSession_assignsUniqueOptimisticNavigationInstanceIDs() async {
+    @Test func newSession_assignsUniqueNavigationInstanceIDs() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
             sessionRepository: FakeSessionRepository(),
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
-        await viewModel.createSession(in: "/repo")
+        let start = NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo")
+        viewModel.openNewSessionDraft(start)
         let first = viewModel.pendingSessionOpen?.optimisticNavigationInstanceID
         viewModel.consumePendingSessionOpen()
-        await viewModel.createSession(in: "/repo")
+        viewModel.openNewSessionDraft(start)
         let second = viewModel.pendingSessionOpen?.optimisticNavigationInstanceID
         #expect(first != nil)
         #expect(second != nil)
         #expect(first != second)
+    }
+
+    @Test func newSession_keptDraftWinsOverHomesProject() async {
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(projectKey: "path:/other", projectDirectory: "/other", composer: ComposerDraft(text: "half typed")),
+            forProfile: homeDraftProfileKey
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            newSessionDraftStore: store
+        )
+        await viewModel.refresh()
+
+        viewModel.openNewSessionDraft(NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo"))
+
+        #expect(viewModel.pendingSessionOpen?.worktree == "/other")
+        #expect(store.draft(forProfile: homeDraftProfileKey)?.composer.text == "half typed")
+    }
+
+    @Test func worktreesNewSessionHereMovesTheDraftThereAndKeepsItsText() async {
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo", composer: ComposerDraft(text: "keep")),
+            forProfile: homeDraftProfileKey
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            newSessionDraftStore: store
+        )
+        await viewModel.refresh()
+
+        await viewModel.handleWorktreeRequest(.newSession(directory: "/wt/feature"))
+
+        #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
+        #expect(viewModel.pendingSessionOpen?.worktree == "/wt/feature")
+        #expect(store.draft(forProfile: homeDraftProfileKey)?.composer.text == "keep")
     }
 
     @Test func homeReveal_afterStaleAbsenceIncrementsRevealToken() async {
@@ -1990,10 +1955,13 @@ struct ProjectListHomeViewModelTests {
             Session(id: "root", title: "Issue", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 2),
             Session(id: "child", title: "Subagent", slug: nil, projectID: nil, directory: "/repo", parentID: "root", updatedAtEpochMs: 1),
         ]
+        let repository = FakeSessionRepository(sessions: sessions)
         let sessionLive = ControllableSessionLiveStore()
+        sessionLive.ancestry = fetchingAncestry(repository)
         let statusLive = ControllableStatusLiveStore()
         let readyLive = ControllableReadyStore()
-        sessionLive.emit(directory: "/repo", sessions: sessions)
+        // Home's window holds roots only; the child is found by asking for it.
+        sessionLive.emit(directory: "/repo", sessions: [sessions[0]])
         readyLive.emit(directory: "/repo", ids: [])
         statusLive.emit(
             directory: "/repo",
@@ -2001,7 +1969,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
-            sessionRepository: FakeSessionRepository(sessions: sessions),
+            sessionRepository: repository,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
             sessionLiveStoreOverride: sessionLive,
             sessionStatusLiveStoreOverride: statusLive,
@@ -2009,11 +1977,175 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
 
-        let working = await waitUntil {
+        let working = await waitUntil(timeoutMs: ancestryWaitMs) {
             homeSession(viewModel, id: "root")?.statusLabel == "Working"
         }
         #expect(working)
         #expect(homeSession(viewModel, id: "child") == nil)
+        #expect(repository.fetchedIDs == ["child"])
+    }
+
+    @Test func liveStatus_busyGrandchildWithUnknownParentsMarksItsRoot() async {
+        let sessions = [
+            Session(id: "other", title: "Other", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 3),
+            Session(id: "root", title: "Issue", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 2),
+            Session(id: "child", title: "Plan", slug: nil, projectID: nil, directory: "/repo", parentID: "root", updatedAtEpochMs: 1),
+            Session(id: "grandchild", title: "Explore", slug: nil, projectID: nil, directory: "/repo", parentID: "child", updatedAtEpochMs: 1),
+        ]
+        let repository = FakeSessionRepository(sessions: sessions)
+        let sessionLive = ControllableSessionLiveStore()
+        sessionLive.ancestry = fetchingAncestry(repository)
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: Array(sessions.prefix(2)))
+        readyLive.emit(directory: "/repo", ids: [])
+        statusLive.emit(
+            directory: "/repo",
+            statuses: ["grandchild": SessionStatus(sessionID: "grandchild", raw: ["type": "busy"])]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: repository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+        await viewModel.refresh()
+
+        // Two lookups (grandchild, then child) and a rebuild each run in background tasks; wait
+        // for the walk to reach the root rather than for whatever the first rebuild showed.
+        let working = await waitUntil(timeoutMs: ancestryWaitMs) {
+            repository.fetchedIDs == ["grandchild", "child"]
+                && homeSession(viewModel, id: "root")?.statusLabel == "Working"
+        }
+        #expect(working)
+        #expect(repository.fetchedIDs == ["grandchild", "child"])
+        #expect(homeSession(viewModel, id: "other")?.statusLabel == nil)
+    }
+
+    @Test func liveStatus_busyRootOutsideTheWindowIsListedUntilItsFamilyIdles() async {
+        let recent = Session(id: "recent", title: "Recent", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 9)
+        let old = Session(id: "old", title: "Old", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1)
+        let oldChild = Session(id: "old-child", title: "Sub", slug: nil, projectID: nil, directory: "/repo", parentID: "old", updatedAtEpochMs: 1)
+        let elsewhere = Session(id: "elsewhere", title: "Else", slug: nil, projectID: nil, directory: "/other", parentID: nil, updatedAtEpochMs: 5)
+        let repository = FakeSessionRepository(sessions: [recent, old, oldChild, elsewhere])
+        let sessionLive = ControllableSessionLiveStore()
+        sessionLive.ancestry = fetchingAncestry(repository)
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: [recent], hasMore: true)
+        readyLive.emit(directory: "/repo", ids: [])
+        statusLive.emit(
+            directory: "/repo",
+            statuses: [
+                "old-child": SessionStatus(sessionID: "old-child", raw: ["type": "busy"]),
+                "elsewhere": SessionStatus(sessionID: "elsewhere", raw: ["type": "busy"]),
+            ]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: repository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+        await viewModel.refresh()
+
+        let merged = await waitUntil(timeoutMs: ancestryWaitMs) {
+            homeSession(viewModel, id: "old")?.statusLabel == "Working"
+        }
+        #expect(merged)
+        // Busy in another directory: not this section's row.
+        #expect(homeSession(viewModel, id: "elsewhere") == nil)
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(sections.first?.allSessions.map(\.id) == ["recent", "old"])
+        // The window edge stays the window's own, not the merged row's.
+        #expect(sections.first?.oldestWindowUpdatedAtEpochMs == 9)
+
+        statusLive.emit(directory: "/repo", statuses: [:])
+        let dropped = await waitUntil {
+            homeSession(viewModel, id: "old") == nil
+        }
+        #expect(dropped)
+        #expect(homeSession(viewModel, id: "recent") != nil)
+    }
+
+    @Test func loadMoreSessions_growsEveryDirectoryInTheScopeThatHasMore() async {
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        for directory in ["/repo", "/other", "/done"] {
+            let session = Session(
+                id: "s\(directory)", title: directory, slug: nil, projectID: nil,
+                directory: directory, parentID: nil, updatedAtEpochMs: 1
+            )
+            sessionLive.emit(directory: directory, sessions: [session], hasMore: directory != "/done")
+            readyLive.emit(directory: directory, ids: [])
+            statusLive.emit(directory: directory, statuses: [:])
+        }
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo", "/other", "/done"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+        await viewModel.refresh()
+        let loaded = await waitUntil { homeSession(viewModel, id: "s/done") != nil && homeSession(viewModel, id: "s/repo") != nil }
+        #expect(loaded)
+
+        viewModel.loadMoreSessions(scopeId: HomeProjectGrouping.pathKeyPrefix + "/repo")
+        #expect(await waitUntil { !viewModel.isLoadingMoreSessions })
+        #expect(sessionLive.loadMoreDirectories == ["/repo"])
+
+        viewModel.loadMoreSessions(scopeId: SessionListFilterTab.allId)
+        #expect(await waitUntil { !viewModel.isLoadingMoreSessions })
+        #expect(sessionLive.loadMoreDirectories.sorted() == ["/other", "/repo", "/repo"])
+
+        // Nothing in scope has more: no request.
+        viewModel.loadMoreSessions(scopeId: HomeProjectGrouping.pathKeyPrefix + "/done")
+        #expect(!viewModel.isLoadingMoreSessions)
+        #expect(sessionLive.loadMoreDirectories.count == 3)
+    }
+
+    @Test func canLoadMoreSessions_followsTheWindowAndSkipsFailedRefreshes() async {
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        let session = Session(
+            id: "s", title: "Alpha", slug: nil, projectID: nil,
+            directory: "/repo", parentID: nil, updatedAtEpochMs: 1
+        )
+        // A cache seed never says more follow.
+        sessionLive.emit(directory: "/repo", sessions: [session], isFromCache: true)
+        readyLive.emit(directory: "/repo", ids: [])
+        statusLive.emit(directory: "/repo", statuses: [:])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil { homeSession(viewModel, id: "s") != nil })
+        #expect(!viewModel.canLoadMoreSessions(scopeId: SessionListFilterTab.allId))
+
+        // The live window with the same rows says more follow: the list can page again.
+        sessionLive.emit(directory: "/repo", sessions: [session], hasMore: true)
+        #expect(await waitUntil { viewModel.canLoadMoreSessions(scopeId: SessionListFilterTab.allId) })
+
+        // A failed refresh keeps the rows but stops paging, so the list never retries in a loop.
+        sessionLive.emit(directory: "/repo", sessions: [session], loadFailed: true, hasMore: true)
+        #expect(await waitUntil { !viewModel.canLoadMoreSessions(scopeId: SessionListFilterTab.allId) })
+        viewModel.loadMoreSessions(scopeId: SessionListFilterTab.allId)
+        #expect(!viewModel.isLoadingMoreSessions)
+        #expect(sessionLive.loadMoreDirectories.isEmpty)
     }
 
     @Test func liveStatus_mapsRetryingAndHidesUntilSeeded() async {
@@ -2418,7 +2550,6 @@ struct ProjectListHomeViewModelTests {
         #expect(load == .loading(isSlow: true))
         let tabs = SessionListHomeChrome.filterTabs(
             projects: projects,
-            sessions: [section].crossProjectSessionListSessions(projects: projects),
             loads: [projects[0].key: load].compactMapValues { $0 }
         )
         #expect(tabs.first?.load == .loading(isSlow: true))
@@ -2452,6 +2583,7 @@ private func makeViewModel(
     connectionProbing: (any ConnectionProbing)? = nil,
     sessionCache: any SessionCache = NoOpSessionCache.shared,
     initialProfile: ConnectionProfile = ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+    newSessionDraftStore: NewSessionDraftStore? = nil,
     onCoordinator: (ConnectionSessionCoordinator) -> Void = { _ in }
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
@@ -2499,8 +2631,15 @@ private func makeViewModel(
         projectLoadTiming: projectLoadTiming,
         worktreeRepository: worktreeRepository,
         branchRetryDelays: branchRetryDelays,
-        worktreeInventoryCache: worktreeInventoryCache
+        worktreeInventoryCache: worktreeInventoryCache,
+        newSessionDraftStore: newSessionDraftStore
     )
+}
+
+/// Draft store key of `makeViewModel`'s default profile.
+@MainActor
+private var homeDraftProfileKey: String {
+    NewSessionDraftStore.key(for: ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""))
 }
 
 private struct HomeModelRepository: ModelRepository {
@@ -2803,7 +2942,8 @@ private struct SlowFirstSessionRepository: SessionRepository {
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool { fatalError() }
 }
 
@@ -2820,6 +2960,7 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     private let listLock = NSLock()
     private var listSessionsCallCount = 0
     private var listSessionsFailing = false
+    private var fetchedSessionIDs: [String] = []
 
     var listCallCount: Int {
         listLock.lock()
@@ -2904,7 +3045,23 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
         return Session(id: "created", title: "New Session", slug: nil, projectID: nil, directory: directory, parentID: parentID, updatedAtEpochMs: 10)
     }
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }
-    func getSession(id: String, directory: String?) async throws -> Session { fatalError() }
+
+    /// Ancestry lookups for busy sessions Home cannot place; unknown ids fail.
+    func getSession(id: String, directory: String?) async throws -> Session {
+        listLock.lock()
+        fetchedSessionIDs.append(id)
+        listLock.unlock()
+        guard let session = sessions.first(where: { $0.id == id }) else {
+            throw SessionError.http(statusCode: 404, message: nil)
+        }
+        return session
+    }
+
+    var fetchedIDs: [String] {
+        listLock.lock()
+        defer { listLock.unlock() }
+        return fetchedSessionIDs
+    }
 
     func updateSession(id: String, title: String?, directory: String?) async throws -> Session {
         updatedTitles.append((id, title))
@@ -2970,7 +3127,8 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool { fatalError() }
 }
 
@@ -3049,20 +3207,41 @@ private func waitUntil(
     return predicate()
 }
 
+/// Ancestry lookups hop through background tasks per parent; a parallel test run can delay them
+/// well past the default wait.
+private let ancestryWaitMs = 10_000
+
+/// Ancestry that looks sessions up in `repository`, as the live store's does.
+private func fetchingAncestry(_ repository: FakeSessionRepository) -> SessionAncestry {
+    SessionAncestry { id, directory in try await repository.getSession(id: id, directory: directory) }
+}
+
 @MainActor
 private final class ControllableSessionLiveStore: SessionLiveStore {
     private var latest: [String: SessionListSnapshot] = [:]
     private var continuations: [String: [UUID: AsyncStream<SessionListSnapshot>.Continuation]] = [:]
     private(set) var invalidatedDirectories: [String?] = []
+    private(set) var loadMoreDirectories: [String] = []
+    var ancestry = SessionAncestry.unseeded
 
-    func emit(directory: String, sessions: [Session], isFromCache: Bool = false, loadFailed: Bool = false) {
-        let snapshot = SessionListSnapshot(sessions: sessions, isFromCache: isFromCache, loadFailed: loadFailed)
+    func emit(
+        directory: String,
+        sessions: [Session],
+        isFromCache: Bool = false,
+        loadFailed: Bool = false,
+        hasMore: Bool = false
+    ) {
+        let snapshot = SessionListSnapshot(sessions: sessions, isFromCache: isFromCache, loadFailed: loadFailed, hasMore: hasMore)
         latest[directory] = snapshot
         continuations[directory]?.values.forEach { $0.yield(snapshot) }
     }
 
     func invalidate(directory: String?) async {
         invalidatedDirectories.append(directory)
+    }
+
+    func loadMore(directory: String) async {
+        loadMoreDirectories.append(directory)
     }
 
     func observeSessions(directory: String) -> AsyncStream<SessionListSnapshot> {

@@ -85,10 +85,10 @@ struct OpenCodeReorderableListMathTests {
     @Test func projectPickerRows_reportProjectsWithoutAllOrNoteRows() {
         let rows: [HomeProjectPickerRow] = [
             .note,
-            .all(SessionListFilterTab(id: SessionListFilterTab.allId, title: "All", count: 3)),
-            .project(SessionListFilterTab(id: "/a", title: "a", count: 1), pill: nil),
-            .project(SessionListFilterTab(id: "/b", title: "b", count: 1), pill: nil),
-            .project(SessionListFilterTab(id: "/c", title: "c", count: 1), pill: nil),
+            .all(SessionListFilterTab(id: SessionListFilterTab.allId, title: "All")),
+            .project(SessionListFilterTab(id: "/a", title: "a"), pill: nil),
+            .project(SessionListFilterTab(id: "/b", title: "b"), pill: nil),
+            .project(SessionListFilterTab(id: "/c", title: "c"), pill: nil),
         ]
         #expect(HomeProjectPickerRow.reorderedProjectKeys(rows, from: 4, to: 2) == ["/c", "/a", "/b"])
     }

@@ -828,7 +828,8 @@ private final class StatusLiveStoreFakeSessionRepository: SessionRepository, @un
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool { fatalError() }
 }
 

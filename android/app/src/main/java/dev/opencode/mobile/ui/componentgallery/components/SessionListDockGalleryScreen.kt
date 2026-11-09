@@ -158,14 +158,14 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
 
 private val sessionListDockGalleryFilterTabs =
     listOf(
-        SessionListFilterTab.all(projectCount = 3, sessionCount = 4),
+        SessionListFilterTab.all(projectCount = 3, hasSessions = true),
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
-            count = 2,
+            hasSessions = true,
         ),
-        SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", count = 1),
-        SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", count = 1),
+        SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", hasSessions = true),
+        SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", hasSessions = true),
     )
 
 private val sessionListDockGalleryOneProjectFilterTabs =
@@ -173,6 +173,6 @@ private val sessionListDockGalleryOneProjectFilterTabs =
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
-            count = 2,
+            hasSessions = true,
         ),
     )

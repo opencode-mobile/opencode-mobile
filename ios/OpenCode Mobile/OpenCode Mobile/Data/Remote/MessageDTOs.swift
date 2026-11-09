@@ -110,8 +110,13 @@ nonisolated struct MessageToolStateDTO: Codable, Sendable {
     let error: String?
     let time: MessageToolTimeDTO?
     let metadata: [String: AnyCodable]?
-    /// Set by the v2 live projection when `tool.failed` reports `error.type: "aborted"`.
+    /// Set by the v2 live projection when `tool.failed` reports `error.type: "aborted"`
+    /// or `"permission.rejected"`.
     var interrupted: Bool? = nil
+    /// Set by the v2 live projection when `tool.failed` reports `error.type: "permission.rejected"`;
+    /// `declineNote` is the note the user sent with Deny.
+    var declined: Bool? = nil
+    var declineNote: String? = nil
     /// Set when the server closed the call without running it (`executed: false`).
     var malformed: Bool? = nil
     /// Files the completed tool returned (v1 `attachments`); the v2 live projection fills it

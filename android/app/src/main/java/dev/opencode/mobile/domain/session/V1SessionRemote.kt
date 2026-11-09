@@ -23,6 +23,15 @@ internal class V1SessionRemote(
 
     override suspend fun listSessions(directory: String?): List<Session> = api.listSessions(directory).map(adapter::toSession)
 
+    /** The row count before filtering decides [SessionWindow.hasMore]; old servers ignore `roots` and `limit`. */
+    override suspend fun listRootSessionsWindow(
+        directory: String?,
+        limit: Int,
+    ): SessionWindow {
+        val rows = api.listSessions(directory, rootsOnly = true, limit = limit)
+        return SessionWindow(sessions = rows.map(adapter::toSession), hasMore = rows.size == limit)
+    }
+
     override suspend fun searchSessions(
         query: String,
         directory: String?,
@@ -184,11 +193,15 @@ internal class V1SessionRemote(
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
+        message: String?,
     ): Boolean =
         api.respondToPermission(
             sessionId,
             permissionId,
-            PermissionResponseRequestDto(reply = adapter.toPermissionResponse(decision)),
+            PermissionResponseRequestDto(
+                reply = adapter.toPermissionResponse(decision),
+                message = permissionReplyNote(decision, message),
+            ),
             directory,
         )
 

@@ -58,7 +58,7 @@ struct SessionChatToolGroupView: View {
                             subtitle: card.subtitle?.resolved,
                             additions: card.additions,
                             deletions: card.deletions,
-                            errorText: card.errorText?.resolved,
+                            errorText: card.errorTextWithDeclineNote,
                             action: toolCardAction(for: card)
                         )
                         if !card.images.isEmpty {

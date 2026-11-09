@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.ResumeTiming
 import dev.opencode.mobile.domain.event.SessionViewedUpdate
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.sessioncache.SessionCache
@@ -38,7 +39,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.Json
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,8 +52,9 @@ class DefaultSessionLiveStore
         private val liveStoreScope: LiveStoreScope,
         private val sessionCache: SessionCache,
         private val syncCoordinator: SyncCoordinator,
-        private val eventDomainAdapter: EventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+        private val eventDomainAdapter: EventDomainAdapter = EventDomainAdapter(serverPayloadJson()),
         private val capabilities: () -> ServerCapabilities = { ServerCapabilities.forProtocol(ServerProtocol.V1) },
+        private val sessionAncestry: SessionAncestry = SessionAncestry(sessionRepository, liveStoreScope.coroutineScope),
     ) : SessionLiveStore {
         @Inject
         constructor(
@@ -64,6 +65,7 @@ class DefaultSessionLiveStore
             syncCoordinator: SyncCoordinator,
             eventDomainAdapter: EventDomainAdapter,
             activeConnectionManager: ActiveConnectionManager,
+            sessionAncestry: SessionAncestry,
         ) : this(
             sessionRepository = sessionRepository,
             eventStream = eventStream,
@@ -72,6 +74,7 @@ class DefaultSessionLiveStore
             syncCoordinator = syncCoordinator,
             eventDomainAdapter = eventDomainAdapter,
             capabilities = { activeConnectionManager.currentCapabilities() },
+            sessionAncestry = sessionAncestry,
         )
 
         private val cache = LiveStoreFlowCache<SessionListSnapshot>(liveStoreScope)
@@ -82,10 +85,40 @@ class DefaultSessionLiveStore
         private val localViewedUpdates = MutableSharedFlow<SessionViewedUpdate>(extraBufferCapacity = 64)
         private val knownSessions = MutableStateFlow<Map<String, Session>>(emptyMap())
 
+        /** Home's window size per directory (#981); absent means one page. */
+        private val windowSizes = ConcurrentHashMap<String, Int>()
+        private val latestByDirectory = ConcurrentHashMap<String, SessionListSnapshot>()
+        private val loadingMore = ConcurrentHashMap.newKeySet<String>()
+
         override fun clearCache() {
             cache.clear()
             viewedWatermarks.clear()
             knownSessions.value = emptyMap()
+            windowSizes.clear()
+            latestByDirectory.clear()
+            sessionAncestry.clear()
+        }
+
+        private fun windowSize(directory: String): Int = windowSizes[directory] ?: HomeSessionPaging.PAGE_SIZE
+
+        override suspend fun loadMore(directory: String) {
+            if (!activeDirectories.contains(directory)) return
+            if (latestByDirectory[directory]?.hasMore != true) return
+            if (!loadingMore.add(directory)) return
+            try {
+                windowSizes.compute(directory) { _, size -> (size ?: HomeSessionPaging.PAGE_SIZE) + HomeSessionPaging.PAGE_SIZE }
+                DiagnosticLog.info(
+                    DiagnosticLogArea.Session,
+                    "sessionLiveStore loadMore directory=$directory limit=${windowSize(directory)}",
+                )
+                val projection = ProjectionKey.SessionList(directory)
+                syncCoordinator.invalidate(projection)
+                withTimeoutOrNull(LiveStoreRefreshPolicy.INVALIDATION_ACK_TIMEOUT_MS) {
+                    syncCoordinator.ensureFresh(projection)
+                }
+            } finally {
+                loadingMore.remove(directory)
+            }
         }
 
         override fun observeKnownSession(sessionId: String): Flow<Session?> = knownSessions.map { it[sessionId] }.distinctUntilChanged()
@@ -170,7 +203,9 @@ class DefaultSessionLiveStore
 
                 suspend fun publish(snapshot: SessionListSnapshot) {
                     latest = snapshot
+                    latestByDirectory[directory] = snapshot
                     remember(snapshot.sessions)
+                    sessionAncestry.record(snapshot.sessions)
                     send(snapshot)
                 }
                 val registration =
@@ -179,19 +214,29 @@ class DefaultSessionLiveStore
                         val outcome =
                             gate.refresh(
                                 load = {
-                                    runCatching { sessionRepository.listSessions(directory = directory) }.getOrNull()
+                                    // One request for the current window, never every page (#981).
+                                    runCatching {
+                                        sessionRepository.listRootSessionsWindow(directory = directory, limit = windowSize(directory))
+                                    }.getOrNull()
                                 },
-                                commit = { fetched ->
+                                commit = { window ->
                                     val sessions =
                                         publishLock.withLock {
-                                            withKnownViewed(fetched).also { sessions ->
-                                                publish(SessionListSnapshot(sessions = sessions, isFromCache = false))
+                                            withKnownViewed(window.sessions).also { sessions ->
+                                                publish(
+                                                    SessionListSnapshot(
+                                                        sessions = sessions,
+                                                        isFromCache = false,
+                                                        hasMore = window.hasMore,
+                                                        projectId = window.projectId,
+                                                    ),
+                                                )
                                             }
                                         }
                                     sessionCache.rememberSessions(directory, sessions)
                                     DiagnosticLog.info(
                                         DiagnosticLogArea.Session,
-                                        "sessionLiveStore refresh directory=$directory count=${sessions.size}",
+                                        "sessionLiveStore refresh directory=$directory count=${sessions.size} hasMore=${window.hasMore}",
                                     )
                                 },
                                 isCurrent = { syncCoordinator.profileGeneration == generation },
@@ -199,8 +244,16 @@ class DefaultSessionLiveStore
                         if (outcome == LiveStoreRefreshOutcome.FAILED) {
                             // Tell observers now; the coordinator keeps retrying with backoff.
                             publishLock.withLock {
-                                val known = latest?.sessions.orEmpty()
-                                publish(SessionListSnapshot(sessions = known, isFromCache = true, loadFailed = true))
+                                val known = latest
+                                publish(
+                                    SessionListSnapshot(
+                                        sessions = known?.sessions.orEmpty(),
+                                        isFromCache = true,
+                                        loadFailed = true,
+                                        hasMore = known?.hasMore == true,
+                                        projectId = known?.projectId,
+                                    ),
+                                )
                             }
                             error("session list refresh failed directory=$directory")
                         }

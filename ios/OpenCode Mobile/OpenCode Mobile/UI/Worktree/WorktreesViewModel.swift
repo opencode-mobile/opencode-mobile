@@ -8,7 +8,6 @@ struct WorktreeRowItem: Identifiable, Equatable {
     let directory: String
     /// Branch, else folder name.
     let name: String
-    let sessionCount: Int
     let isRunning: Bool
     /// Uncommitted changes the server reported; nil until known or when it could not tell.
     let changeCount: Int?
@@ -32,7 +31,6 @@ struct WorktreeActionsItem: Equatable {
     let directory: String
     let name: String
     let projectName: String
-    let sessionCount: Int
     /// Home shows worktrees, so its scope picker can select this one.
     let canShowOnHome: Bool
 }
@@ -40,13 +38,14 @@ struct WorktreeActionsItem: Equatable {
 enum WorktreeRemoveDialog: Equatable {
     /// Remove, or Remove anyway when uncommitted work may be lost: `changeCount` changes,
     /// `changesUnknown` (the server refused without force and gave no count), or `changesUnchecked`
-    /// (the change count could not be read, so the screen cannot say).
+    /// (the change count could not be read, so the screen cannot say). `hasSessions` when Home
+    /// lists sessions in the worktree (it loads a window of them, so it gives no count).
     case confirm(
         directory: String,
         name: String,
         changeCount: Int?,
         changesUnknown: Bool,
-        sessionCount: Int,
+        hasSessions: Bool,
         changesUnchecked: Bool = false
     )
     /// A session runs in the worktree: stop it first.
@@ -132,7 +131,6 @@ final class WorktreesViewModel {
             directory: worktree.directory,
             name: worktree.folderName,
             projectName: project.displayName,
-            sessionCount: snapshot.sessions(in: worktree.directory).count,
             canShowOnHome: homeShowsWorktrees
         )
     }
@@ -172,7 +170,7 @@ final class WorktreesViewModel {
             name: worktree.folderName,
             changeCount: changeCounts[worktree.directory] ?? nil,
             changesUnknown: false,
-            sessionCount: sessions.count,
+            hasSessions: !sessions.isEmpty,
             // Still loading or failed. v1 removes with force, so say it rather than act clean.
             changesUnchecked: (changeCounts[worktree.directory] ?? nil) == nil
         )
@@ -241,7 +239,7 @@ final class WorktreesViewModel {
                 name: worktree.folderName,
                 changeCount: count.flatMap { $0 > 0 ? $0 : nil },
                 changesUnknown: true,
-                sessionCount: snapshot.sessions(in: worktree.directory).count
+                hasSessions: !snapshot.sessions(in: worktree.directory).isEmpty
             )
         case let error?:
             DiagnosticLog.warning(.session, "worktree remove failed: \(error.message)")
@@ -293,7 +291,6 @@ final class WorktreesViewModel {
                             projectKey: project.key,
                             directory: worktree.directory,
                             name: worktree.folderName,
-                            sessionCount: sessions.count,
                             isRunning: sessions.contains(where: \.isRunning),
                             changeCount: changeCounts[worktree.directory] ?? nil,
                             isRemoving: removing.contains(worktree.directory)

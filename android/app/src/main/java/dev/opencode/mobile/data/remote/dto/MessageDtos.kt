@@ -96,6 +96,8 @@ data class MessagePartDto(
     val summary: String? = null,
     /** Client-only `notice` part from the v2 live projection (a timeline notice). */
     val notice: JsonObject? = null,
+    /** Client-only: the goal a v2 user prompt kicks off (see [dev.opencode.mobile.domain.message.MessagePart.Text.goalKickoffId]). */
+    @SerialName("goalID") val goalId: String? = null,
 )
 
 @Serializable
@@ -114,8 +116,15 @@ data class MessageToolStateDto(
     val error: String? = null,
     val time: MessageToolTimeDto? = null,
     val metadata: JsonObject? = null,
-    /** Set by the v2 live projection when `tool.failed` reports `error.type: "aborted"`. */
+    /**
+     * Set by the v2 live projection when `tool.failed` reports `error.type: "aborted"` or
+     * `"permission.rejected"`.
+     */
     val interrupted: Boolean? = null,
+    /** Set by the v2 live projection when `tool.failed` reports `error.type: "permission.rejected"`. */
+    val declined: Boolean? = null,
+    /** The v2 live projection's "Deny with a note" note (`error.message` of `permission.rejected`). */
+    val userNote: String? = null,
     /** Set when the server closed the call without running it (`executed: false`). */
     val malformed: Boolean? = null,
     /** v1 completed-state files the tool returned (`url` is a `data:` URL); the v2 live projection fills it too. */

@@ -206,7 +206,7 @@ final class PlaygroundSessionRepository: SessionRepository {
 
     func commitRevert(id _: String) async throws -> Bool { true }
 
-    func respondToPermission(sessionID _: String, permissionID: String, decision _: PermissionDecision, directory _: String?) async throws -> Bool {
+    func respondToPermission(sessionID _: String, permissionID: String, decision _: PermissionDecision, directory _: String?, message _: String?) async throws -> Bool {
         world.update { current in
             var copy = current
             copy.permissions.removeAll { $0.id == permissionID }

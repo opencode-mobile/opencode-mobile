@@ -12,6 +12,8 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessagePatch
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
+import dev.opencode.mobile.domain.message.MessageWindowMerge
+import dev.opencode.mobile.domain.message.matchesTailIdentity
 import dev.opencode.mobile.domain.message.NoticeModelRef
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -350,6 +352,101 @@ class V2LiveTurnTimelineTest {
     }
 
     @Test
+    fun liveGoalKickoff_isAGoalSetRowThatSplitsTheTurnsAndSharesTheRestId() {
+        apply(prompt("u1", "First", at = 1_000))
+        apply(step("a1", at = 1_050))
+        apply(text("a1", "Reply one.", at = 1_060))
+        apply(stepEnded("a1", "stop", at = 1_070))
+        apply(idle(at = 1_080))
+        apply(goalKickoff("msg_k", "goal_1", "Ship it", at = 2_000))
+        apply(delivered("msg_k", at = 2_010))
+        apply(step("a2", at = 2_050))
+        apply(text("a2", "Working on the goal.", at = 2_060))
+        apply(stepEnded("a2", "stop", at = 2_070))
+        apply(idle(at = 2_080))
+
+        val goalSet = TimelineNotice.GoalSet("goal_1", "Goal: Ship it")
+        val live = store.messages(SESSION)
+        assertEquals(listOf("u1", "a1", "msg_k", "a2"), live.map { it.id })
+        assertEquals(MessageRole.Notice, live[2].role)
+        assertEquals(goalSet, live[2].notice())
+        val rows = chipBodies(displayOrder(live))
+        assertEquals(listOf("u1", "a1", "msg_k", "a2"), rows.map { it.message.id })
+        assertEquals(listOf("Reply one."), rows[1].blocks.stepParagraphs().map { it.text })
+        assertEquals(listOf("Working on the goal."), rows[3].blocks.stepParagraphs().map { it.text })
+
+        // REST records the kickoff under the inbox id: one row, not two.
+        reload(
+            """
+            [
+              {"id":"u1","type":"user","text":"First","time":{"created":1000}},
+              {"id":"a1","type":"assistant","agent":"build","model":{"id":"m","providerID":"p"},
+               "content":[{"type":"text","text":"Reply one."}],"time":{"created":1050,"completed":1070}},
+              {"id":"msg_k","type":"synthetic","text":"$GOAL_KICKOFF_TEXT","description":"Goal: Ship it",
+               "metadata":{"source":"goal","goalID":"goal_1"},"time":{"created":2010}},
+              {"id":"a2","type":"assistant","agent":"build","model":{"id":"m","providerID":"p"},
+               "content":[{"type":"text","text":"Working on the goal."}],"time":{"created":2050,"completed":2070}}
+            ]
+            """,
+            inbox = "[]",
+        )
+        val reloaded = store.messages(SESSION)
+        assertEquals(listOf("u1", "a1", "msg_k", "a2"), reloaded.map { it.id })
+        assertEquals(goalSet, reloaded[2].notice())
+    }
+
+    @Test
+    fun cacheWithTheKickoffAsAHiddenPrompt_isReplacedByTheRestGoalSetRow() {
+        val hiddenKickoff =
+            Message(
+                id = "msg_k",
+                role = MessageRole.User,
+                text = GOAL_KICKOFF_TEXT,
+                parts = listOf(MessagePart.Text(text = GOAL_KICKOFF_TEXT, id = "msg_k:text:0", isSynthetic = true)),
+                sentAtEpochMs = 2_010,
+            )
+        store.replaceAll(SESSION, listOf(hiddenKickoff))
+        val local = store.messages(SESSION)
+        val tail =
+            restMessages(
+                """
+                [
+                  {"id":"msg_k","type":"synthetic","text":"$GOAL_KICKOFF_TEXT","description":"Goal: Ship it",
+                   "metadata":{"source":"goal","goalID":"goal_1"},"time":{"created":2010}}
+                ]
+                """,
+            )
+
+        // Neither the cache-confirm shortcut nor the staleness check may keep the cached copy.
+        assertFalse(local.matchesTailIdentity(tail))
+        assertTrue(MessageWindowMerge.isTailAcceptable(remote = tail, local = local))
+        assertTrue(store.mergeTailAuthoritativeIfRevision(SESSION, tail, store.revision(SESSION)))
+        assertEquals(TimelineNotice.GoalSet("goal_1", "Goal: Ship it"), store.messages(SESSION).single().notice())
+    }
+
+    @Test
+    fun deliveredAfterARestSeededGoalSetRow_keepsTheRow() {
+        store.replaceAll(
+            SESSION,
+            restMessages(
+                """
+                [
+                  {"id":"msg_k","type":"synthetic","text":"$GOAL_KICKOFF_TEXT","description":"Goal: Ship it",
+                   "metadata":{"source":"goal","goalID":"goal_1"},"time":{"created":2010}}
+                ]
+                """,
+            ),
+        )
+        apply(delivered("msg_k", at = 2_010))
+        apply(goalKickoff("msg_k", "goal_1", "Ship it", at = 2_011, type = "session.inbox.delivery.changed"))
+
+        val messages = store.messages(SESSION)
+        assertEquals(listOf("msg_k"), messages.map { it.id })
+        assertEquals(MessageRole.Notice, messages.single().role)
+        assertEquals(TimelineNotice.GoalSet("goal_1", "Goal: Ship it"), messages.single().notice())
+    }
+
+    @Test
     fun noticeBetweenAssistantSteps_isAStandaloneRowThatSplitsTheChipMerge() {
         apply(prompt("u1", "Explore", at = 1_000))
         apply(step("a1", at = 1_100))
@@ -431,6 +528,73 @@ class V2LiveTurnTimelineTest {
                 """,
             )
         assertTrue(rest[1].parts.filterIsInstance<MessagePart.Tool>().single().isInterrupted)
+    }
+
+    @Test
+    fun deniedWithNote_isDeclinedWithTheNote_liveAndAfterReload() {
+        apply(prompt("u1", "Push the branch.", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val fields = """"assistantMessageID":"a1","id":"call_9","name":"bash""""
+        apply(
+            listOf(
+                envelope("session.tool.called", 1_121, """$fields,"input":{"command":"git push"}"""),
+                envelope(
+                    "session.tool.failed",
+                    1_200,
+                    """$fields,"error":{"type":"permission.rejected","message":"Run the tests first"}""",
+                ),
+            ),
+        )
+
+        val live = liveTool("a1")
+        assertTrue(live.isInterrupted)
+        assertTrue(live.isDeclined)
+        assertEquals("Run the tests first", live.userNote)
+        val card = toolCard("a1")
+        assertTrue(card.isInterrupted)
+        assertEquals("Declined", card.errorText?.english())
+        assertEquals("Your note: Run the tests first", card.noteText?.english())
+        val paragraph = chipBodies(store.messages(SESSION))[1].blocks.stepParagraphs().single()
+        assertTrue(paragraph.errorLines.isEmpty())
+        assertEquals(listOf("Your note: Run the tests first"), paragraph.noteLines.map { it.english() })
+
+        val rest =
+            restMessages(
+                """
+                [
+                  {"id":"u1","type":"user","text":"Push the branch.","time":{"created":1000}},
+                  {"id":"a1","type":"assistant",
+                   "content":[{"type":"tool","id":"call_9","name":"bash","state":{"status":"error","input":{"command":"git push"},
+                      "error":{"type":"permission.rejected","message":"Run the tests first"}}}],
+                   "time":{"created":1100,"completed":1200}}
+                ]
+                """,
+            )
+        val restTool = rest[1].parts.filterIsInstance<MessagePart.Tool>().single()
+        assertTrue(restTool.isInterrupted)
+        assertTrue(restTool.isDeclined)
+        assertEquals("Run the tests first", restTool.userNote)
+        val restCard = toolCards(rest[1]).single()
+        assertEquals("Declined", restCard.errorText?.english())
+        assertEquals("Your note: Run the tests first", restCard.noteText?.english())
+    }
+
+    @Test
+    fun plainDeny_isDeclinedWithoutANote() {
+        apply(prompt("u1", "Push the branch.", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val fields = """"assistantMessageID":"a1","id":"call_9","name":"bash""""
+        apply(
+            listOf(
+                envelope("session.tool.called", 1_121, """$fields,"input":{"command":"git push"}"""),
+                envelope("session.tool.failed", 1_200, """$fields,"error":{"type":"permission.rejected","message":""}"""),
+            ),
+        )
+
+        val card = toolCard("a1")
+        assertTrue(card.isInterrupted)
+        assertEquals("Declined", card.errorText?.english())
+        assertEquals(null, card.noteText)
     }
 
     @Test
@@ -866,6 +1030,23 @@ class V2LiveTurnTimelineTest {
         at: Long,
     ): List<String> = listOf(envelope("session.inbox.delivered", at, """"inboxID":"$id""""))
 
+    /** The goal plugin's kickoff, the way `/api/event` carries it: a synthetic inbox item. */
+    private fun goalKickoff(
+        id: String,
+        goalId: String,
+        objective: String,
+        at: Long,
+        type: String = "session.inbox.enqueued",
+    ): List<String> =
+        listOf(
+            envelope(
+                type,
+                at,
+                """"inboxID":"$id","item":{"type":"synthetic","delivery":"steer","payload":{"text":"$GOAL_KICKOFF_TEXT",""" +
+                    """"description":"Goal: $objective","metadata":{"source":"goal","goalID":"$goalId"}}}""",
+            ),
+        )
+
     private fun step(
         id: String,
         at: Long,
@@ -1075,6 +1256,8 @@ class V2LiveTurnTimelineTest {
         const val SESSION = "ses_v2"
         const val SCRIPTED = """{"id":"scripted","providerID":"sim"}"""
         const val SCRIPTED_HIGH = """{"id":"scripted","providerID":"sim","variant":"high"}"""
+        const val GOAL_KICKOFF_TEXT =
+            "A goal is now active for this session. <untrusted_objective>\\nShip it\\n</untrusted_objective> Start now."
         const val SUMMARY = "## Objective\n- Exercise queue and steer prompts.\n\n## Next Move\n- Wait."
     }
 }

@@ -1,6 +1,8 @@
 <resources>
     <string name="app_name">OpenCode Mobile</string>
     <string name="bottom_sheet_close">Close</string>
+    <string name="bottom_sheet_collapse">Collapse</string>
+    <string name="bottom_sheet_expand">Expand</string>
     <string name="top_bar_back">Back</string>
 
     <!-- Keys match iOS Localizable.xcstrings: iOS `area.name` is Android `area_name`.
@@ -151,8 +153,6 @@
     <string name="home_servers_sheet_switch_to">Switch to</string>
     <string name="home_servers_sheet_manage">Manage in Settings</string>
     <string name="home_more_options">More options</string>
-    <string name="home_new_session">New session</string>
-    <string name="home_no_projects">No projects</string>
     <string name="home_filter_sheet_title">Filter by project</string>
     <string name="home_empty_title">No projects yet</string>
     <string name="home_empty_message">Tap the Add project icon below to choose a folder on your server.</string>
@@ -163,7 +163,6 @@
     <string name="home_probe_failed_edit_connection">Edit connection</string>
     <string name="home_error_load_projects">Unable to load projects</string>
     <string name="home_error_project_load_failed">Couldn’t load sessions</string>
-    <string name="home_error_reconnect_to_create">Reconnect to create a session</string>
     <string name="home_remove_project_title">Remove from home?</string>
     <string name="home_remove_project_message">Remove \"%1$s\" from home? Its sessions stay on the server.</string>
     <string name="home_snackbar_removed">Removed \"%1$s\" from home</string>
@@ -175,8 +174,6 @@
         <item quantity="one">%1$d project</item>
         <item quantity="other">%1$d projects</item>
     </plurals>
-    <string name="home_run_in">Run in</string>
-    <string name="home_other_projects">Other projects</string>
     <string name="home_main_checkout">main checkout</string>
     <plurals name="home_worktree_count">
         <item quantity="one">%1$d worktree</item>
@@ -416,6 +413,7 @@
     <string name="session_chat_fork_result_stay_here">Stay here</string>
     <string name="session_chat_attachment_source_title">Add attachment</string>
     <string name="session_chat_attachment_source_photos">Photos</string>
+    <string name="session_chat_attachment_source_media">Media</string>
     <string name="session_chat_attachment_source_files">Files</string>
     <string name="session_chat_attachment_source_log_file">Log file</string>
     <string name="session_chat_commands_title">Commands</string>
@@ -503,8 +501,28 @@
         <item quantity="one">Scroll to end, %1$d new message</item>
         <item quantity="other">Scroll to end, %1$d new messages</item>
     </plurals>
+    <!-- New session draft (#1004): Session Chat before its first send. -->
+    <string name="home_error_reconnect_to_create">Reconnect to create a session</string>
     <string name="timeline_state_creating_title">Starting session…</string>
     <string name="timeline_state_creating_subtitle">Creating on server…</string>
+    <string name="new_session_title">New session</string>
+    <string name="new_session_draft_subtitle">Draft · created when you send</string>
+    <string name="new_session_discard_draft">Discard draft</string>
+    <string name="new_session_run_in_caption">Run session in</string>
+    <string name="new_session_project">Project</string>
+    <string name="new_session_worktree">Worktree</string>
+    <string name="new_session_starts_from">Starts from</string>
+    <string name="new_session_local">Local</string>
+    <string name="new_session_new_worktree">New worktree</string>
+    <string name="new_session_not_git">None · not a Git repo</string>
+    <string name="new_session_created_on_send">Created when you send</string>
+    <string name="new_session_search_projects">Search projects</string>
+    <string name="new_session_no_project_matches">No matching projects</string>
+    <string name="new_session_add_project">Add project…</string>
+    <string name="new_session_run_in_project">Run in %1$s</string>
+    <string name="new_session_current_checkout">%1$s · current checkout</string>
+    <string name="new_session_new_worktree_subtitle">Isolated copy, created when you send</string>
+    <string name="new_session_worktrees_section">Worktrees</string>
     <string name="timeline_state_loading_title">Loading messages</string>
     <string name="timeline_state_loading_subtitle">Fetching timeline…</string>
     <string name="timeline_state_error_title">Unable to load messages</string>
@@ -658,6 +676,7 @@
     <string name="tool_error_failed">Failed</string>
     <string name="tool_error_exit_code">Exited with code %1$d</string>
     <string name="tool_status_declined">Declined</string>
+    <string name="tool_user_note">Your note: %1$s</string>
     <string name="tool_status_stopped">Stopped</string>
     <string name="tool_placeholder_writing_command">Writing command…</string>
     <string name="tool_placeholder_preparing_read">Preparing read…</string>
@@ -818,6 +837,76 @@
     <string name="session_chat_sheet_todos_title">Session todos</string>
     <!-- %1$d completed todos, %2$d todos in total. The numbers are shown in bold. -->
     <string name="session_chat_sheet_todos_progress">%1$d of %2$d completed</string>
+    <!-- Session goal (/goal, #1007) -->
+    <string name="session_chat_goal_pill">Goal</string>
+    <string name="session_chat_goal_pill_paused">Goal paused</string>
+    <string name="session_chat_goal_pill_met">Goal met</string>
+    <string name="session_chat_goal_pill_accessibility_active">Goal active, round %1$d of %2$d</string>
+    <string name="session_chat_goal_pill_accessibility_paused">Goal paused. %1$s</string>
+    <string name="session_chat_goal_sheet_title">Goal</string>
+    <string name="session_chat_goal_tag_working">Working</string>
+    <string name="session_chat_goal_tag_waiting">Waiting</string>
+    <string name="session_chat_goal_tag_paused">Paused</string>
+    <string name="session_chat_goal_tag_met">Met</string>
+    <string name="session_chat_goal_show_all">Show all</string>
+    <string name="session_chat_goal_show_less">Show less</string>
+    <string name="session_chat_goal_first_turn">First turn · round 0 of %1$d</string>
+    <string name="session_chat_goal_round">Round %1$d of %2$d</string>
+    <string name="session_chat_goal_paused_in_round">Paused in round %1$d of %2$d</string>
+    <string name="session_chat_goal_met_in_round">Met in round %1$d</string>
+    <string name="session_chat_goal_reviewer_last_round">Reviewer, last round</string>
+    <string name="session_chat_goal_not_met_yet">Not met yet: %1$s</string>
+    <string name="session_chat_goal_reviewer">Reviewer</string>
+    <string name="session_chat_goal_reviewer_pending">Checks the work when this turn ends.</string>
+    <plurals name="session_chat_goal_stalls">
+        <item quantity="one">No progress for %1$d round; pauses after %2$d</item>
+        <item quantity="other">No progress for %1$d rounds; pauses after %2$d</item>
+    </plurals>
+    <string name="session_chat_goal_waiting">Waiting</string>
+    <string name="session_chat_goal_waiting_shell">For a background shell to finish: %1$s. Pauses if nothing runs for %2$d minutes.</string>
+    <string name="session_chat_goal_waiting_subagent">For a subagent to finish. Pauses if nothing runs for %1$d minutes.</string>
+    <string name="session_chat_goal_waiting_on_you">Waiting on you</string>
+    <string name="session_chat_goal_waiting_permission">A permission request is open. The goal carries on once you answer it.</string>
+    <string name="session_chat_goal_waiting_question">A question is open. The goal carries on once you answer it.</string>
+    <string name="session_chat_goal_evidence">Evidence</string>
+    <string name="session_chat_goal_reconnecting">Reconnecting. Showing the last known goal.</string>
+    <string name="session_chat_goal_pause">Pause</string>
+    <string name="session_chat_goal_pausing">Pausing…</string>
+    <string name="session_chat_goal_resume">Resume</string>
+    <string name="session_chat_goal_resuming">Resuming…</string>
+    <string name="session_chat_goal_clear">Clear</string>
+    <string name="session_chat_goal_clearing">Clearing…</string>
+    <string name="session_chat_goal_new">New goal…</string>
+    <string name="session_chat_goal_footnote_active">After each turn a reviewer checks the work against the goal. The agent keeps going until it is met, it needs you, or %1$d rounds pass.</string>
+    <string name="session_chat_goal_footnote_paused">Resume starts a fresh budget of %1$d rounds.</string>
+    <string name="session_chat_goal_footnote_met">A new goal replaces this one.</string>
+    <string name="session_chat_goal_paused">Goal paused</string>
+    <string name="session_chat_goal_paused_by_user">You paused the goal</string>
+    <string name="session_chat_goal_paused_stopped">You stopped the turn, so the goal paused</string>
+    <string name="session_chat_goal_paused_failed">Goal paused after an error</string>
+    <string name="session_chat_goal_paused_no_progress">Goal paused: no progress for %1$d rounds</string>
+    <string name="session_chat_goal_paused_round_limit">Goal paused after %1$d rounds</string>
+    <string name="session_chat_goal_paused_restart">Goal paused: the server restarted</string>
+    <string name="session_chat_goal_paused_reviewer">Goal paused: the reviewer could not decide</string>
+    <string name="session_chat_goal_paused_quiet">Goal paused: background work went quiet</string>
+    <string name="session_chat_goal_met">Goal met</string>
+    <string name="session_chat_goal_set">Goal set</string>
+    <string name="session_chat_goal_ended">ended</string>
+    <string name="session_chat_goal_set_earlier">An earlier goal. It was cleared or replaced.</string>
+    <string name="session_chat_goal_bubble_label">Goal</string>
+    <string name="session_chat_goal_objective_hint">Describe what “done” looks like…</string>
+    <string name="session_chat_goal_resume_placeholder">Reply, then resume the goal…</string>
+    <string name="session_chat_goal_count">%1$s / %2$s characters</string>
+    <string name="session_chat_goal_count_over">%1$s / %2$s characters · shorten the objective to send</string>
+    <string name="session_chat_goal_command_replaces">Replaces your current goal</string>
+    <string name="session_chat_goal_command_replaces_paused">Replaces your current goal (paused)</string>
+    <string name="session_chat_goal_command_replaces_met">Replaces your current goal (met)</string>
+    <string name="session_chat_goal_pause_failed">Couldn’t pause the goal</string>
+    <string name="session_chat_goal_pause_failed_reason">Couldn’t pause the goal: %1$s</string>
+    <string name="session_chat_goal_resume_failed">Couldn’t resume the goal</string>
+    <string name="session_chat_goal_resume_failed_reason">Couldn’t resume the goal: %1$s</string>
+    <string name="session_chat_goal_clear_failed">Couldn’t clear the goal</string>
+    <string name="session_chat_goal_clear_failed_reason">Couldn’t clear the goal: %1$s</string>
     <string name="session_chat_sheet_skills_title">Skills</string>
     <string name="session_chat_sheet_skills_status_loading">Loading</string>
     <string name="session_chat_sheet_skills_status_failed">Failed</string>
@@ -1163,6 +1252,8 @@
     <string name="keyboard_shortcuts_allow_once">Allow Once</string>
     <string name="keyboard_shortcuts_always_allow">Always Allow</string>
     <string name="keyboard_shortcuts_deny">Deny</string>
+    <string name="keyboard_shortcuts_deny_with_note">Deny with a Note</string>
+    <string name="keyboard_shortcuts_send_note">Send Note</string>
     <string name="keyboard_shortcuts_next_question">Next Question</string>
     <string name="keyboard_shortcuts_submit_answers">Submit Answers</string>
     <string name="keyboard_shortcuts_dismiss_question">Dismiss Question</string>
@@ -1282,6 +1373,15 @@
     <string name="session_list_worktree_empty_other_projects">Clear the filter to see sessions on other projects.</string>
     <string name="component_attachment_uploading">Uploading…</string>
     <string name="component_composer_deny">Deny</string>
+    <string name="component_composer_deny_options">More deny options</string>
+    <string name="component_composer_deny_with_note_menu">Deny with a note…</string>
+    <string name="component_composer_deny_with_note_menu_subtitle">Tell the agent what to do instead</string>
+    <string name="component_composer_deny_with_note_title">Deny with a note</string>
+    <string name="component_composer_deny_note_placeholder">Tell OpenCode what to do differently</string>
+    <plurals name="component_composer_deny_note_also_denies">
+        <item quantity="one">Also denies %1$d other waiting request.</item>
+        <item quantity="other">Also denies %1$d other waiting requests.</item>
+    </plurals>
     <string name="dictation_stopped">Dictation stopped</string>
     <string name="component_composer_question_position">%1$d of %2$d</string>
     <string name="session_list_status_ready">Ready</string>
@@ -1431,10 +1531,6 @@
     <!-- %1$s and %2$s are the first and last day of the week, such as Mar 3. -->
     <string name="session_list_section_week_of">Week of %1$s – %2$s</string>
     <!-- Spoken after the project name in the dock. -->
-    <plurals name="session_list_dock_session_count">
-        <item quantity="one">%1$d sessions</item>
-        <item quantity="other">%1$d sessions</item>
-    </plurals>
     <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->
     <string name="dictation_model_download_failed_title">%1$s couldn\'t download the %2$s</string>
     <string name="component_activity_status_pending">pending</string>
@@ -1535,16 +1631,10 @@
         <item quantity="one">%1$d changed</item>
         <item quantity="other">%1$d changed</item>
     </plurals>
-    <plurals name="worktrees_session_count">
-        <item quantity="one">%1$d session</item>
-        <item quantity="other">%1$d sessions</item>
-    </plurals>
-    <string name="worktrees_no_sessions">no sessions</string>
     <string name="worktrees_none_in_project">No worktrees. New session → Choose project or worktree creates one.</string>
     <string name="worktrees_footer">Removing a worktree deletes its folder on the server. Its sessions stay, but can’t run in it again.</string>
     <string name="worktrees_more">More actions for %1$s</string>
     <string name="worktrees_removing">Removing…</string>
-    <string name="worktrees_actions_subtitle">%1$s · %2$s</string>
     <string name="worktrees_actions_show_on_home">Show sessions on Home</string>
     <string name="worktrees_actions_new_session">New session here</string>
     <string name="worktrees_actions_remove">Remove worktree…</string>
@@ -1556,10 +1646,7 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">Uncommitted changes will be lost.</string>
     <string name="worktrees_remove_changes_unchecked">Couldn’t check for uncommitted changes. Any there will be lost.</string>
-    <plurals name="worktrees_remove_sessions">
-        <item quantity="one">%1$d session uses this worktree. It stays on Home but can’t run here again.</item>
-        <item quantity="other">%1$d sessions use this worktree. They stay on Home but can’t run here again.</item>
-    </plurals>
+    <string name="worktrees_remove_sessions_stay">Sessions that use this worktree stay on Home but can’t run here again.</string>
     <string name="worktrees_remove_confirm_anyway">Remove anyway</string>
     <string name="worktrees_blocked_title">Can’t remove “%1$s” yet</string>
     <string name="worktrees_blocked_message">A session is running in this worktree. Stop it, then remove the worktree.</string>

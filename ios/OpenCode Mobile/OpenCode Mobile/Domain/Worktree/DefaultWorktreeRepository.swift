@@ -69,7 +69,8 @@ struct DefaultWorktreeRepository: WorktreeRepository {
     }
 
     func create(_ request: CreateWorktreeRequest) async throws -> CreatedWorktree {
-        let name = request.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = request.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let name: String? = trimmedName.isEmpty ? nil : trimmedName
         let source = ServerPathPolicy.canonical(request.sourceDirectory)
         if await protocolProvider() == .v2 {
             let projectID = request.projectID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

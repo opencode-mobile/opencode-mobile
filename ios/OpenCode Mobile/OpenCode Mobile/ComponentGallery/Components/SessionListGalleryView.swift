@@ -13,7 +13,7 @@ struct SessionListGalleryView: View {
     private var filterTabs: [SessionListFilterTab] {
         let tabs = oneProject ? sessionListGalleryOneProjectFilterTabs : sessionListGalleryFilterTabs
         guard let scopeLoad = load.scopeLoad else { return tabs }
-        return tabs + [.project(worktree: Self.loadingWorktree, title: "opencode", count: 0, load: scopeLoad)]
+        return tabs + [.project(worktree: Self.loadingWorktree, title: "opencode", load: scopeLoad)]
     }
 
     var body: some View {
@@ -157,14 +157,14 @@ private let sessionListGallerySamples: [SessionListSession] = {
 }()
 
 private let sessionListGalleryFilterTabs: [SessionListFilterTab] = [
-    .all(projectCount: 3, sessionCount: 5),
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 3),
-    .project(worktree: "/Users/demo/playground", title: "playground", count: 1),
-    .project(worktree: "/Users/demo/api-client", title: "api-client", count: 1),
+    .all(projectCount: 3),
+    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
+    .project(worktree: "/Users/demo/playground", title: "playground"),
+    .project(worktree: "/Users/demo/api-client", title: "api-client"),
 ]
 
 private let sessionListGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 3),
+    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
 ]
 
 #Preview {

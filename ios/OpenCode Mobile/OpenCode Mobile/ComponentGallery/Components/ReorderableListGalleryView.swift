@@ -5,7 +5,6 @@ private struct ReorderableGalleryProject: Identifiable, Equatable {
     let title: String
     let path: String
     let accent: LetterAccent
-    let count: Int
     var isAll: Bool { id == "all" }
 }
 
@@ -15,11 +14,11 @@ struct ReorderableListGalleryView: View {
     @State private var dragHandles = false
     @State private var lastEvent = "Long-press a project row, then drag."
     @State private var items: [ReorderableGalleryProject] = [
-        .init(id: "all", title: "All projects", path: "4 projects", accent: .violet, count: 12),
-        .init(id: "/Users/me/Projects/opencode-mobile", title: "opencode-mobile", path: "~/Projects/opencode-mobile", accent: .violet, count: 6),
-        .init(id: "/Users/me/Projects/playground", title: "playground", path: "~/Projects/playground", accent: .teal, count: 3),
-        .init(id: "/Users/me/Projects/website", title: "website", path: "~/Projects/website", accent: .amber, count: 2),
-        .init(id: "/Users/me/Projects/docs", title: "docs", path: "~/Projects/docs", accent: .blue, count: 1),
+        .init(id: "all", title: "All projects", path: "4 projects", accent: .violet),
+        .init(id: "/Users/me/Projects/opencode-mobile", title: "opencode-mobile", path: "~/Projects/opencode-mobile", accent: .violet),
+        .init(id: "/Users/me/Projects/playground", title: "playground", path: "~/Projects/playground", accent: .teal),
+        .init(id: "/Users/me/Projects/website", title: "website", path: "~/Projects/website", accent: .amber),
+        .init(id: "/Users/me/Projects/docs", title: "docs", path: "~/Projects/docs", accent: .blue),
     ]
 
     var body: some View {
@@ -65,9 +64,7 @@ struct ReorderableListGalleryView: View {
                     startDecorator: item.isAll
                         ? .iconCircle(.widgets, accessibilityLabel: nil)
                         : .letter(item.title.first ?? "?", item.accent)
-                ) {
-                    SessionListScopeCountBadge(count: item.count)
-                }
+                )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

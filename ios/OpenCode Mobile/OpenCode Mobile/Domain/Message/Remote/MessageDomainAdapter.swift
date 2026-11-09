@@ -126,7 +126,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
         case "system":
             kind = Self.systemNotice(metadata: dto.metadata, description: dto.description)
         case "synthetic":
-            kind = Self.isRestartNotice(metadata: dto.metadata, description: dto.description) ? .restart : nil
+            if Self.isRestartNotice(metadata: dto.metadata, description: dto.description) {
+                kind = .restart
+            } else {
+                kind = Self.goalSetNotice(metadata: dto.metadata, description: dto.description)
+            }
         default:
             kind = nil
         }
@@ -159,6 +163,19 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return .instructionsUpdated(sources: [])
     }
 
+    /// The `/goal` kickoff: a described synthetic message whose metadata names the goal.
+    /// Continuations carry the same metadata but no description; they stay hidden.
+    static func goalSetNotice(metadata: [String: AnyCodable]?, description: String?) -> TimelineNoticeKind? {
+        func string(_ key: String) -> String? {
+            if case .string(let value)? = metadata?[key] { return value }
+            return nil
+        }
+        guard let goalID = SessionGoalKickoff.goalID(source: string("source"), goalID: string("goalID")),
+              let description = nonBlank(description)
+        else { return nil }
+        return .goalSet(goalID: goalID, description: description)
+    }
+
     private static func isRestartNotice(metadata: [String: AnyCodable]?, description: String?) -> Bool {
         if case .string("restart")? = metadata?["notice"] { return true }
         return description == restartDescription
@@ -185,6 +202,13 @@ nonisolated struct MessageDomainAdapter: Sendable {
         state: MessageToolStateDTO?
     ) -> ToolPart {
         let status = toolStatus(from: state?.status)
+        let decline: ToolDecline? = if status != .error {
+            nil
+        } else if state?.declined == true {
+            ToolDecline(note: state?.declineNote.flatMap { $0.isEmpty ? nil : $0 })
+        } else {
+            ToolInterruption.v1Decline(error: state?.error)
+        }
         return ToolPart(
             id: id,
             toolName: toolName,
@@ -200,6 +224,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             isInterrupted: status == .error
                 && (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
             isMalformed: state?.malformed == true,
+            decline: decline,
             images: toolImages(state?.attachments, ownerID: id ?? callID)
         )
     }
@@ -803,8 +828,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     metadata: metadata,
                     timeStartEpochMs: content.time?.created,
                     timeEndEpochMs: content.time?.completed,
-                    isInterrupted: status == .error && ToolInterruption.isAbortedType(state?.error?.type),
+                    isInterrupted: status == .error && ToolInterruption.isUserInterruptionType(state?.error?.type),
                     isMalformed: SessionFailure.isMalformedTool(type: state?.error?.type, executed: state?.executed),
+                    decline: status == .error
+                        ? ToolInterruption.v2Decline(type: state?.error?.type, message: state?.error?.message)
+                        : nil,
                     images: v2ToolImages(state, ownerID: content.id ?? fallbackID)
                 )
             )

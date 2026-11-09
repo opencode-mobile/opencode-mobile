@@ -391,7 +391,7 @@ internal object SessionChatActivityPillCopy {
     ): UiText = if (count > 1) UiText.plural(many, count) else UiText.resource(one)
 }
 
-/** Top-left context pills: todos progress and the branch pill. */
+/** Top-left context pills: the goal, the branch pill and todos progress. */
 @Composable
 internal fun SessionChatContextSlotView(
     items: List<SessionChatContextItem>,
@@ -400,6 +400,7 @@ internal fun SessionChatContextSlotView(
     onBranchClick: () -> Unit,
     modifier: Modifier = Modifier,
     onBranchCopied: () -> Unit = {},
+    onGoalClick: () -> Unit = {},
 ) {
     Row(
         modifier = modifier,
@@ -408,6 +409,7 @@ internal fun SessionChatContextSlotView(
     ) {
         items.forEach { item ->
             when (item) {
+                is SessionChatContextItem.Goal -> SessionChatGoalPill(state = item.goal, onClick = onGoalClick)
                 is SessionChatContextItem.Todos ->
                     OpenCodeFloatingPill(
                         layout = OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.List, "${item.completed}/${item.total}"),

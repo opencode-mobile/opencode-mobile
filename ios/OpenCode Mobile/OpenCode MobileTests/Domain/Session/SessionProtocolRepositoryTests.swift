@@ -556,6 +556,83 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(try #require(listed[0].url), "project") == "p")
     }
 
+    @Test func v2RootSessionsWindowAsksForOneNewestFirstPageOfRoots() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}}"#),
+            .json(#"""
+            {"data":[
+              {"id":"ses_b","title":"B","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":3,"updated":4},"location":{"directory":"/repo"}},
+              {"id":"ses_a","title":"A","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}
+            ],"cursor":{"previous":null,"next":"page-2"}}
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let window = try await repository.listRootSessionsWindow(directory: "/repo", limit: 2)
+
+        #expect(window.sessions.map(\.id) == ["ses_b", "ses_a"])
+        // A full page may have more; the cursor is never followed (the server sends one on the last page too).
+        #expect(window.hasMore)
+        let listed = ProtocolRoutingURLProtocol.requests.filter { $0.url?.path.hasSuffix("/api/session") == true }
+        #expect(listed.count == 1)
+        let url = try #require(listed.first?.url)
+        #expect(queryValue(url, "project") == "p")
+        #expect(queryValue(url, "parentID") == "null")
+        #expect(queryValue(url, "archived") == "false")
+        #expect(queryValue(url, "order") == "desc")
+        #expect(queryValue(url, "limit") == "2")
+        #expect(queryValue(url, "cursor") == nil)
+    }
+
+    @Test func v2RootSessionsWindowShorterThanTheLimitHasNoMore() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"directory":"/home/example"}"#),
+            .json(#"""
+            {"data":[{"id":"ses_a","title":"A","projectID":"global","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/home/example"}}],"cursor":{"previous":null,"next":"page-2"}}
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let window = try await repository.listRootSessionsWindow(directory: "/home/example", limit: 50)
+
+        #expect(window.sessions.map(\.id) == ["ses_a"])
+        #expect(!window.hasMore)
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first { $0.url?.path.hasSuffix("/api/session") == true }?.url)
+        #expect(queryValue(url, "project") == nil)
+        #expect(queryValue(url, "limit") == "50")
+    }
+
+    @Test func v1RootSessionsWindowSendsRootsAndLimitAndCountsTheRawReply() async throws {
+        // An older server ignores both parameters and lists children and archived sessions too.
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            [
+              {"id":"ses_root","title":"Root","directory":"/repo","time":{"created":1,"updated":5}},
+              {"id":"ses_child","title":"Child","parentID":"ses_root","directory":"/repo","time":{"created":1,"updated":4}},
+              {"id":"ses_archived","title":"Old","directory":"/repo","time":{"created":1,"updated":3,"archived":9}}
+            ]
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        let window = try await repository.listRootSessionsWindow(directory: "/repo", limit: 3)
+
+        #expect(window.sessions.map(\.id) == ["ses_root"])
+        #expect(window.children.map(\.id) == ["ses_child"])
+        #expect(window.hasMore)
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/session"))
+        #expect(queryValue(url, "directory") == "/repo")
+        #expect(queryValue(url, "roots") == "true")
+        #expect(queryValue(url, "limit") == "3")
+
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"[{"id":"ses_root","title":"Root","directory":"/repo","time":{"created":1,"updated":5}}]"#)
+        ])
+        let short = try await repository.listRootSessionsWindow(directory: "/repo", limit: 50)
+        #expect(!short.hasMore)
+    }
+
     @Test func unknownProtocolProbesBeforeRoutingToV2() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .json(#"{"directory":"/repo"}"#),
@@ -644,6 +721,89 @@ struct SessionProtocolRepositoryTests {
         let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
         #expect(body.contains(#""decision":"reject""#))
         #expect(!body.contains(#""reply""#))
+    }
+
+    @Test func v2DenyWithNotePostsTrimmedMessage() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .deny,
+            directory: "/repo",
+            message: "  Run the tests with --watch=false instead\n"
+        )
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/permission/per_1/reply") == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        let json = try #require(try JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])
+        #expect(json["decision"] as? String == "reject")
+        #expect(json["message"] as? String == "Run the tests with --watch=false instead")
+        #expect(json.keys.sorted() == ["decision", "message"])
+    }
+
+    @Test func v2DenyWithBlankNoteOmitsMessage() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        _ = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .deny,
+            directory: "/repo",
+            message: "   "
+        )
+
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        #expect(!body.contains("message"))
+    }
+
+    @Test func v1DenyWithNotePostsMessageOnReplyRoute() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        let ok = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .deny,
+            directory: "/repo",
+            message: "Use the staging config"
+        )
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        let path = try #require(request.url?.path)
+        #expect(path.hasSuffix("/permission/per_1/reply"))
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        let json = try #require(try JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])
+        #expect(json["reply"] as? String == "reject")
+        #expect(json["message"] as? String == "Use the staging config")
+    }
+
+    @Test func v1AllowIgnoresNoteAndPlainDenySendsNone() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent, .noContent])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        _ = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .allowOnce,
+            directory: "/repo",
+            message: "Not a deny"
+        )
+        _ = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_2",
+            decision: .deny,
+            directory: "/repo"
+        )
+
+        let bodies = ProtocolRoutingURLProtocol.bodies.compactMap { $0 }
+        #expect(bodies.count == 2)
+        #expect(bodies.allSatisfy { !$0.contains("message") })
     }
 
     @Test func v1RespondToPermissionPostsPermissionReplyPath() async throws {

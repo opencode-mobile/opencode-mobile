@@ -38,7 +38,8 @@ object MessageSnapshotAuthority {
             for (part in message.parts) {
                 when (part) {
                     is MessagePart.Text -> {
-                        textCharacters += part.text.length
+                        // Hidden text (a synthetic kickoff's instructions) is not progress on screen.
+                        if (part.isDisplayable) textCharacters += part.text.length
                         if (part.isStreaming) streamingCount += 1
                     }
                     is MessagePart.Tool -> {

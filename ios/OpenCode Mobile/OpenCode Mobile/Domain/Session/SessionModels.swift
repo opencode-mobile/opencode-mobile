@@ -1,6 +1,6 @@
 import Foundation
 
-struct Session: Sendable, Equatable {
+nonisolated struct Session: Sendable, Equatable {
     let id: String
     var title: String
     let slug: String?
@@ -40,7 +40,7 @@ struct Session: Sendable, Equatable {
 }
 
 /// How the latest run of a session ended, as reported by the v2 server.
-enum SessionIdleOutcome: String, Sendable, Equatable {
+nonisolated enum SessionIdleOutcome: String, Sendable, Equatable {
     case succeeded
     case failed
     case interrupted
@@ -51,7 +51,7 @@ enum SessionIdleOutcome: String, Sendable, Equatable {
     }
 }
 
-struct SessionRevert: Sendable, Equatable {
+nonisolated struct SessionRevert: Sendable, Equatable {
     let messageID: String
     let partID: String?
     let snapshot: String?
@@ -65,7 +65,7 @@ struct SessionRevert: Sendable, Equatable {
     }
 }
 
-extension Array where Element == Session {
+nonisolated extension Array where Element == Session {
     func activeSessions() -> [Session] {
         filter { !$0.isArchived }
     }
@@ -80,7 +80,7 @@ struct SessionStatus: Sendable, Equatable {
     let raw: [String: String]
 }
 
-enum SessionActivity: Sendable, Equatable {
+nonisolated enum SessionActivity: Sendable, Equatable {
     case idle
     case running
     case retrying(
@@ -165,7 +165,7 @@ enum SessionActivity: Sendable, Equatable {
 }
 
 /// Countdown shown while the server is waiting to retry a rate limit or quota error.
-struct SessionRetryCard: Equatable, Sendable {
+nonisolated struct SessionRetryCard: Equatable, Sendable {
     let message: String
     let attempt: Int?
     let nextAtMs: Int64
@@ -173,24 +173,24 @@ struct SessionRetryCard: Equatable, Sendable {
     let actionLink: String?
 }
 
-private func trimmedNonEmpty(_ value: String?) -> String? {
+private nonisolated func trimmedNonEmpty(_ value: String?) -> String? {
     let text = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return text.isEmpty ? nil : text
 }
 
-enum SessionActivitySource: Sendable, Equatable {
+nonisolated enum SessionActivitySource: Sendable, Equatable {
     case server
     case optimistic
     case cached
 }
 
-struct SessionActivityEntry: Sendable, Equatable {
+nonisolated struct SessionActivityEntry: Sendable, Equatable {
     let activity: SessionActivity
     let source: SessionActivitySource
     let observedAtMs: Int64
 }
 
-struct SessionActivitySnapshot: Sendable, Equatable {
+nonisolated struct SessionActivitySnapshot: Sendable, Equatable {
     var entries: [String: SessionActivityEntry]
     var seeded: Bool
     var fromCache: Bool
@@ -225,64 +225,53 @@ struct SessionActivitySnapshot: Sendable, Equatable {
         entries[sessionID]?.source == .cached
     }
 
-    /// Session whose activity Home should show for a root row.
-    ///
-    /// The opencode desktop home row is working when the session or any
-    /// descendant is in the active set. A parent blocked on a child is working
-    /// even when its own step is idle. Nil when nobody in the family is busy;
-    /// the caller keeps the root's own idle path.
-    func homeActivitySessionID(rootID: String, sessions: [Session]) -> String? {
-        var bestID: String?
-        var bestRank = 0
-        var bestFresh = false
-        for id in SessionFamily.memberIDs(of: rootID, in: sessions) {
-            guard let entry = visibleEntry(id), entry.activity.isBusy else { continue }
+    /// Rolls busy sessions up to their roots: for each root with a busy member, the session whose
+    /// activity its Home row shows. The opencode desktop home row is working when the session or
+    /// any descendant is in the active set, so a parent blocked on a child reads as working.
+    /// Running beats retrying, a fresh status beats a cached one, and on a tie the root's own.
+    /// Costs one `rootOf` per busy entry; `unresolved` lists busy ids whose root is not known yet.
+    func homeActivityRollup(rootOf: (String) -> String?) -> HomeActivityRollup {
+        var best: [String: (id: String, rank: Int, fresh: Bool)] = [:]
+        var unresolved: [String] = []
+        for (id, entry) in entries where entry.activity.isBusy && (seeded || entry.source == .cached) {
+            guard let root = rootOf(id) else {
+                unresolved.append(id)
+                continue
+            }
             let rank = entry.activity.homeRank
             let fresh = entry.source != .cached
-            let preferRoot = id == rootID && fresh == bestFresh
-            if rank > bestRank || (rank == bestRank && fresh && !bestFresh) || (rank == bestRank && preferRoot) {
-                bestRank = rank
-                bestFresh = fresh
-                bestID = id
+            guard let current = best[root] else {
+                best[root] = (id, rank, fresh)
+                continue
+            }
+            let better: Bool
+            if rank != current.rank {
+                better = rank > current.rank
+            } else if fresh != current.fresh {
+                better = fresh
+            } else if current.id == root || id == root {
+                better = id == root
+            } else {
+                // Same standing: the lowest id, so the label does not flip between emissions.
+                better = id < current.id
+            }
+            if better {
+                best[root] = (id, rank, fresh)
             }
         }
-        return bestID
-    }
-
-    private func visibleEntry(_ sessionID: String) -> SessionActivityEntry? {
-        guard let entry = entries[sessionID] else { return nil }
-        guard seeded || entry.source == .cached else { return nil }
-        return entry
+        return HomeActivityRollup(sourceByRoot: best.mapValues(\.id), unresolved: unresolved.sorted())
     }
 }
 
-enum SessionFamily {
-    /// The root and every non-archived descendant whose parent chain resolves to it.
-    static func memberIDs(of rootID: String, in sessions: [Session]) -> [String] {
-        let parentByID = Dictionary(sessions.map { ($0.id, $0.parentID) }, uniquingKeysWith: { _, latest in latest })
-        var members = [rootID]
-        for session in sessions where session.id != rootID && !session.isArchived {
-            if resolveRoot(session.id, parentByID: parentByID) == rootID {
-                members.append(session.id)
-            }
-        }
-        return members
-    }
-
-    /// Walk `parentID` to the furthest known ancestor. A missing parent stops the walk.
-    static func resolveRoot(_ sessionID: String, parentByID: [String: String?]) -> String {
-        var current = sessionID
-        var seen: Set<String> = [sessionID]
-        while let parent = parentByID[current] ?? nil {
-            if parent.isEmpty || seen.contains(parent) { break }
-            seen.insert(parent)
-            current = parent
-        }
-        return current
-    }
+/// Busy sessions rolled up to their Home rows.
+nonisolated struct HomeActivityRollup: Sendable, Equatable {
+    /// Root id to the busy session whose activity that root's row shows.
+    var sourceByRoot: [String: String] = [:]
+    /// Busy sessions whose root is not known yet, sorted.
+    var unresolved: [String] = []
 }
 
-private extension SessionActivity {
+nonisolated private extension SessionActivity {
     /// Running outranks a retry; both outrank idle.
     var homeRank: Int {
         switch self {

@@ -1241,7 +1241,7 @@
 			repositoryURL = "https://github.com/hmlongco/Factory";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 3.5.1;
+				minimumVersion = 3.5.2;
 			};
 		};
 		63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {

@@ -20,6 +20,7 @@ import dev.opencode.mobile.domain.filesystem.DirectoryNotFoundException
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPaths
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
+import dev.opencode.mobile.domain.live.SessionAncestry
 import dev.opencode.mobile.domain.live.DefaultSessionReadyStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.InMemorySessionReadyPersistence
@@ -43,6 +44,10 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.composer.ComposerDraft
+import dev.opencode.mobile.domain.session.NewSessionDraftStart
+import dev.opencode.mobile.domain.session.NewSessionDraftStore
+import dev.opencode.mobile.domain.session.NewSessionPlace
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -54,22 +59,21 @@ import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.domain.session.SessionWindow
 import dev.opencode.mobile.domain.session.VcsInfo
 import dev.opencode.mobile.domain.sessioncache.DefaultSessionCache
 import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
-import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
-import dev.opencode.mobile.domain.worktree.CreatedWorktree
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
-import dev.opencode.mobile.domain.worktree.WorktreeCreateError
 import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.text.UiText
@@ -277,25 +281,88 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun uiState_includesAllSessionsInAllSessions() =
+    fun uiState_listsTheFirstPageThenLoadsMoreNearTheEnd() =
         runTest(testDispatcher) {
             val sessions =
-                (1..7).map { index ->
+                (1..120).map { index ->
                     Session(id = "$index", title = "Session $index", updatedAtEpochMs = index.toLong())
                 }
+            val repository = FakeSessionRepository(mutableMapOf("/repo" to sessions))
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    sessionRepository = repository,
                 )
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals(
-                7,
-                loaded.sections
+
+            fun rows() =
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .sections
                     .single()
-                    .allSessions.size,
-            )
+                    .allSessions
+
+            fun canLoadMore() = viewModel.canLoadMoreSessions(viewModel.moreSessionDirectories.value, SessionListFilterTab.ALL_ID)
+
+            assertEquals(50, rows().size)
+            assertEquals("120", rows().first().id)
+            assertTrue(repository.windowLimits.all { (_, limit) -> limit == 50 })
+            assertTrue(canLoadMore())
+
+            viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
+            assertEquals(SessionListFilterTab.ALL_ID, viewModel.loadingMoreScopeId.value)
+            advanceUntilIdle()
+
+            assertEquals(100, rows().size)
+            assertNull(viewModel.loadingMoreScopeId.value)
+            assertEquals("/repo" to 100, repository.windowLimits.last())
+            val requests = repository.windowLimits.size
+
+            // Last page: the window comes back short, so further calls do nothing.
+            viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
+            advanceUntilIdle()
+            assertEquals(120, rows().size)
+            assertFalse(canLoadMore())
+            viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
+            advanceUntilIdle()
+            assertNull(viewModel.loadingMoreScopeId.value)
+            assertEquals(requests + 1, repository.windowLimits.size)
+        }
+
+    @Test
+    fun loadMoreSessions_stopsWhileTheWindowFailsToRefresh() =
+        runTest(testDispatcher) {
+            val sessions =
+                (1..120).map { index ->
+                    Session(id = "$index", title = "Session $index", updatedAtEpochMs = index.toLong())
+                }
+            val repository = FakeSessionRepository(mutableMapOf("/repo" to sessions))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = repository,
+                )
+            advanceUntilIdle()
+
+            fun canLoadMore() = viewModel.canLoadMoreSessions(viewModel.moreSessionDirectories.value, SessionListFilterTab.ALL_ID)
+
+            assertTrue(canLoadMore())
+            repository.listErrors["/repo"] = IllegalStateException("down")
+            viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
+            advanceTimeBy(100)
+            runCurrent()
+
+            // A failed window must not page again on its own: the list would retry in a loop.
+            assertFalse(canLoadMore())
+            val requests = repository.windowLimits.size
+            viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
+            advanceTimeBy(100)
+            runCurrent()
+            assertEquals(requests, repository.windowLimits.size)
+
+            // The store's retry succeeds: paging comes back.
+            repository.listErrors.remove("/repo")
+            advanceUntilIdle()
+            assertTrue(canLoadMore())
         }
 
     @Test
@@ -1542,6 +1609,7 @@ class MainScreenViewModelTest {
     private fun kotlinx.coroutines.test.TestScope.viewModelWithOneProject(
         newSessions: List<Session>,
         timing: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
+        drafts: NewSessionDraftStore = NewSessionDraftStore(),
     ): Pair<MainScreenViewModel, FakeSessionRepository> {
         val repository =
             FakeSessionRepository(
@@ -1555,6 +1623,7 @@ class MainScreenViewModelTest {
                 connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
                 sessionRepository = repository,
                 projectFirstLoadTiming = timing,
+                newSessionDraftStore = drafts,
             )
         advanceUntilIdle()
         return viewModel to repository
@@ -1665,17 +1734,19 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun createSession_usesFocusedWorktreeAndClearsError() =
+    fun openNewSession_opensTheDraftAndCreatesNothing() =
         runTest(testDispatcher) {
             val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            val drafts = NewSessionDraftStore()
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
                     sessionRepository = sessionRepository,
+                    newSessionDraftStore = drafts,
                 )
             advanceUntilIdle()
             assertEquals(0, viewModel.revealNewestToken.value)
-            viewModel.createSession("/repo")
+            viewModel.openNewSession(NewSessionDraftStart("/repo", "/repo"))
             advanceUntilIdle()
             assertEquals(emptyList<String>(), sessionRepository.createdDirectories)
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
@@ -1683,6 +1754,101 @@ class MainScreenViewModelTest {
             assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, loaded.pendingOpenSession?.sessionId)
             assertEquals("/repo", loaded.pendingOpenSession?.worktree)
             assertNull(loaded.projectSessionCreateError)
+            assertEquals("/repo", drafts.draft("")?.projectDirectory)
+        }
+
+    @Test
+    fun openNewSession_restoresTheProfilesDraftOverTheHomeFilter() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            drafts.open("", NewSessionDraftStart("/other", "/other"))
+            drafts.update("") { it.copy(composer = ComposerDraft("half a thought")) }
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to emptyList()),
+                    newSessionDraftStore = drafts,
+                )
+            advanceUntilIdle()
+
+            viewModel.openNewSession(NewSessionDraftStart("/repo", "/repo"))
+            advanceUntilIdle()
+
+            assertEquals("/other", (viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession?.worktree)
+            assertEquals("half a thought", drafts.draft("")?.composer?.text)
+        }
+
+    @Test
+    fun worktreesNewSessionHere_keepsTheDraftTextAndRunsInThatWorktree() =
+        runTest(testDispatcher) {
+            val worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun loadRefreshed(
+                        addedPath: String,
+                        projectId: String?,
+                        mainWorktree: String?,
+                    ): WorktreeLoad = WorktreeLoad.Loaded(listOf("/repo", "/wt/brave-otter"), listsSessions = false)
+                }
+            val drafts = NewSessionDraftStore()
+            drafts.open("", NewSessionDraftStart("proj", "/repo"))
+            drafts.update("") { it.copy(composer = ComposerDraft("keep me")) }
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionsByWorktree = mapOf("/repo" to emptyList()),
+                    worktreeRepository = worktrees,
+                    serverProtocol = ServerProtocol.V2,
+                    newSessionDraftStore = drafts,
+                )
+            advanceUntilIdle()
+
+            viewModel.openNewSessionHere("/wt/brave-otter")
+            advanceUntilIdle()
+
+            val draft = drafts.draft("")!!
+            assertEquals("keep me", draft.composer.text)
+            assertEquals(NewSessionPlace.Worktree("/wt/brave-otter", null), draft.place)
+            assertEquals("/repo", draft.projectDirectory)
+            assertEquals("/wt/brave-otter", (viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession?.worktree)
+        }
+
+    @Test
+    fun draftAddProject_opensTheSheetAndTheAddedProjectBecomesTheDrafts() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            val (viewModel, _) = viewModelWithOneProject(newSessions = emptyList(), drafts = drafts)
+            drafts.open("", NewSessionDraftStart("/one", "/one"))
+            drafts.update("") { it.copy(composer = ComposerDraft("for the new one")) }
+
+            drafts.requestAddProject("")
+            advanceUntilIdle()
+            assertTrue(loaded(viewModel).showAddProjectSheet)
+
+            viewModel.addProject("/new")
+            advanceUntilIdle()
+
+            val draft = drafts.draft("")!!
+            assertEquals("/new", draft.projectDirectory)
+            assertEquals("for the new one", draft.composer.text)
+            assertEquals("/new", loaded(viewModel).pendingOpenSession?.worktree)
+        }
+
+    @Test
+    fun draftAddProject_dismissedSheetLeavesTheDraftAlone() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            val (viewModel, _) = viewModelWithOneProject(newSessions = emptyList(), drafts = drafts)
+            drafts.open("", NewSessionDraftStart("/one", "/one"))
+
+            drafts.requestAddProject("")
+            advanceUntilIdle()
+            viewModel.dismissAddProjectSheet()
+            viewModel.addProject("/new")
+            advanceUntilIdle()
+
+            assertEquals("/one", drafts.draft("")?.projectDirectory)
+            assertNull(loaded(viewModel).pendingOpenSession)
         }
 
     @Test
@@ -2425,6 +2591,49 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun home_busyRootOutsideTheWindowShowsUntilItsFamilyIsIdle() =
+        runTest(testDispatcher) {
+            val roots =
+                (1..60).map { index ->
+                    Session(id = "root-$index", title = "Root $index", directory = "/repo", updatedAtEpochMs = 100L + index)
+                }
+            // An old root (outside the first page) whose sub-agent runs; v2 does not bump its time.
+            val oldRoot = Session(id = "old", title = "Old issue", directory = "/repo", updatedAtEpochMs = 1L)
+            val agent = Session(id = "agent", title = "Subagent", parentId = "old", directory = "/repo", updatedAtEpochMs = 0L)
+            val running =
+                SessionActivitySnapshot(
+                    entries =
+                        mapOf(
+                            "agent" to
+                                SessionActivityEntry(
+                                    activity = SessionActivity.Running,
+                                    source = SessionActivitySource.Server,
+                                    observedAtMs = 1L,
+                                ),
+                        ),
+                    seeded = true,
+                )
+            val activity = MutableStateFlow(running)
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to roots + oldRoot + agent),
+                    statusLiveStoreOverride = FakeHomeStatusLiveStore(activity),
+                )
+            advanceUntilIdle()
+
+            val byId = homeSummaries(viewModel)
+            assertEquals(51, byId.size)
+            assertEquals("Working", byId.getValue("old").statusLabel)
+            assertNull(byId["agent"])
+
+            activity.value = SessionActivitySnapshot(seeded = true)
+            advanceUntilIdle()
+            assertNull(homeSummaries(viewModel)["old"])
+            assertEquals(50, homeSummaries(viewModel).size)
+        }
+
+    @Test
     fun v2Home_unreadOutcomeWaitsForSeededStatus() =
         runTest(testDispatcher) {
             // Running again, but an older run's `time.idle` is still unviewed.
@@ -2788,85 +2997,6 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun runInNewWorktreeCreatesThenStartsASessionThereAndListsIt() =
-        runTest(testDispatcher) {
-            var listed = listOf("/repo")
-            val requests = mutableListOf<CreateWorktreeRequest>()
-            val worktrees =
-                object : WorktreeRepository by UnavailableWorktreeRepository {
-                    override suspend fun loadRefreshed(
-                        addedPath: String,
-                        projectId: String?,
-                        mainWorktree: String?,
-                    ): WorktreeLoad = WorktreeLoad.Loaded(listed, listsSessions = false)
-
-                    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree {
-                        requests += request
-                        listed = listed + "/wt/brave-otter"
-                        return CreatedWorktree("/wt/brave-otter", "brave-otter", branch = null)
-                    }
-                }
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
-                    sessionsByWorktree = mapOf("/repo" to emptyList()),
-                    worktreeRepository = worktrees,
-                    serverProtocol = ServerProtocol.V2,
-                )
-            advanceUntilIdle()
-
-            viewModel.openRunInNewWorktree("proj")
-            advanceUntilIdle()
-            val form = viewModel.worktreeCreateForm.value!!
-            assertEquals("/repo", form.sourceDirectory)
-            viewModel.updateNewWorktreeName("brave-otter")
-            viewModel.submitNewWorktree()
-            advanceUntilIdle()
-
-            assertEquals(listOf(CreateWorktreeRequest("proj", "/repo", "brave-otter", baseRef = null)), requests)
-            assertNull(viewModel.worktreeCreateForm.value)
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("/wt/brave-otter", loaded.pendingOpenSession?.worktree)
-            assertEquals(
-                listOf("/repo", "/wt/brave-otter"),
-                loaded.projects
-                    .single()
-                    .worktrees
-                    .map { it.directory },
-            )
-        }
-
-    @Test
-    fun runInNewWorktreeFailureStartsNoSession() =
-        runTest(testDispatcher) {
-            val worktrees =
-                object : WorktreeRepository by UnavailableWorktreeRepository {
-                    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree =
-                        throw WorktreeCreateError("Worktrees are only supported for git projects")
-                }
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
-                    sessionsByWorktree = mapOf("/repo" to emptyList()),
-                    worktreeRepository = worktrees,
-                    serverProtocol = ServerProtocol.V1,
-                )
-            advanceUntilIdle()
-
-            viewModel.openRunInNewWorktree("proj")
-            viewModel.submitNewWorktree()
-            advanceUntilIdle()
-
-            assertEquals(
-                "Couldn't create the worktree: Worktrees are only supported for git projects",
-                viewModel.worktreeCreateForm.value?.errorMessage?.english(),
-            )
-            assertNull((viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession)
-        }
-
-    @Test
     fun loadedWorktreeInventoriesAreSharedForSessionChat() =
         runTest(testDispatcher) {
             val cache =
@@ -2974,6 +3104,7 @@ class MainScreenViewModelTest {
         worktreeInventoryCache: dev.opencode.mobile.domain.worktree.WorktreeInventoryCache =
             dev.opencode.mobile.domain.worktree
                 .WorktreeInventoryCache(),
+        newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
     ): MainScreenViewModel {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore, connectionProbing)
         runBlocking {
@@ -3014,6 +3145,7 @@ class MainScreenViewModelTest {
                     SilentWorldSignals,
                     coordinatorSync,
                 )
+        val sessionAncestry = SessionAncestry(sessionRepository, liveStoreScope.coroutineScope, ioDispatcher = testDispatcher)
         val sessionLiveStore =
             DefaultSessionLiveStore(
                 sessionRepository,
@@ -3021,6 +3153,7 @@ class MainScreenViewModelTest {
                 liveStoreScope,
                 NoOpSessionCache,
                 coordinatorSync,
+                sessionAncestry = sessionAncestry,
             )
         val sessionReadyStore =
             readyStoreOverride ?: DefaultSessionReadyStore(
@@ -3043,10 +3176,12 @@ class MainScreenViewModelTest {
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,
             sessionCache = sessionCache,
+            sessionAncestry = sessionAncestry,
             worktreeRepository = worktreeRepository,
             projectFirstLoadTiming = projectFirstLoadTiming,
             worktreeInventoryCache = worktreeInventoryCache,
-        )
+            newSessionDraftStore = newSessionDraftStore,
+        ).apply { homeRowsDispatcher = testDispatcher }
     }
 }
 
@@ -3118,6 +3253,19 @@ private class FakeSessionRepository(
     var listSessionsCallCount = 0
     val listedDirectories = mutableListOf<String?>()
     var nextListGate: CompletableDeferred<Unit>? = null
+
+    /** Directory and limit of each Home window request. */
+    val windowLimits = mutableListOf<Pair<String?, Int>>()
+
+    /** Pages like a server: newest first, [limit] rows, more when the page is full. */
+    override suspend fun listRootSessionsWindow(
+        directory: String?,
+        limit: Int,
+    ): SessionWindow {
+        windowLimits += directory to limit
+        val page = listSessions(directory).sortedByDescending { it.updatedAtEpochMs ?: 0L }.take(limit)
+        return SessionWindow(sessions = page, hasMore = page.size == limit)
+    }
 
     /** Per-directory list hooks: a gate holds that directory's list call, an error fails it. */
     val listGates = mutableMapOf<String, CompletableDeferred<Unit>>()
@@ -3278,6 +3426,7 @@ private class FakeSessionRepository(
         permissionId: String,
         decision: dev.opencode.mobile.domain.session.PermissionDecision,
         directory: String?,
+        message: String?,
     ) = error("unused")
 }
 

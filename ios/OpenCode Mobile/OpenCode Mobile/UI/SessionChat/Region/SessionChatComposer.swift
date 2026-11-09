@@ -16,7 +16,7 @@ final class SessionChatComposer {
     private(set) var state = SessionChatComposerRegionState()
 
     private var sessionID: String
-    private let worktree: String
+    private var worktree: String
     private let messageRepository: any MessageRepository
     private let modelCatalogStore: ModelCatalogStore
     private let commandRepository: any CommandRepository
@@ -35,6 +35,9 @@ final class SessionChatComposer {
     private var loadedCatalog: ModelSelectionCatalog?
     private var cachedSelection: SessionModelSelection?
     private var newSessionPreference: SessionModelSelection?
+    /// A New session draft's explicit model, agent or variant pick (#1004); it outranks the
+    /// new-session preference, also after the draft moves to another project.
+    private(set) var draftModelSelection: SessionModelSelection?
     private var initialSelectionState: InitialSelectionState = .loadingCache
     /// A selection seeded from the shared catalog is shown; the history reconcile is pending.
     private var isSelectionProvisional = false
@@ -59,6 +62,11 @@ final class SessionChatComposer {
     private var fileSearchTask: Task<Void, Never>?
     private var fileSearchGeneration = 0
     var fileSearchDelayMs = 200
+    /// How long a prompt upload may go unanswered before "Still sending…" offers Retry (#1002).
+    var sendStallDelayMs = 20_000
+    private var sendControl: PromptSendControl?
+    private var sendStallTask: Task<Void, Never>?
+    private var sendStallSequence = 0
 
     init(
         sessionID: String,
@@ -74,9 +82,11 @@ final class SessionChatComposer {
         foregroundEventStream: (any ForegroundEventStream)? = nil,
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
         attachmentUploadRepository: (any AttachmentUploadRepository)? = nil,
-        catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs
+        catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs,
+        draftModelSelection: SessionModelSelection? = nil
     ) {
         self.sessionID = sessionID
+        self.draftModelSelection = draftModelSelection
         self.worktree = worktree
         self.messageRepository = messageRepository
         self.modelCatalogStore = modelCatalogStore
@@ -97,28 +107,48 @@ final class SessionChatComposer {
         seedFromCatalogStore()
         Task {
             await self.loadCachedSelection()
-            self.applyOrLoadDraft(preserve: nil)
+            self.applyOrLoadDraft()
         }
     }
 
-    /// Catalog loads that used to run from `init` — keep them off View construction.
-    /// `SessionChatView` init can run on every parent body refresh while `@State` keeps
-    /// one live ViewModel; orphan inits must not hit the network.
-    func rebind(sessionID: String) {
-        guard sessionID != self.sessionID else { return }
-        let previousSessionID = self.sessionID
-        let preserve: ComposerDraft? =
-            if OptimisticSessionCreate.isPlaceholder(previousSessionID),
-               !OptimisticSessionCreate.isPlaceholder(sessionID) {
-                currentDraft()
-            } else {
-                nil
-            }
-        persistDraftTask?.cancel()
-        persistDraft(sessionID: previousSessionID, draft: currentDraft())
-        cancelAllUploads()
-        discardStoredAttachments(state.composer.attachments)
-        self.sessionID = sessionID
+    // MARK: New session draft (#1004)
+
+    /// Puts a kept draft back: text, mentions and attachments. Uploads that were still running
+    /// when the draft was left start again.
+    func restoreDraftContent(_ draft: ComposerDraft, attachments: [Attachment]) {
+        guard OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
+        if !draft.text.isEmpty {
+            applyDraft(draft)
+            draftRevision += 1
+        }
+        guard !attachments.isEmpty else { return }
+        for attachment in attachments {
+            attachmentRevision += 1
+            attachmentRevisions[attachment.id] = attachmentRevision
+        }
+        updateComposer { $0.attachments = attachments }
+        attachments.filter(\.isUploadPending).forEach(startUpload)
+    }
+
+    /// What the draft holds right now.
+    var draftContent: (composer: ComposerDraft, attachments: [Attachment]) {
+        (currentDraft(), state.composer.attachments)
+    }
+
+    /// The draft moved to another project or worktree: commands, agents and models load for the
+    /// new checkout; text, attachments and an explicit model pick stay.
+    func retargetDraft(worktree: String) {
+        guard OptimisticSessionCreate.isPlaceholder(sessionID), worktree != self.worktree else { return }
+        self.worktree = worktree
+        serverCommandsTask?.cancel()
+        mentionableAgentsTask?.cancel()
+        selectableAgentsTask?.cancel()
+        fileSearchTask?.cancel()
+        fileSearchTask = nil
+        fileSearchGeneration += 1
+        catalogLoadGeneration += 1
+        catalogRetryTask?.cancel()
+        catalogRetryTask = nil
         loadedCatalog = nil
         loadedSelectableAgents = false
         seededSelectableAgents = false
@@ -126,22 +156,52 @@ final class SessionChatComposer {
         newSessionPreference = nil
         initialSelectionState = .loadingCache
         isSelectionProvisional = false
-        latestTimelineState = nil
-        latestHistoryHints = nil
-        draftRevision = 0
-        attachmentRevision = 0
-        attachmentRevisions = [:]
-        state = SessionChatComposerRegionState()
-        state.composer.followUpDelivery = SessionChatDisplayPreferences.shared.followUpDelivery
+        state.serverCommands = []
+        state.mentionableAgents = []
+        state.composer.isModelSelectionReady = false
         seedFromCatalogStore()
         notifyChange()
         Task {
             await self.loadCachedSelection()
-            self.applyOrLoadDraft(preserve: preserve)
         }
         loadServerCommands()
         loadMentionableAgents()
         loadSelectableAgents()
+    }
+
+    /// The first send created the session (in `worktree`). Everything typed and picked stays, so
+    /// the prompt goes out exactly as drafted.
+    func promoteDraft(sessionID: String, worktree: String) {
+        guard OptimisticSessionCreate.isPlaceholder(self.sessionID) else { return }
+        self.sessionID = sessionID
+        self.worktree = worktree
+        draftModelSelection = nil
+        notifyChange()
+    }
+
+    /// The normal sending state while the first send creates the worktree and session.
+    func setDraftSending(_ sending: Bool) {
+        state.isSending = sending
+        if sending { state.errorMessage = nil }
+        notifyChange()
+    }
+
+    /// The model, agent and variant shown now, as a selection to seed a new session with.
+    var currentModelSelection: SessionModelSelection? {
+        guard let selectedModel = state.composer.selectedModel else { return nil }
+        return SessionModelSelection(
+            providerID: selectedModel.option.providerID,
+            modelID: selectedModel.option.modelID,
+            variant: state.composer.selectedVariant,
+            agentID: state.composer.selectedMode,
+            savedAtEpochMs: Int64(Date().timeIntervalSince1970 * 1_000)
+        )
+    }
+
+    private func markDraftSelection() {
+        guard OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
+        draftModelSelection = currentModelSelection
+        notifyChange()
     }
 
     func startCatalogLoads() {
@@ -934,6 +994,7 @@ final class SessionChatComposer {
             composer.modelNotice = nil
         }
         persistCurrentSelection(updatePreference: true)
+        markDraftSelection()
         discardStoredAttachments(dropped)
     }
 
@@ -944,6 +1005,7 @@ final class SessionChatComposer {
         settleProvisionalSelection()
         updateComposer { $0.selectedMode = match.id }
         persistCurrentSelection(updatePreference: false)
+        markDraftSelection()
     }
 
     func selectVariant(_ variant: String) {
@@ -959,6 +1021,7 @@ final class SessionChatComposer {
             composer.selectedModel = composer.selectedModel.map { ModelSelection(option: $0.option, selectedVariant: variant) }
         }
         persistCurrentSelection(updatePreference: true)
+        markDraftSelection()
     }
 
     func restoreComposerText(_ text: String) {
@@ -1138,98 +1201,105 @@ final class SessionChatComposer {
             }
         }
 
+        let sendControl = PromptSendControl()
+        beginSendWatch(sendControl)
+        defer { endSendWatch(sendControl) }
+        let hasAttachments = !submittedAttachments.isEmpty
+        let progressHandler: @Sendable (Int64, Int64) -> Void = { [weak self] sent, total in
+            Task { @MainActor in
+                self?.applySendProgress(sent: sent, total: total, hasAttachments: hasAttachments)
+            }
+        }
         do {
-            let hasAttachments = !submittedAttachments.isEmpty
-            try await PromptSendProgressReporting.$handler.withValue({ [weak self] sent, total in
-                Task { @MainActor in
-                    self?.applySendProgress(sent: sent, total: total, hasAttachments: hasAttachments)
-                }
-            }) {
-                @MainActor
-                func sendPrompt(
-                    text: String,
-                    skillMentions: [SkillMention],
-                    mentions: [AgentMention],
-                    fileMentions: [FileMention],
-                    sessionID: String,
-                    attachments: [Attachment],
-                    model: ModelSelection,
-                    worktree: String?
-                ) async throws {
-                    try await beforePrompt()
-                    func send(delivery: FollowUpDelivery) async throws {
-                        try await messageRepository.sendPromptAsync(
+            try await PromptSendControl.$current.withValue(sendControl) {
+                try await PromptSendProgressReporting.$handler.withValue(progressHandler) {
+                    @MainActor
+                    func sendPrompt(
+                        text: String,
+                        skillMentions: [SkillMention],
+                        mentions: [AgentMention],
+                        fileMentions: [FileMention],
+                        sessionID: String,
+                        attachments: [Attachment],
+                        model: ModelSelection,
+                        worktree: String?
+                    ) async throws {
+                        try await beforePrompt()
+                        func send(delivery: FollowUpDelivery) async throws {
+                            try await messageRepository.sendPromptAsync(
+                                sessionID: sessionID,
+                                options: PromptSendOptions(
+                                    text: text,
+                                    attachments: attachments,
+                                    model: PromptModelSelection(
+                                        providerID: model.option.providerID,
+                                        modelID: model.option.modelID
+                                    ),
+                                    variant: composer.selectedVariant,
+                                    mode: composer.selectedMode,
+                                    agentMentions: mentions,
+                                    fileMentions: fileMentions,
+                                    worktree: worktree,
+                                    skillMentions: skillMentions,
+                                    delivery: delivery,
+                                    messageID: messageID
+                                ),
+                                directory: worktree
+                            )
+                        }
+                        do {
+                            try await send(delivery: composer.followUpDelivery)
+                        } catch {
+                            if supportsFollowUp,
+                               composer.followUpDelivery != .queue,
+                               errorMessage(error) == "Session is busy"
+                            {
+                                try await send(delivery: .queue)
+                            } else {
+                                throw error
+                            }
+                        }
+                        if !mentions.isEmpty || !fileMentions.isEmpty || !skillMentions.isEmpty {
+                            OpenCodeLog.sessionChat.info(
+                                "prompt send agentParts=\(mentions.count) fileParts=\(fileMentions.count) skills=\(skillMentions.count)"
+                            )
+                        }
+                    }
+                    switch intent {
+                    case let .serverCommand(command, arguments):
+                        try await commandRepository.runCommand(
                             sessionID: sessionID,
-                            options: PromptSendOptions(
-                                text: text,
-                                attachments: attachments,
+                            options: CommandRunOptions(
+                                command: command,
+                                arguments: arguments,
+                                attachments: submittedAttachments,
                                 model: PromptModelSelection(
-                                    providerID: model.option.providerID,
-                                    modelID: model.option.modelID
+                                    providerID: selectedModel.option.providerID,
+                                    modelID: selectedModel.option.modelID
                                 ),
                                 variant: composer.selectedVariant,
                                 mode: composer.selectedMode,
-                                agentMentions: mentions,
-                                fileMentions: fileMentions,
-                                worktree: worktree,
-                                skillMentions: skillMentions,
-                                delivery: delivery,
+                                delivery: composer.followUpDelivery,
+                                skillIDs: ComposerMentionRouting.skillParts(text: trimmed, mentions: skillsForSend).map(\.skillID),
                                 messageID: messageID
                             ),
                             directory: worktree
                         )
-                    }
-                    do {
-                        try await send(delivery: composer.followUpDelivery)
-                    } catch {
-                        if supportsFollowUp,
-                           composer.followUpDelivery != .queue,
-                           errorMessage(error) == "Session is busy"
-                        {
-                            try await send(delivery: .queue)
-                        } else {
-                            throw error
-                        }
-                    }
-                    if !mentions.isEmpty || !fileMentions.isEmpty || !skillMentions.isEmpty {
-                        OpenCodeLog.sessionChat.info(
-                            "prompt send agentParts=\(mentions.count) fileParts=\(fileMentions.count) skills=\(skillMentions.count)"
+                    case let .prompt(text):
+                        try await sendPrompt(
+                            text: text,
+                            skillMentions: skillsForSend,
+                            mentions: mentionsForSend,
+                            fileMentions: filesForSend,
+                            sessionID: sessionID,
+                            attachments: submittedAttachments,
+                            model: selectedModel,
+                            worktree: worktree
                         )
                     }
                 }
-                switch intent {
-                case let .serverCommand(command, arguments):
-                    try await commandRepository.runCommand(
-                        sessionID: sessionID,
-                        options: CommandRunOptions(
-                            command: command,
-                            arguments: arguments,
-                            attachments: submittedAttachments,
-                            model: PromptModelSelection(
-                                providerID: selectedModel.option.providerID,
-                                modelID: selectedModel.option.modelID
-                            ),
-                            variant: composer.selectedVariant,
-                            mode: composer.selectedMode,
-                            delivery: composer.followUpDelivery,
-                            skillIDs: ComposerMentionRouting.skillParts(text: trimmed, mentions: skillsForSend).map(\.skillID),
-                            messageID: messageID
-                        ),
-                        directory: worktree
-                    )
-                case let .prompt(text):
-                    try await sendPrompt(
-                        text: text,
-                        skillMentions: skillsForSend,
-                        mentions: mentionsForSend,
-                        fileMentions: filesForSend,
-                        sessionID: sessionID,
-                        attachments: submittedAttachments,
-                        model: selectedModel,
-                        worktree: worktree
-                    )
-                }
             }
+            endSendWatch(sendControl)
             persistCurrentSelection(updatePreference: false)
             state.sendProgressPercent = nil
             notifyChange()
@@ -1328,6 +1398,56 @@ final class SessionChatComposer {
         updateComposerText(ComposerShellCommand.exitShellMode(composer.text), cursor: max(0, composer.cursor - 1))
     }
 
+    /// Watches a prompt upload so a send the server never answers turns into "Still sending…"
+    /// with Retry instead of a silent wait with Send disabled (#1002).
+    private func beginSendWatch(_ control: PromptSendControl) {
+        sendControl = control
+        scheduleSendStallCheck()
+    }
+
+    private func scheduleSendStallCheck() {
+        sendStallTask?.cancel()
+        let delay = sendStallDelayMs
+        sendStallTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(delay))
+            guard !Task.isCancelled else { return }
+            self?.sendStalled()
+        }
+    }
+
+    private func sendStalled() {
+        guard state.isSending, let control = sendControl else { return }
+        // Only a send the uploader can retry offers Retry; check again later either way.
+        if control.canRetry {
+            sendStallSequence += 1
+            state.sendStallNotice = sendStallSequence
+            DiagnosticLog.warning(.chat, "sendPrompt stalled notice=\(sendStallSequence)")
+            notifyChange()
+        }
+        scheduleSendStallCheck()
+    }
+
+    /// Sends the stuck prompt again on a new connection; the same message id keeps it from doubling.
+    func retryStalledSend() {
+        state.sendStallNotice = nil
+        notifyChange()
+        guard state.isSending, let control = sendControl, control.canRetry else { return }
+        DiagnosticLog.info(.chat, "sendPrompt retry")
+        control.retry()
+        scheduleSendStallCheck()
+    }
+
+    private func endSendWatch(_ control: PromptSendControl) {
+        guard sendControl === control else { return }
+        sendControl = nil
+        sendStallTask?.cancel()
+        sendStallTask = nil
+        if state.sendStallNotice != nil {
+            state.sendStallNotice = nil
+            notifyChange()
+        }
+    }
+
     func clearSending() {
         state.isSending = false
         state.sendProgressPercent = nil
@@ -1420,14 +1540,8 @@ final class SessionChatComposer {
         scheduleFileSearch()
     }
 
-    private func applyOrLoadDraft(preserve: ComposerDraft?) {
+    private func applyOrLoadDraft() {
         if OptimisticSessionCreate.isPlaceholder(sessionID) { return }
-        if let preserve, !preserve.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            applyDraft(preserve)
-            draftRevision += 1
-            schedulePersistDraft()
-            return
-        }
         draftLoadGeneration += 1
         let generation = draftLoadGeneration
         guard let identity = currentIdentity() else { return }
@@ -1492,10 +1606,13 @@ final class SessionChatComposer {
             newSessionPreference = await preference
             // A pick made on the provisional selection already settled this session.
             guard initialSelectionState == .loadingCache else { return }
-            cachedSelection = newerSelection(
-                persisted,
-                modelCatalogStore.lastSelection(worktree: worktree, sessionID: sessionID)
-            )
+            // A draft's own pick lives in the draft, never under the placeholder id.
+            cachedSelection = OptimisticSessionCreate.isPlaceholder(sessionID)
+                ? draftModelSelection
+                : newerSelection(
+                    persisted,
+                    modelCatalogStore.lastSelection(worktree: worktree, sessionID: sessionID)
+                )
         }
         guard initialSelectionState == .loadingCache else { return }
         initialSelectionState = .waitingForInputs
@@ -1528,12 +1645,12 @@ final class SessionChatComposer {
         loadedCatalog = catalog
         state.composer.modelOptions = catalog.options
         let identity = currentIdentity()
-        let remembered = modelCatalogStore.lastSelection(worktree: worktree, sessionID: sessionID)
-        let persisted = identity.flatMap {
+        // A draft has no history; its own pick, else the default the create resolver seeds.
+        let isOptimistic = OptimisticSessionCreate.isPlaceholder(sessionID)
+        let remembered = isOptimistic ? draftModelSelection : modelCatalogStore.lastSelection(worktree: worktree, sessionID: sessionID)
+        let persisted = isOptimistic ? nil : identity.flatMap {
             sessionModelSelectionStore.peekSession(connectionIdentity: $0, worktree: worktree, sessionID: sessionID)
         }
-        // An optimistic session has no history; it gets the same default the create resolver seeds.
-        let isOptimistic = OptimisticSessionCreate.isPlaceholder(sessionID)
         let preference = isOptimistic ? identity.flatMap {
             sessionModelSelectionStore.peekNewSessionPreference(connectionIdentity: $0, worktree: worktree)
         } : nil
@@ -1595,13 +1712,17 @@ final class SessionChatComposer {
         )
         cachedSelection = selection
         recordLastSelection(selection)
+        let sessionID = sessionID
+        let worktree = worktree
         Task {
-            await sessionModelSelectionStore.saveSession(
-                connectionIdentity: identity,
-                worktree: worktree,
-                sessionID: sessionID,
-                selection: selection
-            )
+            if !OptimisticSessionCreate.isPlaceholder(sessionID) {
+                await sessionModelSelectionStore.saveSession(
+                    connectionIdentity: identity,
+                    worktree: worktree,
+                    sessionID: sessionID,
+                    selection: selection
+                )
+            }
             if updatePreference {
                 await sessionModelSelectionStore.saveNewSessionPreference(
                     connectionIdentity: identity,

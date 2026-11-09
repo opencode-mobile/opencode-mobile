@@ -180,6 +180,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     let changesInitialFilePath: String?
     /// `status` is `.error` because the user stopped or declined it; render neutral.
     let isInterrupted: Bool
+    /// "Your note: …" under a declined call the user denied with a note; muted, never an error.
+    let declineNote: TimelineText?
     /// The server closed the call without running it.
     let isMalformed: Bool
     /// v2 is still streaming this tool's arguments: `subtitle` is the value
@@ -204,6 +206,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         opensChangesReview: Bool = false,
         changesInitialFilePath: String? = nil,
         isInterrupted: Bool = false,
+        declineNote: TimelineText? = nil,
         isMalformed: Bool = false,
         isReceivingArguments: Bool = false,
         presentation: ToolResultPresentation? = nil,
@@ -222,10 +225,18 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.opensChangesReview = opensChangesReview
         self.changesInitialFilePath = changesInitialFilePath
         self.isInterrupted = isInterrupted
+        self.declineNote = declineNote
         self.isMalformed = isMalformed
         self.isReceivingArguments = isReceivingArguments
         self.presentation = presentation
         self.images = images
+    }
+
+    /// The card's caption: `errorText`, then a declined call's note as a second line. Both are
+    /// muted on an interrupted card.
+    var errorTextWithDeclineNote: String? {
+        let lines = [errorText, declineNote].compactMap { $0?.resolved }.filter { !$0.isEmpty }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
     }
 
     func markingFailed(_ errorText: TimelineText) -> SessionChatToolCardBlock {
@@ -243,6 +254,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
             opensChangesReview: opensChangesReview,
             changesInitialFilePath: changesInitialFilePath,
             isInterrupted: isInterrupted,
+            declineNote: declineNote,
             isMalformed: isMalformed,
             presentation: presentation,
             images: images
@@ -506,6 +518,11 @@ nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
     }
 
     static let placeholderText = TimelineText.app("timeline.step.no_commentary", "Worked without commentary")
+
+    /// "Your note: …" for each chip the user declined with a note; muted, unlike `errorLines`.
+    var declineNoteLines: [TimelineText] {
+        chips.compactMap { $0.card.isInterrupted ? $0.card.declineNote : nil }
+    }
 
     func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatStepParagraphBlock {
         SessionChatStepParagraphBlock(
@@ -2845,7 +2862,7 @@ nonisolated enum SessionChatTimelineBlocks {
             if let failedExit {
                 .app("tool.error.exit_code", "Exited with code \(failedExit)")
             } else if interrupted {
-                interruptedToolText(tool.error)
+                interruptedToolText(tool.error, declined: tool.decline != nil)
             } else if tool.status == .error {
                 TimelineText.verbatim(ifPresent: tool.error.flatMap { $0.isEmpty ? nil : $0 })
             } else {
@@ -2867,6 +2884,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 opensChangesReview: chrome.opensChangesReview,
                 changesInitialFilePath: chrome.changesInitialFilePath,
                 isInterrupted: interrupted,
+                declineNote: interrupted ? declineNoteText(tool.decline) : nil,
                 isMalformed: tool.isMalformed,
                 isReceivingArguments: receivingArguments,
                 presentation: toolResultPresentation(tool, fallbackTitle: chrome.title),
@@ -2947,11 +2965,17 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     /// Neutral copy for a tool the user stopped or declined (never the raw abort text).
-    static func interruptedToolText(_ error: String?) -> TimelineText {
+    static func interruptedToolText(_ error: String?, declined: Bool = false) -> TimelineText {
         let text = (error ?? "").lowercased()
-        return text.contains("declined") || text.contains("rejected")
+        return declined || text.contains("declined") || text.contains("rejected")
             ? .app("tool.status.declined", "Declined")
             : .app("tool.status.stopped", "Stopped")
+    }
+
+    /// "Your note: …" for a call the user denied with a note; nil without one.
+    static func declineNoteText(_ decline: ToolDecline?) -> TimelineText? {
+        guard let note = decline?.note else { return nil }
+        return .app("tool.user_note", "Your note: \(note)")
     }
 
     /// A shell run the server reports as completed but whose command exited

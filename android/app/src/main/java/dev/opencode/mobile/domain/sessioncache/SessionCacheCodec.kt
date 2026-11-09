@@ -246,6 +246,7 @@ internal data class CachedMessagePartPayload(
     val isStreaming: Boolean = false,
     val isSynthetic: Boolean = false,
     val isIgnored: Boolean = false,
+    val goalKickoffId: String? = null,
     val toolName: String? = null,
     val status: String? = null,
     val title: String? = null,
@@ -264,6 +265,8 @@ internal data class CachedMessagePartPayload(
     val auto: Boolean = false,
     val isInterrupted: Boolean = false,
     val isMalformed: Boolean = false,
+    val isDeclined: Boolean = false,
+    val userNote: String? = null,
 )
 
 @Serializable
@@ -470,6 +473,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 isStreaming = isStreaming,
                 isSynthetic = isSynthetic,
                 isIgnored = isIgnored,
+                goalKickoffId = goalKickoffId,
             )
         is MessagePart.Tool ->
             CachedMessagePartPayload(
@@ -487,6 +491,8 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 timeEndEpochMs = timeEndEpochMs,
                 isInterrupted = isInterrupted,
                 isMalformed = isMalformed,
+                isDeclined = isDeclined,
+                userNote = userNote,
             )
         is MessagePart.File ->
             CachedMessagePartPayload(
@@ -532,6 +538,7 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 id = id,
                 isSynthetic = isSynthetic,
                 isIgnored = isIgnored,
+                goalKickoffId = goalKickoffId,
             )
         "tool" ->
             MessagePart.Tool(
@@ -550,6 +557,8 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 timeEndEpochMs = timeEndEpochMs,
                 isInterrupted = isInterrupted,
                 isMalformed = isMalformed,
+                isDeclined = isDeclined,
+                userNote = userNote,
             )
         "file" -> {
             val fileId = id ?: return null

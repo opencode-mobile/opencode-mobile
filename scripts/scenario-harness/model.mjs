@@ -18,6 +18,9 @@ const SUMMARY_MARKERS = [
 // v2 only accepts a compaction summary that uses its template headings (core/src/session/compaction.ts).
 export const SUMMARY_TEXT =
   "## Objective\nKeep formatMoney correct for every currency.\n\n## Work State\n### Completed\n- The harness ran scripted turns.\n\n## Next Move\n- Continue with the next request.";
+// v2 `/goal` reviewer prompt (opencode core/src/plugin/goal/judge.txt); answered from the goal verdict queue.
+const GOAL_REVIEW_MARKER = "You are now the reviewer for the session's goal";
+const GOAL_DONE = { verdict: "done", reason: "The harness reviewer found the goal met." };
 const SCENARIO_MARKER = /\bscenario[:\s]+([a-z0-9][a-z0-9-]*)/i;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,6 +45,7 @@ export function classify(body, headers = {}) {
   let kind = "turn";
   if (TITLE_MARKERS.some((marker) => system.includes(marker) || raw.includes(marker))) kind = "title";
   else if (SUMMARY_MARKERS.some((marker) => system.includes(marker) || users.some((u) => messageText(u).includes(marker)))) kind = "summary";
+  else if (users.length && messageText(users[users.length - 1]).includes(GOAL_REVIEW_MARKER)) kind = "goal-review";
   const firstUser = users.length ? messageText(users[0]) : "";
   const lastMessage = messages[messages.length - 1];
   const lastUser = users.length ? messageText(users[users.length - 1]) : "";
@@ -104,6 +108,8 @@ export function createModel({ getContext, scenarios, emit }) {
   const latched = new Set(); // gate labels released before their gate opened
   let armed = null; // { scenarioId, armedAt, run }
   let pacing = 1;
+  // /goal: verdicts the reviewer gives, in order (then "done"), and how long an unscripted turn takes.
+  const goal = { verdicts: [], turnMs: 0, served: 0 };
 
   function publicRun(run) {
     return {
@@ -132,6 +138,7 @@ export function createModel({ getContext, scenarios, emit }) {
       pacing,
       runs: [...runs.values()].filter((r) => r.status !== "armed").map(publicRun).reverse().slice(0, 20),
       gates: [...gates.entries()].map(([id, gate]) => ({ id, label: gate.label, run: gate.run })),
+      goal: { queued: goal.verdicts, turnMs: goal.turnMs, served: goal.served },
     };
   }
 
@@ -467,6 +474,12 @@ export function createModel({ getContext, scenarios, emit }) {
         steps = [{ op: "text", value: SUMMARY_TEXT, chunkChars: 40, delayMs: 5 }];
         label = "auto summary";
       }
+    } else if (info.kind === "goal-review") {
+      const verdict = goal.verdicts.shift() ?? GOAL_DONE;
+      goal.served += 1;
+      steps = [{ op: "text", value: JSON.stringify(verdict), chunkChars: 400, delayMs: 0 }];
+      label = `goal review: ${verdict.verdict}`;
+      changed();
     } else {
       entry = route(info);
       const call = entry ? nextCall(entry) : null;
@@ -474,7 +487,9 @@ export function createModel({ getContext, scenarios, emit }) {
         steps = call.steps;
         label = `${entry.run.scenario.id} ${entry.role === "child" ? `child ${entry.child.id}` : "main"} call ${entry.role === "main" ? entry.run.main.index : entry.child.index}`;
       } else {
-        steps = [{ op: "text", value: entry ? "Done." : "ok", chunkChars: 16, delayMs: 10 }];
+        steps = !entry && goal.turnMs > 0
+          ? [{ op: "text", value: "Working on the goal, one step at a time.", chunkChars: 4, delayMs: Math.round(goal.turnMs / 10) }]
+          : [{ op: "text", value: entry ? "Done." : "ok", chunkChars: 16, delayMs: 10 }];
         label = entry ? `${entry.run.scenario.id} (script exhausted)` : "unscripted";
       }
     }
@@ -550,6 +565,13 @@ export function createModel({ getContext, scenarios, emit }) {
       if (target && !ids.length && !target.startsWith("gate_")) latched.add(target);
       changed();
       return ids.length;
+    },
+    // Queues /goal reviewer verdicts ({verdict, reason, next_step?}); `turnMs` slows unscripted turns so a working goal stays on screen.
+    setGoal(body = {}) {
+      if (Array.isArray(body.verdicts)) goal.verdicts = body.append ? [...goal.verdicts, ...body.verdicts] : [...body.verdicts];
+      if (body.turnMs !== undefined) goal.turnMs = Math.max(0, Number(body.turnMs) || 0);
+      changed();
+      return { queued: goal.verdicts, turnMs: goal.turnMs, served: goal.served };
     },
     setPacing(value) {
       pacing = Math.max(0, Number(value) || 1);

@@ -234,6 +234,8 @@ enum ProductAnalytics {
         static let permissionAlways = "permission_always"
         static let permissionHide = "permission_hide"
         static let permissionShow = "permission_show"
+        static let permissionNoteOpen = "permission_note_open"
+        static let permissionNoteCancel = "permission_note_cancel"
         static let questionToggleOption = "question_toggle_option"
         static let questionToggleCustom = "question_toggle_custom"
         static let questionEditCustomText = "question_edit_custom_text"

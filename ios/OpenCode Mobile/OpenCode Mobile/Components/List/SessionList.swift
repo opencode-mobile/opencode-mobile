@@ -126,6 +126,26 @@ struct SessionListSession: Identifiable, Hashable {
     }
 }
 
+/// When Home's list asks for older sessions (#981).
+enum SessionListPaging {
+    /// What the list samples to decide on a load more. A change in any field samples again, so a
+    /// load that ends or a window that gains more while near the end asks once more.
+    struct Trigger: Equatable {
+        let nearEnd: Bool
+        let rowCount: Int
+        let canLoadMore: Bool
+        let loadingMore: Bool
+
+        var loadsMore: Bool { nearEnd && canLoadMore && !loadingMore }
+    }
+}
+
+/// A near-end row on screen under one filter.
+private struct SessionListNearEndRow: Hashable {
+    let filterId: String
+    let sessionId: String
+}
+
 /// A project scope whose first server load has not landed yet.
 enum SessionListScopeLoad: Hashable {
     case loading(isSlow: Bool)
@@ -178,7 +198,6 @@ struct SessionListFilterTab: Identifiable, Hashable {
     let id: String
     let title: String
     let subtitle: String
-    let count: Int
     let letter: Character?
     let accent: LetterAccent?
     /// Set while this project's sessions are still loading or failed to load.
@@ -200,7 +219,6 @@ struct SessionListFilterTab: Identifiable, Hashable {
     init(
         id: String,
         title: String,
-        count: Int,
         subtitle: String = "",
         letter: Character? = nil,
         accent: LetterAccent? = nil,
@@ -213,7 +231,6 @@ struct SessionListFilterTab: Identifiable, Hashable {
         self.id = id
         self.title = title
         self.subtitle = subtitle
-        self.count = count
         self.letter = letter
         self.accent = accent
         self.load = load
@@ -224,11 +241,10 @@ struct SessionListFilterTab: Identifiable, Hashable {
     }
 
     /// `load` is loading while any project's first list is outstanding (a server switch).
-    static func all(projectCount: Int, sessionCount: Int, load: SessionListScopeLoad? = nil) -> SessionListFilterTab {
+    static func all(projectCount: Int, load: SessionListScopeLoad? = nil) -> SessionListFilterTab {
         SessionListFilterTab(
             id: allId,
             title: allTitle,
-            count: sessionCount,
             subtitle: projectCount == 1 ? "1 project" : "\(projectCount) projects",
             load: load
         )
@@ -236,10 +252,9 @@ struct SessionListFilterTab: Identifiable, Hashable {
 
     /// A Home project. The dock reads "All N worktrees" while worktrees are shown and the
     /// project has several, else the path; the picker row reads the path (its worktree pill
-    /// carries the count).
+    /// carries the worktree count).
     static func homeProject(
         _ project: HomeProject,
-        count: Int,
         load: SessionListScopeLoad? = nil,
         worktreesEnabled: Bool = true
     ) -> SessionListFilterTab {
@@ -247,7 +262,6 @@ struct SessionListFilterTab: Identifiable, Hashable {
         return SessionListFilterTab(
             id: HomeScope.project(project.key).id,
             title: project.displayName,
-            count: count,
             subtitle: many ? HomeProjectCopy.allWorktrees(project.worktrees.count) : project.primaryPath,
             letter: letterCharacter(for: project.displayName),
             accent: letterAccent(for: project.primaryPath),
@@ -260,8 +274,7 @@ struct SessionListFilterTab: Identifiable, Hashable {
     /// "branch · folder" ("branch" for the main checkout, the folder when the branch is unknown).
     static func homeWorktree(
         _ worktree: HomeWorktree,
-        of project: HomeProject,
-        count: Int
+        of project: HomeProject
     ) -> SessionListFilterTab {
         let dockSubtitle: String
         if let branch = worktree.branch {
@@ -272,7 +285,6 @@ struct SessionListFilterTab: Identifiable, Hashable {
         return SessionListFilterTab(
             id: HomeScope.worktree(projectKey: project.key, directory: worktree.directory).id,
             title: project.displayName,
-            count: count,
             subtitle: dockSubtitle,
             letter: letterCharacter(for: project.displayName),
             accent: letterAccent(for: project.primaryPath),
@@ -286,13 +298,11 @@ struct SessionListFilterTab: Identifiable, Hashable {
     static func project(
         worktree: String,
         title: String,
-        count: Int,
         load: SessionListScopeLoad? = nil
     ) -> SessionListFilterTab {
         SessionListFilterTab(
             id: worktree,
             title: title,
-            count: count,
             subtitle: worktree,
             letter: letterCharacter(for: title),
             accent: letterAccent(for: worktree),
@@ -304,18 +314,20 @@ struct SessionListFilterTab: Identifiable, Hashable {
     /// project is still loading or failed, and for any scope that is not a worktree.
     /// Prefers the project when another worktree has sessions, otherwise All when another
     /// project does, otherwise the project so the empty worktree is not a dead end.
+    /// `scopeHasSessions` says whether a scope id lists any loaded session.
     func worktreeFilterClear(
         broaderTabs: [SessionListFilterTab],
-        visibleIsEmpty: Bool
+        visibleIsEmpty: Bool,
+        scopeHasSessions: (String) -> Bool
     ) -> WorktreeFilterClear? {
         guard isWorktree, visibleIsEmpty, load == nil else { return nil }
         let parent = parentId.flatMap { id in broaderTabs.first { $0.id == id } }
         if parent?.load != nil { return nil }
         let all = broaderTabs.first { $0.isAll }
-        if let parent, parent.count > 0 {
+        if let parent, scopeHasSessions(parent.id) {
             return WorktreeFilterClear(filterId: parent.id, message: SessionListWorktreeEmptyCopy.otherWorktrees)
         }
-        if let all, all.count > 0 {
+        if let all, scopeHasSessions(all.id) {
             return WorktreeFilterClear(filterId: all.id, message: SessionListWorktreeEmptyCopy.otherProjects)
         }
         if let parent {
@@ -371,10 +383,21 @@ struct SessionList<EmptyContent: View>: View {
     /// Rendered sessions under the selected filter, top to bottom, whenever the
     /// rendered order changes. Empty while nothing is rendered.
     let onDisplayedSessionsChange: (([SessionListSession]) -> Void)?
+    /// A row within ``nearEndRowCount`` of the end of the list appeared, or the list shows no
+    /// rows, while `canLoadMore`: load older sessions.
+    let onNearEnd: (() -> Void)?
+    /// Older sessions are loading: a skeleton row closes the list.
+    let showsLoadingFooter: Bool
+    /// The selected filter has older sessions to load. A filter with no rows yet shows its
+    /// loading placeholder and keeps loading (#981).
+    let canLoadMore: Bool
     let showsEmptyContent: Bool
     /// Row style override, such as in the gallery. Nil follows the Session rows setting.
     let rowStyle: HomeSessionRowStyle?
     let emptyContent: EmptyContent
+
+    /// Rows from the end of the list whose appearance calls `onNearEnd`.
+    static var nearEndRowCount: Int { 10 }
 
     @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var dockHeight: CGFloat = 0
@@ -387,6 +410,8 @@ struct SessionList<EmptyContent: View>: View {
     @State private var incomingOpacity: CGFloat = 1
     @State private var outgoingOpacity: CGFloat = 0
     @State private var listCrossfadeTask: Task<Void, Never>?
+    /// Near-end rows on screen, by filter id and session id.
+    @State private var shownNearEndRows: Set<SessionListNearEndRow> = []
 
     init(
         sessions: [SessionListSession],
@@ -407,6 +432,9 @@ struct SessionList<EmptyContent: View>: View {
         revealNewestToken: Int = 0,
         revealSelectedSessionToken: Int = 0,
         onDisplayedSessionsChange: (([SessionListSession]) -> Void)? = nil,
+        onNearEnd: (() -> Void)? = nil,
+        showsLoadingFooter: Bool = false,
+        canLoadMore: Bool = false,
         showsEmptyContent: Bool = false,
         rowStyle: HomeSessionRowStyle? = nil,
         @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
@@ -429,6 +457,9 @@ struct SessionList<EmptyContent: View>: View {
         self.revealNewestToken = revealNewestToken
         self.revealSelectedSessionToken = revealSelectedSessionToken
         self.onDisplayedSessionsChange = onDisplayedSessionsChange
+        self.onNearEnd = onNearEnd
+        self.showsLoadingFooter = showsLoadingFooter
+        self.canLoadMore = canLoadMore
         self.showsEmptyContent = showsEmptyContent
         self.rowStyle = rowStyle
         self.emptyContent = emptyContent()
@@ -511,10 +542,17 @@ struct SessionList<EmptyContent: View>: View {
         let scopeTab = filterTabs.first { $0.id == filterId }
             ?? layer.scopeTab
             ?? (selectedScopeTab?.id == filterId ? selectedScopeTab : nil)
-        let loadingTab = visible.isEmpty ? scopeTab.flatMap { $0.load == nil ? nil : $0 } : nil
-        let worktreeClear = scopeTab?.worktreeFilterClear(broaderTabs: filterTabs, visibleIsEmpty: visible.isEmpty)
+        // A filter with no rows yet but older sessions to load is still loading.
+        let pagingLoad: SessionListScopeLoad? = isCurrent && canLoadMore && onNearEnd != nil ? .loading(isSlow: false) : nil
+        let placeholderLoad = visible.isEmpty ? scopeTab?.load ?? pagingLoad : nil
+        let loadingTab = placeholderLoad == nil ? nil : scopeTab
+        let worktreeClear = scopeTab?.worktreeFilterClear(
+            broaderTabs: filterTabs,
+            visibleIsEmpty: visible.isEmpty,
+            scopeHasSessions: { !sessions.visibleForFilter($0).isEmpty }
+        )
         Group {
-            if let loadingTab, let load = loadingTab.load {
+            if let loadingTab, let load = placeholderLoad {
                 ScrollView {
                     scopeLoadContent(tab: loadingTab, load: load)
                         .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
@@ -559,6 +597,9 @@ struct SessionList<EmptyContent: View>: View {
                     if isCurrent { onDisplayedSessionsChange?([]) }
                 }
             } else {
+                let nearEnd = isCurrent && onNearEnd != nil
+                    ? Set(visible.suffix(Self.nearEndRowCount).map(\.id))
+                    : []
                 SessionListStabilizedScrollView(
                     visible: visible,
                     recentWindowHours: homeDisplayPreferences.recentWindowHours,
@@ -568,20 +609,36 @@ struct SessionList<EmptyContent: View>: View {
                     bottomObscuredHeight: dockHeight,
                     followingTop: isCurrent ? $followingTop : .constant(true),
                     onRefresh: isCurrent ? onRefresh : nil,
-                    onDisplayedSessionsChange: isCurrent ? onDisplayedSessionsChange : nil
+                    onDisplayedSessionsChange: isCurrent ? onDisplayedSessionsChange : nil,
+                    showsLoadingFooter: isCurrent && showsLoadingFooter
                 ) { section in
                     switch section.kind {
                     case .recent:
-                        recentStack(section)
+                        recentStack(section, filterId: filterId, nearEnd: nearEnd)
                     case .day, .week:
-                        dayOrWeekSection(section)
+                        dayOrWeekSection(section, filterId: filterId, nearEnd: nearEnd)
                     }
                 }
                 .id(filterId)
                 .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: loadingTab?.load)
+        .animation(.easeInOut(duration: 0.25), value: placeholderLoad)
+        .task(id: isCurrent ? nearEndTrigger(filterId: filterId, visible: visible) : nil) {
+            // Again when a load ends or the window gains more while still near the end, which
+            // row appearance alone misses.
+            if isCurrent, nearEndTrigger(filterId: filterId, visible: visible).loadsMore { onNearEnd?() }
+        }
+    }
+
+    private func nearEndTrigger(filterId: String, visible: [SessionListSession]) -> SessionListPaging.Trigger {
+        let nearEndIDs = visible.suffix(Self.nearEndRowCount).map(\.id)
+        return SessionListPaging.Trigger(
+            nearEnd: visible.isEmpty || nearEndIDs.contains { shownNearEndRows.contains(SessionListNearEndRow(filterId: filterId, sessionId: $0)) },
+            rowCount: visible.count,
+            canLoadMore: canLoadMore && onNearEnd != nil,
+            loadingMore: showsLoadingFooter
+        )
     }
 
     @ViewBuilder
@@ -610,20 +667,20 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     @ViewBuilder
-    private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
+    private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>, filterId: String, nearEnd: Set<String>) -> some View {
         OpenCodeSectionHeader(title: .localized(section.title))
 
         ForEach(section.items, id: \.id) { session in
-            sessionRow(session, showStatusDot: true)
+            sessionRow(session, showStatusDot: true, filterId: filterId, nearEnd: nearEnd)
         }
     }
 
     @ViewBuilder
-    private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
+    private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>, filterId: String, nearEnd: Set<String>) -> some View {
         OpenCodeSectionHeader(title: .localized(section.title))
 
         ForEach(section.items, id: \.id) { session in
-            sessionRow(session, showStatusDot: false)
+            sessionRow(session, showStatusDot: false, filterId: filterId, nearEnd: nearEnd)
         }
     }
 
@@ -632,7 +689,7 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     @ViewBuilder
-    private func sessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
+    private func sessionRow(_ session: SessionListSession, showStatusDot: Bool, filterId: String, nearEnd: Set<String>) -> some View {
         SessionListRow(
             session: session,
             rowStyle: effectiveRowStyle,
@@ -641,6 +698,14 @@ struct SessionList<EmptyContent: View>: View {
             action: { onSessionSelected(session) },
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }
         )
+        .onAppear {
+            guard nearEnd.contains(session.id) else { return }
+            shownNearEndRows.insert(SessionListNearEndRow(filterId: filterId, sessionId: session.id))
+            if canLoadMore { onNearEnd?() }
+        }
+        .onDisappear {
+            shownNearEndRows.remove(SessionListNearEndRow(filterId: filterId, sessionId: session.id))
+        }
         .background {
             if selectedSessionId == session.id {
                 GeometryReader { geometry in
@@ -799,6 +864,7 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
     @Binding var followingTop: Bool
     let onRefresh: (() async -> Void)?
     let onDisplayedSessionsChange: (([SessionListSession]) -> Void)?
+    let showsLoadingFooter: Bool
     let sectionContent: (HomeSessionLadderSection<SessionListSession>) -> SectionContent
 
     @State private var previousSections: [HomeSessionLadderSection<SessionListSession>]
@@ -818,6 +884,7 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
         followingTop: Binding<Bool>,
         onRefresh: (() async -> Void)?,
         onDisplayedSessionsChange: (([SessionListSession]) -> Void)?,
+        showsLoadingFooter: Bool,
         @ViewBuilder sectionContent: @escaping (HomeSessionLadderSection<SessionListSession>) -> SectionContent
     ) {
         self.visible = visible
@@ -829,6 +896,7 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
         _followingTop = followingTop
         self.onRefresh = onRefresh
         self.onDisplayedSessionsChange = onDisplayedSessionsChange
+        self.showsLoadingFooter = showsLoadingFooter
         self.sectionContent = sectionContent
         let seeded = SessionListStabilizedOrder.apply(
             visible: visible,
@@ -856,6 +924,7 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
             bottomObscuredHeight: bottomObscuredHeight,
             followingTop: $followingTop,
             onRefresh: onRefresh,
+            showsLoadingFooter: showsLoadingFooter,
             sectionContent: sectionContent
         )
         .onAppear { ingest() }
@@ -904,6 +973,7 @@ private struct SessionListScrollView<SectionContent: View>: View {
     let bottomObscuredHeight: CGFloat
     @Binding var followingTop: Bool
     let onRefresh: (() async -> Void)?
+    let showsLoadingFooter: Bool
     let sectionContent: (HomeSessionLadderSection<SessionListSession>) -> SectionContent
 
     @State private var viewportHeight: CGFloat = 0
@@ -918,6 +988,7 @@ private struct SessionListScrollView<SectionContent: View>: View {
         bottomObscuredHeight: CGFloat,
         followingTop: Binding<Bool>,
         onRefresh: (() async -> Void)?,
+        showsLoadingFooter: Bool,
         @ViewBuilder sectionContent: @escaping (HomeSessionLadderSection<SessionListSession>) -> SectionContent
     ) {
         self.ladderSections = ladderSections
@@ -928,6 +999,7 @@ private struct SessionListScrollView<SectionContent: View>: View {
         self.bottomObscuredHeight = bottomObscuredHeight
         _followingTop = followingTop
         self.onRefresh = onRefresh
+        self.showsLoadingFooter = showsLoadingFooter
         self.sectionContent = sectionContent
     }
 
@@ -940,6 +1012,11 @@ private struct SessionListScrollView<SectionContent: View>: View {
                         .id(sessionListTopAnchorID)
                     ForEach(ladderSections, id: \.id) { section in
                         sectionContent(section)
+                    }
+                    if showsLoadingFooter {
+                        OpenCodeSessionListSkeleton(rowCount: 1)
+                            .accessibilityIdentifier("sessionListLoadingMore")
+                            .transition(.opacity)
                     }
                 }
                 .openCodeFocusGroup(.vertical)
@@ -1277,9 +1354,9 @@ private struct SessionListRefreshableModifier: ViewModifier {
             ),
         ],
         filterTabs: [
-            .all(projectCount: 2, sessionCount: 2),
-            .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 1),
-            .project(worktree: "/Users/demo/playground", title: "playground", count: 1),
+            .all(projectCount: 2),
+            .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
+            .project(worktree: "/Users/demo/playground", title: "playground"),
         ],
         selectedFilterId: SessionListFilterTab.allId,
         onSessionSelected: { _ in },

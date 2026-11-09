@@ -234,14 +234,14 @@ private val sessionListGallerySamples: List<SessionListSession>
 
 private val sessionListGalleryFilterTabs =
     listOf(
-        SessionListFilterTab.all(projectCount = 3, sessionCount = 9),
+        SessionListFilterTab.all(projectCount = 3, hasSessions = true),
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
-            count = 4,
+            hasSessions = true,
         ),
-        SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", count = 4),
-        SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", count = 1),
+        SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", hasSessions = true),
+        SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", hasSessions = true),
     )
 
 private val sessionListGalleryOneProjectFilterTabs =
@@ -249,7 +249,7 @@ private val sessionListGalleryOneProjectFilterTabs =
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
-            count = 4,
+            hasSessions = true,
         ),
     )
 
@@ -280,12 +280,12 @@ internal fun galleryTabsWithNewProject(
         SessionListFilterTab.project(
             worktree = GALLERY_NEW_PROJECT_WORKTREE,
             title = "new-project",
-            count = 0,
+            hasSessions = false,
             load = load,
         )
     if (oneProject) return listOf(newProject)
     val projects = base.filterNot { it.isAll } + newProject
     return listOf(
-        SessionListFilterTab.all(projectCount = projects.size, sessionCount = projects.sumOf { it.count }),
+        SessionListFilterTab.all(projectCount = projects.size, hasSessions = projects.any { it.hasSessions }),
     ) + projects
 }

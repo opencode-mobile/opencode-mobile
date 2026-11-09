@@ -4,6 +4,9 @@ protocol SessionRepository: Sendable {
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest]
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest]
     func listSessions(directory: String?) async throws -> [Session]
+    /// Home's list: the newest `limit` root, unarchived sessions of `directory` (its project on v2)
+    /// in one request. Other screens keep `listSessions`.
+    func listRootSessionsWindow(directory: String, limit: Int) async throws -> SessionWindow
     /// Root, unarchived sessions of `directory` whose title contains `query` (case-insensitive).
     func searchSessions(query: String, directory: String?) async throws -> [Session]
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session
@@ -40,7 +43,15 @@ protocol SessionRepository: Sendable {
     /// explicit commit; v1 applies the revert itself when the next prompt arrives, so it has
     /// nothing to commit.
     func commitRevert(id: String) async throws -> Bool
-    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool
+    /// Answers a permission request. `message` is the note sent with a `.deny` (the agent gets it
+    /// as the tool error and keeps going); it is trimmed, and blank or non-deny notes are dropped.
+    func respondToPermission(
+        sessionID: String,
+        permissionID: String,
+        decision: PermissionDecision,
+        directory: String?,
+        message: String?
+    ) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?, questions: [QuestionInfo]) async throws -> Bool
@@ -68,6 +79,11 @@ nonisolated enum CompactionStart: Sendable, Equatable {
 }
 
 extension SessionRepository {
+    /// Lists everything and keeps the newest roots. The protocol remotes ask the server for one page.
+    func listRootSessionsWindow(directory: String, limit: Int) async throws -> SessionWindow {
+        SessionWindow.prefix(of: try await listSessions(directory: directory), limit: limit)
+    }
+
     /// Lists and filters locally. The protocol remotes ask the server to search first.
     func searchSessions(query: String, directory: String?) async throws -> [Session] {
         SessionTitleSearch.searchResults(try await listSessions(directory: directory), query: query)
@@ -121,6 +137,21 @@ extension SessionRepository {
 
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision) async throws -> Bool {
         try await respondToPermission(sessionID: sessionID, permissionID: permissionID, decision: decision, directory: nil)
+    }
+
+    func respondToPermission(
+        sessionID: String,
+        permissionID: String,
+        decision: PermissionDecision,
+        directory: String?
+    ) async throws -> Bool {
+        try await respondToPermission(
+            sessionID: sessionID,
+            permissionID: permissionID,
+            decision: decision,
+            directory: directory,
+            message: nil
+        )
     }
 
     func replyToQuestion(questionID: String, answers: [[String]]) async throws -> Bool {
@@ -183,6 +214,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func listSessions(directory: String?) async throws -> [Session] {
         try await run { try await remote.listSessions(directory: directory) }
+    }
+
+    func listRootSessionsWindow(directory: String, limit: Int) async throws -> SessionWindow {
+        try await run { try await remote.listRootSessionsWindow(directory: directory, limit: limit) }
     }
 
     func searchSessions(query: String, directory: String?) async throws -> [Session] {
@@ -311,14 +346,16 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool {
         try await run {
             try await remote.respondToPermission(
                 sessionID: sessionID,
                 permissionID: permissionID,
                 decision: decision,
-                directory: directory
+                directory: directory,
+                message: message
             )
         }
     }

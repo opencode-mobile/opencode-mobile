@@ -51,6 +51,7 @@ enum class ComponentGalleryEntryId {
     ListItem,
     SelectableCard,
     OptionCard,
+    PickerCard,
     ListGroup,
     SectionHeader,
     ReorderableList,
@@ -70,6 +71,7 @@ enum class ComponentGalleryEntryId {
     TreeRow,
     FileTabs,
     Button,
+    SplitButton,
     TextInput,
     ServerAddressInput,
     EmptyState,
@@ -192,6 +194,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SplitButton,
+            title = "Split Button",
+            description = "Compact text button with a ▾ menu half; long-press opens the menu too.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.ChoiceBadge,
             title = "Choice Badge",
             description = "Selectable pill for compact single-choice controls.",
@@ -285,6 +293,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.OptionCard,
             title = "Option Card",
             description = "Bordered single-choice card with radio, title and tag, subtitle, and illustration preview.",
+            category = ComponentGalleryCategory.Lists,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.PickerCard,
+            title = "Picker Card",
+            description = "Caption, rounded card of label-over-value rows with icon tiles that open pickers, and a path footnote.",
             category = ComponentGalleryCategory.Lists,
         ),
         ComponentGalleryEntry(

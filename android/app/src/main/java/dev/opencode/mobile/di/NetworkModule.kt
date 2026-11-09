@@ -11,6 +11,7 @@ import dev.opencode.mobile.data.remote.MessagesApi
 import dev.opencode.mobile.data.remote.ModelsApi
 import dev.opencode.mobile.data.remote.PtyApi
 import dev.opencode.mobile.data.remote.SessionsApi
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.network.OpencodeHttpClient
 import kotlinx.serialization.json.Json
 import javax.inject.Singleton
@@ -21,8 +22,7 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideJson(): Json =
-        Json {
-            ignoreUnknownKeys = true
+        serverPayloadJson {
             isLenient = true
             explicitNulls = false
         }

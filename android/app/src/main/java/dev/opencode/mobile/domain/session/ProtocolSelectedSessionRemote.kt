@@ -16,6 +16,11 @@ internal class ProtocolSelectedSessionRemote(
 
     override suspend fun listSessions(directory: String?): List<Session> = selected().listSessions(directory)
 
+    override suspend fun listRootSessionsWindow(
+        directory: String?,
+        limit: Int,
+    ): SessionWindow = selected().listRootSessionsWindow(directory, limit)
+
     override suspend fun searchSessions(
         query: String,
         directory: String?,
@@ -158,7 +163,8 @@ internal class ProtocolSelectedSessionRemote(
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
-    ): Boolean = selected().respondToPermission(sessionId, permissionId, decision, directory)
+        message: String?,
+    ): Boolean = selected().respondToPermission(sessionId, permissionId, decision, directory, message)
 
     override suspend fun replyToQuestion(
         requestId: String,

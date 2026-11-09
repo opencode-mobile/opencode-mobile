@@ -80,22 +80,98 @@ enum OpenCodeBottomSheetLayoutMath {
     /// Tallest `.fitContent` card that still wraps its content: five Commands
     /// rows plus header and bottom clearance. Shared with Android.
     static let compactMaxHeight: CGFloat = 420
-    /// Header drag distance that dismisses on release. Shared with Android.
-    static let dragDismissDistance: CGFloat = 96
-    /// Downward release speed (pt/s) that dismisses a header drag of any
-    /// length. Shared with Android.
-    static let dragDismissVelocity: CGFloat = 1200
+    /// Release speed (pt/s) that counts as a flick toward the next stop or
+    /// off screen. Shared with Android.
+    static let flickVelocity: CGFloat = 900
+    /// A slow release with less than this fraction of the lowest stop still
+    /// showing dismisses. Shared with Android.
+    static let dismissFraction: CGFloat = 0.6
     /// Enter: decelerate onto the resting position. Shared with Android.
     static let enterAnimation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: bottomSheetEnterDuration)
     /// Exit: accelerate off the bottom edge. Shared with Android.
     static let exitAnimation = Animation.timingCurve(0.4, 0, 1, 1, duration: bottomSheetExitDuration)
-    /// Settle back after a header drag that did not dismiss.
+    /// Settle onto a stop after a drag, and grow or shrink between stops.
     static let dragSettleAnimation = Animation.spring(response: 0.31, dampingFraction: 0.82)
 
-    /// Whether a released header drag dismisses: past the distance, or flung
-    /// down fast enough.
-    static func dragDismisses(offset: CGFloat, velocity: CGFloat) -> Bool {
-        offset >= dragDismissDistance || velocity >= dragDismissVelocity
+    /// Stop a released drag settles on, or `nil` to dismiss. `extent` is the
+    /// visible card height, `velocity` the release speed (down positive).
+    ///
+    /// A flick down steps from above the low stop to it, or dismisses from
+    /// it; a flick up goes to the high stop. A slow release dismisses below
+    /// `dismissFraction` of the low stop, otherwise it takes the nearer stop.
+    /// Shared with Android.
+    static func settleTarget(extent: CGFloat, velocity: CGFloat, low: CGFloat, high: CGFloat) -> CGFloat? {
+        if velocity > flickVelocity {
+            return extent > low + 1 ? low : nil
+        }
+        if velocity < -flickVelocity {
+            return high
+        }
+        if extent < dismissFraction * low {
+            return nil
+        }
+        return extent < (low + high) / 2 ? low : high
+    }
+
+    /// Extent after the finger moves by `dy` (down positive): never above the
+    /// high stop, never below nothing showing.
+    static func draggedExtent(_ extent: CGFloat, by dy: CGFloat, high: CGFloat) -> CGFloat {
+        min(max(extent - dy, 0), max(high, 0))
+    }
+
+    /// Height the card lays out at for `extent`: between the stops. Below the
+    /// low stop the card keeps that height and slides down instead.
+    static func layoutHeight(extent: CGFloat, stops: OpenCodeBottomSheetStops) -> CGFloat {
+        min(max(extent, stops.low), stops.high)
+    }
+
+    /// How far the card slides down below its resting spot for `extent`.
+    static func slideOffset(extent: CGFloat, low: CGFloat) -> CGFloat {
+        max(0, low - extent)
+    }
+
+    /// Tallest card: the space an expanded card gets, never below the half
+    /// detent.
+    static func fullHeight(availableHeight: CGFloat, topSafeArea: CGFloat) -> CGFloat {
+        max(
+            fitAllMaxHeight(availableHeight: availableHeight, topSafeArea: topSafeArea),
+            scrollableHeight(availableHeight: availableHeight)
+        )
+    }
+
+    /// Where a card rests for its height policy and mode.
+    ///
+    /// | Policy | Mode | low | high |
+    /// |---|---|---|---|
+    /// | `.half` | scrollable | half | full |
+    /// | `.fitContent` | compact | fitted | fitted |
+    /// | `.fitContent` | scrollable | half | full |
+    /// | `.fitAllContent` | compact | fitted | fitted |
+    /// | `.fitAllContent` | scrollable | full | full |
+    ///
+    /// - Parameters:
+    ///   - fittedHeight: the card wrapped around its content (compact).
+    ///   - availableHeight: space above the keyboard, as before detents: a
+    ///     `.keep` sheet's half stop is half the space the keyboard leaves,
+    ///     and `cardHeight` caps the full stop at the room under the top
+    ///     safe area.
+    static func stops(
+        height: OpenCodeBottomSheetHeight,
+        mode: BottomSheetPresentationMode,
+        fittedHeight: CGFloat,
+        availableHeight: CGFloat,
+        topSafeArea: CGFloat
+    ) -> OpenCodeBottomSheetStops {
+        let full = fullHeight(availableHeight: availableHeight, topSafeArea: topSafeArea)
+        let half = scrollableHeight(availableHeight: availableHeight)
+        switch (height, mode) {
+        case (.half, _), (.fitContent, .scrollable):
+            return OpenCodeBottomSheetStops(low: half, high: full)
+        case (.fitAllContent, .scrollable):
+            return OpenCodeBottomSheetStops(low: full, high: full)
+        case (.fitContent, .compact), (.fitAllContent, .compact):
+            return OpenCodeBottomSheetStops(low: fittedHeight, high: fittedHeight)
+        }
     }
 
     /// Offset that slides a hidden card just below the bottom edge: its own
@@ -243,28 +319,63 @@ enum OpenCodeBottomSheetLayoutMath {
         contentHeight > 0 ? contentHeight + pinnedBottomTopSpacing : 0
     }
 
-    /// Fixed card height, or `nil` when the card sizes to its content.
+    /// Room a card gets above the keyboard: up to the top safe area and its gap.
+    static func keyboardRoom(availableHeight: CGFloat, topSafeArea: CGFloat) -> CGFloat {
+        max(0, availableHeight - topSafeArea - expandedTopGap)
+    }
+
+    /// Card height shown, or `nil` when the card sizes to its content.
+    ///
+    /// Without the keyboard the card is its layout height. While the keyboard
+    /// is up, `.keep` caps it at the room above the keyboard and `.expand`
+    /// fills that room (growing from the layout height, or shrinking to it
+    /// when the card is taller).
     ///
     /// - Parameters:
-    ///   - restingHeight: height without the keyboard (`nil` = content-sized).
+    ///   - layoutHeight: height from the drag extent and the stops (`nil` =
+    ///     content-sized, before it measures).
     ///   - availableHeight: space above the keyboard, from `availableHeight(containerHeight:keyboardOverlap:)`.
     ///   - topSafeArea: top safe-area inset of the window.
     ///   - keyboardOverlap: height of the container the keyboard covers.
     ///   - keyboard: the sheet's keyboard policy.
     static func cardHeight(
-        restingHeight: CGFloat?,
+        layoutHeight: CGFloat?,
         availableHeight: CGFloat,
         topSafeArea: CGFloat,
         keyboardOverlap: CGFloat,
         keyboard: OpenCodeBottomSheetKeyboard
     ) -> CGFloat? {
-        let resting = restingHeight.map { min($0, availableHeight) }
-        guard isKeyboardExpanded(keyboard: keyboard, keyboardOverlap: keyboardOverlap) else {
-            return resting
+        let room = keyboardRoom(availableHeight: availableHeight, topSafeArea: topSafeArea)
+        if isKeyboardExpanded(keyboard: keyboard, keyboardOverlap: keyboardOverlap) {
+            return room
         }
-        let expanded = max(0, availableHeight - topSafeArea - expandedTopGap)
-        // Never shorter than the resting height: expand only grows the card.
-        return max(resting ?? 0, expanded)
+        guard let layoutHeight else { return nil }
+        if keyboardOverlap > 0 {
+            return min(layoutHeight, room)
+        }
+        return min(layoutHeight, availableHeight)
+    }
+}
+
+/// Resting heights of a bottom sheet card: `low` is where it opens, `high`
+/// the tallest it grows to. Equal for a sheet with a single stop.
+struct OpenCodeBottomSheetStops: Equatable {
+    let low: CGFloat
+    let high: CGFloat
+
+    init(low: CGFloat, high: CGFloat) {
+        self.low = max(0, low)
+        self.high = max(self.low, high)
+    }
+
+    /// Whether the card has two stops to move between.
+    var hasRange: Bool {
+        high - low > 0.5
+    }
+
+    /// Whether `extent` is at the high stop.
+    func isAtHigh(_ extent: CGFloat) -> Bool {
+        extent >= high - 0.5
     }
 }
 
@@ -369,7 +480,8 @@ private struct BottomSheetPinnedBottomHeightKey: PreferenceKey {
     }
 }
 
-private enum BottomSheetPresentationMode: Equatable {
+/// Whether a card wraps its content or scrolls its body at a fixed height.
+enum BottomSheetPresentationMode: Equatable {
     case scrollable
     case compact
 }
@@ -389,6 +501,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
     let trailingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
     let followsBottom: Bool
+    let presentation: OpenCodeBottomSheetPresentation
     let height: OpenCodeBottomSheetHeight
     let keyboard: OpenCodeBottomSheetKeyboard
     let availableHeight: CGFloat
@@ -398,11 +511,13 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
     let usesFloatingCard: Bool
     let displayCornerRadius: CGFloat
     let onDismiss: () -> Void
-    let onHeaderDragChanged: (CGFloat) -> Void
-    let onHeaderDragEnded: (CGFloat, CGFloat) -> Void
     @ViewBuilder let pinnedTop: () -> PinnedTop
     @ViewBuilder let sheetContent: () -> SheetContent
     @ViewBuilder let pinnedBottom: () -> PinnedBottom
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Not observed: the last laid-out card height, for drags before the
+    /// body measures and for the compact-to-scrollable slide.
+    @State private var cardMeasure = BottomSheetCardMeasure()
     @State private var mode: BottomSheetPresentationMode
     @State private var hasLockedScrollable: Bool
     @State private var contentHeight: CGFloat = 0
@@ -417,6 +532,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         trailingAction: OpenCodeBottomSheetHeaderAction?,
         scrollTargetID: String?,
         followsBottom: Bool,
+        presentation: OpenCodeBottomSheetPresentation,
         height: OpenCodeBottomSheetHeight,
         keyboard: OpenCodeBottomSheetKeyboard,
         availableHeight: CGFloat,
@@ -426,8 +542,6 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         usesFloatingCard: Bool,
         displayCornerRadius: CGFloat,
         onDismiss: @escaping () -> Void,
-        onHeaderDragChanged: @escaping (CGFloat) -> Void,
-        onHeaderDragEnded: @escaping (CGFloat, CGFloat) -> Void,
         @ViewBuilder pinnedTop: @escaping () -> PinnedTop,
         @ViewBuilder sheetContent: @escaping () -> SheetContent,
         @ViewBuilder pinnedBottom: @escaping () -> PinnedBottom
@@ -438,6 +552,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         self.trailingAction = trailingAction
         self.scrollTargetID = scrollTargetID
         self.followsBottom = followsBottom
+        self.presentation = presentation
         self.height = height
         self.keyboard = keyboard
         self.availableHeight = availableHeight
@@ -447,8 +562,6 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         self.usesFloatingCard = usesFloatingCard
         self.displayCornerRadius = displayCornerRadius
         self.onDismiss = onDismiss
-        self.onHeaderDragChanged = onHeaderDragChanged
-        self.onHeaderDragEnded = onHeaderDragEnded
         self.pinnedTop = pinnedTop
         self.sheetContent = sheetContent
         self.pinnedBottom = pinnedBottom
@@ -486,32 +599,89 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         )
     }
 
-    var body: some View {
-        // An expanded card sits on the keyboard and fills the space above it.
-        let keyboardExpanded = OpenCodeBottomSheetLayoutMath.isKeyboardExpanded(
-            keyboard: keyboard,
-            keyboardOverlap: keyboardOverlap
+    private var keyboardExpanded: Bool {
+        OpenCodeBottomSheetLayoutMath.isKeyboardExpanded(keyboard: keyboard, keyboardOverlap: keyboardOverlap)
+    }
+
+    /// The card wrapped around its measured parts, or `nil` before the body measures.
+    private var fittedHeight: CGFloat? {
+        guard contentHeight > 0 else { return nil }
+        return OpenCodeBottomSheetLayoutMath.fitContentHeight(
+            headerHeight: resolvedHeaderHeight,
+            pinnedTopHeight: pinnedTopHeight,
+            contentHeight: contentHeight,
+            pinnedBottomHeight: pinnedBottomHeight,
+            bottomClearance: bottomClearance
         )
-        let presentationMode: BottomSheetPresentationMode = keyboardExpanded ? .scrollable : resolvedMode
-        let restingScrollableHeight = OpenCodeBottomSheetLayoutMath.restingScrollableHeight(
+    }
+
+    /// Whether the card wraps its content at its natural height: compact, and
+    /// not yet measured nor grown onto the keyboard.
+    private var sizesToContent: Bool {
+        resolvedMode == .compact && fittedHeight == nil && !keyboardExpanded
+    }
+
+    /// Stops for the current layout, capped the way the keyboard caps the card.
+    private var stops: OpenCodeBottomSheetStops {
+        let resting = OpenCodeBottomSheetLayoutMath.stops(
             height: height,
+            mode: resolvedMode,
+            fittedHeight: fittedHeight ?? cardMeasure.height,
             availableHeight: availableHeight,
             topSafeArea: topSafeArea
         )
-        let cardHeight = OpenCodeBottomSheetLayoutMath.cardHeight(
-            restingHeight: resolvedMode == .scrollable ? restingScrollableHeight : nil,
-            availableHeight: availableHeight,
-            topSafeArea: topSafeArea,
-            keyboardOverlap: keyboardOverlap,
-            keyboard: keyboard
-        )
+        func capped(_ value: CGFloat) -> CGFloat {
+            OpenCodeBottomSheetLayoutMath.cardHeight(
+                layoutHeight: value,
+                availableHeight: availableHeight,
+                topSafeArea: topSafeArea,
+                keyboardOverlap: keyboardOverlap,
+                keyboard: keyboard
+            ) ?? value
+        }
+        return OpenCodeBottomSheetStops(low: capped(resting.low), high: capped(resting.high))
+    }
+
+    /// Visible card height: the drag's, or the stop the card rests on.
+    private func extent(in stops: OpenCodeBottomSheetStops) -> CGFloat {
+        presentation.dragExtent ?? (presentation.restsAtHigh ? stops.high : stops.low)
+    }
+
+    private var settleAnimation: Animation? {
+        reduceMotion ? nil : OpenCodeBottomSheetLayoutMath.dragSettleAnimation
+    }
+
+    var body: some View {
+        let stops = self.stops
+        let extent = self.extent(in: stops)
+        let presentationMode: BottomSheetPresentationMode = keyboardExpanded ? .scrollable : resolvedMode
+        let cardHeight: CGFloat? = sizesToContent
+            ? nil
+            : OpenCodeBottomSheetLayoutMath.layoutHeight(extent: extent, stops: stops)
         let scrollAreaHeight = OpenCodeBottomSheetLayoutMath.scrollAreaHeight(
-            cardHeight: cardHeight ?? min(restingScrollableHeight, availableHeight),
+            cardHeight: cardHeight ?? min(stops.low, availableHeight),
             headerHeight: resolvedHeaderHeight,
             pinnedTopHeight: pinnedTopHeight,
             pinnedBottomHeight: pinnedBottomHeight,
             bottomClearance: bottomClearance
         )
+        // A compact card animates when its content changes height while open;
+        // content past the compact limit slides into the scrollable detent instead.
+        let compactLimit = OpenCodeBottomSheetLayoutMath.compactLimit(
+            height: height,
+            availableHeight: availableHeight,
+            topSafeArea: topSafeArea
+        )
+        let staysCompact = presentationMode == .compact && (fittedHeight ?? 0) <= compactLimit
+        let compactHeight: CGFloat? = staysCompact ? cardHeight : nil
+        let detentAction: BottomSheetDetentAction? = stops.hasRange
+            ? BottomSheetDetentAction(expands: !stops.isAtHigh(extent)) { expands in
+                withAnimation(settleAnimation) {
+                    presentation.restsAtHigh = expands
+                    presentation.dragExtent = nil
+                }
+            }
+            : nil
 
         OpenCodeBottomSheetContainer(
             title: title,
@@ -519,8 +689,12 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             leadingAction: leadingAction,
             trailingAction: trailingAction,
             onDismiss: onDismiss,
-            onHeaderDragChanged: onHeaderDragChanged,
-            onHeaderDragEnded: onHeaderDragEnded,
+            drag: BottomSheetDragActions(
+                canGrow: { canGrow },
+                changed: dragChanged(by:),
+                ended: dragEnded(velocity:)
+            ),
+            detentAction: detentAction,
             mode: presentationMode,
             bottomClearance: bottomClearance,
             scrollAreaHeight: scrollAreaHeight,
@@ -550,6 +724,10 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         .frame(maxWidth: .infinity, alignment: .top)
         .frame(height: cardHeight, alignment: .top)
         .modifier(BottomSheetCardChrome(usesFloatingCard: usesFloatingCard, displayCornerRadius: displayCornerRadius))
+        .animation(presentation.revealed ? settleAnimation : nil, value: compactHeight)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardMeasure.height = $0 }
+        // Below the low stop the card slides down rather than squashing.
+        .offset(y: OpenCodeBottomSheetLayoutMath.slideOffset(extent: extent, low: stops.low))
         .onChange(of: contentHeight) { _, _ in
             updatePresentationMode()
         }
@@ -563,6 +741,9 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             updatePresentationMode()
         }
         .onChange(of: safeAreaBottom) { _, _ in
+            updatePresentationMode()
+        }
+        .onChange(of: availableHeight) { _, _ in
             updatePresentationMode()
         }
         .onChange(of: height) { _, newHeight in
@@ -612,7 +793,75 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             mode = .compact
         } else {
             hasLockedScrollable = true
+            promoteToScrollable()
+        }
+    }
+
+    /// Switches an open compact card to the scrollable detent without a jump:
+    /// the card keeps its compact height for a frame, then settles on the low
+    /// stop (sliding up when that stop is taller).
+    private func promoteToScrollable() {
+        let from = cardMeasure.height
+        guard mode == .compact, presentation.revealed, !presentation.isDragging, from > 0,
+              let animation = settleAnimation
+        else {
             mode = .scrollable
+            return
+        }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            mode = .scrollable
+            presentation.restsAtHigh = false
+            presentation.dragExtent = from
+        }
+        DispatchQueue.main.async { [presentation] in
+            guard !presentation.isDragging, presentation.dragExtent == from else { return }
+            withAnimation(animation) {
+                presentation.dragExtent = nil
+            }
+        }
+    }
+
+    // MARK: Drag
+
+    /// Whether a finger moving up grows the card before the body scrolls.
+    private var canGrow: Bool {
+        let stops = self.stops
+        return !stops.isAtHigh(self.extent(in: stops))
+    }
+
+    /// The finger moved by `dy` (down positive) on the header or the body.
+    private func dragChanged(by dy: CGFloat) {
+        guard presentation.revealed else { return }
+        let stops = self.stops
+        let next = OpenCodeBottomSheetLayoutMath.draggedExtent(extent(in: stops), by: dy, high: stops.high)
+        presentation.isDragging = true
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            presentation.dragExtent = next
+        }
+    }
+
+    /// The finger lifted at `velocity` (down positive): settle on a stop or dismiss.
+    private func dragEnded(velocity: CGFloat) {
+        presentation.isDragging = false
+        guard presentation.revealed, let extent = presentation.dragExtent else { return }
+        let stops = self.stops
+        guard let target = OpenCodeBottomSheetLayoutMath.settleTarget(
+            extent: extent,
+            velocity: velocity,
+            low: stops.low,
+            high: stops.high
+        ) else {
+            // Exit starts from the dragged position.
+            onDismiss()
+            return
+        }
+        withAnimation(settleAnimation) {
+            presentation.restsAtHigh = stops.hasRange && stops.isAtHigh(target)
+            presentation.dragExtent = nil
         }
     }
 }
@@ -670,11 +919,34 @@ private struct BottomSheetCardChrome: ViewModifier {
 }
 
 /// Shared between the overlay host and its SwiftUI content: whether the card is
-/// on screen, and how far the header drag has pulled it down.
+/// on screen, and how tall it shows (its extent).
+///
+/// The extent is `dragExtent` while a drag (or a settle onto a stop) holds
+/// it, otherwise the stop the card rests on, so a resting card follows its
+/// stops when they change (rotation, keyboard, window size). Every
+/// presentation opens at the low stop.
 @Observable
 final class OpenCodeBottomSheetPresentation {
     var revealed = false
-    var dragOffset: CGFloat = 0
+    /// Resting on the high stop rather than the low one.
+    var restsAtHigh = false
+    /// Visible card height above its resting bottom edge while a drag holds
+    /// it; `nil` rests on a stop.
+    var dragExtent: CGFloat?
+    /// A finger is moving the card.
+    @ObservationIgnored var isDragging = false
+
+    /// Back to the low stop, as every presentation opens.
+    func resetExtent() {
+        restsAtHigh = false
+        dragExtent = nil
+        isDragging = false
+    }
+}
+
+/// Last laid-out card height, kept outside SwiftUI observation.
+private final class BottomSheetCardMeasure {
+    var height: CGFloat = 0
 }
 
 /// Window-level bottom sheet driven by `isPresented`.
@@ -860,7 +1132,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
                 }
             } else {
                 presentation.revealed = false
-                presentation.dragOffset = 0
+                presentation.resetExtent()
                 let controller = OpenCodeOverlayHostingController(rootView: content)
                 configureOverlay(controller)
                 attachOverlay(controller.view, to: window)
@@ -894,13 +1166,13 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             overlayController?.view.removeFromSuperview()
             overlayController = nil
             presentation.revealed = false
-            presentation.dragOffset = 0
+            presentation.resetExtent()
         }
 
         private func reveal() {
             withAnimation(OpenCodeBottomSheetLayoutMath.enterAnimation) {
                 presentation.revealed = true
-                presentation.dragOffset = 0
+                presentation.resetExtent()
             }
         }
 
@@ -939,7 +1211,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
                 overlayController.view.removeFromSuperview()
                 self.overlayController = nil
                 self.isAnimatingOut = false
-                self.presentation.dragOffset = 0
+                self.presentation.resetExtent()
             }
         }
     }
@@ -1001,6 +1273,7 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
                     trailingAction: trailingAction,
                     scrollTargetID: scrollTargetID,
                     followsBottom: followsBottom,
+                    presentation: presentation,
                     height: height,
                     keyboard: keyboard,
                     availableHeight: availableHeight,
@@ -1010,8 +1283,6 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
                     usesFloatingCard: usesFloatingCard,
                     displayCornerRadius: displayCornerRadius,
                     onDismiss: onDismiss,
-                    onHeaderDragChanged: headerDragChanged,
-                    onHeaderDragEnded: headerDragEnded,
                     pinnedTop: pinnedTop,
                     sheetContent: sheetContent,
                     pinnedBottom: pinnedBottom
@@ -1021,9 +1292,10 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
                 .padding(.horizontal, bottomSheetInset)
                 .padding(.bottom, bottomSheetInset + keyboardInset)
                 .opacity(revealed ? 1 : 0)
+                // The drag's slide is inside the card, so the exit starts from it.
                 .offset(
                     y: revealed
-                        ? presentation.dragOffset
+                        ? 0
                         : OpenCodeBottomSheetLayoutMath.hiddenOffset(
                             cardHeight: cardHeight,
                             containerHeight: geometry.size.height,
@@ -1053,28 +1325,6 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
         .ignoresSafeArea()
         .animation(.easeOut(duration: 0.25), value: keyboardOverlap)
         .accessibilityAction(.escape, onDismiss)
-    }
-
-    /// The card follows the finger down; it never moves above its resting spot.
-    private func headerDragChanged(_ translation: CGFloat) {
-        guard presentation.revealed else { return }
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            presentation.dragOffset = max(0, translation)
-        }
-    }
-
-    private func headerDragEnded(_ translation: CGFloat, _ velocity: CGFloat) {
-        guard presentation.revealed else { return }
-        if OpenCodeBottomSheetLayoutMath.dragDismisses(offset: max(0, translation), velocity: velocity) {
-            // Exit starts from the dragged offset.
-            onDismiss()
-        } else {
-            withAnimation(OpenCodeBottomSheetLayoutMath.dragSettleAnimation) {
-                presentation.dragOffset = 0
-            }
-        }
     }
 }
 
@@ -1204,8 +1454,8 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let trailingAction: OpenCodeBottomSheetHeaderAction?
     let onDismiss: () -> Void
-    let onHeaderDragChanged: (CGFloat) -> Void
-    let onHeaderDragEnded: (CGFloat, CGFloat) -> Void
+    let drag: BottomSheetDragActions
+    let detentAction: BottomSheetDetentAction?
     let mode: BottomSheetPresentationMode
     let bottomClearance: CGFloat
     let scrollAreaHeight: CGFloat
@@ -1222,6 +1472,9 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
     let onPinnedBottomContentHeightChange: (CGFloat) -> Void
     /// Not observed: the body moves every scroll frame and none of it renders.
     @State private var tracker = BottomSheetFollowTracker()
+    /// Not observed: last header drag translation, to feed the card deltas.
+    @State private var headerDrag = BottomSheetHeaderDragTracker()
+    @GestureState private var headerDragging = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1342,6 +1595,8 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
             guard height > 0 else { return }
             onContentHeightChange(height)
         }
+        // Body drags move the card first and scroll the body once it is full.
+        .background(BottomSheetBodyDragHost(drag: drag))
     }
 
     private var header: some View {
@@ -1358,10 +1613,12 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
+                    .modifier(BottomSheetDetentAccessibility(action: detentAction))
             case .running(let startedAtMs):
                 HStack(spacing: 8) {
                     OpenCodeRunningShimmerText(text: title.resolved, font: OpenCodeTypography.heading)
                         .accessibilityAddTraits(.isHeader)
+                        .modifier(BottomSheetDetentAccessibility(action: detentAction))
                     Spacer(minLength: 0)
                     if let startedAtMs {
                         OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
@@ -1398,13 +1655,25 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
         // would feed back into itself.
         .gesture(
             DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                .updating($headerDragging) { _, dragging, _ in dragging = true }
                 .onChanged { value in
-                    onHeaderDragChanged(value.translation.height)
+                    let translation = value.translation.height
+                    let dy = translation - (headerDrag.lastTranslation ?? 0)
+                    headerDrag.lastTranslation = translation
+                    drag.changed(dy)
                 }
                 .onEnded { value in
-                    onHeaderDragEnded(value.translation.height, value.velocity.height)
+                    guard headerDrag.lastTranslation != nil else { return }
+                    headerDrag.lastTranslation = nil
+                    drag.ended(value.velocity.height)
                 }
         )
+        .onChange(of: headerDragging) { _, dragging in
+            // A cancelled drag never ends: settle where it was let go.
+            guard !dragging, headerDrag.lastTranslation != nil else { return }
+            headerDrag.lastTranslation = nil
+            drag.ended(0)
+        }
     }
 
     private func scrollToTarget(with proxy: ScrollViewProxy) {
@@ -1454,6 +1723,33 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
             )
         }
     }
+}
+
+/// Assistive Expand or Collapse between a card's two stops.
+private struct BottomSheetDetentAction {
+    /// Expand to the high stop; otherwise collapse to the low one.
+    let expands: Bool
+    let perform: (Bool) -> Void
+}
+
+private struct BottomSheetDetentAccessibility: ViewModifier {
+    let action: BottomSheetDetentAction?
+
+    func body(content: Content) -> some View {
+        if let action {
+            let name: OpenCodeText = action.expands ? "bottom_sheet.expand" : "bottom_sheet.collapse"
+            content.accessibilityAction(named: Text(openCode: name)) {
+                action.perform(action.expands)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// Header drag translation already applied to the card, outside observation.
+private final class BottomSheetHeaderDragTracker {
+    var lastTranslation: CGFloat?
 }
 
 /// Follow state for one sheet body, kept outside SwiftUI observation.

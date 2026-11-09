@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
+import dev.opencode.mobile.domain.goal.SessionGoalKickoff
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -34,7 +35,7 @@ internal object V2TimelineNotices {
                     TimelineNotice.ModelChanged(model = model, previous = TimelineNoticeCodec.modelRef(dto.previous as? JsonObject))
                 }
             "system" -> system(metadata = dto.metadata, description = dto.description)
-            "synthetic" -> if (isRestart(dto.metadata, dto.description)) TimelineNotice.Restart else null
+            "synthetic" -> if (isRestart(dto.metadata, dto.description)) TimelineNotice.Restart else goalSet(dto.metadata, dto.description)
             else -> null
         }
 
@@ -68,9 +69,30 @@ internal object V2TimelineNotices {
         return TimelineNotice.InstructionsUpdated(sources)
     }
 
-    /** Live: `session.synthetic`. Only a restart is a notice; other synthetic items are not. */
-    fun synthetic(properties: JsonObject): TimelineNotice? =
-        if (isRestart(properties["metadata"] as? JsonObject, properties.string("description"))) TimelineNotice.Restart else null
+    /** Live: `session.synthetic`. Only a restart or a goal kickoff is a notice; other synthetic items are not. */
+    fun synthetic(properties: JsonObject): TimelineNotice? {
+        val metadata = properties["metadata"] as? JsonObject
+        val description = properties.string("description")
+        return if (isRestart(metadata, description)) TimelineNotice.Restart else goalSet(metadata, description)
+    }
+
+    /**
+     * The goal plugin's kickoff: `metadata {source:"goal", goalID}` with a description. Its
+     * continuations carry the same metadata but no description, and stay hidden.
+     */
+    fun goalSet(
+        metadata: JsonObject?,
+        description: String?,
+    ): TimelineNotice.GoalSet? {
+        if (metadata?.string("source") != SessionGoalKickoff.SOURCE) return null
+        val goalId = metadata.string("goalID") ?: return null
+        val text = description?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return TimelineNotice.GoalSet(goalId = goalId, description = text)
+    }
+
+    /** The goal a user prompt kicks off (a kickoff sent with attachments), from its metadata. */
+    fun goalKickoffId(metadata: JsonObject?): String? =
+        metadata?.takeIf { it.string("source") == SessionGoalKickoff.SOURCE }?.string("goalID")
 
     private fun system(
         metadata: JsonObject?,

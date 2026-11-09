@@ -667,6 +667,28 @@
         }
       }
     },
+    "bottom_sheet.collapse" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapse"
+          }
+        }
+      }
+    },
+    "bottom_sheet.expand" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expand"
+          }
+        }
+      }
+    },
     "changes.accessibility.file" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1795,6 +1817,85 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deny"
+          }
+        }
+      }
+    },
+    "component.composer.deny_note_also_denies" : {
+      "comment" : "%lld counts the other waiting permission requests of the session that the deny also rejects.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Also denies %lld other waiting request."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Also denies %lld other waiting requests."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "component.composer.deny_note_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tell OpenCode what to do differently"
+          }
+        }
+      }
+    },
+    "component.composer.deny_options" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More deny options"
+          }
+        }
+      }
+    },
+    "component.composer.deny_with_note_menu" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deny with a note…"
+          }
+        }
+      }
+    },
+    "component.composer.deny_with_note_menu_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tell the agent what to do instead"
+          }
+        }
+      }
+    },
+    "component.composer.deny_with_note_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deny with a note"
           }
         }
       }
@@ -5573,28 +5674,6 @@
         }
       }
     },
-    "home.new_session" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New session"
-          }
-        }
-      }
-    },
-    "home.no_projects" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No projects"
-          }
-        }
-      }
-    },
     "home.no_session_selected.message" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5613,17 +5692,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No session selected"
-          }
-        }
-      }
-    },
-    "home.other_projects" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Other projects"
           }
         }
       }
@@ -5724,17 +5792,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Drag to reorder. Worktrees stay with their project."
-          }
-        }
-      }
-    },
-    "home.run_in" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Run in"
           }
         }
       }
@@ -6094,6 +6151,17 @@
         }
       }
     },
+    "keyboard_shortcuts.deny_with_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deny with a Note"
+          }
+        }
+      }
+    },
     "keyboard_shortcuts.dismiss_question" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6216,6 +6284,17 @@
         }
       }
     },
+    "keyboard_shortcuts.send_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Note"
+          }
+        }
+      }
+    },
     "keyboard_shortcuts.settings" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6313,6 +6392,204 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "offline"
+          }
+        }
+      }
+    },
+    "new_session.add_project" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add project…"
+          }
+        }
+      }
+    },
+    "new_session.created_on_send" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Created when you send"
+          }
+        }
+      }
+    },
+    "new_session.current_checkout" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · current checkout"
+          }
+        }
+      }
+    },
+    "new_session.discard_draft" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard draft"
+          }
+        }
+      }
+    },
+    "new_session.draft_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Draft · created when you send"
+          }
+        }
+      }
+    },
+    "new_session.local" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local"
+          }
+        }
+      }
+    },
+    "new_session.new_worktree" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New worktree"
+          }
+        }
+      }
+    },
+    "new_session.new_worktree_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Isolated copy, created when you send"
+          }
+        }
+      }
+    },
+    "new_session.no_project_matches" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No matching projects"
+          }
+        }
+      }
+    },
+    "new_session.not_git" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None · not a Git repo"
+          }
+        }
+      }
+    },
+    "new_session.project" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Project"
+          }
+        }
+      }
+    },
+    "new_session.run_in_caption" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run session in"
+          }
+        }
+      }
+    },
+    "new_session.run_in_project" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run in %@"
+          }
+        }
+      }
+    },
+    "new_session.search_projects" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search projects"
+          }
+        }
+      }
+    },
+    "new_session.starts_from" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starts from"
+          }
+        }
+      }
+    },
+    "new_session.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New session"
+          }
+        }
+      }
+    },
+    "new_session.worktree" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree"
+          }
+        }
+      }
+    },
+    "new_session.worktrees_section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktrees"
           }
         }
       }
@@ -7334,6 +7611,17 @@
         }
       }
     },
+    "session_chat.attachment_source.media" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media"
+          }
+        }
+      }
+    },
     "session_chat.attachment_source.photos" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7760,6 +8048,745 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Session forked"
+          }
+        }
+      }
+    },
+    "session_chat.goal.bubble_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.clear" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
+          }
+        }
+      }
+    },
+    "session_chat.goal.clear_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t clear the goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.clear_failed_reason" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t clear the goal: %1$@"
+          }
+        }
+      }
+    },
+    "session_chat.goal.clearing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clearing…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.command_replaces" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaces your current goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.command_replaces_met" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaces your current goal (met)"
+          }
+        }
+      }
+    },
+    "session_chat.goal.command_replaces_paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaces your current goal (paused)"
+          }
+        }
+      }
+    },
+    "session_chat.goal.count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@ characters"
+          }
+        }
+      }
+    },
+    "session_chat.goal.count_over" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@ characters · shorten the objective to send"
+          }
+        }
+      }
+    },
+    "session_chat.goal.ended" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ended"
+          }
+        }
+      }
+    },
+    "session_chat.goal.evidence" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Evidence"
+          }
+        }
+      }
+    },
+    "session_chat.goal.first_turn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "First turn · round 0 of %1$lld"
+          }
+        }
+      }
+    },
+    "session_chat.goal.footnote_active" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After each turn a reviewer checks the work against the goal. The agent keeps going until it is met, it needs you, or %1$lld rounds pass."
+          }
+        }
+      }
+    },
+    "session_chat.goal.footnote_met" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A new goal replaces this one."
+          }
+        }
+      }
+    },
+    "session_chat.goal.footnote_paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume starts a fresh budget of %1$lld rounds."
+          }
+        }
+      }
+    },
+    "session_chat.goal.met" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal met"
+          }
+        }
+      }
+    },
+    "session_chat.goal.met_in_round" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met in round %1$lld"
+          }
+        }
+      }
+    },
+    "session_chat.goal.new" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New goal…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.not_met_yet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not met yet: %1$@"
+          }
+        }
+      }
+    },
+    "session_chat.goal.objective_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Describe what “done” looks like…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pause" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pause_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t pause the goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pause_failed_reason" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t pause the goal: %1$@"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_by_user" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You paused the goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused after an error"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_in_round" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused in round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_no_progress" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused: no progress for %1$lld rounds"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_quiet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused: background work went quiet"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_restart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused: the server restarted"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_reviewer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused: the reviewer could not decide"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_round_limit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused after %1$lld rounds"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_stopped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You stopped the turn, so the goal paused"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pausing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausing…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pill" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pill_accessibility_active" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal active, round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pill_accessibility_paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused. %1$@"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pill_met" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal met"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pill_paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused"
+          }
+        }
+      }
+    },
+    "session_chat.goal.reconnecting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnecting. Showing the last known goal."
+          }
+        }
+      }
+    },
+    "session_chat.goal.resume" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume"
+          }
+        }
+      }
+    },
+    "session_chat.goal.resume_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t resume the goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.resume_failed_reason" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t resume the goal: %1$@"
+          }
+        }
+      }
+    },
+    "session_chat.goal.resume_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reply, then resume the goal…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.resuming" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resuming…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.reviewer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reviewer"
+          }
+        }
+      }
+    },
+    "session_chat.goal.reviewer_last_round" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reviewer, last round"
+          }
+        }
+      }
+    },
+    "session_chat.goal.reviewer_pending" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checks the work when this turn ends."
+          }
+        }
+      }
+    },
+    "session_chat.goal.round" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "session_chat.goal.set" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal set"
+          }
+        }
+      }
+    },
+    "session_chat.goal.set_earlier" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An earlier goal. It was cleared or replaced."
+          }
+        }
+      }
+    },
+    "session_chat.goal.sheet_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.show_all" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show all"
+          }
+        }
+      }
+    },
+    "session_chat.goal.show_less" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show less"
+          }
+        }
+      }
+    },
+    "session_chat.goal.stalls" : {
+      "comment" : "%1$lld rounds without progress (drives the plural); %2$@ the round count that pauses the goal.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No progress for %1$lld round; pauses after %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No progress for %1$lld rounds; pauses after %2$@"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "session_chat.goal.tag_met" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met"
+          }
+        }
+      }
+    },
+    "session_chat.goal.tag_paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused"
+          }
+        }
+      }
+    },
+    "session_chat.goal.tag_waiting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting"
+          }
+        }
+      }
+    },
+    "session_chat.goal.tag_working" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working"
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting"
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting_on_you" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting on you"
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting_permission" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A permission request is open. The goal carries on once you answer it."
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting_question" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A question is open. The goal carries on once you answer it."
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting_shell" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For a background shell to finish: %1$@. Pauses if nothing runs for %2$lld minutes."
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting_subagent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For a subagent to finish. Pauses if nothing runs for %1$lld minutes."
           }
         }
       }
@@ -9807,30 +10834,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Project filter"
-          }
-        }
-      }
-    },
-    "session_list.dock.session_count" : {
-      "comment" : "Spoken after the project name in the dock.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld sessions"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld sessions"
-                }
-              }
-            }
           }
         }
       }
@@ -13364,6 +14367,18 @@
         }
       }
     },
+    "tool.user_note" : {
+      "comment" : "%@ is the note the user sent when denying the tool's permission.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your note: %@"
+          }
+        }
+      }
+    },
     "top_bar.back" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13739,17 +14754,6 @@
         }
       }
     },
-    "worktrees.actions.subtitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ · %2$@"
-          }
-        }
-      }
-    },
     "worktrees.blocked.message" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13906,17 +14910,6 @@
         }
       }
     },
-    "worktrees.no_sessions" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "no sessions"
-          }
-        }
-      }
-    },
     "worktrees.none_in_project" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13995,25 +14988,13 @@
         }
       }
     },
-    "worktrees.remove.sessions" : {
+    "worktrees.remove.sessions_stay" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld session uses this worktree. It stays on Home but can’t run here again."
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld sessions use this worktree. They stay on Home but can’t run here again."
-                }
-              }
-            }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sessions that use this worktree stay on Home but can’t run here again."
           }
         }
       }
@@ -14069,29 +15050,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Removing…"
-          }
-        }
-      }
-    },
-    "worktrees.session_count" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld session"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld sessions"
-                }
-              }
-            }
           }
         }
       }

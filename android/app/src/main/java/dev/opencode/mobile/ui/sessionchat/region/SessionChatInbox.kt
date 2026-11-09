@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.InboxRequestPaging
+import dev.opencode.mobile.ui.sessionchat.PermissionNoteDraft
 import dev.opencode.mobile.ui.sessionchat.QuestionAnswerDraft
 import dev.opencode.mobile.ui.sessionchat.SessionChatInboxRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatInboxTarget
@@ -147,6 +148,53 @@ class SessionChatInbox(
         sessionId: String,
     ) = respondToPermission(requestId, sessionId, PermissionDecision.AlwaysAllow)
 
+    /** Opens the "Deny with a note" step for the shown permission request. */
+    fun openPermissionNote(
+        requestId: String,
+        sessionId: String,
+    ) {
+        _state.update { current ->
+            val request = current.visiblePermissionRequest
+            if (request == null || request.id != requestId || request.sessionId != sessionId) return@update current
+            if (current.permissionSubmittingId != null || current.visiblePermissionNote != null) return@update current
+            // Pin the page so a request arriving ahead of this one cannot swap the prompt under the note.
+            current.copy(permissionNote = PermissionNoteDraft(requestId), permissionSelectedId = requestId, permissionError = null)
+        }
+    }
+
+    fun updatePermissionNote(
+        requestId: String,
+        text: String,
+    ) {
+        _state.update { current ->
+            val note = current.visiblePermissionNote
+            if (note == null || note.requestId != requestId || current.permissionSubmittingId != null) return@update current
+            current.copy(permissionNote = note.copy(text = text))
+        }
+    }
+
+    /** Back to the permission prompt; nothing is answered and the note is dropped. */
+    fun cancelPermissionNote(requestId: String) {
+        _state.update { current ->
+            if (current.permissionNote?.requestId != requestId || current.permissionSubmittingId != null) {
+                return@update current
+            }
+            current.copy(permissionNote = null, permissionError = null)
+        }
+    }
+
+    /** Denies with the trimmed note. On failure the note step stays, with the note and the error. */
+    fun sendPermissionNote(
+        requestId: String,
+        sessionId: String,
+    ) {
+        val note = _state.value.visiblePermissionNote ?: return
+        if (note.requestId != requestId) return
+        val message = note.trimmedText
+        if (message.isEmpty()) return
+        respondToPermission(requestId, sessionId, PermissionDecision.Deny, message)
+    }
+
     fun hidePermissionDock(requestId: String) {
         if (_state.value.permissionRequests.none { it.id == requestId }) return
         _state.update { it.copy(permissionHiddenId = requestId) }
@@ -166,7 +214,12 @@ class SessionChatInbox(
                 _state.update { current ->
                     if (current.permissionRequests.none { it.id == target.requestId }) return@update current
                     val pages = current.permissionSubmittingId == null && current.visiblePermissionRequest?.id != target.requestId
-                    val paged = if (pages) current.copy(permissionSelectedId = target.requestId, permissionError = null) else current
+                    val paged =
+                        if (pages) {
+                            current.copy(permissionSelectedId = target.requestId, permissionError = null, permissionNote = null)
+                        } else {
+                            current
+                        }
                     paged.copy(permissionHiddenId = null, panelPulse = current.panelPulse + 1)
                 }
             is SessionChatInboxTarget.Question ->
@@ -192,7 +245,7 @@ class SessionChatInbox(
             InboxRequestPaging.pagedId(current.permissionRequests.map { it.id }, current.permissionSelectedId, delta)
                 ?: return
         if (target == current.visiblePermissionRequest?.id) return
-        _state.update { it.copy(permissionSelectedId = target, permissionError = null) }
+        _state.update { it.copy(permissionSelectedId = target, permissionError = null, permissionNote = null) }
     }
 
     /** Pages the question panel [delta] requests forward; each request keeps its own answers. */
@@ -365,6 +418,7 @@ class SessionChatInbox(
         requestId: String,
         sessionId: String,
         decision: PermissionDecision,
+        message: String? = null,
     ) {
         if (!canMutate()) return
         val request =
@@ -375,7 +429,7 @@ class SessionChatInbox(
         val worktree = boundWorktree
         scope.launch(ioDispatcher) {
             runCatching {
-                sessionRepository.respondToPermission(request.sessionId, request.id, decision, worktree)
+                sessionRepository.respondToPermission(request.sessionId, request.id, decision, worktree, message)
             }.onFailure {
                 if (it is SessionError.Http && it.statusCode == 404) {
                     val refreshed = refreshPermissionSnapshot()
@@ -442,13 +496,16 @@ class SessionChatInbox(
             val submittingCleared =
                 current.permissionSubmittingId != null &&
                     ordered.none { request -> request.id == current.permissionSubmittingId }
-            current.copy(
-                permissionRequests = ordered,
-                permissionSessions = sessions,
-                permissionTopologyError = topologyError,
-                permissionSubmittingId = if (submittingCleared) null else current.permissionSubmittingId,
-                permissionError = if (submittingCleared) null else current.permissionError,
-            )
+            val next =
+                current.copy(
+                    permissionRequests = ordered,
+                    permissionSessions = sessions,
+                    permissionTopologyError = topologyError,
+                    permissionSubmittingId = if (submittingCleared) null else current.permissionSubmittingId,
+                    permissionError = if (submittingCleared) null else current.permissionError,
+                )
+            // The note belongs to the shown request: drop it once that request is answered or gone.
+            if (next.permissionNote != null && next.visiblePermissionNote == null) next.copy(permissionNote = null) else next
         }
     }
 

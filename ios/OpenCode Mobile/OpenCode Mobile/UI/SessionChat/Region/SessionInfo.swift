@@ -6,7 +6,7 @@ final class SessionInfo {
 
     private(set) var state = SessionInfoRegionState()
 
-    private let worktree: String
+    private var worktree: String
     private let sessionRepository: any SessionRepository
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let foregroundEventStream: any ForegroundEventStream
@@ -45,6 +45,19 @@ final class SessionInfo {
         state.rename = SessionRenameUiState()
         state.archivedAtEpochMs = nil
         notifyChange()
+    }
+
+    /// A draft moved, or its first send created the session in another checkout.
+    func retarget(worktree: String) {
+        self.worktree = worktree
+    }
+
+    /// A draft (#1004) has no session to watch, only the connection that gates its composer.
+    func startObservingConnection() {
+        stopObserving()
+        observationTask = Task { [weak self] in
+            await self?.observeConnectionState()
+        }
     }
 
     func requestLeaveSession() {

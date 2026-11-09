@@ -599,6 +599,12 @@ nonisolated struct FilePart: Equatable, Sendable {
     }
 }
 
+/// The user denied a tool call's permission request.
+nonisolated struct ToolDecline: Equatable, Sendable {
+    /// What the user told the agent to do instead (Deny with a note); nil for a plain deny.
+    let note: String?
+}
+
 nonisolated struct ToolPart: Equatable, Sendable {
     let id: String?
     let toolName: String
@@ -616,6 +622,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
     let isInterrupted: Bool
     /// The model emitted a tool call the server could not run (`executed: false`).
     let isMalformed: Bool
+    /// Set when the call failed because the user denied its permission (always `isInterrupted`).
+    let decline: ToolDecline?
     /// Images the tool returned (v1 `attachments`, v2 `content` files), as inline data URLs.
     /// Only kinds the app can show; other returned files are dropped.
     let images: [FilePart]
@@ -634,6 +642,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         timeEndEpochMs: Int64? = nil,
         isInterrupted: Bool = false,
         isMalformed: Bool = false,
+        decline: ToolDecline? = nil,
         images: [FilePart] = []
     ) {
         self.id = id
@@ -649,6 +658,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         self.timeEndEpochMs = timeEndEpochMs
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
+        self.decline = decline
         self.images = images
     }
 
@@ -667,6 +677,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
             timeEndEpochMs: timeEndEpochMs,
             isInterrupted: isInterrupted,
             isMalformed: isMalformed,
+            decline: decline,
             images: images
         )
     }
@@ -688,6 +699,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
             timeEndEpochMs: timeEndEpochMs,
             isInterrupted: isInterrupted,
             isMalformed: isMalformed,
+            decline: decline,
             images: images
         )
     }
@@ -737,6 +749,8 @@ nonisolated enum TimelineNoticeKind: Equatable, Sendable {
     case systemNote(String)
     /// The server restarted mid-turn and resumed it.
     case restart
+    /// A `/goal` kickoff: `description` is the server's "Goal: <objective>" line.
+    case goalSet(goalID: String, description: String)
 }
 
 nonisolated struct TimelineNoticeModel: Equatable, Sendable {

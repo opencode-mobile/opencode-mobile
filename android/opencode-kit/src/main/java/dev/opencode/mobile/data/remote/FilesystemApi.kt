@@ -6,6 +6,7 @@ import dev.opencode.mobile.data.remote.dto.FileNodeDto
 import dev.opencode.mobile.data.remote.dto.PathDto
 import dev.opencode.mobile.data.remote.dto.V2FsEntryDto
 import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.applyLocationDirectory
@@ -24,7 +25,6 @@ import io.ktor.http.appendEncodedPathSegments
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
-import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
 
 class FilesystemApi private constructor(
@@ -215,7 +215,7 @@ class FilesystemApi private constructor(
     }
 
     companion object {
-        private val json = Json { ignoreUnknownKeys = true }
+        private val json = serverPayloadJson()
 
         /** Percent-encodes every byte outside RFC 3986 unreserved characters, per segment. */
         fun encodeRelativePathSegments(relativePath: String): List<String> =

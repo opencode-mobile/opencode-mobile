@@ -32,7 +32,6 @@ data class WorktreeRowUi(
     val directory: String,
     /** Branch, else folder name. */
     val name: String,
-    val sessionCount: Int,
     val isRunning: Boolean,
     /** Uncommitted changes the server reported; null until known or when it could not tell. */
     val changeCount: Int?,
@@ -55,7 +54,6 @@ data class WorktreeActionsUi(
     val directory: String,
     val name: String,
     val projectName: String,
-    val sessionCount: Int,
     /** Home shows worktrees, so its scope picker can select this one. */
     val canShowOnHome: Boolean,
 )
@@ -73,7 +71,8 @@ sealed interface WorktreeRemoveDialogUi {
         override val name: String,
         val changeCount: Int?,
         val changesUnknown: Boolean,
-        val sessionCount: Int,
+        /** Home lists a session here; the dialog says sessions stay, without a count (#981). */
+        val hasSessions: Boolean,
         val changesUnchecked: Boolean = false,
     ) : WorktreeRemoveDialogUi {
         /** Known to lose changes, so a v2 remove forces. */
@@ -190,7 +189,6 @@ class WorktreesViewModel
                             directory = worktree.directory,
                             name = worktree.folderName,
                             projectName = project.displayName,
-                            sessionCount = snapshot.sessionsIn(worktree.directory).size,
                             canShowOnHome = homeShowsWorktrees,
                         ),
                 )
@@ -231,7 +229,7 @@ class WorktreesViewModel
                         name = name,
                         changeCount = changeCounts[worktree.directory],
                         changesUnknown = false,
-                        sessionCount = sessions.size,
+                        hasSessions = sessions.isNotEmpty(),
                         // Still loading or failed. v1 removes with force, so say it rather than act clean.
                         changesUnchecked = changeCounts[worktree.directory] == null,
                     )
@@ -310,7 +308,7 @@ class WorktreesViewModel
                                         name = name,
                                         changeCount = knownChanges,
                                         changesUnknown = true,
-                                        sessionCount = snapshot.sessionsIn(worktree.directory).size,
+                                        hasSessions = snapshot.sessionsIn(worktree.directory).isNotEmpty(),
                                     ),
                             )
                         }
@@ -378,7 +376,6 @@ class WorktreesViewModel
                                         projectKey = project.key,
                                         directory = worktree.directory,
                                         name = worktree.folderName,
-                                        sessionCount = sessions.size,
                                         isRunning = sessions.any { it.isRunning },
                                         changeCount = changeCounts[worktree.directory],
                                         isRemoving = worktree.directory in removing,

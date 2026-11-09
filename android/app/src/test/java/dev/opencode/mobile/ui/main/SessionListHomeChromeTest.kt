@@ -3,11 +3,17 @@ package dev.opencode.mobile.ui.main
 import dev.opencode.mobile.domain.home.HomeProjectPickerState
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeWorktree
+import dev.opencode.mobile.domain.session.NewSessionDraftStart
+import dev.opencode.mobile.domain.session.NewSessionPlace
+import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRow
 import dev.opencode.mobile.ui.components.SessionListScopePaging
+import dev.opencode.mobile.ui.components.SessionListSession
+import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.components.reorderedProjectPickerProjectIds
 import dev.opencode.mobile.ui.text.EnglishStrings
+import dev.opencode.mobile.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -16,15 +22,15 @@ import org.junit.Test
 class SessionListHomeChromeTest {
     @Test
     fun filterTabs_zeroProjectsOmitsAllAndScopeControl() {
-        val tabs = SessionListHomeChrome.filterTabs(projects = emptyList(), sessionCount = 0, text = EnglishStrings)
+        val tabs = SessionListHomeChrome.filterTabs(projects = emptyList(), text = EnglishStrings)
         assertEquals(emptyList<SessionListFilterTab>(), tabs)
     }
 
     @Test
     fun filterTabs_oneProjectShowsOnlyThatProject() {
-        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(mobile), sessionCount = 2, text = EnglishStrings)
+        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(mobile), text = EnglishStrings)
         assertEquals(
-            listOf(SessionListFilterTab.project(worktree = "/repo", title = "opencode-mobile", count = 2)),
+            listOf(SessionListFilterTab.project(worktree = "/repo", title = "opencode-mobile", hasSessions = true)),
             tabs,
         )
     }
@@ -34,14 +40,13 @@ class SessionListHomeChromeTest {
         val tabs =
             SessionListHomeChrome.filterTabs(
                 projects = listOf(mobile, playground),
-                sessionCount = 3,
                 text = EnglishStrings,
             )
         assertEquals(
             listOf(
-                SessionListFilterTab.all(projectCount = 2, sessionCount = 3).copy(pickerTitleOverride = "All projects"),
-                SessionListFilterTab.project(worktree = "/repo", title = "opencode-mobile", count = 2),
-                SessionListFilterTab.project(worktree = "/play", title = "playground", count = 1),
+                SessionListFilterTab.all(projectCount = 2, hasSessions = true).copy(pickerTitleOverride = "All projects"),
+                SessionListFilterTab.project(worktree = "/repo", title = "opencode-mobile", hasSessions = true),
+                SessionListFilterTab.project(worktree = "/play", title = "playground", hasSessions = true),
             ),
             tabs,
         )
@@ -51,7 +56,7 @@ class SessionListHomeChromeTest {
 
     @Test
     fun resolvedFilterId_fallsBackToSoleProjectWhenAllIsOmitted() {
-        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(mobile), sessionCount = 2, text = EnglishStrings)
+        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(mobile), text = EnglishStrings)
         assertEquals(
             "/repo",
             SessionListHomeChrome.resolvedFilterId(
@@ -63,7 +68,7 @@ class SessionListHomeChromeTest {
 
     @Test
     fun resolvedFilterId_writeBackThenSecondProjectKeepsSoleProject() {
-        val oneProjectTabs = SessionListHomeChrome.filterTabs(projects = listOf(mobile), sessionCount = 2, text = EnglishStrings)
+        val oneProjectTabs = SessionListHomeChrome.filterTabs(projects = listOf(mobile), text = EnglishStrings)
         val storedId =
             SessionListHomeChrome.resolvedFilterId(
                 selectedId = SessionListFilterTab.ALL_ID,
@@ -72,7 +77,6 @@ class SessionListHomeChromeTest {
         val twoProjectTabs =
             SessionListHomeChrome.filterTabs(
                 projects = listOf(mobile, playground),
-                sessionCount = 3,
                 text = EnglishStrings,
             )
         assertEquals(
@@ -86,7 +90,6 @@ class SessionListHomeChromeTest {
         val tabs =
             SessionListHomeChrome.filterTabs(
                 projects = listOf(mobile, playground),
-                sessionCount = 3,
                 text = EnglishStrings,
             )
         assertEquals(
@@ -100,7 +103,6 @@ class SessionListHomeChromeTest {
         val tabs =
             SessionListHomeChrome.filterTabs(
                 projects = listOf(mobile, playground),
-                sessionCount = 3,
                 text = EnglishStrings,
             )
         assertEquals(
@@ -113,44 +115,75 @@ class SessionListHomeChromeTest {
     fun newSessionAction_zeroProjectsDoesNothing() {
         assertEquals(
             SessionListHomeChrome.NewSessionAction.None,
+            SessionListHomeChrome.newSessionAction(projects = emptyList(), selectedFilterId = SessionListFilterTab.ALL_ID),
+        )
+    }
+
+    @Test
+    fun newSessionAction_scopedProjectStartsTheDraftOnItsMainCheckout() {
+        assertEquals(draft("/repo", "/repo"), SessionListHomeChrome.newSessionAction(listOf(mobile), "/repo"))
+        assertEquals(draft("/play", "/play"), SessionListHomeChrome.newSessionAction(listOf(mobile, playground), "/play"))
+        // Main checkout /repo even though the first added path is the worktree.
+        val addedFromWorktree = worktreed.copy(worktree = "/repo-723")
+        assertEquals(draft("proj", "/repo"), SessionListHomeChrome.newSessionAction(listOf(addedFromWorktree, playground), "proj"))
+    }
+
+    @Test
+    fun newSessionAction_worktreeScopeStartsTheDraftInThatWorktree() {
+        assertEquals(
+            draft("proj", "/repo", NewSessionPlace.Worktree("/repo-723", "feature/723-iphone-duo")),
+            SessionListHomeChrome.newSessionAction(listOf(worktreed, playground), HomeScope.worktreeId("proj", "/repo-723")),
+        )
+        // The main checkout's own scope is Local.
+        assertEquals(
+            draft("proj", "/repo"),
+            SessionListHomeChrome.newSessionAction(listOf(worktreed, playground), HomeScope.worktreeId("proj", "/repo")),
+        )
+    }
+
+    @Test
+    fun newSessionAction_worktreesOffStartsAWorktreeScopeOnItsProjectsMainCheckout() {
+        assertEquals(
+            draft("proj", "/repo"),
             SessionListHomeChrome.newSessionAction(
-                projects = emptyList(),
-                selectedFilterId = SessionListFilterTab.ALL_ID,
+                projects = listOf(worktreed, playground),
+                selectedFilterId = HomeScope.worktreeId("proj", "/repo-723"),
+                worktreesEnabled = false,
             ),
         )
     }
 
     @Test
-    fun newSessionAction_oneProjectCreatesInThatWorktree() {
+    fun newSessionAction_allScopeStartsWhereTheMostRecentSessionRuns() {
+        val sessions =
+            listOf(
+                session("old", worktree = "/play", directory = "/play", updatedAt = 1_000),
+                session("new", worktree = "proj", directory = "/repo-723", updatedAt = 5_000),
+                session("mid", worktree = "proj", directory = "/repo", updatedAt = 3_000),
+            )
         assertEquals(
-            SessionListHomeChrome.NewSessionAction.Create("/repo"),
+            draft("proj", "/repo", NewSessionPlace.Worktree("/repo-723", "feature/723-iphone-duo")),
+            SessionListHomeChrome.newSessionAction(listOf(playground, worktreed), "all", sessions = sessions),
+        )
+        // Worktrees off: the same project, on its main checkout.
+        assertEquals(
+            draft("proj", "/repo"),
+            SessionListHomeChrome.newSessionAction(listOf(playground, worktreed), "all", worktreesEnabled = false, sessions = sessions),
+        )
+        // The newest in another project.
+        assertEquals(
+            draft("/play", "/play"),
             SessionListHomeChrome.newSessionAction(
-                projects = listOf(mobile),
-                selectedFilterId = "/repo",
+                listOf(worktreed, playground),
+                "all",
+                sessions = listOf(session("p", worktree = "/play", directory = "/play", updatedAt = 9_000)) + sessions,
             ),
         )
     }
 
     @Test
-    fun newSessionAction_allSelectedPresentsProjectChoice() {
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(SessionListHomeChrome.NewSessionSheetMode.Projects(holdPick = false)),
-            SessionListHomeChrome.newSessionAction(
-                projects = listOf(mobile, playground),
-                selectedFilterId = SessionListFilterTab.ALL_ID,
-            ),
-        )
-    }
-
-    @Test
-    fun newSessionAction_scopedProjectCreatesThere() {
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.Create("/play"),
-            SessionListHomeChrome.newSessionAction(
-                projects = listOf(mobile, playground),
-                selectedFilterId = "/play",
-            ),
-        )
+    fun newSessionAction_allScopeWithoutSessionsStartsOnTheFirstProject() {
+        assertEquals(draft("proj", "/repo"), SessionListHomeChrome.newSessionAction(listOf(worktreed, playground), "all"))
     }
 
     @Test
@@ -178,41 +211,8 @@ class SessionListHomeChromeTest {
     }
 
     @Test
-    fun newSessionLongPressAction_oneProjectOpensItsRunInWhileWorktreesIsOn() {
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(
-                SessionListHomeChrome.NewSessionSheetMode.RunIn("/repo", showsOtherProjects = false),
-            ),
-            SessionListHomeChrome.newSessionLongPressAction(projects = listOf(mobile)),
-        )
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.None,
-            SessionListHomeChrome.newSessionLongPressAction(projects = listOf(mobile), worktreesEnabled = false),
-        )
-    }
-
-    @Test
-    fun newSessionLongPressAction_singleCheckoutProjectOpensRunInSoNewWorktreeIsReachable() {
-        val single = mobile.copy(id = "solo", worktrees = listOf(SessionListHomeChrome.Worktree(HomeWorktree("/repo", isMain = true))))
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(
-                SessionListHomeChrome.NewSessionSheetMode.RunIn("solo", showsOtherProjects = true),
-            ),
-            SessionListHomeChrome.newSessionLongPressAction(listOf(single, playground), "solo"),
-        )
-    }
-
-    @Test
-    fun newSessionLongPressAction_twoProjectsPresentsHoldPicker() {
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(SessionListHomeChrome.NewSessionSheetMode.Projects(holdPick = true)),
-            SessionListHomeChrome.newSessionLongPressAction(projects = listOf(mobile, playground)),
-        )
-    }
-
-    @Test
     fun filterTabs_listProjectsOnlyAndKeepWorktreesForTheirOwnLookup() {
-        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(worktreed, playground), sessionCount = 4, text = EnglishStrings)
+        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(worktreed, playground), text = EnglishStrings)
 
         assertEquals(listOf("all", "proj", "/play"), tabs.map { it.id })
         val project = tabs[1]
@@ -230,7 +230,7 @@ class SessionListHomeChromeTest {
         assertEquals("proj", main.parentId)
         assertEquals("opencode-mobile", main.dockTitle)
         assertEquals("dev", main.dockSubtitle)
-        assertEquals(1, main.count)
+        assertTrue(main.hasSessions)
         val other = worktreeTabs[1]
         assertEquals("feature/723-iphone-duo", other.pickerTitle)
         assertEquals("repo-723", other.subtitle)
@@ -241,7 +241,7 @@ class SessionListHomeChromeTest {
 
     @Test
     fun resolvedFilterId_acceptsAWorktreeScopeOnlyWhileItsTabExists() {
-        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(worktreed, playground), sessionCount = 4, text = EnglishStrings)
+        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(worktreed, playground), text = EnglishStrings)
         val worktreeId = HomeScope.worktreeId("proj", "/repo-723")
 
         assertEquals(
@@ -261,7 +261,7 @@ class SessionListHomeChromeTest {
     @Test
     fun filterTabs_singleWorktreeProjectKeepsItsPath() {
         val single = worktreed.copy(worktrees = worktreed.worktrees.take(1))
-        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(single), sessionCount = 2, text = EnglishStrings)
+        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(single), text = EnglishStrings)
 
         assertEquals(listOf("proj"), tabs.map { it.id })
         assertEquals("/repo", tabs.single().subtitle)
@@ -271,7 +271,12 @@ class SessionListHomeChromeTest {
 
     @Test
     fun filterTabs_worktreesOffShowsAProjectLikeASingleCheckout() {
-        val tabs = SessionListHomeChrome.filterTabs(projects = listOf(worktreed, playground), sessionCount = 4, worktreesEnabled = false, text = EnglishStrings)
+        val tabs =
+            SessionListHomeChrome.filterTabs(
+                projects = listOf(worktreed, playground),
+                worktreesEnabled = false,
+                text = EnglishStrings,
+            )
 
         assertEquals(listOf("all", "proj", "/play"), tabs.map { it.id })
         assertEquals(null, tabs[1].dockSubtitle)
@@ -280,122 +285,8 @@ class SessionListHomeChromeTest {
     }
 
     @Test
-    fun newSessionAction_worktreeScopeCreatesInThatWorktree() {
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.Create("/repo-723"),
-            SessionListHomeChrome.newSessionAction(
-                projects = listOf(worktreed, playground),
-                selectedFilterId = HomeScope.worktreeId("proj", "/repo-723"),
-            ),
-        )
-    }
-
-    @Test
-    fun newSessionAction_tapNeverAsksAndStartsOnTheMainCheckout() {
-        // Main checkout /repo even though the first added path is the worktree.
-        val addedFromWorktree = worktreed.copy(worktree = "/repo-723")
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.Create("/repo"),
-            SessionListHomeChrome.newSessionAction(projects = listOf(addedFromWorktree, playground), selectedFilterId = "proj"),
-        )
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.Create("/repo"),
-            SessionListHomeChrome.newSessionAction(projects = listOf(addedFromWorktree), selectedFilterId = "all"),
-        )
-        assertEquals("/repo", addedFromWorktree.mainCheckoutDirectory)
-        assertEquals("/play", playground.mainCheckoutDirectory)
-    }
-
-    @Test
-    fun newSessionAction_worktreesOffStartsAWorktreeScopeOnItsProjectsMainCheckout() {
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.Create("/repo"),
-            SessionListHomeChrome.newSessionAction(
-                projects = listOf(worktreed, playground),
-                selectedFilterId = HomeScope.worktreeId("proj", "/repo-723"),
-                worktreesEnabled = false,
-            ),
-        )
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(SessionListHomeChrome.NewSessionSheetMode.Projects(holdPick = false)),
-            SessionListHomeChrome.newSessionAction(listOf(worktreed, playground), "all", worktreesEnabled = false),
-        )
-    }
-
-    @Test
-    fun newSessionLongPressAction_opensRunInForTheTargetProjectWithOtherProjects() {
-        val runIn =
-            SessionListHomeChrome.NewSessionAction.PresentSheet(
-                SessionListHomeChrome.NewSessionSheetMode.RunIn("proj", showsOtherProjects = true),
-            )
-        assertEquals(runIn, SessionListHomeChrome.newSessionLongPressAction(listOf(worktreed, playground), "proj"))
-        assertEquals(
-            runIn,
-            SessionListHomeChrome.newSessionLongPressAction(listOf(worktreed, playground), HomeScope.worktreeId("proj", "/repo")),
-        )
-        // All scope with one project: that project; no other projects to offer.
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(
-                SessionListHomeChrome.NewSessionSheetMode.RunIn("proj", showsOtherProjects = false),
-            ),
-            SessionListHomeChrome.newSessionLongPressAction(listOf(worktreed), "all"),
-        )
-        // A single-checkout target opens its Run in too ("New worktree…" is there).
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(
-                SessionListHomeChrome.NewSessionSheetMode.RunIn("/play", showsOtherProjects = true),
-            ),
-            SessionListHomeChrome.newSessionLongPressAction(listOf(worktreed, playground), "/play"),
-        )
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(SessionListHomeChrome.NewSessionSheetMode.Projects(holdPick = true)),
-            SessionListHomeChrome.newSessionLongPressAction(listOf(worktreed, playground), "all"),
-        )
-    }
-
-    @Test
-    fun newSessionLongPressAction_worktreesOffNeverOffersRunIn() {
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(SessionListHomeChrome.NewSessionSheetMode.Projects(holdPick = true)),
-            SessionListHomeChrome.newSessionLongPressAction(listOf(worktreed, playground), "proj", worktreesEnabled = false),
-        )
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.None,
-            SessionListHomeChrome.newSessionLongPressAction(listOf(worktreed), "proj", worktreesEnabled = false),
-        )
-    }
-
-    @Test
-    fun projectPickAction_holdPickAsksWhereToRunTapPickStartsOnMain() {
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(
-                SessionListHomeChrome.NewSessionSheetMode.RunIn("proj", showsOtherProjects = false),
-            ),
-            SessionListHomeChrome.projectPickAction(worktreed, holdPick = true),
-        )
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.Create("/repo"),
-            SessionListHomeChrome.projectPickAction(worktreed, holdPick = false),
-        )
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.Create("/repo"),
-            SessionListHomeChrome.projectPickAction(worktreed, holdPick = true, worktreesEnabled = false),
-        )
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(
-                SessionListHomeChrome.NewSessionSheetMode.RunIn("/play", showsOtherProjects = false),
-            ),
-            SessionListHomeChrome.projectPickAction(playground, holdPick = true),
-        )
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.Create("/play"),
-            SessionListHomeChrome.projectPickAction(playground, holdPick = true, worktreesEnabled = false),
-        )
-    }
-
-    @Test
     fun pickerRows_collapsedByDefaultWithAPillOnTheMultiWorktreeProject() {
-        val rows = SessionListHomeChrome.pickerRows(listOf(worktreed, playground), sessionCount = 4, state = HomeProjectPickerState(), text = EnglishStrings)
+        val rows = SessionListHomeChrome.pickerRows(listOf(worktreed, playground), state = HomeProjectPickerState(), text = EnglishStrings)
 
         assertEquals(listOf("all", "proj", "/play"), rows.map { it.key })
         val project = rows[1] as SessionListProjectPickerRow.Scope
@@ -410,7 +301,6 @@ class SessionListHomeChromeTest {
         val rows =
             SessionListHomeChrome.pickerRows(
                 listOf(worktreed, playground),
-                sessionCount = 4,
                 state = HomeProjectPickerState().toggleExpanded("proj"),
                 text = EnglishStrings,
             )
@@ -426,7 +316,12 @@ class SessionListHomeChromeTest {
     @Test
     fun pickerRows_manyWorktreesShowFiveThenShowAllThenShowFewer() {
         val many = manyWorktrees(count = 7)
-        val collapsed = SessionListHomeChrome.pickerRows(listOf(many, playground), 0, HomeProjectPickerState().toggleExpanded("big"), text = EnglishStrings)
+        val collapsed =
+            SessionListHomeChrome.pickerRows(
+                listOf(many, playground),
+                HomeProjectPickerState().toggleExpanded("big"),
+                text = EnglishStrings,
+            )
         assertEquals(5, collapsed.count { it is SessionListProjectPickerRow.Worktree })
         assertEquals(
             "Show all 7",
@@ -436,7 +331,6 @@ class SessionListHomeChromeTest {
         val all =
             SessionListHomeChrome.pickerRows(
                 listOf(many, playground),
-                0,
                 HomeProjectPickerState().toggleExpanded("big").toggleShowAll("big"),
                 text = EnglishStrings,
             )
@@ -449,7 +343,7 @@ class SessionListHomeChromeTest {
     @Test
     fun pickerRows_editingCollapsesAddsTheNoteAndKeepsDisabledPills() {
         val state = HomeProjectPickerState().toggleExpanded("proj").setEditing(true)
-        val rows = SessionListHomeChrome.pickerRows(listOf(worktreed, playground), 4, state, text = EnglishStrings)
+        val rows = SessionListHomeChrome.pickerRows(listOf(worktreed, playground), state, text = EnglishStrings)
 
         assertEquals(listOf("note", "all", "proj", "/play"), rows.map { it.key })
         assertEquals("Drag to reorder. Worktrees stay with their project.", (rows[0] as SessionListProjectPickerRow.Note).text)
@@ -465,7 +359,6 @@ class SessionListHomeChromeTest {
         val rows =
             SessionListHomeChrome.pickerRows(
                 listOf(worktreed, playground),
-                4,
                 HomeProjectPickerState().toggleExpanded("proj"),
                 worktreesEnabled = false,
                 text = EnglishStrings,
@@ -478,7 +371,7 @@ class SessionListHomeChromeTest {
     @Test
     fun dockSwipe_walksAllAndProjectsAndAWorktreeSitsInsideItsProject() {
         val projects = listOf(worktreed, playground)
-        val tabs = SessionListHomeChrome.filterTabs(projects, sessionCount = 4, text = EnglishStrings)
+        val tabs = SessionListHomeChrome.filterTabs(projects, text = EnglishStrings)
         val worktree = SessionListHomeChrome.worktreeTabs(worktreed, text = EnglishStrings)[1]
 
         fun neighbor(
@@ -492,7 +385,7 @@ class SessionListHomeChromeTest {
         assertEquals(null, neighbor(tabs[2], SessionListScopePaging.Direction.Next))
         val lastProjectWorktree =
             SessionListHomeChrome.worktreeTabs(listOf(playground, worktreed), text = EnglishStrings).first()
-        val reversed = SessionListHomeChrome.filterTabs(listOf(playground, worktreed), sessionCount = 4, text = EnglishStrings)
+        val reversed = SessionListHomeChrome.filterTabs(listOf(playground, worktreed), text = EnglishStrings)
         assertEquals(null, SessionListScopePaging.neighborIndex(reversed, lastProjectWorktree, SessionListScopePaging.Direction.Next))
     }
 
@@ -500,7 +393,7 @@ class SessionListHomeChromeTest {
         SessionListHomeChrome.Project(
             worktree = "/big",
             title = "big",
-            sessionCount = 0,
+            hasSessions = false,
             id = "big",
             worktrees =
                 (0 until count).map { index ->
@@ -512,22 +405,46 @@ class SessionListHomeChromeTest {
                 },
         )
 
+    private fun draft(
+        key: String,
+        directory: String,
+        place: NewSessionPlace = NewSessionPlace.Local,
+    ) = SessionListHomeChrome.NewSessionAction.OpenDraft(NewSessionDraftStart(key, directory, place))
+
+    private fun session(
+        id: String,
+        worktree: String,
+        directory: String,
+        updatedAt: Long,
+    ) = SessionListSession(
+        id = id,
+        title = id,
+        worktree = worktree,
+        letter = 'S',
+        letterAccent = LetterAccent.Violet,
+        subtitle = directory,
+        status = SessionListStatus.Idle,
+        caption = UiText.verbatim(""),
+        updatedAtEpochMs = updatedAt,
+        directory = directory,
+    )
+
     private val worktreed =
         SessionListHomeChrome.Project(
             worktree = "/repo",
             title = "opencode-mobile",
-            sessionCount = 3,
+            hasSessions = true,
             id = "proj",
             worktrees =
                 listOf(
                     SessionListHomeChrome.Worktree(
                         HomeWorktree("/repo", branch = "dev", isMain = true),
-                        sessionCount = 1,
+                        hasSessions = true,
                         scopeId = HomeScope.worktreeId("proj", "/repo"),
                     ),
                     SessionListHomeChrome.Worktree(
                         HomeWorktree("/repo-723", branch = "feature/723-iphone-duo"),
-                        sessionCount = 2,
+                        hasSessions = true,
                         runningCount = 1,
                         scopeId = HomeScope.worktreeId("proj", "/repo-723"),
                     ),
@@ -538,12 +455,12 @@ class SessionListHomeChromeTest {
         SessionListHomeChrome.Project(
             worktree = "/repo",
             title = "opencode-mobile",
-            sessionCount = 2,
+            hasSessions = true,
         )
     private val playground =
         SessionListHomeChrome.Project(
             worktree = "/play",
             title = "playground",
-            sessionCount = 1,
+            hasSessions = true,
         )
 }

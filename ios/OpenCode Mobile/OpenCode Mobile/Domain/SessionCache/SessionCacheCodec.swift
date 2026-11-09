@@ -337,6 +337,9 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
     let auto: Bool?
     let isInterrupted: Bool
     let isMalformed: Bool
+    /// The user denied the tool's permission; `declineNote` is the note sent with it.
+    let isDeclined: Bool
+    let declineNote: String?
 
     init(
         kind: String,
@@ -362,7 +365,9 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         timeEndEpochMs: Int64? = nil,
         auto: Bool? = nil,
         isInterrupted: Bool = false,
-        isMalformed: Bool = false
+        isMalformed: Bool = false,
+        isDeclined: Bool = false,
+        declineNote: String? = nil
     ) {
         self.kind = kind
         self.id = id
@@ -388,6 +393,8 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         self.auto = auto
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
+        self.isDeclined = isDeclined
+        self.declineNote = declineNote
     }
 
     init(from decoder: Decoder) throws {
@@ -416,6 +423,8 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         auto = try container.decodeIfPresent(Bool.self, forKey: .auto)
         isInterrupted = try container.decodeIfPresent(Bool.self, forKey: .isInterrupted) ?? false
         isMalformed = try container.decodeIfPresent(Bool.self, forKey: .isMalformed) ?? false
+        isDeclined = try container.decodeIfPresent(Bool.self, forKey: .isDeclined) ?? false
+        declineNote = try container.decodeIfPresent(String.self, forKey: .declineNote)
     }
 }
 
@@ -707,7 +716,9 @@ private extension MessagePart {
                 timeStartEpochMs: part.timeStartEpochMs,
                 timeEndEpochMs: part.timeEndEpochMs,
                 isInterrupted: part.isInterrupted,
-                isMalformed: part.isMalformed
+                isMalformed: part.isMalformed,
+                isDeclined: part.decline != nil,
+                declineNote: part.decline?.note
             )
         case let .file(part):
             return CachedMessagePartPayload(
@@ -762,6 +773,8 @@ private extension TimelineNoticeKind {
             return ["notice": .string("system"), "description": .string(description)]
         case .restart:
             return ["notice": .string("restart")]
+        case let .goalSet(goalID, description):
+            return ["notice": .string("goalSet"), "goalID": .string(goalID), "description": .string(description)]
         }
     }
 
@@ -791,6 +804,9 @@ private extension TimelineNoticeKind {
             self = .systemNote(description)
         case "restart":
             self = .restart
+        case "goalSet":
+            guard let goalID = string("goalID"), let description = string("description") else { return nil }
+            self = .goalSet(goalID: goalID, description: description)
         default:
             return nil
         }
@@ -846,7 +862,8 @@ private extension CachedMessagePartPayload {
                     timeStartEpochMs: timeStartEpochMs,
                     timeEndEpochMs: timeEndEpochMs,
                     isInterrupted: isInterrupted,
-                    isMalformed: isMalformed
+                    isMalformed: isMalformed,
+                    decline: isDeclined ? ToolDecline(note: declineNote) : nil
                 )
             )
         case "file":

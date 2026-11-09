@@ -186,11 +186,12 @@ struct SessionChatComposerState: Equatable {
         selectedModel?.option.canAttachFiles == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
-    func attachmentSources(developerToolsUnlocked: Bool) -> ComposerAttachmentSources {
+    var attachmentSources: ComposerAttachmentSources {
         ComposerAttachmentSources(
             photos: canAttachPhotos,
             files: canAttachFiles,
-            logFile: developerToolsUnlocked
+            logFile: true,
+            acceptsAnyType: streamedUploadAvailable
         )
     }
 }
@@ -199,6 +200,8 @@ struct ComposerAttachmentSources: Equatable {
     let photos: Bool
     let files: Bool
     let logFile: Bool
+    /// Streamed uploads take any file, so the gallery offers videos too and Files takes every type.
+    var acceptsAnyType = false
 
     var isAttachEnabled: Bool { photos || files || logFile }
     var showsSourceSheet: Bool { logFile || (photos && files) }
@@ -228,10 +231,14 @@ enum SessionChatSnackbarTone: Equatable {
 enum SessionChatSnackbarAction: Equatable {
     /// Ask a failed `/btw` question again.
     case retrySideQuestion(UUID)
+    /// Run a New session draft's failed first send again (#1004).
+    case retryNewSession
+    /// Send a prompt the server has not answered again.
+    case retryStalledSend
 
     var label: String {
         switch self {
-        case .retrySideQuestion: "Retry"
+        case .retrySideQuestion, .retryNewSession, .retryStalledSend: "Retry"
         }
     }
 }
@@ -345,6 +352,10 @@ struct SessionChatUiState: Equatable {
     var permissionDockHidden: Bool = false
     var permissionSubmitting: Bool = false
     var permissionErrorMessage: String?
+    /// "Deny with a note" draft for `permissionRequest`; non-nil shows the note step.
+    var permissionNote: PermissionNoteDraft?
+    /// Other waiting permission requests in `permissionRequest`'s session, which a deny also rejects.
+    var permissionOtherPendingInSessionCount: Int = 0
     var questionRequest: QuestionRequest?
     /// 1-based position of `questionRequest` among the waiting question requests.
     var questionQueuePosition: Int = 1
@@ -421,6 +432,14 @@ struct SessionChatUiState: Equatable {
     var dictation: ComposerDictationUiState? = nil
     /// `/btw` side questions: composer mode, chips above the composer and the answer sheet.
     var sideQuestions = SessionChatSideQuestionsUiState()
+    /// Set while the screen is a New session draft (#1004): nothing exists on the server yet.
+    var draft: SessionChatDraftUiState? = nil
+    /// The checkout the screen is bound to. A draft moves it; its first send may create it.
+    var directory: String = ""
+    /// The session's `/goal`; nil when it has none, on v1, or without the goal plugin.
+    var goal: SessionChatGoalUiState? = nil
+    /// The server lists a `goal` command, so a `/goal …` draft gets its hint and limit.
+    var goalCommandAvailable = false
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
     var blocksChipTimelineIntro: Bool {
@@ -795,6 +814,8 @@ struct SessionChatComposerRegionState: Equatable {
     )
     var isSending: Bool = false
     var sendProgressPercent: Int? = nil
+    /// Set while a prompt upload has gone unanswered; each new value shows "Still sending…" again.
+    var sendStallNotice: Int? = nil
     var isAborting: Bool = false
     var errorMessage: String?
     var abortErrorMessage: String?
@@ -893,6 +914,20 @@ struct PendingSend: Equatable {
     let queuedAtMs: Int64
 }
 
+/// The note typed in "Deny with a note" for one permission request. While it exists for the
+/// shown request, the permission prompt shows the note step instead of its actions.
+struct PermissionNoteDraft: Equatable {
+    let requestID: String
+    var text: String = ""
+
+    /// What Send sends: the note without surrounding whitespace.
+    var trimmedText: String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var canSend: Bool { !trimmedText.isEmpty }
+}
+
 struct SessionChatInboxRegionState: Equatable {
     /// The session the inbox is bound to; requests from any other session are a subagent's.
     var rootSessionID = ""
@@ -904,6 +939,9 @@ struct SessionChatInboxRegionState: Equatable {
     var permissionSubmittingID: String?
     var permissionError: String?
     var permissionTopologyError: String?
+    /// "Deny with a note" draft; only ever for the shown request (paging or the request
+    /// going away clears it).
+    var permissionNote: PermissionNoteDraft?
     /// Sessions loaded to place descendant permission requests; also names the asking subagent.
     var permissionSessions: [Session] = []
     var questionRequests: [QuestionRequest] = []
@@ -951,6 +989,12 @@ struct SessionChatInboxRegionState: Equatable {
     /// True while the shown question is the one the user collapsed.
     var isQuestionDockHidden: Bool {
         questionHiddenID != nil && visibleQuestionRequest?.id == questionHiddenID
+    }
+
+    /// Other waiting permission requests of the shown request's session; a deny rejects them too.
+    var otherPendingPermissionsInVisibleSession: Int {
+        guard let visible = visiblePermissionRequest else { return 0 }
+        return permissionRequests.filter { $0.sessionID == visible.sessionID && $0.id != visible.id }.count
     }
 
     var visiblePermissionAttribution: InboxRequestAttribution? {

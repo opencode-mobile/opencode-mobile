@@ -36,6 +36,10 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
         try await selected().listSessions(directory: directory)
     }
 
+    func listRootSessionsWindow(directory: String, limit: Int) async throws -> SessionWindow {
+        try await selected().listRootSessionsWindow(directory: directory, limit: limit)
+    }
+
     func searchSessions(query: String, directory: String?) async throws -> [Session] {
         try await selected().searchSessions(query: query, directory: directory)
     }
@@ -140,13 +144,15 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool {
         try await selected().respondToPermission(
             sessionID: sessionID,
             permissionID: permissionID,
             decision: decision,
-            directory: directory
+            directory: directory,
+            message: message
         )
     }
 

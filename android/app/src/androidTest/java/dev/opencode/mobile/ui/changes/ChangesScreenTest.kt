@@ -239,5 +239,6 @@ private object ChangesScreenRepository : SessionRepository {
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
+        message: String?,
     ) = false
 }

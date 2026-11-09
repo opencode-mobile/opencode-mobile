@@ -13,7 +13,7 @@ final class SessionChatRepoStrip {
 
     private(set) var state = SessionChatRepoStripRegionState()
 
-    private let worktree: String
+    private var worktree: String
     private let sessionRepository: any SessionRepository
     private let foregroundEventStream: (any ForegroundEventStream)?
     private var expandWhenDirty: Bool
@@ -35,6 +35,11 @@ final class SessionChatRepoStrip {
         self.expandWhenDirty = startExpanded
         self.sessionRepository = sessionRepository
         self.foregroundEventStream = foregroundEventStream
+    }
+
+    /// Not started while drafting, so the next `start()` reads the new checkout.
+    func retarget(worktree: String) {
+        self.worktree = worktree
     }
 
     func start() {

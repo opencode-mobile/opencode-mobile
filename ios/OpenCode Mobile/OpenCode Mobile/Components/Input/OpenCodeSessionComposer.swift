@@ -1,5 +1,7 @@
 import SwiftUI
 
+typealias OpenCodeSessionComposerFootnote = OpenCodeSessionComposerState.Footnote
+
 enum OpenCodeSessionComposerState {
     struct Prompt {
         let text: String
@@ -32,6 +34,10 @@ enum OpenCodeSessionComposerState {
         /// the model and agent chips and the field shows its own placeholder; tapping the badge or
         /// deleting on an empty field sends `.exitSideQuestionMode`.
         let sideQuestionMode: Bool
+        /// Replaces the default "Ask anything..." placeholder, e.g. while a goal waits on a reply.
+        let placeholder: String?
+        /// One caption line under the field: a hint, or a count that reads as an error past a limit.
+        let footnote: OpenCodeSessionComposerFootnote?
 
         init(
             text: String,
@@ -54,7 +60,9 @@ enum OpenCodeSessionComposerState {
             showDictationButton: Bool = false,
             shellMode: Bool = false,
             sideQuestionMode: Bool = false,
-            history: [String] = []
+            history: [String] = [],
+            placeholder: String? = nil,
+            footnote: OpenCodeSessionComposerFootnote? = nil
         ) {
             self.text = text
             self.mentionRanges = mentionRanges
@@ -77,6 +85,20 @@ enum OpenCodeSessionComposerState {
             self.shellMode = shellMode
             self.sideQuestionMode = sideQuestionMode
             self.history = history
+            self.placeholder = placeholder.flatMap { $0.isEmpty ? nil : $0 }
+            self.footnote = footnote
+        }
+    }
+
+    /// A caption under the prompt field.
+    struct Footnote: Equatable {
+        let text: String
+        /// Past a limit: drawn in the error colour.
+        let isError: Bool
+
+        init(text: String, isError: Bool = false) {
+            self.text = text
+            self.isError = isError
         }
     }
 
@@ -110,6 +132,10 @@ enum OpenCodeSessionComposerState {
         let submitting: Bool
         let actionsEnabled: Bool
         let errorMessage: String?
+        /// "Deny with a note" draft; non-nil shows the note step instead of the actions.
+        let note: String?
+        /// Other waiting permission requests in this request's session; a deny rejects them too.
+        let otherPendingInSessionCount: Int
 
         init(
             requestID: String,
@@ -123,7 +149,9 @@ enum OpenCodeSessionComposerState {
             attribution: RequestAttribution? = nil,
             submitting: Bool = false,
             actionsEnabled: Bool = true,
-            errorMessage: String? = nil
+            errorMessage: String? = nil,
+            note: String? = nil,
+            otherPendingInSessionCount: Int = 0
         ) {
             self.requestID = requestID
             self.sessionID = sessionID
@@ -137,6 +165,22 @@ enum OpenCodeSessionComposerState {
             self.submitting = submitting
             self.actionsEnabled = actionsEnabled
             self.errorMessage = errorMessage
+            self.note = note
+            self.otherPendingInSessionCount = otherPendingInSessionCount
+        }
+
+        /// The note step shows.
+        var isNoteStep: Bool { note != nil }
+
+        /// Send in the note step: a non-blank note and no reply in flight.
+        var noteSendEnabled: Bool {
+            guard let note, actionsEnabled, !submitting else { return false }
+            return !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        /// The request in one line for the note step: the first file or pattern.
+        var summaryTarget: String? {
+            files.first?.path ?? patterns.first
         }
     }
 
@@ -238,6 +282,9 @@ extension OpenCodeSessionComposerState {
     /// The prompt chords' view of this state (`OpenCodePromptChordRule`).
     var promptChordState: OpenCodePromptChordState {
         switch self {
+        case let .permission(permission) where permission.isNoteStep:
+            // Only ⌘⏎ (Send) applies; the note field owns Return and Esc.
+            .permissionNote(requestID: permission.requestID, sendEnabled: permission.noteSendEnabled)
         case let .permission(permission):
             .permission(
                 requestID: permission.requestID,
@@ -266,6 +313,10 @@ extension OpenCodeSessionComposerState {
             .alwaysAllowPermission(requestID: permission.requestID, sessionID: permission.sessionID)
         case let (.permission(permission), .deny):
             .denyPermission(requestID: permission.requestID, sessionID: permission.sessionID)
+        case let (.permission(permission), .denyWithNote):
+            .openPermissionNote(requestID: permission.requestID, sessionID: permission.sessionID)
+        case let (.permission(permission), .sendNote):
+            .sendPermissionNote(requestID: permission.requestID, sessionID: permission.sessionID)
         case let (.question(question), .next):
             .questionNext(requestID: question.requestID, sessionID: question.sessionID)
         case let (.question(question), .submit):
@@ -305,6 +356,13 @@ enum OpenCodeSessionComposerAction {
     case allowPermissionOnce(requestID: String, sessionID: String)
     case denyPermission(requestID: String, sessionID: String)
     case alwaysAllowPermission(requestID: String, sessionID: String)
+    /// "Deny with a note…": show the note step instead of the permission actions.
+    case openPermissionNote(requestID: String, sessionID: String)
+    case permissionNoteChanged(requestID: String, text: String)
+    /// Leave the note step without answering.
+    case cancelPermissionNote(requestID: String)
+    /// Deny with the note; only sent while the note is not blank.
+    case sendPermissionNote(requestID: String, sessionID: String)
     /// Collapse the permission dock without answering it.
     case hidePermission(requestID: String)
     /// Collapse the question panel without answering or dismissing it.
@@ -380,6 +438,9 @@ struct OpenCodeSessionComposer: View {
     @State private var focusRequester = OpenCodeFocusRequester()
     @State private var promptEntryOwner = UUID()
     @State private var customAnswerFocused = false
+    /// The split Deny's menu (Deny, Deny with a note…) is open.
+    @State private var denyMenuPresented = false
+    @State private var permissionNoteFocused = false
     /// `OpenCodeKeyboardFocusState.navigationKeyCount` when the current request arrived.
     @State private var navigationKeysAtArrival = 0
     /// A control of the current request had keyboard focus.
@@ -428,6 +489,8 @@ struct OpenCodeSessionComposer: View {
                     // carries over from one queued request to the next.
                     VStack(alignment: .leading, spacing: 10) {
                         switch state {
+                        case let .permission(permission) where permission.isNoteStep:
+                            permissionNoteContent(permission)
                         case let .permission(permission):
                             permissionApprovalContent(permission)
                         case let .question(question):
@@ -473,6 +536,7 @@ struct OpenCodeSessionComposer: View {
             if key != nil, promptRequestID != nil { focusWasInPrompt = true }
         }
         .onChange(of: promptRequestID) { previous, requestID in
+            denyMenuPresented = false
             let leftWithFocus = OpenCodePromptFocus.clearsFocusOnLeave(
                 previousRequestID: previous,
                 requestID: requestID,
@@ -501,9 +565,26 @@ struct OpenCodeSessionComposer: View {
                 customAnswerFocused = true
             }
         }
+        .onChange(of: isPermissionNoteStep) { _, noteStep in
+            denyMenuPresented = false
+            if !noteStep { permissionNoteFocused = false }
+        }
         .onDisappear {
             OpenCodeKeyboardFocusState.shared.setPromptEntry(promptEntryOwner, key: OpenCodePromptFocusTarget?.none)
         }
+    }
+
+    private var isPermissionNoteStep: Bool {
+        if case let .permission(permission) = state { return permission.isNoteStep }
+        return false
+    }
+
+    /// iPadOS cannot move focus in code out of the UIKit note field: stop editing
+    /// and make `target` the next Tab stop.
+    private func leavePermissionNote(toward target: OpenCodePromptFocusTarget) {
+        OpenCodeKeyboardFocusState.shared.setNextTabTarget(target)
+        permissionNoteFocused = false
+        OpenCodeKeyboardAnchor.takeFocus()
     }
 
     /// iPadOS cannot move focus in code out of the UIKit answer field: stop editing
@@ -554,6 +635,15 @@ struct OpenCodeSessionComposer: View {
         switch state {
         case let .permission(permission):
             let enabled = permission.actionsEnabled && !permission.submitting
+            if permission.isNoteStep {
+                // Cancel; the note field takes focus itself when the step opens.
+                return OpenCodePromptFocus.initialTarget(
+                    optionCount: 0,
+                    customAllowed: false,
+                    optionsEnabled: false,
+                    actionsEnabled: [!permission.submitting]
+                )
+            }
             return OpenCodePromptFocus.initialTarget(
                 optionCount: 0,
                 customAllowed: false,
@@ -601,7 +691,7 @@ struct OpenCodeSessionComposer: View {
     private var promptKeyboardHint: some View {
         if OpenCodePromptKeyboardHint.isVisible(
             hardwareKeyboardConnected: OpenCodeKeyboardFocusState.shared.hardwareKeyboardConnected,
-            focusInsidePrompt: focusRequester.focusedKey != nil || customAnswerFocused
+            focusInsidePrompt: focusRequester.focusedKey != nil || customAnswerFocused || permissionNoteFocused
         ) {
             OpenCodeKeyboardHint(OpenCodePromptKeyboardHint.text)
                 .accessibilityIdentifier("sessionChatPromptKeyboardHint")
@@ -648,7 +738,9 @@ struct OpenCodeSessionComposer: View {
                 selectionStart: prompt.selectionStart,
                 selectionEnd: prompt.selectionEnd,
                 selectionRevision: prompt.selectionRevision,
-                placeholder: prompt.sideQuestionMode ? Self.sideQuestionPlaceholder : Self.promptPlaceholder,
+                placeholder: prompt.sideQuestionMode
+                    ? Self.sideQuestionPlaceholder
+                    : (prompt.placeholder ?? Self.promptPlaceholder),
                 focusRequestToken: focusRequestToken,
                 onFocusChange: onInputFocusChange,
                 literalInput: prompt.shellMode,
@@ -686,6 +778,15 @@ struct OpenCodeSessionComposer: View {
             )
             .padding(.horizontal, 4)
             .padding(.vertical, 4)
+
+            if let footnote = prompt.footnote {
+                Text(footnote.text)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(footnote.isError ? OpenCodeColors.error : OpenCodeColors.textWeak)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
 
             pickerChipsRow(prompt)
 
@@ -1011,14 +1112,22 @@ struct OpenCodeSessionComposer: View {
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
         HStack(spacing: 8) {
-            OpenCodeButton(
-                variant: .compactText(title: "component.composer.deny"),
-                enabled: actionsEnabled,
-                contrast: .low,
-                action: {
-                    onAction(.denyPermission(requestID: permission.requestID, sessionID: permission.sessionID))
-                }
-            )
+            OpenCodeAnchoredOverflowHost(
+                isPresented: $denyMenuPresented,
+                entries: denyMenuEntries(permission),
+                placement: .above
+            ) {
+                OpenCodeSplitButton(
+                    title: "component.composer.deny",
+                    menuAccessibilityLabel: "component.composer.deny_options",
+                    enabled: actionsEnabled,
+                    contrast: .low,
+                    action: {
+                        onAction(.denyPermission(requestID: permission.requestID, sessionID: permission.sessionID))
+                    },
+                    menuAction: { denyMenuPresented = true }
+                )
+            }
             .openCodeFocusKey(OpenCodePromptFocusTarget.action(0))
             Spacer(minLength: 0)
             if permission.submitting {
@@ -1047,6 +1156,122 @@ struct OpenCodeSessionComposer: View {
         .openCodeFocusGroup(.horizontal)
         requestPageDots(position: permission.queuePosition, count: permission.queueCount)
         promptKeyboardHint
+    }
+
+    private func denyMenuEntries(_ permission: OpenCodeSessionComposerState.Permission) -> [OpenCodeOverflowMenuEntry] {
+        [
+            OpenCodeOverflowMenuEntry(
+                id: "deny",
+                title: "component.composer.deny",
+                icon: .close,
+                accessibilityIdentifier: "sessionChatPermissionDenyMenuDeny",
+                action: {
+                    onAction(.denyPermission(requestID: permission.requestID, sessionID: permission.sessionID))
+                }
+            ),
+            OpenCodeOverflowMenuEntry(
+                id: "denyWithNote",
+                title: "component.composer.deny_with_note_menu",
+                subtitle: "component.composer.deny_with_note_menu_subtitle",
+                icon: .edit,
+                accessibilityIdentifier: "sessionChatPermissionDenyWithNote",
+                action: {
+                    onAction(.openPermissionNote(requestID: permission.requestID, sessionID: permission.sessionID))
+                }
+            ),
+        ]
+    }
+
+    /// "Deny with a note": the note field with Cancel and Send in place of the permission actions.
+    @ViewBuilder
+    private func permissionNoteContent(_ permission: OpenCodeSessionComposerState.Permission) -> some View {
+        if let attribution = permission.attribution {
+            requestAttributionRow(attribution)
+        }
+        VStack(alignment: .leading, spacing: 10) {
+            Text("component.composer.deny_with_note_title").font(OpenCodeTypography.heading)
+            HStack(spacing: 8) {
+                Text(permission.permission.replacingOccurrences(of: "_", with: " "))
+                    .font(OpenCodeTypography.bodySecondary)
+                    .layoutPriority(1)
+                if let target = permission.summaryTarget {
+                    Text(target)
+                        .font(OpenCodeTypography.code)
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            QuestionCustomTextField(
+                text: permission.note ?? "",
+                hint: "component.composer.deny_note_placeholder",
+                enabled: !permission.submitting,
+                isFocused: $permissionNoteFocused,
+                onReturn: {
+                    // Return sends; Shift+Return adds a line.
+                    guard permission.noteSendEnabled else { return }
+                    onAction(.sendPermissionNote(requestID: permission.requestID, sessionID: permission.sessionID))
+                },
+                onEscape: {
+                    // Back to the prompt without answering; Tab then lands on Deny.
+                    onAction(.cancelPermissionNote(requestID: permission.requestID))
+                    leavePermissionNote(toward: .action(0))
+                },
+                onTabOut: { backward in
+                    leavePermissionNote(toward: backward ? .action(0) : .primaryAction)
+                },
+                onChange: { text in
+                    onAction(.permissionNoteChanged(requestID: permission.requestID, text: text))
+                }
+            )
+            .accessibilityIdentifier("sessionChatPermissionNoteField")
+            .onAppear { permissionNoteFocused = true }
+            if permission.otherPendingInSessionCount > 0 {
+                Text(Self.alsoDeniesText(count: permission.otherPendingInSessionCount))
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+            }
+            if let errorMessage = permission.errorMessage {
+                Text(errorMessage)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.error)
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        HStack(spacing: 8) {
+            OpenCodeButton(
+                variant: .compactText(title: "common.cancel"),
+                enabled: !permission.submitting,
+                contrast: .low,
+                action: { onAction(.cancelPermissionNote(requestID: permission.requestID)) }
+            )
+            .openCodeFocusKey(OpenCodePromptFocusTarget.action(0))
+            .accessibilityIdentifier("sessionChatPermissionNoteCancel")
+            Spacer(minLength: 0)
+            if permission.submitting {
+                ProgressView().controlSize(.small)
+            }
+            OpenCodeButton(
+                variant: .compactText(title: "component.composer.send"),
+                enabled: permission.noteSendEnabled,
+                action: {
+                    onAction(.sendPermissionNote(requestID: permission.requestID, sessionID: permission.sessionID))
+                }
+            )
+            .openCodeFocusKey(OpenCodePromptFocusTarget.primaryAction)
+            .accessibilityIdentifier("sessionChatPermissionNoteSend")
+        }
+        .openCodeFocusGroup(.horizontal)
+    }
+
+    /// "Also denies 1 other waiting request." / "Also denies 3 other waiting requests."
+    static func alsoDeniesText(count: Int) -> String {
+        String(localized: LocalizedStringResource(
+            "component.composer.deny_note_also_denies",
+            defaultValue: "Also denies \(count) other waiting requests."
+        ))
     }
 
     /// Light amber row naming the subagent that asks, with Open to show its session.
@@ -1366,7 +1591,7 @@ struct OpenCodeSessionComposer: View {
 
     private var pagesRequests: Bool {
         switch state {
-        case let .permission(permission): permission.queueCount > 1
+        case let .permission(permission): permission.queueCount > 1 && !permission.isNoteStep
         case let .question(question): question.requestCount > 1
         case .prompt, .childLockout: false
         }
@@ -1493,8 +1718,11 @@ enum RequestPagerKind {
     }
 }
 
+/// Multi-line answer field of a prompt: a question's "Type your own answer" and the
+/// permission note. Shortcut gating treats it as a prompt answer (⌘⌫ stays with it).
 private struct QuestionCustomTextField: View {
     let text: String
+    var hint: OpenCodeText = "component.composer.custom_answer_hint"
     let enabled: Bool
     @Binding var isFocused: Bool
     let onReturn: () -> Void
@@ -1517,7 +1745,7 @@ private struct QuestionCustomTextField: View {
                     onChange(newValue)
                 }
             ),
-            hint: "component.composer.custom_answer_hint",
+            hint: hint,
             enabled: enabled,
             isFocused: $isFocused,
             minLines: Self.minLines,

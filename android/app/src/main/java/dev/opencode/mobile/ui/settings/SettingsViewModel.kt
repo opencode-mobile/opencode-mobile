@@ -15,7 +15,6 @@ import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
-import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
@@ -93,7 +92,6 @@ class SettingsViewModel
                 )
                 AppLockPreferences.clear()
                 AppOnboardingPreferences.clear()
-                DeveloperToolsPreferences.clear()
                 PerformanceOverlayPreferences.clear()
                 SessionChatDisplayPreferences.clear()
                 // A wipe is a fresh install: settle the timeline now so the update-only picker never shows.

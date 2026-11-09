@@ -13,6 +13,10 @@ struct ProjectSectionItem: Identifiable, Equatable {
     var sessionsFromCache: Bool = false
     var projectID: String? = nil
     var worktreeInventory: WorktreeInventory = .unloaded
+    /// The live window holds only the newest sessions; the server may have older ones.
+    var hasMoreSessions = false
+    /// Oldest update in the live window; nil before it loads or when it is empty.
+    var oldestWindowUpdatedAtEpochMs: Int64? = nil
 }
 
 /// A subfolder row in the Add project sheet.
@@ -461,12 +465,10 @@ final class ProjectListHomeViewModel {
     private let worktreeInventoryCache: WorktreeInventoryCache
     /// The Worktrees screen reads Home's projects and sessions here and asks Home to act.
     let homeWorktreesFeed: HomeWorktreesFeed
-    /// New worktree form of the Run in sheet.
-    let worktreeCreate: WorktreeCreateModel
     /// Session search over Home's pane (#929).
     let sessionSearch: SessionSearchModel
-    /// False once a v1 server answered 404 for its worktree routes.
-    private(set) var serverCanCreateWorktrees = true
+    /// New session drafts (#1004), one per Connection Profile.
+    private let newSessionDraftStore: NewSessionDraftStore
     private let foregroundEventStream: (any ForegroundEventStream)?
     private let sessionCache: any SessionCache
     private let sessionAdapter = SessionDomainAdapter()
@@ -506,6 +508,17 @@ final class ProjectListHomeViewModel {
     private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
     private var liveStatusesByWorktree: [String: SessionActivitySnapshot] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
+    /// Latest row build per worktree; a build that finishes after a newer one started is dropped.
+    @ObservationIgnored private var rowBuildSerial = 0
+    @ObservationIgnored private var latestRowBuild: [String: Int] = [:]
+    /// First loads whose rows have not landed yet; the skeleton stays until they do.
+    @ObservationIgnored private var projectLoadsAwaitingRows: Set<String> = []
+    /// Busy sessions whose root is being looked up, and ids asked for meanwhile, per worktree.
+    @ObservationIgnored private var ancestryTasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var ancestryPending: [String: Set<String>] = [:]
+    /// A load more is running for the scope Home shows.
+    private(set) var isLoadingMoreSessions = false
+    @ObservationIgnored private var loadMoreTask: Task<Void, Never>?
     private let sessionActionsRegion: HomeSessionActions
     /// Home menu's Archived sessions entry; its `entry` is nil on servers that cannot restore archived sessions.
     let archivedMenu: HomeArchivedMenu
@@ -532,8 +545,10 @@ final class ProjectListHomeViewModel {
         foregroundEventStream: (any ForegroundEventStream)? = nil,
         branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
         worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
-        homeWorktreesFeed: HomeWorktreesFeed? = nil
+        homeWorktreesFeed: HomeWorktreesFeed? = nil,
+        newSessionDraftStore: NewSessionDraftStore? = nil
     ) {
+        self.newSessionDraftStore = newSessionDraftStore ?? NewSessionDraftStore()
         self.addProjectListingDebounce = addProjectListingDebounce
         self.projectLoadTiming = projectLoadTiming
         self.projectRepository = projectRepository
@@ -549,12 +564,10 @@ final class ProjectListHomeViewModel {
         self.worktreeRepository = worktreeRepository
         self.worktreeInventoryCache = worktreeInventoryCache
         self.homeWorktreesFeed = homeWorktreesFeed ?? HomeWorktreesFeed()
-        self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
         self.sessionSearch = SessionSearchModel(
             repository: sessionRepository,
             archivedSessionsSupported: { activeConnectionManager.capabilities.supportsArchivedSessions }
         )
-        self.serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
         self.foregroundEventStream = foregroundEventStream
         let projects = projectRepository
         let sessions = sessionRepository
@@ -572,8 +585,12 @@ final class ProjectListHomeViewModel {
                 )
             },
             listSessions: { directory in
-                let listed = (try? await sessions.listSessions(directory: directory)) ?? []
-                return listed.activeSessions().rootSessions().map { session in
+                // The first page of roots, like the added paths' own windows.
+                let listed = (try? await sessions.listRootSessionsWindow(
+                    directory: directory,
+                    limit: HomeSessionPaging.pageSize
+                ))?.sessions ?? []
+                return listed.map { session in
                     let item = adapter.listItem(from: session, worktree: directory)
                     if item.directory?.isEmpty == false { return item }
                     return SessionListItem(
@@ -666,7 +683,6 @@ final class ProjectListHomeViewModel {
                 self?.stopLiveObservations()
                 self?.worktreeMarks.onDisconnected()
                 self?.worktreeInventoryCache.clear()
-                self?.worktreeCreate.dismiss()
                 self?.worktreeInventories.removeAll()
                 self?.worktreeProjectIDs.removeAll()
                 self?.clearHomeProjectInputs()
@@ -1062,6 +1078,7 @@ final class ProjectListHomeViewModel {
             // A newly added project always takes the scope, even from All.
             pendingSelectedFilterOverridesAll = true
             pendingSelectedFilterId = worktree
+            lastAddedProject = HomeAddedProject(path: worktree)
             if let joined {
                 removalSnackbar = OpenCodeSnackbarMessage(text: HomeProjectCopy.joinedExisting(joined.displayName))
             }
@@ -1083,13 +1100,18 @@ final class ProjectListHomeViewModel {
         await sessionLiveStore.invalidate(directory: worktree)
     }
 
-    func createSession(in worktree: String) async {
-        guard liveUpdates.chrome.canMutate else {
-            logCreateSession(outcome: ProductAnalytics.Outcome.blocked)
-            setProjectSessionCreateError(
-                String(localized: "home.error.reconnect_to_create", defaultValue: "Reconnect to create a session")
-            )
-            return
+    /// New session (#1004): opens Session Chat as a draft. Nothing is created on the server until
+    /// its first send. A kept draft (text or attachments) wins over `start`; `forcePlace` keeps
+    /// its content but moves it to `start`'s place (Worktrees "New session here").
+    func openNewSessionDraft(_ start: NewSessionDraft, forcePlace: Bool = false) {
+        let directory: String = if let profile = activeConnectionManager.currentProfile() {
+            newSessionDraftStore.open(
+                profile: NewSessionDraftStore.key(for: profile),
+                start: start,
+                forcePlace: forcePlace
+            ).directory
+        } else {
+            start.directory
         }
         setProjectSessionCreateError(nil)
         logCreateSession(outcome: "started")
@@ -1097,48 +1119,9 @@ final class ProjectListHomeViewModel {
         pendingSessionOpen = SessionListItem(
             id: OptimisticSessionCreate.placeholderSessionID,
             title: OptimisticSessionCreate.placeholderTitle,
-            worktree: worktree,
+            worktree: directory,
             optimisticNavigationInstanceID: UUID()
         )
-    }
-
-    // MARK: New worktree (Run in)
-
-    /// The Run in sheet's New worktree row for `project`.
-    func newWorktreeAvailability(for project: HomeProject, worktreesEnabled: Bool) -> NewWorktreeAvailability {
-        NewWorktreeAvailability.runIn(
-            worktreesEnabled: worktreesEnabled,
-            isRepository: project.isRepository,
-            projectID: project.projectID,
-            serverCanCreate: serverCanCreateWorktrees
-        )
-    }
-
-    /// Switches the Run in sheet to the New worktree form, creating from the main checkout.
-    func openNewWorktree(projectKey: String) {
-        guard let project = homeProjects.first(where: { $0.key == projectKey }) else { return }
-        let source = project.mainCheckoutDirectory
-        worktreeCreate.open(
-            origin: .runIn(projectKey: projectKey),
-            serverProtocol: activeConnectionManager.serverProtocol ?? .v1,
-            projectID: project.projectID,
-            sourceDirectory: source,
-            sourceBranch: project.worktree(at: source)?.branch
-        )
-    }
-
-    /// Creates the worktree, refreshes the project's checkouts, then starts a session there.
-    /// True when the sheet should close.
-    func submitNewWorktree() async -> Bool {
-        guard case let .runIn(projectKey)? = worktreeCreate.state?.origin else { return false }
-        guard let created = await worktreeCreate.submit() else {
-            serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
-            return false
-        }
-        await refreshWorktreeInventory(projectKey: projectKey)
-        worktreeCreate.dismiss()
-        await createSession(in: created.directory)
-        return true
     }
 
     /// Home has listed some project's worktrees.
@@ -1165,7 +1148,10 @@ final class ProjectListHomeViewModel {
             pendingSelectedFilterOverridesAll = true
             pendingSelectedFilterId = HomeScope.worktree(projectKey: projectKey, directory: directory).id
         case let .newSession(directory):
-            await createSession(in: directory)
+            openNewSessionDraft(
+                NewSessionDraftStart.fromDirectory(directory, projects: homeProjects, worktreesEnabled: true),
+                forcePlace: true
+            )
         case let .removed(_, directory):
             worktreeMarks.retain(removedDirectories: homeWorktreesFeed.removedDirectories)
             await refreshWorktreeInventory(containing: directory)
@@ -1204,6 +1190,8 @@ final class ProjectListHomeViewModel {
     }
 
     private(set) var pendingSessionOpen: SessionListItem?
+    /// The project Add project last added; a New session draft that asked for it takes it.
+    private(set) var lastAddedProject: HomeAddedProject?
     private(set) var pendingSelectedFilterId: String?
     /// True when `pendingSelectedFilterId` must replace the All scope too (a newly added project).
     private(set) var pendingSelectedFilterOverridesAll = false
@@ -1727,7 +1715,6 @@ final class ProjectListHomeViewModel {
             seeded = await sessionCache.seedSessions(worktree: worktree)
             cachedActivity = await sessionCache.seedActivity(directory: worktree) ?? []
         }
-        let family = (seeded ?? []).activeSessions()
         let cachedSnapshot = SessionActivitySnapshot(
             entries: Dictionary(
                 cachedActivity.map { entry in
@@ -1741,21 +1728,15 @@ final class ProjectListHomeViewModel {
             seeded: false,
             fromCache: true
         )
-        let sessions =
-            family
-                .rootSessions()
-                .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
-        let items =
-            sessions.map { session in
-                let sourceID = cachedSnapshot.homeActivitySessionID(rootID: session.id, sessions: family) ?? session.id
-                let label = cachedSnapshot.statusLabel(for: sourceID)
-                return sessionAdapter.listItem(
-                    from: session,
-                    worktree: worktree,
-                    statusLabel: label,
-                    statusIsStale: label != nil && cachedSnapshot.statusIsStale(for: sourceID)
-                )
-            }
+        let items = HomeSessionRows.build(HomeSessionRowsInput(
+            worktree: worktree,
+            sessions: seeded ?? [],
+            activity: cachedSnapshot,
+            readyIDs: [],
+            ancestry: sessionLiveStore.ancestry.snapshot(),
+            projectID: rowScopeProjectID(worktree),
+            readsServerUnread: false
+        )).items
         let name = ProjectDomainAdapter.displayName(from: worktree)
         return ProjectSectionItem(
             id: worktree,
@@ -1788,29 +1769,15 @@ final class ProjectListHomeViewModel {
     private func loadSection(worktree: String) async -> ProjectSectionItem {
         do {
             _ = try await projectRepository.getCurrentProject(directory: worktree)
-            let family =
-                try await sessionRepository.listSessions(directory: worktree)
-                    .activeSessions()
-            let sessions =
-                family
-                    .rootSessions()
-                    .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
-            let items =
-                sessions.map { session in
-                    let status = homeStatus(for: session.id, family: family, directory: worktree)
-                    return sessionAdapter.listItem(
-                        from: session,
-                        worktree: worktree,
-                        statusLabel: status.label,
-                        isReady: isReady(
-                            sessionID: session.id,
-                            directory: worktree,
-                            readyIds: liveReadyIdsByWorktree[worktree] ?? []
-                        ),
-                        unreadOutcome: unreadOutcome(for: session, directory: worktree),
-                        statusIsStale: status.stale
-                    )
-                }
+            let window = try await sessionRepository.listRootSessionsWindow(
+                directory: worktree,
+                limit: HomeSessionPaging.pageSize
+            )
+            let items = HomeSessionRows.build(rowsInput(
+                worktree: worktree,
+                sessions: window.sessions,
+                readyIds: liveReadyIdsByWorktree[worktree] ?? []
+            )).items
             let name = ProjectDomainAdapter.displayName(from: worktree)
             return ProjectSectionItem(
                 id: worktree,
@@ -2103,9 +2070,6 @@ final class ProjectListHomeViewModel {
     }
 
     private func applyWorktreeMark(_ update: WorktreeMarkUpdate) {
-        if serverCanCreateWorktrees != worktreeRepository.canCreateWorktrees {
-            serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
-        }
         worktreeInventories[update.addedPath] = update.inventory
         worktreeInventoryCache.record(update.inventory, addedPath: update.addedPath, server: serverBaseURL)
         if let projectID = update.projectID {
@@ -2141,7 +2105,9 @@ final class ProjectListHomeViewModel {
             loadError: section.loadError,
             sessionsFromCache: section.sessionsFromCache,
             projectID: worktreeProjectIDs[update.addedPath] ?? section.projectID,
-            worktreeInventory: update.inventory
+            worktreeInventory: update.inventory,
+            hasMoreSessions: section.hasMoreSessions,
+            oldestWindowUpdatedAtEpochMs: section.oldestWindowUpdatedAtEpochMs
         )
         state = .loaded(
             sections: sections.map { $0.worktree == update.addedPath ? updated : $0 },
@@ -2164,6 +2130,14 @@ final class ProjectListHomeViewModel {
         liveSessionsByWorktree = [:]
         liveStatusesByWorktree = [:]
         liveReadyIdsByWorktree = [:]
+        latestRowBuild = [:]
+        projectLoadsAwaitingRows = []
+        ancestryTasks.values.forEach { $0.cancel() }
+        ancestryTasks = [:]
+        ancestryPending = [:]
+        loadMoreTask?.cancel()
+        loadMoreTask = nil
+        isLoadingMoreSessions = false
     }
 
     private func liveObservationsRunning(for worktrees: [String]) -> Bool {
@@ -2279,18 +2253,19 @@ final class ProjectListHomeViewModel {
     private func noteProjectLoad(worktree: String, snapshot: SessionListSnapshot) {
         guard let tracker = projectLoads[worktree], !tracker.completing else { return }
         if snapshot.loadFailed {
+            projectLoadsAwaitingRows.remove(worktree)
             failProjectLoad(worktree)
         } else if !snapshot.isFromCache {
+            // The skeleton clears once these rows are on screen.
+            projectLoadsAwaitingRows.insert(worktree)
             // Rows land with the load even when status or ready ids have not emitted yet.
             if liveStatusesByWorktree[worktree] == nil || liveReadyIdsByWorktree[worktree] == nil {
-                updateSectionFromLiveData(
+                scheduleRowBuild(
                     worktree: worktree,
-                    sessions: snapshot.sessions,
-                    readyIds: liveReadyIdsByWorktree[worktree] ?? [],
-                    sessionsFromCache: false
+                    snapshot: snapshot,
+                    readyIds: liveReadyIdsByWorktree[worktree] ?? []
                 )
             }
-            completeProjectLoad(worktree)
         }
     }
 
@@ -2316,38 +2291,75 @@ final class ProjectListHomeViewModel {
         guard let snapshot = liveSessionsByWorktree[worktree] else { return }
         guard liveStatusesByWorktree[worktree] != nil else { return }
         guard let readyIds = liveReadyIdsByWorktree[worktree] else { return }
-        updateSectionFromLiveData(
+        scheduleRowBuild(worktree: worktree, snapshot: snapshot, readyIds: readyIds)
+    }
+
+    /// Builds the section's rows off the main actor and applies them unless a newer build for
+    /// the worktree started meanwhile.
+    private func scheduleRowBuild(worktree: String, snapshot: SessionListSnapshot, readyIds: Set<String>) {
+        rowBuildSerial += 1
+        let serial = rowBuildSerial
+        latestRowBuild[worktree] = serial
+        let input = rowsInput(worktree: worktree, sessions: snapshot.sessions, readyIds: readyIds)
+        Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) { HomeSessionRows.build(input) }.value
+            guard let self, self.latestRowBuild[worktree] == serial else { return }
+            self.applyRows(result.items, worktree: worktree, snapshot: snapshot)
+            if !result.unresolvedBusyIDs.isEmpty {
+                self.resolveBusyRoots(result.unresolvedBusyIDs, worktree: worktree)
+            }
+        }
+    }
+
+    private func rowsInput(worktree: String, sessions: [Session], readyIds: Set<String>) -> HomeSessionRowsInput {
+        HomeSessionRowsInput(
             worktree: worktree,
-            sessions: snapshot.sessions,
-            readyIds: readyIds,
-            sessionsFromCache: snapshot.isFromCache
+            sessions: sessions,
+            activity: liveStatusesByWorktree[worktree],
+            readyIDs: readyIds,
+            ancestry: sessionLiveStore.ancestry.snapshot(),
+            projectID: rowScopeProjectID(worktree),
+            readsServerUnread: activeConnectionManager.capabilities.supportsSessionViewed
         )
     }
 
-    private func updateSectionFromLiveData(
-        worktree: String,
-        sessions: [Session],
-        readyIds: Set<String>,
-        sessionsFromCache: Bool
-    ) {
+    /// The repository project an added path lists whole (worktrees of one repository merge).
+    private func rowScopeProjectID(_ worktree: String) -> String? {
+        guard let resolution = projectResolutions[worktree], resolution.isMergeable else { return nil }
+        return resolution.id
+    }
+
+    /// Looks up the roots of busy sessions Home cannot place yet, then rebuilds the section when
+    /// that taught anything. One lookup per worktree at a time; ids asked for meanwhile wait for it.
+    private func resolveBusyRoots(_ ids: [String], worktree: String) {
+        guard ancestryTasks[worktree] == nil else {
+            ancestryPending[worktree, default: []].formUnion(ids)
+            return
+        }
+        let ancestry = sessionLiveStore.ancestry
+        let loadedRoots = Set(liveSessionsByWorktree[worktree]?.sessions.map(\.id) ?? [])
+        ancestryTasks[worktree] = Task { [weak self] in
+            // Same priority as the row build it feeds: these rows are on screen.
+            let resolution = await Task.detached(priority: .userInitiated) {
+                await ancestry.resolveRoots(ids: ids, directory: worktree, loadedRoots: loadedRoots)
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            self.ancestryTasks[worktree] = nil
+            let waited = self.ancestryPending.removeValue(forKey: worktree) ?? []
+            if resolution.learned || !waited.isEmpty {
+                self.applyLiveUpdate(worktree: worktree)
+            }
+        }
+    }
+
+    private func applyRows(_ items: [SessionListItem], worktree: String, snapshot: SessionListSnapshot) {
+        defer {
+            if projectLoadsAwaitingRows.remove(worktree) != nil {
+                completeProjectLoad(worktree)
+            }
+        }
         guard case let .loaded(sections, showAdd, addProjectSheet, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
-        let family = sessions.activeSessions()
-        let items =
-            family
-                .rootSessions()
-                .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
-                .map { session in
-                    let status = homeStatus(for: session.id, family: family, directory: worktree)
-                    return sessionAdapter.listItem(
-                        from: session,
-                        worktree: worktree,
-                        statusLabel: status.label,
-                        isReady: isReady(sessionID: session.id, directory: worktree, readyIds: readyIds),
-                        unreadOutcome: unreadOutcome(for: session, directory: worktree),
-                        statusIsStale: status.stale
-                    )
-                }
         let updatedSection = ProjectSectionItem(
             id: section.id,
             worktree: section.worktree,
@@ -2357,10 +2369,13 @@ final class ProjectListHomeViewModel {
             letterAccent: section.letterAccent,
             allSessions: worktreeMarks.withLive(addedPath: worktree, primary: items),
             loadError: section.loadError,
-            sessionsFromCache: sessionsFromCache,
+            sessionsFromCache: snapshot.isFromCache,
             projectID: worktreeProjectIDs[worktree] ?? section.projectID,
-            worktreeInventory: worktreeInventories[worktree] ?? section.worktreeInventory
+            worktreeInventory: worktreeInventories[worktree] ?? section.worktreeInventory,
+            hasMoreSessions: snapshot.hasMore,
+            oldestWindowUpdatedAtEpochMs: snapshot.sessions.compactMap(\.updatedAtEpochMs).min()
         )
+        guard updatedSection != section else { return }
         let updatedSections =
             sections.map { current in
                 current.worktree == worktree ? updatedSection : current
@@ -2373,32 +2388,51 @@ final class ProjectListHomeViewModel {
         )
     }
 
-    /// Own activity, or a descendant's when that is busier. Matches the desktop home row.
-    private func homeStatus(
-        for sessionID: String,
-        family: [Session],
-        directory: String
-    ) -> (label: String?, stale: Bool) {
-        guard let snapshot = liveStatusesByWorktree[directory] else { return (nil, false) }
-        let sourceID = snapshot.homeActivitySessionID(rootID: sessionID, sessions: family) ?? sessionID
-        return (snapshot.statusLabel(for: sourceID), snapshot.statusIsStale(for: sourceID))
+    // MARK: - Load more
+
+    /// Near the end of Home's list: grows the window of every directory in the scope that has
+    /// more. `scopeId` is the selected filter (All, a project, or a worktree scope).
+    func loadMoreSessions(scopeId: String) {
+        guard loadMoreTask == nil else { return }
+        let directories = observedDirectories(inScope: scopeId).filter(windowCanLoadMore)
+        guard !directories.isEmpty else { return }
+        isLoadingMoreSessions = true
+        let store = sessionLiveStore
+        loadMoreTask = Task { [weak self] in
+            await withTaskGroup(of: Void.self) { group in
+                for directory in directories {
+                    group.addTask { await store.loadMore(directory: directory) }
+                }
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.loadMoreTask = nil
+            self.isLoadingMoreSessions = false
+        }
     }
 
-    /// v1 only: the local per-device Ready ids. v2 reads unread state from the server instead.
-    private func isReady(sessionID: String, directory: String, readyIds: Set<String>) -> Bool {
-        guard !activeConnectionManager.capabilities.supportsSessionViewed else { return false }
-        guard liveStatusesByWorktree[directory]?.seeded == true else { return false }
-        return readyIds.contains(sessionID)
+    /// The loading footer under Home's list: a load more runs and the scope still has more.
+    func showsLoadMoreFooter(scopeId: String) -> Bool {
+        guard isLoadingMoreSessions else { return false }
+        return observedDirectories(inScope: scopeId).contains { liveSessionsByWorktree[$0]?.hasMore == true }
     }
 
-    /// v2 only: Done / Failed / Stopped for a finished run nobody has viewed. Same seeding gate as
-    /// Ready, so a session the status snapshot has not confirmed idle never flashes Done.
-    /// A missing outcome (older v2 server) reads as succeeded.
-    private func unreadOutcome(for session: Session, directory: String) -> SessionIdleOutcome? {
-        guard activeConnectionManager.capabilities.supportsSessionViewed else { return nil }
-        guard liveStatusesByWorktree[directory]?.seeded == true else { return nil }
-        guard session.isServerUnread else { return nil }
-        return session.idleOutcome ?? .succeeded
+    /// Whether a directory of the scope has older sessions to load. A window whose refresh failed
+    /// stays out until a refresh succeeds, so paging never retries in a loop.
+    func canLoadMoreSessions(scopeId: String) -> Bool {
+        observedDirectories(inScope: scopeId).contains(where: windowCanLoadMore)
+    }
+
+    private func windowCanLoadMore(_ directory: String) -> Bool {
+        guard let snapshot = liveSessionsByWorktree[directory] else { return false }
+        return snapshot.hasMore && !snapshot.loadFailed
+    }
+
+    private func observedDirectories(inScope scopeId: String) -> [String] {
+        let projects = homeProjects
+        guard let key = HomeScope.resolve(id: scopeId, projects: projects)?.projectKey,
+              let project = projects.first(where: { $0.key == key })
+        else { return observedWorktrees }
+        return observedWorktrees.filter { project.memberPaths.contains($0) }
     }
 
     private func setProjectSessionCreateError(_ message: String?) {
@@ -2431,4 +2465,10 @@ private struct ProjectLoadTracker {
     var timers: [Task<Void, Never>] = []
 
     var isPending: Bool { !failed && !completing }
+}
+
+/// One finished Add project, so the same path added twice still reads as a change.
+struct HomeAddedProject: Equatable {
+    let path: String
+    let id = UUID()
 }

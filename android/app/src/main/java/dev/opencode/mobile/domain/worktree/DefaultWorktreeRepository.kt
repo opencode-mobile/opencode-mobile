@@ -6,13 +6,13 @@ import dev.opencode.mobile.data.remote.WorktreeRemote
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProjectGrouping.GLOBAL_PROJECT_ID
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.session.ServerErrorMessage
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -250,7 +250,7 @@ internal fun httpErrorMessage(
 
 /** V2 `WorktreeError` body: `{"name":"WorktreeError","data":{"message","forceRequired"}}`. */
 internal object WorktreeErrorBody {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = serverPayloadJson()
 
     fun forceRequired(body: String): Boolean =
         try {

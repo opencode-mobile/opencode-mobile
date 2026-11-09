@@ -37,6 +37,8 @@ internal class ChatFlowNavigator(
     val replaceSession: (SessionChat) -> Unit,
     /** Opens another session the way Home opens one: pushed when stacked, selected in the pane. */
     val openSession: (SessionChat) -> Unit,
+    /** The New session draft's Add project…: shows Home, whose Add project sheet opens (#1004). */
+    val showHomeForAddProject: () -> Unit = {},
 )
 
 internal fun MutableList<NavKey>.rootChatFlowNavigator(): ChatFlowNavigator =
@@ -48,8 +50,13 @@ internal fun MutableList<NavKey>.rootChatFlowNavigator(): ChatFlowNavigator =
             add(session)
         },
         openSession = { session -> add(session) },
+        // Home is the root; the draft stays in memory while it is gone.
+        showHomeForAddProject = {
+            while (size > 1) removeAt(lastIndex)
+        },
     )
 
+// In the pane, Home is beside the draft already: its Add project sheet opens over both.
 internal fun MutableList<NavKey>.paneChatFlowNavigator(): ChatFlowNavigator =
     ChatFlowNavigator(
         push = { route -> add(route) },
@@ -99,6 +106,7 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
                 parentId = key.parentId,
                 detailControl = detailControl,
                 onNavigateBack = navigator.navigateBack,
+                onAddProjectRequested = navigator.showHomeForAddProject,
                 onNewSessionRequested = { worktree ->
                     val target = newSessionOpenTarget(worktree)
                     navigator.openSession(

@@ -8,6 +8,16 @@ interface SessionRepository {
     suspend fun listSessions(directory: String? = null): List<Session>
 
     /**
+     * Home's window (#981): the newest [limit] active root sessions of [directory]'s list in one
+     * request. Only Home's live list pages; every other caller keeps [listSessions]. Without
+     * server paging this is the whole list.
+     */
+    suspend fun listRootSessionsWindow(
+        directory: String? = null,
+        limit: Int,
+    ): SessionWindow = SessionWindow(sessions = listSessions(directory), hasMore = false)
+
+    /**
      * Active root sessions in [directory]'s list whose title contains [query] (#929). Servers
      * search on their side; without that this filters the full list.
      */
@@ -177,11 +187,17 @@ interface SessionRepository {
         directory: String? = null,
     ): Boolean = true
 
+    /**
+     * Answers a permission request. [message] is a note for [PermissionDecision.Deny] that tells
+     * the agent what to do instead; it is trimmed, and blank means none. A deny also rejects the
+     * other pending requests of the session.
+     */
     suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,
         decision: PermissionDecision,
         directory: String? = null,
+        message: String? = null,
     ): Boolean
 
     suspend fun replyToQuestion(

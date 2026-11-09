@@ -56,7 +56,11 @@ class SessionInfo(
     /** Bumped by every archive change, so a session read that started earlier cannot undo it. */
     private var archiveStateGeneration = 0
 
-    fun bindCreating(
+    /**
+     * The New session draft: no session yet, so only the connection decides whether the
+     * composer can send.
+     */
+    fun bindDraft(
         sessionTitle: String,
         worktree: String,
     ) {
@@ -66,12 +70,30 @@ class SessionInfo(
         boundSessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
         boundSessionTitle = sessionTitle
         boundWorktree = worktree
+        val chrome = liveUpdates.chrome.value
         _state.value =
             SessionInfoRegionState(
                 sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
                 sessionTitle = sessionTitle,
+                connectionStatus = chrome.label.toSessionConnectionStatus(),
+                canMutate = chrome.canMutate,
+                composerEnabled = chrome.composerEnabled,
             )
-        logI("bind creating worktree=$worktree title=$sessionTitle")
+        logI("bind draft worktree=$worktree")
+        val sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
+        observationJob =
+            scope.launch {
+                liveUpdates.chrome.collect { live ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@collect
+                    _state.update {
+                        it.copy(
+                            connectionStatus = live.label.toSessionConnectionStatus(),
+                            canMutate = live.canMutate,
+                            composerEnabled = live.composerEnabled,
+                        )
+                    }
+                }
+            }
     }
 
     fun bind(

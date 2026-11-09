@@ -162,9 +162,8 @@ struct HomeProjectPickerRowTests {
     @Test func worktreesOffListsProjectsWithoutPills() {
         let projects = [project(worktreeCount: 3), other]
         let rows = HomeProjectPickerRow.rows(
-            tabs: SessionListHomeChrome.filterTabs(projects: projects, sessions: [], worktreesEnabled: false),
+            tabs: SessionListHomeChrome.filterTabs(projects: projects, worktreesEnabled: false),
             projects: projects,
-            sessions: [],
             state: HomeProjectPickerState(expandedProjectKey: "prj"),
             worktreesEnabled: false
         )
@@ -177,9 +176,8 @@ struct HomeProjectPickerRowTests {
 
     private func rows(_ projects: [HomeProject], state: HomeProjectPickerState) -> [HomeProjectPickerRow] {
         HomeProjectPickerRow.rows(
-            tabs: SessionListHomeChrome.filterTabs(projects: projects, sessions: []),
+            tabs: SessionListHomeChrome.filterTabs(projects: projects),
             projects: projects,
-            sessions: [],
             state: state
         )
     }

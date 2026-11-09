@@ -45,6 +45,7 @@ import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.domain.session.SessionWindow
 import dev.opencode.mobile.domain.sessioncache.DefaultSessionCache
 import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
@@ -2937,6 +2938,95 @@ class SessionLiveStoreTest {
             }
         }
 
+    @Test
+    fun window_startsAtOnePageAndLoadMoreRaisesItInOneRequest() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(sessions = (1..120).map { testSession(id = "ses-$it", title = "Session $it") })
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = sessionStore(repository, eventStream, ServerProtocol.V2)
+            var latest: SessionListSnapshot? = null
+            val collectJob = launch { store.observeSessions("/repo").collect { latest = it } }
+            advanceUntilIdle()
+
+            assertEquals(listOf(HomeSessionPaging.PAGE_SIZE), repository.windowLimits)
+            assertEquals(50, latest?.sessions?.size)
+            assertTrue(latest?.hasMore == true)
+
+            store.loadMore("/repo")
+            advanceUntilIdle()
+            assertEquals(listOf(50, 100), repository.windowLimits)
+            assertEquals(100, latest?.sessions?.size)
+            assertTrue(latest?.hasMore == true)
+
+            store.loadMore("/repo")
+            advanceUntilIdle()
+            assertEquals(listOf(50, 100, 150), repository.windowLimits)
+            assertEquals(120, latest?.sessions?.size)
+            assertFalse(latest?.hasMore == true)
+
+            // Nothing more: no request.
+            store.loadMore("/repo")
+            advanceUntilIdle()
+            assertEquals(listOf(50, 100, 150), repository.windowLimits)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun window_eventRefetchUsesTheCurrentWindowSize() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(sessions = (1..120).map { testSession(id = "ses-$it", title = "Session $it") })
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = sessionStore(repository, eventStream, ServerProtocol.V1)
+            val collectJob = launch { store.observeSessions("/repo").collect { } }
+            advanceUntilIdle()
+            store.loadMore("/repo")
+            advanceUntilIdle()
+
+            eventStream.emit(OpencodeEvent(type = "session.created", sessionId = "ses-121"))
+            advanceTimeBy(550)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(listOf(50, 100, 100), repository.windowLimits)
+        }
+
+    @Test
+    fun window_loadMoreIsANoOpWhileOneRunsOrWhenTheListIsShort() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(sessions = (1..120).map { testSession(id = "ses-$it", title = "Session $it") })
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = sessionStore(repository, eventStream, ServerProtocol.V2)
+            val collectJob = launch { store.observeSessions("/repo").collect { } }
+            advanceUntilIdle()
+
+            val gate = CompletableDeferred<Unit>()
+            repository.nextListGate = gate
+            val first = launch { store.loadMore("/repo") }
+            advanceUntilIdle()
+            val second = launch { store.loadMore("/repo") }
+            advanceUntilIdle()
+            assertTrue(second.isCompleted)
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(first.isCompleted)
+            assertEquals(listOf(50, 100), repository.windowLimits)
+
+            val short = FakeSessionRepository(sessions = listOf(testSession(id = "ses-1", title = "Only")))
+            val shortStore = sessionStore(short, eventStream, ServerProtocol.V2)
+            var hasMore: Boolean? = null
+            val shortJob = launch { shortStore.observeSessions("/short").collect { hasMore = it.hasMore } }
+            advanceUntilIdle()
+            shortStore.loadMore("/short")
+            advanceUntilIdle()
+            assertEquals(false, hasMore)
+            assertEquals(listOf(50), short.windowLimits)
+            shortJob.cancel()
+            collectJob.cancel()
+        }
+
     private fun sessionStore(
         repository: FakeSessionRepository,
         eventStream: FakeForegroundEventStream,
@@ -3953,6 +4043,18 @@ private class FakeSessionRepository(
     val questionScript: MutableList<Pair<Long, List<QuestionRequest>>> = mutableListOf()
     var questions: List<QuestionRequest> = emptyList()
 
+    /** Limit of each Home window request, in order. */
+    val windowLimits = mutableListOf<Int>()
+
+    override suspend fun listRootSessionsWindow(
+        directory: String?,
+        limit: Int,
+    ): SessionWindow {
+        windowLimits += limit
+        val rows = listSessions(directory).take(limit)
+        return SessionWindow(sessions = rows, hasMore = rows.size == limit)
+    }
+
     override suspend fun listSessions(directory: String?): List<Session> {
         listSessionsCallCount += 1
         nextListGate?.also {
@@ -4085,5 +4187,6 @@ private class FakeSessionRepository(
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
+        message: String?,
     ): Boolean = error("unused")
 }

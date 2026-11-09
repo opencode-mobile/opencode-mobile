@@ -70,10 +70,16 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.goal.SessionGoalAction
+import dev.opencode.mobile.domain.message.TimelineNotice
+import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageLabel
+import dev.opencode.mobile.ui.sessionchat.SessionChatGoalTimeline
+import dev.opencode.mobile.ui.sessionchat.SessionChatGoalUiState
 import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.domain.message.MessageRole
@@ -246,6 +252,11 @@ internal data class SessionChatTimelineViewProps(
     val onOpenImageViewer: (galleryId: String, index: Int) -> Unit = { _, _ -> },
     val onImageViewerPageChange: (index: Int) -> Unit = {},
     val onDismissImageViewer: () -> Unit = {},
+    /** The session's `/goal`: the first context pill, its timeline rows and status row (#1007). */
+    val goal: SessionChatGoalUiState? = null,
+    val onGoalClick: () -> Unit = {},
+    val onGoalAction: (SessionGoalAction) -> Unit = {},
+    val onNewGoal: () -> Unit = {},
 )
 
 @Composable
@@ -292,13 +303,8 @@ private fun SessionChatTimelineStateContent(
     modifier: Modifier,
 ) {
     when (props.timeline) {
-        SessionChatTimelineState.Creating ->
-            OpenCodeStatusStack(
-                title = stringResource(R.string.timeline_state_creating_title),
-                subtitle = stringResource(R.string.timeline_state_creating_subtitle),
-                testTag = "sessionChatCreating",
-                modifier = modifier.fillMaxSize(),
-            )
+        // The screen shows the draft's Run session in card instead of a timeline.
+        SessionChatTimelineState.Draft -> Box(modifier = modifier.fillMaxSize())
 
         SessionChatTimelineState.Loading ->
             OpenCodeStatusStack(
@@ -343,7 +349,17 @@ private fun SessionChatTimelineStateContent(
             val galleryLoader = remember(serverImageLoader) { SessionChatGalleryImageLoader(serverImageLoader) }
             // Swaps what the loader can resolve without recomposing the timeline for it.
             galleryLoader.update(props.messages)
+            val timelineMessages =
+                remember(props.messages, props.goal) { SessionChatGoalTimeline.withStatusRow(props.messages, props.goal) }
+            val goalContext =
+                SessionChatGoalTimelineContext(
+                    goal = props.goal,
+                    onOpenSheet = props.onGoalClick,
+                    onAction = props.onGoalAction,
+                    onNewGoal = props.onNewGoal,
+                )
             CompositionLocalProvider(
+                LocalSessionChatGoal provides goalContext,
                 LocalHideLiveRetryFailures provides props.hideLiveRetryFailures,
                 LocalRetryCountdownBlockId provides retryCountdownBlockId,
                 LocalNoticeModelNames provides props.noticeModelNames,
@@ -351,7 +367,7 @@ private fun SessionChatTimelineStateContent(
                 LocalOpenImageViewer provides props.onOpenImageViewer,
             ) {
             SessionChatTimelineReadyView(
-                messages = props.messages,
+                messages = timelineMessages,
                 timelineFrame = props.timelineFrame,
                 isRefreshing = props.isRefreshing,
                 hasOlder = props.hasOlder,
@@ -392,6 +408,8 @@ private fun SessionChatTimelineStateContent(
                 activityCardFooters = props.activityCardFooters,
                 debouncedStepIds = props.debouncedStepIds,
                 onOpenActivityCard = props.onOpenActivityCard,
+                goal = props.goal,
+                onGoalClick = props.onGoalClick,
                 modifier = modifier,
             )
             ActivityCardSheet(props = props)
@@ -451,6 +469,8 @@ private fun SessionChatTimelineReadyView(
     activityCardFooters: Map<String, SessionChatActivityFooter>,
     debouncedStepIds: Set<String>,
     onOpenActivityCard: (blockId: String) -> Unit,
+    goal: SessionChatGoalUiState?,
+    onGoalClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -733,6 +753,7 @@ private fun SessionChatTimelineReadyView(
                 todosCompleted = sessionTodoCompletedCount.takeIf { sessionTodosVisible },
                 todosTotal = sessionTodoTotalCount.takeIf { sessionTodosVisible },
                 branch = sessionBranchPill,
+                goal = goal,
             )
         LaunchedEffect(contextItems.isEmpty()) {
             if (contextItems.isEmpty()) {
@@ -747,6 +768,7 @@ private fun SessionChatTimelineReadyView(
                 onTodosClick = onSessionTodosClick,
                 onBranchClick = onSessionBranchClick,
                 onBranchCopied = onSessionBranchCopied,
+                onGoalClick = onGoalClick,
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)
@@ -948,6 +970,10 @@ private fun SessionChatMessageRow(
                             { openMessageActions(showsRevertMessage = true) }
                         },
                     onImageClick = LocalOpenImageViewer.current,
+                    label =
+                        message.goalKickoffId?.let {
+                            OpenCodeOutgoingMessageLabel(stringResource(R.string.session_chat_goal_bubble_label), SessionChatGoalIcon)
+                        },
                 )
 
             MessageRole.Assistant ->
@@ -977,8 +1003,11 @@ private fun SessionChatMessageRow(
 
             MessageRole.Notice ->
                 message.blocks.forEach { block ->
-                    if (block is SessionChatTimelineBlock.Notice) {
-                        key(block.blockID) { TimelineNoticeBlock(block) }
+                    when {
+                        block is SessionChatTimelineBlock.GoalStatus -> key(block.blockID) { SessionChatGoalStatusRow() }
+                        block is SessionChatTimelineBlock.Notice && block.notice is TimelineNotice.GoalSet ->
+                            key(block.blockID) { SessionChatGoalSetRow(block.notice) }
+                        block is SessionChatTimelineBlock.Notice -> key(block.blockID) { TimelineNoticeBlock(block) }
                     }
                 }
 
@@ -1030,6 +1059,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
             is SessionChatTimelineBlock.StopNote,
             is SessionChatTimelineBlock.FailureLine,
             is SessionChatTimelineBlock.Notice,
+            is SessionChatTimelineBlock.GoalStatus,
             -> null
         }
     }
@@ -1119,6 +1149,7 @@ private fun AssistantMessageContent(
                             additions = block.additions,
                             deletions = block.deletions,
                             errorText = block.errorText?.resolve(),
+                            noteText = block.noteText?.resolve(),
                             onClick = toolCardAction(block),
                         )
                     is SessionChatTimelineBlock.ToolGroup ->
@@ -1177,6 +1208,7 @@ private fun AssistantMessageContent(
                                 },
                         )
                     is SessionChatTimelineBlock.Notice -> TimelineNoticeBlock(block)
+                    is SessionChatTimelineBlock.GoalStatus -> Unit
                     is SessionChatTimelineBlock.FailureLine -> {
                         if (!LocalHideLiveRetryFailures.current || !block.coveredByLiveRetry) {
                             FailureLineBlock(
@@ -1719,6 +1751,16 @@ private fun StepParagraphBlock(
                 text = line.resolve(),
                 style = MaterialTheme.typography.bodySmall,
                 color = openCodeColor("error"),
+                modifier = Modifier.padding(horizontal = StepParagraphTextPaddingHorizontal),
+            )
+        }
+        block.noteLines.forEach { line ->
+            Text(
+                text = line.resolve(),
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-weak"),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = StepParagraphTextPaddingHorizontal),
             )
         }
