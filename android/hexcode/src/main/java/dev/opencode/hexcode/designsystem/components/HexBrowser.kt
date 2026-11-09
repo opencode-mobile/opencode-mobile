@@ -48,12 +48,16 @@ data class HexBrowserLabels(
     val loading: String,
 )
 
-/** The page area's error: a title, a detail and a button. */
+/** The page area's error: a title, a detail and a button, and maybe a second, quieter one before it. */
 data class HexBrowserError(
     val title: String,
     val detail: String,
     val button: String,
     val onClick: () -> Unit,
+    /** The button's icon: Try again's `refresh`; null for none (Done). */
+    val icon: androidx.compose.ui.graphics.vector.ImageVector? = HexIcons.refresh,
+    /** A second button, after the first: "Turn on…" beside Done. */
+    val second: HexSheetAction? = null,
 )
 
 /**
@@ -163,7 +167,12 @@ fun HexBrowser(
                     )
                     Text(error.detail, style = HexTheme.type.body, color = colors.text2)
                     Spacer(Modifier.height(4.dp))
-                    HexButton(onClick = error.onClick, text = error.button, icon = HexIcons.refresh, size = HexButtonSize.Regular)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HexButton(onClick = error.onClick, text = error.button, icon = error.icon, size = HexButtonSize.Regular)
+                        error.second?.let {
+                            HexButton(onClick = it.onClick, text = it.label, style = HexButtonStyle.Primary, size = HexButtonSize.Regular)
+                        }
+                    }
                 }
             }
         }

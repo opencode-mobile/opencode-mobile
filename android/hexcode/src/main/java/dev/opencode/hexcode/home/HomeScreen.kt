@@ -138,6 +138,7 @@ import dev.opencode.hexcode.designsystem.components.HexToastTone
 import dev.opencode.hexcode.designsystem.components.rememberHexTalkHold
 import dev.opencode.hexcode.designsystem.rememberScreenReaderOn
 import dev.opencode.hexcode.session.AgentStatus
+import dev.opencode.hexcode.session.ArtifactsState
 import dev.opencode.hexcode.session.GoalStatus
 import dev.opencode.hexcode.session.PromptFiles
 import dev.opencode.hexcode.session.SessionSetup
@@ -159,8 +160,16 @@ fun HomeScreen(
     serverName: String? = null,
     /** Signed out's Pair again. */
     onPairAgain: () -> Unit = {},
+    /** The address in use and the signed-in client, for the in-app browser's artifacts; null before pairing. */
+    artifactAddress: String? = null,
+    artifactFetcher: ArtifactFetcher? = null,
+    /** The computer's home folder, for shorter paths in the artifacts sheet. */
+    serverHome: String? = null,
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val artifacts by vm.artifacts.collectAsStateWithLifecycle()
+    // An artifact tile's page, in the in-app browser over home.
+    var artifactPage by remember { mutableStateOf<ArtifactPage?>(null) }
     val context = LocalContext.current
     var micAllowed by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
@@ -199,7 +208,14 @@ fun HomeScreen(
         ) {
             // Behind an open sheet or the browser, nothing of home is reachable with TalkBack.
             val covered =
-                attachOpen || state.detailsOpen || state.needs != null || state.goalSheet != null || browser != null || reader != null
+                attachOpen ||
+                    state.detailsOpen ||
+                    state.needs != null ||
+                    state.goalSheet != null ||
+                    browser != null ||
+                    reader != null ||
+                    artifactPage != null ||
+                    artifacts.setup?.hidden == false
             Column(
                 Modifier
                     .fillMaxSize()
@@ -267,6 +283,9 @@ fun HomeScreen(
                                         serverName = serverName,
                                         onPairAgain = onPairAgain,
                                         onReadYou = { reader = ReaderOpen.YouSaid },
+                                        artifactsShown =
+                                            artifacts.state != ArtifactsState.Off && artifacts.state != ArtifactsState.Unavailable,
+                                        onOpenArtifact = { artifactPage = ArtifactPage(it.id, it.title) },
                                         modifier = Modifier.fadeInOnArrival(ColdStart.cardStage(today)),
                                     )
                                 } else {
@@ -539,6 +558,14 @@ fun HomeScreen(
             DraftReader(reader, state, vm, onClose = { reader = null })
             NeedsSheets(state, vm, micReady)
             GoalSheetView(state, vm, micReady)
+            // The artifacts sheet over home (from the hint or the browser's Turn on…), its notices and the hint.
+            ArtifactSheets(
+                artifacts,
+                vm,
+                serverName ?: stringResource(R.string.server_this_computer),
+                serverHome,
+                showHint = true,
+            )
             // Notices and the stop warning show over any open sheet.
             HexToastHost(
                 message = notice,
@@ -567,6 +594,30 @@ fun HomeScreen(
         AnimatedVisibility(browser != null, enter = fadeIn(HexTheme.motion.fade()), exit = fadeOut(HexTheme.motion.fade())) {
             val page = browser
             if (page != null) InAppBrowser(page, serverName ?: stringResource(R.string.server_this_computer), onClose = { browser = null })
+        }
+        AnimatedVisibility(
+            artifactPage != null && artifactAddress != null && artifactFetcher != null,
+            enter = fadeIn(HexTheme.motion.fade()),
+            exit = fadeOut(HexTheme.motion.fade()),
+        ) {
+            val page = artifactPage
+            if (page != null && artifactAddress != null && artifactFetcher != null) {
+                ArtifactBrowser(
+                    page,
+                    artifactAddress,
+                    artifactFetcher,
+                    serverName ?: stringResource(R.string.server_this_computer),
+                    onClose = { artifactPage = null },
+                    onSignedOut = {
+                        artifactPage = null
+                        vm.artifactSignedOut()
+                    },
+                    onTurnOn = {
+                        artifactPage = null
+                        vm.turnOnArtifacts()
+                    },
+                )
+            }
         }
     }
 }

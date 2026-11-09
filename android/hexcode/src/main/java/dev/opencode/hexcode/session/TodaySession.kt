@@ -307,6 +307,8 @@ class TodaySession(
     private val goalSettleMs: Long = GOAL_SETTLE_MS,
     /** Runs at the start of every setup: renewing the sign-in and reading the server's version. Never fails it. */
     private val beforeSetup: suspend () -> Unit = {},
+    /** Artifacts (app-plan.md, Artifacts (M8)): their state, rule and tile; the enable flow. None in the samples. */
+    val artifacts: ArtifactsFeature? = null,
 ) {
     private val own = MutableStateFlow(TodayState())
 
@@ -321,6 +323,12 @@ class TodaySession(
                 override suspend fun summarise(prompt: String) = api.summarise(sessionId ?: error("No session open"), prompt)
 
                 override suspend fun updatedAt() = sessionId?.let { api.updatedAt(it) }
+
+                override suspend fun artifact(): ArtifactRead {
+                    val feature = artifacts ?: return ArtifactRead.Keep
+                    val root = sessionId ?: return ArtifactRead.Keep
+                    return feature.tile(root, live?.childInfo?.keys.orEmpty())
+                }
             },
             clock,
             summaryTimeoutMs,
@@ -389,6 +397,7 @@ class TodaySession(
         stream?.onConnected = ::connected
         stream?.onDisconnected = { own.update { it.copy(streamUp = false) } }
         stream?.onEvent = ::received
+        stream?.onLine = { line -> artifacts?.line(line) }
     }
 
     /** Stops following today's session: the stream closes and nothing more is asked (the computer was forgotten). */
@@ -400,8 +409,20 @@ class TodaySession(
         sessionId = null
         live = null
         summary.clear()
+        artifacts?.closed()
         publish()
         own.update { TodayState() }
+    }
+
+    /**
+     * A signed-in call outside the session's own (the in-app browser's artifact) answered `401`: home shows Signed out,
+     * as setup does (app-plan.md, Settings and finish (M6) › Signed out).
+     */
+    fun signedOut() {
+        opening?.cancel()
+        stream?.stop()
+        summary.clear()
+        own.update { it.copy(setup = SessionSetup.SignedOut) }
     }
 
     /** Finds or creates today's session and follows it. A new session shows the empty card; one that ran, a summary. */
@@ -855,6 +876,7 @@ class TodaySession(
         stopWatch = null
         summary.open(session.id, date, directory)
         asking.open(session.id)
+        artifacts?.opened(session.id)
         own.update { it.copy(readBack = false) }
         publish(streamUp = true)
         // Without a stream nothing is read back: the top bar shows the state at once.
@@ -870,6 +892,7 @@ class TodaySession(
 
     private suspend fun connected() {
         own.update { it.copy(streamUp = true) }
+        artifacts?.reconnected()
         val root = live?.rootId ?: return
         var updatedAt: Long? = null
         // Today's goal on every (re)connect, beside the rest; a failed read keeps the goal shown.

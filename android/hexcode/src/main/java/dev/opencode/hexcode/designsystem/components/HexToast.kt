@@ -56,6 +56,9 @@ enum class HexToastTone {
 
     /** The undo arrow in `text2`: something was taken away, such as a dropped take or a deleted chunk. */
     Undo,
+
+    /** The compass in `text2`: about artifacts, such as the one-time hint. */
+    Artifact,
 }
 
 /** One notice for [HexToastHost]. A new [id] shows it again, even with the same text. */
@@ -99,6 +102,7 @@ fun HexToast(
             HexToastTone.Steer -> HexIcons.steer to colors.green
             HexToastTone.Sun -> HexIcons.sun to colors.text2
             HexToastTone.Undo -> HexIcons.undo to colors.text2
+            HexToastTone.Artifact -> HexIcons.compass to colors.text2
         }
     Row(
         verticalAlignment = Alignment.CenterVertically,

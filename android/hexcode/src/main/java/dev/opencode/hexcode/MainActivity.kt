@@ -376,6 +376,9 @@ private fun AfterFirstRun(
     val takeFile = remember { services.takeAudio?.let { File(it).takeIf(File::isAbsolute) ?: File(context.filesDir, it) } }
     // Where link tiles for `localhost` open: the paired computer, as the phone reaches it.
     val computer by produceState<String?>(null) { value = services.computerAddress() }
+    // Where artifact tiles open: the address in use, each file fetched by the signed-in client.
+    val serverAddress by produceState<String?>(null, serverRead) { value = services.serverAddress() }
+    val artifactFetcher = remember(prefs.project?.path) { services.artifactsApi.fetcher(prefs.project?.path.orEmpty()) }
     // Today's session reads the latest choices when it opens, so a change made in Settings reaches the next open.
     val latest by rememberUpdatedState(prefs)
     // A new sample (or Off) is a new home: the session starts again from opening.
@@ -480,6 +483,7 @@ private fun AfterFirstRun(
     val pairedDetail = stringResource(R.string.server_paired_sub, server?.name.orEmpty())
     val addresses by produceState<ServerAddresses?>(null, page, serverRead) { value = services.serverAddresses() }
     val homeUi by homeModel.uiState.collectAsStateWithLifecycle()
+    val artifactsUi by homeModel.artifacts.collectAsStateWithLifecycle()
     // Debug builds: `--es HexCodePair <link>` with first run done pairs again with that code.
     var debugPair by remember { mutableStateOf(pairLink) }
     LaunchedEffect(pageState.step) {
@@ -523,6 +527,9 @@ private fun AfterFirstRun(
                         computer = computer,
                         serverName = server?.name,
                         onPairAgain = { pairingAgain = true },
+                        artifactAddress = serverAddress,
+                        artifactFetcher = artifactFetcher,
+                        serverHome = home,
                     )
                 }
                 Page.Settings ->
@@ -571,6 +578,9 @@ private fun AfterFirstRun(
                             homeModel.shutDown()
                             services.forget()
                         },
+                        artifacts = artifactsUi,
+                        artifactActions = homeModel,
+                        serverHome = home,
                     )
                 Page.SettingsProject, Page.SettingsBrowse, Page.SettingsModel -> SettingsPage(pages, pageState, current)
                 Page.SettingsGallery -> HexGallery(galleryDark, { galleryDark = it }, onBack = { page = Page.Settings })

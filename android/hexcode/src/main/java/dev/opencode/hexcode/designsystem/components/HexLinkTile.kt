@@ -52,6 +52,9 @@ enum class HexLinkKind {
 
     /** A page served by the computer the agent runs on: the monitor, before the computer's address. */
     Local,
+
+    /** An artifact the agent published (app-plan.md, Artifacts (M8)): the compass, before "Artifact". */
+    Artifact,
 }
 
 /**
@@ -98,7 +101,11 @@ fun HexLinkTile(
                     .background(colors.tint(6f)),
         ) {
             Icon(
-                if (kind == HexLinkKind.Local) HexIcons.monitor else HexIcons.globe,
+                when (kind) {
+                    HexLinkKind.Local -> HexIcons.monitor
+                    HexLinkKind.Artifact -> HexIcons.compass
+                    HexLinkKind.Web -> HexIcons.globe
+                },
                 null,
                 tint = colors.text2,
                 modifier = Modifier.size(HexTheme.size.iconSmall),
@@ -108,7 +115,11 @@ fun HexLinkTile(
             Text(label, style = HexTheme.type.callout, color = colors.text1, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 Icon(
-                    if (kind == HexLinkKind.Local) HexIcons.monitor else HexIcons.out,
+                    when (kind) {
+                        HexLinkKind.Local -> HexIcons.monitor
+                        HexLinkKind.Artifact -> HexIcons.compass
+                        HexLinkKind.Web -> HexIcons.out
+                    },
                     null,
                     tint = colors.text3,
                     modifier = Modifier.size(11.dp),

@@ -84,6 +84,7 @@ import dev.opencode.hexcode.designsystem.components.HexTileRow
 import dev.opencode.hexcode.designsystem.components.HexTopBar
 import dev.opencode.hexcode.designsystem.components.rememberTurn
 import dev.opencode.hexcode.session.AgentStatus
+import dev.opencode.hexcode.session.ArtifactTile
 import dev.opencode.hexcode.session.NowLine
 import dev.opencode.hexcode.session.PendingItem
 import dev.opencode.hexcode.session.PromptFiles
@@ -176,9 +177,12 @@ internal fun StatusArea(
     onPairAgain: () -> Unit = {},
     /** "N words · Read all ›" under a clamped You line. */
     onReadYou: () -> Unit = {},
+    /** The card's artifact tile shows (artifacts aren't off or unavailable), and opens [onOpenArtifact]. */
+    artifactsShown: Boolean = false,
+    onOpenArtifact: (ArtifactTile) -> Unit = {},
 ) {
     val summary = today.summary
-    val links = Links(computer, onOpenLink)
+    val links = Links(computer, onOpenLink, summary.artifact?.takeIf { artifactsShown }, onOpenArtifact)
     val phase =
         when {
             today.pendingInput != null -> CardPhase.Waiting
@@ -396,10 +400,15 @@ private enum class CardPhase {
     Waiting,
 }
 
-/** Where link tiles open: the paired [computer]'s address for `localhost` links, and [open] for a tap (url, label). */
+/**
+ * Where link tiles open: the paired [computer]'s address for `localhost` links, and [open] for a tap (url, label); the
+ * card's [artifact], first in the row, and where it opens.
+ */
 private class Links(
     val computer: String?,
     val open: (String, String) -> Unit,
+    val artifact: ArtifactTile? = null,
+    val openArtifact: (ArtifactTile) -> Unit = {},
 )
 
 /**
@@ -459,8 +468,20 @@ private fun Card(
                         ),
             )
     }
-    if (tiles.isNotEmpty() && links != null) {
+    val artifact = links?.artifact
+    if ((tiles.isNotEmpty() || artifact != null) && links != null) {
         HexTileRow(Modifier.alpha(dim)) {
+            // The newest artifact of the latest run comes first (app-plan.md, Artifacts (M8) › Using it).
+            if (artifact != null) {
+                val kind = stringResource(R.string.home_tile_artifact)
+                HexLinkTile(
+                    label = artifact.title,
+                    host = kind,
+                    kind = HexLinkKind.Artifact,
+                    accessibilityLabel = "$kind, ${artifact.title}",
+                    onClick = { links.openArtifact(artifact) },
+                )
+            }
             tiles.forEach { link ->
                 HexLinkTile(
                     label = link.label,

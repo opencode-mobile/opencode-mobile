@@ -44,6 +44,9 @@ class LiveEventStream(
     var onDisconnected: () -> Unit = {}
     var onEvent: (SessionEvent) -> Unit = {}
 
+    /** Every `data:` payload as it came, before it's read for today's session (the artifact feature reads its own). */
+    var onLine: (String) -> Unit = {}
+
     private var loop: Job? = null
     private var attemptJob: Job? = null
     private val wakes = Channel<Unit>(Channel.CONFLATED)
@@ -125,6 +128,7 @@ class LiveEventStream(
                     outcome =
                         try {
                             transport.connect(onActivity = { restartWatchdog() }) { line ->
+                                onLine(line)
                                 val event = SessionEvent.decode(line) ?: return@connect
                                 if (event == SessionEvent.Connected) {
                                     attempt = 0

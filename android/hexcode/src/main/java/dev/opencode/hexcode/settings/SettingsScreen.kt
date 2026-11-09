@@ -56,7 +56,13 @@ import dev.opencode.hexcode.designsystem.components.HexToastMessage
 import dev.opencode.hexcode.designsystem.components.HexToastTone
 import dev.opencode.hexcode.firstrun.PageTop
 import dev.opencode.hexcode.firstrun.ServerLabel
+import dev.opencode.hexcode.home.ArtifactActions
+import dev.opencode.hexcode.home.ArtifactSheets
+import dev.opencode.hexcode.session.ArtifactsState
+import dev.opencode.hexcode.session.ArtifactsUi
 import dev.opencode.hexcode.session.NewSessionOutcome
+import dev.opencode.hexcode.session.SetupMode
+import dev.opencode.hexcode.session.SetupStage
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import kotlinx.coroutines.launch
 
@@ -101,6 +107,11 @@ fun SettingsScreen(
     onPairAgain: () -> Unit = {},
     /** Forget this computer, after its confirmation. */
     onForget: suspend () -> Unit = {},
+    /** Artifacts on the computer (app-plan.md, Artifacts (M8)): the row's state, and its sheets' actions. */
+    artifacts: ArtifactsUi = ArtifactsUi(ArtifactsState.Unavailable),
+    artifactActions: ArtifactActions? = null,
+    /** The computer's home folder, for shorter paths in the artifacts sheet. */
+    serverHome: String? = null,
 ) {
     var sheet by remember { mutableStateOf<SettingsSheet?>(null) }
     var working by remember { mutableStateOf(false) }
@@ -113,7 +124,8 @@ fun SettingsScreen(
     val failedTitle = stringResource(R.string.settings_new_session_failed)
     val failedDetail = stringResource(R.string.settings_new_session_failed_sub)
     Box(Modifier.fillMaxSize().systemBarsPadding()) {
-        Column(Modifier.fillMaxSize().then(if (sheet != null) Modifier.clearAndSetSemantics {} else Modifier)) {
+        val artifactsOpen = artifacts.setup?.hidden == false
+        Column(Modifier.fillMaxSize().then(if (sheet != null || artifactsOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
             PageTop(
                 stringResource(R.string.settings_title),
                 server?.let { label ->
@@ -134,6 +146,7 @@ fun SettingsScreen(
                 HexSectionLabel(stringResource(R.string.settings_agent))
                 Row(HexIcons.cpu, stringResource(R.string.settings_model), modelName, null, onModel)
                 Row(HexIcons.spark, stringResource(R.string.settings_reasoning), reasoningValue(prefs), null, onModel)
+                ArtifactsRow(artifacts, onClick = { artifactActions?.openArtifacts() })
                 HexSectionLabel(stringResource(R.string.settings_dictation))
                 Row(
                     HexIcons.mic,
@@ -251,6 +264,15 @@ fun SettingsScreen(
             danger = true,
             loading = working && sheet == SettingsSheet.Forget,
         )
+        if (artifactActions != null) {
+            ArtifactSheets(
+                artifacts,
+                artifactActions,
+                server?.name ?: stringResource(R.string.server_this_computer),
+                serverHome,
+                noticeTop = 72.dp,
+            )
+        }
         HexToastHost(
             message = notYet ?: notice,
             onDismissed = {
@@ -261,6 +283,64 @@ fun SettingsScreen(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp),
         )
     }
+}
+
+/**
+ * Settings › Agent › Artifacts (app-plan.md, Artifacts (M8) › Settings row): On · Off · Turning on… · Needs you · Not
+ * available. Tapping opens the enable sheet, or the turn-off sheet while on; nothing while checking or unavailable.
+ */
+@Composable
+private fun ArtifactsRow(
+    artifacts: ArtifactsUi,
+    onClick: () -> Unit,
+) {
+    val flow = artifacts.setup
+    val running = flow?.stage == SetupStage.Running && flow.approval == null
+    val needsYou = flow != null && flow.needsYou
+    val value =
+        when {
+            needsYou -> stringResource(R.string.settings_artifacts_needs_you)
+            running ->
+                stringResource(
+                    if (flow.mode ==
+                        SetupMode.On
+                    ) {
+                        R.string.settings_artifacts_turning_on
+                    } else {
+                        R.string.settings_artifacts_turning_off
+                    },
+                )
+            else ->
+                when (artifacts.state) {
+                    ArtifactsState.On -> stringResource(R.string.settings_artifacts_on)
+                    ArtifactsState.Off -> stringResource(R.string.settings_artifacts_off)
+                    ArtifactsState.Unavailable -> stringResource(R.string.settings_artifacts_unavailable)
+                    ArtifactsState.Checking -> null
+                }
+        }
+    val subtitle =
+        when {
+            flow?.approval != null -> stringResource(R.string.settings_artifacts_approval_sub)
+            flow?.stage is SetupStage.Damaged -> stringResource(R.string.artifacts_broken_title)
+            flow?.stage is SetupStage.Fallback -> stringResource(R.string.artifacts_flow_not_changed)
+            running -> null
+            else ->
+                when (artifacts.state) {
+                    ArtifactsState.On -> stringResource(R.string.settings_artifacts_on_sub)
+                    ArtifactsState.Off -> stringResource(R.string.settings_artifacts_off_sub)
+                    ArtifactsState.Unavailable -> stringResource(R.string.settings_artifacts_unavailable_sub)
+                    ArtifactsState.Checking -> null
+                }
+        }
+    val tappable = artifacts.state == ArtifactsState.On || artifacts.state == ArtifactsState.Off || flow != null
+    HexRow(
+        title = stringResource(R.string.settings_artifacts),
+        icon = HexIcons.compass,
+        subtitle = subtitle,
+        value = value,
+        trailing = if (tappable) HexRowTrailing.Chevron else HexRowTrailing.None,
+        onClick = if (tappable) onClick else null,
+    )
 }
 
 /** The sheet open over Settings. */

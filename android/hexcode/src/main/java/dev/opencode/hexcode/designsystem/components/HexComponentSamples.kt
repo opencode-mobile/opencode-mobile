@@ -102,6 +102,7 @@ val HexComponentSamples: List<HexSampleSection> =
         HexSampleSection("HexConfirmSheet, HexReader") { ConfirmAndReaderSample() },
         HexSampleSection("HexStatusFailure") { StatusFailureSample() },
         HexSampleSection("HexBrowser") { BrowserSample() },
+        HexSampleSection("HexSteps") { StepsSample() },
     )
 
 /** A section's heading, in the gallery and the previews: component names, so not upper-cased like HexSectionLabel. */
@@ -841,6 +842,7 @@ private fun ToastSample() {
             HexToast("Build copied", HexToastTone.Steer)
             HexToast("New day, new session", HexToastTone.Sun, detail = "Yesterday’s is kept on your computer.")
             HexToast("Take dropped", HexToastTone.Undo, detail = "Earlier parts of the draft are kept.")
+            HexToast("Open pages like this on your phone", HexToastTone.Artifact, actionLabel = "Turn on artifacts")
         }
         StateSample("with an action, a long detail on one line") {
             HexToast(
@@ -903,6 +905,12 @@ private fun LinkTileSample() {
         StateSample("web (HexLinkKind.Web) and the computer (HexLinkKind.Local)") {
             HexTileRow(Modifier.fillMaxWidth()) {
                 HexLinkTile("Pull request", "github.com", HexLinkKind.Web, "Open Pull request", onClick = {})
+                HexLinkTile("Dev server", "192.168.1.20:5173", HexLinkKind.Local, "Open Dev server", onClick = {})
+            }
+        }
+        StateSample("an artifact (HexLinkKind.Artifact), first in the row") {
+            HexTileRow(Modifier.fillMaxWidth()) {
+                HexLinkTile("Login page preview", "Artifact", HexLinkKind.Artifact, "Artifact, Login page preview", onClick = {})
                 HexLinkTile("Dev server", "192.168.1.20:5173", HexLinkKind.Local, "Open Dev server", onClick = {})
             }
         }
@@ -1337,7 +1345,8 @@ private fun BrowserSample() {
                                 "Couldn’t reach port 5173 on Bold Quokka",
                                 "The dev server may only listen on the computer itself. Start it so it listens on the network (for Vite, add --host), then try again.",
                                 "Try again",
-                            ) {}
+                                onClick = {},
+                            )
                         } else {
                             null
                         },
@@ -1345,6 +1354,65 @@ private fun BrowserSample() {
                     Box(Modifier.fillMaxSize().background(Color.White))
                 }
             }
+        }
+        // An artifact: "<computer> · artifact", no Open in browser, and its 403 with Done and Turn on….
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .clip(RoundedCornerShape(HexTheme.radius.l))
+                .border(1.dp, HexTheme.colors.line),
+        ) {
+            HexBrowser(
+                title = "Login page preview",
+                host = "Bold Quokka · artifact",
+                progress = null,
+                canGoBack = false,
+                canGoForward = false,
+                labels = labels.copy(openSystem = null),
+                onDone = {},
+                onReload = {},
+                onBack = {},
+                onForward = {},
+                onOpenSystem = {},
+                error =
+                    HexBrowserError(
+                        "Artifacts are off on Bold Quokka",
+                        "Turn on experimental.artifacts in OpenCode’s config there.",
+                        "Done",
+                        onClick = {},
+                        icon = null,
+                        second = HexSheetAction("Turn on…") {},
+                    ),
+            ) {
+                Box(Modifier.fillMaxSize().background(Color.White))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepsSample() {
+    Edge {
+        StateSample("Todo, Doing, Dimmed, Warn (with a button), Done, Failed") {
+            HexSteps(
+                listOf(
+                    HexStep(HexStepState.Done, "Sent to the agent", "Hex Code setup · a separate session"),
+                    HexStep(HexStepState.Dimmed, "Agent is working", "Waiting for your approval", live = true),
+                    HexStep(HexStepState.Warn, "Approval needed", "Edit opencode.json", action = HexSheetAction("Review") {}),
+                    HexStep(HexStepState.Doing, "Checking Bold Quokka", "Every 2 s", live = true),
+                    HexStep(HexStepState.Todo, "Artifacts are on"),
+                ),
+            )
+        }
+        StateSample("a step that didn't happen (HexStepState.Failed)") {
+            HexSteps(
+                listOf(
+                    HexStep(HexStepState.Done, "Sent to the agent", "Hex Code setup · a separate session"),
+                    HexStep(HexStepState.Failed, "The agent didn’t change it", "~/.config/opencode/opencode.json"),
+                    HexStep(HexStepState.Todo, "Checking Bold Quokka", "Asks the artifact route whether it answers"),
+                ),
+            )
         }
     }
 }

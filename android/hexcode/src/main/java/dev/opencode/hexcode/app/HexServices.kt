@@ -14,6 +14,7 @@ import dev.opencode.hexcode.home.BrowserData
 import dev.opencode.hexcode.home.ImageInput
 import dev.opencode.hexcode.home.TalkLog
 import dev.opencode.hexcode.home.UploadRoute
+import dev.opencode.hexcode.session.ArtifactsFeature
 import dev.opencode.hexcode.session.DailySessionSetup
 import dev.opencode.hexcode.session.EventsApiTransport
 import dev.opencode.hexcode.session.OpenCodeTodayApi
@@ -189,7 +190,26 @@ class HexServices(
             model = model,
             summaryStore = settings,
             askStore = settings,
+            artifacts = ArtifactsFeature(scope, artifactsApi, settings, directory, model),
         )
+    }
+
+    /** Artifacts' calls (app-plan.md, Artifacts (M8)); the in-app browser fetches an artifact's files through it too. */
+    val artifactsApi by lazy {
+        OpenCodeArtifactsApi(
+            httpClient,
+            sessions,
+            AttachmentUploadApi(httpClient),
+            json,
+            java.io.File(appContext.cacheDir, "artifacts"),
+            ready = { connectionLoaded.await() },
+        )
+    }
+
+    /** The address in use, for the in-app browser's artifact pages; null before pairing. */
+    suspend fun serverAddress(): String? {
+        connectionLoaded.await()
+        return connection.current()?.baseUrl
     }
 
     /** Debug builds: the model counts as unable to see images (`--ez HexCodeNoVision true`). */

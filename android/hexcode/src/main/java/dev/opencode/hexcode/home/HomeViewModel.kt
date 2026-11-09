@@ -9,6 +9,8 @@ import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.session.AgentStatus
 import dev.opencode.hexcode.session.ApprovalDecision
+import dev.opencode.hexcode.session.ArtifactsState
+import dev.opencode.hexcode.session.ArtifactsUi
 import dev.opencode.hexcode.session.GoalAction
 import dev.opencode.hexcode.session.GoalCommand
 import dev.opencode.hexcode.session.GoalOutcome
@@ -22,6 +24,8 @@ import dev.opencode.hexcode.session.QuestionAnswers
 import dev.opencode.hexcode.session.RecentStep
 import dev.opencode.hexcode.session.RequestGoneException
 import dev.opencode.hexcode.session.SessionSetup
+import dev.opencode.hexcode.session.SetupMode
+import dev.opencode.hexcode.session.SetupStage
 import dev.opencode.hexcode.session.StopOutcome
 import dev.opencode.hexcode.session.TodaySession
 import dev.opencode.hexcode.session.TodayState
@@ -624,11 +628,84 @@ class HomeViewModel(
     /** Copies picked files into the cache and uploads them to the computer (app-plan.md, Attach files). */
     private val files: FileAttacher = NoFileAttacher,
     private val clock: () -> Long = System::currentTimeMillis,
-) : ViewModel() {
+) : ViewModel(),
+    ArtifactActions {
     private val state = MutableStateFlow(HomeUiState(speech = dictation.speech.value))
     val uiState: StateFlow<HomeUiState> = state.asStateFlow()
 
     private val session: TodaySession? = makeSession?.invoke(viewModelScope)
+
+    /**
+     * Artifacts on the paired computer (app-plan.md, Artifacts (M8)): their state, the enable flow and the hint, for
+     * home and Settings. Not available in the sample sessions.
+     */
+    val artifacts: StateFlow<ArtifactsUi> =
+        session?.artifacts?.state ?: MutableStateFlow(ArtifactsUi(ArtifactsState.Unavailable)).asStateFlow()
+
+    override fun openArtifacts() {
+        val feature = session?.artifacts ?: return
+        val ui = feature.state.value
+        val flow = ui.setup
+        when {
+            // A flow that's still going (or waits for the person) shows again.
+            flow != null && (flow.watching || flow.stage is SetupStage.Damaged) -> feature.setup.start(flow.mode)
+            ui.state == ArtifactsState.On -> feature.setup.start(SetupMode.Off)
+            ui.state == ArtifactsState.Off -> feature.setup.start(SetupMode.On)
+            else -> Unit
+        }
+    }
+
+    override fun sendArtifactsPrompt() {
+        session?.artifacts?.setup?.send()
+    }
+
+    override fun hideArtifacts() {
+        session?.artifacts?.setup?.hide()
+    }
+
+    override fun closeArtifacts() {
+        session?.artifacts?.setup?.close()
+    }
+
+    override fun allowArtifactsEdit() {
+        session?.artifacts?.setup?.allowOnce()
+    }
+
+    override fun rejectArtifactsEdit() {
+        session?.artifacts?.setup?.reject()
+    }
+
+    override fun restoreArtifactsConfig() {
+        session?.artifacts?.setup?.restore()
+    }
+
+    override fun retryArtifacts() {
+        session?.artifacts?.setup?.tryAgain()
+    }
+
+    override fun artifactsSuggestion(text: String) {
+        closeArtifacts()
+        addToDraft(text)
+    }
+
+    override fun artifactsHintDone() {
+        session?.artifacts?.hintDone()
+    }
+
+    /**
+     * The browser's "Artifacts are off" Turn on…: the enable sheet, whatever the last state read (the page just said
+     * they're off); the flow reads the state again first.
+     */
+    fun turnOnArtifacts() {
+        val feature = session?.artifacts ?: return
+        viewModelScope.launch { feature.check() }
+        feature.setup.start(SetupMode.On)
+    }
+
+    /** The in-app browser's artifact answered `401`: home shows Signed out. */
+    fun artifactSignedOut() {
+        session?.signedOut()
+    }
 
     /** Turning waiting takes into text, oldest first, once the model is ready. */
     private var draining: Job? = null

@@ -403,7 +403,7 @@ class EventsApiTransport(
         return events().streamGlobalEvents(
             protocol = ServerProtocol.V2,
             onActivity = { onActivity() },
-            types = SessionEvent.TYPES,
+            types = SessionEvent.TYPES + ArtifactEvent.TYPES,
             onDataLine = onLine,
         )
     }

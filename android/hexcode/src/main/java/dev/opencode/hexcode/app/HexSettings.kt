@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.firstrun.ProjectChoice
+import dev.opencode.hexcode.session.ArtifactsStore
 import dev.opencode.hexcode.session.AskStore
 import dev.opencode.hexcode.session.DailySessionMemory
 import dev.opencode.hexcode.session.SavedAsks
@@ -45,6 +46,7 @@ class HexSettings(
 ) : DailySessionMemory,
     SummaryStore,
     AskStore,
+    ArtifactsStore,
     SetupMemory {
     private val store = context.applicationContext.hexDataStore
 
@@ -152,6 +154,28 @@ class HexSettings(
         store.edit { it[SIGNED_IN_AT] = at }
     }
 
+    override suspend fun setupSession(): Pair<String, String>? {
+        val data = store.data.first()
+        val id = data[ARTIFACTS_SETUP_ID] ?: return null
+        return id to (data[ARTIFACTS_SETUP_DIRECTORY] ?: return null)
+    }
+
+    override suspend fun saveSetupSession(
+        id: String,
+        directory: String,
+    ) {
+        store.edit {
+            it[ARTIFACTS_SETUP_ID] = id
+            it[ARTIFACTS_SETUP_DIRECTORY] = directory
+        }
+    }
+
+    override suspend fun hintSeen(): Boolean = store.data.first()[ARTIFACTS_HINT_SEEN] ?: false
+
+    override suspend fun setHintSeen() {
+        store.edit { it[ARTIFACTS_HINT_SEEN] = true }
+    }
+
     override suspend fun forgetSetup() {
         store.edit { prefs ->
             listOf(
@@ -164,6 +188,8 @@ class HexSettings(
                 LAST_SUMMARY,
                 LAST_SESSION_ID,
                 ASKED,
+                ARTIFACTS_SETUP_ID,
+                ARTIFACTS_SETUP_DIRECTORY,
             ).forEach { prefs.remove(it) }
             prefs.remove(FIRST_RUN_DONE)
             prefs.remove(SIGNED_IN_AT)
@@ -183,5 +209,10 @@ class HexSettings(
         val LAST_SESSION_ID = stringPreferencesKey("session_last_id")
         val ASKED = stringPreferencesKey("ask_history")
         val SIGNED_IN_AT = longPreferencesKey("signed_in_at")
+
+        /** The "Hex Code setup" session and its project; the one-time artifacts hint (once per phone, kept on Forget). */
+        val ARTIFACTS_SETUP_ID = stringPreferencesKey("artifacts_setup_session")
+        val ARTIFACTS_SETUP_DIRECTORY = stringPreferencesKey("artifacts_setup_directory")
+        val ARTIFACTS_HINT_SEEN = booleanPreferencesKey("artifacts_hint_seen")
     }
 }

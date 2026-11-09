@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +21,9 @@ fun interface SummarySource {
 
     /** The session's `time.updated` now (`GET /api/session/{id}`), the basis of the card a request makes. */
     suspend fun updatedAt(): Long? = null
+
+    /** The card's artifact tile, read alongside the summary (app-plan.md, Artifacts (M8)). */
+    suspend fun artifact(): ArtifactRead = ArtifactRead.Keep
 }
 
 /**
@@ -38,6 +42,8 @@ data class SavedSummary(
     val basis: Long? = null,
     /** The card was made while the session was busy (a mid-run card), so it never counts as up to date. */
     val madeWhileBusy: Boolean = false,
+    /** The card's artifact tile, saved with it so Nothing new keeps it. */
+    val artifact: ArtifactTile? = null,
 )
 
 /** Where the last card is kept: one session's (today's) at a time, so saving forgets the one before. */
@@ -72,6 +78,8 @@ data class SummaryState(
     val loading: Boolean = false,
     /** The last request failed; [summary] is still the card before it. */
     val failed: Boolean = false,
+    /** The newest artifact of the latest run, the card's first tile; null for none. */
+    val artifact: ArtifactTile? = null,
 ) {
     /** ↻'s label at [now]: updating while a request runs, then a failure, then the card's age; null before any card. */
     fun label(now: Long): RefreshLabel? =
@@ -210,7 +218,9 @@ class SummaryRefresher(
         }
 
     private fun show(saved: SavedSummary) {
-        mutable.update { if (it.summary == null) it.copy(summary = saved.summary, updatedAt = saved.updatedAt) else it }
+        mutable.update {
+            if (it.summary == null) it.copy(summary = saved.summary, updatedAt = saved.updatedAt, artifact = saved.artifact) else it
+        }
         shownFor = saved.sessionId
         this.saved = saved
     }
@@ -275,17 +285,33 @@ class SummaryRefresher(
                             null
                         }
                     val busyAtStart = busy()
+                    // The artifact is read alongside; a failed read keeps the tile shown and never fails the card.
+                    val artifactRead =
+                        async {
+                            try {
+                                source.artifact()
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (_: Exception) {
+                                ArtifactRead.Keep
+                            }
+                        }
                     // A timeout counts as a failed request, not as a cancellation.
                     val reply = withTimeoutOrNull(timeoutMs) { source.summarise(SessionPrompts.SUMMARY) }
+                    val artifact =
+                        when (val read = artifactRead.await()) {
+                            ArtifactRead.Keep -> mutable.value.artifact
+                            is ArtifactRead.Set -> read.tile
+                        }
                     if (reply != null && reply.isBlank() && busy()) {
                         // Empty while the agent works: the last card stays, without "Couldn't update" (with none yet,
                         // a card says the agent is working); the run's end refreshes it.
                         mutable.update {
                             if (it.summary == null) {
                                 shownFor = sessionId
-                                SummaryState(StatusSummary.working(today()), updatedAt = clock())
+                                SummaryState(StatusSummary.working(today()), updatedAt = clock(), artifact = artifact)
                             } else {
-                                it.copy(loading = false, failed = false)
+                                it.copy(loading = false, failed = false, artifact = artifact)
                             }
                         }
                         return@launch
@@ -305,9 +331,9 @@ class SummaryRefresher(
                             else -> parsed
                         }
                     val updatedAt = clock()
-                    mutable.value = SummaryState(summary, updatedAt = updatedAt)
+                    mutable.value = SummaryState(summary, updatedAt = updatedAt, artifact = artifact)
                     shownFor = sessionId
-                    save(summary, updatedAt, basis, midRun)
+                    save(summary, updatedAt, basis, midRun, artifact)
                     onNewCard(midRun)
                 } catch (error: CancellationException) {
                     mutable.update { it.copy(loading = false) }
@@ -331,9 +357,10 @@ class SummaryRefresher(
         updatedAt: Long,
         basis: Long?,
         midRun: Boolean,
+        artifact: ArtifactTile?,
     ) {
         val id = sessionId ?: return
-        val card = SavedSummary(id, summary, updatedAt, date?.toString().orEmpty(), directory.orEmpty(), basis, midRun)
+        val card = SavedSummary(id, summary, updatedAt, date?.toString().orEmpty(), directory.orEmpty(), basis, midRun, artifact)
         saved = card
         store(card)
     }
