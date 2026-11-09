@@ -90,6 +90,15 @@ final class TodaySession {
     var showsGoalSheet = false
     /// Ask on the side: the message on home and its history.
     let ask: AskModel
+    /// The card's artifact for today's session and its known subagents (app plan, "Artifacts
+    /// (M8)"), read with each summary refresh.
+    @ObservationIgnored var artifactSource: ((_ rootID: String, _ sessions: Set<String>) async -> CardArtifact?)?
+    /// Today's session is open (setup, a new day, project or session): artifacts are read again and
+    /// their rule follows.
+    @ObservationIgnored var onOpened: (() async -> Void)?
+    /// The latest tools of today's session, read for Details after each run: the one-time artifacts
+    /// hint looks for a page written.
+    @ObservationIgnored var onRecentTools: (([ToolPartV2]) -> Void)?
     let summary: StatusSummaryModel
 
     @ObservationIgnored private let dailySetup: DailySessionSetup
@@ -168,6 +177,7 @@ final class TodaySession {
         stream?.onDisconnected = { [weak self] in self?.streamUp = false }
         stream?.onEvent = { [weak self] in self?.received($0) }
         summary.isWorking = { [weak self] in self?.busySince != nil }
+        summary.artifactReader = { [weak self] in await self?.readArtifact() }
         summary.onCard = { [weak self] busy in self?.cardMade(busy: busy) }
         // An Ask finds the session gone (`404`): setup runs again, as for any request.
         self.ask.onSessionGone = { [weak self] in Task { await self?.open() } }
@@ -284,6 +294,7 @@ final class TodaySession {
             ask.generate = { prompt in try await api.generate(sessionID: id, prompt: prompt) }
         }
         stream?.start()
+        if let onOpened { Task { await onOpened() } }
         if stream == nil || isEmptySession {
             // A session that never ran shows its empty card now; with no stream, nothing will
             // tell us more.
@@ -291,6 +302,12 @@ final class TodaySession {
         }
         // Otherwise the first summary waits for the stream's read-back, which says whether the
         // agent is working (an empty reply then isn't a failure); the saved card shows meanwhile.
+    }
+
+    /// The newest artifact of today's session or a subagent it knows, from the latest run.
+    private func readArtifact() async -> CardArtifact? {
+        guard let artifactSource, let live else { return nil }
+        return await artifactSource(live.rootID, live.children)
     }
 
     // MARK: Start a new session
@@ -877,6 +894,7 @@ final class TodaySession {
         guard live?.rootID == rootID else { return }
         if let recentTools {
             recentSteps = RecentSteps.make(recentTools)
+            onRecentTools?(recentTools)
         }
         // Both have answered (a failed read too): Details stops its spinner.
         detailsRead = true

@@ -7,11 +7,19 @@ import SwiftUI
 /// Back and Forward (35 % when there's nowhere to go) and an optional "Open in Safari". An error
 /// fills the page area: a `headline` title, a `body` `text2` detail and a regular `HexButton`. No
 /// lock icon: the pages are plain HTTP.
-/// What the page area shows in place of a page that failed to load.
+/// What the page area shows in place of a page that failed to load: a title, a detail, the button
+/// (Try again with `refresh`, or Done with no icon) and an optional second one, such as "Turn on…".
 struct HexBrowserFailure: Equatable {
+    enum Action: Equatable {
+        case retry
+        case done
+    }
+
     var title: String
     var detail: String
     var button: String
+    var action: Action = .retry
+    var secondary: String?
 }
 
 struct HexBrowser<Page: View>: View {
@@ -28,6 +36,8 @@ struct HexBrowser<Page: View>: View {
     var onForward: () -> Void = {}
     var onOpenSystem: () -> Void = {}
     var onRetry: () -> Void = {}
+    /// The failure's second button.
+    var onSecondary: () -> Void = {}
     @ViewBuilder let page: Page
 
     var body: some View {
@@ -132,9 +142,19 @@ struct HexBrowser<Page: View>: View {
             SummaryText(text: failure.detail, style: .body)
                 .foregroundStyle(HexColor.text2)
                 .fixedSize(horizontal: false, vertical: true)
-            HexButton(text: Text(verbatim: failure.button), icon: .refresh, size: .regular, action: onRetry)
-                .fixedSize()
-                .padding(.top, 10)
+            HStack(spacing: 8) {
+                HexButton(
+                    text: Text(verbatim: failure.button),
+                    icon: failure.action == .retry ? .refresh : nil,
+                    size: .regular,
+                    action: failure.action == .retry ? onRetry : onDone
+                )
+                if let secondary = failure.secondary {
+                    HexButton(text: Text(verbatim: secondary), size: .regular, style: .primary, action: onSecondary)
+                }
+            }
+            .fixedSize()
+            .padding(.top, 10)
         }
         .padding(.horizontal, 28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

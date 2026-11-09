@@ -151,6 +151,8 @@ enum SessionEvent: Equatable, Sendable {
         "shell.exited",
         "session.tool.failed",
         "session.tool.success",
+        // The artifacts setup session's live line: which tool the agent calls (only its name).
+        "session.tool.input.started",
         // The server accepts any `rpc.*` name without checking it, so a typo here fails silently.
         "rpc.opencode.goal.changed",
     ]

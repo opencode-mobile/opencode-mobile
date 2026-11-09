@@ -97,6 +97,8 @@ final class StatusSummaryModel {
     private(set) var showsEmpty = false
 
     @ObservationIgnored var generator: (any SummaryGenerating)?
+    /// The card's artifact, read alongside each request (app plan, "Artifacts (M8)"); nil for none.
+    @ObservationIgnored var artifactReader: (() async -> CardArtifact?)?
     /// What the card shown was made from; nil with no card, or none known.
     @ObservationIgnored private(set) var basis: SummaryBasis?
     /// A new card was made; `busy` when the session was busy then.
@@ -238,11 +240,14 @@ final class StatusSummaryModel {
         let timeout = timeout
         let busy = isWorking()
         HexLog.summary.info("summary: request (busy: \(busy))")
+        let reader = artifactReader
         let task = Task {
             let updated = try? await generator.sessionUpdated()
+            async let artifact = reader?()
             let reply = await Self.generate(generator, timeout: timeout)
+            let found = await artifact
             guard !Task.isCancelled else { return }
-            self.finish(reply, basis: updated.map { SummaryBasis(updated: $0, busy: busy) })
+            self.finish(reply, basis: updated.map { SummaryBasis(updated: $0, busy: busy) }, artifact: found ?? nil)
         }
         inFlight = task
         await task.value
@@ -252,7 +257,7 @@ final class StatusSummaryModel {
         await refresh(runEnd: true)
     }
 
-    private func finish(_ reply: String?, basis: SummaryBasis?) {
+    private func finish(_ reply: String?, basis: SummaryBasis?, artifact: CardArtifact? = nil) {
         isUpdating = false
         inFlight = nil
         guard let reply, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -276,6 +281,10 @@ final class StatusSummaryModel {
         let busy = basis?.busy ?? isWorking()
         if busy, case var .card(card) = parsed {
             card.next = nil
+            parsed = .card(card)
+        }
+        if case var .card(card) = parsed {
+            card.artifact = artifact
             parsed = .card(card)
         }
         summary = parsed

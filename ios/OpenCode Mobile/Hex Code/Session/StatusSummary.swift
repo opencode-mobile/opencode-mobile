@@ -18,12 +18,15 @@ struct StatusCard: Equatable, Sendable, Codable {
     var next: String?
     /// The tiles under Next: the reply's `Link:` lines, then links left in Now and Next.
     var links: [CardLink] = []
+    /// The newest artifact of the latest run: the first tile (app plan, "Artifacts (M8)"). Read with
+    /// the summary and saved with the card, so Nothing new keeps it.
+    var artifact: CardArtifact?
 
     /// Now's lines, one per line of text.
     var now: String { lines.map(\.text).joined(separator: "\n") }
     var hasBullets: Bool { lines.contains(where: \.isBullet) }
 
-    private enum CodingKeys: String, CodingKey { case title, now, lines, next, links }
+    private enum CodingKeys: String, CodingKey { case title, now, lines, next, links, artifact }
 
     init(title: String, now: String, next: String? = nil, links: [CardLink] = []) {
         self.init(title: title, lines: [NowLine(text: now)], next: next, links: links)
@@ -48,6 +51,7 @@ struct StatusCard: Equatable, Sendable, Codable {
         }
         next = try container.decodeIfPresent(String.self, forKey: .next)
         links = try container.decodeIfPresent([CardLink].self, forKey: .links) ?? []
+        artifact = try container.decodeIfPresent(CardArtifact.self, forKey: .artifact)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -56,6 +60,7 @@ struct StatusCard: Equatable, Sendable, Codable {
         try container.encode(lines, forKey: .lines)
         try container.encodeIfPresent(next, forKey: .next)
         try container.encode(links, forKey: .links)
+        try container.encodeIfPresent(artifact, forKey: .artifact)
     }
 
     /// A session that never ran: no request. The title is today's long date in English, day before
@@ -252,10 +257,11 @@ enum StatusSummary: Equatable, Sendable, Codable {
                     }
                     afterNext = true
                 case .link:
-                    if let link = CardLinks.fromLinkLine(value) ?? linkLine(value) { linkLines.append(link) }
+                    if let link = CardLinks.fromLinkLine(value) ?? linkLine(value), !ArtifactLinks.isArtifact(link.url) { linkLines.append(link) }
                 }
             } else if let link = linkLine(line) {
-                linkLines.append(link)
+                // An artifact's address is the agent's guess; the artifact tile covers it.
+                if !ArtifactLinks.isArtifact(link.url) { linkLines.append(link) }
             } else if !afterNext {
                 // Unrecognised lines stay, as plain lines of Now; a second heading loses its `#`.
                 nowLines.append(headingTitle(line) ?? line)
@@ -274,11 +280,11 @@ enum StatusSummary: Equatable, Sendable, Codable {
         for raw in rawNow {
             let line = nowLine(raw)
             let pulled = CardLinks.pull(from: line.text)
-            links += pulled.links
+            links += pulled.links.filter { !ArtifactLinks.isArtifact($0.url) }
             now.append(NowLine(text: pulled.text, isBullet: line.isBullet))
         }
         let pulledNext = next.flatMap { isNoNext($0) ? nil : CardLinks.pull(from: $0) }
-        links += pulledNext?.links ?? []
+        links += (pulledNext?.links ?? []).filter { !ArtifactLinks.isArtifact($0.url) }
         var cardTitle = title ?? (shape == .none ? statusTitle : "")
         if now.isEmpty {
             // Only a title is left: it shows as Now, with no label above it.

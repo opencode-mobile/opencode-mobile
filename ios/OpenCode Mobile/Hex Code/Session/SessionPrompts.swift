@@ -89,4 +89,54 @@ enum SessionPrompts {
         - The goal set with /goal is the plan for today. Keep it unless told otherwise.
         """
     }
+
+    /// Artifacts (app plan, "Artifacts (M8)"): the rule today's session gets while they're on, and
+    /// what the separate "Hex Code setup" session is sent to turn them on or off.
+    enum Artifacts {
+        /// The rule entry, `artifact-rules`, put on today's session only while artifacts are on and
+        /// deleted as soon as they're off or not available (artifacts-proposal.md §2.4).
+        enum Rules {
+            /// 1: the rule tested live in artifacts-proposal.md §1.6 (session D).
+            static let version = 1
+            static let entryID = "artifact-rules"
+
+            static let text = """
+            The user reads this session on a phone, which shows the newest artifact of this run as a tile they can open. When they want to see something you made (a page, a mock-up, a chart, a report), publish it as an artifact: inside `execute`, call `tools.opencode.artifact_create`; for a new version of the same thing, call `tools.opencode.artifact_update` with its id. Never write an artifact's address or URL: the phone opens it. These are OpenCode's own artifact tools, not another publishing tool or skill.
+            """
+        }
+
+        /// The prompts sent to the setup session (artifacts-enable-spike.md §2.1), with `file` the
+        /// absolute path of the config file that wins `experimental`, never `~`.
+        enum Setup {
+            /// 1: the spike's final prompts.
+            static let version = 1
+            /// The setup session's title: never the daily "YYYY-MM-DD (n)" pattern.
+            static let title = "Hex Code setup"
+
+            static func enable(file: String) -> String {
+                "Turn on OpenCode's experimental artifacts for me. In `\(file)`, add `\"artifacts\": true` inside the `\"experimental\"` object. If there's no `\"experimental\"` key, add `\"experimental\": { \"artifacts\": true }`; if the file doesn't exist, create it with just that. Change nothing else: keep every other setting, comment and the formatting as they are. Don't run commands, look anything up or touch any other file. Reply with exactly DONE, or FAILED: <reason>."
+            }
+
+            static func disable(file: String) -> String {
+                "Turn off OpenCode's experimental artifacts for me. In `\(file)`, remove `\"artifacts\": true` from the `\"experimental\"` object. Change nothing else: keep every other setting, comment and the formatting as they are. Don't run commands, look anything up or touch any other file. Reply with exactly DONE, or FAILED: <reason>."
+            }
+
+            /// The setup session's lockdown (spike §2.2), last in the session's rules so they win: no
+            /// shell, code mode, web, skills or subagents; outside the project only the global config
+            /// folder; every edit asks.
+            static func lockdown(globalFolder: String) -> [(action: String, resource: String, effect: String)] {
+                [
+                    ("shell", "*", "deny"),
+                    ("execute", "*", "deny"),
+                    ("webfetch", "*", "deny"),
+                    ("websearch", "*", "deny"),
+                    ("skill", "*", "deny"),
+                    ("subagent", "*", "deny"),
+                    ("external_directory", "*", "deny"),
+                    ("external_directory", globalFolder + "/*", "allow"),
+                    ("edit", "*", "ask"),
+                ]
+            }
+        }
+    }
 }

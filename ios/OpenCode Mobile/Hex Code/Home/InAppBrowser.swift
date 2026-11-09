@@ -2,6 +2,7 @@ import Observation
 import SwiftUI
 import UIKit
 import WebKit
+import OpenCodeKit
 
 /// Where a navigation inside the in-app browser goes (app plan, "The in-app browser" › Inside the
 /// page): the page's own origin stays; another `http` or `https` origin opens in the system
@@ -16,6 +17,8 @@ enum BrowserPolicy {
         let scheme = url.scheme?.lowercased() ?? ""
         // The page's own documents: about:blank, srcdoc, blobs and data URLs.
         if ["about", "blob", "data", "javascript"].contains(scheme) { return .allow }
+        // An artifact's own files, served by the app.
+        if scheme == ArtifactURL.scheme { return sameOrigin(url, home) ? .allow : .system }
         guard scheme == "http" || scheme == "https" else { return .system }
         // A frame inside the page may come from anywhere; only the page itself is kept to its origin.
         guard mainFrame else { return .allow }
@@ -68,7 +71,8 @@ enum BrowserFailure {
 
 /// A page on the computer in a `WKWebView`, with no credentials: it replaces the Safari view for
 /// `localhost` tiles so the app can explain a dev server that only listens on the computer.
-/// Website data is kept between opens (the default store); Forget this computer clears it.
+/// Website data is kept between opens (the default store); Forget this computer clears it. An
+/// artifact's files are fetched by the app itself (`ArtifactSchemeHandler`).
 @MainActor
 @Observable
 final class BrowserModel {
@@ -83,21 +87,53 @@ final class BrowserModel {
     private(set) var failure: HexBrowserFailure?
     /// The page shown now, for "Open in Safari".
     private(set) var current: URL
+    /// The artifact shown, for an artifact tile.
+    let artifact: CardArtifact?
+    /// An artifact answered `401`: the browser closes and home shows Signed out.
+    @ObservationIgnored var onSignedOut: () -> Void = {}
+    /// The `403` error's "Turn on…": the enable sheet.
+    @ObservationIgnored var onTurnOn: () -> Void = {}
 
     @ObservationIgnored let webView: WKWebView
+    @ObservationIgnored private var schemeHandler: ArtifactSchemeHandler?
     @ObservationIgnored private var driver: BrowserDriver?
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
     /// The page whose load failed, for Try again.
     @ObservationIgnored private var failedURL: URL?
 
-    init(destination: CardLinks.Destination, serverName: String) {
-        start = destination.url
-        current = destination.url
-        label = destination.label.isEmpty ? destination.shownHost : destination.label
-        host = destination.shownHost
+    convenience init(destination: CardLinks.Destination, serverName: String) {
+        self.init(
+            start: destination.url,
+            label: destination.label.isEmpty ? destination.shownHost : destination.label,
+            host: destination.shownHost,
+            serverName: serverName,
+            artifact: nil,
+            handler: nil
+        )
+    }
+
+    /// An artifact, every file through the app's signed-in client.
+    convenience init(artifact: CardArtifact, serverName: String, directory: String, connection: @escaping @Sendable () -> ServerConnection?) {
+        self.init(
+            start: ArtifactURL.start(id: artifact.id),
+            label: artifact.title,
+            host: String(localized: "browser.artifact", defaultValue: "\(serverName) · artifact"),
+            serverName: serverName,
+            artifact: artifact,
+            handler: ArtifactSchemeHandler(id: artifact.id, directory: directory, connection: connection)
+        )
+    }
+
+    private init(start: URL, label: String, host: String, serverName: String, artifact: CardArtifact?, handler: ArtifactSchemeHandler?) {
+        self.start = start
+        current = start
+        self.label = label
+        self.host = host
         self.serverName = serverName
+        self.artifact = artifact
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
+        if let handler { configuration.setURLSchemeHandler(handler, forURLScheme: ArtifactURL.scheme) }
         configuration.allowsInlineMediaPlayback = true
         webView = WKWebView(frame: .zero, configuration: configuration)
         // The edge swipe goes back.
@@ -127,7 +163,23 @@ final class BrowserModel {
                 MainActor.assumeIsolated { if let url = view.url { self?.current = url } }
             },
         ]
+        schemeHandler = handler
+        handler?.onMainPage = { [weak self] result in self?.mainPage(result) }
         webView.load(URLRequest(url: start))
+    }
+
+    var isArtifact: Bool { artifact != nil }
+
+    /// The artifact's own page answered: a status other than success fills the page area.
+    private func mainPage(_ result: Result<Int, any Error>) {
+        let failure: ArtifactFailure?
+        switch result {
+        case let .success(status): failure = ArtifactFailure.of(status: status)
+        case let .failure(error): failure = ArtifactFailure.of(error: error)
+        }
+        guard let failure else { return }
+        if failure == .signedOut { return onSignedOut() }
+        show(failure.shown(name: serverName), url: current)
     }
 
     /// The page's title, else the tile's label.
@@ -159,7 +211,16 @@ final class BrowserModel {
 
     fileprivate func failed(_ error: Error, url: URL?) {
         let url = url ?? current
-        guard let shown = BrowserFailure.of(error, url: url, name: serverName) else { return }
+        if isArtifact {
+            // The page's own failure came through the handler.
+            guard failure == nil, let shown = ArtifactFailure.of(error: error)?.shown(name: serverName) else { return }
+            return show(shown, url: url)
+        }
+        show(BrowserFailure.of(error, url: url, name: serverName), url: url)
+    }
+
+    private func show(_ shown: HexBrowserFailure?, url: URL) {
+        guard let shown else { return }
         failure = shown
         failedURL = url
         UIAccessibility.post(notification: .announcement, argument: shown.title)
@@ -261,12 +322,14 @@ struct BrowserScreen: View {
             canGoBack: model.canGoBack,
             canGoForward: model.canGoForward,
             failure: model.failure,
+            openSystemTitle: model.isArtifact ? nil : LocalizedStringResource("browser.open_system", defaultValue: "Open in Safari"),
             onDone: onDone,
             onReload: { model.reload() },
             onBack: { model.back() },
             onForward: { model.forward() },
             onOpenSystem: { model.openInSystemBrowser() },
-            onRetry: { model.reload() }
+            onRetry: { model.reload() },
+            onSecondary: { model.onTurnOn() }
         ) {
             BrowserWebView(webView: model.webView)
                 .ignoresSafeArea(edges: .bottom)

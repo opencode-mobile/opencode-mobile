@@ -16,6 +16,8 @@ final class LiveEventStream {
     /// The stream went down; it retries on its own.
     var onDisconnected: () -> Void = {}
     var onEvent: (SessionEvent) -> Void = { _ in }
+    /// Every `data:` line as it came, for followers of other sessions (the artifacts setup session).
+    var onLine: (String) -> Void = { _ in }
 
     private let transport: any EventStreamTransport
     private let now: () -> Date
@@ -149,6 +151,7 @@ final class LiveEventStream {
 
     private func handle(_ line: String) async {
         lastActivity = now()
+        onLine(line)
         guard let event = SessionEvent.decode(line) else { return }
         if event == .connected {
             isUp = true

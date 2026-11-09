@@ -71,6 +71,8 @@ final class HexMainModel {
     private(set) var samplePreset: TodaySessionDemo?
     private(set) var sampleSession: TodaySession?
     let build: HexBuildInfo
+    /// Artifacts on this computer and project: Settings' row, the enable sheet, the card's tile.
+    let artifacts: ArtifactsModel
 
     /// Pair again's scan cover, while it is up.
     var pairAgain: PairAgainModel?
@@ -104,7 +106,16 @@ final class HexMainModel {
         self.liveConnection = liveConnection
         self.checks = checks
         self.now = now
-        realSession = session ?? Self.liveSession(current, connection: liveConnection, toasts: home.toasts)
+        let stream = session == nil ? LiveEventStream(transport: OpenCodeEventTransport(connection: { liveConnection.current })) : nil
+        realSession = session ?? Self.liveSession(current, connection: liveConnection, stream: stream!, toasts: home.toasts)
+        let realSession = realSession
+        artifacts = ArtifactsModel(
+            api: session == nil ? OpenCodeArtifactsService(connection: { liveConnection.current }) : nil,
+            directory: { current.setup.project.path },
+            model: { current.setup.model },
+            todaySessionID: { realSession.sessionID },
+            toasts: home.toasts
+        )
         self.build = build ?? .current
         self.services = services
         self.store = store
@@ -112,6 +123,16 @@ final class HexMainModel {
         realSession.serverName = setup.serverName
         realSession.computerHost = URL(string: setup.profile.baseURL)?.host
         realSession.serverCheck = { [weak self] in await self?.checkServer() ?? .ready }
+        let artifacts = artifacts
+        artifacts.serverName = { [weak self] in self?.setup.serverName ?? "" }
+        artifacts.onSuggestion = { [weak self] text in
+            self?.home.addSuggestion(text)
+            self?.path = []
+        }
+        realSession.artifactSource = { rootID, sessions in await artifacts.cardArtifact(rootID: rootID, sessions: sessions) }
+        realSession.onOpened = { await artifacts.sessionOpened() }
+        realSession.onRecentTools = { artifacts.noteTools($0) }
+        stream?.onLine = { artifacts.received(line: $0) }
         // Today's saved card, from the phone, so the first frame shows it (app plan, "Cold start").
         realSession.preopen()
         if let samplePreset { showSample(samplePreset) }
@@ -159,9 +180,8 @@ final class HexMainModel {
 
     /// Today's session on the paired server, following the project and model chosen now, and the
     /// address and sign-in in use.
-    private static func liveSession(_ current: CurrentSetup, connection: LiveConnection, toasts: HexToaster) -> TodaySession {
+    private static func liveSession(_ current: CurrentSetup, connection: LiveConnection, stream: LiveEventStream, toasts: HexToaster) -> TodaySession {
         let service = OpenCodeSessionService(connection: { connection.current })
-        let stream = LiveEventStream(transport: OpenCodeEventTransport(connection: { connection.current }))
         stream.watchNetwork()
         return TodaySession(
             setup: DailySessionSetup(service: service, memory: DailySessionDefaults()),
@@ -180,6 +200,7 @@ final class HexMainModel {
     /// The clients read the new address or sign-in from here on; tiles and the signed-out line follow.
     private func followConnection() {
         liveConnection.update(setup.profile)
+        artifacts.connectionChanged()
         realSession.computerHost = URL(string: setup.profile.baseURL)?.host
         realSession.serverName = setup.serverName
     }
