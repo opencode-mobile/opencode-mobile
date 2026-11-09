@@ -1590,6 +1590,7 @@ private extension EventStreamConnectionState {
     }
 }
 
+#if DEBUG
 #Preview {
     ProjectListHomeView(viewModel: previewProjectListHomeViewModel())
         .openCodeTheme()
@@ -1728,6 +1729,7 @@ nonisolated private final class PreviewForegroundEventStream: ForegroundEventStr
     func start() {}
     func stop() async {}
 }
+#endif
 
 /// Holds the split's sidebar control for handlers that run outside the trailing pane.
 /// Written from `onChange`, never read during a render.
