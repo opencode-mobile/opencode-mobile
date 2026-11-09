@@ -151,8 +151,15 @@ fun ArtifactBrowser(
                             view: WebView,
                             received: String?,
                         ) {
-                            // A page with no <title> reports its address; the tile's title reads better then.
-                            received?.takeIf { it.isNotBlank() && !it.startsWith("http") }?.let { title = it }
+                            // A page with no <title> (or an error's answer) reports its address, with or without the scheme;
+                            // the tile's title reads better then.
+                            val address = view.url?.substringAfter("://")
+                            title =
+                                received?.takeIf {
+                                    it.isNotBlank() &&
+                                        !it.startsWith("http") &&
+                                        address?.startsWith(it.removeSuffix("…")) != true
+                                }
                         }
                     }
                 loadUrl(where.start)

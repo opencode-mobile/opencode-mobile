@@ -6,6 +6,7 @@ import dev.opencode.hexcode.session.FakeArtifactsApi.Companion.GLOBAL
 import dev.opencode.hexcode.session.FakeArtifactsApi.Companion.GLOBAL_FILE
 import dev.opencode.hexcode.session.FakeArtifactsApi.Companion.configOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -358,6 +359,31 @@ class ArtifactSetupFlowTest {
             assertEquals(GLOBAL_FILE, path)
             assertArrayEquals(text, bytes)
             assertEquals(SetupStage.Fallback(SetupStage.Fallback.Why.Restored), flow.now().stage)
+        }
+
+    @Test
+    fun restoreWaitsForOpenCodeToReadTheFileAgain() =
+        runTest {
+            val flow = flow()
+            flow.start(SetupMode.On)
+            runCurrent()
+            flow.send()
+            runCurrent()
+            api.config = configOf()
+            flow.event(ArtifactEvent.RunEnded("ses_setup1"))
+            runCurrent()
+            assertTrue(flow.now().stage is SetupStage.Damaged)
+            // OpenCode's watcher reads the file again a moment after the write.
+            api.afterWrite = { _, _ ->
+                backgroundScope.launch {
+                    kotlinx.coroutines.delay(300)
+                    api.config = configOf(GLOBAL_FILE to beforeInfo)
+                }
+            }
+            flow.restore()
+            advanceTimeBy(2_000)
+            assertEquals(SetupStage.Fallback(SetupStage.Fallback.Why.Restored), flow.now().stage)
+            assertEquals(false, flow.now().restoreFailed)
         }
 
     @Test

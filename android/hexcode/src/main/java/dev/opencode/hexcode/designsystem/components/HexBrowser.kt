@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -149,7 +150,8 @@ fun HexBrowser(
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth().background(colors.background)) {
-            page()
+            // Behind an error, the page isn't reachable with a screen reader.
+            Box(if (error != null) Modifier.clearAndSetSemantics {} else Modifier) { page() }
             if (error != null) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),

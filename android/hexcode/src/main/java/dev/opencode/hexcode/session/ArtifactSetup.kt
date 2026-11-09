@@ -550,7 +550,14 @@ class ArtifactSetupFlow(
                     Log.w(TAG, "restore: ${error.message}")
                     false
                 }
-            val damage = if (written) damage() else null
+            // OpenCode reads the file again about 0.1 s after it changes: check until it has, for a few seconds.
+            var damage = if (written) damage() else null
+            var waited = 0L
+            while (written && (damage == null || damage.any) && waited < RESTORE_SETTLE_MS) {
+                delay(RESTORE_STEP_MS)
+                waited += RESTORE_STEP_MS
+                damage = damage()
+            }
             if (damage == null || damage.any) {
                 set { it.copy(restoring = false, restoreFailed = true) }
                 return@launch
@@ -607,6 +614,10 @@ class ArtifactSetupFlow(
         const val TIMEOUT_MS = 60_000L
 
         private const val TIMER_STEP_MS = 1_000L
+
+        /** After Restore's write, how long the check waits for OpenCode to read the file again. */
+        private const val RESTORE_SETTLE_MS = 5_000L
+        private const val RESTORE_STEP_MS = 500L
 
         private val READ_TOOLS = setOf("read", "glob", "grep", "list")
         private val EDIT_TOOLS = setOf("edit", "write", "patch")
