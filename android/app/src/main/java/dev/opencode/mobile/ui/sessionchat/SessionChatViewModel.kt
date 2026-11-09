@@ -2262,6 +2262,42 @@ class SessionChatViewModel
             inbox.denyPermission(requestId, sessionId)
         }
 
+        /** "Deny with a note…": swaps the permission prompt for the note step. */
+        fun openPermissionNote(
+            requestId: String,
+            sessionId: String,
+        ) {
+            logAction(actionId = ProductAnalytics.Action.PERMISSION_NOTE_OPEN)
+            inbox.openPermissionNote(requestId, sessionId)
+        }
+
+        fun updatePermissionNote(
+            requestId: String,
+            text: String,
+        ) {
+            inbox.updatePermissionNote(requestId, text)
+        }
+
+        /** Leaves the note step for the permission prompt without answering. */
+        fun cancelPermissionNote(requestId: String) {
+            logAction(actionId = ProductAnalytics.Action.PERMISSION_NOTE_CANCEL)
+            inbox.cancelPermissionNote(requestId)
+        }
+
+        /** Denies the permission request with the trimmed note; ignored while the note is blank. */
+        fun sendPermissionNote(
+            requestId: String,
+            sessionId: String,
+        ) {
+            val note = inbox.state.value.visiblePermissionNote
+            if (note == null || note.requestId != requestId || note.trimmedText.isEmpty()) return
+            logAction(
+                actionId = ProductAnalytics.Action.PERMISSION_DENY,
+                parameters = mapOf(ProductAnalytics.Param.PERMISSION_DECISION to "deny_with_note"),
+            )
+            inbox.sendPermissionNote(requestId, sessionId)
+        }
+
         fun toggleQuestionOption(
             requestId: String,
             sessionId: String,
@@ -2765,6 +2801,8 @@ class SessionChatViewModel
                 permissionDockHidden = inboxSnapshot.isPermissionDockHidden,
                 permissionSubmitting = inboxSnapshot.permissionSubmittingId != null,
                 permissionErrorMessage = inboxSnapshot.permissionError ?: inboxSnapshot.permissionTopologyError,
+                permissionNote = inboxSnapshot.visiblePermissionNote,
+                permissionOtherPendingInSession = inboxSnapshot.otherPendingPermissionsInVisibleSession,
                 questionRequest = visibleQuestion,
                 questionQueuePosition = inboxSnapshot.questionPageIndex + 1,
                 questionQueueCount = inboxSnapshot.questionRequests.size,

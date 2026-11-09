@@ -280,12 +280,14 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     ) async throws -> Data {
         if let fileURL = try encoded() {
             defer { try? FileManager.default.removeItem(at: fileURL) }
-            return try await sendBodyFile(request, fileURL: fileURL)
+            return try await sendBodyFile(request, fileURL: fileURL, directFirst: true)
         }
-        return try await sendBody(request, body: try fallback())
+        return try await sendBody(request, body: try fallback(), directFirst: true)
     }
 
-    private func sendBodyFile(_ request: URLRequest, fileURL: URL) async throws -> Data {
+    /// `directFirst` is for prompts only: the server ignores a repeated prompt id, but a resent
+    /// shell command would run twice.
+    private func sendBodyFile(_ request: URLRequest, fileURL: URL, directFirst: Bool = false) async throws -> Data {
         if let bodyUploader {
             let startedAt = OpenCodeAPITrace.start(request)
             let data: Data
@@ -294,6 +296,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
                 (data, response) = try await bodyUploader.upload(
                     request,
                     fileURL: fileURL,
+                    directFirst: directFirst,
                     onProgress: PromptSendProgressReporting.handler
                 )
             } catch {
@@ -315,7 +318,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         return try await data(for: request)
     }
 
-    private func sendBody(_ request: URLRequest, body: Data) async throws -> Data {
+    private func sendBody(_ request: URLRequest, body: Data, directFirst: Bool = false) async throws -> Data {
         if let bodyUploader {
             let startedAt = OpenCodeAPITrace.start(request)
             let data: Data
@@ -324,6 +327,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
                 (data, response) = try await bodyUploader.upload(
                     request,
                     body: body,
+                    directFirst: directFirst,
                     onProgress: PromptSendProgressReporting.handler
                 )
             } catch {

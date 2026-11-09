@@ -131,6 +131,48 @@ final class SessionChatInbox {
         await respondToPermission(requestID: requestID, sessionID: sessionID, decision: .alwaysAllow)
     }
 
+    /// Shows the "Deny with a note" step for the shown request. Keeps a draft already open for it.
+    func openPermissionNote(requestID: String, sessionID: String) {
+        guard canMutate() else { return }
+        guard let request = state.visiblePermissionRequest,
+              request.id == requestID, request.sessionID == sessionID,
+              state.permissionSubmittingID == nil,
+              state.permissionNote?.requestID != requestID
+        else { return }
+        state.permissionNote = PermissionNoteDraft(requestID: requestID)
+        state.permissionHiddenID = nil
+        notifyChange()
+    }
+
+    func updatePermissionNote(requestID: String, text: String) {
+        guard state.permissionNote?.requestID == requestID,
+              state.permissionSubmittingID == nil,
+              state.permissionNote?.text != text
+        else { return }
+        state.permissionNote?.text = text
+        notifyChange()
+    }
+
+    /// Back to the prompt without answering; the draft is dropped.
+    func cancelPermissionNote(requestID: String) {
+        guard state.permissionNote?.requestID == requestID, state.permissionSubmittingID == nil else { return }
+        state.permissionNote = nil
+        state.permissionError = nil
+        notifyChange()
+    }
+
+    /// Denies the request with the note. Ignored while the note is blank or a reply is in flight;
+    /// on failure the note step stays with its text.
+    func sendPermissionNote(requestID: String, sessionID: String) async {
+        guard let note = state.permissionNote, note.requestID == requestID, note.canSend else { return }
+        await respondToPermission(
+            requestID: requestID,
+            sessionID: sessionID,
+            decision: .deny,
+            message: note.trimmedText
+        )
+    }
+
     func hidePermissionDock(requestID: String) {
         guard state.permissionRequests.contains(where: { $0.id == requestID }) else { return }
         state.permissionHiddenID = requestID
@@ -152,6 +194,7 @@ final class SessionChatInbox {
             if state.permissionSubmittingID == nil, state.visiblePermissionRequest?.id != requestID {
                 state.permissionSelectedID = requestID
                 state.permissionError = nil
+                syncPermissionNote()
             }
             state.permissionHiddenID = nil
         case let .question(requestID):
@@ -177,6 +220,7 @@ final class SessionChatInbox {
         else { return }
         state.permissionSelectedID = target
         state.permissionError = nil
+        syncPermissionNote()
         notifyChange()
     }
 
@@ -315,7 +359,8 @@ final class SessionChatInbox {
     private func respondToPermission(
         requestID: String,
         sessionID: String,
-        decision: PermissionDecision
+        decision: PermissionDecision,
+        message: String? = nil
     ) async {
         guard canMutate() else { return }
         guard let request = state.permissionRequests.first(where: { $0.id == requestID && $0.sessionID == sessionID }),
@@ -328,7 +373,8 @@ final class SessionChatInbox {
                 sessionID: request.sessionID,
                 permissionID: request.id,
                 decision: decision,
-                directory: worktree
+                directory: worktree,
+                message: message
             )
         } catch {
             state.permissionSubmittingID = nil
@@ -390,6 +436,7 @@ final class SessionChatInbox {
             sessions: state.permissionSessions,
             requests: requests
         )
+        syncPermissionNote()
         if let submitting = state.permissionSubmittingID,
            !state.permissionRequests.contains(where: { $0.id == submitting }) {
             state.permissionSubmittingID = nil
@@ -455,6 +502,14 @@ final class SessionChatInbox {
             }
         }
         notifyChange()
+    }
+
+    /// A note draft belongs to the shown request only: paging away or the request going away drops it.
+    private func syncPermissionNote() {
+        guard let note = state.permissionNote else { return }
+        if state.visiblePermissionRequest?.id != note.requestID {
+            state.permissionNote = nil
+        }
     }
 
     private func syncQuestionDraftState() {

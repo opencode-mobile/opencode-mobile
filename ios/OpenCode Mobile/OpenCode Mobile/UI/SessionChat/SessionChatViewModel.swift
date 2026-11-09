@@ -603,6 +603,11 @@ final class SessionChatViewModel {
         set { composer.fileSearchDelayMs = newValue }
     }
 
+    var sendStallDelayMs: Int {
+        get { composer.sendStallDelayMs }
+        set { composer.sendStallDelayMs = newValue }
+    }
+
     func selectAtSuggestion(agentName: String) {
         logChatAction(ProductAnalytics.Action.composerSelectAtSuggestion)
         composer.selectAtSuggestion(agentName: agentName)
@@ -993,6 +998,12 @@ final class SessionChatViewModel {
     }
 
     static let branchCopiedMessage = "Branch name copied"
+    static let sendStalledMessage = "Still sending…"
+
+    /// Retry on the "Still sending…" snackbar.
+    func retryStalledSend() {
+        composer.retryStalledSend()
+    }
 
     func consumeSnackbar() {
         if uiState.snackbar != nil {
@@ -1544,6 +1555,31 @@ final class SessionChatViewModel {
             parameters: [ProductAnalytics.Param.permissionDecision: "deny"]
         )
         await inbox.denyPermission(requestID: requestID, sessionID: sessionID)
+    }
+
+    /// "Deny with a note…": swaps the permission prompt for the note step.
+    func openPermissionNote(requestID: String, sessionID: String) {
+        logChatAction(ProductAnalytics.Action.permissionNoteOpen)
+        inbox.openPermissionNote(requestID: requestID, sessionID: sessionID)
+    }
+
+    func updatePermissionNote(requestID: String, text: String) {
+        inbox.updatePermissionNote(requestID: requestID, text: text)
+    }
+
+    /// Leaves the note step without answering.
+    func cancelPermissionNote(requestID: String) {
+        logChatAction(ProductAnalytics.Action.permissionNoteCancel)
+        inbox.cancelPermissionNote(requestID: requestID)
+    }
+
+    /// Denies with the note, so the agent gets it and keeps going.
+    func sendPermissionNote(requestID: String, sessionID: String) async {
+        logChatAction(
+            ProductAnalytics.Action.permissionDeny,
+            parameters: [ProductAnalytics.Param.permissionDecision: "deny_with_note"]
+        )
+        await inbox.sendPermissionNote(requestID: requestID, sessionID: sessionID)
     }
 
     func toggleQuestionOption(requestID: String, sessionID: String, label: String) {
@@ -2283,6 +2319,7 @@ final class SessionChatViewModel {
         let snackbar = resolveSnackbar(
             transientError: transientError,
             transientAction: draftErrorMessage != nil && transientError == draftErrorMessage ? .retryNewSession : nil,
+            sendStallNotice: composerState.sendStallNotice,
             sideQuestionNotice: sideQuestions.notice,
             successNotice: composerState.followUpNotice
                 ?? commandsState.actionSuccessMessage
@@ -2422,6 +2459,8 @@ final class SessionChatViewModel {
             permissionDockHidden: inboxState.isPermissionDockHidden,
             permissionSubmitting: inboxState.permissionSubmittingID != nil,
             permissionErrorMessage: inboxState.permissionError ?? inboxState.permissionTopologyError,
+            permissionNote: inboxState.permissionNote,
+            permissionOtherPendingInSessionCount: inboxState.otherPendingPermissionsInVisibleSession,
             questionRequest: visibleQuestion,
             questionQueuePosition: inboxState.questionPageIndex + 1,
             questionQueueCount: inboxState.questionRequests.count,
@@ -2519,9 +2558,27 @@ final class SessionChatViewModel {
     private func resolveSnackbar(
         transientError: String?,
         transientAction: SessionChatSnackbarAction? = nil,
+        sendStallNotice: Int? = nil,
         sideQuestionNotice: SessionChatSideQuestionNotice? = nil,
         successNotice: String?
     ) -> SessionChatSnackbar? {
+        // A prompt the server has not answered outranks notices and yields to errors. Each
+        // notice value is a new key, so a dismissed one comes back if the send stays stuck.
+        if transientError == nil, let sendStallNotice {
+            let key = "sendStall:\(sendStallNotice)"
+            if key != suppressedSnackbarKey {
+                if key != lastSnackbarKey {
+                    snackbarSequence += 1
+                    lastSnackbarKey = key
+                }
+                return SessionChatSnackbar(
+                    id: snackbarSequence,
+                    message: Self.sendStalledMessage,
+                    tone: .default,
+                    action: .retryStalledSend
+                )
+            }
+        }
         // A `/btw` notice outranks other success notices and yields to errors; its id keeps a
         // repeated failure of the same question from deduping into the earlier snackbar.
         if transientError == nil, let sideQuestionNotice {

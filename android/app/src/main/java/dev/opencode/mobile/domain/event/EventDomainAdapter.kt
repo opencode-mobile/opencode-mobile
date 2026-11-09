@@ -666,7 +666,10 @@ class EventDomainAdapter(
         val partId = properties.string("id") ?: callId
         val errorObject = properties["error"] as? JsonObject
         val error = errorObject?.string("message")?.let(SessionFailure::unwrap)
-        val interrupted = status == "error" && ToolInterruption.isAbortedType(errorObject?.string("type"))
+        val errorType = errorObject?.string("type")
+        val interrupted = status == "error" && ToolInterruption.isUserInterruptionType(errorType)
+        val declined = status == "error" && ToolInterruption.isPermissionRejectedType(errorType)
+        val userNote = if (declined) ToolInterruption.userNote(errorType, errorObject?.string("message")) else null
         val malformed =
             SessionFailure.isMalformedTool(
                 type = errorObject?.string("type"),
@@ -710,6 +713,8 @@ class EventDomainAdapter(
             // v2 `tool.progress` carries the live title in metadata (v1: state.title).
             title = metadata?.string("title")?.takeIf { it.isNotEmpty() },
             interrupted = interrupted,
+            declined = declined,
+            userNote = userNote,
         )
     }
 
@@ -1018,6 +1023,8 @@ class EventDomainAdapter(
         interrupted: Boolean = false,
         malformed: Boolean = false,
         attachments: JsonArray? = null,
+        declined: Boolean = false,
+        userNote: String? = null,
     ): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val state =
@@ -1026,6 +1033,8 @@ class EventDomainAdapter(
                 attachments?.let { put("attachments", it) }
                 if (interrupted) put("interrupted", true)
                 if (malformed) put("malformed", true)
+                if (declined) put("declined", true)
+                userNote?.let { put("userNote", it) }
                 title?.let { put("title", it) }
                 if (input is JsonObject) put("input", input)
                 output?.let { put("output", it) }

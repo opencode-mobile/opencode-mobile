@@ -527,5 +527,6 @@ private class FakeArchivedRepository(
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
+        message: String?,
     ) = false
 }

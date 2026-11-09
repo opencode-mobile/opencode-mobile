@@ -279,6 +279,10 @@ data class SessionChatUiState(
     val permissionDockHidden: Boolean = false,
     val permissionSubmitting: Boolean = false,
     val permissionErrorMessage: String? = null,
+    /** "Deny with a note" draft for [permissionRequest]; non-null shows the note step. */
+    val permissionNote: PermissionNoteDraft? = null,
+    /** Other waiting permission requests of [permissionRequest]'s session, which a deny also rejects. */
+    val permissionOtherPendingInSession: Int = 0,
     val questionRequest: QuestionRequest? = null,
     /** 1-based position of [questionRequest] among the waiting question requests. */
     val questionQueuePosition: Int = 1,
@@ -785,6 +789,12 @@ data class SessionChatInboxRegionState(
     val permissionSubmittingId: String? = null,
     val permissionError: String? = null,
     val permissionTopologyError: String? = null,
+    /**
+     * The note the user is writing to deny a permission request with ("Deny with a note").
+     * Non-null swaps that request's prompt for the note step; paging, the request going away,
+     * or another session clears it.
+     */
+    val permissionNote: PermissionNoteDraft? = null,
     /** Sessions loaded to place descendant permission requests; also names the asking subagent. */
     val permissionSessions: List<Session> = emptyList(),
     val questionRequests: List<QuestionRequest> = emptyList(),
@@ -811,6 +821,17 @@ data class SessionChatInboxRegionState(
 
     val visiblePermissionRequest: PermissionRequest?
         get() = permissionRequests.getOrNull(permissionPageIndex)
+
+    /** The note draft of the shown permission request, or null when its prompt shows the buttons. */
+    val visiblePermissionNote: PermissionNoteDraft?
+        get() = permissionNote?.takeIf { it.requestId == visiblePermissionRequest?.id }
+
+    /** Other waiting permission requests of the shown request's session; a deny rejects them too. */
+    val otherPendingPermissionsInVisibleSession: Int
+        get() {
+            val visible = visiblePermissionRequest ?: return 0
+            return permissionRequests.count { it.sessionId == visible.sessionId && it.id != visible.id }
+        }
 
     val questionPageIndex: Int
         get() = InboxRequestPaging.index(questionRequests.map { it.id }, questionSelectedId)
@@ -844,6 +865,16 @@ data class SessionChatInboxRegionState(
 
     val questionDraft: QuestionAnswerDraft
         get() = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+}
+
+/** The note of "Deny with a note" for the permission request [requestId]. */
+data class PermissionNoteDraft(
+    val requestId: String,
+    val text: String = "",
+) {
+    /** The note as sent: trimmed; Send stays disabled while it is empty. */
+    val trimmedText: String
+        get() = text.trim()
 }
 
 data class KeptQuestionDraft(

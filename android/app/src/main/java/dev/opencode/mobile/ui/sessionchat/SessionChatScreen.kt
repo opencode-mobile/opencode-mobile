@@ -1368,6 +1368,8 @@ private fun SessionChatScreenBody(
                                         submitting = uiState.permissionSubmitting,
                                         actionsEnabled = uiState.canMutate,
                                         errorMessage = uiState.permissionErrorMessage,
+                                        note = uiState.permissionNote?.text,
+                                        otherPendingInSessionCount = uiState.permissionOtherPendingInSession,
                                     )
                                 }
                                 SessionChatComposerKind.Question -> {
@@ -1572,6 +1574,14 @@ private fun SessionChatScreenBody(
                                         viewModel.denyPermission(action.requestId, action.sessionId)
                                     is OpenCodeSessionComposerAction.AlwaysAllowPermission ->
                                         viewModel.alwaysAllowPermission(action.requestId, action.sessionId)
+                                    is OpenCodeSessionComposerAction.OpenPermissionNote ->
+                                        viewModel.openPermissionNote(action.requestId, action.sessionId)
+                                    is OpenCodeSessionComposerAction.PermissionNoteChanged ->
+                                        viewModel.updatePermissionNote(action.requestId, action.text)
+                                    is OpenCodeSessionComposerAction.CancelPermissionNote ->
+                                        viewModel.cancelPermissionNote(action.requestId)
+                                    is OpenCodeSessionComposerAction.SendPermissionNote ->
+                                        viewModel.sendPermissionNote(action.requestId, action.sessionId)
                                     is OpenCodeSessionComposerAction.HidePermission ->
                                         viewModel.hidePermissionDock(action.requestId)
                                     is OpenCodeSessionComposerAction.HideQuestion ->

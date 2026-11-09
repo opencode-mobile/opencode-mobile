@@ -576,6 +576,101 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
+    fun v1RespondToPermission_denyWithNote_sendsTrimmedMessage() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("true")
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            val ok = repository.respondToPermission("ses_1", "per_1", PermissionDecision.Deny, "/repo", "  Run the tests first \n")
+
+            assertTrue(ok)
+            val request = requests.single()
+            assertTrue(request.url.encodedPath.endsWith("/permission/per_1/reply"))
+            val body = request.requestBodyText()
+            assertTrue(body.contains("\"reply\":\"reject\""))
+            assertTrue(body.contains("\"message\":\"Run the tests first\""))
+        }
+
+    @Test
+    fun v1RespondToPermission_blankNoteOrNonDeny_omitsMessage() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("true")
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            repository.respondToPermission("ses_1", "per_1", PermissionDecision.Deny, "/repo", "   ")
+            repository.respondToPermission("ses_1", "per_2", PermissionDecision.AllowOnce, "/repo", "ignored")
+
+            requests.forEach { request -> assertFalse(request.requestBodyText().contains("\"message\"")) }
+        }
+
+    @Test
+    fun v2RespondToPermission_denyWithNote_sendsMessage() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val ok = repository.respondToPermission("ses_1", "per_1", PermissionDecision.Deny, "/repo", "Use a branch instead")
+
+            assertTrue(ok)
+            val request = requests.single()
+            assertTrue(request.url.encodedPath.contains("/api/session/ses_1/permission/per_1/reply"))
+            val body = request.requestBodyText()
+            assertTrue(body.contains("\"decision\":\"reject\""))
+            assertTrue(body.contains("\"message\":\"Use a branch instead\""))
+        }
+
+    @Test
+    fun v2RespondToPermission_withoutNote_omitsMessage() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            repository.respondToPermission("ses_1", "per_1", PermissionDecision.Deny, "/repo")
+
+            assertFalse(requests.single().requestBodyText().contains("\"message\""))
+        }
+
+    @Test
     fun v2ListPendingQuestions_readsForms() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()

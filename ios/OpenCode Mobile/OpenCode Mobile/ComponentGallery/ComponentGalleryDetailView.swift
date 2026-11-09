@@ -188,6 +188,8 @@ struct ComponentGalleryDetailView: View {
             FileTabsGalleryView()
         case .button:
             ButtonGalleryView()
+        case .splitButton:
+            SplitButtonGalleryView()
         case .textInput:
             TextInputGalleryView()
         case .serverAddressInput:

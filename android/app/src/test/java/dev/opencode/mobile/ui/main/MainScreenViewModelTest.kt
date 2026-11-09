@@ -3426,6 +3426,7 @@ private class FakeSessionRepository(
         permissionId: String,
         decision: dev.opencode.mobile.domain.session.PermissionDecision,
         directory: String?,
+        message: String?,
     ) = error("unused")
 }
 

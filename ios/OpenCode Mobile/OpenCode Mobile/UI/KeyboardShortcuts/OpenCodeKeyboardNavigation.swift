@@ -347,6 +347,8 @@ nonisolated enum OpenCodePromptChordState: Equatable, Sendable {
     case none
     /// `actionsEnabled` is false while a reply is in flight or the session is read-only.
     case permission(requestID: String, actionsEnabled: Bool, alwaysOffered: Bool)
+    /// The "Deny with a note" step of a permission; `sendEnabled` once the note is not blank.
+    case permissionNote(requestID: String, sendEnabled: Bool)
     case question(requestID: String, isLastStep: Bool, nextEnabled: Bool, submitEnabled: Bool, dismissEnabled: Bool)
 }
 
@@ -355,6 +357,10 @@ nonisolated enum OpenCodePromptChordOutcome: Equatable, Sendable {
     case allowOnce
     case alwaysAllow
     case deny
+    /// Opens the "Deny with a note" step.
+    case denyWithNote
+    /// Sends the note of the "Deny with a note" step.
+    case sendNote
     case next
     case submit
     case dismiss
@@ -365,6 +371,8 @@ nonisolated enum OpenCodePromptChordOutcome: Equatable, Sendable {
         case .allowOnce: LocalizedStringResource("keyboard_shortcuts.allow_once", defaultValue: "Allow Once")
         case .alwaysAllow: LocalizedStringResource("keyboard_shortcuts.always_allow", defaultValue: "Always Allow")
         case .deny: LocalizedStringResource("keyboard_shortcuts.deny", defaultValue: "Deny")
+        case .denyWithNote: LocalizedStringResource("keyboard_shortcuts.deny_with_note", defaultValue: "Deny with a Note")
+        case .sendNote: LocalizedStringResource("keyboard_shortcuts.send_note", defaultValue: "Send Note")
         case .next: LocalizedStringResource("keyboard_shortcuts.next_question", defaultValue: "Next Question")
         case .submit: LocalizedStringResource("keyboard_shortcuts.submit_answers", defaultValue: "Submit Answers")
         case .dismiss: LocalizedStringResource("keyboard_shortcuts.dismiss_question", defaultValue: "Dismiss Question")
@@ -374,8 +382,9 @@ nonisolated enum OpenCodePromptChordOutcome: Equatable, Sendable {
 
 nonisolated enum OpenCodePromptChordRule {
     /// ⌘⏎ allows once or goes Next / Submits; ⌥⌘⏎ always allows when offered;
-    /// ⌘⌫ denies or dismisses. Nil when the chord does nothing now (no prompt, the
-    /// button is disabled, or a reply is in flight).
+    /// ⌘⌫ denies or dismisses; ⌥⌘⌫ opens "Deny with a note" on a permission, whose
+    /// note step only takes ⌘⏎ (Send). Nil when the chord does nothing now (no
+    /// prompt, the button is disabled, or a reply is in flight).
     static func outcome(_ shortcut: OpenCodeKeyboardShortcut, state: OpenCodePromptChordState) -> OpenCodePromptChordOutcome? {
         switch (shortcut, state) {
         case let (.promptPrimary, .permission(_, enabled, _)):
@@ -384,6 +393,10 @@ nonisolated enum OpenCodePromptChordRule {
             return enabled && offered ? .alwaysAllow : nil
         case let (.promptReject, .permission(_, enabled, _)):
             return enabled ? .deny : nil
+        case let (.promptRejectWithNote, .permission(_, enabled, _)):
+            return enabled ? .denyWithNote : nil
+        case let (.promptPrimary, .permissionNote(_, sendEnabled)):
+            return sendEnabled ? .sendNote : nil
         case let (.promptPrimary, .question(_, isLastStep, nextEnabled, submitEnabled, _)):
             if isLastStep { return submitEnabled ? .submit : nil }
             return nextEnabled ? .next : nil

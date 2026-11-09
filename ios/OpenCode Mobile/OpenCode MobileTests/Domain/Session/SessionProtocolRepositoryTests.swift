@@ -723,6 +723,89 @@ struct SessionProtocolRepositoryTests {
         #expect(!body.contains(#""reply""#))
     }
 
+    @Test func v2DenyWithNotePostsTrimmedMessage() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .deny,
+            directory: "/repo",
+            message: "  Run the tests with --watch=false instead\n"
+        )
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/permission/per_1/reply") == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        let json = try #require(try JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])
+        #expect(json["decision"] as? String == "reject")
+        #expect(json["message"] as? String == "Run the tests with --watch=false instead")
+        #expect(json.keys.sorted() == ["decision", "message"])
+    }
+
+    @Test func v2DenyWithBlankNoteOmitsMessage() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        _ = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .deny,
+            directory: "/repo",
+            message: "   "
+        )
+
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        #expect(!body.contains("message"))
+    }
+
+    @Test func v1DenyWithNotePostsMessageOnReplyRoute() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        let ok = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .deny,
+            directory: "/repo",
+            message: "Use the staging config"
+        )
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        let path = try #require(request.url?.path)
+        #expect(path.hasSuffix("/permission/per_1/reply"))
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        let json = try #require(try JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any])
+        #expect(json["reply"] as? String == "reject")
+        #expect(json["message"] as? String == "Use the staging config")
+    }
+
+    @Test func v1AllowIgnoresNoteAndPlainDenySendsNone() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent, .noContent])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        _ = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .allowOnce,
+            directory: "/repo",
+            message: "Not a deny"
+        )
+        _ = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_2",
+            decision: .deny,
+            directory: "/repo"
+        )
+
+        let bodies = ProtocolRoutingURLProtocol.bodies.compactMap { $0 }
+        #expect(bodies.count == 2)
+        #expect(bodies.allSatisfy { !$0.contains("message") })
+    }
+
     @Test func v1RespondToPermissionPostsPermissionReplyPath() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [.noContent])
         let repository = makeSessionRepository(serverProtocol: .v1)

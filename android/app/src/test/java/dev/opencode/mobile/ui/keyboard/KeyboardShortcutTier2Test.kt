@@ -31,6 +31,7 @@ class KeyboardShortcutTier2Test {
         assertEquals(KeyboardShortcutAction.PromptPrimary, match(KeyEvent.KEYCODE_NUMPAD_ENTER, ctrl = true))
         assertEquals(KeyboardShortcutAction.PromptAlways, match(KeyEvent.KEYCODE_ENTER, ctrl = true, alt = true))
         assertEquals(KeyboardShortcutAction.PromptReject, match(KeyEvent.KEYCODE_DEL, ctrl = true))
+        assertEquals(KeyboardShortcutAction.PromptRejectWithNote, match(KeyEvent.KEYCODE_DEL, ctrl = true, alt = true))
         val digits =
             listOf(
                 KeyEvent.KEYCODE_1,
@@ -61,7 +62,8 @@ class KeyboardShortcutTier2Test {
         assertNull(match(KeyEvent.KEYCODE_ENTER, shift = true))
         assertNull(match(KeyEvent.KEYCODE_ENTER, ctrl = true, shift = true))
         assertNull(match(KeyEvent.KEYCODE_DEL))
-        assertNull(match(KeyEvent.KEYCODE_DEL, ctrl = true, alt = true))
+        assertNull(match(KeyEvent.KEYCODE_DEL, ctrl = true, shift = true))
+        assertNull(match(KeyEvent.KEYCODE_DEL, alt = true))
         // Bare digits are not chords; Ctrl+0 is unbound.
         assertNull(match(KeyEvent.KEYCODE_1))
         assertNull(match(KeyEvent.KEYCODE_0, ctrl = true))
@@ -79,7 +81,13 @@ class KeyboardShortcutTier2Test {
 
     @Test
     fun gatingMatrix() {
-        val prompt = listOf(KeyboardShortcutAction.PromptPrimary, KeyboardShortcutAction.PromptAlways, KeyboardShortcutAction.PromptReject)
+        val prompt =
+            listOf(
+                KeyboardShortcutAction.PromptPrimary,
+                KeyboardShortcutAction.PromptAlways,
+                KeyboardShortcutAction.PromptReject,
+                KeyboardShortcutAction.PromptRejectWithNote,
+            )
         val app = KeyboardShortcutAction.entries - prompt.toSet()
         for (action in KeyboardShortcutAction.entries) {
             // Nothing over a sheet, dialog or menu.
@@ -95,6 +103,9 @@ class KeyboardShortcutTier2Test {
         // "Type your own answer": only Ctrl+Enter (save and Next / Submit).
         assertTrue(KeyboardShortcutRules.allowed(KeyboardShortcutAction.PromptPrimary, KeyboardShortcutTextFocus.CustomAnswer, false))
         assertFalse(KeyboardShortcutRules.allowed(KeyboardShortcutAction.PromptReject, KeyboardShortcutTextFocus.CustomAnswer, false))
+        assertFalse(
+            KeyboardShortcutRules.allowed(KeyboardShortcutAction.PromptRejectWithNote, KeyboardShortcutTextFocus.CustomAnswer, false),
+        )
         assertFalse(
             KeyboardShortcutRules.allowed(KeyboardShortcutAction.PromptAlways, KeyboardShortcutTextFocus.CustomAnswer, false),
         )
@@ -127,6 +138,7 @@ class KeyboardShortcutTier2Test {
         assertEquals("Allow Once", KeyboardShortcutAction.PromptPrimary.title.english())
         assertEquals("Always Allow", KeyboardShortcutAction.PromptAlways.title.english())
         assertEquals("Deny", KeyboardShortcutAction.PromptReject.title.english())
+        assertEquals("Deny with a Note", KeyboardShortcutAction.PromptRejectWithNote.title.english())
         assertEquals("Show acme-invoices", KeyboardShortcutRules.projectShortcutTitle("acme-invoices").english())
         assertEquals("Project 3", KeyboardShortcutAction.Project3.title.english())
     }
@@ -177,6 +189,7 @@ class KeyboardShortcutTier2Test {
         assertEquals(KeyboardShortcutGroupKind.Prompt, KeyboardShortcutAction.PromptPrimary.group)
         assertEquals(KeyboardShortcutGroupKind.Prompt, KeyboardShortcutAction.PromptAlways.group)
         assertEquals(KeyboardShortcutGroupKind.Prompt, KeyboardShortcutAction.PromptReject.group)
+        assertEquals(KeyboardShortcutGroupKind.Prompt, KeyboardShortcutAction.PromptRejectWithNote.group)
         assertEquals(KeyboardShortcutGroupKind.Go, KeyboardShortcutAction.Settings.group)
         KeyboardShortcutAction.projects.forEach { assertEquals(KeyboardShortcutGroupKind.Go, it.group) }
     }
@@ -228,6 +241,46 @@ class KeyboardShortcutTier2Test {
         assertTrue(press(KeyEvent.KEYCODE_ENTER))
         assertEquals(0, dismissed)
         assertEquals(1, submitted)
+    }
+
+    @Test
+    fun permissionNoteFieldKeepsCtrlBackspaceAndDenyChords() {
+        assertEquals(
+            KeyboardShortcutTextFocus.CustomAnswer,
+            KeyboardShortcutRules.textFocus(OpenCodeFocusedTextInput.PermissionNote, nativeTextEditorFocused = false),
+        )
+        val host = KeyboardShortcutHost()
+        var denied = 0
+        var noted = 0
+        host.register(KeyboardShortcutAction.PromptReject, UiText.verbatim("Deny")) { denied += 1 }
+        host.register(KeyboardShortcutAction.PromptRejectWithNote, UiText.verbatim("Deny with a Note")) { noted += 1 }
+
+        fun press(alt: Boolean) =
+            host.handleKey(
+                isDown = true,
+                keyCode = KeyEvent.KEYCODE_DEL,
+                ctrl = true,
+                alt = alt,
+                shift = false,
+                meta = false,
+                repeatCount = 0,
+                nativeTextEditorFocused = false,
+            )
+
+        // With nothing focused, Ctrl+Alt+Backspace opens the note and Ctrl+Backspace still denies.
+        assertTrue(press(alt = true))
+        assertTrue(press(alt = false))
+        assertEquals(1, noted)
+        assertEquals(1, denied)
+
+        // While typing the note (it also reports as a plain field), both chords stay with the text.
+        host.inputFocus.updateTextInput(Any(), OpenCodeFocusedTextInput.Field, focused = true)
+        host.inputFocus.updateTextInput(Any(), OpenCodeFocusedTextInput.PermissionNote, focused = true)
+        assertEquals(OpenCodeFocusedTextInput.PermissionNote, host.inputFocus.focusedTextInput)
+        assertFalse(press(alt = true))
+        assertFalse(press(alt = false))
+        assertEquals(1, noted)
+        assertEquals(1, denied)
     }
 
     @Test

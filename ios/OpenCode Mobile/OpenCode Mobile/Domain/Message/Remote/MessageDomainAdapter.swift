@@ -185,6 +185,13 @@ nonisolated struct MessageDomainAdapter: Sendable {
         state: MessageToolStateDTO?
     ) -> ToolPart {
         let status = toolStatus(from: state?.status)
+        let decline: ToolDecline? = if status != .error {
+            nil
+        } else if state?.declined == true {
+            ToolDecline(note: state?.declineNote.flatMap { $0.isEmpty ? nil : $0 })
+        } else {
+            ToolInterruption.v1Decline(error: state?.error)
+        }
         return ToolPart(
             id: id,
             toolName: toolName,
@@ -200,6 +207,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             isInterrupted: status == .error
                 && (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
             isMalformed: state?.malformed == true,
+            decline: decline,
             images: toolImages(state?.attachments, ownerID: id ?? callID)
         )
     }
@@ -803,8 +811,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     metadata: metadata,
                     timeStartEpochMs: content.time?.created,
                     timeEndEpochMs: content.time?.completed,
-                    isInterrupted: status == .error && ToolInterruption.isAbortedType(state?.error?.type),
+                    isInterrupted: status == .error && ToolInterruption.isUserInterruptionType(state?.error?.type),
                     isMalformed: SessionFailure.isMalformedTool(type: state?.error?.type, executed: state?.executed),
+                    decline: status == .error
+                        ? ToolInterruption.v2Decline(type: state?.error?.type, message: state?.error?.message)
+                        : nil,
                     images: v2ToolImages(state, ownerID: content.id ?? fallbackID)
                 )
             )

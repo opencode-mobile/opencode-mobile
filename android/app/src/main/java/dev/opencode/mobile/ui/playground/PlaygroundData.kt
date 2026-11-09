@@ -342,6 +342,7 @@ class PlaygroundSessionRepository(
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
+        message: String?,
     ): Boolean {
         world.update { current -> current.copy(permissions = current.permissions.filterNot { it.id == permissionId }) }
         return true

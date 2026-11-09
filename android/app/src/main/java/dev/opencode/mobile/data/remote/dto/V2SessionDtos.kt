@@ -105,6 +105,11 @@ data class V2PermissionSourceDto(
 @Serializable
 data class V2PermissionReplyRequestDto(
     val decision: String,
+    /**
+     * Deny with a note. The schema has `additionalProperties: false`, so the key is omitted when
+     * null (a default value is not encoded).
+     */
+    val message: String? = null,
 )
 
 @Serializable

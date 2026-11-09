@@ -66,6 +66,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case treeRow
     case fileTabs
     case button
+    case splitButton
     case textInput
     case serverAddressInput
     case emptyState
@@ -183,6 +184,12 @@ let componentGalleryEntries = [
         id: .button,
         title: "Button",
         description: "Reusable action component with text and icon variants.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .splitButton,
+        title: "Split Button",
+        description: "Compact button with a ▾ half that opens a menu of related actions; long-press opens it too.",
         category: .controls
     ),
     ComponentGalleryEntry(
