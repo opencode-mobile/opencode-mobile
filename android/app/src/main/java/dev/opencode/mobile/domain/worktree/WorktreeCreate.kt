@@ -5,6 +5,7 @@ data class CreateWorktreeRequest(
     val projectId: String?,
     /** The checkout the new one is made from (v1: the project checkout the server is asked in). */
     val sourceDirectory: String,
+    /** Blank lets the server name the checkout (the New session draft). */
     val name: String,
     /** V2 start ref; null starts from [sourceDirectory]'s HEAD. */
     val baseRef: String?,

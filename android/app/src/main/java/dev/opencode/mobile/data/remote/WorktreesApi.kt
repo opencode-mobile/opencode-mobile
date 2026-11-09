@@ -74,7 +74,8 @@ interface WorktreeRemote {
     suspend fun listV1(directory: String): V1WorktreeHttp
 
     /**
-     * V2 `POST /api/worktree` with `projectID`, `from`, `name`, and `branch` only when given.
+     * V2 `POST /api/worktree` with `projectID`, `from`, and `name` and `branch` only when given; a blank
+     * name lets the server pick one.
      * Returns the new checkout's directory. Throws [WorktreeHttpException] outside 2xx.
      */
     suspend fun createV2(
@@ -84,7 +85,10 @@ interface WorktreeRemote {
         branch: String?,
     ): String
 
-    /** V1 `POST /experimental/worktree?directory=` with `{"name"}`. Throws [WorktreeHttpException] outside 2xx. */
+    /**
+     * V1 `POST /experimental/worktree?directory=` with `{"name"}`, or `{}` for a blank name so the
+     * server picks one. Throws [WorktreeHttpException] outside 2xx.
+     */
     suspend fun createV1(
         directory: String,
         name: String,
@@ -164,7 +168,7 @@ class WorktreesApi private constructor(
                     buildJsonObject {
                         put("projectID", projectId)
                         put("from", from)
-                        put("name", name)
+                        name.takeIf { it.isNotBlank() }?.let { put("name", it) }
                         branch?.let { put("branch", it) }
                     }.toString(),
                 )
@@ -180,7 +184,7 @@ class WorktreesApi private constructor(
             httpClient.get().post("experimental/worktree") {
                 applyDirectory(directory)
                 contentType(ContentType.Application.Json)
-                setBody(buildJsonObject { put("name", name) }.toString())
+                setBody(buildJsonObject { name.takeIf { it.isNotBlank() }?.let { put("name", it) } }.toString())
             }
         val dto = lenientJson.decodeFromString<V1CreatedWorktreeDto>(response.successText())
         return V1CreatedWorktree(name = dto.name, branch = dto.branch?.takeIf { it.isNotBlank() }, directory = dto.directory)

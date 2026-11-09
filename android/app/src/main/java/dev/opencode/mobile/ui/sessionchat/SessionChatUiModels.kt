@@ -161,6 +161,11 @@ sealed interface SessionChatSnackbarAction {
     ) : SessionChatSnackbarAction {
         override val label: String get() = "Retry"
     }
+
+    /** Send the New session draft again after its first send failed; reuses what it already created. */
+    data object RetryNewSessionDraft : SessionChatSnackbarAction {
+        override val label: String get() = "Retry"
+    }
 }
 
 data class SessionChatSnackbar(
@@ -364,6 +369,8 @@ data class SessionChatUiState(
     val worktree: String = "",
     /** `/btw` side questions: composer mode, chips above the composer and the answer sheet. */
     val sideQuestions: SessionChatSideQuestionsUiState = SessionChatSideQuestionsUiState(),
+    /** New session before its first send (#1004); null once the session exists. */
+    val newSessionDraft: NewSessionDraftUiState? = null,
 ) {
     /** A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet. */
     fun blocksChipTimelineIntro(): Boolean =
@@ -988,7 +995,8 @@ data class SessionChatTimelineStyleOption(
 }
 
 enum class SessionChatTimelineState {
-    Creating,
+    /** New session before its first send: nothing on the server yet. */
+    Draft,
     Loading,
     Empty,
     Ready,

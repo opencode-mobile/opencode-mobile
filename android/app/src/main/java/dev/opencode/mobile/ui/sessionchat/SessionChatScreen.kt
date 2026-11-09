@@ -74,6 +74,10 @@ import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.ui.sessionchat.view.NewSessionDraftCallbacks
+import dev.opencode.mobile.ui.sessionchat.view.NewSessionDraftSheets
+import dev.opencode.mobile.ui.sessionchat.view.NewSessionDraftTags
+import dev.opencode.mobile.ui.sessionchat.view.RunSessionInCard
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.session.SideQuestion
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
@@ -201,8 +205,10 @@ fun SessionChatScreen(
     optimisticNavigationInstanceId: String? = null,
     parentId: String? = null,
     onNavigateBack: () -> Unit = {},
-    /** Ctrl+N: open a new session in [worktree] the way Home's New session does; null turns Ctrl+N off. */
+    /** Ctrl+N: open the New session draft (its checkout is [worktree]) the way Home's New session does; null turns Ctrl+N off. */
     onNewSessionRequested: ((worktree: String) -> Unit)? = null,
+    /** The draft's Add project…: Home's Add project flow; the project it adds becomes the draft's. */
+    onAddProjectRequested: () -> Unit = {},
     onSessionContextClick: () -> Unit = {},
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit = {},
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit = {},
@@ -235,6 +241,7 @@ fun SessionChatScreen(
             parentId = parentId,
             onNavigateBack = onNavigateBack,
             onNewSessionRequested = onNewSessionRequested,
+            onAddProjectRequested = onAddProjectRequested,
             onSessionContextClick = onSessionContextClick,
             onReviewChangesClick = onReviewChangesClick,
             onChildSessionClick = onChildSessionClick,
@@ -261,6 +268,7 @@ private fun SessionChatScreenBody(
     parentId: String?,
     onNavigateBack: () -> Unit,
     onNewSessionRequested: ((worktree: String) -> Unit)?,
+    onAddProjectRequested: () -> Unit,
     onSessionContextClick: () -> Unit,
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit,
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit,
@@ -327,6 +335,25 @@ private fun SessionChatScreenBody(
         label = SNACKBAR_INSET_ANIMATION_LABEL,
     )
     val sessionCreated = !OptimisticSessionCreate.isPlaceholder(uiState.sessionId)
+    // New session before its first send (#1004): nothing exists on the server yet.
+    val drafting = uiState.newSessionDraft != null
+    val newSessionDraftCallbacks =
+        remember(viewModel) {
+            NewSessionDraftCallbacks(
+                onOpenProject = viewModel::openNewSessionProjectSheet,
+                onOpenWorktree = viewModel::openNewSessionWorktreeSheet,
+                onOpenBaseBranch = viewModel::openNewSessionBaseBranchSheet,
+                onDismissSheet = viewModel::dismissNewSessionSheet,
+                onProjectQueryChange = viewModel::updateNewSessionProjectQuery,
+                onSelectProject = viewModel::selectNewSessionProject,
+                onAddProject = {
+                    viewModel.requestNewSessionAddProject()
+                    onAddProjectRequested()
+                },
+                onSelectPlace = viewModel::selectNewSessionPlace,
+                onSelectBaseBranch = viewModel::selectNewSessionBaseBranch,
+            )
+        }
     val lifecycleActionsEnabled = sessionCreated && !uiState.isLifecycleActionInFlight
     var showAttachmentSource by rememberSaveable { mutableStateOf(false) }
 
@@ -732,6 +759,8 @@ private fun SessionChatScreenBody(
         },
     )
 
+    NewSessionDraftSheets(state = uiState.newSessionDraft, callbacks = newSessionDraftCallbacks)
+
     SessionChatMoveToWorktreeSheet(
         state = uiState.moveToWorktree,
         onDismiss = viewModel::dismissMoveToWorktree,
@@ -765,6 +794,23 @@ private fun SessionChatScreenBody(
                 onDismissRequest = { menuExpanded = false },
                 entries =
                     buildList {
+                        if (drafting) {
+                            // A draft has nothing on the server to act on; it can only be thrown away.
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = stringResource(R.string.new_session_draft_discard),
+                                    icon = OpenCodeIcons.Delete,
+                                    destructive = true,
+                                    testTag = NewSessionDraftTags.DISCARD,
+                                    onClick = {
+                                        menuExpanded = false
+                                        viewModel.discardNewSessionDraft()
+                                        onNavigateBack()
+                                    },
+                                ),
+                            )
+                            return@buildList
+                        }
                         add(
                             OpenCodeOverflowMenuEntry(
                                 title = stringResource(R.string.session_chat_menu_rename),
@@ -887,11 +933,18 @@ private fun SessionChatScreenBody(
                     },
             ) {
                 OpenCodeTopBar(
-                    title = titleMenu?.title ?: uiState.sessionTitle.ifBlank { sessionTitle },
+                    title =
+                        if (drafting) {
+                            stringResource(R.string.new_session_draft_title)
+                        } else {
+                            titleMenu?.title ?: uiState.sessionTitle.ifBlank { sessionTitle }
+                        },
                     onTitleClick = titleMenu?.onClick,
-                    subtitle = uiState.projectLabel,
+                    subtitle = if (drafting) stringResource(R.string.new_session_draft_subtitle) else uiState.projectLabel,
                     subtitleLeading =
-                        if (uiState.worktreeCheckout) {
+                        if (drafting) {
+                            null
+                        } else if (uiState.worktreeCheckout) {
                             OpenCodeTopBarSubtitleLeading.Worktree
                         } else {
                             uiState.projectLetter?.let { letter ->
@@ -980,157 +1033,177 @@ private fun SessionChatScreenBody(
                         .weight(1f)
                         .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
             ) {
-                SessionChatTimelineView(
-                    props =
-                        SessionChatTimelineViewProps(
-                            timeline = uiState.timeline,
-                            messages = uiState.messages,
-                            timelineFrame = uiState.timelineFrame,
-                            isRefreshing = uiState.isRefreshing,
-                            hasOlder = uiState.hasOlder,
-                            isLoadingOlder = uiState.isLoadingOlder,
-                            errorMessage = uiState.errorMessage,
-                            sessionBranchPill = uiState.sessionBranchPill,
-                            syncingIndicatorLabel = uiState.syncingIndicatorLabel,
-                            workingIndicatorLabel = uiState.workingIndicatorLabel,
-                            workingIndicatorCollapsed = uiState.workingIndicatorCollapsed,
-                            workingIndicatorFading = uiState.workingIndicatorFading,
-                            sessionTodosVisible = sessionTodosPillVisible,
-                            sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
-                            sessionTodoTotalCount = uiState.sessionTodoTotalCount,
-                            sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
-                            hideFloatStack = showSessionTodosSheet || showSubagentsSheet || uiState.shellOutput != null,
-                            hideLiveRetryFailures = uiState.retryCard != null,
-                            hideRetryCountdown = uiState.isRetrying,
-                            noticeModelNames = noticeModelNames,
-                            // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
-                            // uses this as-is (no extra scrollToEndPillBottomPadding).
-                            bottomOverlayInset = timelineBottomInset + animatedSnackbarOverlayHeight,
-                            activityItems =
-                                sessionChatActivityItems(
-                                    uiState = uiState,
-                                    composerKind =
-                                        SessionChatComposerKind.resolve(
-                                            isChildSession = isChildSession,
-                                            hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
-                                            hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
-                                        ),
-                                ),
-                            keyboardVisible = WindowInsets.isImeVisible,
-                            onActivityClick = { item ->
-                                when (item) {
-                                    SessionChatActivityItem.ReviewPermission -> viewModel.showPermissionDock()
-                                    SessionChatActivityItem.AnswerQuestion -> viewModel.showQuestionDock()
-                                    is SessionChatActivityItem.Subagents -> {
-                                        if (!item.pill.needsInput || !viewModel.openWaitingSubagentRequest()) {
-                                            logChatAction(ProductAnalytics.Action.CHAT_OPEN_SUBAGENTS)
-                                            showSubagentsSheet = true
+                val draftState = uiState.newSessionDraft
+                if (draftState != null) {
+                    // The draft's empty timeline: the Run session in card between the header and the composer.
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(bottom = timelineBottomInset)
+                                .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        RunSessionInCard(
+                            state = draftState,
+                            callbacks = newSessionDraftCallbacks,
+                            compact = WindowInsets.isImeVisible,
+                        )
+                    }
+                } else {
+                    SessionChatTimelineView(
+                        props =
+                            SessionChatTimelineViewProps(
+                                timeline = uiState.timeline,
+                                messages = uiState.messages,
+                                timelineFrame = uiState.timelineFrame,
+                                isRefreshing = uiState.isRefreshing,
+                                hasOlder = uiState.hasOlder,
+                                isLoadingOlder = uiState.isLoadingOlder,
+                                errorMessage = uiState.errorMessage,
+                                sessionBranchPill = uiState.sessionBranchPill,
+                                syncingIndicatorLabel = uiState.syncingIndicatorLabel,
+                                workingIndicatorLabel = uiState.workingIndicatorLabel,
+                                workingIndicatorCollapsed = uiState.workingIndicatorCollapsed,
+                                workingIndicatorFading = uiState.workingIndicatorFading,
+                                sessionTodosVisible = sessionTodosPillVisible,
+                                sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
+                                sessionTodoTotalCount = uiState.sessionTodoTotalCount,
+                                sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
+                                hideFloatStack = showSessionTodosSheet || showSubagentsSheet || uiState.shellOutput != null,
+                                hideLiveRetryFailures = uiState.retryCard != null,
+                                hideRetryCountdown = uiState.isRetrying,
+                                noticeModelNames = noticeModelNames,
+                                // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
+                                // uses this as-is (no extra scrollToEndPillBottomPadding).
+                                bottomOverlayInset = timelineBottomInset + animatedSnackbarOverlayHeight,
+                                activityItems =
+                                    sessionChatActivityItems(
+                                        uiState = uiState,
+                                        composerKind =
+                                            SessionChatComposerKind.resolve(
+                                                isChildSession = isChildSession,
+                                                hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
+                                                hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
+                                            ),
+                                    ),
+                                keyboardVisible = WindowInsets.isImeVisible,
+                                onActivityClick = { item ->
+                                    when (item) {
+                                        SessionChatActivityItem.ReviewPermission -> viewModel.showPermissionDock()
+                                        SessionChatActivityItem.AnswerQuestion -> viewModel.showQuestionDock()
+                                        is SessionChatActivityItem.Subagents -> {
+                                            if (!item.pill.needsInput || !viewModel.openWaitingSubagentRequest()) {
+                                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_SUBAGENTS)
+                                                showSubagentsSheet = true
+                                            }
                                         }
+                                        is SessionChatActivityItem.SideQuestionsFailed -> viewModel.retrySideQuestions()
+                                        is SessionChatActivityItem.SideQuestionsReady -> viewModel.openSideQuestionAnswer()
+                                        is SessionChatActivityItem.Queued -> showPendingPromptsSheet = true
+                                        else -> Unit
                                     }
-                                    is SessionChatActivityItem.SideQuestionsFailed -> viewModel.retrySideQuestions()
-                                    is SessionChatActivityItem.SideQuestionsReady -> viewModel.openSideQuestionAnswer()
-                                    is SessionChatActivityItem.Queued -> showPendingPromptsSheet = true
-                                    else -> Unit
-                                }
-                            },
-                            onActivityClose = { item ->
-                                if (item is SessionChatActivityItem.SideQuestionsFailed) {
-                                    viewModel.dismissFailedSideQuestions()
-                                }
-                            },
-                            onRefresh = viewModel::refreshMessages,
-                            onRetry = viewModel::retryFailedTimeline,
-                            onLoadOlder = viewModel::loadOlderMessages,
-                            onSessionBranchClick = {
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
-                                onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
-                            },
-                            onSessionBranchCopied = viewModel::branchNameCopied,
-                            onSessionTodosClick = {
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TODOS)
-                                if (!blocksSessionTodosSheet) {
-                                    showSessionTodosSheet = true
-                                }
-                            },
-                            onMessageActionsTap = {
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_MESSAGE_ACTIONS)
-                                messageActionsTarget = it
-                            },
-                            onToolDetailTap = {
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
-                                toolDetailTarget = it
-                            },
-                            onSkillsTap = {
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_SKILLS)
-                                skillsTarget = it
-                            },
-                            onToolGroupTap = { target ->
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_GROUP)
-                                SessionToolGroupImages.put(sessionId, target)
-                                onToolGroupClick(
-                                    target.toRoute(
-                                        sessionId = sessionId,
-                                        worktree = currentWorktree,
-                                        parentId = parentId ?: uiState.sessionParentId,
-                                        owningTurnMessageId = uiState.owningTurnMessageId(target.messageId),
-                                        supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
-                                        lastTurnDiffUnavailable =
-                                            uiState.owningTurnMessageId(target.messageId)
-                                                ?.let(uiState::lastTurnSpansLocationChange) == true,
-                                    ),
-                                )
-                            },
-                            onChildSessionTap = { childSessionId, childTitle ->
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
-                                onChildSessionClick(
-                                    ChildSessionNavigationTarget(
-                                        sessionId = childSessionId,
-                                        sessionTitle = childTitle,
-                                        worktree = currentWorktree,
-                                    ),
-                                )
-                            },
-                            onChangesReviewTap = changesReview@{ assistantMessageId, initialFilePath ->
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
-                                val target =
-                                    uiState.fileChangeNavigationTarget(
-                                        worktree = currentWorktree,
-                                        assistantMessageId = assistantMessageId,
-                                        initialFilePath = initialFilePath,
-                                    ) ?: return@changesReview
-                                if (target.messageId?.let(uiState::lastTurnSpansLocationChange) == true) {
-                                    viewModel.presentTurnDiffUnavailable()
-                                    return@changesReview
-                                }
-                                onReviewChangesClick(target)
-                            },
-                            supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
-                            expandedStepParagraphs = uiState.expandedStepParagraphs,
-                            onExpandStepParagraph = viewModel::expandStepParagraph,
-                            unfoldedStepRails = uiState.unfoldedStepRails,
-                            onToggleStepRailFold = viewModel::toggleStepRailFold,
-                            presentedActivityCard = uiState.presentedActivityCard,
-                            activityCardChildren = uiState.activityCardChildren,
-                            activityCardFooters = uiState.activityCardFooters,
-                            debouncedStepIds = uiState.debouncedStepIds,
-                            onOpenActivityCard = { blockId ->
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
-                                viewModel.openActivityCard(blockId)
-                            },
-                            onDismissActivityCard = viewModel::dismissActivityCard,
-                            activityCardDetailStepId = uiState.activityCardDetailStepId,
-                            onOpenActivityCardStep = { stepId ->
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
-                                viewModel.openActivityCardStep(stepId)
-                            },
-                            onCloseActivityCardStep = viewModel::closeActivityCardStep,
-                            imageViewer = uiState.imageViewer,
-                            onOpenImageViewer = viewModel::openImageViewer,
-                            onImageViewerPageChange = viewModel::showImageViewerPage,
-                            onDismissImageViewer = viewModel::dismissImageViewer,
-                        ),
-                    modifier = Modifier.fillMaxSize(),
-                )
+                                },
+                                onActivityClose = { item ->
+                                    if (item is SessionChatActivityItem.SideQuestionsFailed) {
+                                        viewModel.dismissFailedSideQuestions()
+                                    }
+                                },
+                                onRefresh = viewModel::refreshMessages,
+                                onRetry = viewModel::retryFailedTimeline,
+                                onLoadOlder = viewModel::loadOlderMessages,
+                                onSessionBranchClick = {
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
+                                    onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
+                                },
+                                onSessionBranchCopied = viewModel::branchNameCopied,
+                                onSessionTodosClick = {
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_TODOS)
+                                    if (!blocksSessionTodosSheet) {
+                                        showSessionTodosSheet = true
+                                    }
+                                },
+                                onMessageActionsTap = {
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_MESSAGE_ACTIONS)
+                                    messageActionsTarget = it
+                                },
+                                onToolDetailTap = {
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                                    toolDetailTarget = it
+                                },
+                                onSkillsTap = {
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_SKILLS)
+                                    skillsTarget = it
+                                },
+                                onToolGroupTap = { target ->
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_GROUP)
+                                    SessionToolGroupImages.put(sessionId, target)
+                                    onToolGroupClick(
+                                        target.toRoute(
+                                            sessionId = sessionId,
+                                            worktree = currentWorktree,
+                                            parentId = parentId ?: uiState.sessionParentId,
+                                            owningTurnMessageId = uiState.owningTurnMessageId(target.messageId),
+                                            supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
+                                            lastTurnDiffUnavailable =
+                                                uiState
+                                                    .owningTurnMessageId(target.messageId)
+                                                    ?.let(uiState::lastTurnSpansLocationChange) == true,
+                                        ),
+                                    )
+                                },
+                                onChildSessionTap = { childSessionId, childTitle ->
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
+                                    onChildSessionClick(
+                                        ChildSessionNavigationTarget(
+                                            sessionId = childSessionId,
+                                            sessionTitle = childTitle,
+                                            worktree = currentWorktree,
+                                        ),
+                                    )
+                                },
+                                onChangesReviewTap = changesReview@{ assistantMessageId, initialFilePath ->
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
+                                    val target =
+                                        uiState.fileChangeNavigationTarget(
+                                            worktree = currentWorktree,
+                                            assistantMessageId = assistantMessageId,
+                                            initialFilePath = initialFilePath,
+                                        ) ?: return@changesReview
+                                    if (target.messageId?.let(uiState::lastTurnSpansLocationChange) == true) {
+                                        viewModel.presentTurnDiffUnavailable()
+                                        return@changesReview
+                                    }
+                                    onReviewChangesClick(target)
+                                },
+                                supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
+                                expandedStepParagraphs = uiState.expandedStepParagraphs,
+                                onExpandStepParagraph = viewModel::expandStepParagraph,
+                                unfoldedStepRails = uiState.unfoldedStepRails,
+                                onToggleStepRailFold = viewModel::toggleStepRailFold,
+                                presentedActivityCard = uiState.presentedActivityCard,
+                                activityCardChildren = uiState.activityCardChildren,
+                                activityCardFooters = uiState.activityCardFooters,
+                                debouncedStepIds = uiState.debouncedStepIds,
+                                onOpenActivityCard = { blockId ->
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                                    viewModel.openActivityCard(blockId)
+                                },
+                                onDismissActivityCard = viewModel::dismissActivityCard,
+                                activityCardDetailStepId = uiState.activityCardDetailStepId,
+                                onOpenActivityCardStep = { stepId ->
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                                    viewModel.openActivityCardStep(stepId)
+                                },
+                                onCloseActivityCardStep = viewModel::closeActivityCardStep,
+                                imageViewer = uiState.imageViewer,
+                                onOpenImageViewer = viewModel::openImageViewer,
+                                onImageViewerPageChange = viewModel::showImageViewerPage,
+                                onDismissImageViewer = viewModel::dismissImageViewer,
+                            ),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
 
                 if (timelineBottomInset > 0.dp) {
                     OpenCodeBottomFade(
@@ -1146,6 +1219,7 @@ private fun SessionChatScreenBody(
                         val snackbar = uiState.snackbar?.takeIf { it.id == message.id }
                         when (val action = snackbar?.action) {
                             is SessionChatSnackbarAction.RetrySideQuestion -> viewModel.retrySideQuestions(action.id)
+                            SessionChatSnackbarAction.RetryNewSessionDraft -> viewModel.sendPrompt()
                             null -> Unit
                         }
                     },
@@ -1379,12 +1453,11 @@ private fun SessionChatScreenBody(
                                                         !blockedSideQuestion
                                                 }
                                             ) &&
-                                                sessionCreated &&
-                                                uiState.timeline != SessionChatTimelineState.Creating &&
+                                                (sessionCreated || drafting) &&
                                                 uiState.composerEnabled,
                                         attachEnabled =
                                             attachmentSources.isAttachEnabled &&
-                                                sessionCreated &&
+                                                (sessionCreated || drafting) &&
                                                 uiState.composer.isModelSelectionReady &&
                                                 !uiState.composer.isShellMode &&
                                                 !sideQuestionMode,
@@ -1439,9 +1512,9 @@ private fun SessionChatScreenBody(
                         // Home's New session. Home stands down while this chat shows beside it.
                         KeyboardShortcutHandler(
                             KeyboardShortcutAction.NewSession,
-                            enabled = onNewSessionRequested != null && uiState.canMutate && currentWorktree.isNotEmpty(),
+                            enabled = onNewSessionRequested != null && sessionCreated && currentWorktree.isNotEmpty(),
                         ) {
-                            onNewSessionRequested?.invoke(currentWorktree)
+                            onNewSessionRequested?.invoke(viewModel.prepareNewSessionDraft())
                         }
                         KeyboardShortcutHandler(KeyboardShortcutAction.CommandPalette, enabled = promptComposerShown) {
                             viewModel.openCommands()
