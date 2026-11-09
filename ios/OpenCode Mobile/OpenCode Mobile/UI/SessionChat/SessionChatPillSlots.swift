@@ -84,6 +84,8 @@ struct SessionChatActivitySlot: Equatable {
 
 /// A top-left context pill.
 enum SessionChatContextItem: Equatable {
+    /// The session's `/goal`; first in the row.
+    case goal(SessionChatGoalPillUiState)
     case todos(completed: Int, total: Int)
     case branch(SessionChatBranchPillUiState)
 }
@@ -121,7 +123,7 @@ enum SessionChatNavigationPill: Equatable {
 /// Pure rules for the three Session Chat corner slots.
 enum SessionChatPillSlots {
     static let finishedFadeSeconds: TimeInterval = 3
-    static let maxContextPills = 2
+    static let maxContextPills = 3
 
     /// Bottom left: highest priority first, the rest behind "+N". Finished items
     /// older than the fade drop out. With the keyboard up the pill goes compact
@@ -181,12 +183,16 @@ enum SessionChatPillSlots {
         .min()
     }
 
-    /// Top left: the branch in the corner, then todos, at most two.
+    /// Top left: the goal first, then the branch, then todos, at most three.
     static func context(
+        goal: SessionChatGoalPillUiState? = nil,
         todos: (completed: Int, total: Int)?,
         branch: SessionChatBranchPillUiState?
     ) -> [SessionChatContextItem] {
         var items: [SessionChatContextItem] = []
+        if let goal {
+            items.append(.goal(goal))
+        }
         if let branch {
             items.append(.branch(branch))
         }

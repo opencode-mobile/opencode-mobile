@@ -12,6 +12,10 @@ enum OpenCodeTagTone {
     case neutral
     /// Interactive tint, for a label that should stand out, such as "Recommended".
     case accent
+    /// Waiting on the user, such as a paused goal.
+    case warning
+    /// Done, such as a met goal.
+    case success
 }
 
 /// Static capsule label.
@@ -31,6 +35,8 @@ struct OpenCodeTag: View {
         switch tone {
         case .neutral: OpenCodeColors.surfaceRaisedBase
         case .accent: OpenCodeColors.interactive.opacity(0.12)
+        case .warning: OpenCodeColors.warning.opacity(0.14)
+        case .success: OpenCodeColors.success.opacity(0.14)
         }
     }
 
@@ -38,6 +44,8 @@ struct OpenCodeTag: View {
         switch tone {
         case .neutral: neutral
         case .accent: OpenCodeColors.textInteractiveBase
+        case .warning: OpenCodeColors.warning
+        case .success: OpenCodeColors.success
         }
     }
 
@@ -71,6 +79,8 @@ struct OpenCodeTag: View {
         OpenCodeTag("git", size: .small)
         OpenCodeTag("Recommended", tone: .accent)
         OpenCodeTag("Recommended", size: .small, tone: .accent)
+        OpenCodeTag("Paused", size: .small, tone: .warning)
+        OpenCodeTag("Met", size: .small, tone: .success)
     }
     .padding()
     .openCodeTheme()

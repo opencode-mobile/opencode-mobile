@@ -431,6 +431,20 @@ extension Container {
         }.singleton
     }
 
+    var goalAPIClient: Factory<GoalAPIClient> {
+        onMainActor { GoalAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var sessionGoalRepository: Factory<any SessionGoalRepository> {
+        onMainActor {
+            DefaultSessionGoalRepository(
+                api: self.goalAPIClient(),
+                commandRepository: self.commandRepository(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
     var agentsAPIClient: Factory<AgentsAPIClient> {
         onMainActor { AgentsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
@@ -748,7 +762,8 @@ extension Container {
                 projectRepository: self.projectRepository(),
                 worktreeInventoryCache: self.worktreeInventoryCache(),
                 agentShellRepository: self.agentShellRepository(),
-                newSessionDraftStore: self.newSessionDraftStore()
+                newSessionDraftStore: self.newSessionDraftStore(),
+                goalRepository: self.sessionGoalRepository()
             )
         }
     }

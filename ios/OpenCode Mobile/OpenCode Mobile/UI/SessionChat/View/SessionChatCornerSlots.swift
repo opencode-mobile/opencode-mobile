@@ -254,18 +254,28 @@ struct SessionChatActivitySlotView: View {
     }
 }
 
-/// Top-left context pills: todos progress and the branch pill.
+/// Top-left context pills: the goal, todos progress and the branch pill.
 struct SessionChatContextSlotView: View {
     let items: [SessionChatContextItem]
     let todosAccessibilityLabel: String
     let onTodosTap: () -> Void
     let onBranchTap: () -> Void
     var onBranchCopied: () -> Void = {}
+    var onGoalTap: () -> Void = {}
 
     var body: some View {
         HStack(spacing: SessionChatActivitySlotView.spacing) {
             ForEach(items, id: \.slotKey) { item in
                 switch item {
+                case let .goal(goal):
+                    OpenCodeFloatingPill(
+                        layout: goal.floatingPillLayout,
+                        state: goal.floatingPillState,
+                        accessibilityLabel: goal.accessibilityLabel,
+                        action: onGoalTap
+                    )
+                    .opacity(goal.isStale ? Self.staleOpacity : 1)
+                    .transition(.opacity)
                 case let .todos(completed, total):
                     OpenCodeFloatingPill(
                         layout: .iconLabel(
@@ -289,6 +299,33 @@ struct SessionChatContextSlotView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: items.map(\.slotKey))
     }
+
+    /// A goal kept from before a reconnect reads as last known.
+    private static let staleOpacity = 0.55
+}
+
+extension SessionChatGoalPillUiState {
+    /// Working spins; waiting shows the goal mark; paused needs attention; met is done.
+    var floatingPillLayout: OpenCodeFloatingPillLayout {
+        switch activity {
+        case .working: .counter(label: label)
+        case .waiting: .iconLabel(icon: Self.goalIcon, label: label)
+        case .paused: .iconLabel(icon: .pause, label: label)
+        case .met: .iconLabel(icon: .check, label: label)
+        }
+    }
+
+    var floatingPillState: OpenCodeFloatingPillState {
+        switch activity {
+        case .working: .live
+        case .waiting: .ready
+        case .paused: .needsAttention
+        case .met: .done
+        }
+    }
+
+    /// The goal's mark: a dot in a ring, the nearest catalog glyph to a target.
+    static let goalIcon: OpenCodeIcon = .radioButtonChecked
 }
 
 /// What the bottom-right slot shows: Syncing, then scroll to end.
@@ -341,6 +378,7 @@ struct SessionChatTrailingSlotView: View {
 private extension SessionChatContextItem {
     var slotKey: String {
         switch self {
+        case .goal: "goal"
         case .todos: "todos"
         case .branch: "branch"
         }

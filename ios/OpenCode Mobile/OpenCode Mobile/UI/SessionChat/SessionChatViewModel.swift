@@ -25,6 +25,7 @@ final class SessionChatViewModel {
     private let inbox: SessionChatInbox
     private let sideQuestions: SessionChatSideQuestions
     private let shells: SessionChatShells
+    private let goalRegion: SessionChatGoal
     /// The loaded messages last pushed to `shells`, so unchanged publishes push nothing.
     @ObservationIgnored private var shellTranscript: [Message]?
     private let sessionRepository: any SessionRepository
@@ -165,7 +166,8 @@ final class SessionChatViewModel {
         projectRepository: any ProjectRepository = UnavailableProjectRepository(),
         worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
         agentShellRepository: any AgentShellRepository = UnavailableAgentShellRepository(),
-        newSessionDraftStore: NewSessionDraftStore? = nil
+        newSessionDraftStore: NewSessionDraftStore? = nil,
+        goalRepository: any SessionGoalRepository = UnavailableSessionGoalRepository()
     ) {
         // A New session draft binds where its kept draft runs, whatever the route said.
         let draftStore = newSessionDraftStore ?? NewSessionDraftStore()
@@ -269,6 +271,12 @@ final class SessionChatViewModel {
             supported: { activeConnectionManager.capabilities.supportsSideQuestion }
         )
         self.shells = SessionChatShells(sessionID: sessionID, worktree: worktree, repository: agentShellRepository)
+        self.goalRegion = SessionChatGoal(
+            sessionID: sessionID,
+            worktree: worktree,
+            repository: goalRepository,
+            foregroundEventStream: foregroundEventStream
+        )
         let boundSessionInfo = self.sessionInfo
         let boundTimeline = self.timeline
         self.inbox = SessionChatInbox(
@@ -301,6 +309,7 @@ final class SessionChatViewModel {
         inbox.onChange = { [weak self] in self?.publishUiState() }
         sideQuestions.onChange = { [weak self] in self?.publishUiState() }
         shells.onChange = { [weak self] in self?.publishUiState() }
+        goalRegion.onChange = { [weak self] in self?.publishUiState() }
         sideQuestions.canPresentAnswer = { [weak self] in self?.canPresentSideQuestionAnswer ?? false }
         refreshProjectIdentity()
         publishUiState()
@@ -346,6 +355,7 @@ final class SessionChatViewModel {
         timeline.startObserving()
         inbox.startObserving()
         shells.start()
+        goalRegion.start()
     }
 
     /// Error-state Retry: refetches the timeline. A draft has no timeline to fail.
@@ -989,6 +999,27 @@ final class SessionChatViewModel {
     }
 
     /// The branch pill copied the branch name; confirm it with a snackbar.
+    // MARK: Goal
+
+    func openGoalSheet() {
+        goalRegion.openSheet()
+    }
+
+    func closeGoalSheet() {
+        goalRegion.closeSheet()
+    }
+
+    func performGoalAction(_ action: SessionGoalAction) {
+        goalRegion.perform(action)
+    }
+
+    /// New goal…: the composer gets "/goal " so the user types the next objective.
+    func startNewGoal() {
+        goalRegion.closeSheet()
+        let draft = "/\(SessionGoalKickoff.commandName) "
+        updateComposerText(draft, cursor: draft.count)
+    }
+
     func branchNameCopied() {
         branchCopiedNotice = Self.branchCopiedMessage
         // A repeat copy shows the snackbar again even if the last one was dismissed.
@@ -1019,6 +1050,7 @@ final class SessionChatViewModel {
         turnDiffNotice = nil
         commands.clearActionFeedback()
         sideQuestions.clearNotice()
+        goalRegion.clearNotice()
         composer.clearTransientErrors()
         sessionInfo.clearTransientErrors()
         timeline.clearReadyError()
@@ -1783,6 +1815,7 @@ final class SessionChatViewModel {
         inbox.stop()
         sideQuestions.stop()
         shells.stop()
+        goalRegion.stop()
         collapsePreferenceGeneration += 1
         // Only release our own focus: the next Session Chat (child, parent, fork) may already
         // have focused itself before this screen disappears.
@@ -2082,6 +2115,7 @@ final class SessionChatViewModel {
         commands.retarget(worktree: directory)
         shells.retarget(worktree: directory)
         inbox.retarget(worktree: directory)
+        goalRegion.retarget(worktree: directory)
     }
 
     /// Mirrors the draft (with what the composer holds) into the per-profile store.
@@ -2237,6 +2271,7 @@ final class SessionChatViewModel {
         sessionInfo.bind(sessionID: id, sessionTitle: title)
         inbox.bind(sessionID: id)
         shells.rebind(sessionID: id)
+        goalRegion.rebind(sessionID: id)
         // Left before the create finished: the next screen to show it starts observing.
         if isSessionBound {
             startObserving()
@@ -2309,6 +2344,7 @@ final class SessionChatViewModel {
             if let error = composerState.errorMessage { return error }
             if let error = composerState.abortErrorMessage { return error }
             if let error = commandsState.actionErrorMessage { return error }
+            if let error = goalRegion.state.errorNotice { return error }
             if let error = moveErrorMessage { return error }
             if let error = turnDiffNotice { return error }
             if let error = infoState.errorMessage { return error }
@@ -2393,6 +2429,17 @@ final class SessionChatViewModel {
         }
         let shellsState = shells.state
         let runningShells = SessionChatBackgroundWork.runningShells(shellsState.shells)
+        goalRegion.setConnected(infoState.connectionStatus == .live)
+        let goalState = SessionChatGoalUiState.resolve(
+            region: goalRegion.state,
+            isChildSession: false,
+            isSessionBusy: isTurnActive,
+            hasPermission: !inboxState.permissionRequests.isEmpty,
+            hasQuestion: !inboxState.questionRequests.isEmpty,
+            runningShellCommand: runningShells.first?.command,
+            hasRunningSubagent: subagents.contains { $0.isActive },
+            canMutate: infoState.canMutate
+        )
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -2525,7 +2572,9 @@ final class SessionChatViewModel {
                 return next
             }(),
             draft: draftUiState,
-            directory: worktree
+            directory: worktree,
+            goal: goalState,
+            goalCommandAvailable: composerState.serverCommands.contains { $0.name == SessionGoalKickoff.commandName }
         )
     }
 

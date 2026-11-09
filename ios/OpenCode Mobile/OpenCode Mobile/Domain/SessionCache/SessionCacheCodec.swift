@@ -773,6 +773,8 @@ private extension TimelineNoticeKind {
             return ["notice": .string("system"), "description": .string(description)]
         case .restart:
             return ["notice": .string("restart")]
+        case let .goalSet(goalID, description):
+            return ["notice": .string("goalSet"), "goalID": .string(goalID), "description": .string(description)]
         }
     }
 
@@ -802,6 +804,9 @@ private extension TimelineNoticeKind {
             self = .systemNote(description)
         case "restart":
             self = .restart
+        case "goalSet":
+            guard let goalID = string("goalID"), let description = string("description") else { return nil }
+            self = .goalSet(goalID: goalID, description: description)
         default:
             return nil
         }
