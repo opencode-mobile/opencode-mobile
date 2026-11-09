@@ -8,6 +8,14 @@ on:
       - "ios/OpenCode Mobile/OpenCode Mobile/**"
       - "scripts/check-string-keys.mjs"
       - "scripts/check-hardcoded-text.mjs"
+      - "scripts/check-theme-presets.mjs"
+      - "scripts/check-icons.mjs"
+      - "scripts/lib/**"
+      - "shared/theme-presets/**"
+      - "shared/syntax-presets/**"
+      - "icons/**"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/string-checks.yml"
   push:
     branches: [main]
@@ -44,3 +52,20 @@ jobs:
             cat hardcoded-text.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  generated-assets:
+    # Theme presets and icons are generated from shared sources; fail when the
+    # committed platform copies drift from them.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install script dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Theme presets match shared sources
+        run: npm run themes:check
+
+      - name: Icon outputs match manifest
+        run: npm run icons:check

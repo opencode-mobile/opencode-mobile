@@ -71,7 +71,6 @@ icons/cache/
 
 # Theme research
 research/
-research/
 
 # Throwaway on-demand UI snapshot evidence (OPE-161)
 .snapshot-evidence/
@@ -94,3 +93,8 @@ android/screenshot/src/test/snapshots/
 *.mobileprovision
 .mcp.json
 .claude/launch.json
+
+# Local prototypes, root-level recordings, and native markdown-core builds
+prototypes/
+/*.gif
+shared/markdown-core/native/

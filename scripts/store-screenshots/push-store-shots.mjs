@@ -13,7 +13,6 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, "../..");
 const COPY_PATH = join(SCRIPT_DIR, "copy.json");
 const DEFAULT_DIR = "store-screenshots";
-const DEFAULT_URL = "http://ivans-mac-mini-1:8790";
 const APP_NAME = "OpenCode Mobile";
 const HEALTH_TIMEOUT_MS = 5000;
 
@@ -37,9 +36,11 @@ const CAPTURE_TARGETS = Object.keys(TARGET_MAP);
 
 export function defaultStoreShotsUrl() {
   const fromEnv = process.env.STORE_SHOTS_URL?.trim();
-  if (fromEnv) return normalizeBaseUrl(fromEnv);
-  return DEFAULT_URL;
+  return fromEnv ? normalizeBaseUrl(fromEnv) : null;
 }
+
+export const MISSING_STORE_SHOTS_URL_MESSAGE =
+  "No store-shots URL: set STORE_SHOTS_URL or pass --url <base>.";
 
 export function normalizeBaseUrl(url) {
   return String(url).trim().replace(/\/+$/, "");
@@ -354,8 +355,8 @@ Usage:
   node scripts/store-screenshots/push-store-shots.mjs [options]
 
 Options:
-  --url <base>          store-shots base URL
-                        (default: $STORE_SHOTS_URL or ${DEFAULT_URL})
+  --url <base>          store-shots base URL (default: $STORE_SHOTS_URL;
+                        one of the two is required)
   --dir <out-dir>       Capture root (default: ${DEFAULT_DIR})
   --target <name>       ${CLI_TARGETS.join(" | ")}
                         (default: all; ios is an alias for ios-6.9)
@@ -447,6 +448,9 @@ export function parsePushArgs(argv = process.argv.slice(2)) {
     }
   }
 
+  if (!args.url) {
+    throw new Error(MISSING_STORE_SHOTS_URL_MESSAGE);
+  }
   if (!CLI_TARGETS.includes(args.target) && args.target !== "ios-6.9") {
     throw new Error(`--target must be one of: ${CLI_TARGETS.join(", ")}`);
   }
