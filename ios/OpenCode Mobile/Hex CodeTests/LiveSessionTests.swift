@@ -91,9 +91,11 @@ struct LiveSessionStateTests {
     }
 
     @Test func theTypesAreTheExactListEachOnItsOwn() {
-        // 18 for M2–M4, and the goal's event for M5.
-        #expect(SessionEvent.types.count == 19)
+        // 18 for M2–M4, the goal's event for M5, and the tool input start for M8.
+        #expect(SessionEvent.types.count == 20)
         #expect(SessionEvent.types.contains("session.tool.failed"))
+        // The artifacts setup session's live line.
+        #expect(SessionEvent.types.contains("session.tool.input.started"))
         #expect(SessionEvent.types.contains("rpc.opencode.goal.changed"))
         #expect(!SessionEvent.types.contains { $0.contains("*") || $0.contains(",") })
     }

@@ -333,7 +333,10 @@ struct ArtifactsFlowTests {
         await model.sessionOpened()
         api.listStatus = 403
         await model.open()?.value
-        try? await Task.sleep(for: .milliseconds(200))
+        // Two checks, however busy the machine is.
+        for _ in 0 ..< 200 where await waits.all.count < 3 {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
         let seen = await waits.all
         #expect(seen.count >= 2)
         #expect(seen.allSatisfy { $0 == .seconds(2) })
