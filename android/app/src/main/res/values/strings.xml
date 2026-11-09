@@ -661,6 +661,7 @@
     <string name="tool_error_failed">Failed</string>
     <string name="tool_error_exit_code">Exited with code %1$d</string>
     <string name="tool_status_declined">Declined</string>
+    <string name="tool_user_note">Your note: %1$s</string>
     <string name="tool_status_stopped">Stopped</string>
     <string name="tool_placeholder_writing_command">Writing command…</string>
     <string name="tool_placeholder_preparing_read">Preparing read…</string>
@@ -1166,6 +1167,8 @@
     <string name="keyboard_shortcuts_allow_once">Allow Once</string>
     <string name="keyboard_shortcuts_always_allow">Always Allow</string>
     <string name="keyboard_shortcuts_deny">Deny</string>
+    <string name="keyboard_shortcuts_deny_with_note">Deny with a Note</string>
+    <string name="keyboard_shortcuts_send_note">Send Note</string>
     <string name="keyboard_shortcuts_next_question">Next Question</string>
     <string name="keyboard_shortcuts_submit_answers">Submit Answers</string>
     <string name="keyboard_shortcuts_dismiss_question">Dismiss Question</string>
@@ -1285,6 +1288,15 @@
     <string name="session_list_worktree_empty_other_projects">Clear the filter to see sessions on other projects.</string>
     <string name="component_attachment_uploading">Uploading…</string>
     <string name="component_composer_deny">Deny</string>
+    <string name="component_composer_deny_options">More deny options</string>
+    <string name="component_composer_deny_with_note_menu">Deny with a note…</string>
+    <string name="component_composer_deny_with_note_menu_subtitle">Tell the agent what to do instead</string>
+    <string name="component_composer_deny_with_note_title">Deny with a note</string>
+    <string name="component_composer_deny_note_placeholder">Tell OpenCode what to do differently</string>
+    <plurals name="component_composer_deny_note_also_denies">
+        <item quantity="one">Also denies %1$d other waiting request.</item>
+        <item quantity="other">Also denies %1$d other waiting requests.</item>
+    </plurals>
     <string name="dictation_stopped">Dictation stopped</string>
     <string name="component_composer_question_position">%1$d of %2$d</string>
     <string name="session_list_status_ready">Ready</string>

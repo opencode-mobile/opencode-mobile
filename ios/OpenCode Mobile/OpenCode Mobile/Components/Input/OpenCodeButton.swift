@@ -22,6 +22,39 @@ enum OpenCodeButtonSize {
     case medium
 }
 
+/// Where a button sits in an `OpenCodeSplitButton`; `.whole` for every standalone button.
+enum OpenCodeButtonSegment {
+    case whole
+    /// The split button's label half: outer corners on the leading side.
+    case leading
+    /// The split button's narrow menu half: outer corners on the trailing side.
+    case trailing
+
+    /// Corner of the joined edges, kept small so the halves read as one control.
+    static let innerCornerRadius: CGFloat = 3
+    /// Width of the trailing menu half.
+    static let trailingWidth: CGFloat = 32
+
+    var shape: UnevenRoundedRectangle {
+        let outer = OpenCodeRadius.small
+        let inner = Self.innerCornerRadius
+        return switch self {
+        case .whole:
+            UnevenRoundedRectangle(cornerRadii: .init(
+                topLeading: outer, bottomLeading: outer, bottomTrailing: outer, topTrailing: outer
+            ), style: .circular)
+        case .leading:
+            UnevenRoundedRectangle(cornerRadii: .init(
+                topLeading: outer, bottomLeading: outer, bottomTrailing: inner, topTrailing: inner
+            ), style: .circular)
+        case .trailing:
+            UnevenRoundedRectangle(cornerRadii: .init(
+                topLeading: inner, bottomLeading: inner, bottomTrailing: outer, topTrailing: outer
+            ), style: .circular)
+        }
+    }
+}
+
 struct OpenCodeButton: View {
     let variant: OpenCodeButtonVariant
     let size: OpenCodeButtonSize
@@ -29,6 +62,8 @@ struct OpenCodeButton: View {
     let contrast: OpenCodeButtonContrast
     let action: () -> Void
     let longPress: (() -> Void)?
+    /// Set only by `OpenCodeSplitButton` (see `segmented(_:)`).
+    private(set) var segment = OpenCodeButtonSegment.whole
 
     init(
         variant: OpenCodeButtonVariant,
@@ -44,6 +79,13 @@ struct OpenCodeButton: View {
         self.contrast = contrast
         self.longPress = longPress
         self.action = action
+    }
+
+    /// The same button drawn as one half of an `OpenCodeSplitButton`.
+    func segmented(_ segment: OpenCodeButtonSegment) -> OpenCodeButton {
+        var copy = self
+        copy.segment = segment
+        return copy
     }
 
     var body: some View {
@@ -81,7 +123,8 @@ struct OpenCodeButton: View {
                 size: size,
                 enabled: enabled,
                 contrast: contrast,
-                prepareHapticOnPress: longPress != nil
+                prepareHapticOnPress: longPress != nil,
+                segment: segment
             )
         )
         .disabled(!enabled)
@@ -116,7 +159,7 @@ struct OpenCodeButton: View {
                 .font(OpenCodeTypography.button)
                 .lineLimit(1)
         case let .iconSquare(icon, accessibilityLabel):
-            OpenCodeIconImage(icon: icon, size: 18)
+            OpenCodeIconImage(icon: icon, size: segment == .trailing ? 16 : 18)
                 .accessibilityLabel(openCode: accessibilityLabel ?? .empty)
                 .accessibilityHidden(accessibilityLabel == nil)
         case let .iconCircle(icon, accessibilityLabel):
@@ -143,14 +186,16 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     let enabled: Bool
     let contrast: OpenCodeButtonContrast
     let prepareHapticOnPress: Bool
+    let segment: OpenCodeButtonSegment
 
     @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
         let isPressed = configuration.isPressed && enabled
         let maxWidth: CGFloat? = variant.isFullWidth ? .infinity : nil
         let iconSize: CGFloat = size == .large ? 48 : 40
-        let minWidth: CGFloat? = variant.isIconOnly ? iconSize : nil
-        let fixedWidth: CGFloat? = variant.isIconOnly ? iconSize : nil
+        let iconWidth = segment == .trailing ? OpenCodeButtonSegment.trailingWidth : iconSize
+        let minWidth: CGFloat? = variant.isIconOnly ? iconWidth : nil
+        let fixedWidth: CGFloat? = variant.isIconOnly ? iconWidth : nil
         let fixedHeight: CGFloat? = variant.isIconOnly ? iconSize : nil
         Group {
             if variant.isIconCircle {
@@ -167,6 +212,21 @@ private struct OpenCodeButtonStyle: ButtonStyle {
                         .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
                 )
                 .overlay { lowContrastPressWash(isPressed: isPressed, in: Circle()) }
+                .opacity(pressOpacity(isPressed: isPressed))
+                .scaleEffect(pressScale(isPressed: isPressed))
+                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+                .animation(accentEnableAnimation, value: enabled)
+            } else if segment != .whole {
+                baseLabel(
+                    configuration: configuration,
+                    minWidth: minWidth,
+                    maxWidth: maxWidth,
+                    fixedWidth: fixedWidth,
+                    fixedHeight: fixedHeight
+                )
+                .background { chromeFill(isPressed: isPressed, in: segment.shape) }
+                .overlay(segment.shape.strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1))
+                .overlay { lowContrastPressWash(isPressed: isPressed, in: segment.shape) }
                 .opacity(pressOpacity(isPressed: isPressed))
                 .scaleEffect(pressScale(isPressed: isPressed))
                 .animation(.easeOut(duration: 0.12), value: configuration.isPressed)

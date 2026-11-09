@@ -164,6 +164,8 @@ class MessageDomainAdapter(
         id: String? = null,
     ): MessagePart.Tool {
         val status = toToolStatus(state?.status)
+        val failed = status == ToolStatus.Error
+        val declined = failed && (state?.declined == true || ToolInterruption.isV1PermissionRejection(state?.error))
         return MessagePart.Tool(
             toolName = toolName,
             status = status,
@@ -177,9 +179,15 @@ class MessageDomainAdapter(
             timeStartEpochMs = state?.time?.start,
             timeEndEpochMs = state?.time?.end,
             isInterrupted =
-                status == ToolStatus.Error &&
-                    (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
+                failed && (state?.interrupted == true || declined || ToolInterruption.isUserInterruption(state?.error)),
             isMalformed = state?.malformed == true,
+            isDeclined = declined,
+            userNote =
+                if (declined) {
+                    state?.userNote?.trim()?.takeIf { it.isNotEmpty() } ?: ToolInterruption.userNote(type = null, message = state?.error)
+                } else {
+                    null
+                },
             images = v1ToolImages(state?.attachments, partId = id ?: callId),
         )
     }
@@ -840,6 +848,7 @@ class MessageDomainAdapter(
                 val state = content.state
                 val status = toToolStatus(state?.status)
                 val metadata = state?.metadata ?: state?.structured
+                val declined = status == ToolStatus.Error && ToolInterruption.isPermissionRejectedType(state?.error?.type)
                 MessagePart.Tool(
                     toolName = name,
                     status = status,
@@ -853,7 +862,9 @@ class MessageDomainAdapter(
                     id = content.id ?: fallbackId,
                     timeStartEpochMs = content.time?.created,
                     timeEndEpochMs = content.time?.completed,
-                    isInterrupted = status == ToolStatus.Error && ToolInterruption.isAbortedType(state?.error?.type),
+                    isInterrupted = status == ToolStatus.Error && ToolInterruption.isUserInterruptionType(state?.error?.type),
+                    isDeclined = declined,
+                    userNote = if (declined) ToolInterruption.userNote(state?.error?.type, state?.error?.message) else null,
                     isMalformed =
                         SessionFailure.isMalformedTool(
                             type = state?.error?.type,

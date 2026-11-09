@@ -350,6 +350,10 @@ struct SessionChatUiState: Equatable {
     var permissionDockHidden: Bool = false
     var permissionSubmitting: Bool = false
     var permissionErrorMessage: String?
+    /// "Deny with a note" draft for `permissionRequest`; non-nil shows the note step.
+    var permissionNote: PermissionNoteDraft?
+    /// Other waiting permission requests in `permissionRequest`'s session, which a deny also rejects.
+    var permissionOtherPendingInSessionCount: Int = 0
     var questionRequest: QuestionRequest?
     /// 1-based position of `questionRequest` among the waiting question requests.
     var questionQueuePosition: Int = 1
@@ -900,6 +904,20 @@ struct PendingSend: Equatable {
     let queuedAtMs: Int64
 }
 
+/// The note typed in "Deny with a note" for one permission request. While it exists for the
+/// shown request, the permission prompt shows the note step instead of its actions.
+struct PermissionNoteDraft: Equatable {
+    let requestID: String
+    var text: String = ""
+
+    /// What Send sends: the note without surrounding whitespace.
+    var trimmedText: String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var canSend: Bool { !trimmedText.isEmpty }
+}
+
 struct SessionChatInboxRegionState: Equatable {
     /// The session the inbox is bound to; requests from any other session are a subagent's.
     var rootSessionID = ""
@@ -911,6 +929,9 @@ struct SessionChatInboxRegionState: Equatable {
     var permissionSubmittingID: String?
     var permissionError: String?
     var permissionTopologyError: String?
+    /// "Deny with a note" draft; only ever for the shown request (paging or the request
+    /// going away clears it).
+    var permissionNote: PermissionNoteDraft?
     /// Sessions loaded to place descendant permission requests; also names the asking subagent.
     var permissionSessions: [Session] = []
     var questionRequests: [QuestionRequest] = []
@@ -958,6 +979,12 @@ struct SessionChatInboxRegionState: Equatable {
     /// True while the shown question is the one the user collapsed.
     var isQuestionDockHidden: Bool {
         questionHiddenID != nil && visibleQuestionRequest?.id == questionHiddenID
+    }
+
+    /// Other waiting permission requests of the shown request's session; a deny rejects them too.
+    var otherPendingPermissionsInVisibleSession: Int {
+        guard let visible = visiblePermissionRequest else { return 0 }
+        return permissionRequests.filter { $0.sessionID == visible.sessionID && $0.id != visible.id }.count
     }
 
     var visiblePermissionAttribution: InboxRequestAttribution? {

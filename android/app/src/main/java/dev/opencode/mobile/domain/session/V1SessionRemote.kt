@@ -193,11 +193,15 @@ internal class V1SessionRemote(
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
+        message: String?,
     ): Boolean =
         api.respondToPermission(
             sessionId,
             permissionId,
-            PermissionResponseRequestDto(reply = adapter.toPermissionResponse(decision)),
+            PermissionResponseRequestDto(
+                reply = adapter.toPermissionResponse(decision),
+                message = permissionReplyNote(decision, message),
+            ),
             directory,
         )
 

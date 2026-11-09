@@ -626,7 +626,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         let errorObject = properties["error"] as? [String: Any]
         let unwrapped = SessionFailure.unwrap(errorObject?["message"] as? String)
         let error = unwrapped.isEmpty ? nil : unwrapped
-        let interrupted = status == "error" && ToolInterruption.isAbortedType(errorObject?["type"] as? String)
+        let errorType = errorObject?["type"] as? String
+        let interrupted = status == "error" && ToolInterruption.isUserInterruptionType(errorType)
+        let decline = status == "error"
+            ? ToolInterruption.v2Decline(type: errorType, message: errorObject?["message"] as? String)
+            : nil
         let malformed = SessionFailure.isMalformedTool(
             type: errorObject?["type"] as? String,
             executed: boolValue(properties["executed"])
@@ -648,6 +652,7 @@ nonisolated struct EventDomainAdapter: Sendable {
             title: title,
             interrupted: interrupted,
             malformed: malformed,
+            decline: decline,
             attachments: attachments
         )
     }
@@ -954,9 +959,14 @@ nonisolated struct EventDomainAdapter: Sendable {
         title: String? = nil,
         interrupted: Bool = false,
         malformed: Bool = false,
+        decline: ToolDecline? = nil,
         attachments: [[String: Any]] = []
     ) -> OpencodeEvent {
         var state: [String: Any] = ["status": status]
+        if let decline {
+            state["declined"] = true
+            if let note = decline.note { state["declineNote"] = note }
+        }
         if !attachments.isEmpty { state["attachments"] = attachments }
         if interrupted { state["interrupted"] = true }
         if malformed { state["malformed"] = true }

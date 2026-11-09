@@ -240,11 +240,15 @@ internal class V2SessionRemote(
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
+        message: String?,
     ): Boolean =
         api.respondToPermissionV2(
             sessionId,
             permissionId,
-            V2PermissionReplyRequestDto(decision = adapter.toPermissionResponse(decision)),
+            V2PermissionReplyRequestDto(
+                decision = adapter.toPermissionResponse(decision),
+                message = permissionReplyNote(decision, message),
+            ),
         )
 
     override suspend fun replyToQuestion(

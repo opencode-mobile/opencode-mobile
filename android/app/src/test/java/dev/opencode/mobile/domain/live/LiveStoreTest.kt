@@ -4187,5 +4187,6 @@ private class FakeSessionRepository(
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
+        message: String?,
     ): Boolean = error("unused")
 }

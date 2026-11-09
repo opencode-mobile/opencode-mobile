@@ -725,6 +725,196 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun denyWithNote_sendsTheTrimmedNoteAsADeny() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title")))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(request)),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openPermissionNote(request.id, request.sessionId)
+            advanceUntilIdle()
+            assertEquals(PermissionNoteDraft("permission-1"), viewModel.uiState.value.permissionNote)
+
+            viewModel.updatePermissionNote(request.id, "  Run the tests first\n ")
+            viewModel.sendPermissionNote(request.id, request.sessionId)
+            advanceUntilIdle()
+
+            assertEquals(1, sessionRepository.permissionResponseCount)
+            assertEquals("permission-1", sessionRepository.respondedPermissionId)
+            assertEquals(dev.opencode.mobile.domain.session.PermissionDecision.Deny, sessionRepository.respondedDecision)
+            assertEquals("Run the tests first", sessionRepository.respondedMessage)
+        }
+
+    @Test
+    fun denyWithNote_blankNoteDoesNotSend() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title")))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(request)),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openPermissionNote(request.id, request.sessionId)
+            viewModel.sendPermissionNote(request.id, request.sessionId)
+            viewModel.updatePermissionNote(request.id, "  \n ")
+            viewModel.sendPermissionNote(request.id, request.sessionId)
+            advanceUntilIdle()
+
+            assertEquals(0, sessionRepository.permissionResponseCount)
+            assertFalse(viewModel.uiState.value.permissionSubmitting)
+            assertEquals(
+                "  \n ",
+                viewModel.uiState.value.permissionNote
+                    ?.text,
+            )
+        }
+
+    @Test
+    fun denyWithNote_cancelReturnsToThePromptWithoutAnswering() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title")))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(request)),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openPermissionNote(request.id, request.sessionId)
+            viewModel.updatePermissionNote(request.id, "Try something else")
+            viewModel.cancelPermissionNote(request.id)
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.permissionNote)
+            assertEquals(
+                "permission-1",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
+            assertEquals(0, sessionRepository.permissionResponseCount)
+
+            // Reopening starts from an empty note.
+            viewModel.openPermissionNote(request.id, request.sessionId)
+            advanceUntilIdle()
+            assertEquals(
+                "",
+                viewModel.uiState.value.permissionNote
+                    ?.text,
+            )
+        }
+
+    @Test
+    fun denyWithNote_pagingOrTheRequestGoingAwayClearsTheNote() =
+        runTest(testDispatcher) {
+            val first = permissionRequest("permission-1", "ses-1")
+            val second = permissionRequest("permission-2", "ses-1")
+            val permissionLiveStore = FakePermissionLiveStore(listOf(first, second))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title"))),
+                    permissionLiveStore = permissionLiveStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(1, viewModel.uiState.value.permissionOtherPendingInSession)
+
+            viewModel.openPermissionNote(first.id, first.sessionId)
+            viewModel.updatePermissionNote(first.id, "Not this one")
+            viewModel.pagePermission(1)
+            advanceUntilIdle()
+            assertEquals(
+                "permission-2",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
+            assertNull(viewModel.uiState.value.permissionNote)
+            viewModel.pagePermission(-1)
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.permissionNote)
+
+            viewModel.openPermissionNote(first.id, first.sessionId)
+            advanceUntilIdle()
+            assertEquals(PermissionNoteDraft("permission-1"), viewModel.uiState.value.permissionNote)
+            permissionLiveStore.requests.value = listOf(second)
+            advanceUntilIdle()
+            assertEquals(
+                "permission-2",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
+            assertNull(viewModel.uiState.value.permissionNote)
+            assertEquals(0, viewModel.uiState.value.permissionOtherPendingInSession)
+        }
+
+    @Test
+    fun denyWithNote_failureKeepsTheNoteAndShowsTheError() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions = listOf(Session(id = "ses-1", title = "Title")),
+                    permissionResponseError = SessionError.Http(500, "boom"),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(request)),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openPermissionNote(request.id, request.sessionId)
+            viewModel.updatePermissionNote(request.id, "Use the staging database")
+            viewModel.sendPermissionNote(request.id, request.sessionId)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(1, sessionRepository.permissionResponseCount)
+            assertEquals("Use the staging database", state.permissionNote?.text)
+            assertFalse(state.permissionSubmitting)
+            assertTrue(state.permissionErrorMessage != null)
+        }
+
+    @Test
+    fun plainDeny_sendsNoNote() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title")))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(request)),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.denyPermission(request.id, request.sessionId)
+            advanceUntilIdle()
+
+            assertEquals(dev.opencode.mobile.domain.session.PermissionDecision.Deny, sessionRepository.respondedDecision)
+            assertNull(sessionRepository.respondedMessage)
+            assertNull(viewModel.uiState.value.permissionNote)
+        }
+
+    @Test
     fun backgroundWorkPill_countsRunningSubagentsAndFlagsTheOneWaitingForInput() =
         runTest(testDispatcher) {
             fun subagent(
@@ -8855,6 +9045,12 @@ private class FakeSessionRepository(
         private set
     var respondedSessionId: String? = null
         private set
+    var respondedDecision: dev.opencode.mobile.domain.session.PermissionDecision? = null
+        private set
+    var respondedMessage: String? = null
+        private set
+    var permissionResponseCount: Int = 0
+        private set
     var repliedQuestionId: String? = null
         private set
     var rejectedQuestionId: String? = null
@@ -9136,9 +9332,13 @@ private class FakeSessionRepository(
         permissionId: String,
         decision: dev.opencode.mobile.domain.session.PermissionDecision,
         directory: String?,
+        message: String?,
     ): Boolean {
         respondedSessionId = sessionId
         respondedPermissionId = permissionId
+        respondedDecision = decision
+        respondedMessage = message
+        permissionResponseCount += 1
         permissionResponseError?.let { throw it }
         return true
     }

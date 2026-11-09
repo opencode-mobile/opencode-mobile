@@ -1519,6 +1519,31 @@ final class SessionChatViewModel {
         await inbox.denyPermission(requestID: requestID, sessionID: sessionID)
     }
 
+    /// "Deny with a note…": swaps the permission prompt for the note step.
+    func openPermissionNote(requestID: String, sessionID: String) {
+        logChatAction(ProductAnalytics.Action.permissionNoteOpen)
+        inbox.openPermissionNote(requestID: requestID, sessionID: sessionID)
+    }
+
+    func updatePermissionNote(requestID: String, text: String) {
+        inbox.updatePermissionNote(requestID: requestID, text: text)
+    }
+
+    /// Leaves the note step without answering.
+    func cancelPermissionNote(requestID: String) {
+        logChatAction(ProductAnalytics.Action.permissionNoteCancel)
+        inbox.cancelPermissionNote(requestID: requestID)
+    }
+
+    /// Denies with the note, so the agent gets it and keeps going.
+    func sendPermissionNote(requestID: String, sessionID: String) async {
+        logChatAction(
+            ProductAnalytics.Action.permissionDeny,
+            parameters: [ProductAnalytics.Param.permissionDecision: "deny_with_note"]
+        )
+        await inbox.sendPermissionNote(requestID: requestID, sessionID: sessionID)
+    }
+
     func toggleQuestionOption(requestID: String, sessionID: String, label: String) {
         logChatAction(ProductAnalytics.Action.questionToggleOption)
         inbox.toggleQuestionOption(requestID: requestID, sessionID: sessionID, label: label)
@@ -2167,6 +2192,8 @@ final class SessionChatViewModel {
             permissionDockHidden: inboxState.isPermissionDockHidden,
             permissionSubmitting: inboxState.permissionSubmittingID != nil,
             permissionErrorMessage: inboxState.permissionError ?? inboxState.permissionTopologyError,
+            permissionNote: inboxState.permissionNote,
+            permissionOtherPendingInSessionCount: inboxState.otherPendingPermissionsInVisibleSession,
             questionRequest: visibleQuestion,
             questionQueuePosition: inboxState.questionPageIndex + 1,
             questionQueueCount: inboxState.questionRequests.count,

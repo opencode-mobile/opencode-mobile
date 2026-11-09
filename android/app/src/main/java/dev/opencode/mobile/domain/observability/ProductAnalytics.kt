@@ -235,6 +235,8 @@ object ProductAnalytics {
         const val PERMISSION_ALWAYS = "permission_always"
         const val PERMISSION_HIDE = "permission_hide"
         const val PERMISSION_SHOW = "permission_show"
+        const val PERMISSION_NOTE_OPEN = "permission_note_open"
+        const val PERMISSION_NOTE_CANCEL = "permission_note_cancel"
         const val QUESTION_TOGGLE_OPTION = "question_toggle_option"
         const val QUESTION_TOGGLE_CUSTOM = "question_toggle_custom"
         const val QUESTION_EDIT_CUSTOM_TEXT = "question_edit_custom_text"

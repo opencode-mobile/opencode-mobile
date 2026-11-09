@@ -1005,7 +1005,7 @@ private struct AssistantMessageContent: View {
                         subtitle: card.subtitle?.resolved,
                         additions: card.additions,
                         deletions: card.deletions,
-                        errorText: card.errorText?.resolved,
+                        errorText: card.errorTextWithDeclineNote,
                         action: toolCardAction(for: card)
                     )
                 case .toolGroup(let blockID, let group):
@@ -1380,6 +1380,13 @@ private struct StepParagraphBlock: View {
                     .lineLimit(3)
                     .padding(.horizontal, Self.chipRowHorizontalPadding)
             }
+            ForEach(Array(paragraph.declineNoteLines.enumerated()), id: \.offset) { _, line in
+                Text(openCode: line.openCode)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .lineLimit(3)
+                    .padding(.horizontal, Self.chipRowHorizontalPadding)
+            }
         }
     }
 
@@ -1435,7 +1442,8 @@ private extension SessionChatStepRailRow {
                 startedAtMs: step.kind == .thought ? nil : startedAtMs,
                 endedAtMs: endedAtMs,
                 isBranch: step.isBranch,
-                isActionable: actionable(step)
+                isActionable: actionable(step),
+                note: step.card?.declineNote?.resolved
             )
         }
     }

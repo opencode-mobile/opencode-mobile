@@ -332,6 +332,190 @@ struct SessionChatViewModelTests {
         #expect(!viewModel.uiState.permissionDockHidden)
     }
 
+    // MARK: Deny with a note (#946)
+
+    private func noteSessions() -> [Session] {
+        [
+            Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+            Session(id: "child", title: "Child", slug: nil, projectID: nil, directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil),
+        ]
+    }
+
+    @Test func permissionNote_sendDeniesWithTheTrimmedNote() async throws {
+        let sessionRepository = FakeChatSessionRepository(sessions: noteSessions())
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [permissionRequest(id: "permission-1", sessionID: "ses-1")])
+        )
+        defer { viewModel.stopObserving() }
+        try #require(await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-1" })
+        #expect(viewModel.uiState.permissionNote == nil)
+
+        viewModel.openPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+        #expect(viewModel.uiState.permissionNote == PermissionNoteDraft(requestID: "permission-1", text: ""))
+        viewModel.updatePermissionNote(requestID: "permission-1", text: "  Use pnpm instead of npm\n")
+        #expect(viewModel.uiState.permissionNote?.text == "  Use pnpm instead of npm\n")
+        await viewModel.sendPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+
+        #expect(sessionRepository.permissionResponseCount == 1)
+        #expect(sessionRepository.responsePermissionID == "permission-1")
+        #expect(sessionRepository.responseSessionID == "ses-1")
+        #expect(sessionRepository.responseDecision == .deny)
+        #expect(sessionRepository.responseMessage == "Use pnpm instead of npm")
+        #expect(sessionRepository.responseDirectory == "/repo")
+    }
+
+    @Test func permissionNote_blankSendIsIgnored() async throws {
+        let sessionRepository = FakeChatSessionRepository(sessions: noteSessions())
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [permissionRequest(id: "permission-1", sessionID: "ses-1")])
+        )
+        defer { viewModel.stopObserving() }
+        try #require(await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-1" })
+
+        viewModel.openPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+        await viewModel.sendPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+        viewModel.updatePermissionNote(requestID: "permission-1", text: " \n\t ")
+        await viewModel.sendPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+
+        #expect(sessionRepository.permissionResponseCount == 0)
+        #expect(viewModel.uiState.permissionNote?.text == " \n\t ")
+        #expect(!viewModel.uiState.permissionSubmitting)
+    }
+
+    @Test func permissionNote_cancelReturnsToThePromptWithoutAnswering() async throws {
+        let sessionRepository = FakeChatSessionRepository(sessions: noteSessions())
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [permissionRequest(id: "permission-1", sessionID: "ses-1")])
+        )
+        defer { viewModel.stopObserving() }
+        try #require(await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-1" })
+
+        viewModel.openPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+        viewModel.updatePermissionNote(requestID: "permission-1", text: "Not this one")
+        viewModel.cancelPermissionNote(requestID: "permission-1")
+
+        #expect(viewModel.uiState.permissionNote == nil)
+        #expect(viewModel.uiState.permissionRequest?.id == "permission-1")
+        #expect(sessionRepository.permissionResponseCount == 0)
+
+        // Opening again starts from an empty note.
+        viewModel.openPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+        #expect(viewModel.uiState.permissionNote?.text == "")
+    }
+
+    @Test func permissionNote_pagingToAnotherRequestClearsTheDraft() async throws {
+        let sessionRepository = FakeChatSessionRepository(sessions: noteSessions())
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [
+                permissionRequest(id: "permission-1", sessionID: "ses-1"),
+                permissionRequest(id: "permission-2", sessionID: "child"),
+            ])
+        )
+        defer { viewModel.stopObserving() }
+        try #require(await waitUntil { viewModel.uiState.permissionQueueCount == 2 })
+
+        viewModel.openPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+        viewModel.updatePermissionNote(requestID: "permission-1", text: "Use pnpm")
+        viewModel.pagePermission(by: 1)
+        #expect(viewModel.uiState.permissionRequest?.id == "permission-2")
+        #expect(viewModel.uiState.permissionNote == nil)
+
+        viewModel.pagePermission(by: -1)
+        #expect(viewModel.uiState.permissionNote == nil)
+
+        // A note step for a request that is not shown does not open.
+        viewModel.openPermissionNote(requestID: "permission-2", sessionID: "child")
+        #expect(viewModel.uiState.permissionNote == nil)
+    }
+
+    @Test func permissionNote_requestGoingAwayClearsTheDraft() async throws {
+        let sessionRepository = FakeChatSessionRepository(sessions: noteSessions())
+        let permissionLiveStore = ScriptedPermissionLiveStore()
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: permissionLiveStore
+        )
+        defer { viewModel.stopObserving() }
+
+        permissionLiveStore.emit([
+            permissionRequest(id: "permission-1", sessionID: "ses-1"),
+            permissionRequest(id: "permission-2", sessionID: "ses-1"),
+        ])
+        try #require(await waitUntil { viewModel.uiState.permissionQueueCount == 2 })
+        #expect(viewModel.uiState.permissionOtherPendingInSessionCount == 1)
+        viewModel.openPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+        viewModel.updatePermissionNote(requestID: "permission-1", text: "Use pnpm")
+
+        permissionLiveStore.emit([permissionRequest(id: "permission-2", sessionID: "ses-1")])
+        try #require(await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-2" })
+        #expect(viewModel.uiState.permissionNote == nil)
+        #expect(viewModel.uiState.permissionOtherPendingInSessionCount == 0)
+    }
+
+    @Test func permissionNote_otherPendingCountsOnlyTheSameSession() async throws {
+        let viewModel = makeViewModel(
+            sessionRepository: FakeChatSessionRepository(sessions: noteSessions()),
+            permissionLiveStore: FakePermissionLiveStore(requests: [
+                permissionRequest(id: "permission-1", sessionID: "ses-1"),
+                permissionRequest(id: "permission-2", sessionID: "child"),
+                permissionRequest(id: "permission-3", sessionID: "ses-1"),
+                permissionRequest(id: "permission-4", sessionID: "ses-1"),
+            ])
+        )
+        defer { viewModel.stopObserving() }
+        try #require(await waitUntil { viewModel.uiState.permissionQueueCount == 4 })
+
+        #expect(viewModel.uiState.permissionRequest?.sessionID == "ses-1")
+        #expect(viewModel.uiState.permissionOtherPendingInSessionCount == 2)
+    }
+
+    @Test func permissionNote_failureKeepsTheNoteAndShowsTheError() async throws {
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: noteSessions(),
+            permissionResponseError: .http(statusCode: 500, message: nil)
+        )
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [permissionRequest(id: "permission-1", sessionID: "ses-1")])
+        )
+        defer { viewModel.stopObserving() }
+        try #require(await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-1" })
+
+        viewModel.openPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+        viewModel.updatePermissionNote(requestID: "permission-1", text: "Use pnpm")
+        await viewModel.sendPermissionNote(requestID: "permission-1", sessionID: "ses-1")
+
+        #expect(sessionRepository.permissionResponseCount == 1)
+        #expect(viewModel.uiState.permissionNote == PermissionNoteDraft(requestID: "permission-1", text: "Use pnpm"))
+        #expect(viewModel.uiState.permissionErrorMessage?.hasPrefix("Couldn't send your reply.") == true)
+        #expect(!viewModel.uiState.permissionSubmitting)
+
+        viewModel.cancelPermissionNote(requestID: "permission-1")
+        #expect(viewModel.uiState.permissionNote == nil)
+        #expect(viewModel.uiState.permissionErrorMessage == nil)
+    }
+
+    @Test func plainDeny_isUnchangedAndSendsNoNote() async throws {
+        let sessionRepository = FakeChatSessionRepository(sessions: noteSessions())
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [permissionRequest(id: "permission-1", sessionID: "ses-1")])
+        )
+        defer { viewModel.stopObserving() }
+        try #require(await waitUntil { viewModel.uiState.permissionRequest?.id == "permission-1" })
+
+        await viewModel.denyPermission(requestID: "permission-1", sessionID: "ses-1")
+
+        #expect(sessionRepository.permissionResponseCount == 1)
+        #expect(sessionRepository.responseDecision == .deny)
+        #expect(sessionRepository.responseMessage == nil)
+        #expect(viewModel.uiState.permissionNote == nil)
+    }
+
     @Test func backgroundWorkPill_countsRunningSubagentsAndFlagsTheOneWaitingForInput() async throws {
         func subagent(_ id: String, child: String, agent: String) -> MessagePart {
             .tool(ToolPart(
@@ -6779,6 +6963,9 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private(set) var responseDirectory: String?
     private(set) var responsePermissionID: String?
     private(set) var responseSessionID: String?
+    private(set) var responseDecision: PermissionDecision?
+    private(set) var responseMessage: String?
+    private(set) var permissionResponseCount = 0
     private(set) var listSessionsCallCount = 0
     private(set) var pendingPermissionLoads = 0
     private(set) var pendingQuestionLoads = 0
@@ -7097,11 +7284,15 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool {
         responseDirectory = directory
         responsePermissionID = permissionID
         responseSessionID = sessionID
+        responseDecision = decision
+        responseMessage = message
+        permissionResponseCount += 1
         if let permissionResponseError { throw permissionResponseError }
         return true
     }

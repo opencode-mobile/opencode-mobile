@@ -93,6 +93,13 @@ struct RevertSessionRequestDTO: Codable, Sendable {
 
 struct PermissionResponseRequestDTO: Codable, Sendable {
     let reply: String
+    /// Note sent with a `reject`; the key is left out when nil.
+    let message: String?
+
+    init(reply: String, message: String? = nil) {
+        self.reply = reply
+        self.message = message
+    }
 }
 
 struct PermissionRequestDTO: Codable, Sendable {

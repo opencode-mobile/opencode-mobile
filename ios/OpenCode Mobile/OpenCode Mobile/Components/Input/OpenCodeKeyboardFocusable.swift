@@ -56,6 +56,12 @@ extension View {
         environment(\.openCodeFocusKey, AnyHashable(key))
     }
 
+    /// Inside a component with more than one focusable control: the controls inside
+    /// are not named by a key the caller set on the whole component.
+    func openCodeFocusKeyCleared() -> some View {
+        environment(\.openCodeFocusKey, nil)
+    }
+
     /// Lets code inside see whether, and which, control in it has keyboard focus.
     func openCodeFocusRequester(_ requester: OpenCodeFocusRequester) -> some View {
         environment(\.openCodeFocusRequester, requester)

@@ -31,6 +31,7 @@ import Testing
             "Allow Once",
             "Always Allow",
             "Deny",
+            "Deny with a Note",
         ])
     }
 
@@ -49,6 +50,7 @@ import Testing
             "keyboard_shortcuts.allow_once",
             "keyboard_shortcuts.always_allow",
             "keyboard_shortcuts.deny",
+            "keyboard_shortcuts.deny_with_note",
         ])
     }
 
@@ -86,6 +88,9 @@ import Testing
         #expect(OpenCodeKeyboardShortcut.promptAlwaysAllow.modifiers == [.option, .command])
         #expect(OpenCodeKeyboardShortcut.promptReject.key == .delete)
         #expect(OpenCodeKeyboardShortcut.promptReject.modifiers == .command)
+        #expect(OpenCodeKeyboardShortcut.promptRejectWithNote.key == .delete)
+        #expect(OpenCodeKeyboardShortcut.promptRejectWithNote.modifiers == [.option, .command])
+        #expect(OpenCodeKeyboardShortcut.promptRejectWithNote.isPromptChord)
     }
 
     @Test func matching_needsExactModifiers() {
@@ -99,6 +104,7 @@ import Testing
         #expect(OpenCodeKeyboardShortcut.matching(key: "3", modifiers: .command) == [.switchProject(3)])
         #expect(OpenCodeKeyboardShortcut.matching(key: "3", modifiers: []).isEmpty)
         #expect(OpenCodeKeyboardShortcut.matching(key: .delete, modifiers: .command) == [.promptReject])
+        #expect(OpenCodeKeyboardShortcut.matching(key: .delete, modifiers: [.option, .command]) == [.promptRejectWithNote])
         #expect(OpenCodeKeyboardShortcut.matching(key: .delete, modifiers: []).isEmpty)
         // The #358 chords are unchanged.
         #expect(OpenCodeKeyboardShortcut.matching(key: "s", modifiers: [.control, .command]) == [.toggleSidebar])
@@ -244,7 +250,7 @@ import Testing
     }
 
     @Test func promptChords_fireWithNothingFocused() {
-        for chord in [OpenCodeKeyboardShortcut.promptPrimary, .promptAlwaysAllow, .promptReject] {
+        for chord in [OpenCodeKeyboardShortcut.promptPrimary, .promptAlwaysAllow, .promptReject, .promptRejectWithNote] {
             #expect(allows(chord, .none))
             #expect(!allows(chord, .otherTextField))
         }
@@ -254,6 +260,8 @@ import Testing
         #expect(allows(.promptPrimary, .promptAnswer))
         #expect(!allows(.promptReject, .promptAnswer))
         #expect(!allows(.promptAlwaysAllow, .promptAnswer))
+        // The deny note field is a prompt answer too: ⌥⌘⌫ and ⌘⌫ stay with the text.
+        #expect(!allows(.promptRejectWithNote, .promptAnswer))
     }
 }
 

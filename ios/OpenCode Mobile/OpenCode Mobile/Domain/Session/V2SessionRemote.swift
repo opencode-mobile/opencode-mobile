@@ -196,12 +196,16 @@ struct V2SessionRemote: SessionRemote, Sendable {
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory _: String?
+        directory _: String?,
+        message: String?
     ) async throws -> Bool {
         try await api.respondToPermissionV2(
             sessionID: sessionID,
             permissionID: permissionID,
-            body: V2PermissionReplyRequestDTO(decision: adapter.permissionResponse(decision))
+            body: V2PermissionReplyRequestDTO(
+                decision: adapter.permissionResponse(decision),
+                message: adapter.permissionReplyMessage(message, decision: decision)
+            )
         )
     }
 

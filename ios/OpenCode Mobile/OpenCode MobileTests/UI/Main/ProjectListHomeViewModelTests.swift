@@ -2977,7 +2977,8 @@ private struct SlowFirstSessionRepository: SessionRepository {
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool { fatalError() }
 }
 
@@ -3161,7 +3162,8 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool { fatalError() }
 }
 
