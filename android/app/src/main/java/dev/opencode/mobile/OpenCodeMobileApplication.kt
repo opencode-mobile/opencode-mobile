@@ -16,11 +16,11 @@ import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
-import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.textmate.TextMateProcessPressureObserver
 import dev.opencode.mobile.platform.ComposeFoundationWorkarounds
 import dev.opencode.mobile.platform.FrameworkSdkLevel
 import dev.opencode.mobile.theme.ThemeManager
+import dev.opencode.mobile.ui.components.SplitPanePreferences
 
 @HiltAndroidApp
 class OpenCodeMobileApplication : Application() {

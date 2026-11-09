@@ -20,7 +20,6 @@ import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
-import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -28,6 +27,7 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
+import dev.opencode.mobile.ui.components.SplitPanePreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

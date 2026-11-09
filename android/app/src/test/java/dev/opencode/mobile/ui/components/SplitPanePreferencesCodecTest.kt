@@ -1,8 +1,6 @@
-package dev.opencode.mobile.domain.preferences
+package dev.opencode.mobile.ui.components
 
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.ui.components.OpenCodeSplitPaneScreen
-import dev.opencode.mobile.ui.components.OpenCodeSplitPaneState
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
