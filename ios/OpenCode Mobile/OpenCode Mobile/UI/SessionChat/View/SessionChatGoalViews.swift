@@ -163,7 +163,8 @@ private struct SessionChatGoalSheetContent: View {
                         title: .localized(SessionChatGoalCopy.actionLabel(.clear, pending: state.pending == .clear))
                     ),
                     enabled: state.actionsEnabled,
-                    contrast: .destructive,
+                    // Same quiet style as the status row's Clear; the sheet's main action stays the strong one.
+                    contrast: .low,
                     action: { onAction(.clear) }
                 )
                 Spacer(minLength: 0)

@@ -851,7 +851,10 @@ struct SessionChatView: View {
                 state: shownGoal,
                 onDismiss: { viewModel.closeGoalSheet() },
                 onAction: { viewModel.performGoalAction($0) },
-                onNewGoal: { viewModel.startNewGoal() }
+                onNewGoal: {
+                    viewModel.startNewGoal()
+                    composerFocusRequest += 1
+                }
             )
             .sessionChatTodosSheet(
                 isPresented: $showSessionTodosSheet,
@@ -1338,7 +1341,10 @@ struct SessionChatView: View {
             state: shownGoal,
             onOpen: { viewModel.openGoalSheet() },
             onAction: { viewModel.performGoalAction($0) },
-            onNewGoal: { viewModel.startNewGoal() }
+            onNewGoal: {
+                viewModel.startNewGoal()
+                composerFocusRequest += 1
+            }
         )
     }
 
