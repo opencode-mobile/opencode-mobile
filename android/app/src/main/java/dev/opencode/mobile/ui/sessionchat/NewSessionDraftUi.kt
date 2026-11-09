@@ -206,7 +206,7 @@ object NewSessionDraftPresentation {
                 is NewSessionPlace.Worktree -> UiText.verbatim(place.directory)
                 is NewSessionPlace.NewWorktree ->
                     draft.createdWorktree?.let { UiText.verbatim(it.directory) }
-                        ?: UiText.resource(R.string.new_session_path_created_on_send)
+                        ?: UiText.resource(R.string.new_session_created_on_send)
             }
         return NewSessionDraftUiState(
             projectName = project.displayName,
@@ -218,7 +218,7 @@ object NewSessionDraftPresentation {
             sheet = sheet,
             projectQuery = projectQuery,
             projectRows = if (sheet == NewSessionDraftSheet.Project) projectRows(projects, project.key, projectQuery) else emptyList(),
-            worktreeSheetTitle = UiText.resource(R.string.new_session_worktree_sheet_title, project.displayName),
+            worktreeSheetTitle = UiText.resource(R.string.new_session_run_in_project, project.displayName),
             placeOptions =
                 if (sheet == NewSessionDraftSheet.Worktree) {
                     placeOptions(project, place, worktreesEnabled, serverCanCreate)
@@ -275,7 +275,7 @@ object NewSessionDraftPresentation {
             add(
                 NewSessionWorktreeOption.Local(
                     subtitle =
-                        branch?.let { UiText.resource(R.string.new_session_local_current_checkout, it) }
+                        branch?.let { UiText.resource(R.string.new_session_current_checkout, it) }
                             ?: UiText.resource(R.string.home_main_checkout),
                     selected = place == NewSessionPlace.Local,
                 ),

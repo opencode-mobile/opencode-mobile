@@ -5595,28 +5595,6 @@
         }
       }
     },
-    "home.new_session" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New session"
-          }
-        }
-      }
-    },
-    "home.no_projects" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No projects"
-          }
-        }
-      }
-    },
     "home.no_session_selected.message" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5635,17 +5613,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No session selected"
-          }
-        }
-      }
-    },
-    "home.other_projects" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Other projects"
           }
         }
       }
@@ -5746,17 +5713,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Drag to reorder. Worktrees stay with their project."
-          }
-        }
-      }
-    },
-    "home.run_in" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Run in"
           }
         }
       }

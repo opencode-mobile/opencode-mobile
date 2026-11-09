@@ -93,7 +93,6 @@ nonisolated struct HomeProject: Identifiable, Equatable, Sendable {
 /// on Android). Project names stay arguments.
 nonisolated enum HomeProjectCopy {
     static var mainCheckout: String { String(localized: "home.main_checkout", defaultValue: "main checkout") }
-    static var runInTitle: String { String(localized: "home.run_in", defaultValue: "Run in") }
 
     static func worktreeCount(_ count: Int) -> String {
         String(localized: LocalizedStringResource("home.worktree_count", defaultValue: "\(count) worktrees"))
@@ -107,7 +106,6 @@ nonisolated enum HomeProjectCopy {
         String(localized: LocalizedStringResource("home.running_count", defaultValue: "\(count) running"))
     }
 
-    static var otherProjectsTitle: String { String(localized: "home.other_projects", defaultValue: "Other projects") }
     static var showFewer: String { String(localized: "home.show_fewer", defaultValue: "Show fewer") }
     static var reorderNote: String {
         String(localized: "home.reorder_note", defaultValue: "Drag to reorder. Worktrees stay with their project.")

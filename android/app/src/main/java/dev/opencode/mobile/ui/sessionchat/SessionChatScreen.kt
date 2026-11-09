@@ -798,7 +798,7 @@ private fun SessionChatScreenBody(
                             // A draft has nothing on the server to act on; it can only be thrown away.
                             add(
                                 OpenCodeOverflowMenuEntry(
-                                    title = stringResource(R.string.new_session_draft_discard),
+                                    title = stringResource(R.string.new_session_discard_draft),
                                     icon = OpenCodeIcons.Delete,
                                     destructive = true,
                                     testTag = NewSessionDraftTags.DISCARD,
@@ -935,7 +935,7 @@ private fun SessionChatScreenBody(
                 OpenCodeTopBar(
                     title =
                         if (drafting) {
-                            stringResource(R.string.new_session_draft_title)
+                            stringResource(R.string.new_session_title)
                         } else {
                             titleMenu?.title ?: uiState.sessionTitle.ifBlank { sessionTitle }
                         },

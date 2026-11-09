@@ -82,7 +82,7 @@ fun RunSessionInCard(
         buildList {
             add(
                 OpenCodePickerCardRow(
-                    label = stringResource(R.string.new_session_row_project),
+                    label = stringResource(R.string.new_session_project),
                     value = state.projectName,
                     tile = OpenCodePickerCardTile.Letter(state.projectLetter, state.projectAccent),
                     enabled = enabled,
@@ -93,13 +93,13 @@ fun RunSessionInCard(
             state.worktree?.let { worktree ->
                 add(
                     OpenCodePickerCardRow(
-                        label = stringResource(R.string.new_session_row_worktree),
+                        label = stringResource(R.string.new_session_worktree),
                         value =
                             when (worktree) {
-                                NewSessionWorktreeValue.Local -> stringResource(R.string.new_session_place_local)
+                                NewSessionWorktreeValue.Local -> stringResource(R.string.new_session_local)
                                 is NewSessionWorktreeValue.Worktree -> worktree.title
-                                NewSessionWorktreeValue.NewWorktree -> stringResource(R.string.new_session_place_new_worktree)
-                                NewSessionWorktreeValue.NotRepository -> stringResource(R.string.new_session_place_not_git)
+                                NewSessionWorktreeValue.NewWorktree -> stringResource(R.string.new_session_new_worktree)
+                                NewSessionWorktreeValue.NotRepository -> stringResource(R.string.new_session_not_git)
                             },
                         tile =
                             OpenCodePickerCardTile.Icon(
@@ -123,7 +123,7 @@ fun RunSessionInCard(
             state.startsFrom?.let { base ->
                 add(
                     OpenCodePickerCardRow(
-                        label = stringResource(R.string.new_session_row_starts_from),
+                        label = stringResource(R.string.new_session_starts_from),
                         value = base.resolve(),
                         tile = OpenCodePickerCardTile.Icon(OpenCodeIcons.CallSplit),
                         monospaceValue = true,
@@ -181,7 +181,7 @@ fun NewSessionProjectSheet(
 ) {
     OpenCodeBottomSheet(
         visible = visible,
-        title = stringResource(R.string.new_session_project_sheet_title),
+        title = stringResource(R.string.new_session_project),
         onDismissRequest = callbacks.onDismissSheet,
         height = OpenCodeBottomSheetHeight.Half,
         keyboard = OpenCodeBottomSheetKeyboard.Keep,
@@ -189,7 +189,7 @@ fun NewSessionProjectSheet(
             OpenCodeTextInput(
                 value = state?.projectQuery.orEmpty(),
                 onValueChange = callbacks.onProjectQueryChange,
-                hint = stringResource(R.string.new_session_project_search),
+                hint = stringResource(R.string.new_session_search_projects),
                 kind = OpenCodeTextInputKind.Search,
                 modifier =
                     Modifier
@@ -201,7 +201,7 @@ fun NewSessionProjectSheet(
     ) {
         val rows = state?.projectRows.orEmpty()
         if (rows.isEmpty()) {
-            OpenCodeListItem(title = stringResource(R.string.new_session_project_no_match), enabled = false)
+            OpenCodeListItem(title = stringResource(R.string.new_session_no_project_matches), enabled = false)
         }
         rows.forEach { row ->
             OpenCodeListItem(
@@ -239,7 +239,7 @@ fun NewSessionWorktreeSheet(
             when (option) {
                 is NewSessionWorktreeOption.Local ->
                     OpenCodeListItem(
-                        title = stringResource(R.string.new_session_place_local),
+                        title = stringResource(R.string.new_session_local),
                         subtitle = option.subtitle.resolve(),
                         selected = option.selected,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Terminal, null),
@@ -249,7 +249,7 @@ fun NewSessionWorktreeSheet(
                     )
                 is NewSessionWorktreeOption.NewWorktree ->
                     OpenCodeListItem(
-                        title = stringResource(R.string.new_session_place_new_worktree),
+                        title = stringResource(R.string.new_session_new_worktree),
                         subtitle = stringResource(R.string.new_session_new_worktree_subtitle),
                         selected = option.selected,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Add, null),
@@ -287,7 +287,7 @@ fun NewSessionBaseBranchSheet(
 ) {
     OpenCodeBottomSheet(
         visible = visible,
-        title = stringResource(R.string.new_session_base_sheet_title),
+        title = stringResource(R.string.new_session_starts_from),
         onDismissRequest = callbacks.onDismissSheet,
     ) {
         state?.baseRows.orEmpty().forEach { row ->
