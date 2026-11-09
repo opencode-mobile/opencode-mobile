@@ -44,6 +44,8 @@ import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.session.NewSessionDraftStart
+import dev.opencode.mobile.domain.session.NewSessionDraftStore
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
@@ -72,9 +74,6 @@ import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import dev.opencode.mobile.ui.text.UiText
-import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
-import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
-import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -122,6 +121,7 @@ class MainScreenViewModel
         private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
         private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
         private val homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
+        private val newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -219,20 +219,6 @@ class MainScreenViewModel
                 currentProject = { directory -> projectRepository.getCurrentProject(directory) },
             )
 
-        /** Run in → "New worktree…": create a checkout, then start a new session there. */
-        private val worktreeCreate =
-            WorktreeCreateForm(
-                repository = worktreeRepository,
-                scope = viewModelScope,
-                onCreated = { origin, created ->
-                    if (origin is WorktreeCreateOrigin.RunIn) createSession(created.directory)
-                },
-                onInventoryChanged = { _, request -> refreshProjectWorktrees(request.sourceDirectory) },
-            )
-        val worktreeCreateForm: StateFlow<WorktreeCreateFormState?> = worktreeCreate.state
-
-        /** False once a v1 server answered that it cannot create worktrees. */
-        val worktreeServerCanCreate: StateFlow<Boolean> = worktreeRepository.canCreate
         private val projectFirstLoads =
             HomeProjectFirstLoads(
                 scope = viewModelScope,
@@ -302,6 +288,12 @@ class MainScreenViewModel
             }
             viewModelScope.launch { homeWorktreesFeed.requests.collect(::onWorktreeRequest) }
             viewModelScope.launch {
+                // A New session draft's Add project…: the project added here becomes the draft's.
+                newSessionDraftStore.addProjectRequested.collect { profileId ->
+                    if (profileId == currentProfileId()) showAddProjectSheet()
+                }
+            }
+            viewModelScope.launch {
                 homeWorktreesFeed.removed.collect { removed ->
                     updateHomeIndex { it.copy(removedWorktrees = removed) }
                 }
@@ -313,7 +305,6 @@ class MainScreenViewModel
                     if (pending != null && active?.id != pending) return@collect
                     pendingSwitchId = null
                     switchPaintGeneration++
-                    worktreeCreate.dismiss()
                     stopLiveObservations()
                     // A switch already painted its projects; their skeletons stay until sessions arrive.
                     if (pending == null) projectFirstLoads.clearAll()
@@ -347,7 +338,6 @@ class MainScreenViewModel
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
-                    worktreeCreate.dismiss()
                     stopLiveObservations()
                     projectFirstLoads.clearAll()
                     pendingFirstServerSnapshots.clear()
@@ -523,6 +513,8 @@ class MainScreenViewModel
         }
 
         fun dismissAddProjectSheet() {
+            // A draft that asked for a project gets none when the sheet closes without one.
+            newSessionDraftStore.cancelAddProject(currentProfileId())
             endAddProjectSession()
             _uiState.update { state ->
                 when (state) {
@@ -676,8 +668,11 @@ class MainScreenViewModel
             viewModelScope.launch {
                 val added = connectionProfileStore.addedWorktrees(serverBaseUrl)
                 if (worktree in added) {
+                    // Before the sheet closes, which would drop the draft's request.
+                    val forDraft = newSessionDraftStore.consumeAddProjectRequest(currentProfileId())
                     dismissAddProjectSheet()
                     runHomeLoad(skipProbe = true)
+                    if (forDraft) openDraftWithAddedProject(worktree)
                     _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = false)
                     _removalSnackbar.value =
                         HomeSnackbar(text = HomeText.alreadyOnHome(ProjectDomainAdapter.displayNameFromWorktree(worktree)))
@@ -699,8 +694,10 @@ class MainScreenViewModel
                         // /project/current worktree — non-git dirs resolve to global "/".
                         connectionProfileStore.addWorktree(serverBaseUrl, worktree)
                         projectFirstLoads.start(worktree)
+                        val forDraft = newSessionDraftStore.consumeAddProjectRequest(currentProfileId())
                         dismissAddProjectSheet()
                         runHomeLoad(skipProbe = true)
+                        if (forDraft) openDraftWithAddedProject(worktree)
                         _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = true)
                         if (joined != null) {
                             _removalSnackbar.value =
@@ -719,48 +716,43 @@ class MainScreenViewModel
             }
         }
 
-        fun createSession(worktree: String) {
+        /**
+         * New session (#1004): opens the profile's draft (it wins), else a fresh one at [start].
+         * Nothing is created on the server until the draft's first send.
+         */
+        fun openNewSession(start: NewSessionDraftStart) {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_CREATE_SESSION)
-            if (!liveUpdates.chrome.value.canMutate) {
-                setProjectSessionCreateError(UiText.resource(R.string.home_error_reconnect_to_create))
-                return
-            }
+            val draft = newSessionDraftStore.open(currentProfileId(), start)
+            openDraft(draft.directory)
+        }
+
+        /** New session in [directory] (the Worktrees screen): the draft keeps its text and runs there. */
+        fun openNewSessionHere(directory: String) {
+            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_CREATE_SESSION)
+            val draft = newSessionDraftStore.openAt(currentProfileId(), NewSessionDraftStart.forDirectory(currentHomeProjects(), directory))
+            openDraft(draft.directory)
+        }
+
+        private fun openDraft(directory: String) {
             clearProjectSessionCreateError()
             _revealNewestToken.update { it + 1 }
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) {
-                    state.copy(pendingOpenSession = newSessionOpenTarget(worktree))
+                    state.copy(pendingOpenSession = newSessionOpenTarget(directory))
                 } else {
                     state
                 }
             }
         }
 
-        /** Run in → "New worktree…" of project [projectKey]: the form, made from its main checkout. */
-        fun openRunInNewWorktree(projectKey: String) {
-            val project = currentHomeProjects().firstOrNull { it.key == projectKey } ?: return
-            val main = project.worktrees.firstOrNull { it.isMain }
-            worktreeCreate.open(
-                origin = WorktreeCreateOrigin.RunIn(projectKey),
-                protocol = activeConnectionManager.protocolHint(),
-                projectId = project.projectId,
-                sourceDirectory = project.mainCheckoutDirectory,
-                sourceBranch = main?.branch,
-            )
+        /** A project the draft's Add project… asked for was added: it becomes the draft's, which opens again. */
+        private fun openDraftWithAddedProject(worktree: String) {
+            val profileId = currentProfileId()
+            val draft = newSessionDraftStore.openAt(profileId, NewSessionDraftStart.forDirectory(currentHomeProjects(), worktree))
+            openDraft(draft.directory)
         }
 
-        fun updateNewWorktreeName(name: String) = worktreeCreate.updateName(name)
-
-        fun showNewWorktreeBasePicker() = worktreeCreate.showBasePicker()
-
-        fun hideNewWorktreeBasePicker() = worktreeCreate.hideBasePicker()
-
-        fun selectNewWorktreeBase(ref: String?) = worktreeCreate.selectBase(ref)
-
-        fun submitNewWorktree() = worktreeCreate.submit()
-
-        /** Form → Back, or the New session sheet closed. */
-        fun closeNewWorktreeForm() = worktreeCreate.dismiss()
+        private fun currentProfileId(): String = connectionSessionCoordinator.currentProfile()?.id.orEmpty()
 
         fun consumePendingOpenSession() {
             _uiState.update { state ->
@@ -1651,7 +1643,7 @@ class MainScreenViewModel
                 is HomeWorktreeRequest.ShowSessions ->
                     _pendingScopeRequest.value =
                         HomeScopeRequest(HomeScope.worktreeId(request.projectKey, request.directory), evenFromAll = true)
-                is HomeWorktreeRequest.NewSession -> createSession(request.directory)
+                is HomeWorktreeRequest.NewSession -> openNewSessionHere(request.directory)
                 is HomeWorktreeRequest.Removed -> {
                     // Before the reload, so the v1 extra-session sync already keeps its sessions.
                     val removed = homeWorktreesFeed.removed.value
@@ -2059,9 +2051,9 @@ data class SessionOpenTarget(
 )
 
 /**
- * A new session in [worktree], opened optimistically: Session Chat shows it at once and the
- * server session is created with the first prompt. Home's New session and Ctrl+N (Home and
- * Session Chat) all open this.
+ * The New session draft, whose checkout is [worktree]: Session Chat opens at once and the server
+ * session (and any new worktree) is created with the first send (#1004). Home's New session,
+ * Ctrl+N (Home and Session Chat), `/new` and the Worktrees screen all open this.
  */
 fun newSessionOpenTarget(worktree: String): SessionOpenTarget =
     SessionOpenTarget(
