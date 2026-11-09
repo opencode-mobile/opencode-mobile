@@ -145,12 +145,15 @@ final class StatusSummaryModel {
     }
 
     /// The app opened, before setup finds today's session: a card saved for a session of this date
-    /// in this project shows at once. `open(sessionID:)` keeps it or removes it.
-    func preopen(day: String, directory: String) {
+    /// in this project shows at once; with `sessionID` (today's saved session), only that session's.
+    /// `open(sessionID:)` keeps it or removes it.
+    func preopen(day: String, directory: String, sessionID: String? = nil) {
         clear()
         self.day = day
         self.directory = directory
-        guard let saved = store?.load(), saved.day == day, saved.directory == directory else { return }
+        guard let saved = store?.load(), saved.day == day, saved.directory == directory,
+              sessionID == nil || saved.sessionID == sessionID
+        else { return }
         summary = saved.summary
         updatedAt = saved.updatedAt
         basis = saved.basis

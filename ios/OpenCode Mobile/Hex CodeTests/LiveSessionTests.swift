@@ -310,7 +310,8 @@ struct TodaySessionLiveTests {
     @Test func aNewSessionGetsTheRulesThenTheStreamAndTheEmptyCard() async {
         let server = FakeSessionServer()
         let (session, transport, toasts) = make(server)
-        #expect(session.agentState == nil)
+        // Cold start: Connecting… until the first read-back.
+        #expect(session.agentState == .connecting)
         await session.open()
         #expect(server.calls.prefix(3) == [.list(search: "2026-11-05", cursor: nil), .create(title: "2026-11-05", model: model), .rules("ses_new1")])
         await eventually { transport.connections == 1 }
@@ -322,6 +323,10 @@ struct TodaySessionLiveTests {
         #expect(card.now == "New session. Nothing running yet.")
         #expect(!server.calls.contains(.generate("ses_new1")))
         #expect(toasts.current == nil)
+        // Connecting… until the stream reads the state back, then Idle.
+        #expect(session.agentState == .connecting)
+        transport.send(EventLines.connected)
+        await eventually { session.agentState == .idle }
         #expect(session.agentState == .idle)
     }
 

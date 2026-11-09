@@ -5,6 +5,10 @@ struct HexCodeApp: App {
     @State private var app = HexAppModel()
     @AppStorage(HexAppearance.key) private var appearance: HexAppearance = .auto
 
+    init() {
+        StartupClock.mark("app init")
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
@@ -66,6 +70,12 @@ struct HexRootView: View {
             }
         }
         .hexScreenBackground()
+        .onAppear {
+            NextFrame.after {
+                StartupClock.mark("first frame")
+                app.firstFrameDrawn()
+            }
+        }
         .task { await app.launch() }
     }
 }

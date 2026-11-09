@@ -173,28 +173,38 @@ final class TodaySession {
         self.ask.onSessionGone = { [weak self] in Task { await self?.open() } }
     }
 
-    /// The top bar's state; nil (empty) until today's session is open.
+    /// The top bar's state (app plan, "Cold start"): Connecting… from the first frame until the
+    /// stream first reads the state back; nil (empty) when setup failed or the sign-in expired.
     var agentState: AgentState? {
-        guard case .ready = setup else { return nil }
-        return AgentState.resolve(streamUp: streamUp, pendingInput: pendingInput != nil, busySince: busySince)
+        switch setup {
+        case .failed, .signedOut: return nil
+        case .opening: return .connecting
+        case .ready:
+            guard stateRead else { return .connecting }
+            return AgentState.resolve(streamUp: streamUp, pendingInput: pendingInput != nil, busySince: busySince)
+        }
     }
+
+    /// Setup has an answer: today's session, a failure or signed out. Until then, with no saved card
+    /// for today's session, the card area stays empty (app plan, "Cold start").
+    var sessionKnown: Bool { setup != .opening }
 
     var sessionID: String? {
         if case let .ready(id) = setup { return id }
         return nil
     }
 
-    /// The home's first state is ready (app plan, "Cold start"): today's session found, its state
-    /// read back and its card known (saved, empty, working or new), or setup failed, or signed out.
-    var hasFirstState: Bool {
-        switch setup {
-        case .opening: false
-        case .failed, .signedOut: true
-        case .ready: stateRead && (summary.summary != nil || !summary.isUpdating)
-        }
+    // MARK: Opening
+
+    /// Cold start, before the first frame: today's saved card, when it belongs to today's saved
+    /// session in this project. Reads only the phone.
+    func preopen() {
+        preopen(day: DailySession.title(for: now(), timeZone: timeZone), directory: directory())
     }
 
-    // MARK: Opening
+    private func preopen(day: String, directory: String) {
+        summary.preopen(day: day, directory: directory, sessionID: dailySetup.savedSessionID)
+    }
 
     /// On open, on Try again, and back in front on a new date: find or create today's session and
     /// put the rules, then follow it. A new session shows the empty card (no request); one that
@@ -212,7 +222,7 @@ final class TodaySession {
         let today = DailySession.title(for: now(), timeZone: timeZone)
         let directory = directory()
         // Today's saved card for this project shows at once, while setup finds the session.
-        summary.preopen(day: today, directory: directory)
+        preopen(day: today, directory: directory)
         if let serverCheck, await serverCheck() == .signedOut {
             summary.clear()
             setup = .signedOut

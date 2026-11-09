@@ -4,6 +4,8 @@ import Foundation
 /// event stream is down; Needs input while a question or approval is pending; Working `m:ss` while
 /// the session is busy, timed from when the turn started; else Idle.
 enum AgentState: Equatable, Sendable {
+    /// Cold start: until the stream first reads the state back (app plan, "Cold start").
+    case connecting
     case reconnecting
     case needsInput
     case working(since: Date)
@@ -19,6 +21,8 @@ enum AgentState: Equatable, Sendable {
     /// The top bar's state slot at `date`.
     func topBar(at date: Date) -> HexTopBarState {
         switch self {
+        case .connecting:
+            HexTopBarState(tone: .connecting, label: String(localized: "home.state.connecting", defaultValue: "Connecting…"))
         case .reconnecting:
             HexTopBarState(tone: .reconnecting, label: String(localized: "home.state.reconnecting", defaultValue: "Reconnecting…"))
         case .needsInput:

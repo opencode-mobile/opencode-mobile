@@ -219,6 +219,8 @@ final class FakeSpeech: SpeechTranscribing {
     var failsTranscription = false
     private(set) var transcribed: [URL] = []
     private(set) var reloads = 0
+    /// Times `start()` was called.
+    private(set) var starts = 0
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
     init(_ status: SpeechStatus = .ready) {
@@ -230,6 +232,10 @@ final class FakeSpeech: SpeechTranscribing {
             await withCheckedContinuation { waiters.append($0) }
         }
         return status == .ready
+    }
+
+    func start() {
+        starts += 1
     }
 
     func reload() {

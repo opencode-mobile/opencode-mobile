@@ -19,12 +19,14 @@ final class HexAppModel {
     private(set) var firstRun: FirstRunModel?
     private(set) var main: HexMainModel?
     let voice: VoiceEngine
-    /// The speech model; it starts loading with the process when it is already on the phone.
+    /// The speech model; it starts loading about 1 s after the first frame (`speechLoad`), or at
+    /// once on the first talk press.
     let speech: SpeechModel
 
     @ObservationIgnored private let store: any HexSetupStoring
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var speechTask: Task<Void, Never>?
+    @ObservationIgnored private var speechLoad: SpeechLoadTrigger?
 
     init(store: any HexSetupStoring = HexSetupStore(), defaults: UserDefaults = .standard) {
         self.store = store
@@ -34,9 +36,17 @@ final class HexAppModel {
         let voice = VoiceEngine()
         self.voice = voice
         speech = SpeechModel(voice: voice)
-        // Load at process start (app plan, "The speech model"). On first run the download still
-        // starts at the scan step.
-        if VoiceEngine.hasDownloadedModel { prepareSpeech() }
+        // After the first frame (app plan, Dictation "Load"), when the model is on the phone or
+        // home is up; on first run the download still starts at the scan step.
+        speechLoad = SpeechLoadTrigger { [weak self] in
+            guard let self, self.phase == .main || VoiceEngine.hasDownloadedModel else { return }
+            self.prepareSpeech()
+        }
+    }
+
+    /// The app's first frame is on screen: the speech model loads in about a second.
+    func firstFrameDrawn() {
+        speechLoad?.firstFrameDrawn()
     }
 
     func launch() async {
@@ -57,13 +67,13 @@ final class HexAppModel {
                 model: ModelChoice(providerID: "anthropic", modelID: "claude-sonnet-5-5", variant: "high"),
                 modelName: "Claude Sonnet 5.5"
             ))
-            prepareSpeech()
             return
         }
         #endif
-        if let setup = await store.load() {
+        let saved = await store.load()
+        StartupClock.mark("setup loaded")
+        if let setup = saved {
             showMain(setup)
-            prepareSpeech()
         } else {
             beginFirstRun()
         }

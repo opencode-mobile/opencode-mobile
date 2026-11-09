@@ -1,5 +1,6 @@
 import Foundation
 import os
+import UIKit
 
 /// Hex Code's own log, under its bundle id. `log stream --predicate 'subsystem == "dev.opencode.hexcode"'`
 /// (or Console with the phone connected) shows it.
@@ -56,5 +57,70 @@ enum PressTiming {
         #if DEBUG
         print("HEXPROBE press: \(what) after \(ms) ms")
         #endif
+    }
+}
+
+/// Cold-start timing (app plan, "Cold start"): milliseconds from the process starting (its
+/// `p_starttime`, close to the icon tap) to each mark. Logged at info level in the `startup`
+/// category, and printed in debug builds (`devicectl device process launch --console` shows them).
+@MainActor
+enum StartupClock {
+    private static let logger = Logger(subsystem: HexLog.subsystem, category: "startup")
+    private static var marked: Set<String> = []
+
+    /// When the process started, as a Unix time.
+    nonisolated static let processStart: TimeInterval = {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        guard sysctl(&mib, u_int(mib.count), &info, &size, nil, 0) == 0 else { return Date().timeIntervalSince1970 }
+        let start = info.kp_proc.p_starttime
+        return TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000
+    }()
+
+    /// Milliseconds since the process started.
+    static var elapsed: Int { Int(((Date().timeIntervalSince1970 - processStart) * 1000).rounded()) }
+
+    /// Logs `what` once per process.
+    static func mark(_ what: String) {
+        guard marked.insert(what).inserted else { return }
+        let ms = elapsed
+        logger.info("startup: \(what, privacy: .public) at \(ms) ms")
+        #if DEBUG
+        print("HEXPROBE startup: \(what) at \(ms) ms")
+        fflush(stdout)
+        #endif
+    }
+}
+
+/// Runs once, on the next screen refresh: by then the frame being built now is on screen.
+@MainActor
+final class NextFrame: NSObject {
+    private static var waiting: Set<NextFrame> = []
+    private var link: CADisplayLink?
+    private let action: () -> Void
+
+    private init(_ action: @escaping () -> Void) {
+        self.action = action
+    }
+
+    static func after(_ action: @escaping () -> Void) {
+        let next = NextFrame(action)
+        let link = CADisplayLink(target: next, selector: #selector(tick))
+        next.link = link
+        waiting.insert(next)
+        link.add(to: .main, forMode: .common)
+    }
+
+    /// Returns on the next screen refresh.
+    static func wait() async {
+        await withCheckedContinuation { continuation in after { continuation.resume() } }
+    }
+
+    @objc private func tick() {
+        link?.invalidate()
+        link = nil
+        Self.waiting.remove(self)
+        action()
     }
 }

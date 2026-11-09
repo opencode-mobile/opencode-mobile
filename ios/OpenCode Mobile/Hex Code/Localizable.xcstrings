@@ -2615,6 +2615,17 @@
         }
       }
     },
+    "home.state.connecting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting…"
+          }
+        }
+      }
+    },
     "home.state.idle": {
       "extractionState": "manual",
       "localizations": {

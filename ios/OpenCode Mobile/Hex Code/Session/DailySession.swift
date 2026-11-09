@@ -174,6 +174,9 @@ final class DailySessionSetup {
         self.memory = memory
     }
 
+    /// The last session the app opened, as saved on the phone; nil when none is saved.
+    var savedSessionID: String? { memory.lastSessionID }
+
     /// Start a new session (Settings).
     enum NewSessionOutcome: Equatable, Sendable {
         case opened(SessionListing)

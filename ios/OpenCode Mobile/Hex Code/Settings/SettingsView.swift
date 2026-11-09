@@ -214,8 +214,18 @@ struct HexMainView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Cold start: the launch screen's logo until home's first state is ready, then home in one piece.
-    @State private var coldStart = ColdStart()
+    /// Cold start: home in the first frame, its card area from what's saved on the phone.
+    @State private var coldStart: ColdStart
+    /// Home has faded in over the launch logo.
+    @State private var shown = false
+
+    init(main: HexMainModel, voice: VoiceEngine, appearance: Binding<HexAppearance>, onForgetServer: @escaping () -> Void) {
+        self.main = main
+        self.voice = voice
+        _appearance = appearance
+        self.onForgetServer = onForgetServer
+        _coldStart = State(initialValue: ColdStart(savedCard: main.session.summary.summary != nil))
+    }
 
     var body: some View {
         NavigationStack(path: $main.path) {
@@ -225,7 +235,6 @@ struct HexMainView: View {
                 voice: voice,
                 onSettings: { main.openSettings() },
                 onPairAgain: { main.startPairAgain() },
-                revealed: coldStart.showsHome,
                 cardShown: coldStart.showsCard
             )
                 .hexPage()
@@ -243,27 +252,28 @@ struct HexMainView: View {
         // screen it takes bottom-edge touches first; the home swipe then needs a second swipe. Set
         // here, outside the navigation stack, so it reaches the window's root controller.
         .defersSystemGestures(on: main.path.isEmpty ? .bottom : [])
-        // Until then the launch screen's look: the logo on the plain background.
-        // Home fades in over the logo (instant with Reduce Motion): the logo stays behind it, so it is
-        // never drawn on top of the content, and home's opaque background hides it once shown.
-        .opacity(coldStart.showsHome ? 1 : 0)
-        .animation(HexMotion.animation(HexMotion.fade, reduced: reduceMotion), value: coldStart.showsHome)
-        .allowsHitTesting(coldStart.showsHome)
-        .accessibilityHidden(!coldStart.showsHome)
+        // Home fades in over the launch logo in its first frame (instant with Reduce Motion): the
+        // logo stays behind it, so it is never drawn on top of the content, and home's opaque
+        // background hides it once shown.
+        .opacity(shown ? 1 : 0)
         .background {
             HexColor.background.ignoresSafeArea()
                 .overlay { LaunchLogo() }
         }
-        .task { await main.realSession.open() }
-        .task {
-            try? await Task.sleep(for: ColdStart.limit)
-            coldStart.timedOut()
+        .onAppear {
+            withAnimation(HexMotion.animation(HexMotion.fade, reduced: reduceMotion)) { shown = true }
         }
-        .onChange(of: main.session.hasFirstState, initial: true) { _, ready in
-            guard ready, !coldStart.showsCard else { return }
-            // Shown whole at once; a card arriving after the limit fades in (instant with Reduce Motion).
+        // Nothing needs the network before home's first frame is on screen.
+        .task {
+            await NextFrame.wait()
+            StartupClock.mark("home shown")
+            await main.start()
+        }
+        .onChange(of: main.session.sessionKnown, initial: true) { _, known in
+            guard known, !coldStart.showsCard else { return }
+            // No saved card for today's session: the card fades in once the session is known.
             var next = coldStart
-            let fades = next.ready()
+            let fades = next.sessionKnown()
             withAnimation(fades ? HexMotion.animation(HexMotion.fade, reduced: reduceMotion) : nil) {
                 coldStart = next
             }

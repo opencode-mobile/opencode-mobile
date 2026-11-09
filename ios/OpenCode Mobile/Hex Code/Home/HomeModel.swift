@@ -159,6 +159,9 @@ final class HomeModel {
 
     private func startTake() -> Bool {
         guard let id = draft.beginTake() else { return false }
+        // Pressed before the speech model's deferred load began: it starts now (app plan, Dictation
+        // "Load"); the take waits for it.
+        speech.start()
         // A re-recorded chunk starts over.
         parts[id] = nil
         releasedAt[id] = nil

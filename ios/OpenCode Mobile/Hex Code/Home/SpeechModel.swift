@@ -17,6 +17,8 @@ enum SpeechStatus: Equatable, Sendable {
 @MainActor
 protocol SpeechTranscribing: AnyObject {
     var status: SpeechStatus { get }
+    /// Downloads (if needed) and loads the model, once per process; later calls do nothing.
+    func start()
     /// Waits until the model is ready (true) or has failed (false).
     func waitUntilReady() async -> Bool
     /// After a failure: load the model again.
@@ -27,8 +29,8 @@ protocol SpeechTranscribing: AnyObject {
     func transcribe(part: TakePart) async throws -> String
 }
 
-/// The speech model on this phone (Parakeet V2 through `VoiceEngine`). It starts loading when the
-/// app process starts (`start()`, once), and after loading transcribes one short take of silence so
+/// The speech model on this phone (Parakeet V2 through `VoiceEngine`). It starts loading after the
+/// first frame (`start()`, once; see `SpeechLoadTrigger`), and after loading transcribes one short take of silence so
 /// the first real take is as fast as the rest. Debug builds can hold readiness back
 /// (`-HexCodeSpeechDelay <seconds>`) or fail the first load (`-HexCodeSpeechFail YES`).
 @MainActor
@@ -209,5 +211,40 @@ final class SpeechModel: SpeechTranscribing {
         data.append(contentsOf: Array("data".utf8)); append(UInt32(dataBytes))
         data.append(Data(count: dataBytes))
         return data
+    }
+}
+
+/// When the speech model starts loading (app plan, Dictation "Load"): once per process, about 1 s
+/// after the first frame is drawn, so it doesn't compete with start-up. A talk press before then
+/// starts it at once (`HomeModel` calls `start()`), and the take waits for the model.
+@MainActor
+final class SpeechLoadTrigger {
+    static let delay: Duration = .seconds(1)
+
+    private let sleep: @Sendable (Duration) async throws -> Void
+    private let load: @MainActor () -> Void
+    private var fired = false
+    private var waiting: Task<Void, Never>?
+
+    init(sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }, load: @escaping @MainActor () -> Void) {
+        self.sleep = sleep
+        self.load = load
+    }
+
+    /// The first frame is on screen: load in about a second.
+    func firstFrameDrawn() {
+        guard !fired, waiting == nil else { return }
+        let sleep = sleep
+        waiting = Task { [weak self] in
+            try? await sleep(Self.delay)
+            self?.fire()
+        }
+    }
+
+    private func fire() {
+        guard !fired else { return }
+        fired = true
+        waiting = nil
+        load()
     }
 }

@@ -12,6 +12,8 @@ struct HexTopBarState: Equatable {
         case needsYou
         /// Amber arc turning fast, amber label.
         case reconnecting
+        /// Cold start: the Reconnecting arc in `text3`, `text3` label.
+        case connecting
     }
 
     var tone: Tone
@@ -163,6 +165,8 @@ struct HexTopBar<Trailing: View>: View {
             HexSpinner(color: HexColor.green, period: 1.6)
         case .reconnecting:
             HexSpinner(color: HexColor.amber)
+        case .connecting:
+            HexSpinner(color: HexColor.text3)
         case .needsYou:
             Circle()
                 .fill(HexColor.amber)
@@ -176,6 +180,7 @@ struct HexTopBar<Trailing: View>: View {
         case .idle: HexColor.text2
         case .working: HexColor.text1
         case .needsYou, .reconnecting: HexColor.amber
+        case .connecting: HexColor.text3
         }
     }
 }

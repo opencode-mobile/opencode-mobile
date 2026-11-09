@@ -10,9 +10,8 @@ struct HomeView: View {
     let onSettings: () -> Void
     /// Signed out's Pair again.
     var onPairAgain: () -> Void = {}
-    /// On screen (app plan, "Cold start"): false while the launch look holds.
-    var revealed = true
-    /// The card (or setup failure) has arrived; until then its place stays empty.
+    /// Cold start: today's session is known, or its saved card was on the phone (app plan, "Cold
+    /// start"); until then the card area stays empty.
     var cardShown = true
 
     @State private var showsAttach = false
@@ -89,11 +88,21 @@ struct HomeView: View {
                     .padding(.bottom, 10)
                     .transition(.opacity)
             }
-            if !drafting, session.waitingCount > 0 {
-                // Waiting messages open Details, where they can be cancelled.
-                WaitingLine(count: session.waitingCount, idle: session.agentState == .idle) { session.openDetails() }
-                    .padding(.bottom, 10)
-                    .transition(.opacity)
+            if !drafting {
+                // Waiting messages open Details, where they can be cancelled. With none (or before
+                // they are read) its height stays, so nothing moves when it fills in.
+                Group {
+                    if session.waitingCount > 0 {
+                        WaitingLine(count: session.waitingCount, idle: session.agentState == .idle) { session.openDetails() }
+                            .transition(.opacity)
+                    } else {
+                        WaitingLine(count: 1) {}
+                            .hidden()
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .padding(.bottom, 10)
             } else {
                 Spacer().frame(height: 12)
             }
@@ -149,8 +158,8 @@ struct HomeView: View {
             Text(LocalizedStringResource("stop.confirm.body", defaultValue: "It stops now, with its subagents. Background shells keep running."))
         }
         // VoiceOver lands on the talk button first, after the top bar.
-        .task(id: revealed) {
-            guard voiceOver, revealed else { return }
+        .task {
+            guard voiceOver else { return }
             try? await Task.sleep(for: .milliseconds(600))
             talkFocused = true
         }

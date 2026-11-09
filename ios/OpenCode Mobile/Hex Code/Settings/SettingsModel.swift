@@ -112,9 +112,18 @@ final class HexMainModel {
         realSession.serverName = setup.serverName
         realSession.computerHost = URL(string: setup.profile.baseURL)?.host
         realSession.serverCheck = { [weak self] in await self?.checkServer() ?? .ready }
+        // Today's saved card, from the phone, so the first frame shows it (app plan, "Cold start").
+        realSession.preopen()
         if let samplePreset { showSample(samplePreset) }
+    }
+
+    /// After home's first frame (app plan, "Cold start"): everything that needs the network. Today's
+    /// session opens (the sign-in renewal, finding it, its rules, the stream), and the upload route
+    /// and today's model's image input are read; each fills its slot when it arrives.
+    func start() async {
         Task { await refreshImageInput() }
         Task { await refreshFileUploads() }
+        await realSession.open()
     }
 
     /// Whether files can be uploaded, from the server's API contract and `paths.tmp` (app plan,
