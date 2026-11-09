@@ -201,10 +201,10 @@ internal fun SessionChatGoalStatusRow() {
                         variant = OpenCodeButtonVariant.CompactText(stringResource(R.string.session_chat_goal_new)),
                         onClick = context.onNewGoal,
                         enabled = state.actionsEnabled,
-                        contrast = OpenCodeButtonContrast.Accent,
+                        contrast = OpenCodeButtonContrast.High,
                     )
                 } else {
-                    GoalActionButton(state, SessionGoalAction.Resume, OpenCodeButtonContrast.Accent, context.onAction)
+                    GoalActionButton(state, SessionGoalAction.Resume, OpenCodeButtonContrast.High, context.onAction)
                 }
                 GoalActionButton(state, SessionGoalAction.Clear, OpenCodeButtonContrast.Low, context.onAction)
             }
@@ -321,15 +321,15 @@ internal fun SessionChatGoalSheet(
                 Spacer(modifier = Modifier.weight(1f))
                 when (goal.status) {
                     SessionGoalStatus.Active ->
-                        GoalActionButton(goalState, SessionGoalAction.Pause, OpenCodeButtonContrast.Accent, onAction)
+                        GoalActionButton(goalState, SessionGoalAction.Pause, OpenCodeButtonContrast.High, onAction)
                     SessionGoalStatus.Paused ->
-                        GoalActionButton(goalState, SessionGoalAction.Resume, OpenCodeButtonContrast.Accent, onAction)
+                        GoalActionButton(goalState, SessionGoalAction.Resume, OpenCodeButtonContrast.High, onAction)
                     SessionGoalStatus.Complete ->
                         OpenCodeButton(
                             variant = OpenCodeButtonVariant.CompactText(stringResource(R.string.session_chat_goal_new)),
                             onClick = onNewGoal,
                             enabled = goalState.actionsEnabled,
-                            contrast = OpenCodeButtonContrast.Accent,
+                            contrast = OpenCodeButtonContrast.High,
                         )
                 }
             }
