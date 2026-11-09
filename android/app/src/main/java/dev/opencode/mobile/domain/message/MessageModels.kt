@@ -165,6 +165,11 @@ sealed class MessagePart {
         val isSynthetic: Boolean = false,
         /** Server-marked non-display text. Hidden in UI. */
         val isIgnored: Boolean = false,
+        /**
+         * Set on a `/goal` kickoff sent as the user's prompt (it had attachments): [text] is then
+         * the objective, never the server's instruction text, and the bubble is labelled Goal.
+         */
+        val goalKickoffId: String? = null,
     ) : MessagePart() {
         val isDisplayable: Boolean
             get() = !isSynthetic && !isIgnored

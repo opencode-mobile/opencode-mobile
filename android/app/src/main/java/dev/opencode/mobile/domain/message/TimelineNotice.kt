@@ -55,6 +55,15 @@ sealed interface TimelineNotice {
 
     /** The server restarted mid-turn and the turn resumed. */
     data object Restart : TimelineNotice
+
+    /**
+     * A `/goal` was set: the goal plugin's kickoff message. [description] is the server's
+     * "Goal: <objective cut to 120>" line; [goalId] tells the current goal from earlier ones.
+     */
+    data class GoalSet(
+        val goalId: String,
+        val description: String,
+    ) : TimelineNotice
 }
 
 /**
@@ -89,6 +98,11 @@ internal object TimelineNoticeCodec {
                     put("description", notice.description)
                 }
                 TimelineNotice.Restart -> put("kind", RESTART)
+                is TimelineNotice.GoalSet -> {
+                    put("kind", GOAL)
+                    put("goalID", notice.goalId)
+                    put("description", notice.description)
+                }
             }
         }
 
@@ -104,6 +118,11 @@ internal object TimelineNoticeCodec {
             INSTRUCTIONS -> TimelineNotice.InstructionsUpdated(strings(json["sources"]))
             SYSTEM -> json.string("description")?.let { TimelineNotice.SystemNote(it) }
             RESTART -> TimelineNotice.Restart
+            GOAL -> {
+                val goalId = json.string("goalID")
+                val description = json.string("description")
+                if (goalId != null && description != null) TimelineNotice.GoalSet(goalId, description) else null
+            }
             else -> null
         }
     }
@@ -136,4 +155,5 @@ internal object TimelineNoticeCodec {
     private const val INSTRUCTIONS = "instructions"
     private const val SYSTEM = "system"
     private const val RESTART = "restart"
+    private const val GOAL = "goal"
 }

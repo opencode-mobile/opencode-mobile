@@ -132,6 +132,12 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.abs
 
+/** A line under the composer field; [isError] tints it, e.g. a draft over the server's limit. */
+data class OpenCodeSessionComposerNote(
+    val text: String,
+    val isError: Boolean = false,
+)
+
 sealed interface OpenCodeSessionComposerState {
     data class Prompt(
         val text: String,
@@ -167,6 +173,15 @@ sealed interface OpenCodeSessionComposerState {
         val suggestionsOpen: Boolean = false,
         /** This session's sent prompts, oldest first, for ↑ / ↓ recall with a hardware keyboard. */
         val promptHistory: List<String> = emptyList(),
+        /** Replaces the default empty-field placeholder, e.g. "Reply, then resume the goal…". */
+        val placeholder: String? = null,
+        /**
+         * Muted hint drawn right after a draft that is only a command waiting for its argument,
+         * e.g. `/goal ` → "Describe what “done” looks like…".
+         */
+        val argumentHint: String? = null,
+        /** A line under the field, such as a character count near a limit. */
+        val note: OpenCodeSessionComposerNote? = null,
     ) : OpenCodeSessionComposerState
 
     /** The descendant subagent session asking a permission or question; Open shows that session. */
@@ -849,21 +864,41 @@ private fun PromptEntryContent(
                     if (state.text.isBlank()) {
                         Text(
                             text =
-                                stringResource(
-                                    if (state.sideQuestionMode) {
-                                        R.string.component_composer_side_question_placeholder
-                                    } else {
-                                        R.string.component_composer_placeholder
-                                    },
-                                ),
+                                when {
+                                    state.sideQuestionMode -> stringResource(R.string.component_composer_side_question_placeholder)
+                                    state.placeholder != null -> state.placeholder
+                                    else -> stringResource(R.string.component_composer_placeholder)
+                                },
                             style = MaterialTheme.typography.bodyLarge,
                             color = openCodeColor("text-weak"),
+                        )
+                    } else if (state.argumentHint != null) {
+                        // The draft drawn invisibly, so the hint starts where the typed text ends.
+                        Text(
+                            text =
+                                buildAnnotatedString {
+                                    withStyle(SpanStyle(color = Color.Transparent)) { append(state.text) }
+                                    append(state.argumentHint)
+                                },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = openCodeColor("text-weak"),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clearAndSetSemantics {},
                         )
                     }
                     innerTextField()
                 }
             },
         )
+        state.note?.let { note ->
+            Text(
+                text = note.text,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (note.isError) openCodeColor("error") else openCodeColor("text-weak"),
+            )
+        }
     }
 
     PickerChipsRow(state = state, onAction = onAction)

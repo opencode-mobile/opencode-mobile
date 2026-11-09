@@ -184,7 +184,7 @@ class SessionChatPillSlotsTest {
     // Context
 
     @Test
-    fun contextShowsBranchInTheCornerThenTodosAtMostTwo() {
+    fun contextShowsBranchInTheCornerThenTodosWithoutAGoal() {
         val branch = SessionBranchPillUiState(
                 OpenCodeSessionBranchSummary("main", files = listOf(OpenCodeSessionBranchChangedFile("a.kt", 1, 2))),
             )
@@ -198,7 +198,7 @@ class SessionChatPillSlotsTest {
             SessionChatPillSlots.context(0, 0, branch),
         )
         assertTrue(SessionChatPillSlots.context(null, null, null).isEmpty())
-        assertEquals(2, SessionChatPillSlots.MAX_CONTEXT_PILLS)
+        assertEquals(3, SessionChatPillSlots.MAX_CONTEXT_PILLS)
     }
 
     // Navigation

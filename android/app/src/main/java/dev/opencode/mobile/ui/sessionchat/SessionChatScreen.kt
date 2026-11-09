@@ -67,6 +67,8 @@ import dev.opencode.mobile.domain.connection.ExternalLinkPolicy
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
+import dev.opencode.mobile.domain.goal.SessionGoalDraft
+import dev.opencode.mobile.domain.goal.SessionGoalLimits
 import dev.opencode.mobile.domain.message.AttachmentDropContext
 import dev.opencode.mobile.domain.message.AttachmentDropRouting
 import dev.opencode.mobile.domain.message.AttachmentDropSummary
@@ -111,6 +113,7 @@ import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
+import dev.opencode.mobile.ui.components.OpenCodeSessionComposerNote
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
@@ -147,6 +150,7 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveTags
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatGoalSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
@@ -999,7 +1003,11 @@ private fun SessionChatScreenBody(
                             sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
-                            hideFloatStack = showSessionTodosSheet || showSubagentsSheet || uiState.shellOutput != null,
+                            hideFloatStack =
+                                showSessionTodosSheet ||
+                                    showSubagentsSheet ||
+                                    uiState.shellOutput != null ||
+                                    uiState.goal?.sheetOpen == true,
                             hideLiveRetryFailures = uiState.retryCard != null,
                             hideRetryCountdown = uiState.isRetrying,
                             noticeModelNames = noticeModelNames,
@@ -1128,6 +1136,10 @@ private fun SessionChatScreenBody(
                             onOpenImageViewer = viewModel::openImageViewer,
                             onImageViewerPageChange = viewModel::showImageViewerPage,
                             onDismissImageViewer = viewModel::dismissImageViewer,
+                            goal = uiState.goal,
+                            onGoalClick = viewModel::openGoalSheet,
+                            onGoalAction = viewModel::sendGoalAction,
+                            onNewGoal = viewModel::startNewGoal,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -1199,7 +1211,12 @@ private fun SessionChatScreenBody(
                                             OpenCodeComposerSuggestionItem(
                                                 id = suggestion.id,
                                                 title = suggestion.title,
-                                                subtitle = suggestion.subtitle,
+                                                subtitle =
+                                                    SessionChatGoalCopy
+                                                        .commandSubtitle(uiState.goal?.goal)
+                                                        ?.takeIf { suggestion.commandName == SessionGoalLimits.COMMAND }
+                                                        ?.resolve()
+                                                        ?: suggestion.subtitle,
                                                 badge = suggestion.badge?.resolve(),
                                             )
                                         },
@@ -1244,6 +1261,14 @@ private fun SessionChatScreenBody(
                         }
 
                         val sideQuestionMode = uiState.sideQuestions.composerMode
+                        // A `/goal <objective>` draft (#1007): Send stays off while it is empty or over the limit.
+                        val goalObjective =
+                            if (uiState.goalCommandAvailable && !sideQuestionMode) {
+                                SessionGoalDraft.objective(uiState.composer.text)
+                            } else {
+                                null
+                            }
+                        val blockedGoal = goalObjective != null && !SessionGoalDraft.canSend(goalObjective)
                         val blockedSideQuestion =
                             !uiState.sideQuestions.supported &&
                                 SideQuestion.questionInDraft(uiState.composer.text) != null
@@ -1378,7 +1403,8 @@ private fun SessionChatScreenBody(
                                                         uiState.composer.selectedModel != null &&
                                                         uiState.composer.isModelSelectionReady &&
                                                         !uiState.isSending &&
-                                                        !blockedSideQuestion
+                                                        !blockedSideQuestion &&
+                                                        !blockedGoal
                                                 }
                                             ) &&
                                                 sessionCreated &&
@@ -1403,6 +1429,14 @@ private fun SessionChatScreenBody(
                                         sideQuestionMode = sideQuestionMode,
                                         suggestionsOpen = uiState.atSuggestionsVisible || uiState.slashSuggestionsVisible,
                                         promptHistory = promptHistory,
+                                        placeholder =
+                                            stringResource(R.string.session_chat_goal_resume_placeholder)
+                                                .takeIf { SessionChatGoalCopy.resumesAfterReply(uiState.goal) && !sideQuestionMode },
+                                        argumentHint =
+                                            stringResource(R.string.session_chat_goal_objective_hint).takeIf {
+                                                goalObjective != null && SessionGoalDraft.awaitsObjective(uiState.composer.text)
+                                            },
+                                        note = goalObjective?.let { goalObjectiveNote(it) },
                                     )
                             }
                         // Drops attach only where the Attach button would: a prompt composer that takes attachments.
@@ -1667,6 +1701,7 @@ private fun SessionChatScreenBody(
                 showSessionTodosSheet ||
                 showSubagentsSheet ||
                 uiState.shellOutput != null ||
+                uiState.goal?.sheetOpen == true ||
                 showAttachmentSource ||
                 activePicker != null ||
                 showDeleteConfirmation
@@ -1711,6 +1746,14 @@ private fun SessionChatScreenBody(
             onStop = viewModel::stopShell,
             onObservedChange = viewModel::setShellOutputObserved,
             onDismiss = viewModel::closeShellOutput,
+        )
+
+        SessionChatGoalSheet(
+            state = uiState.goal,
+            onDismiss = viewModel::closeGoalSheet,
+            onAction = viewModel::sendGoalAction,
+            onNewGoal = viewModel::startNewGoal,
+            onToggleObjective = viewModel::toggleGoalObjective,
         )
 
         SessionChatTodosSheet(
@@ -2234,3 +2277,22 @@ private fun ComposerAttachmentSources.galleryRequest(): PickVisualMediaRequest =
             ActivityResultContracts.PickVisualMedia.ImageOnly
         },
     )
+
+/** "3,812 / 4,000 characters" near the goal objective limit; null below it. */
+@Composable
+private fun goalObjectiveNote(objective: String): OpenCodeSessionComposerNote? {
+    if (!SessionGoalDraft.showsCount(objective)) return null
+    val format = java.text.NumberFormat.getIntegerInstance()
+    val count = format.format(objective.length)
+    val limit = format.format(SessionGoalLimits.MAX_OBJECTIVE)
+    val over = objective.length > SessionGoalLimits.MAX_OBJECTIVE
+    return OpenCodeSessionComposerNote(
+        text =
+            stringResource(
+                if (over) R.string.session_chat_goal_count_over else R.string.session_chat_goal_count,
+                count,
+                limit,
+            ),
+        isError = over,
+    )
+}

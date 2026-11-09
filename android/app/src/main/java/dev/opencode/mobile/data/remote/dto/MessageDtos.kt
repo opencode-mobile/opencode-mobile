@@ -110,6 +110,8 @@ data class MessagePartDto(
     val summary: String? = null,
     /** Client-only `notice` part from the v2 live projection (a timeline notice). */
     val notice: JsonObject? = null,
+    /** Client-only: the goal a v2 user prompt kicks off (see [dev.opencode.mobile.domain.message.MessagePart.Text.goalKickoffId]). */
+    @SerialName("goalID") val goalId: String? = null,
 )
 
 @Serializable

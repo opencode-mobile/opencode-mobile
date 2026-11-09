@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.message.ToolArgumentsPreview
 import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolResultImages
+import dev.opencode.mobile.domain.goal.SessionGoalKickoff
 import dev.opencode.mobile.domain.message.V2ContentPartId
 import dev.opencode.mobile.domain.message.V2TimelineNotices
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -407,13 +408,19 @@ class EventDomainAdapter(
         val messageId = userMessageId(properties)
         val parts = mutableListOf<OpencodeEvent>()
         val rawText = prompt?.string("text") ?: properties.string("text")
-        val uploads = UploadedAttachments.parse(prompt?.get("metadata") as? JsonObject ?: properties["metadata"] as? JsonObject)
-        val text = rawText?.let { UploadedAttachments.stripLines(it, uploads) }
+        val metadata = prompt?.get("metadata") as? JsonObject ?: properties["metadata"] as? JsonObject
+        val uploads = UploadedAttachments.parse(metadata)
+        // A goal kickoff sent with attachments carries the plugin's instructions: show the objective only.
+        val goalKickoffId = V2TimelineNotices.goalKickoffId(metadata)
+        val text =
+            rawText?.let { UploadedAttachments.stripLines(it, uploads) }?.let { prompt ->
+                if (goalKickoffId != null) SessionGoalKickoff.objective(prompt) ?: prompt else prompt
+            }
         // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
         // context, not something the user typed: keep the part but mark it hidden.
         val synthetic = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
         text?.takeIf { it.isNotBlank() }?.let {
-            parts += userTextPartUpdated(sessionId, messageId, it, synthetic = synthetic)
+            parts += userTextPartUpdated(sessionId, messageId, it, synthetic = synthetic, goalKickoffId = goalKickoffId)
         }
         if (prompt == null && uploads.isEmpty()) return parts
         val files = prompt?.get("files") as? JsonArray
@@ -432,6 +439,7 @@ class EventDomainAdapter(
         messageId: String?,
         text: String,
         synthetic: Boolean = false,
+        goalKickoffId: String? = null,
     ): OpencodeEvent {
         val part =
             buildJsonObject {
@@ -441,6 +449,7 @@ class EventDomainAdapter(
                 put("type", "text")
                 put("text", text)
                 if (synthetic) put("synthetic", true)
+                goalKickoffId?.let { put("goalID", it) }
             }
         return event("message.part.updated", buildJsonObject { put("part", part) })
     }
