@@ -611,7 +611,7 @@ private struct ConnectionSetupPreview: View {
         let profile =
             mode == .edit
                 ? ConnectionProfile(
-                    baseURL: "http://192.168.0.99:4096/",
+                    baseURL: "http://192.168.1.2:4096/",
                     username: "opencode",
                     password: "",
                     id: "preview-profile",
