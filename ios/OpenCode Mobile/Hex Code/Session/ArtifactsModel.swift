@@ -90,12 +90,13 @@ struct ArtifactsFlow: Equatable {
     var runEnded = false
 
     enum LiveLine: Equatable, Sendable {
+        /// Sent, nothing from the agent yet.
         case waiting
         case thinking
         case reading(String)
         case editing(String)
-        case looking
-        case writingReply
+        /// Any other tool, by name.
+        case tool(String)
     }
 
     var isRunning: Bool { stage == .running }
@@ -108,8 +109,8 @@ struct ArtifactsFlow: Equatable {
         }
     }
 
-    /// The fallback's line can be shown: the flow turns artifacts on, and there's a file to name.
-    var offersLine: Bool { mode == .enable && target != nil }
+    /// The fallback's line can be shown: there's a file to name.
+    var offersLine: Bool { target != nil }
 
     var prompt: String? {
         target.map { mode == .enable ? SessionPrompts.Artifacts.Setup.enable(file: $0.path) : SessionPrompts.Artifacts.Setup.disable(file: $0.path) }
@@ -126,6 +127,9 @@ final class ArtifactsModel {
     static let checkInterval: Duration = .seconds(2)
     static let runTimeout: TimeInterval = 60
     static let hintKey = "hexcode.artifacts.hint_seen"
+    /// After Restore, the config is read again up to this many more times, this far apart.
+    static let restoreChecks = 6
+    static let restoreInterval: Duration = .milliseconds(500)
 
     private(set) var state: ArtifactsState = .checking
     private(set) var flow: ArtifactsFlow?
@@ -141,6 +145,8 @@ final class ArtifactsModel {
 
     /// Waits; a test passes its own.
     @ObservationIgnored var sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    /// The wait between checks after Restore; a test passes its own.
+    @ObservationIgnored var restoreWait: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     /// "Make a small page that previews …" goes into the draft.
     @ObservationIgnored var onSuggestion: (String) -> Void = { _ in }
     /// The server's name, for "Waiting for <name>…".
@@ -444,8 +450,7 @@ final class ArtifactsModel {
         switch tool {
         case "read": .reading(file)
         case "edit", "write", "patch", "multiedit", "apply_patch": .editing(file)
-        case "glob", "grep", "list", "ls": .looking
-        default: .thinking
+        default: .tool(tool)
         }
     }
 
@@ -497,7 +502,7 @@ final class ArtifactsModel {
     func runEnded(error: SetupRunError?) async {
         guard let api, flow?.isRunning == true, flow?.runEnded == false, let id = setupSessionID else { return }
         flow?.runEnded = true
-        flow?.liveLine = .writingReply
+        flow?.liveLine = .thinking
         transcript = await api.transcript(sessionID: id)
         flow?.reply = SetupMessage.lastReply(transcript)
         let answer = await refresh()
@@ -591,12 +596,20 @@ final class ArtifactsModel {
             ))
             return
         }
+        // OpenCode's config watcher reloads the file within about a second.
+        var problem = await afterCheck()
+        for _ in 0 ..< Self.restoreChecks where problem != nil && problem != .intact {
+            try? await restoreWait(Self.restoreInterval)
+            problem = await afterCheck()
+        }
         let answer = await refresh()
-        if let problem = await afterCheck(), problem != .intact {
+        if let problem, problem != .intact {
             flow?.stage = .broken(problem)
         } else if let mode = flow?.mode, wanted(answer, mode) {
             settle(.done)
         } else {
+            // The original is back: still checking, so a line changed by hand still flips it.
+            flow?.check = .doing
             flow?.end = .todo
             settle(.fallback(.restored))
         }
@@ -652,7 +665,7 @@ final class ArtifactsModel {
 
     /// The On result's chip: the suggestion goes into today's draft and the sheet closes.
     func suggestPage() {
-        let text = String(localized: "artifacts.flow.on.suggestion", defaultValue: "Make a small page that previews")
+        let text = String(localized: "artifacts.flow.on_suggestion", defaultValue: "Make a small page that previews")
         end()
         onSuggestion(text)
     }

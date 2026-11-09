@@ -44,6 +44,16 @@ struct SettingsView: View {
                     HexRow(icon: .spark, LocalizedStringResource("settings.reasoning", defaultValue: "Reasoning"), value: reasoning) {
                         Task { await main.openModel() }
                     }
+                    // Artifacts: On, Off, Turning on…, Needs you or Not available; the enable or
+                    // turn-off sheet.
+                    HexRow(
+                        icon: .compass,
+                        LocalizedStringResource("settings.artifacts", defaultValue: "Artifacts"),
+                        subtitle: main.artifacts.rowSubtitle,
+                        value: main.artifacts.rowValue,
+                        trailing: main.artifacts.rowEnabled ? .chevron : .none,
+                        action: main.artifacts.rowEnabled ? { main.artifacts.open() } : nil
+                    )
 
                     HexSectionLabel(LocalizedStringResource("settings.dictation", defaultValue: "Dictation · on this phone"))
                     HexRow(
@@ -233,6 +243,8 @@ struct HexMainView: View {
                 home: main.home,
                 session: main.session,
                 voice: voice,
+                artifacts: main.samplePreset == nil ? main.artifacts : nil,
+                artifactBrowser: { main.artifactBrowser($0) },
                 onSettings: { main.openSettings() },
                 onPairAgain: { main.startPairAgain() },
                 cardShown: coldStart.showsCard
@@ -244,6 +256,11 @@ struct HexMainView: View {
         }
         // Notices sit under the top bar: home's, or the open page's.
         .hexToastHost(main.toasts, top: main.path.isEmpty ? HexTopBarMetrics.homeToastTop : HexTopBarMetrics.pageToastTop)
+        // Artifacts' enable or turn-off sheet, over whichever page opened it.
+        .hexFittedSheet(isPresented: Binding(get: { main.artifacts.sheetShown }, set: { if !$0 { main.artifacts.close() } })) {
+            ArtifactsSheet(artifacts: main.artifacts, toasts: main.toasts)
+        }
+        .onChange(of: main.artifacts.sheetShown) { _, up in main.toasts.inSheet = up }
         .fullScreenCover(item: $main.pairAgain) { model in
             PairAgainView(model: model, onCancel: { main.cancelPairAgain() })
         }

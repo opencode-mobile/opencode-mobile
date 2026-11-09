@@ -7,6 +7,11 @@ struct HomeView: View {
     let home: HomeModel
     let session: TodaySession
     let voice: VoiceEngine
+    /// Artifacts on this computer: the card's artifact tile, the one-time hint and the browser's
+    /// "Turn on…". Nil for the sample sessions.
+    var artifacts: ArtifactsModel?
+    /// The in-app browser for an artifact.
+    var artifactBrowser: (CardArtifact) -> BrowserModel? = { _ in nil }
     let onSettings: () -> Void
     /// Signed out's Pair again.
     var onPairAgain: () -> Void = {}
@@ -71,6 +76,8 @@ struct HomeView: View {
                 } else {
                     HomeStatusView(
                         session: session,
+                        artifacts: artifacts,
+                        onOpenArtifact: openArtifact,
                         onOpenLink: open,
                         onNext: { home.addSuggestion($0) },
                         onPairAgain: onPairAgain,
@@ -329,6 +336,28 @@ struct HomeView: View {
         } else {
             openURL(destination.url)
         }
+    }
+
+    /// The artifact tile: the in-app browser, every file loaded by the app. A `401` closes it and
+    /// home shows Signed out; the `403` error's "Turn on…" opens the enable sheet.
+    private func openArtifact(_ artifact: CardArtifact) {
+        guard let model = artifactBrowser(artifact) else { return }
+        model.onSignedOut = { [session] in
+            closeBrowser()
+            Task { await session.open() }
+        }
+        model.onTurnOn = { [artifacts] in
+            closeBrowser()
+            Task {
+                // The sheet opens once the browser has gone.
+                try? await Task.sleep(for: .milliseconds(450))
+                await artifacts?.refresh()
+                artifacts?.open()
+            }
+        }
+        var transaction = Transaction()
+        transaction.disablesAnimations = reduceMotion
+        withTransaction(transaction) { browser = model }
     }
 
     /// The prototype's `.fx-dock`: attach, the talk button filling the rest, stop. Stop is dimmed

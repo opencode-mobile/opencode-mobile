@@ -123,16 +123,18 @@ enum ArtifactFailure: Equatable {
 }
 
 /// Serves `hexcode-artifact://<id>/…` from the server with the app's own client. Status,
-/// `Content-Type` and the other headers pass through; the main page's answer goes to `onMainPage`.
+/// `Content-Type` and the other headers pass through; the browser reads the main page's status from
+/// the navigation response.
 @MainActor
 final class ArtifactSchemeHandler: NSObject, WKURLSchemeHandler {
     let id: String
     let directory: String
     private let connection: @Sendable () -> ServerConnection?
     private let session: URLSession
-    /// The main page answered (its status) or failed (its error).
-    var onMainPage: (Result<Int, any Error>) -> Void = { _ in }
     private var running: [ObjectIdentifier: Task<Void, Never>] = [:]
+    /// The status each URL last answered: WebKit gives the navigation delegate a plain
+    /// `URLResponse` for a custom scheme, without it.
+    private(set) var statuses: [URL: Int] = [:]
 
     init(id: String, directory: String, connection: @escaping @Sendable () -> ServerConnection?, session: URLSession = OpenCodeURLSessions.rest) {
         self.id = id
@@ -144,7 +146,6 @@ final class ArtifactSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, start task: any WKURLSchemeTask) {
         let key = ObjectIdentifier(task)
         let url = task.request.url
-        let main = task.request.mainDocumentURL == url
         guard let url, let connection = connection(),
               let request = ArtifactURL.serverRequest(for: url, id: id, directory: directory, connection: connection)
         else {
@@ -158,18 +159,17 @@ final class ArtifactSchemeHandler: NSObject, WKURLSchemeHandler {
                 guard let self, self.running[key] != nil else { return }
                 self.running[key] = nil
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                self.statuses[url] = status
                 let headers = ArtifactURL.pageHeaders((response as? HTTPURLResponse)?.allHeaderFields ?? [:])
                 let answer = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)
                     ?? HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!
                 task.didReceive(answer)
                 task.didReceive(data)
                 task.didFinish()
-                if main { self.onMainPage(.success(status)) }
             } catch {
                 guard let self, self.running[key] != nil else { return }
                 self.running[key] = nil
                 task.didFailWithError(error)
-                if main { self.onMainPage(.failure(error)) }
             }
         }
     }

@@ -5,6 +5,9 @@ import SwiftUI
 /// the room between the top bar and the talk button.
 struct HomeStatusView: View {
     let session: TodaySession
+    /// Artifacts: the tile shows while they're on, and the one-time hint.
+    var artifacts: ArtifactsModel?
+    var onOpenArtifact: (CardArtifact) -> Void = { _ in }
     /// A tile was tapped.
     var onOpenLink: (CardLinks.Destination) -> Void = { _ in }
     /// Next was tapped: its text goes into the draft.
@@ -53,6 +56,9 @@ struct HomeStatusView: View {
                             sentIsGoal: session.sentIsGoal,
                             summary: session.summary,
                             computerHost: session.computerHost,
+                            showsArtifact: artifactsShown,
+                            onOpenArtifact: onOpenArtifact,
+                            hint: artifactHint,
                             todo: TodoProgress(session.todos),
                             runningCount: session.runningCount,
                             onDetails: { session.openDetails() },
@@ -78,6 +84,27 @@ struct HomeStatusView: View {
         }
     }
 
+    /// The card's artifact shows unless artifacts are known to be off or not available.
+    private var artifactsShown: Bool {
+        guard let artifacts else { return true }
+        return artifacts.state == .on || artifacts.state == .checking
+    }
+
+    /// The one-time hint, under the tiles.
+    private var artifactHint: AnyView? {
+        guard let artifacts, artifacts.hintShown else { return nil }
+        return AnyView(
+            HexArtifactHint(
+                title: String(localized: "home.hint.artifacts", defaultValue: "Open pages like this on your phone"),
+                action: String(localized: "home.hint.artifacts.sub", defaultValue: "Turn on artifacts"),
+                closeLabel: Text(LocalizedStringResource("needs.hide", defaultValue: "Hide")),
+                onTap: { artifacts.hintTapped() },
+                onClose: { artifacts.dismissHint() }
+            )
+            .transition(.opacity)
+        )
+    }
+
     @ViewBuilder
     private func hintCard(_ hint: PendingItem?) -> some View {
         if let hint {
@@ -101,6 +128,11 @@ struct StatusCardView: View {
     var sentIsGoal = false
     let summary: StatusSummaryModel
     var computerHost: String?
+    /// The card's artifact shows as the first tile.
+    var showsArtifact = true
+    var onOpenArtifact: (CardArtifact) -> Void = { _ in }
+    /// Under the tiles: the one-time artifacts hint.
+    var hint: AnyView?
     /// The agent's to-do list; nil for no row.
     var todo: TodoProgress?
     /// Subagents and shell commands running, in front of Details.
@@ -135,12 +167,19 @@ struct StatusCardView: View {
                 .accessibilityLabel(Text(verbatim: String(localized: "home.summary.next", defaultValue: "Next: \(InlineMarkdown.plain(next))")))
                 .accessibilityHint(Text(LocalizedStringResource("a11y.next.hint", defaultValue: "Adds it to your draft")))
             }
-            if !card.links.isEmpty {
+            let artifact = showsArtifact ? card.artifact : nil
+            if artifact != nil || !card.links.isEmpty {
                 HexTileRow {
+                    if let artifact {
+                        artifactTile(artifact)
+                    }
                     ForEach(card.links, id: \.url) { link in
                         tile(link)
                     }
                 }
+            }
+            if let hint {
+                hint
             }
             if let todo {
                 // Opens Details from M4.
@@ -161,6 +200,18 @@ struct StatusCardView: View {
             .frame(minHeight: 30)
         }
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: summary.isUpdating)
+    }
+
+    /// First in the row: `compass`, the artifact's title and "Artifact".
+    private func artifactTile(_ artifact: CardArtifact) -> some View {
+        let kind = String(localized: "home.tile.artifact", defaultValue: "Artifact")
+        return HexLinkTile(
+            icon: .compass,
+            label: artifact.title,
+            detail: kind,
+            detailIcon: .compass,
+            accessibilityText: String(localized: "home.link.open", defaultValue: "\(kind), \(artifact.title)")
+        ) { onOpenArtifact(artifact) }
     }
 
     @ViewBuilder

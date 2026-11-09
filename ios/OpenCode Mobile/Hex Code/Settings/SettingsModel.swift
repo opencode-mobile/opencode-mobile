@@ -378,6 +378,19 @@ final class HexMainModel {
         path = []
     }
 
+    // MARK: Artifacts
+
+    /// The in-app browser for the card's artifact: every file through the app's signed-in client.
+    func artifactBrowser(_ artifact: CardArtifact) -> BrowserModel {
+        let live = liveConnection
+        return BrowserModel(
+            artifact: artifact,
+            serverName: setup.serverName,
+            directory: setup.project.path,
+            connection: { live.current }
+        )
+    }
+
     // MARK: Developer settings
 
     func openGallery() { path.append(.gallery) }

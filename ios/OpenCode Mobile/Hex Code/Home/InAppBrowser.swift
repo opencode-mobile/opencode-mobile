@@ -164,20 +164,18 @@ final class BrowserModel {
             },
         ]
         schemeHandler = handler
-        handler?.onMainPage = { [weak self] result in self?.mainPage(result) }
         webView.load(URLRequest(url: start))
     }
 
     var isArtifact: Bool { artifact != nil }
 
+    fileprivate func artifactStatus(for url: URL) -> Int? {
+        schemeHandler?.statuses[url]
+    }
+
     /// The artifact's own page answered: a status other than success fills the page area.
-    private func mainPage(_ result: Result<Int, any Error>) {
-        let failure: ArtifactFailure?
-        switch result {
-        case let .success(status): failure = ArtifactFailure.of(status: status)
-        case let .failure(error): failure = ArtifactFailure.of(error: error)
-        }
-        guard let failure else { return }
+    fileprivate func mainPage(status: Int) {
+        guard isArtifact, let failure = ArtifactFailure.of(status: status) else { return }
         if failure == .signedOut { return onSignedOut() }
         show(failure.shown(name: serverName), url: current)
     }
@@ -245,6 +243,18 @@ private final class BrowserDriver: NSObject, WKNavigationDelegate, WKUIDelegate 
             decisionHandler(.cancel)
             UIApplication.shared.open(url)
         }
+    }
+
+    /// Only the main page's status counts: an artifact's `404`, `403` or other error fills the page
+    /// area; a failed image or script leaves the page as it is.
+    func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
+        if response.isForMainFrame, let model {
+            // An artifact's status comes from the app's own loader.
+            if let url = response.response.url, let status = model.artifactStatus(for: url) ?? (response.response as? HTTPURLResponse)?.statusCode {
+                model.mainPage(status: status)
+            }
+        }
+        decisionHandler(.allow)
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {

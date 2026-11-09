@@ -444,6 +444,985 @@
         }
       }
     },
+    "artifacts.approval.from": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From the separate Hex Code setup session: the edit Hex Code’s prompt asked for. Today’s session isn’t waiting on this."
+          }
+        }
+      }
+    },
+    "artifacts.approval.reject": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reject"
+          }
+        }
+      }
+    },
+    "artifacts.approval.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit %@"
+          }
+        }
+      }
+    },
+    "artifacts.broken.missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Missing or changed in %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "artifacts.broken.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your OpenCode config changed unexpectedly"
+          }
+        }
+      }
+    },
+    "artifacts.broken.unreadable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The edit broke %@, so OpenCode is ignoring it, with your providers and settings."
+          }
+        }
+      }
+    },
+    "artifacts.flow.agent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent"
+          }
+        }
+      }
+    },
+    "artifacts.flow.allowed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You allowed the edit"
+          }
+        }
+      }
+    },
+    "artifacts.flow.answers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ answers"
+          }
+        }
+      }
+    },
+    "artifacts.flow.approval": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approval needed"
+          }
+        }
+      }
+    },
+    "artifacts.flow.changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent changed the config"
+          }
+        }
+      }
+    },
+    "artifacts.flow.checking": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking %@"
+          }
+        }
+      }
+    },
+    "artifacts.flow.checking_every": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every 2 s"
+          }
+        }
+      }
+    },
+    "artifacts.flow.checking_sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asks the artifact route whether it answers"
+          }
+        }
+      }
+    },
+    "artifacts.flow.couldnt_run": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent couldn’t run"
+          }
+        }
+      }
+    },
+    "artifacts.flow.couldnt_run_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        }
+      }
+    },
+    "artifacts.flow.editing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editing %@"
+          }
+        }
+      }
+    },
+    "artifacts.flow.failed_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent said: %@"
+          }
+        }
+      }
+    },
+    "artifacts.flow.fallback": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Or add it yourself on %1$@, in %2$@:"
+          }
+        }
+      }
+    },
+    "artifacts.flow.fallback_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Or remove it yourself on %1$@, in %2$@:"
+          }
+        }
+      }
+    },
+    "artifacts.flow.fallback_watching": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code keeps checking and turns to On by itself."
+          }
+        }
+      }
+    },
+    "artifacts.flow.not_changed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent didn’t change it"
+          }
+        }
+      }
+    },
+    "artifacts.flow.now_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artifacts are off"
+          }
+        }
+      }
+    },
+    "artifacts.flow.off_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent can’t make pages now. The ones it made stay on the computer."
+          }
+        }
+      }
+    },
+    "artifacts.flow.off_rule": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code removed its artifact rule from today’s session."
+          }
+        }
+      }
+    },
+    "artifacts.flow.on_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pages the agent makes now show as the first tile on the card."
+          }
+        }
+      }
+    },
+    "artifacts.flow.on_rule": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code will ask the agent to publish pages as artifacts (a short rule for today’s session)."
+          }
+        }
+      }
+    },
+    "artifacts.flow.on_suggestion": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Make a small page that previews"
+          }
+        }
+      }
+    },
+    "artifacts.flow.on_suggestion_sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to put it in today’s draft, or just say it"
+          }
+        }
+      }
+    },
+    "artifacts.flow.reading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading %@"
+          }
+        }
+      }
+    },
+    "artifacts.flow.rejected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You rejected the edit"
+          }
+        }
+      }
+    },
+    "artifacts.flow.rejected_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You rejected the edit, so the file is as it was."
+          }
+        }
+      }
+    },
+    "artifacts.flow.rejected_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing changed"
+          }
+        }
+      }
+    },
+    "artifacts.flow.replies": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See what the agent says"
+          }
+        }
+      }
+    },
+    "artifacts.flow.replies_none": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent hasn’t said anything yet."
+          }
+        }
+      }
+    },
+    "artifacts.flow.restored": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restored"
+          }
+        }
+      }
+    },
+    "artifacts.flow.restored_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is back exactly as it was before the edit."
+          }
+        }
+      }
+    },
+    "artifacts.flow.review": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review"
+          }
+        }
+      }
+    },
+    "artifacts.flow.sent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent to the agent"
+          }
+        }
+      }
+    },
+    "artifacts.flow.sent_sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code setup · a separate session"
+          }
+        }
+      }
+    },
+    "artifacts.flow.setup": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code setup"
+          }
+        }
+      }
+    },
+    "artifacts.flow.still_disabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ still answers “disabled”"
+          }
+        }
+      }
+    },
+    "artifacts.flow.still_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Still off on %@"
+          }
+        }
+      }
+    },
+    "artifacts.flow.still_off_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCode still answers “Artifacts are disabled”. The agent may not have changed the file, or the flag comes from somewhere else."
+          }
+        }
+      }
+    },
+    "artifacts.flow.still_on": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ still serves artifacts"
+          }
+        }
+      }
+    },
+    "artifacts.flow.still_on_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Still on on %@"
+          }
+        }
+      }
+    },
+    "artifacts.flow.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Hex Code setup · today’s session isn’t touched"
+          }
+        }
+      }
+    },
+    "artifacts.flow.thinking": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thinking…"
+          }
+        }
+      }
+    },
+    "artifacts.flow.timed_out": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No answer in time"
+          }
+        }
+      }
+    },
+    "artifacts.flow.timed_out_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent didn’t finish within a minute."
+          }
+        }
+      }
+    },
+    "artifacts.flow.tool": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Using %@"
+          }
+        }
+      }
+    },
+    "artifacts.flow.try_again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        }
+      }
+    },
+    "artifacts.flow.turning_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turning off artifacts…"
+          }
+        }
+      }
+    },
+    "artifacts.flow.turning_on": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turning on artifacts…"
+          }
+        }
+      }
+    },
+    "artifacts.flow.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent · waiting for the agent"
+          }
+        }
+      }
+    },
+    "artifacts.flow.waiting_approval": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for your approval"
+          }
+        }
+      }
+    },
+    "artifacts.flow.working": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent is working"
+          }
+        }
+      }
+    },
+    "artifacts.notice.approval": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approval needed"
+          }
+        }
+      }
+    },
+    "artifacts.notice.approval.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code setup · edit %@"
+          }
+        }
+      }
+    },
+    "artifacts.notice.on.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pages the agent makes now show on the card"
+          }
+        }
+      }
+    },
+    "artifacts.notice.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        }
+      }
+    },
+    "artifacts.notice.open.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the sheet to see why"
+          }
+        }
+      }
+    },
+    "artifacts.notice.review": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review"
+          }
+        }
+      }
+    },
+    "artifacts.restore": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore"
+          }
+        }
+      }
+    },
+    "artifacts.restore.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t restore it"
+          }
+        }
+      }
+    },
+    "artifacts.restore.failed.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fix the file on the computer."
+          }
+        }
+      }
+    },
+    "artifacts.restore_body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore writes back the text Hex Code saved before the edit, byte for byte, and checks again."
+          }
+        }
+      }
+    },
+    "artifacts.sheet.broken": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCode can’t read %@ right now, so Hex Code won’t ask the agent to change it. Fix it on the computer, or add the line yourself."
+          }
+        }
+      }
+    },
+    "artifacts.sheet.copied": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copied"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.copy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.env": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenCode reads this from OPENCODE_CONFIG_CONTENT; restart it after the change."
+          }
+        }
+      }
+    },
+    "artifacts.sheet.example": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Login page preview"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.intro": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artifacts are small pages the agent publishes, like a mock-up or a chart. The newest shows on the card. They’re off on %@, so Hex Code asks the agent to turn them on."
+          }
+        }
+      }
+    },
+    "artifacts.sheet.intro_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code asks the agent to take the flag out again. The agent then can’t make pages, and the card shows no artifact tile. Pages it made stay on the computer."
+          }
+        }
+      }
+    },
+    "artifacts.sheet.new": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.no_config": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hex Code couldn’t read OpenCode’s config on %@."
+          }
+        }
+      }
+    },
+    "artifacts.sheet.now_on": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artifacts are on"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.prompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent to the agent, as you"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.prompt_exact": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "exact text"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.reused": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reused"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.send": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send to the agent"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.turn_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off artifacts"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.turn_on": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on artifacts"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.where": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Goes to Hex Code setup"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.where_sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A separate session · today’s card and messages aren’t touched"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.will_edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Will edit"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.will_edit_global": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No file sets “experimental” yet: one change for every project, nothing in the repo."
+          }
+        }
+      }
+    },
+    "artifacts.sheet.will_edit_global_block": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The global file: one change for every project, nothing in the repo."
+          }
+        }
+      }
+    },
+    "artifacts.sheet.will_edit_project": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Its own “experimental” block overrides the global file, so the change goes here."
+          }
+        }
+      }
+    },
     "ask.age.minutes": {
       "extractionState": "manual",
       "localizations": {
@@ -609,6 +1588,17 @@
         }
       }
     },
+    "browser.artifact": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · artifact"
+          }
+        }
+      }
+    },
     "browser.back": {
       "extractionState": "manual",
       "localizations": {
@@ -642,6 +1632,28 @@
         }
       }
     },
+    "browser.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t open the artifact"
+          }
+        }
+      }
+    },
+    "browser.failed.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server answered %lld."
+          }
+        }
+      }
+    },
     "browser.forward": {
       "extractionState": "manual",
       "localizations": {
@@ -653,6 +1665,28 @@
         }
       }
     },
+    "browser.gone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This artifact is gone"
+          }
+        }
+      }
+    },
+    "browser.gone.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It was deleted, or it belongs to another project."
+          }
+        }
+      }
+    },
     "browser.loading": {
       "extractionState": "manual",
       "localizations": {
@@ -660,6 +1694,39 @@
           "stringUnit": {
             "state": "translated",
             "value": "Loading"
+          }
+        }
+      }
+    },
+    "browser.off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artifacts are off on %@"
+          }
+        }
+      }
+    },
+    "browser.off.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on `experimental.artifacts` in OpenCode’s config there."
+          }
+        }
+      }
+    },
+    "browser.off.turn_on": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on…"
           }
         }
       }
@@ -2175,6 +3242,28 @@
         }
       }
     },
+    "home.hint.artifacts": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open pages like this on your phone"
+          }
+        }
+      }
+    },
+    "home.hint.artifacts.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on artifacts"
+          }
+        }
+      }
+    },
     "home.hold.drop": {
       "extractionState": "manual",
       "localizations": {
@@ -2919,6 +4008,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "It never reached the agent."
+          }
+        }
+      }
+    },
+    "home.tile.artifact": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artifact"
           }
         }
       }
@@ -4256,6 +5356,127 @@
           "stringUnit": {
             "state": "translated",
             "value": "Light"
+          }
+        }
+      }
+    },
+    "settings.artifacts": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artifacts"
+          }
+        }
+      }
+    },
+    "settings.artifacts.approval.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approval needed in Hex Code setup"
+          }
+        }
+      }
+    },
+    "settings.artifacts.needs_you": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs you"
+          }
+        }
+      }
+    },
+    "settings.artifacts.off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        }
+      }
+    },
+    "settings.artifacts.off.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pages the agent makes, opened on your phone."
+          }
+        }
+      }
+    },
+    "settings.artifacts.on": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On"
+          }
+        }
+      }
+    },
+    "settings.artifacts.on.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The newest one from each run shows on the card."
+          }
+        }
+      }
+    },
+    "settings.artifacts.turning_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turning off…"
+          }
+        }
+      }
+    },
+    "settings.artifacts.turning_on": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turning on…"
+          }
+        }
+      }
+    },
+    "settings.artifacts.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not available"
+          }
+        }
+      }
+    },
+    "settings.artifacts.unavailable.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This OpenCode handles artifacts differently."
           }
         }
       }

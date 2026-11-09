@@ -101,6 +101,7 @@ struct ArtifactsFlowTests {
         )
         // The 2 s loop never runs by itself: the tests tick.
         model.sleep = { _ in try await Task.sleep(for: .seconds(3600)) }
+        model.restoreWait = { _ in }
         return model
     }
 
@@ -359,6 +360,8 @@ struct ArtifactsFlowTests {
         model.received(line: line("session.execution.succeeded", #"{"sessionID":"ses_setup"}"#))
         await model.runEnded(error: nil)
         #expect(model.flow?.stage == .broken(.broken))
+        // OpenCode reads the restored file a moment later.
+        api.configs = [ArtifactsTests.config([])]
         api.config = ArtifactsTests.config([(ArtifactsTests.globalFile, #"{"model":"x","experimental":{"todo":true}}"#)])
         await model.restore()
         #expect(api.writes.count == 1)

@@ -87,6 +87,7 @@ private struct HexGalleryContent: View {
             goals
             askMessages
             settingsAndFinish
+            artifacts
         }
         .padding(.bottom, 40)
     }
@@ -808,6 +809,82 @@ private struct HexGalleryContent: View {
                 .frame(height: 300)
             }
             caption("HexBrowser · loading, can go back · dev server unreachable")
+        }
+    }
+
+    /// Artifacts (M8): the tile, the hint, the enable sheet's steps in each state, the Settings row's
+    /// values and the browser's artifact errors.
+    private var artifacts: some View {
+        section("Artifacts") {
+            HexTileRow {
+                HexLinkTile(icon: .compass, label: "Login page preview", detail: "Artifact", detailIcon: .compass) {}
+                HexLinkTile(icon: .monitor, label: "Dev server", detail: "192.168.1.2:5173", detailIcon: .monitor) {}
+            }
+            caption("The artifact tile comes first in the row")
+            HexArtifactHint(title: "Open pages like this on your phone", action: "Turn on artifacts", closeLabel: Text(verbatim: "Hide"), onTap: {}, onClose: {})
+            caption("HexArtifactHint · the one-time hint under the tiles")
+            galleryPanel {
+                HexSteps(steps: [
+                    HexStep(id: "1", state: .done, title: "Sent to the agent", detail: "Hex Code setup · a separate session"),
+                    HexStep(id: "2", state: .dimmed, title: "Agent is working", detail: "Waiting for your approval", live: true),
+                    HexStep(id: "3", state: .warn, title: "Approval needed", detail: "Edit opencode.json", action: ("Review", {})),
+                    HexStep(id: "4", state: .doing, title: "Checking Rapid Bison", detail: "Every 2 s", live: true),
+                    HexStep(id: "5", state: .todo, title: "Artifacts are on"),
+                ])
+                .padding(16)
+            }
+            galleryPanel {
+                HexSteps(steps: [
+                    HexStep(id: "1", state: .done, title: "Sent to the agent", detail: "Hex Code setup · a separate session"),
+                    HexStep(id: "2", state: .failed, title: "The agent didn’t change it", detail: "/Users/example/.config/opencode/opencode.json"),
+                    HexStep(id: "3", state: .failed, title: "You rejected the edit", detail: "Edit opencode.json"),
+                    HexStep(id: "4", state: .warn, title: "Rapid Bison still answers “disabled”"),
+                    HexStep(id: "5", state: .todo, title: "Artifacts are on"),
+                ])
+                .padding(16)
+            }
+            caption("HexSteps · working with an approval waiting · rejected, still off")
+            VStack(spacing: 0) {
+                HexRow(icon: .compass, verbatim: "Artifacts", subtitle: "The newest one from each run shows on the card.", value: "On") {}
+                HexRow(icon: .compass, verbatim: "Artifacts", subtitle: "Pages the agent makes, opened on your phone.", value: "Off") {}
+                HexRow(icon: .compass, verbatim: "Artifacts", subtitle: "Approval needed in Hex Code setup", value: "Needs you") {}
+                HexRow(icon: .compass, verbatim: "Artifacts", subtitle: "This OpenCode handles artifacts differently.", value: "Not available", trailing: .none)
+            }
+            .padding(.horizontal, -HexSpacing.screen)
+            caption("Settings › Artifacts · on, off, needs you, not available")
+            galleryPanel {
+                HexBrowser(title: "Login page preview", host: "Rapid Bison · artifact", progress: 0.6, openSystemTitle: nil, onDone: {}, onReload: {}) {
+                    Color.white
+                }
+                .frame(height: 160)
+            }
+            galleryPanel {
+                HexBrowser(
+                    title: "Login page preview",
+                    host: "Rapid Bison · artifact",
+                    failure: ArtifactFailure.off.shown(name: "Rapid Bison"),
+                    openSystemTitle: nil,
+                    onDone: {},
+                    onReload: {}
+                ) {
+                    Color.clear
+                }
+                .frame(height: 260)
+            }
+            galleryPanel {
+                HexBrowser(
+                    title: "Login page preview",
+                    host: "Rapid Bison · artifact",
+                    failure: ArtifactFailure.gone.shown(name: "Rapid Bison"),
+                    openSystemTitle: nil,
+                    onDone: {},
+                    onReload: {}
+                ) {
+                    Color.clear
+                }
+                .frame(height: 240)
+            }
+            caption("HexBrowser for an artifact · loading, no Open in Safari · off with Turn on… · gone")
         }
     }
 
