@@ -111,6 +111,14 @@ sealed class SessionChatTimelineBlock {
         val notice: TimelineNotice,
     ) : SessionChatTimelineBlock()
 
+    /**
+     * A paused or met goal's status row (#1007). It is built from the goal state, not a
+     * message ([SessionChatGoalTimeline]); the row reads the goal from Session Chat.
+     */
+    data class GoalStatus(
+        override val blockID: String,
+    ) : SessionChatTimelineBlock()
+
     data class ToolGroup(
         override val blockID: String,
         val count: Int,
@@ -1686,6 +1694,7 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlock.StopNote,
             is SessionChatTimelineBlock.FailureLine,
             is SessionChatTimelineBlock.Notice,
+            is SessionChatTimelineBlock.GoalStatus,
             -> false
         }
 

@@ -24,6 +24,11 @@ import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.namedProjectId
 import dev.opencode.mobile.domain.event.sessionMoved
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import dev.opencode.mobile.domain.goal.EmptySessionGoalRepository
+import dev.opencode.mobile.domain.goal.SessionGoalAction
+import dev.opencode.mobile.domain.goal.SessionGoalDraft
+import dev.opencode.mobile.domain.goal.SessionGoalLimits
+import dev.opencode.mobile.domain.goal.SessionGoalRepository
 import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.home.HomeWorktreesFeed
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
@@ -92,6 +97,7 @@ import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatGoal
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatImageViewer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionNotice
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShells
@@ -171,6 +177,7 @@ class SessionChatViewModel
         agentShellRepository: AgentShellRepository = EmptyAgentShellRepository,
         private val newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
         private val homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
+        sessionGoalRepository: SessionGoalRepository = EmptySessionGoalRepository,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -289,6 +296,14 @@ class SessionChatViewModel
                 repository = agentShellRepository,
                 scope = viewModelScope,
                 nowMs = { nowMs() },
+            )
+
+        /** The session's `/goal` (#1007): pill, sheet and status row. */
+        private val goal =
+            SessionChatGoal(
+                repository = sessionGoalRepository,
+                connectionState = foregroundEventStream.connectionState,
+                scope = viewModelScope,
             )
 
         private val worktreeMove =
@@ -529,6 +544,9 @@ class SessionChatViewModel
                 shells.state.collect { publishUiState() }
             }
             viewModelScope.launch {
+                goal.state.collect { publishUiState() }
+            }
+            viewModelScope.launch {
                 combine(
                     worktreeMove.state,
                     homeProjectsSnapshot.projects,
@@ -629,6 +647,7 @@ class SessionChatViewModel
             inbox.bind(sessionId, worktree)
             sideQuestions.bind(sessionId)
             bindShells(sessionId, worktree)
+            goal.bind(sessionId, worktree)
             syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
@@ -651,6 +670,8 @@ class SessionChatViewModel
             scheduleProjectIdentityRefine(worktree)
             timeline.restartLiveObservation()
             sideQuestions.bind(sessionId)
+            // Goal changes while the screen was away were missed.
+            goal.refresh()
             syncCoordinator.markFocused(ProjectionKey.Transcript(transcriptWorktree ?: worktree, sessionId))
         }
 
@@ -673,6 +694,7 @@ class SessionChatViewModel
             commands.moveDirectory(directory)
             inbox.moveDirectory(directory)
             bindShells(sessionId, directory)
+            goal.moveDirectory(directory)
             val knownBranch =
                 homeProjectsSnapshot
                     .projectContaining(directory)
@@ -751,6 +773,7 @@ class SessionChatViewModel
                 reviewChanges.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, directory)
                 commands.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, directory)
                 shells.reset()
+                goal.reset()
             } finally {
                 draftSyncPaused = false
             }
@@ -842,6 +865,7 @@ class SessionChatViewModel
             inbox.bind(sessionId, directory)
             sideQuestions.bind(sessionId)
             bindShells(sessionId, directory)
+            goal.bind(sessionId, directory)
             syncCoordinator.markFocused(ProjectionKey.Transcript(directory, sessionId))
             publishUiState()
         }
@@ -874,6 +898,34 @@ class SessionChatViewModel
         private fun resetBackgroundWorkSeen() {
             seenDoneSubagentIds = null
             backgroundWorkDoneVisible = false
+        }
+
+        // Goal (#1007): the goal pill, sheet and status row.
+
+        fun openGoalSheet() {
+            goal.openSheet()
+        }
+
+        fun closeGoalSheet() {
+            goal.closeSheet()
+        }
+
+        fun toggleGoalObjective() {
+            goal.toggleObjective()
+        }
+
+        /** Pause, Resume or Clear: sends the goal command; progress shows until the goal changes. */
+        fun sendGoalAction(action: SessionGoalAction) {
+            goal.send(action)
+        }
+
+        /** New goal…: the composer starts a `/goal ` command, keeping any draft as the objective. */
+        fun startNewGoal() {
+            goal.closeSheet()
+            val draft = composer.state.value.composer.text
+            val command = "/${SessionGoalLimits.COMMAND} "
+            val text = if (SessionGoalDraft.objective(draft) != null) draft else command + draft.trimStart()
+            updateComposerText(text, cursor = text.length)
         }
 
         fun closeShellOutput() {
@@ -1666,6 +1718,7 @@ class SessionChatViewModel
             chipTimelineIntroNotice = null
             commands.clearActionFeedback()
             sideQuestions.clearNotice()
+            goal.clearNotice()
             worktreeMove.clearMessages()
             composer.clearTransientErrors()
             sessionInfo.clearTransientErrors()
@@ -2649,6 +2702,7 @@ class SessionChatViewModel
                         composerState.errorMessage != null -> UiText.verbatim(composerState.errorMessage)
                         composerState.abortErrorMessage != null -> UiText.verbatim(composerState.abortErrorMessage)
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
+                        goal.state.value.notice != null -> goal.state.value.notice
                         turnDiffNotice != null -> TimelineText.verbatim(turnDiffNotice)
                         infoState.errorMessage != null -> UiText.verbatim(infoState.errorMessage)
                         inboxSnapshot.permissionRequests.isEmpty() &&
@@ -2868,6 +2922,18 @@ class SessionChatViewModel
                 worktreeCheckout = projectIdentity.isWorktreeCheckout,
                 sessionBranchPill =
                     repoStrip.state.value.toSessionBranchPill(isWorktree = projectIdentity.isWorktreeCheckout),
+                goal =
+                    SessionChatGoalUiState.resolve(
+                        region = goal.state.value,
+                        isChildSession = infoState.parentId != null,
+                        isSessionBusy = sessionStatusLabel != null,
+                        hasPermission = inboxSnapshot.permissionRequests.isNotEmpty(),
+                        hasQuestion = inboxSnapshot.questionRequests.isNotEmpty(),
+                        runningShellCommand = shellsState.shells.firstOrNull { it.isRunning }?.command,
+                        hasRunningSubagent = subagents.any { it.status == SessionChatSubagentStatus.Running },
+                        canMutate = infoState.canMutate,
+                    ),
+                goalCommandAvailable = composerState.serverCommands.any { it.name == SessionGoalLimits.COMMAND },
                 worktree = boundWorktree.orEmpty(),
                 dictation = dictation,
                 sideQuestions =
