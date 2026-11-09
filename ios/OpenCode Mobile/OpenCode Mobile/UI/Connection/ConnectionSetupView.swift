@@ -402,7 +402,7 @@ struct ConnectionSetupView: View {
                 .frame(maxWidth: .infinity, minHeight: 32)
                 .background(
                     selected ? segmentSelectedFill : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 8)
+                    in: RoundedRectangle(cornerRadius: OpenCodeRadius.small)
                 )
         }
         .buttonStyle(.plain)
@@ -535,9 +535,9 @@ struct ConnectionSetupView: View {
                     ConnectionSetupSavedAddressRow(row: row)
                 }
             }
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
+            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: OpenCodeRadius.small))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: OpenCodeRadius.small)
                     .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
             )
         }
@@ -648,9 +648,9 @@ private struct ConnectionPairingCodeField: View {
             .onSubmit(onSubmit)
             .padding(.horizontal, 12)
             .frame(minHeight: 48)
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
+            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: OpenCodeRadius.small))
             .overlay {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: OpenCodeRadius.small)
                     .stroke(focused ? OpenCodeColors.interactive : OpenCodeColors.borderWeakerBase, lineWidth: focused ? 2 : 1)
             }
             .disabled(!enabled)

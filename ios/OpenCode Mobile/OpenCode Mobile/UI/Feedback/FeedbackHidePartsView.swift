@@ -23,9 +23,9 @@ struct FeedbackHidePartsContent: View {
         Image(uiImage: image)
             .resizable()
             .scaledToFit()
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: OpenCodeRadius.medium, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: OpenCodeRadius.medium, style: .continuous)
                     .stroke(OpenCodeColors.borderWeakBase, lineWidth: 1)
             )
             .overlay {
