@@ -3348,6 +3348,42 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sendPrompt_goalCommand_showsNoEchoBubbleAndSendsATrimmedObjective() =
+        runTest(testDispatcher) {
+            val commandRepository =
+                FakeCommandRepository(
+                    commands =
+                        listOf(
+                            ServerCommand(name = "goal", description = "keep working", source = ServerCommandSource.Command),
+                            ServerCommand(name = "init", description = "Create AGENTS.md", source = ServerCommandSource.Command),
+                        ),
+                )
+            val viewModel = createViewModel(repository = FakeMessageRepository(), commandRepository = commandRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            // The Goal set row is the echo: no "[/goal] …" bubble that would never retire.
+            viewModel.updateComposerText("/goal  Ship it")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals("goal", commandRepository.lastRunOptions?.command)
+            assertEquals("Ship it", commandRepository.lastRunOptions?.arguments)
+            assertFalse(viewModel.uiState.value.messages.any { it.isPending })
+
+            viewModel.updateComposerText("/goal pause")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals("pause", commandRepository.lastRunOptions?.arguments)
+            assertFalse(viewModel.uiState.value.messages.any { it.isPending })
+
+            // Other commands keep their bubble until the server's prompt retires it.
+            viewModel.updateComposerText("/init please")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.messages.any { it.isPending })
+        }
+
+    @Test
     fun sendPrompt_serverCommand_clearsComposerWhileRequestInFlight() =
         runTest(testDispatcher) {
             val commandGate = CompletableDeferred<Unit>()

@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.componentgallery.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -105,7 +106,7 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OpenCodeButtonContrast.entries.forEach { option ->
                 OpenCodeChoiceBadge(
                     label =
@@ -114,6 +115,7 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
                             OpenCodeButtonContrast.Low -> "Low contrast"
                             OpenCodeButtonContrast.Accent -> "Accent"
                             OpenCodeButtonContrast.Destructive -> "Destructive"
+                            OpenCodeButtonContrast.DestructiveLow -> "Destructive, low"
                         },
                     selected = option == contrastSelection,
                     onClick = { contrastName = option.name },

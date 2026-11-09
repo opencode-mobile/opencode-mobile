@@ -182,6 +182,17 @@ class SessionGoalTest {
         assertTrue(SessionGoalDraft.showsCount("x".repeat(SessionGoalDraft.COUNT_FROM)))
     }
 
+    @Test
+    fun commandEcho_onlyAGoalKickoffWithAttachmentsOrAnotherCommandShowsOne() {
+        assertFalse(SessionGoalCommandEcho.shows("goal", "Ship it", carriesPromptParts = false))
+        assertTrue(SessionGoalCommandEcho.shows("goal", "Ship it", carriesPromptParts = true))
+        listOf("pause", "Resume", " clear ").forEach { control ->
+            assertFalse(SessionGoalCommandEcho.shows("goal", control, carriesPromptParts = true))
+        }
+        assertTrue(SessionGoalCommandEcho.shows("init", "please", carriesPromptParts = false))
+        assertTrue(SessionGoalCommandEcho.shows("goals", "pause", carriesPromptParts = false))
+    }
+
     // MARK: Kickoff projection
 
     @Test
@@ -259,6 +270,65 @@ class SessionGoalTest {
                     """"data":{"sessionID":"ses_1","text":"Continue.","metadata":{"source":"goal","goalID":"goal_1"}}}""",
             )
         assertTrue(continuation.none { it.type == "message.part.updated" })
+    }
+
+    @Test
+    fun parseEvents_liveKickoffInboxItemIsAGoalSetNoticeUnderTheInboxId() {
+        val parsed =
+            events.parseEvents(
+                """{"id":"evt_e1","created":40,"type":"session.inbox.enqueued","location":{"directory":"/repo"},""" +
+                    """"data":{"inboxID":"msg_k","sessionID":"ses_1","item":{"type":"synthetic","delivery":"steer",""" +
+                    """"payload":{"text":"A goal is now active for this session. <untrusted_objective>\nShip it\n</untrusted_objective>",""" +
+                    """"description":"Goal: Ship it","metadata":{"source":"goal","goalID":"goal_1"}}}}}""",
+            )
+
+        val info = parsed.single { it.type == "message.updated" }.rawProperties!!["info"]!!.jsonObject
+        val part = parsed.single { it.type == "message.part.updated" }.rawProperties!!["part"]!!.jsonObject
+        assertEquals("msg_k", info["id"]!!.jsonPrimitive.content)
+        assertEquals("notice", info["role"]!!.jsonPrimitive.content)
+        assertEquals("msg_k", part["messageID"]!!.jsonPrimitive.content)
+        assertEquals(TimelineNotice.GoalSet("goal_1", "Goal: Ship it"), TimelineNoticeCodec.decode(part["notice"]!!.jsonObject))
+
+        // `inbox.delivered` carries only the id: it must not turn the row back into a user message.
+        val delivered =
+            events.parseEvents(
+                """{"id":"evt_d1","created":41,"type":"session.inbox.delivered","data":{"inboxID":"msg_k","sessionID":"ses_1"}}""",
+            )
+        assertTrue(
+            delivered
+                .filter { it.type == "message.updated" }
+                .all {
+                    it.rawProperties!!["info"]!!
+                        .jsonObject["role"]!!
+                        .jsonPrimitive.content == "notice"
+                },
+        )
+    }
+
+    @Test
+    fun parseEvents_otherSyntheticInboxItemsStayHiddenUserText() {
+        val continuation =
+            events.parseEvents(
+                """{"type":"session.inbox.enqueued","data":{"inboxID":"msg_c","sessionID":"ses_1","item":{"type":"synthetic",""" +
+                    """"delivery":"steer","payload":{"text":"Continue.","metadata":{"source":"goal","goalID":"goal_1"}}}}}""",
+            )
+        val info = continuation.single { it.type == "message.updated" }.rawProperties!!["info"]!!.jsonObject
+        val part = continuation.single { it.type == "message.part.updated" }.rawProperties!!["part"]!!.jsonObject
+        assertEquals("user", info["role"]!!.jsonPrimitive.content)
+        assertEquals("true", part["synthetic"]!!.jsonPrimitive.content)
+
+        val delivered =
+            events.parseEvents(
+                """{"type":"session.inbox.delivered","data":{"inboxID":"msg_c","sessionID":"ses_1"}}""",
+            )
+        assertEquals(
+            "user",
+            delivered
+                .single()
+                .rawProperties!!["info"]!!
+                .jsonObject["role"]!!
+                .jsonPrimitive.content,
+        )
     }
 
     @Test

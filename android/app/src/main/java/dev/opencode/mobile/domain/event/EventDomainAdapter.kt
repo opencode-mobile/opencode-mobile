@@ -49,6 +49,12 @@ class EventDomainAdapter(
      */
     private val runningShellMessageIds = ConcurrentHashMap<String, String>()
 
+    /**
+     * Goal set notice per v2 inbox id, remembered from the kickoff's enqueue:
+     * `inbox.delivered` carries only the id, and must not turn the row into a user message.
+     */
+    private val goalKickoffNotices = ConcurrentHashMap<String, TimelineNotice.GoalSet>()
+
     fun parseEvent(dataLine: String): OpencodeEvent? = parseEvents(dataLine).firstOrNull()
 
     fun parseEvents(dataLine: String): List<OpencodeEvent> = (parse(dataLine) as? EventParseOutcome.Events)?.events ?: emptyList()
@@ -195,13 +201,17 @@ class EventDomainAdapter(
             "session.inbox.enqueued",
             "session.inbox.delivery.changed",
             ->
-                // A `synthetic` item is server-injected context (a finished shell command's
-                // output, Plan mode's reminder), not a prompt the user queued: no pending chrome.
-                userPromptEvents(properties, waiting = !isSyntheticInboxItem(properties))
+                goalKickoffEvents(properties, delivered = false)
+                    // A `synthetic` item is server-injected context (a finished shell command's
+                    // output, Plan mode's reminder), not a prompt the user queued: no pending chrome.
+                    ?: userPromptEvents(properties, waiting = !isSyntheticInboxItem(properties))
             "session.next.prompted",
             "session.inbox.delivered",
-            -> userPromptEvents(properties, waiting = false)
-            "session.inbox.cancelled" -> listOf(inboxCancelled(properties))
+            -> goalKickoffEvents(properties, delivered = true) ?: userPromptEvents(properties, waiting = false)
+            "session.inbox.cancelled" -> {
+                userMessageId(properties)?.let(goalKickoffNotices::remove)
+                listOf(inboxCancelled(properties))
+            }
             "session.next.step.started",
             "session.step.started",
             -> stepStarted(properties)
@@ -360,6 +370,30 @@ class EventDomainAdapter(
                 properties.string("parentID")?.let { put("forkedFromSessionID", it) }
             }
         return event("session.created", projected)
+    }
+
+    /**
+     * The goal plugin's kickoff reaches `/api/event` as a synthetic inbox item with a
+     * description and goal metadata: a Goal set notice under the inbox id, which is the id
+     * REST records the delivered message under. Null for any other item.
+     */
+    private fun goalKickoffEvents(
+        properties: JsonObject,
+        delivered: Boolean,
+    ): List<OpencodeEvent>? {
+        val messageId = userMessageId(properties) ?: return null
+        val notice =
+            goalKickoffNotice(properties)?.also { goalKickoffNotices[messageId] = it }
+                ?: goalKickoffNotices[messageId]
+                ?: return null
+        if (delivered) goalKickoffNotices.remove(messageId)
+        return noticeEvents(notice, properties, envelopeId = null, messageId = messageId)
+    }
+
+    private fun goalKickoffNotice(properties: JsonObject): TimelineNotice.GoalSet? {
+        if (!isSyntheticInboxItem(properties)) return null
+        val payload = promptObject(properties) ?: return null
+        return V2TimelineNotices.goalSet(payload["metadata"] as? JsonObject, payload.string("description"))
     }
 
     private fun inboxCancelled(properties: JsonObject): OpencodeEvent {
@@ -560,6 +594,7 @@ class EventDomainAdapter(
      * stamps `time.created` (the envelope time) so a live reply orders after the
      * prompt it answers; later partial infos omit `time` and the store keeps it.
      */
+
     /**
      * A structured compaction error with no id has no timeline row. Toast it, the same way a
      * step failure toasts when the assistant row cannot be created.
@@ -972,9 +1007,9 @@ class EventDomainAdapter(
         notice: TimelineNotice?,
         properties: JsonObject,
         envelopeId: String?,
+        messageId: String? = messageIdFromEnvelope(envelopeId),
     ): List<OpencodeEvent> {
-        if (notice == null) return emptyList()
-        val messageId = messageIdFromEnvelope(envelopeId) ?: return emptyList()
+        if (notice == null || messageId == null) return emptyList()
         val sessionId = sessionIdFromProperties(properties)
         val info =
             buildJsonObject {
