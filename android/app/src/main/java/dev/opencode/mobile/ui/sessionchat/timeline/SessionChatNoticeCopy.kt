@@ -100,5 +100,11 @@ object SessionChatNoticeCopy {
                 )
             is TimelineNotice.SystemNote -> SessionChatNoticeLine(label = UiText.verbatim(notice.description))
             TimelineNotice.Restart -> SessionChatNoticeLine(label = RESTART)
+            // Session Chat draws its own Goal set row; this is the plain-text fallback.
+            is TimelineNotice.GoalSet ->
+                SessionChatNoticeLine(
+                    label = UiText.resource(R.string.session_chat_goal_set),
+                    value = UiText.verbatim(SessionChatGoalCopy.goalSetValue(notice.description)),
+                )
         }
 }

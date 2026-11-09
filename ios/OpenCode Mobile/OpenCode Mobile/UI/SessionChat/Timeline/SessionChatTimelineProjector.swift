@@ -428,9 +428,25 @@ nonisolated enum SessionChatTimelineProjector {
     /// A v2 command takes no id, and its echo is the expanded template, so the first
     /// user row that was not loaded when the send began stands for it.
     static func isNewServerEcho(_ server: TimelineRow, of pending: TimelineRow, baselineIDs: Set<String>) -> Bool {
+        if server.role == .notice {
+            // `/goal <objective>` answers with its Goal set notice, not a user row.
+            return !baselineIDs.contains(server.id) && isGoalCommand(pending) && isGoalSetNotice(server)
+        }
         guard server.role == .user else { return false }
         if ClientMessageID.isClientID(pending.id) { return server.id == pending.id }
         return !baselineIDs.contains(server.id)
+    }
+
+    private static func isGoalCommand(_ pending: TimelineRow) -> Bool {
+        let command = SessionGoalKickoff.commandName
+        return pending.text.hasPrefix("[/\(command)] ") || SessionGoalDraft.objective(pending.text)?.isEmpty == false
+    }
+
+    private static func isGoalSetNotice(_ row: TimelineRow) -> Bool {
+        row.blocks.contains { block in
+            guard case let .notice(_, notice) = block, case .goalSet = notice.kind else { return false }
+            return true
+        }
     }
 
     private static func splicePending(

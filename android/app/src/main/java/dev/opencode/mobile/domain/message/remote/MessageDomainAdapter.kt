@@ -31,6 +31,7 @@ import dev.opencode.mobile.data.remote.dto.V2UnknownErrorDto
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.filesystem.ProjectFileReference
+import dev.opencode.mobile.domain.goal.SessionGoalKickoff
 import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.session.ServerErrorMessage
 import io.ktor.client.plugins.ResponseException
@@ -120,6 +121,7 @@ class MessageDomainAdapter(
                     id = dto.id,
                     isSynthetic = dto.synthetic == true,
                     isIgnored = dto.ignored == true,
+                    goalKickoffId = dto.goalId,
                 )
             }
             "tool" -> {
@@ -525,13 +527,19 @@ class MessageDomainAdapter(
     ): Message {
         val parts = mutableListOf<MessagePart>()
         val uploads = uploadedFileParts(dto)
+        // A goal kickoff sent with attachments carries the plugin's instructions: show the objective only.
+        val goalKickoffId = V2TimelineNotices.goalKickoffId(dto.metadata)
         // The prompt text names each uploaded file; the chips say it, so the bubble drops the lines.
-        val text = withoutUploadLines(dto.text.orEmpty(), uploads)
+        val text =
+            withoutUploadLines(dto.text.orEmpty(), uploads).let { prompt ->
+                if (goalKickoffId != null) SessionGoalKickoff.objective(prompt) ?: prompt else prompt
+            }
         if (text.isNotEmpty()) {
             parts +=
                 MessagePart.Text(
                     text = text,
                     id = "${dto.id}:text:0",
+                    goalKickoffId = goalKickoffId,
                 )
         }
         dto.files.forEachIndexed { index, file ->

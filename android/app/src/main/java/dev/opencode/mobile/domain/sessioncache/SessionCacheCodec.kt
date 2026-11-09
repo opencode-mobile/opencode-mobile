@@ -246,6 +246,7 @@ internal data class CachedMessagePartPayload(
     val isStreaming: Boolean = false,
     val isSynthetic: Boolean = false,
     val isIgnored: Boolean = false,
+    val goalKickoffId: String? = null,
     val toolName: String? = null,
     val status: String? = null,
     val title: String? = null,
@@ -472,6 +473,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 isStreaming = isStreaming,
                 isSynthetic = isSynthetic,
                 isIgnored = isIgnored,
+                goalKickoffId = goalKickoffId,
             )
         is MessagePart.Tool ->
             CachedMessagePartPayload(
@@ -536,6 +538,7 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 id = id,
                 isSynthetic = isSynthetic,
                 isIgnored = isIgnored,
+                goalKickoffId = goalKickoffId,
             )
         "tool" ->
             MessagePart.Tool(

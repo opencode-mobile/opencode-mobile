@@ -30,6 +30,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
+import dev.opencode.mobile.ui.components.OpenCodeSessionComposerNote
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 import dev.opencode.mobile.ui.components.rememberOpenCodeSessionComposerFocus
 
@@ -44,6 +45,8 @@ private enum class SessionComposerGalleryScenario(
     Revert("Revert"),
     Shell("Shell"),
     SideQuestion("/btw"),
+    CommandHint("Hint"),
+    LimitNote("Limit"),
     ChildLockout("Child"),
     Permission("Permission"),
     PermissionEdit("Edit"),
@@ -146,6 +149,18 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                 promptState(text = shellText, shellMode = ComposerShellCommand.isShellMode(shellText))
             SessionComposerGalleryScenario.SideQuestion ->
                 promptState(text = sideQuestionText, showStop = true, sideQuestionMode = sideQuestionMode)
+            // A command waiting for its argument, and a placeholder that asks for a reply.
+            SessionComposerGalleryScenario.CommandHint ->
+                promptState(text = "/goal ").copy(
+                    sendEnabled = false,
+                    argumentHint = "Describe what “done” looks like…",
+                    placeholder = "Reply, then resume the goal…",
+                )
+            SessionComposerGalleryScenario.LimitNote ->
+                promptState(text = "/goal " + "Keep the public API the same. ".repeat(12)).copy(
+                    sendEnabled = false,
+                    note = OpenCodeSessionComposerNote("4,312 / 4,000 characters · shorten the objective to send", isError = true),
+                )
             SessionComposerGalleryScenario.ChildLockout ->
                 OpenCodeSessionComposerState.ChildLockout(
                     selectedModelLabel = "Claude Sonnet 4",

@@ -436,6 +436,10 @@ struct SessionChatUiState: Equatable {
     var draft: SessionChatDraftUiState? = nil
     /// The checkout the screen is bound to. A draft moves it; its first send may create it.
     var directory: String = ""
+    /// The session's `/goal`; nil when it has none, on v1, or without the goal plugin.
+    var goal: SessionChatGoalUiState? = nil
+    /// The server lists a `goal` command, so a `/goal …` draft gets its hint and limit.
+    var goalCommandAvailable = false
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
     var blocksChipTimelineIntro: Bool {

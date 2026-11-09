@@ -8052,6 +8052,745 @@
         }
       }
     },
+    "session_chat.goal.bubble_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.clear" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
+          }
+        }
+      }
+    },
+    "session_chat.goal.clear_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t clear the goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.clear_failed_reason" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t clear the goal: %1$@"
+          }
+        }
+      }
+    },
+    "session_chat.goal.clearing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clearing…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.command_replaces" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaces your current goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.command_replaces_met" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaces your current goal (met)"
+          }
+        }
+      }
+    },
+    "session_chat.goal.command_replaces_paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaces your current goal (paused)"
+          }
+        }
+      }
+    },
+    "session_chat.goal.count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@ characters"
+          }
+        }
+      }
+    },
+    "session_chat.goal.count_over" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@ characters · shorten the objective to send"
+          }
+        }
+      }
+    },
+    "session_chat.goal.ended" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ended"
+          }
+        }
+      }
+    },
+    "session_chat.goal.evidence" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Evidence"
+          }
+        }
+      }
+    },
+    "session_chat.goal.first_turn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "First turn · round 0 of %1$lld"
+          }
+        }
+      }
+    },
+    "session_chat.goal.footnote_active" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After each turn a reviewer checks the work against the goal. The agent keeps going until it is met, it needs you, or %1$lld rounds pass."
+          }
+        }
+      }
+    },
+    "session_chat.goal.footnote_met" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A new goal replaces this one."
+          }
+        }
+      }
+    },
+    "session_chat.goal.footnote_paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume starts a fresh budget of %1$lld rounds."
+          }
+        }
+      }
+    },
+    "session_chat.goal.met" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal met"
+          }
+        }
+      }
+    },
+    "session_chat.goal.met_in_round" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met in round %1$lld"
+          }
+        }
+      }
+    },
+    "session_chat.goal.new" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New goal…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.not_met_yet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not met yet: %1$@"
+          }
+        }
+      }
+    },
+    "session_chat.goal.objective_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Describe what “done” looks like…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pause" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pause_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t pause the goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pause_failed_reason" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t pause the goal: %1$@"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_by_user" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You paused the goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused after an error"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_in_round" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused in round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_no_progress" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused: no progress for %1$lld rounds"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_quiet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused: background work went quiet"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_restart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused: the server restarted"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_reviewer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused: the reviewer could not decide"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_round_limit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused after %1$lld rounds"
+          }
+        }
+      }
+    },
+    "session_chat.goal.paused_stopped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You stopped the turn, so the goal paused"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pausing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausing…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pill" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pill_accessibility_active" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal active, round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pill_accessibility_paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused. %1$@"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pill_met" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal met"
+          }
+        }
+      }
+    },
+    "session_chat.goal.pill_paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal paused"
+          }
+        }
+      }
+    },
+    "session_chat.goal.reconnecting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnecting. Showing the last known goal."
+          }
+        }
+      }
+    },
+    "session_chat.goal.resume" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume"
+          }
+        }
+      }
+    },
+    "session_chat.goal.resume_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t resume the goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.resume_failed_reason" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t resume the goal: %1$@"
+          }
+        }
+      }
+    },
+    "session_chat.goal.resume_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reply, then resume the goal…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.resuming" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resuming…"
+          }
+        }
+      }
+    },
+    "session_chat.goal.reviewer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reviewer"
+          }
+        }
+      }
+    },
+    "session_chat.goal.reviewer_last_round" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reviewer, last round"
+          }
+        }
+      }
+    },
+    "session_chat.goal.reviewer_pending" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checks the work when this turn ends."
+          }
+        }
+      }
+    },
+    "session_chat.goal.round" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "session_chat.goal.set" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal set"
+          }
+        }
+      }
+    },
+    "session_chat.goal.set_earlier" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An earlier goal. It was cleared or replaced."
+          }
+        }
+      }
+    },
+    "session_chat.goal.sheet_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal"
+          }
+        }
+      }
+    },
+    "session_chat.goal.show_all" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show all"
+          }
+        }
+      }
+    },
+    "session_chat.goal.show_less" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show less"
+          }
+        }
+      }
+    },
+    "session_chat.goal.stalls" : {
+      "comment" : "%1$lld rounds without progress (drives the plural); %2$@ the round count that pauses the goal.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No progress for %1$lld round; pauses after %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "No progress for %1$lld rounds; pauses after %2$@"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "session_chat.goal.tag_met" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met"
+          }
+        }
+      }
+    },
+    "session_chat.goal.tag_paused" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused"
+          }
+        }
+      }
+    },
+    "session_chat.goal.tag_waiting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting"
+          }
+        }
+      }
+    },
+    "session_chat.goal.tag_working" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working"
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting"
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting_on_you" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting on you"
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting_permission" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A permission request is open. The goal carries on once you answer it."
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting_question" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A question is open. The goal carries on once you answer it."
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting_shell" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For a background shell to finish: %1$@. Pauses if nothing runs for %2$lld minutes."
+          }
+        }
+      }
+    },
+    "session_chat.goal.waiting_subagent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For a subagent to finish. Pauses if nothing runs for %1$lld minutes."
+          }
+        }
+      }
+    },
     "session_chat.loading" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -1,5 +1,7 @@
 import SwiftUI
 
+typealias OpenCodeSessionComposerFootnote = OpenCodeSessionComposerState.Footnote
+
 enum OpenCodeSessionComposerState {
     struct Prompt {
         let text: String
@@ -32,6 +34,10 @@ enum OpenCodeSessionComposerState {
         /// the model and agent chips and the field shows its own placeholder; tapping the badge or
         /// deleting on an empty field sends `.exitSideQuestionMode`.
         let sideQuestionMode: Bool
+        /// Replaces the default "Ask anything..." placeholder, e.g. while a goal waits on a reply.
+        let placeholder: String?
+        /// One caption line under the field: a hint, or a count that reads as an error past a limit.
+        let footnote: OpenCodeSessionComposerFootnote?
 
         init(
             text: String,
@@ -54,7 +60,9 @@ enum OpenCodeSessionComposerState {
             showDictationButton: Bool = false,
             shellMode: Bool = false,
             sideQuestionMode: Bool = false,
-            history: [String] = []
+            history: [String] = [],
+            placeholder: String? = nil,
+            footnote: OpenCodeSessionComposerFootnote? = nil
         ) {
             self.text = text
             self.mentionRanges = mentionRanges
@@ -77,6 +85,20 @@ enum OpenCodeSessionComposerState {
             self.shellMode = shellMode
             self.sideQuestionMode = sideQuestionMode
             self.history = history
+            self.placeholder = placeholder.flatMap { $0.isEmpty ? nil : $0 }
+            self.footnote = footnote
+        }
+    }
+
+    /// A caption under the prompt field.
+    struct Footnote: Equatable {
+        let text: String
+        /// Past a limit: drawn in the error colour.
+        let isError: Bool
+
+        init(text: String, isError: Bool = false) {
+            self.text = text
+            self.isError = isError
         }
     }
 
@@ -716,7 +738,9 @@ struct OpenCodeSessionComposer: View {
                 selectionStart: prompt.selectionStart,
                 selectionEnd: prompt.selectionEnd,
                 selectionRevision: prompt.selectionRevision,
-                placeholder: prompt.sideQuestionMode ? Self.sideQuestionPlaceholder : Self.promptPlaceholder,
+                placeholder: prompt.sideQuestionMode
+                    ? Self.sideQuestionPlaceholder
+                    : (prompt.placeholder ?? Self.promptPlaceholder),
                 focusRequestToken: focusRequestToken,
                 onFocusChange: onInputFocusChange,
                 literalInput: prompt.shellMode,
@@ -754,6 +778,15 @@ struct OpenCodeSessionComposer: View {
             )
             .padding(.horizontal, 4)
             .padding(.vertical, 4)
+
+            if let footnote = prompt.footnote {
+                Text(footnote.text)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(footnote.isError ? OpenCodeColors.error : OpenCodeColors.textWeak)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
 
             pickerChipsRow(prompt)
 

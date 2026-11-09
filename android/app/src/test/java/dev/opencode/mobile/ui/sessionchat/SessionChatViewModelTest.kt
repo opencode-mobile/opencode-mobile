@@ -1056,6 +1056,73 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun goal_showsInTheUiStateAndItsActionsReachTheGoalCommand() =
+        runTest(testDispatcher) {
+            val goals = GoalRepositoryStub()
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionGoalRepository = goals)
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val goal = goalState(viewModel)
+            assertEquals("goal_1", goal.goal.id)
+            assertEquals(SessionChatGoalActivity.Working, goal.activity)
+
+            viewModel.openGoalSheet()
+            advanceUntilIdle()
+            assertTrue(goalState(viewModel).sheetOpen)
+
+            // A failed command: a snackbar with the server's words, then the goal is read again.
+            goals.sendError = IllegalStateException("offline")
+            viewModel.sendGoalAction(dev.opencode.mobile.domain.goal.SessionGoalAction.Pause)
+            advanceUntilIdle()
+            val snackbar = viewModel.uiState.value.snackbar
+            assertEquals("Couldn’t pause the goal", snackbar?.message?.english())
+            assertEquals(2, goals.reads)
+            assertNull(goalState(viewModel).pending)
+
+            // New goal… starts a /goal command in the composer and closes the sheet.
+            viewModel.startNewGoal()
+            advanceUntilIdle()
+            val composer = viewModel.uiState.value.composer
+            assertEquals("/goal ", composer.text)
+            assertFalse(goalState(viewModel).sheetOpen)
+        }
+
+    private fun goalState(viewModel: SessionChatViewModel): SessionChatGoalUiState = requireNotNull(viewModel.uiState.value.goal)
+
+    private class GoalRepositoryStub : dev.opencode.mobile.domain.goal.SessionGoalRepository {
+        var reads = 0
+        var sendError: Throwable? = null
+
+        override suspend fun isAvailable() = true
+
+        override suspend fun goal(
+            sessionId: String,
+            directory: String?,
+        ): dev.opencode.mobile.domain.goal.SessionGoal {
+            reads += 1
+            return dev.opencode.mobile.domain.goal.SessionGoal(
+                id = "goal_1",
+                objective = "Make the tests pass",
+                status = dev.opencode.mobile.domain.goal.SessionGoalStatus.Active,
+                rounds = 1,
+                maxRounds = 50,
+                updatedAtEpochMs = 1,
+            )
+        }
+
+        override suspend fun send(
+            sessionId: String,
+            action: dev.opencode.mobile.domain.goal.SessionGoalAction,
+        ) {
+            sendError?.let { throw it }
+        }
+
+        override fun changes() = kotlinx.coroutines.flow.emptyFlow<dev.opencode.mobile.domain.goal.SessionGoalChange>()
+    }
+
+    @Test
     fun openWaitingSubagentRequest_expandsAndPagesToTheSubagentsRequestAndPulses() =
         runTest(testDispatcher) {
             val sessionRepository =
@@ -3278,6 +3345,42 @@ class SessionChatViewModelTest {
             sendGate.complete(Unit)
             advanceUntilIdle()
             assertEquals("", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun sendPrompt_goalCommand_showsNoEchoBubbleAndSendsATrimmedObjective() =
+        runTest(testDispatcher) {
+            val commandRepository =
+                FakeCommandRepository(
+                    commands =
+                        listOf(
+                            ServerCommand(name = "goal", description = "keep working", source = ServerCommandSource.Command),
+                            ServerCommand(name = "init", description = "Create AGENTS.md", source = ServerCommandSource.Command),
+                        ),
+                )
+            val viewModel = createViewModel(repository = FakeMessageRepository(), commandRepository = commandRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            // The Goal set row is the echo: no "[/goal] …" bubble that would never retire.
+            viewModel.updateComposerText("/goal  Ship it")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals("goal", commandRepository.lastRunOptions?.command)
+            assertEquals("Ship it", commandRepository.lastRunOptions?.arguments)
+            assertFalse(viewModel.uiState.value.messages.any { it.isPending })
+
+            viewModel.updateComposerText("/goal pause")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals("pause", commandRepository.lastRunOptions?.arguments)
+            assertFalse(viewModel.uiState.value.messages.any { it.isPending })
+
+            // Other commands keep their bubble until the server's prompt retires it.
+            viewModel.updateComposerText("/init please")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.messages.any { it.isPending })
         }
 
     @Test
@@ -8530,6 +8633,8 @@ class SessionChatViewModelTest {
         agentShellRepository: dev.opencode.mobile.domain.shell.AgentShellRepository =
             dev.opencode.mobile.domain.shell.EmptyAgentShellRepository,
         newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
+        sessionGoalRepository: dev.opencode.mobile.domain.goal.SessionGoalRepository =
+            dev.opencode.mobile.domain.goal.EmptySessionGoalRepository,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -8616,6 +8721,7 @@ class SessionChatViewModelTest {
             attachmentUploads = attachmentUploads,
             agentShellRepository = agentShellRepository,
             newSessionDraftStore = newSessionDraftStore,
+            sessionGoalRepository = sessionGoalRepository,
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }
