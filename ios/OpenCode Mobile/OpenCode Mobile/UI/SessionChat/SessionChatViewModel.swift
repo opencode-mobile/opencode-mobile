@@ -569,6 +569,11 @@ final class SessionChatViewModel {
         set { composer.fileSearchDelayMs = newValue }
     }
 
+    var sendStallDelayMs: Int {
+        get { composer.sendStallDelayMs }
+        set { composer.sendStallDelayMs = newValue }
+    }
+
     func selectAtSuggestion(agentName: String) {
         logChatAction(ProductAnalytics.Action.composerSelectAtSuggestion)
         composer.selectAtSuggestion(agentName: agentName)
@@ -959,6 +964,12 @@ final class SessionChatViewModel {
     }
 
     static let branchCopiedMessage = "Branch name copied"
+    static let sendStalledMessage = "Still sending…"
+
+    /// Retry on the "Still sending…" snackbar.
+    func retryStalledSend() {
+        composer.retryStalledSend()
+    }
 
     func consumeSnackbar() {
         if uiState.snackbar != nil {
@@ -2016,6 +2027,7 @@ final class SessionChatViewModel {
         }()
         let snackbar = resolveSnackbar(
             transientError: transientError,
+            sendStallNotice: composerState.sendStallNotice,
             sideQuestionNotice: sideQuestions.notice,
             successNotice: composerState.followUpNotice
                 ?? commandsState.actionSuccessMessage
@@ -2249,9 +2261,27 @@ final class SessionChatViewModel {
 
     private func resolveSnackbar(
         transientError: String?,
+        sendStallNotice: Int? = nil,
         sideQuestionNotice: SessionChatSideQuestionNotice? = nil,
         successNotice: String?
     ) -> SessionChatSnackbar? {
+        // A prompt the server has not answered outranks notices and yields to errors. Each
+        // notice value is a new key, so a dismissed one comes back if the send stays stuck.
+        if transientError == nil, let sendStallNotice {
+            let key = "sendStall:\(sendStallNotice)"
+            if key != suppressedSnackbarKey {
+                if key != lastSnackbarKey {
+                    snackbarSequence += 1
+                    lastSnackbarKey = key
+                }
+                return SessionChatSnackbar(
+                    id: snackbarSequence,
+                    message: Self.sendStalledMessage,
+                    tone: .default,
+                    action: .retryStalledSend
+                )
+            }
+        }
         // A `/btw` notice outranks other success notices and yields to errors; its id keeps a
         // repeated failure of the same question from deduping into the earlier snackbar.
         if transientError == nil, let sideQuestionNotice {

@@ -507,6 +507,8 @@ struct SessionChatView: View {
                     switch viewModel.uiState.snackbar?.action {
                     case let .retrySideQuestion(id):
                         viewModel.retrySideQuestions(id: id)
+                    case .retryStalledSend:
+                        viewModel.retryStalledSend()
                     case nil:
                         break
                     }

@@ -25,12 +25,18 @@ enum SseDiagnosticLogging {
         case "server.heartbeat",
              "message.part.delta",
              "message.part.updated",
-             "message.updated",
              "file.watcher.updated",
              "file.edited",
              "session.diff",
              "session.updated":
             return nil
+        case "message.updated":
+            // A user message is the server's echo of a prompt: proof it was admitted (#1002).
+            // Assistant updates stream constantly, so they stay out of the log.
+            let info = event.rawProperties?["info"]?.dictionaryValue
+            guard info?["role"]?.stringValue == "user" else { return nil }
+            let message = info?["id"]?.stringValue ?? "-"
+            return "SSE event type=message.updated role=user session=\(event.sessionID ?? "-") message=\(message)"
         case "session.status":
             let status =
                 event.rawProperties?["status"]?.dictionaryValue?["type"]?.stringValue ?? "-"

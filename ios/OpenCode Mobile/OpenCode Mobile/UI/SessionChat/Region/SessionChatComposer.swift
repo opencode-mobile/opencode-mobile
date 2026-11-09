@@ -59,6 +59,11 @@ final class SessionChatComposer {
     private var fileSearchTask: Task<Void, Never>?
     private var fileSearchGeneration = 0
     var fileSearchDelayMs = 200
+    /// How long a prompt upload may go unanswered before "Still sending…" offers Retry (#1002).
+    var sendStallDelayMs = 20_000
+    private var sendControl: PromptSendControl?
+    private var sendStallTask: Task<Void, Never>?
+    private var sendStallSequence = 0
 
     init(
         sessionID: String,
@@ -1138,98 +1143,105 @@ final class SessionChatComposer {
             }
         }
 
+        let sendControl = PromptSendControl()
+        beginSendWatch(sendControl)
+        defer { endSendWatch(sendControl) }
+        let hasAttachments = !submittedAttachments.isEmpty
+        let progressHandler: @Sendable (Int64, Int64) -> Void = { [weak self] sent, total in
+            Task { @MainActor in
+                self?.applySendProgress(sent: sent, total: total, hasAttachments: hasAttachments)
+            }
+        }
         do {
-            let hasAttachments = !submittedAttachments.isEmpty
-            try await PromptSendProgressReporting.$handler.withValue({ [weak self] sent, total in
-                Task { @MainActor in
-                    self?.applySendProgress(sent: sent, total: total, hasAttachments: hasAttachments)
-                }
-            }) {
-                @MainActor
-                func sendPrompt(
-                    text: String,
-                    skillMentions: [SkillMention],
-                    mentions: [AgentMention],
-                    fileMentions: [FileMention],
-                    sessionID: String,
-                    attachments: [Attachment],
-                    model: ModelSelection,
-                    worktree: String?
-                ) async throws {
-                    try await beforePrompt()
-                    func send(delivery: FollowUpDelivery) async throws {
-                        try await messageRepository.sendPromptAsync(
+            try await PromptSendControl.$current.withValue(sendControl) {
+                try await PromptSendProgressReporting.$handler.withValue(progressHandler) {
+                    @MainActor
+                    func sendPrompt(
+                        text: String,
+                        skillMentions: [SkillMention],
+                        mentions: [AgentMention],
+                        fileMentions: [FileMention],
+                        sessionID: String,
+                        attachments: [Attachment],
+                        model: ModelSelection,
+                        worktree: String?
+                    ) async throws {
+                        try await beforePrompt()
+                        func send(delivery: FollowUpDelivery) async throws {
+                            try await messageRepository.sendPromptAsync(
+                                sessionID: sessionID,
+                                options: PromptSendOptions(
+                                    text: text,
+                                    attachments: attachments,
+                                    model: PromptModelSelection(
+                                        providerID: model.option.providerID,
+                                        modelID: model.option.modelID
+                                    ),
+                                    variant: composer.selectedVariant,
+                                    mode: composer.selectedMode,
+                                    agentMentions: mentions,
+                                    fileMentions: fileMentions,
+                                    worktree: worktree,
+                                    skillMentions: skillMentions,
+                                    delivery: delivery,
+                                    messageID: messageID
+                                ),
+                                directory: worktree
+                            )
+                        }
+                        do {
+                            try await send(delivery: composer.followUpDelivery)
+                        } catch {
+                            if supportsFollowUp,
+                               composer.followUpDelivery != .queue,
+                               errorMessage(error) == "Session is busy"
+                            {
+                                try await send(delivery: .queue)
+                            } else {
+                                throw error
+                            }
+                        }
+                        if !mentions.isEmpty || !fileMentions.isEmpty || !skillMentions.isEmpty {
+                            OpenCodeLog.sessionChat.info(
+                                "prompt send agentParts=\(mentions.count) fileParts=\(fileMentions.count) skills=\(skillMentions.count)"
+                            )
+                        }
+                    }
+                    switch intent {
+                    case let .serverCommand(command, arguments):
+                        try await commandRepository.runCommand(
                             sessionID: sessionID,
-                            options: PromptSendOptions(
-                                text: text,
-                                attachments: attachments,
+                            options: CommandRunOptions(
+                                command: command,
+                                arguments: arguments,
+                                attachments: submittedAttachments,
                                 model: PromptModelSelection(
-                                    providerID: model.option.providerID,
-                                    modelID: model.option.modelID
+                                    providerID: selectedModel.option.providerID,
+                                    modelID: selectedModel.option.modelID
                                 ),
                                 variant: composer.selectedVariant,
                                 mode: composer.selectedMode,
-                                agentMentions: mentions,
-                                fileMentions: fileMentions,
-                                worktree: worktree,
-                                skillMentions: skillMentions,
-                                delivery: delivery,
+                                delivery: composer.followUpDelivery,
+                                skillIDs: ComposerMentionRouting.skillParts(text: trimmed, mentions: skillsForSend).map(\.skillID),
                                 messageID: messageID
                             ),
                             directory: worktree
                         )
-                    }
-                    do {
-                        try await send(delivery: composer.followUpDelivery)
-                    } catch {
-                        if supportsFollowUp,
-                           composer.followUpDelivery != .queue,
-                           errorMessage(error) == "Session is busy"
-                        {
-                            try await send(delivery: .queue)
-                        } else {
-                            throw error
-                        }
-                    }
-                    if !mentions.isEmpty || !fileMentions.isEmpty || !skillMentions.isEmpty {
-                        OpenCodeLog.sessionChat.info(
-                            "prompt send agentParts=\(mentions.count) fileParts=\(fileMentions.count) skills=\(skillMentions.count)"
+                    case let .prompt(text):
+                        try await sendPrompt(
+                            text: text,
+                            skillMentions: skillsForSend,
+                            mentions: mentionsForSend,
+                            fileMentions: filesForSend,
+                            sessionID: sessionID,
+                            attachments: submittedAttachments,
+                            model: selectedModel,
+                            worktree: worktree
                         )
                     }
                 }
-                switch intent {
-                case let .serverCommand(command, arguments):
-                    try await commandRepository.runCommand(
-                        sessionID: sessionID,
-                        options: CommandRunOptions(
-                            command: command,
-                            arguments: arguments,
-                            attachments: submittedAttachments,
-                            model: PromptModelSelection(
-                                providerID: selectedModel.option.providerID,
-                                modelID: selectedModel.option.modelID
-                            ),
-                            variant: composer.selectedVariant,
-                            mode: composer.selectedMode,
-                            delivery: composer.followUpDelivery,
-                            skillIDs: ComposerMentionRouting.skillParts(text: trimmed, mentions: skillsForSend).map(\.skillID),
-                            messageID: messageID
-                        ),
-                        directory: worktree
-                    )
-                case let .prompt(text):
-                    try await sendPrompt(
-                        text: text,
-                        skillMentions: skillsForSend,
-                        mentions: mentionsForSend,
-                        fileMentions: filesForSend,
-                        sessionID: sessionID,
-                        attachments: submittedAttachments,
-                        model: selectedModel,
-                        worktree: worktree
-                    )
-                }
             }
+            endSendWatch(sendControl)
             persistCurrentSelection(updatePreference: false)
             state.sendProgressPercent = nil
             notifyChange()
@@ -1326,6 +1338,56 @@ final class SessionChatComposer {
         let composer = state.composer
         guard ComposerShellCommand.isShellMode(composer.text) else { return }
         updateComposerText(ComposerShellCommand.exitShellMode(composer.text), cursor: max(0, composer.cursor - 1))
+    }
+
+    /// Watches a prompt upload so a send the server never answers turns into "Still sending…"
+    /// with Retry instead of a silent wait with Send disabled (#1002).
+    private func beginSendWatch(_ control: PromptSendControl) {
+        sendControl = control
+        scheduleSendStallCheck()
+    }
+
+    private func scheduleSendStallCheck() {
+        sendStallTask?.cancel()
+        let delay = sendStallDelayMs
+        sendStallTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(delay))
+            guard !Task.isCancelled else { return }
+            self?.sendStalled()
+        }
+    }
+
+    private func sendStalled() {
+        guard state.isSending, let control = sendControl else { return }
+        // Only a send the uploader can retry offers Retry; check again later either way.
+        if control.canRetry {
+            sendStallSequence += 1
+            state.sendStallNotice = sendStallSequence
+            DiagnosticLog.warning(.chat, "sendPrompt stalled notice=\(sendStallSequence)")
+            notifyChange()
+        }
+        scheduleSendStallCheck()
+    }
+
+    /// Sends the stuck prompt again on a new connection; the same message id keeps it from doubling.
+    func retryStalledSend() {
+        state.sendStallNotice = nil
+        notifyChange()
+        guard state.isSending, let control = sendControl, control.canRetry else { return }
+        DiagnosticLog.info(.chat, "sendPrompt retry")
+        control.retry()
+        scheduleSendStallCheck()
+    }
+
+    private func endSendWatch(_ control: PromptSendControl) {
+        guard sendControl === control else { return }
+        sendControl = nil
+        sendStallTask?.cancel()
+        sendStallTask = nil
+        if state.sendStallNotice != nil {
+            state.sendStallNotice = nil
+            notifyChange()
+        }
     }
 
     func clearSending() {

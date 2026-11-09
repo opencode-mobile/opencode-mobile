@@ -1158,6 +1158,48 @@ struct SessionChatViewModelTests {
         #expect(messages.contains { $0.text == "New prompt" && $0.isPending })
     }
 
+    @Test func sendPrompt_unansweredSend_offersRetryUntilItLands() async {
+        let repository = FakeMessageRepository(holdSend: true)
+        repository.bindsRetryControl = true
+        let viewModel = makeViewModel(messageRepository: repository)
+        defer { viewModel.stopObserving() }
+        viewModel.sendStallDelayMs = 20
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.timeline == .ready }
+        viewModel.updateComposerText("Stuck prompt")
+        let sendTask = Task { await viewModel.sendPrompt() }
+
+        let stalled = await waitUntil { viewModel.uiState.snackbar?.action == .retryStalledSend }
+        #expect(stalled)
+        #expect(viewModel.uiState.snackbar?.message == SessionChatViewModel.sendStalledMessage)
+        #expect(viewModel.uiState.isSending)
+
+        viewModel.retryStalledSend()
+        await sendTask.value
+        #expect(repository.retryCount == 1)
+        let cleared = await waitUntil {
+            viewModel.uiState.snackbar?.action != .retryStalledSend && !viewModel.uiState.isSending
+        }
+        #expect(cleared)
+    }
+
+    @Test func sendPrompt_unansweredSendWithoutRetry_showsNoStallNotice() async {
+        let repository = FakeMessageRepository(holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        defer { viewModel.stopObserving() }
+        viewModel.sendStallDelayMs = 10
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.timeline == .ready }
+        viewModel.updateComposerText("Command-like send")
+        let sendTask = Task { await viewModel.sendPrompt() }
+        _ = await waitUntil { repository.sendPromptAsyncCalled }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        #expect(viewModel.uiState.snackbar?.action != .retryStalledSend)
+        repository.releaseSend()
+        await sendTask.value
+    }
+
     @Test func sendPrompt_whileConnecting_isQueuedThenFlushedOnLive() async {
         let repository = FakeMessageRepository()
         let liveUpdates = FixedLiveUpdates(
@@ -6260,6 +6302,9 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     let holdSend: Bool
     var sendPromptAsyncCalled = false
     var sentOptions: PromptSendOptions?
+    /// Acts like the uploader: binds Retry on the send's control; a retry releases a held send.
+    var bindsRetryControl = false
+    var retryCount = 0
     var shellRequests: [(options: ShellCommandOptions, directory: String?)] = []
     var shellError: Error?
     private var listMessagesCallCount = 0
@@ -6358,6 +6403,14 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         if let handler = PromptSendProgressReporting.handler, !options.attachments.isEmpty {
             handler(1, 4)
         }
+        let control = bindsRetryControl ? PromptSendControl.current : nil
+        control?.bind { [self] in
+            Task { @MainActor in
+                self.retryCount += 1
+                self.releaseSend()
+            }
+        }
+        defer { control?.unbind() }
         if shouldFailSend {
             if holdSend, !sendReleaseRequested {
                 await withCheckedContinuation { sendContinuation = $0 }
