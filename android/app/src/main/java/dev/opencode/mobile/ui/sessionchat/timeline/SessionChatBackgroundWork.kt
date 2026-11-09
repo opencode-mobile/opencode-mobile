@@ -12,8 +12,8 @@ import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.shell.AgentShell
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject

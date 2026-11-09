@@ -7,8 +7,8 @@ import dev.opencode.mobile.domain.shell.AgentShellOutput
 import dev.opencode.mobile.domain.shell.AgentShellRepository
 import dev.opencode.mobile.domain.shell.AgentShellSession
 import dev.opencode.mobile.domain.shell.AgentShellStatus
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWork
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

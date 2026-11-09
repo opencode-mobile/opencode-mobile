@@ -76,6 +76,8 @@ import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.sessionchat.view.NewSessionDraftCallbacks
 import dev.opencode.mobile.ui.sessionchat.view.NewSessionDraftSheets
 import dev.opencode.mobile.ui.sessionchat.view.NewSessionDraftTags
@@ -177,7 +179,6 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionToolGroupImages
 import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.ui.worktree.NewWorktreeRow
 import dev.opencode.mobile.ui.worktree.WorktreeCreateFormActions

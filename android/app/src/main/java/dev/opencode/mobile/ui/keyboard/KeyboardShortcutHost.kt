@@ -23,10 +23,10 @@ import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.AbstractComposeView
 import androidx.compose.ui.platform.LocalFocusManager
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.components.OpenCodeInputFocusRegistry
-import dev.opencode.mobile.ui.text.UiText
-import dev.opencode.mobile.ui.text.UiTextLookup
-import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.delay
 
 /**

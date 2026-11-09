@@ -1,6 +1,6 @@
 package dev.opencode.mobile.domain.filesystem
 
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import java.net.URLEncoder
 
 /** One File Browser row: a file or folder under the Session Chat worktree. */

@@ -4,12 +4,12 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Done
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Failed
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Running
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Stopped
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.WaitingForInput
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject

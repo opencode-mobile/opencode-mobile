@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.shell.AgentShellStatus
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWork
@@ -24,7 +25,6 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatSubagent
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatBackgroundWorkList
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatBackgroundWorkPill
-import dev.opencode.mobile.ui.text.UiText
 
 @Composable
 fun BackgroundWorkPillGalleryScreen(modifier: Modifier = Modifier) {

@@ -8,11 +8,11 @@ import dev.opencode.mobile.domain.goal.SessionGoalChange
 import dev.opencode.mobile.domain.goal.SessionGoalRepository
 import dev.opencode.mobile.domain.goal.SessionGoalStatus
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchChangedFile
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchSummary
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatGoal
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatGoalRegionState
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi

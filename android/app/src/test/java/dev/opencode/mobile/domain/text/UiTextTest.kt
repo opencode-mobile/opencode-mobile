@@ -1,4 +1,4 @@
-package dev.opencode.mobile.ui.text
+package dev.opencode.mobile.domain.text
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals

@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.session.ArchivedSessionPeriod
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
@@ -21,7 +22,6 @@ import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.components.visibleForFilter
 import dev.opencode.mobile.ui.main.ProjectSectionUi
 import dev.opencode.mobile.ui.main.homeSessionListSessions
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

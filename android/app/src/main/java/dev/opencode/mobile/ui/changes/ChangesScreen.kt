@@ -45,6 +45,7 @@ import dev.opencode.mobile.ProductRouteScreenViewEffect
 import dev.opencode.mobile.R
 import dev.opencode.mobile.backwardRouteTransition
 import dev.opencode.mobile.domain.session.FileDiff
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.forwardRouteTransition
 import dev.opencode.mobile.ui.components.OpenCodeDiffStat
 import dev.opencode.mobile.ui.components.OpenCodeDiffStatSeparator
@@ -78,7 +79,6 @@ import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.serialization.Serializable
 

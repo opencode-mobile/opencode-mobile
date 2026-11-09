@@ -2,7 +2,7 @@ package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.live.SessionListSnapshot
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob

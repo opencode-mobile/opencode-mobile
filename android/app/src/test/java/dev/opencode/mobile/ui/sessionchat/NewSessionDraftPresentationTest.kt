@@ -6,7 +6,7 @@ import dev.opencode.mobile.domain.home.HomeWorktree
 import dev.opencode.mobile.domain.session.NewSessionDraft
 import dev.opencode.mobile.domain.session.NewSessionDraftStart
 import dev.opencode.mobile.domain.session.NewSessionPlace
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

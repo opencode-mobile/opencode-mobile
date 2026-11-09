@@ -5,7 +5,7 @@ import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.session.ArchivedSessionList
 import dev.opencode.mobile.domain.session.SessionRepository
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

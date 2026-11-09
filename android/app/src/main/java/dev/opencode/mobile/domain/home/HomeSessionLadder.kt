@@ -1,7 +1,7 @@
 package dev.opencode.mobile.domain.home
 
 import dev.opencode.mobile.R
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate

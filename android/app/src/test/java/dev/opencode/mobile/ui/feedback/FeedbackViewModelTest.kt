@@ -12,8 +12,8 @@ import dev.opencode.mobile.domain.feedback.FeedbackScreenshot
 import dev.opencode.mobile.domain.feedback.FeedbackSubmitResult
 import dev.opencode.mobile.domain.feedback.FeedbackSubmitter
 import dev.opencode.mobile.domain.feedback.ShareFeedbackSubmitter
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
