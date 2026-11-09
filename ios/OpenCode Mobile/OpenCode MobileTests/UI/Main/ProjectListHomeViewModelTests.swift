@@ -545,93 +545,6 @@ struct ProjectListHomeViewModelTests {
         #expect(calls.count("/notes") == 3)
     }
 
-    // MARK: New worktree (#752)
-
-    @Test func newWorktreeFromRunInCreatesRefetchesAndStartsThere() async {
-        let worktrees = ScriptedWorktreeRepository(
-            loads: [.loaded(directories: ["/repo"], listsSessions: false)],
-            created: .success(CreatedWorktree(directory: "/data/worktree/abc/brave-otter", name: "brave-otter", branch: nil))
-        )
-        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
-        let viewModel = makeViewModel(
-            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
-            serverProtocol: .v2,
-            worktreeRepository: worktrees
-        )
-        await viewModel.refresh()
-        #expect(await waitUntil {
-            viewModel.homeProjects.first?.projectID == "prj_repo" && worktrees.loadedPaths.contains("/repo")
-        })
-        let project = viewModel.homeProjects[0]
-        #expect(project.worktrees.count == 1)
-        #expect(viewModel.newWorktreeAvailability(for: project, worktreesEnabled: true).enabled)
-
-        viewModel.openNewWorktree(projectKey: "prj_repo")
-        #expect(viewModel.worktreeCreate.state?.origin == .runIn(projectKey: "prj_repo"))
-        #expect(viewModel.worktreeCreate.state?.sourceDirectory == "/repo")
-        #expect(viewModel.worktreeCreate.state?.serverProtocol == .v2)
-
-        let closes = await viewModel.submitNewWorktree()
-
-        #expect(closes)
-        #expect(worktrees.createRequests.map(\.projectID) == ["prj_repo"])
-        #expect(worktrees.createRequests.map(\.sourceDirectory) == ["/repo"])
-        #expect(worktrees.refetchedProjectIDs == ["prj_repo"])
-        #expect(viewModel.worktreeCreate.state == nil)
-        #expect(viewModel.pendingSessionOpen?.worktree == "/data/worktree/abc/brave-otter")
-        #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
-    }
-
-    @Test func newWorktreeOnV1ReloadsTheAddedPathsAfterCreating() async {
-        let worktrees = ScriptedWorktreeRepository(
-            loads: [.loaded(directories: [], listsSessions: true)],
-            created: .success(CreatedWorktree(directory: "/wt/fix", name: "fix", branch: "opencode/fix"))
-        )
-        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
-        let viewModel = makeViewModel(
-            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
-            serverProtocol: .v1,
-            worktreeRepository: worktrees
-        )
-        await viewModel.refresh()
-        #expect(await waitUntil { worktrees.loadedPaths.count >= 1 && viewModel.homeProjects.first?.projectID == "prj_repo" })
-        let loadsBefore = worktrees.loadedPaths.count
-
-        viewModel.openNewWorktree(projectKey: "prj_repo")
-        #expect(viewModel.worktreeCreate.state?.branchValue.resolved.hasPrefix("opencode/") == true)
-        #expect(await viewModel.submitNewWorktree())
-
-        #expect(worktrees.loadedPaths.count >= loadsBefore + 1)
-        #expect(worktrees.refetchedProjectIDs.isEmpty)
-        #expect(viewModel.pendingSessionOpen?.worktree == "/wt/fix")
-    }
-
-    @Test func failedNewWorktreeStartsNothingAndKeepsTheForm() async {
-        let worktrees = ScriptedWorktreeRepository(
-            loads: [.loaded(directories: ["/repo"], listsSessions: false)],
-            created: .failure(WorktreeCreateError(message: "fatal: invalid reference: nope"))
-        )
-        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
-        let viewModel = makeViewModel(
-            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
-            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
-            serverProtocol: .v2,
-            worktreeRepository: worktrees
-        )
-        await viewModel.refresh()
-        #expect(await waitUntil { viewModel.homeProjects.first?.projectID == "prj_repo" })
-
-        viewModel.openNewWorktree(projectKey: "prj_repo")
-        let closes = await viewModel.submitNewWorktree()
-
-        #expect(!closes)
-        #expect(viewModel.pendingSessionOpen == nil)
-        #expect(worktrees.refetchedProjectIDs.isEmpty)
-        #expect(viewModel.worktreeCreate.state?.errorMessage?.resolved == "Couldn't create the worktree: fatal: invalid reference: nope")
-    }
-
     @Test func removingAMergedProjectRemovesEveryMemberPath() async {
         let store = FakeConnectionProfileStore(initial: ["/repo", "/other", "/repo-wt"])
         let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
@@ -1541,7 +1454,9 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.addProjectSheet.fieldText == "/home/")
     }
 
-    @Test func createSession_usesFocusedWorktreeAndClearsError() async {
+    // MARK: New session draft (#1004)
+
+    @Test func newSession_opensADraftAndCreatesNothing() async {
         let sessionRepository = FakeSessionRepository()
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
@@ -1550,7 +1465,9 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         #expect(viewModel.revealNewestToken == 0)
-        await viewModel.createSession(in: "/repo")
+
+        viewModel.openNewSessionDraft(NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo"))
+
         #expect(sessionRepository.createdDirectories.isEmpty)
         #expect(viewModel.revealNewestToken == 1)
         #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
@@ -1563,21 +1480,61 @@ struct ProjectListHomeViewModelTests {
         #expect(createError == nil)
     }
 
-    @Test func createSession_assignsUniqueOptimisticNavigationInstanceIDs() async {
+    @Test func newSession_assignsUniqueNavigationInstanceIDs() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
             sessionRepository: FakeSessionRepository(),
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
-        await viewModel.createSession(in: "/repo")
+        let start = NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo")
+        viewModel.openNewSessionDraft(start)
         let first = viewModel.pendingSessionOpen?.optimisticNavigationInstanceID
         viewModel.consumePendingSessionOpen()
-        await viewModel.createSession(in: "/repo")
+        viewModel.openNewSessionDraft(start)
         let second = viewModel.pendingSessionOpen?.optimisticNavigationInstanceID
         #expect(first != nil)
         #expect(second != nil)
         #expect(first != second)
+    }
+
+    @Test func newSession_keptDraftWinsOverHomesProject() async {
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(projectKey: "path:/other", projectDirectory: "/other", composer: ComposerDraft(text: "half typed")),
+            forProfile: homeDraftProfileKey
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            newSessionDraftStore: store
+        )
+        await viewModel.refresh()
+
+        viewModel.openNewSessionDraft(NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo"))
+
+        #expect(viewModel.pendingSessionOpen?.worktree == "/other")
+        #expect(store.draft(forProfile: homeDraftProfileKey)?.composer.text == "half typed")
+    }
+
+    @Test func worktreesNewSessionHereMovesTheDraftThereAndKeepsItsText() async {
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo", composer: ComposerDraft(text: "keep")),
+            forProfile: homeDraftProfileKey
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            newSessionDraftStore: store
+        )
+        await viewModel.refresh()
+
+        await viewModel.handleWorktreeRequest(.newSession(directory: "/wt/feature"))
+
+        #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
+        #expect(viewModel.pendingSessionOpen?.worktree == "/wt/feature")
+        #expect(store.draft(forProfile: homeDraftProfileKey)?.composer.text == "keep")
     }
 
     @Test func homeReveal_afterStaleAbsenceIncrementsRevealToken() async {
@@ -2626,6 +2583,7 @@ private func makeViewModel(
     connectionProbing: (any ConnectionProbing)? = nil,
     sessionCache: any SessionCache = NoOpSessionCache.shared,
     initialProfile: ConnectionProfile = ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+    newSessionDraftStore: NewSessionDraftStore? = nil,
     onCoordinator: (ConnectionSessionCoordinator) -> Void = { _ in }
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
@@ -2673,8 +2631,15 @@ private func makeViewModel(
         projectLoadTiming: projectLoadTiming,
         worktreeRepository: worktreeRepository,
         branchRetryDelays: branchRetryDelays,
-        worktreeInventoryCache: worktreeInventoryCache
+        worktreeInventoryCache: worktreeInventoryCache,
+        newSessionDraftStore: newSessionDraftStore
     )
+}
+
+/// Draft store key of `makeViewModel`'s default profile.
+@MainActor
+private var homeDraftProfileKey: String {
+    NewSessionDraftStore.key(for: ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""))
 }
 
 private struct HomeModelRepository: ModelRepository {

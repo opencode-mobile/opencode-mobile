@@ -9,7 +9,7 @@ final class SessionChatTimeline {
     private(set) var timelineFrame: TimelineFrame = .empty
 
     private var sessionID: String
-    private let worktree: String
+    private var worktree: String
     private let messageRepository: any MessageRepository
     private var observationTask: Task<Void, Never>?
     private var catchUpChromeTask: Task<Void, Never>?
@@ -356,24 +356,34 @@ final class SessionChatTimeline {
         notifyChange()
     }
 
-    func prepareForOptimisticCreate() {
+    /// A New session draft (#1004) has no history: the timeline is empty until the first send.
+    func prepareForDraft() {
         cancelObservationTasks()
-        state.timeline = .creating
+        state.timeline = .empty
         state.errorMessage = nil
         notifyChange()
     }
 
-    func showCreateFailed(_ message: String) {
-        state.timeline = .error
-        state.errorMessage = message
-        notifyChange()
-    }
-
-    func rebind(sessionID: String) {
+    /// `worktree` is set when a draft's first send created its session in another checkout.
+    func rebind(sessionID: String, worktree: String? = nil) {
         guard sessionID != self.sessionID else { return }
         cancelObservationTasks()
         self.sessionID = sessionID
+        if let worktree { self.worktree = worktree }
         reset()
+    }
+
+    /// A draft moved to another project or worktree. Nothing observes while drafting.
+    func retargetDraft(worktree: String) {
+        self.worktree = worktree
+    }
+
+    /// A session the first send just created has no history, so it shows empty rather than
+    /// loading while its observation starts; the first answer (or the sent prompt) replaces it.
+    func showCreatedSessionEmpty() {
+        guard state.timeline == .loading, state.messages.isEmpty else { return }
+        state.timeline = .empty
+        notifyChange()
     }
 
     func startObserving() {

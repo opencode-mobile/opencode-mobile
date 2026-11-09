@@ -7,7 +7,7 @@ final class SessionChatInbox {
     private(set) var state = SessionChatInboxRegionState()
 
     private var sessionID: String
-    private let worktree: String
+    private var worktree: String
     private let sessionRepository: any SessionRepository
     private let permissionLiveStore: any PermissionLiveStore
     private let questionLiveStore: any QuestionLiveStore
@@ -42,6 +42,10 @@ final class SessionChatInbox {
         self.canMutate = canMutate
         self.loadedMessages = loadedMessages
         state.rootSessionID = sessionID
+    }
+
+    func retarget(worktree: String) {
+        self.worktree = worktree
     }
 
     func bind(sessionID: String) {

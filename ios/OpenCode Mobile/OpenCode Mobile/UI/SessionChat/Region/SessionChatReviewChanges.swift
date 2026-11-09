@@ -7,7 +7,7 @@ final class SessionChatReviewChanges {
     private(set) var state = SessionChatReviewChangesRegionState()
 
     private var sessionID: String
-    private let worktree: String
+    private var worktree: String
     private let supportsSessionMessageDiff: () -> Bool
     private let lastTurnReviewChangesStore: LastTurnReviewChangesStore
     private var candidateMessageID: String?
@@ -38,6 +38,10 @@ final class SessionChatReviewChanges {
                 self.notifyChange()
             }
         }
+    }
+
+    func retarget(worktree: String) {
+        self.worktree = worktree
     }
 
     func rebind(sessionID: String) {

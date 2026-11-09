@@ -13,7 +13,8 @@ final class SessionChatViewModel {
 
     private var sessionID: String
     private var sessionTitle: String
-    private let worktree: String
+    /// The checkout every region is bound to. A draft moves it; its first send may create it.
+    private var worktree: String
 
     private let timeline: SessionChatTimeline
     private let composer: SessionChatComposer
@@ -61,7 +62,19 @@ final class SessionChatViewModel {
     private var loggedRenameTitleEdit = false
     private var loggedForkTitleEdit = false
     private var loggedQuestionCustomTextEdit: String?
-    private var optimisticCreateTask: Task<Void, Never>?
+    // New session draft (#1004). `draft` is set while nothing exists on the server yet.
+    private var draft: NewSessionDraft?
+    private let newSessionDraftStore: NewSessionDraftStore
+    /// Connection Profile the draft belongs to; nil without an active profile.
+    private let draftProfileKey: String?
+    private var draftContext = NewSessionDraftContext()
+    private var draftCreating = false
+    private var draftErrorMessage: String?
+    private var draftBaseBranches: NewSessionBaseBranchesLoad = .idle
+    private var draftBaseBranchesTask: Task<Void, Never>?
+    /// Refreshes Home's checkouts of a directory after a draft's first send created a worktree.
+    /// The screen sets it from Home's environment.
+    @ObservationIgnored var refreshWorktreeInventory: (@MainActor @Sendable (String) async -> Void)?
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionProfileStore: any ConnectionProfileStore
@@ -148,8 +161,20 @@ final class SessionChatViewModel {
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
         projectRepository: any ProjectRepository = UnavailableProjectRepository(),
         worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
-        agentShellRepository: any AgentShellRepository = UnavailableAgentShellRepository()
+        agentShellRepository: any AgentShellRepository = UnavailableAgentShellRepository(),
+        newSessionDraftStore: NewSessionDraftStore? = nil
     ) {
+        // A New session draft binds where its kept draft runs, whatever the route said.
+        let draftStore = newSessionDraftStore ?? NewSessionDraftStore()
+        let draftProfileKey = activeConnectionManager.currentProfile().map(NewSessionDraftStore.key(for:))
+        let initialDraft: NewSessionDraft? = OptimisticSessionCreate.isPlaceholder(sessionID)
+            ? draftProfileKey.flatMap { draftStore.draft(forProfile: $0) }
+            ?? NewSessionDraft(projectKey: nil, projectDirectory: worktree)
+            : nil
+        let worktree = initialDraft?.directory ?? worktree
+        self.newSessionDraftStore = draftStore
+        self.draftProfileKey = draftProfileKey
+        self.draft = initialDraft
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
         self.worktree = worktree
@@ -163,7 +188,7 @@ final class SessionChatViewModel {
         self.uiState = .initial(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
-            timeline: OptimisticSessionCreate.isPlaceholder(sessionID) ? .creating : .loading
+            timeline: OptimisticSessionCreate.isPlaceholder(sessionID) ? .empty : .loading
         )
         self.sessionRepository = sessionRepository
         self.sessionReadyStore = sessionReadyStore ?? EmptySessionReadyStore()
@@ -201,8 +226,12 @@ final class SessionChatViewModel {
             foregroundEventStream: foregroundEventStream,
             projectFilesRepository: projectFilesRepository,
             attachmentUploadRepository: attachmentUploadRepository,
-            catalogRetryDelaysMs: catalogRetryDelaysMs
+            catalogRetryDelaysMs: catalogRetryDelaysMs,
+            draftModelSelection: initialDraft?.modelSelection
         )
+        if let initialDraft {
+            composer.restoreDraftContent(initialDraft.composer, attachments: initialDraft.attachments)
+        }
         self.sessionInfo = SessionInfo(
             worktree: worktree,
             sessionRepository: sessionRepository,
@@ -292,16 +321,16 @@ final class SessionChatViewModel {
 
     func startObserving() {
         isSessionBound = true
+        if isDraft {
+            startDraftObserving()
+            return
+        }
         startSessionEventObservation()
         startSessionMoveObservation()
         startCollapsePreferenceObservation()
         repoStrip.start()
         reviewChanges.start()
         sideQuestions.start()
-        if OptimisticSessionCreate.isPlaceholder(sessionID) {
-            beginOptimisticCreate()
-            return
-        }
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
         sessionViewReporter.focus(sessionId: sessionID)
@@ -316,20 +345,20 @@ final class SessionChatViewModel {
         shells.start()
     }
 
-    /// Error-state Retry. Create failures start the session again. Load failures refetch the timeline.
+    /// Error-state Retry: refetches the timeline. A draft has no timeline to fail.
     func retryFailedTimeline() async {
-        if OptimisticSessionCreate.isPlaceholder(sessionID) {
-            beginOptimisticCreate()
-            await optimisticCreateTask?.value
-            return
-        }
+        guard !isDraft else { return }
         await loadMessages()
     }
 
     func loadMessages() async {
-        if OptimisticSessionCreate.isPlaceholder(sessionID) {
-            await optimisticCreateTask?.value
-            guard !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
+        if isDraft {
+            // Nothing to load until the first send; the composer needs its models.
+            await composer.loadCatalog()
+            if !Task.isCancelled {
+                hasCompletedInitialLoad = true
+            }
+            return
         }
         async let catalogLoad: Void = composer.loadCatalog()
         _ = await catalogLoad
@@ -369,7 +398,9 @@ final class SessionChatViewModel {
         // Typing `/btw ` switches to side-question mode and keeps only the question. Also strips
         // the command when it is already in that mode: a keystroke typed before the field took
         // the stripped draft brings it back.
-        if activeConnectionManager.capabilities.supportsSideQuestion, let question = SideQuestion.draftAfterCommand(text) {
+        if hasCreatedSession, activeConnectionManager.capabilities.supportsSideQuestion,
+           let question = SideQuestion.draftAfterCommand(text)
+        {
             sideQuestions.enterMode()
             composer.restoreComposerText(question)
             return
@@ -965,6 +996,7 @@ final class SessionChatViewModel {
             logChatAction(ProductAnalytics.Action.chatDismissSnackbar)
         }
         suppressedSnackbarKey = lastSnackbarKey
+        draftErrorMessage = nil
         chipTimelineIntroNotice = nil
         timelineStylePickerNotice = nil
         moveErrorMessage = nil
@@ -1255,7 +1287,10 @@ final class SessionChatViewModel {
     }
 
     func sendPrompt() async {
-        guard hasCreatedSession else { return }
+        guard hasCreatedSession else {
+            await sendDraft()
+            return
+        }
         let hasAttachments = !composer.state.composer.attachments.isEmpty
         guard sessionInfo.state.composerEnabled else {
             logChatAction(
@@ -1694,9 +1729,10 @@ final class SessionChatViewModel {
         resetTimelineStylePicker()
         keepSideQuestionDraft()
         composer.flushDraft()
+        saveDraft()
+        draftBaseBranchesTask?.cancel()
+        draftBaseBranchesTask = nil
         pendingSend = nil
-        optimisticCreateTask?.cancel()
-        optimisticCreateTask = nil
         projectIdentityTask?.cancel()
         projectIdentityTask = nil
         worktreeEventTask?.cancel()
@@ -1862,53 +1898,259 @@ final class SessionChatViewModel {
         }
     }
 
-    private func beginOptimisticCreate() {
-        if optimisticCreateTask != nil || !OptimisticSessionCreate.isPlaceholder(sessionID) {
-            return
-        }
-        OpenCodeLog.sessionChat.info("optimistic create start worktree=\(self.worktree)")
-        timeline.prepareForOptimisticCreate()
+    // MARK: New session draft (#1004)
+
+    /// Nothing exists on the server yet: the first send creates the worktree (if asked for),
+    /// then the session, then sends the prompt.
+    var isDraft: Bool { draft != nil }
+
+    private func startDraftObserving() {
+        OpenCodeLog.sessionChat.info("draft observing worktree=\(self.worktree)")
+        timeline.prepareForDraft()
+        sessionInfo.startObservingConnection()
         composer.startCatalogLoads()
         publishUiState()
-        optimisticCreateTask?.cancel()
-        optimisticCreateTask = Task {
-            do {
-                let profile = activeConnectionManager.currentProfile()
-                let session = try await sessionRepository.createSession(
-                    parentID: nil,
-                    title: nil,
-                    directory: worktree
-                )
-                if let profile {
-                    let selection = await newSessionModelSelectionResolver.resolve(
-                        profile: profile,
-                        worktree: worktree
-                    )
-                    if let selection {
-                        await newSessionModelSelectionResolver.seedSession(
-                            profile: profile,
-                            worktree: worktree,
-                            sessionID: session.id,
-                            selection: selection
-                        )
-                    }
-                }
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.info("optimistic create success id=\(session.id)")
-                optimisticCreateTask = nil
-                promoteOptimisticSession(id: session.id, title: session.title)
-            } catch is CancellationError {
-                return
-            } catch {
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.warning(
-                    "optimistic create failed error=\(error.localizedDescription)"
-                )
-                optimisticCreateTask = nil
-                timeline.showCreateFailed(createSessionErrorMessage(error))
-                publishUiState()
+    }
+
+    /// Home's projects, the Worktrees setting and running counts, for the card and its sheets.
+    func updateDraftContext(_ context: NewSessionDraftContext) {
+        guard draftContext != context else { return }
+        draftContext = context
+        guard var current = draft else { return }
+        // A draft opened before Home knew its project picks the key up once it does.
+        if current.projectKey == nil,
+           let project = NewSessionDraftPresentation.project(of: current, in: context.projects)
+        {
+            current.projectKey = project.key
+            draft = current
+            saveDraft()
+        }
+        publishUiState()
+    }
+
+    /// Project sheet pick: another project starts on its main checkout.
+    func selectDraftProject(key: String) {
+        guard let current = draft, !draftCreating,
+              let project = draftContext.projects.first(where: { $0.key == key })
+        else { return }
+        guard project.key != NewSessionDraftPresentation.project(of: current, in: draftContext.projects)?.key else { return }
+        draft = current.movingTo(projectKey: project.key, projectDirectory: project.mainCheckoutDirectory)
+        draftBaseBranches = .idle
+        applyDraftPlace()
+    }
+
+    /// A project added from the Project sheet's Add project… becomes the draft's project.
+    func selectDraftProject(addedPath path: String) {
+        let canonical = ServerPathPolicy.canonical(path)
+        guard let project = draftContext.projects.first(where: { $0.hasMember(canonical) || $0.worktree(at: canonical) != nil })
+        else { return }
+        selectDraftProject(key: project.key)
+    }
+
+    /// Worktree sheet pick. Picking New worktree again keeps its Starts from branch.
+    func selectDraftPlace(_ place: NewSessionPlace) {
+        guard var current = draft, !draftCreating else { return }
+        if place.isNewWorktree, current.place.isNewWorktree { return }
+        current.place = place
+        if !place.isNewWorktree {
+            current.createdWorktree = nil
+        }
+        draft = current
+        applyDraftPlace()
+    }
+
+    /// Starts from sheet pick; nil (or the main checkout's own branch) is the default.
+    func selectDraftBaseBranch(_ branch: String?) {
+        guard var current = draft, !draftCreating, current.place.isNewWorktree else { return }
+        let mainBranch = NewSessionDraftPresentation.project(of: current, in: draftContext.projects)?
+            .worktree(at: current.projectDirectory)?.branch
+        let trimmed = branch?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = (trimmed?.isEmpty ?? true) || trimmed == mainBranch ? nil : trimmed
+        guard current.place != .newWorktree(baseBranch: normalized) else { return }
+        current.place = .newWorktree(baseBranch: normalized)
+        // A worktree made from another base no longer matches.
+        current.createdWorktree = nil
+        draft = current
+        saveDraft()
+        publishUiState()
+    }
+
+    /// The Starts from sheet opened: loads the v2 branches of the main checkout once.
+    func loadDraftBaseBranches() {
+        guard let current = draft else { return }
+        switch draftBaseBranches {
+        case .loading, .loaded: return
+        case .idle, .failed: break
+        }
+        draftBaseBranches = .loading
+        publishUiState()
+        let directory = current.projectDirectory
+        let repository = worktreeRepository
+        draftBaseBranchesTask?.cancel()
+        draftBaseBranchesTask = Task { [weak self] in
+            let result = try? await repository.baseBranches(directory: directory)
+            guard let self, !Task.isCancelled, self.draft?.projectDirectory == directory else { return }
+            self.draftBaseBranches = result.map { .loaded($0) } ?? .failed
+            self.publishUiState()
+        }
+    }
+
+    /// Discard draft (⋯): forgets the draft and everything in it. The screen leaves.
+    func discardDraft() {
+        guard isDraft, !draftCreating else { return }
+        if let draftProfileKey {
+            newSessionDraftStore.clear(profile: draftProfileKey, discardingAttachments: false)
+        }
+        draft = nil
+        draftErrorMessage = nil
+        // Resetting the composer deletes its attachment files.
+        composer.reset()
+        sessionInfo.requestLeaveSession()
+    }
+
+    /// The draft's place changed: every region binds to its checkout, and the composer loads
+    /// that checkout's commands, agents and models.
+    private func applyDraftPlace() {
+        guard let current = draft else { return }
+        saveDraft()
+        let directory = current.directory
+        if directory != worktree {
+            OpenCodeLog.sessionChat.info("draft retarget worktree=\(directory)")
+            worktree = directory
+            composer.retargetDraft(worktree: directory)
+            retargetRegions(directory)
+            refreshProjectIdentity()
+            Task { [weak self] in
+                await self?.composer.loadCatalog()
             }
         }
+        publishUiState()
+    }
+
+    /// Regions other than the composer: idle while drafting, so they only take the checkout.
+    private func retargetRegions(_ directory: String) {
+        timeline.retargetDraft(worktree: directory)
+        sessionInfo.retarget(worktree: directory)
+        reviewChanges.retarget(worktree: directory)
+        repoStrip.retarget(worktree: directory)
+        commands.retarget(worktree: directory)
+        shells.retarget(worktree: directory)
+        inbox.retarget(worktree: directory)
+    }
+
+    /// Mirrors the draft (with what the composer holds) into the per-profile store.
+    private func saveDraft() {
+        guard var current = draft, let draftProfileKey else { return }
+        let content = composer.draftContent
+        current.composer = content.composer
+        current.attachments = content.attachments
+        current.modelSelection = composer.draftModelSelection
+        draft = current
+        newSessionDraftStore.save(current, forProfile: draftProfileKey)
+    }
+
+    /// First send: creates the worktree (New worktree; reused after a failed attempt), then the
+    /// session in that checkout, seeds its model selection, promotes the screen, and sends the
+    /// prompt through the normal send path. A failure keeps the draft and offers Retry.
+    private func sendDraft() async {
+        guard let current = draft, !draftCreating, !sendInFlight, !composer.state.isSending else { return }
+        let composerState = composer.state.composer
+        guard composerState.hasSendableContent, !composerState.hasPendingUploads,
+              composerState.selectedModel != nil, composerState.isModelSelectionReady
+        else { return }
+        guard liveUpdates.chrome.canMutate else {
+            draftErrorMessage = String(localized: "home.error.reconnect_to_create", defaultValue: "Reconnect to create a session")
+            publishUiState()
+            return
+        }
+        draftCreating = true
+        draftErrorMessage = nil
+        composer.setDraftSending(true)
+        publishUiState()
+        let directory: String
+        let session: Session
+        do {
+            if case let .newWorktree(base) = current.place {
+                if let created = current.createdWorktree {
+                    directory = created.directory
+                } else {
+                    let project = NewSessionDraftPresentation.project(of: current, in: draftContext.projects)
+                    let created = try await worktreeRepository.create(
+                        CreateWorktreeRequest(
+                            projectID: project?.projectID,
+                            sourceDirectory: current.projectDirectory,
+                            name: nil,
+                            baseRef: activeConnectionManager.serverProtocol == .v2 ? base : nil
+                        )
+                    )
+                    OpenCodeLog.sessionChat.info("draft worktree created directory=\(created.directory)")
+                    draft?.createdWorktree = created
+                    saveDraft()
+                    directory = created.directory
+                    await refreshWorktreeInventory?(created.directory)
+                }
+            } else {
+                directory = current.directory
+            }
+            session = try await sessionRepository.createSession(parentID: nil, title: nil, directory: directory)
+        } catch {
+            OpenCodeLog.sessionChat.warning("draft create failed error=\(error.localizedDescription)")
+            draftCreating = false
+            composer.setDraftSending(false)
+            draftErrorMessage = draftCreateErrorMessage(error)
+            publishUiState()
+            return
+        }
+        OpenCodeLog.sessionChat.info("draft session created id=\(session.id)")
+        if let profile = activeConnectionManager.currentProfile() {
+            let selection: SessionModelSelection? = if let picked = composer.currentModelSelection {
+                picked
+            } else {
+                await newSessionModelSelectionResolver.resolve(profile: profile, worktree: directory)
+            }
+            if let selection {
+                await newSessionModelSelectionResolver.seedSession(
+                    profile: profile,
+                    worktree: directory,
+                    sessionID: session.id,
+                    selection: selection
+                )
+            }
+        }
+        if let draftProfileKey {
+            // The composer now owns the text and attachments; the session row shows on Home.
+            newSessionDraftStore.clear(profile: draftProfileKey, discardingAttachments: false)
+        }
+        draftCreating = false
+        // Ends drafting first, so nothing writes the draft back to the store.
+        promoteDraft(id: session.id, title: session.title, directory: directory)
+        composer.setDraftSending(false)
+        await sendPrompt()
+    }
+
+    /// Retry on the draft's error snackbar.
+    func retryDraftSend() async {
+        draftErrorMessage = nil
+        await sendPrompt()
+    }
+
+    private func draftCreateErrorMessage(_ error: Error) -> String {
+        if let worktreeError = error as? WorktreeCreateError {
+            return String(localized: WorktreeCreateCopy.failed(worktreeError.message))
+        }
+        return createSessionErrorMessage(error)
+    }
+
+    private var draftUiState: SessionChatDraftUiState? {
+        guard let draft else { return nil }
+        return NewSessionDraftPresentation.uiState(
+            draft: draft,
+            context: draftContext,
+            serverProtocol: activeConnectionManager.serverProtocol ?? .v1,
+            serverCanCreateWorktrees: worktreeRepository.canCreateWorktrees,
+            isCreating: draftCreating,
+            baseBranches: draftBaseBranches
+        )
     }
 
     private func createSessionErrorMessage(_ error: Error) -> String {
@@ -1925,29 +2167,42 @@ final class SessionChatViewModel {
         }
     }
 
-    private func promoteOptimisticSession(id: String, title: String) {
+    /// The first send created the session: every region binds to it (and to the checkout it
+    /// was created in) and starts what a created session observes. The composer keeps the draft.
+    private func promoteDraft(id: String, title: String, directory: String) {
+        let movedCheckout = directory != worktree
+        draft = nil
+        draftBaseBranchesTask?.cancel()
+        draftBaseBranchesTask = nil
         sessionID = id
         sessionTitle = title
         expandedStepParagraphs = [:]
         resetWorkingFooter()
-        sessionReadyStore.setFocusedSession(sessionID: id, directory: worktree)
-        sessionViewReporter.focus(sessionId: id)
+        if movedCheckout {
+            worktree = directory
+            retargetRegions(directory)
+            refreshProjectIdentity()
+        }
+        composer.promoteDraft(sessionID: id, worktree: directory)
         timeline.rebind(sessionID: id)
-        composer.rebind(sessionID: id)
         reviewChanges.rebind(sessionID: id)
         commands.rebind(sessionID: id)
         sideQuestions.rebind(sessionID: id)
         sessionInfo.bind(sessionID: id, sessionTitle: title)
         inbox.bind(sessionID: id)
         shells.rebind(sessionID: id)
-        shells.start()
-        commands.start()
-        sessionInfo.startObserving()
-        startCollapsePreferenceObservation()
-        timeline.startObserving()
+        // Left before the create finished: the next screen to show it starts observing.
+        if isSessionBound {
+            startObserving()
+            timeline.showCreatedSessionEmpty()
+        }
         publishUiState()
     }
+
     private func publishUiState() {
+        if isDraft {
+            saveDraft()
+        }
         inbox.refilterOrphans()
         let inboxState = inbox.state
         let timelineState = timeline.state
@@ -2002,6 +2257,7 @@ final class SessionChatViewModel {
         let visibleQuestion = inboxState.visibleQuestionRequest
         let timelineEmptyError: String? = timelineState.timeline == .error ? timelineState.errorMessage : nil
         let transientError: String? = {
+            if let draftErrorMessage { return draftErrorMessage }
             if timelineState.timeline == .error { return nil }
             if let error = infoState.lifecycleErrorMessage { return error }
             if let error = composerState.errorMessage { return error }
@@ -2016,6 +2272,7 @@ final class SessionChatViewModel {
         }()
         let snackbar = resolveSnackbar(
             transientError: transientError,
+            transientAction: draftErrorMessage != nil && transientError == draftErrorMessage ? .retryNewSession : nil,
             sideQuestionNotice: sideQuestions.notice,
             successNotice: composerState.followUpNotice
                 ?? commandsState.actionSuccessMessage
@@ -2217,7 +2474,9 @@ final class SessionChatViewModel {
                 next.supported = activeConnectionManager.capabilities.supportsSideQuestion
                 next.composerMode = next.composerMode && next.supported
                 return next
-            }()
+            }(),
+            draft: draftUiState,
+            directory: worktree
         )
     }
 
@@ -2249,6 +2508,7 @@ final class SessionChatViewModel {
 
     private func resolveSnackbar(
         transientError: String?,
+        transientAction: SessionChatSnackbarAction? = nil,
         sideQuestionNotice: SessionChatSideQuestionNotice? = nil,
         successNotice: String?
     ) -> SessionChatSnackbar? {
@@ -2291,7 +2551,8 @@ final class SessionChatViewModel {
         return SessionChatSnackbar(
             id: snackbarSequence,
             message: transientError ?? successNotice!,
-            tone: transientError != nil ? .error : .default
+            tone: transientError != nil ? .error : .default,
+            action: transientError != nil ? transientAction : nil
         )
     }
 
