@@ -86,9 +86,6 @@ enum class OpenCodeButtonContrast {
     Low,
     Accent,
     Destructive,
-
-    /** A destructive action that is not the primary one: error-coloured text on the low-contrast fill. */
-    DestructiveLow,
 }
 
 enum class OpenCodeButtonSize {
@@ -307,7 +304,6 @@ internal fun openCodeButtonColors(
                 !enabled && contrast == OpenCodeButtonContrast.Accent -> disabledAccent
                 !enabled -> MaterialTheme.colorScheme.surfaceVariant
                 contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.surfaceVariant
-                contrast == OpenCodeButtonContrast.DestructiveLow -> MaterialTheme.colorScheme.surfaceVariant
                 contrast == OpenCodeButtonContrast.Accent -> openCodeColor("interactive")
                 contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.error
                 else -> MaterialTheme.colorScheme.onSurface
@@ -317,7 +313,6 @@ internal fun openCodeButtonColors(
                 !enabled && contrast == OpenCodeButtonContrast.Accent -> disabledAccent
                 !enabled -> MaterialTheme.colorScheme.outlineVariant
                 contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.outlineVariant
-                contrast == OpenCodeButtonContrast.DestructiveLow -> MaterialTheme.colorScheme.outlineVariant
                 contrast == OpenCodeButtonContrast.Accent -> openCodeColor("interactive")
                 contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.error
                 else -> MaterialTheme.colorScheme.onSurface
@@ -327,7 +322,6 @@ internal fun openCodeButtonColors(
                 !enabled && contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-weak")
                 !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
                 contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.onSurface
-                contrast == OpenCodeButtonContrast.DestructiveLow -> MaterialTheme.colorScheme.error
                 contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-on-brand-base")
                 contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.onError
                 else -> MaterialTheme.colorScheme.surface

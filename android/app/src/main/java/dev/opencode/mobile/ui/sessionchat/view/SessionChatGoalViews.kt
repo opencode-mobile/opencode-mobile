@@ -316,8 +316,8 @@ internal fun SessionChatGoalSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Destructive but not the primary action: red text on the neutral fill.
-                GoalActionButton(goalState, SessionGoalAction.Clear, OpenCodeButtonContrast.DestructiveLow, onAction)
+                // Same quiet style as the status row's Clear; the main action stays the strong one.
+                GoalActionButton(goalState, SessionGoalAction.Clear, OpenCodeButtonContrast.Low, onAction)
                 Spacer(modifier = Modifier.weight(1f))
                 when (goal.status) {
                     SessionGoalStatus.Active ->
