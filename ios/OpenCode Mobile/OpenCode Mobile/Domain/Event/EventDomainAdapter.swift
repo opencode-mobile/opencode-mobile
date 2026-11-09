@@ -7,6 +7,9 @@ nonisolated struct EventDomainAdapter: Sendable {
     /// v2 shell item id per shell id, remembered from `shell.started`: `ended`
     /// carries only the shell while the server updates the item it started.
     private let runningShellMessageIDs = RunningCompactionIDs()
+    /// Inbox ids of `/goal` kickoffs seen enqueued: their bare `delivered` ref must not turn
+    /// the Goal set notice back into an (empty) user message.
+    private let goalKickoffInboxIDs = RunningCompactionIDs()
 
     func parseEvent(dataLine: String) -> OpencodeEvent? {
         parseEvents(dataLine: dataLine).first
@@ -170,9 +173,11 @@ nonisolated struct EventDomainAdapter: Sendable {
              "session.inbox.delivery.changed":
             // A `synthetic` item is server-injected context (a finished shell command's
             // output, Plan mode's reminder), not a prompt the user queued: no pending chrome.
-            userPromptEvents(properties, waiting: !isSyntheticInboxItem(properties))
+            // A `/goal` kickoff is the exception: it draws a Goal set notice.
+            goalKickoffNoticeEvents(properties)
+                ?? userPromptEvents(properties, waiting: !isSyntheticInboxItem(properties))
         case "session.next.prompted", "session.inbox.delivered":
-            userPromptEvents(properties, waiting: false)
+            isKnownGoalKickoff(properties) ? [] : userPromptEvents(properties, waiting: false)
         case "session.inbox.cancelled":
             [inboxCancelled(properties)]
         case "session.next.step.started", "session.step.started":
@@ -843,14 +848,19 @@ nonisolated struct EventDomainAdapter: Sendable {
                 "metadata": ["notice": "instructions", "instructionSources": sources],
             ]
         case .synthetic:
-            // Only the restart synthetic is a notice; other synthetic items stay as they are.
+            // Only the restart synthetic and a `/goal` kickoff are notices; other synthetic
+            // items stay as they are.
             let metadata = properties["metadata"] as? [String: Any]
             let description = string(in: properties, key: "description")
-            guard string(in: metadata, key: "notice") == "restart"
-                || description == MessageDomainAdapter.restartDescription
-            else { return [] }
-            notice = ["type": "synthetic", "metadata": ["notice": "restart"]]
-            if let description { notice["description"] = description }
+            if let goalNotice = goalSetNotice(metadata: metadata, description: description) {
+                notice = goalNotice
+            } else {
+                guard string(in: metadata, key: "notice") == "restart"
+                    || description == MessageDomainAdapter.restartDescription
+                else { return [] }
+                notice = ["type": "synthetic", "metadata": ["notice": "restart"]]
+                if let description { notice["description"] = description }
+            }
         }
         var info: [String: Any] = ["id": messageID, "role": "notice", "sessionID": sessionID]
         if let created = int64(in: properties, key: "created") {
@@ -867,6 +877,54 @@ nonisolated struct EventDomainAdapter: Sendable {
             event(type: "message.updated", properties: ["info": info]),
             event(type: "message.part.updated", properties: ["part": part]),
         ]
+    }
+
+    /// The notice for a `/goal` kickoff (`metadata {source: "goal", goalID}` with a description);
+    /// nil for any other synthetic item, including the undescribed continuations.
+    private func goalSetNotice(metadata: [String: Any]?, description: String?) -> [String: Any]? {
+        guard SessionGoalKickoff.goalID(
+            source: string(in: metadata, key: "source"),
+            goalID: string(in: metadata, key: "goalID")
+        ) != nil,
+            let description, !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            let metadata
+        else { return nil }
+        return ["type": "synthetic", "description": description, "metadata": metadata]
+    }
+
+    /// A `/goal` kickoff arrives as a synthetic inbox item; its message id is the inbox id,
+    /// so the REST copy replaces this notice in place. Nil for any other item.
+    private func goalKickoffNoticeEvents(_ properties: [String: Any]) -> [OpencodeEvent]? {
+        guard isSyntheticInboxItem(properties),
+              let payload = promptObject(in: properties),
+              let notice = goalSetNotice(
+                  metadata: payload["metadata"] as? [String: Any],
+                  description: string(in: payload, key: "description")
+              ),
+              let messageID = userMessageID(in: properties),
+              let sessionID = sessionID(from: properties)
+        else { return nil }
+        goalKickoffInboxIDs.set(SessionGoalKickoff.metadataSource, for: messageID)
+        var info: [String: Any] = ["id": messageID, "role": "notice", "sessionID": sessionID]
+        if let created = int64(in: properties, key: "created") {
+            info["time"] = ["created": created, "completed": created]
+        }
+        let part: [String: Any] = [
+            "id": messageID,
+            "messageID": messageID,
+            "sessionID": sessionID,
+            "type": "notice",
+            "notice": notice,
+        ]
+        return [
+            event(type: "message.updated", properties: ["info": info]),
+            event(type: "message.part.updated", properties: ["part": part]),
+        ]
+    }
+
+    private func isKnownGoalKickoff(_ properties: [String: Any]) -> Bool {
+        guard let messageID = userMessageID(in: properties) else { return false }
+        return goalKickoffInboxIDs.id(for: messageID) != nil
     }
 
     /// v2 compaction is its own transcript item (`type: compaction`). Its id is

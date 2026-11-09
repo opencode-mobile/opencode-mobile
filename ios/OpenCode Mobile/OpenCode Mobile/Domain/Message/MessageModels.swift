@@ -737,6 +737,8 @@ nonisolated enum TimelineNoticeKind: Equatable, Sendable {
     case systemNote(String)
     /// The server restarted mid-turn and resumed it.
     case restart
+    /// A `/goal` kickoff: `description` is the server's "Goal: <objective>" line.
+    case goalSet(goalID: String, description: String)
 }
 
 nonisolated struct TimelineNoticeModel: Equatable, Sendable {

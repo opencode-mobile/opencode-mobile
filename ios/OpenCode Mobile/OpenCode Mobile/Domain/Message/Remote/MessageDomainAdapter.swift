@@ -126,7 +126,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
         case "system":
             kind = Self.systemNotice(metadata: dto.metadata, description: dto.description)
         case "synthetic":
-            kind = Self.isRestartNotice(metadata: dto.metadata, description: dto.description) ? .restart : nil
+            if Self.isRestartNotice(metadata: dto.metadata, description: dto.description) {
+                kind = .restart
+            } else {
+                kind = Self.goalSetNotice(metadata: dto.metadata, description: dto.description)
+            }
         default:
             kind = nil
         }
@@ -157,6 +161,19 @@ nonisolated struct MessageDomainAdapter: Sendable {
         }
         if let description = nonBlank(description) { return .systemNote(description) }
         return .instructionsUpdated(sources: [])
+    }
+
+    /// The `/goal` kickoff: a described synthetic message whose metadata names the goal.
+    /// Continuations carry the same metadata but no description; they stay hidden.
+    static func goalSetNotice(metadata: [String: AnyCodable]?, description: String?) -> TimelineNoticeKind? {
+        func string(_ key: String) -> String? {
+            if case .string(let value)? = metadata?[key] { return value }
+            return nil
+        }
+        guard let goalID = SessionGoalKickoff.goalID(source: string("source"), goalID: string("goalID")),
+              let description = nonBlank(description)
+        else { return nil }
+        return .goalSet(goalID: goalID, description: description)
     }
 
     private static func isRestartNotice(metadata: [String: AnyCodable]?, description: String?) -> Bool {

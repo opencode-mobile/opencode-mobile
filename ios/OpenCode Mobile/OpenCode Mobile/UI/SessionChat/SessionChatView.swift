@@ -487,7 +487,8 @@ struct SessionChatView: View {
                     onDismissActivityCard: { viewModel.dismissActivityCard() },
                     onOpenActivityCardStep: { stepID in viewModel.openActivityCardStep(stepID) },
                     onCloseActivityCardStep: { viewModel.closeActivityCardStep() },
-                    noticeModelNames: TimelineNoticeModelNames(options: viewModel.uiState.composer.modelOptions)
+                    noticeModelNames: TimelineNoticeModelNames(options: viewModel.uiState.composer.modelOptions),
+                    goal: goalTimelineContext
                 )
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -551,7 +552,9 @@ struct SessionChatView: View {
                                 OpenCodeComposerSuggestionItem(
                                     id: suggestion.id,
                                     title: suggestion.title,
-                                    subtitle: suggestion.subtitle,
+                                    subtitle: suggestion.commandName == SessionGoalKickoff.commandName
+                                        ? SessionChatGoalCopy.commandSubtitle(shownGoal?.goal) ?? suggestion.subtitle
+                                        : suggestion.subtitle,
                                     badge: suggestion.badge
                                 )
                             },
@@ -776,6 +779,12 @@ struct SessionChatView: View {
                 guard viewModel.uiState.shellOutput != nil, scenePhase == .active else { return }
                 await viewModel.watchShellOutput()
             }
+            .sessionChatGoalSheet(
+                state: shownGoal,
+                onDismiss: { viewModel.closeGoalSheet() },
+                onAction: { viewModel.performGoalAction($0) },
+                onNewGoal: { viewModel.startNewGoal() }
+            )
             .sessionChatTodosSheet(
                 isPresented: $showSessionTodosSheet,
                 todos: viewModel.uiState.sessionTodos,
@@ -1233,8 +1242,32 @@ struct SessionChatView: View {
         keyboardOverlap > 0 ? 0 : bottomSafeAreaInset
     }
 
+    /// The goal the screen shows: none in a subagent session (a goal belongs to one session).
+    private var shownGoal: SessionChatGoalUiState? {
+        session.parentID == nil ? viewModel.uiState.goal : nil
+    }
+
+    private var goalTimelineContext: SessionChatGoalTimelineContext {
+        SessionChatGoalTimelineContext(
+            state: shownGoal,
+            onOpen: { viewModel.openGoalSheet() },
+            onAction: { viewModel.performGoalAction($0) },
+            onNewGoal: { viewModel.startNewGoal() }
+        )
+    }
+
+    /// A `/goal …` draft's hint, count and Send rule; nil for any other draft.
+    private var goalDraft: SessionChatGoalDraftUiState? {
+        guard session.parentID == nil else { return nil }
+        return SessionChatGoalDraftUiState.resolve(
+            text: viewModel.uiState.composer.text,
+            goalCommandAvailable: viewModel.uiState.goalCommandAvailable
+        )
+    }
+
     private var viewSheetOpen: Bool {
-        messageActionsTarget != nil
+        shownGoal?.sheetOpen == true
+            || messageActionsTarget != nil
             || showPendingPromptsSheet
             || toolDetailTarget != nil
             || skillsTarget != nil
@@ -1813,8 +1846,10 @@ struct SessionChatView: View {
             let sideQuestions = viewModel.uiState.sideQuestions
             let sideQuestionMode = sideQuestions.composerMode
             let blockedSideQuestion = !sideQuestions.supported && SideQuestion.question(inDraft: composer.text) != nil
+            let goalDraft = goalDraft
             let promptSendEnabled =
                 composer.hasSendableContent &&
+                (goalDraft?.canSend ?? true) &&
                 !composer.hasPendingUploads &&
                 composer.selectedModel != nil &&
                 composer.isModelSelectionReady &&
@@ -1836,7 +1871,7 @@ struct SessionChatView: View {
                 .fixed(sendEnabled && !suggestionsOpen)
             } else {
                 OpenCodeReturnKeyRule(
-                    readyIgnoringText: sessionReady && !suggestionsOpen && (sideQuestionMode || (
+                    readyIgnoringText: sessionReady && !suggestionsOpen && (goalDraft?.canSend ?? true) && (sideQuestionMode || (
                         !composer.hasPendingUploads &&
                             composer.selectedModel != nil &&
                             composer.isModelSelectionReady &&
@@ -1871,7 +1906,11 @@ struct SessionChatView: View {
                     sideQuestionMode: sideQuestionMode,
                     history: OpenCodePromptHistory.entries(viewModel.uiState.messages.map { row in
                         OpenCodePromptHistory.Message(isUser: row.role == .user, text: row.text, isPending: row.isPending)
-                    })
+                    }),
+                    placeholder: SessionChatGoalCopy.resumesAfterReply(shownGoal) ? SessionChatGoalCopy.resumePlaceholder : nil,
+                    footnote: sideQuestionMode
+                        ? nil
+                        : goalDraft?.footnote.map { OpenCodeSessionComposerFootnote(text: $0, isError: goalDraft?.isOverLimit == true) }
                 )
             )
         }

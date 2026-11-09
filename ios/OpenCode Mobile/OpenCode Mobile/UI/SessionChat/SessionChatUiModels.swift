@@ -426,6 +426,10 @@ struct SessionChatUiState: Equatable {
     var dictation: ComposerDictationUiState? = nil
     /// `/btw` side questions: composer mode, chips above the composer and the answer sheet.
     var sideQuestions = SessionChatSideQuestionsUiState()
+    /// The session's `/goal`; nil when it has none, on v1, or without the goal plugin.
+    var goal: SessionChatGoalUiState? = nil
+    /// The server lists a `goal` command, so a `/goal …` draft gets its hint and limit.
+    var goalCommandAvailable = false
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
     var blocksChipTimelineIntro: Bool {

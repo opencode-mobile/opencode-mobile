@@ -49,6 +49,15 @@ nonisolated enum TimelineNoticeCopy {
     static let switchedVariantToDefault = TimelineText.app("timeline.notice.variant_default", "Switched variant to Default")
     static let instructionsUpdated = TimelineText.app("timeline.notice.instructions_updated", "Instructions updated")
     static let restart = TimelineText.app("timeline.notice.restart", "Continuing after restart")
+    static let goalSet = TimelineText.app("session_chat.goal.set", "Goal set")
+
+    /// The server's "Goal: <objective>" description without its prefix: the row label says "Goal set".
+    static func goalSetValue(_ description: String) -> String {
+        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix(SessionGoalKickoff.descriptionPrefix) else { return trimmed }
+        return String(trimmed.dropFirst(SessionGoalKickoff.descriptionPrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     static func presentation(
         for notice: TimelineNotice,
@@ -91,6 +100,8 @@ nonisolated enum TimelineNoticeCopy {
             return TimelineNoticePresentation(isMove: false, label: .verbatim(description), value: nil)
         case .restart:
             return TimelineNoticePresentation(isMove: false, label: restart, value: nil)
+        case let .goalSet(_, description):
+            return TimelineNoticePresentation(isMove: false, label: goalSet, value: .verbatim(goalSetValue(description)))
         }
     }
 }
