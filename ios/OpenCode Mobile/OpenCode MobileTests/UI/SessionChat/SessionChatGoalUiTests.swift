@@ -218,7 +218,8 @@ struct SessionChatGoalUiTests {
         ))
         #expect(long.isOverLimit)
         #expect(!long.canSend)
-        #expect(long.footnote == "4,312 / 4,000 characters · shorten the objective to send")
+        // Counts follow the device locale ("4,312" or "4.312").
+        #expect(long.footnote == "\(4_312.formatted()) / \(4_000.formatted()) characters · shorten the objective to send")
     }
 
     // MARK: Helpers
