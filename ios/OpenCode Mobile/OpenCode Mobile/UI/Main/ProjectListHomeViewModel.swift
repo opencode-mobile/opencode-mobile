@@ -129,6 +129,8 @@ struct HomeUiState: Equatable {
     var lastAddedProject: HomeAddedProject?
     var pendingScopeRequest: HomeScopeRequest?
     var revealNewestToken = 0
+    /// Inputs of the load-more footer and trigger; see ``HomeSessionPagingState``.
+    var paging = HomeSessionPagingState()
 }
 
 struct HomeWorktreesUiState: Equatable {
@@ -389,6 +391,7 @@ final class ProjectListHomeViewModel {
         next.lastAddedProject = projectListState.lastAddedProject
         next.pendingScopeRequest = projectListState.pendingScopeRequest
         next.revealNewestToken = projectListState.revealNewestToken
+        next.paging = projectListState.paging
         if next != uiState {
             uiState = next
         }

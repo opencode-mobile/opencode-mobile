@@ -21,6 +21,17 @@ struct HomeProjectListState: Equatable {
     var lastAddedProject: HomeAddedProject?
     var pendingScopeRequest: HomeScopeRequest?
     var revealNewestToken = 0
+    var paging = HomeSessionPagingState()
+}
+
+/// What Home's load-more controls depend on, published so the view follows it: the directories
+/// with live lists, and which of them have older sessions.
+struct HomeSessionPagingState: Equatable {
+    var observedWorktrees: [String] = []
+    /// Directories whose window has more sessions on the server.
+    var moreDirectories: Set<String> = []
+    /// Directories whose window has more and whose last refresh did not fail.
+    var loadableDirectories: Set<String> = []
 }
 
 /// The Home content: probe, cache-first paint, sections, live rows of each added path, first
@@ -63,8 +74,12 @@ final class HomeProjectList {
     private var projectLoads: [String: ProjectLoadTracker] = [:]
     private var projectLoadAttempt = 0
     private var liveObservationTasks: [Task<Void, Never>] = []
-    private var observedWorktrees: [String] = []
-    private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
+    private var observedWorktrees: [String] = [] {
+        didSet { syncPaging() }
+    }
+    private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:] {
+        didSet { syncPaging() }
+    }
     private var liveStatusesByWorktree: [String: SessionActivitySnapshot] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
     /// Latest row build per worktree; a build that finishes after a newer one started is dropped.
@@ -956,6 +971,16 @@ final class HomeProjectList {
     /// stays out until a refresh succeeds, so paging never retries in a loop.
     func canLoadMore(scopeId: String) -> Bool {
         observedDirectories(inScope: scopeId).contains(where: windowCanLoadMore)
+    }
+
+    /// Mirrors the paging inputs into ``state`` so a change to them alone reaches the view.
+    private func syncPaging() {
+        var next = HomeSessionPagingState(observedWorktrees: observedWorktrees)
+        for (directory, snapshot) in liveSessionsByWorktree where snapshot.hasMore {
+            next.moreDirectories.insert(directory)
+            if !snapshot.loadFailed { next.loadableDirectories.insert(directory) }
+        }
+        if state.paging != next { state.paging = next }
     }
 
     private func windowCanLoadMore(_ directory: String) -> Bool {
