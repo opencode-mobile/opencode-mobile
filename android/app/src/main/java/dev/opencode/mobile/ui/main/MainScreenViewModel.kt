@@ -18,6 +18,7 @@ import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.SessionMovedUpdate
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.home.HomeProject
+import dev.opencode.mobile.domain.home.HomeProjectAdded
 import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeWorktreeRequest
@@ -50,8 +51,6 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.archived.HomeArchivedMenu
 import dev.opencode.mobile.ui.archived.HomeArchivedMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
-import dev.opencode.mobile.ui.main.region.HomeAddProject
-import dev.opencode.mobile.ui.main.region.HomeAddProjectResult
 import dev.opencode.mobile.ui.main.region.HomeProjectList
 import dev.opencode.mobile.ui.main.region.HomeServers
 import dev.opencode.mobile.ui.main.region.HomeSessionActions
@@ -229,15 +228,13 @@ class MainScreenViewModel
         private var renameDraftEditReported = false
         private var forkDraftEditReported = false
 
-        private val addProjectRegion: HomeAddProject =
-            HomeAddProject(
+        private val addProjectRegion: AddProjectFlow =
+            AddProjectFlow(
                 filesystemRepository = filesystemRepository,
                 projectRepository = projectRepository,
                 connectionProfileStore = connectionProfileStore,
-                newSessionDraftStore = newSessionDraftStore,
                 scope = viewModelScope,
                 serverBaseUrl = { serverBaseUrl },
-                currentProfileId = ::currentProfileId,
                 addedProjectIds = { added ->
                     added
                         .mapNotNull { path -> worktreesRegion.index.resolutions[path]?.takeIf { it.isMergeable }?.projectId }
@@ -264,10 +261,8 @@ class MainScreenViewModel
             }
             viewModelScope.launch { homeWorktreesFeed.requests.collect(::onWorktreeRequest) }
             viewModelScope.launch {
-                // A New session draft's Add project…: the project added here becomes the draft's.
-                newSessionDraftStore.addProjectRequested.collect { profileId ->
-                    if (profileId == currentProfileId()) showAddProjectSheet()
-                }
+                // A New session draft added a project from its own Add project sheet (#1021).
+                homeProjectsSnapshot.projectAddedRequests.collect(::onProjectAddedElsewhere)
             }
             viewModelScope.launch { worktreesRegion.followRemoved() }
             viewModelScope.launch {
@@ -404,115 +399,42 @@ class MainScreenViewModel
         }
 
         fun dismissAddProjectSheet() {
-            // A draft that asked for a project gets none when the sheet closes without one.
-            addProjectRegion.cancelDraftRequest()
             addProjectRegion.end()
             projectList.setSheet(null)
         }
 
         /** Typing in the path field: filters locally, and lists a new folder after a pause. */
-        fun updateAddProjectField(text: String) {
-            addProjectRegion.updateField(text)
-        }
+        fun updateAddProjectField(text: String) = addProjectRegion.updateField(text)
 
-        fun addProjectUp() {
-            val target = currentAddProjectSheet()?.upTarget ?: return
-            logAction(
-                ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                ProductAnalytics.Action.ADD_PROJECT_GO_UP,
-            )
-            addProjectRegion.setFolder(target)
-        }
+        fun addProjectUp() = addProjectRegion.up()
 
-        fun selectAddProjectRoot(path: String) {
-            if (addProjectRegion.session == null) return
-            logAction(
-                ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                ProductAnalytics.Action.ADD_PROJECT_SELECT_ROOT,
-            )
-            addProjectRegion.setFolder(path)
-        }
+        fun selectAddProjectRoot(path: String) = addProjectRegion.selectRoot(path)
 
-        fun openAddProjectFolder(path: String) {
-            if (addProjectRegion.session == null) return
-            logAction(
-                ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                ProductAnalytics.Action.ADD_PROJECT_ENTER_DIRECTORY,
-            )
-            addProjectRegion.setFolder(path)
-        }
+        fun openAddProjectFolder(path: String) = addProjectRegion.openFolder(path)
 
-        /**
-         * Return in the path field: opens [AddProjectSheetUi.goTarget] (the exact child match, or
-         * the only matching row). Does nothing otherwise; never adds.
-         */
-        fun submitAddProjectField() {
-            if (addProjectRegion.session == null) return
-            val target = currentAddProjectSheet()?.goTarget ?: return
-            openAddProjectFolder(target)
-        }
+        /** Return in the path field: opens the matching folder; never adds. */
+        fun submitAddProjectField() = addProjectRegion.submitField()
 
         /** A browser row came on screen: queue its folder count and git check. */
-        fun addProjectFolderRowAppeared(path: String) {
-            addProjectRegion.rowAppeared(path)
-        }
+        fun addProjectFolderRowAppeared(path: String) = addProjectRegion.rowAppeared(path)
 
         /** A browser row left the screen: drop its summary if it has not started. */
-        fun addProjectFolderRowDisappeared(path: String) {
-            addProjectRegion.rowDisappeared(path)
-        }
+        fun addProjectFolderRowDisappeared(path: String) = addProjectRegion.rowDisappeared(path)
 
         fun selectAddProjectSuggestion(path: String) {
-            if (addProjectRegion.session?.isValidating != false) return
-            logAction(
-                ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                ProductAnalytics.Action.ADD_PROJECT_SELECT_SUGGESTION,
-            )
-            addProject(path)
+            addProjectRegion.suggestionToAdd(path)?.let(::addProject)
         }
 
         /** Replaces the suggestion sheet with the full-screen folder browser. */
-        fun browseAddProjectFolders() {
-            if (addProjectRegion.session == null || addProjectRegion.session?.isValidating == true) return
-            logAction(
-                ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                ProductAnalytics.Action.ADD_PROJECT_BROWSE,
-            )
-            addProjectRegion.browse()
-        }
+        fun browseAddProjectFolders() = addProjectRegion.browseFolders()
 
-        /**
-         * Back from the browser. Returns to the suggestion sheet at the server home, so
-         * "On this server" is not lost because the field was left in a subfolder.
-         */
-        fun closeAddProjectBrowser() {
-            val session = addProjectRegion.session ?: return
-            if (!session.browsing) return
-            logAction(
-                ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                ProductAnalytics.Action.ADD_PROJECT_BROWSE_BACK,
-            )
-            addProjectRegion.closeBrowser()
-        }
+        /** Back from the browser to the suggestion sheet at the server home. */
+        fun closeAddProjectBrowser() = addProjectRegion.backFromBrowser()
 
-        fun retryAddProjectListing() {
-            if (addProjectRegion.session == null) return
-            logAction(
-                ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                ProductAnalytics.Action.ADD_PROJECT_RETRY_NAVIGATOR,
-            )
-            addProjectRegion.retryListing()
-        }
+        fun retryAddProjectListing() = addProjectRegion.retry()
 
         fun confirmAddProject() {
-            val sheet = currentAddProjectSheet() ?: return
-            val target = sheet.addTarget
-            if (!sheet.addEnabled || target == null) return
-            logAction(
-                ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                ProductAnalytics.Action.ADD_PROJECT_SELECT_CURRENT,
-            )
-            addProject(target)
+            addProjectRegion.confirmTarget()?.let(::addProject)
         }
 
         fun addProject(worktree: String) {
@@ -528,28 +450,37 @@ class MainScreenViewModel
                         worktreesRegion.remember(worktree, resolution)
                     }
                 when (result) {
-                    HomeAddProjectResult.AlreadyAdded -> {
-                        // Before the sheet closes, which would drop the draft's request.
-                        val forDraft = addProjectRegion.consumeDraftRequest()
+                    AddProjectResult.AlreadyAdded -> {
                         dismissAddProjectSheet()
                         projectList.load(skipProbe = true)
-                        if (forDraft) projectList.openDraftWithAddedProject(worktree)
                         projectList.requestScope(HomeScopeRequest(filterId = worktree, evenFromAll = false))
                         setSnackbar(HomeSnackbar(text = HomeText.alreadyOnHome(ProjectDomainAdapter.displayNameFromWorktree(worktree))))
                     }
-                    is HomeAddProjectResult.Added -> {
+                    is AddProjectResult.Added -> {
                         projectList.beginProjectLoad(worktree)
-                        val forDraft = addProjectRegion.consumeDraftRequest()
                         dismissAddProjectSheet()
                         projectList.load(skipProbe = true)
-                        if (forDraft) projectList.openDraftWithAddedProject(worktree)
                         projectList.requestScope(HomeScopeRequest(filterId = worktree, evenFromAll = true))
                         joined?.let { project ->
                             setSnackbar(HomeSnackbar(text = HomeText.joinedProject(project.displayName)))
                         }
                     }
-                    HomeAddProjectResult.Failed -> Unit
+                    AddProjectResult.Failed -> Unit
                 }
+            }
+        }
+
+        /**
+         * The draft's Add project sheet saved [added] to the Connection Profile (#1021): Home
+         * lists it, and Session Chat reads the new project from the snapshot Home publishes.
+         */
+        private fun onProjectAddedElsewhere(added: HomeProjectAdded) {
+            viewModelScope.launch {
+                added.resolution?.let { resolution ->
+                    worktreesRegion.remember(added.worktree, resolution)
+                    projectList.beginProjectLoad(added.worktree)
+                }
+                projectList.load(skipProbe = true)
             }
         }
 

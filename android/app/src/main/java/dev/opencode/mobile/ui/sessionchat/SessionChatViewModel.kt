@@ -27,6 +27,10 @@ import dev.opencode.mobile.domain.goal.SessionGoalAction
 import dev.opencode.mobile.domain.goal.SessionGoalDraft
 import dev.opencode.mobile.domain.goal.SessionGoalLimits
 import dev.opencode.mobile.domain.goal.SessionGoalRepository
+import dev.opencode.mobile.domain.filesystem.FilesystemRepository
+import dev.opencode.mobile.domain.filesystem.UnavailableFilesystemRepository
+import dev.opencode.mobile.domain.home.HomeProjectAdded
+import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.home.HomeWorktreesFeed
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
@@ -60,6 +64,8 @@ import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.UnavailableProjectRepository
+import dev.opencode.mobile.ui.main.AddProjectFlow
+import dev.opencode.mobile.ui.main.AddProjectResult
 import dev.opencode.mobile.domain.session.NewSessionDraft
 import dev.opencode.mobile.domain.session.NewSessionDraftStore
 import dev.opencode.mobile.domain.session.NewSessionPlace
@@ -152,6 +158,7 @@ class SessionChatViewModel
         newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
         homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
         sessionGoalRepository: SessionGoalRepository = EmptySessionGoalRepository,
+        filesystemRepository: FilesystemRepository = UnavailableFilesystemRepository,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -357,6 +364,27 @@ class SessionChatViewModel
                 onChange = { publishUiState() },
             )
 
+        /** The draft's own Add project sheet (#1021); Home lists what it saves. */
+        private val addProject =
+            AddProjectFlow(
+                filesystemRepository = filesystemRepository,
+                projectRepository = projectRepository,
+                connectionProfileStore = connectionProfileStore,
+                scope = viewModelScope,
+                serverBaseUrl = { activeConnectionManager.current()?.baseUrl.orEmpty() },
+                addedProjectIds = { added ->
+                    added
+                        .mapNotNull { path ->
+                            homeProjectsSnapshot
+                                .projectContaining(path)
+                                ?.takeUnless { it.key.startsWith(HomeProjectGrouping.PATH_KEY_PREFIX) }
+                                ?.projectId
+                        }.toSet()
+                },
+                onSheetChanged = { publishUiState() },
+            )
+        private val homeProjects = homeProjectsSnapshot
+
         private val worktreeMove =
             SessionChatWorktreeMove(
                 moveSession = { id, directory -> sessionRepository.moveSession(id, directory) },
@@ -500,6 +528,12 @@ class SessionChatViewModel
             }
             viewModelScope.launch {
                 composer.state.collect { newSessionDraft.syncFromComposer() }
+            }
+            viewModelScope.launch {
+                // A project the draft added shows up once Home lists it.
+                homeProjectsSnapshot.projects.collect {
+                    if (newSessionDraft.onProjectsChanged { moved -> bindDraftDirectory(moved) }) publishUiState()
+                }
             }
             viewModelScope.launch {
                 snapshotFlow { SessionChatDisplayPreferences.collapseConsecutiveToolCalls }
@@ -1602,8 +1636,64 @@ class SessionChatViewModel
         }
 
         /** Project sheet → Add project…: the project Home's Add project flow adds becomes the draft's. */
+        /** Project sheet → Add project…: the Add project sheet opens over the draft (#1021). */
         fun requestNewSessionAddProject() {
-            if (newSessionDraft.requestAddProject()) publishUiState()
+            if (!newSessionDraft.beginAddProject()) return
+            newSessionDraft.syncFromComposer()
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                actionId = ProductAnalytics.Action.HOME_ADD_PROJECT,
+            )
+            addProject.open()
+            publishUiState()
+        }
+
+        fun dismissNewSessionAddProject() {
+            if (addProject.session == null) return
+            addProject.end()
+            publishUiState()
+        }
+
+        fun updateNewSessionAddProjectField(text: String) = addProject.updateField(text)
+
+        fun newSessionAddProjectUp() = addProject.up()
+
+        fun selectNewSessionAddProjectRoot(path: String) = addProject.selectRoot(path)
+
+        fun openNewSessionAddProjectFolder(path: String) = addProject.openFolder(path)
+
+        fun submitNewSessionAddProjectField() = addProject.submitField()
+
+        fun newSessionAddProjectFolderRowAppeared(path: String) = addProject.rowAppeared(path)
+
+        fun newSessionAddProjectFolderRowDisappeared(path: String) = addProject.rowDisappeared(path)
+
+        fun browseNewSessionAddProjectFolders() = addProject.browseFolders()
+
+        fun closeNewSessionAddProjectBrowser() = addProject.backFromBrowser()
+
+        fun retryNewSessionAddProjectListing() = addProject.retry()
+
+        fun selectNewSessionAddProjectSuggestion(path: String) {
+            addProject.suggestionToAdd(path)?.let(::addNewSessionProject)
+        }
+
+        fun confirmNewSessionAddProject() {
+            addProject.confirmTarget()?.let(::addNewSessionProject)
+        }
+
+        /** Saves [worktree] to the Connection Profile, asks Home to list it, and runs the draft there. */
+        private fun addNewSessionProject(worktree: String) {
+            viewModelScope.launch {
+                when (val result = addProject.add(worktree) { }) {
+                    AddProjectResult.Failed -> return@launch
+                    AddProjectResult.AlreadyAdded -> Unit
+                    is AddProjectResult.Added -> homeProjects.requestProjectAdded(HomeProjectAdded(worktree, result.resolution))
+                }
+                addProject.end()
+                newSessionDraft.adoptAddedProject(worktree) { moved -> bindDraftDirectory(moved) }
+                publishUiState()
+            }
         }
 
         /** ⋯ → Discard draft: the draft is gone; the screen goes back. */
@@ -2207,6 +2297,7 @@ class SessionChatViewModel
                         side.copy(supported = supported, composerMode = side.composerMode && supported)
                     },
                 newSessionDraft = newSessionDraft.uiState(),
+                newSessionAddProjectSheet = addProject.sheet.takeIf { newSessionDraft.isActive },
             )
         }
 

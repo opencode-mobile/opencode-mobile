@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.domain.home.HomeProjectAdded
+import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileCatalog
@@ -104,6 +106,7 @@ import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -1816,40 +1819,26 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun draftAddProject_opensTheSheetAndTheAddedProjectBecomesTheDrafts() =
+    fun projectAddedElsewhere_isListedWithoutOpeningHomesSheet() =
         runTest(testDispatcher) {
-            val drafts = NewSessionDraftStore()
-            val (viewModel, _) = viewModelWithOneProject(newSessions = emptyList(), drafts = drafts)
-            drafts.open("", NewSessionDraftStart("/one", "/one"))
-            drafts.update("") { it.copy(composer = ComposerDraft("for the new one")) }
-
-            drafts.requestAddProject("")
-            advanceUntilIdle()
-            assertTrue(loaded(viewModel).showAddProjectSheet)
-
-            viewModel.addProject("/new")
+            val snapshot = HomeProjectsSnapshot()
+            val store = FakeConnectionProfileStore(initial = listOf("/one"))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/new" to emptyList()),
+                    homeProjectsSnapshot = snapshot,
+                )
             advanceUntilIdle()
 
-            val draft = drafts.draft("")!!
-            assertEquals("/new", draft.projectDirectory)
-            assertEquals("for the new one", draft.composer.text)
-            assertEquals("/new", loaded(viewModel).pendingOpenSession?.worktree)
-        }
-
-    @Test
-    fun draftAddProject_dismissedSheetLeavesTheDraftAlone() =
-        runTest(testDispatcher) {
-            val drafts = NewSessionDraftStore()
-            val (viewModel, _) = viewModelWithOneProject(newSessions = emptyList(), drafts = drafts)
-            drafts.open("", NewSessionDraftStart("/one", "/one"))
-
-            drafts.requestAddProject("")
-            advanceUntilIdle()
-            viewModel.dismissAddProjectSheet()
-            viewModel.addProject("/new")
+            // The draft's Add project sheet saved /new, then asked Home to list it.
+            store.addWorktree(serverUrl, "/new")
+            snapshot.requestProjectAdded(HomeProjectAdded(worktree = "/new", resolution = null))
             advanceUntilIdle()
 
-            assertEquals("/one", drafts.draft("")?.projectDirectory)
+            assertTrue(loaded(viewModel).projects.any { it.contains("/new") })
+            assertNotNull(snapshot.projectContaining("/new"))
+            assertFalse(loaded(viewModel).showAddProjectSheet)
             assertNull(loaded(viewModel).pendingOpenSession)
         }
 
@@ -3107,6 +3096,7 @@ class MainScreenViewModelTest {
             dev.opencode.mobile.domain.worktree
                 .WorktreeInventoryCache(),
         newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
+        homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
     ): MainScreenViewModel {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore, connectionProbing)
         runBlocking {
@@ -3183,6 +3173,7 @@ class MainScreenViewModelTest {
             projectFirstLoadTiming = projectFirstLoadTiming,
             worktreeInventoryCache = worktreeInventoryCache,
             newSessionDraftStore = newSessionDraftStore,
+            homeProjectsSnapshot = homeProjectsSnapshot,
         ).apply { homeRowsDispatcher = testDispatcher }
     }
 }

@@ -6,11 +6,8 @@ import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.worktree.CreatedWorktree
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
@@ -152,14 +149,6 @@ class NewSessionDraftStore
         private val _drafts = MutableStateFlow<Map<String, NewSessionDraft>>(emptyMap())
         val drafts: StateFlow<Map<String, NewSessionDraft>> = _drafts.asStateFlow()
 
-        /** Profiles that asked Home's Add project flow for a project to put in their draft. */
-        private val addProjectRequests = mutableSetOf<String>()
-
-        private val _addProjectRequested = MutableSharedFlow<String>(extraBufferCapacity = 1)
-
-        /** A draft's Add project…, by profile id: Home opens its Add project sheet. */
-        val addProjectRequested: SharedFlow<String> = _addProjectRequested.asSharedFlow()
-
         /**
          * The draft screen that edits each profile's draft. Only the owner writes, so a screen that
          * is going away cannot overwrite a draft a newer screen (or Home) already changed.
@@ -245,7 +234,6 @@ class NewSessionDraftStore
         fun discard(profileId: String) {
             _drafts.update { it - profileId }
             synchronized(owners) { owners.remove(profileId) }
-            synchronized(addProjectRequests) { addProjectRequests.remove(profileId) }
         }
 
         /** [owner] leaves its draft: one with no text and no attachments is not kept. */
@@ -260,17 +248,4 @@ class NewSessionDraftStore
             synchronized(owners) { owners.remove(profileId) }
             return true
         }
-
-        /** The draft's Add project… row: the next project Home adds becomes the draft's project. */
-        fun requestAddProject(profileId: String) {
-            synchronized(addProjectRequests) { addProjectRequests += profileId }
-            _addProjectRequested.tryEmit(profileId)
-        }
-
-        fun cancelAddProject(profileId: String) {
-            synchronized(addProjectRequests) { addProjectRequests.remove(profileId) }
-        }
-
-        /** True once after [requestAddProject]: Home added a project for the draft. */
-        fun consumeAddProjectRequest(profileId: String): Boolean = synchronized(addProjectRequests) { addProjectRequests.remove(profileId) }
     }

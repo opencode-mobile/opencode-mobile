@@ -1,5 +1,6 @@
-package dev.opencode.mobile.ui.main.region
+package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
@@ -9,12 +10,7 @@ import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.project.ProjectRepository
-import dev.opencode.mobile.domain.session.NewSessionDraftStore
 import dev.opencode.mobile.domain.text.UiText
-import dev.opencode.mobile.ui.main.AddProjectListing
-import dev.opencode.mobile.ui.main.AddProjectSheetModel
-import dev.opencode.mobile.ui.main.AddProjectSheetSession
-import dev.opencode.mobile.ui.main.AddProjectSheetUi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -22,47 +18,49 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** The Add project sheet session, while one is open. */
-data class HomeAddProjectState(
+data class AddProjectFlowState(
     val session: AddProjectSheetSession? = null,
 )
 
-/** What [HomeAddProject.add] did with the chosen path. */
-sealed interface HomeAddProjectResult {
+/** What [AddProjectFlow.add] did with the chosen path. */
+sealed interface AddProjectResult {
     /** The path is already on Home; nothing was validated or saved. */
-    data object AlreadyAdded : HomeAddProjectResult
+    data object AlreadyAdded : AddProjectResult
 
     /** The path resolved and was saved to the Connection Profile. */
     data class Added(
         val resolution: ResolvedHomePath,
-    ) : HomeAddProjectResult
+    ) : AddProjectResult
 
     /** Validation failed; the sheet shows the error itself. */
-    data object Failed : HomeAddProjectResult
+    data object Failed : AddProjectResult
 }
 
 /**
- * Add project sheet and folder browser: opening it (server home, added paths, server project
- * suggestions, `/Volumes`), field typing with a debounced listing, folder navigation, row
- * summaries, and validating and saving the chosen path. Reloading Home, scope requests,
- * snackbars, opening the draft and analytics stay with the facade.
+ * Add project sheet and folder browser, shared by Home and the New session draft (#1021):
+ * opening it (server home, added paths, server project suggestions, `/Volumes`), field typing
+ * with a debounced listing, folder navigation, row summaries, validating and saving the chosen
+ * path, and the analytics of the sheet's own actions. What happens after a path is saved
+ * (reloading Home, scope requests, snackbars, moving the draft) stays with the host.
  *
- * Every sheet change goes to [onSheetChanged], which patches it into Home's content the way the
- * facade always did (H-AH-2): a content rebuild hides it until the next sheet change.
+ * Every sheet change goes to [onSheetChanged]; the host patches it into its UI state.
  */
-internal class HomeAddProject(
+internal class AddProjectFlow(
     private val filesystemRepository: FilesystemRepository,
     private val projectRepository: ProjectRepository,
     private val connectionProfileStore: ConnectionProfileStore,
-    private val newSessionDraftStore: NewSessionDraftStore,
     private val scope: CoroutineScope,
     private val serverBaseUrl: () -> String,
-    private val currentProfileId: () -> String,
     /** Project ids already on Home for the given added paths. */
     private val addedProjectIds: (List<String>) -> Set<String>,
     private val onSheetChanged: (AddProjectSheetUi) -> Unit,
 ) {
-    var state = HomeAddProjectState()
+    var state = AddProjectFlowState()
         private set
+
+    /** The sheet as the host shows it; null when closed. */
+    val sheet: AddProjectSheetUi?
+        get() = session?.let(AddProjectSheetModel::build)
 
     /** The open sheet session, or null when the sheet is closed. */
     val session: AddProjectSheetSession?
@@ -91,14 +89,14 @@ internal class HomeAddProject(
                     throw cancellation
                 } catch (error: Exception) {
                     DiagnosticLog.warning(DiagnosticLogArea.Connection, "add project home lookup failed", error)
-                    if (generation != this@HomeAddProject.generation) return@launch
+                    if (generation != this@AddProjectFlow.generation) return@launch
                     updateSession {
                         it.copy(isOpening = false, openError = AddProjectSheetUi.LIST_ERROR_MESSAGE)
                     }
                     return@launch
                 }
             val added = connectionProfileStore.addedWorktrees(serverBaseUrl())
-            if (generation != this@HomeAddProject.generation) return@launch
+            if (generation != this@AddProjectFlow.generation) return@launch
             val home = ServerPathPolicy.canonical(paths.home)
             updateSession {
                 it.copy(
@@ -127,13 +125,78 @@ internal class HomeAddProject(
         summaryFailures.clear()
     }
 
-    /** A draft that asked for a project gets none when the sheet closes without one. */
-    fun cancelDraftRequest() {
-        newSessionDraftStore.cancelAddProject(currentProfileId())
+    /** Up one folder in the browser. */
+    fun up() {
+        val target = sheet?.upTarget ?: return
+        log(ProductAnalytics.Action.ADD_PROJECT_GO_UP)
+        setFolder(target)
     }
 
-    /** Whether a New session draft asked for this project; consumes that request. */
-    fun consumeDraftRequest(): Boolean = newSessionDraftStore.consumeAddProjectRequest(currentProfileId())
+    /** A root chip (Home, `/`, a volume). */
+    fun selectRoot(path: String) {
+        if (session == null) return
+        log(ProductAnalytics.Action.ADD_PROJECT_SELECT_ROOT)
+        setFolder(path)
+    }
+
+    /** A folder row: lists that folder. */
+    fun openFolder(path: String) {
+        if (session == null) return
+        log(ProductAnalytics.Action.ADD_PROJECT_ENTER_DIRECTORY)
+        setFolder(path)
+    }
+
+    /**
+     * Return in the path field: opens [AddProjectSheetUi.goTarget] (the exact child match, or
+     * the only matching row). Does nothing otherwise; never adds.
+     */
+    fun submitField() {
+        if (session == null) return
+        val target = sheet?.goTarget ?: return
+        openFolder(target)
+    }
+
+    /** Browse folders: replaces the suggestion sheet with the full-screen folder browser. */
+    fun browseFolders() {
+        val session = session ?: return
+        if (session.isValidating) return
+        log(ProductAnalytics.Action.ADD_PROJECT_BROWSE)
+        browse()
+    }
+
+    /** Back in the browser. */
+    fun backFromBrowser() {
+        val session = session ?: return
+        if (!session.browsing) return
+        log(ProductAnalytics.Action.ADD_PROJECT_BROWSE_BACK)
+        closeBrowser()
+    }
+
+    fun retry() {
+        if (session == null) return
+        log(ProductAnalytics.Action.ADD_PROJECT_RETRY_NAVIGATOR)
+        retryListing()
+    }
+
+    /** A server project suggestion: the path the host should [add], or null while one validates. */
+    fun suggestionToAdd(path: String): String? {
+        if (session?.isValidating != false) return null
+        log(ProductAnalytics.Action.ADD_PROJECT_SELECT_SUGGESTION)
+        return path
+    }
+
+    /** The bar's Add button: the path the host should [add], or null when it is disabled. */
+    fun confirmTarget(): String? {
+        val sheet = sheet ?: return null
+        val target = sheet.addTarget
+        if (!sheet.addEnabled || target == null) return null
+        log(ProductAnalytics.Action.ADD_PROJECT_SELECT_CURRENT)
+        return target
+    }
+
+    private fun log(actionId: String) {
+        ProductAnalytics.logUserAction(screenId = ProductAnalytics.Screen.HOME_ADD_PROJECT, actionId = actionId)
+    }
 
     /** Typing in the path field: filters locally, and lists a new folder after a pause. */
     fun updateField(text: String) {
@@ -144,7 +207,7 @@ internal class HomeAddProject(
     }
 
     /** Chip, row, and Up taps list the folder right away. */
-    fun setFolder(path: String) {
+    private fun setFolder(path: String) {
         debounceJob?.cancel()
         updateSession {
             it.copy(fieldText = ServerPathPolicy.fieldText(path), fieldError = null)
@@ -173,7 +236,7 @@ internal class HomeAddProject(
     }
 
     /** Replaces the suggestion sheet with the full-screen folder browser. */
-    fun browse() {
+    private fun browse() {
         updateSession { it.copy(browsing = true) }
     }
 
@@ -181,7 +244,7 @@ internal class HomeAddProject(
      * Back from the browser. Returns to the suggestion sheet at the server home, so
      * "On this server" is not lost because the field was left in a subfolder.
      */
-    fun closeBrowser() {
+    private fun closeBrowser() {
         val session = session ?: return
         val home = session.home
         if (home.isEmpty()) {
@@ -199,7 +262,7 @@ internal class HomeAddProject(
         loadListing(home)
     }
 
-    fun retryListing() {
+    private fun retryListing() {
         val session = session ?: return
         if (session.openError != null) {
             open()
@@ -217,9 +280,9 @@ internal class HomeAddProject(
     suspend fun add(
         worktree: String,
         onResolved: (ResolvedHomePath) -> Unit,
-    ): HomeAddProjectResult {
+    ): AddProjectResult {
         val added = connectionProfileStore.addedWorktrees(serverBaseUrl())
-        if (worktree in added) return HomeAddProjectResult.AlreadyAdded
+        if (worktree in added) return AddProjectResult.AlreadyAdded
         updateSession { it.copy(isValidating = true, fieldError = null) }
         val result = runCatching { projectRepository.getCurrentProject(directory = worktree) }
         result
@@ -229,7 +292,7 @@ internal class HomeAddProject(
                 // Persist the selected directory (web open-project behavior), not the
                 // /project/current worktree — non-git dirs resolve to global "/".
                 connectionProfileStore.addWorktree(serverBaseUrl(), worktree)
-                return HomeAddProjectResult.Added(resolution)
+                return AddProjectResult.Added(resolution)
             }.onFailure { error ->
                 updateSession {
                     it.copy(
@@ -240,7 +303,7 @@ internal class HomeAddProject(
                     )
                 }
             }
-        return HomeAddProjectResult.Failed
+        return AddProjectResult.Failed
     }
 
     private fun scheduleListing() {
@@ -272,7 +335,7 @@ internal class HomeAddProject(
                     DiagnosticLog.warning(DiagnosticLogArea.Connection, "add project listing failed", error)
                     AddProjectListing.Failed(AddProjectSheetUi.LIST_ERROR_MESSAGE)
                 }
-            if (generation != this@HomeAddProject.generation) return@launch
+            if (generation != this@AddProjectFlow.generation) return@launch
             updateSession { session ->
                 val updated = session.copy(listings = session.listings + (directory to listing))
                 if (listing is AddProjectListing.Loaded) updated.withListedRoot(directory) else updated
@@ -306,7 +369,7 @@ internal class HomeAddProject(
                 } catch (_: Exception) {
                     null
                 }
-            if (generation != this@HomeAddProject.generation) return@launch
+            if (generation != this@AddProjectFlow.generation) return@launch
             summariesInFlight -= path
             if (listing == null) {
                 summaryFailures += path
@@ -334,11 +397,11 @@ internal class HomeAddProject(
                     throw cancellation
                 } catch (_: Exception) {
                     // The section stays hidden.
-                    if (generation != this@HomeAddProject.generation) return@launch
+                    if (generation != this@AddProjectFlow.generation) return@launch
                     updateSession { it.copy(suggestionsResolved = true) }
                     return@launch
                 }
-            if (generation != this@HomeAddProject.generation) return@launch
+            if (generation != this@AddProjectFlow.generation) return@launch
             updateSession { it.copy(serverProjects = projects, suggestionsResolved = true) }
         }
     }
@@ -354,7 +417,7 @@ internal class HomeAddProject(
                     // Linux has no /Volumes.
                     return@launch
                 }
-            if (generation != this@HomeAddProject.generation) return@launch
+            if (generation != this@AddProjectFlow.generation) return@launch
             updateSession { it.copy(volumes = volumes) }
         }
     }

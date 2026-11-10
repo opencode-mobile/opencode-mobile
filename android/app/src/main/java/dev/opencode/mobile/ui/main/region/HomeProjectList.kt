@@ -226,13 +226,6 @@ internal class HomeProjectList(
         openDraft(draft.directory)
     }
 
-    /** A project the draft's Add project… asked for was added: it becomes the draft's, which opens again. */
-    fun openDraftWithAddedProject(worktree: String) {
-        val profileId = currentProfileId()
-        val draft = newSessionDraftStore.openAt(profileId, NewSessionDraftStart.forDirectory(projects(), worktree))
-        openDraft(draft.directory)
-    }
-
     /** Opens [target] (a fork the user chose to open). */
     fun openSession(target: SessionOpenTarget) {
         updateContent { state ->

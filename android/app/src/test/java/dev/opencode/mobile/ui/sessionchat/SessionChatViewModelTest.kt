@@ -6071,6 +6071,95 @@ class SessionChatViewModelTest {
             assertEquals("/play", viewModel.uiState.value.worktree)
         }
 
+    /** A server whose home is /home with no subfolders. */
+    private object DraftFilesystem : dev.opencode.mobile.domain.filesystem.FilesystemRepository {
+        override suspend fun getPaths() =
+            dev.opencode.mobile.domain.filesystem
+                .ServerPaths(home = "/home", directory = "/home", worktree = "/home")
+
+        override suspend fun listDirectory(path: String) =
+            dev.opencode.mobile.domain.filesystem
+                .DirectoryListing(folders = emptyList(), isGitRepository = false)
+    }
+
+    @Test
+    fun newSessionDraft_addProjectOpensOverTheDraftAndTheDraftRunsInTheAddedFolder() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            val snapshot = draftProjects()
+            val profiles = FakeConnectionProfileStore(worktrees = mutableListOf("/repo"))
+            val requests = mutableListOf<dev.opencode.mobile.domain.home.HomeProjectAdded>()
+            backgroundScope.launch { snapshot.projectAddedRequests.collect { requests += it } }
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = profiles,
+                    homeProjectsSnapshot = snapshot,
+                    newSessionDraftStore = drafts,
+                    filesystemRepository = DraftFilesystem,
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("for the new one")
+            viewModel.openNewSessionProjectSheet()
+
+            viewModel.requestNewSessionAddProject()
+            advanceUntilIdle()
+            // The Project sheet gives way to Add project; the draft stays on screen.
+            assertNull(viewModel.draftUi()?.sheet)
+            assertEquals("/home/", viewModel.uiState.value.newSessionAddProjectSheet?.fieldText)
+
+            viewModel.selectNewSessionAddProjectSuggestion("/srv/new")
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.newSessionAddProjectSheet)
+            assertEquals(listOf("/repo", "/srv/new"), profiles.worktrees)
+            assertEquals(listOf("/srv/new"), requests.map { it.worktree })
+            assertEquals("new", viewModel.draftUi()?.projectName)
+            assertEquals("/srv/new", viewModel.uiState.value.worktree)
+            assertEquals("for the new one", viewModel.uiState.value.composer.text)
+
+            // Home lists it: the draft takes the Home project.
+            val listed =
+                HomeProject(
+                    key = "path:/srv/new",
+                    projectId = null,
+                    displayName = "new",
+                    memberPaths = listOf("/srv/new"),
+                    isRepository = false,
+                    worktrees = listOf(HomeWorktree("/srv/new", isMain = true)),
+                )
+            snapshot.publish(listOf(draftProject, listed))
+            advanceUntilIdle()
+            assertEquals("path:/srv/new", drafts.draft("")?.projectKey)
+            assertEquals("for the new one", drafts.draft("")?.composer?.text)
+        }
+
+    @Test
+    fun newSessionDraft_dismissedAddProjectLeavesTheDraftAlone() =
+        runTest(testDispatcher) {
+            val profiles = FakeConnectionProfileStore(worktrees = mutableListOf("/repo"))
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = profiles,
+                    homeProjectsSnapshot = draftProjects(),
+                    filesystemRepository = DraftFilesystem,
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            viewModel.requestNewSessionAddProject()
+            advanceUntilIdle()
+            viewModel.dismissNewSessionAddProject()
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.newSessionAddProjectSheet)
+            assertEquals("repo", viewModel.draftUi()?.projectName)
+            assertEquals("/repo", viewModel.uiState.value.worktree)
+            assertEquals(listOf("/repo"), profiles.worktrees)
+        }
+
     @Test
     fun newSessionDraft_slashNewAndCompactDoNothing() =
         runTest(testDispatcher) {
@@ -8560,6 +8649,8 @@ class SessionChatViewModelTest {
         newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
         sessionGoalRepository: dev.opencode.mobile.domain.goal.SessionGoalRepository =
             dev.opencode.mobile.domain.goal.EmptySessionGoalRepository,
+        filesystemRepository: dev.opencode.mobile.domain.filesystem.FilesystemRepository =
+            dev.opencode.mobile.domain.filesystem.UnavailableFilesystemRepository,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -8646,6 +8737,7 @@ class SessionChatViewModelTest {
             agentShellRepository = agentShellRepository,
             newSessionDraftStore = newSessionDraftStore,
             sessionGoalRepository = sessionGoalRepository,
+            filesystemRepository = filesystemRepository,
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }

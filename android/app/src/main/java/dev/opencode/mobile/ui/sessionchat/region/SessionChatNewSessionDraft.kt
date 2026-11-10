@@ -88,6 +88,9 @@ class SessionChatNewSessionDraft(
     val state: StateFlow<SessionChatNewSessionDraftRegionState> = _state.asStateFlow()
 
     private var baseJob: Job? = null
+
+    /** A path Add project… saved that Home has not listed yet; the draft moves into its Home project once it does. */
+    private var pendingAddedDirectory: String? = null
     private var submitJob: Job? = null
 
     /** Binding a draft rewrites the composer; its intermediate states are not the draft's. */
@@ -118,6 +121,7 @@ class SessionChatNewSessionDraft(
 
     /** A new draft bind: no sheet, query, create in progress, or error carries over. */
     fun resetForBind() {
+        pendingAddedDirectory = null
         _state.update { it.copy(sheet = null, projectQuery = "", isCreating = false, sendError = null) }
     }
 
@@ -235,6 +239,7 @@ class SessionChatNewSessionDraft(
     ): Boolean {
         val draft = draft ?: return false
         val project = homeProjectsSnapshot.projects.value.firstOrNull { it.key == projectKey } ?: return false
+        pendingAddedDirectory = null
         _state.update { it.copy(sheet = null) }
         if (project.key != draft.projectKey) {
             val next = draft.movedTo(project.key, project.mainCheckoutDirectory, NewSessionPlace.Local)
@@ -250,6 +255,7 @@ class SessionChatNewSessionDraft(
         onMoved: (NewSessionDraft) -> Unit,
     ): Boolean {
         val draft = draft ?: return false
+        pendingAddedDirectory = null
         _state.update { it.copy(sheet = null) }
         // Picking New worktree again keeps the base already chosen.
         val next = if (place is NewSessionPlace.NewWorktree) draft.place as? NewSessionPlace.NewWorktree ?: place else place
@@ -276,12 +282,47 @@ class SessionChatNewSessionDraft(
         return true
     }
 
-    /** Project sheet → Add project…: the project Home's Add project flow adds becomes the draft's. */
-    fun requestAddProject(): Boolean {
-        val profileId = _state.value.profileId ?: return false
-        syncFromComposer()
-        newSessionDraftStore.requestAddProject(profileId)
+    /** Project sheet → Add project…: the Project sheet gives way to the Add project sheet. */
+    fun beginAddProject(): Boolean {
+        if (draft == null || isCreating) return false
         _state.update { it.copy(sheet = null) }
+        return true
+    }
+
+    /**
+     * Add project… saved [worktree] (#1021): the draft runs there. Until Home lists the path, the
+     * draft names it as a folder of its own; [onProjectsChanged] moves it into its Home project.
+     */
+    fun adoptAddedProject(
+        worktree: String,
+        onMoved: (NewSessionDraft) -> Unit,
+    ): Boolean {
+        if (draft == null) return false
+        val canonical = ServerPathPolicy.canonical(worktree.trim())
+        pendingAddedDirectory = canonical.takeIf { homeProjectsSnapshot.projectContaining(it) == null }
+        moveTo(NewSessionDraftStart.forDirectory(homeProjectsSnapshot.projects.value, canonical), onMoved)
+        return true
+    }
+
+    /** Home published its projects: a draft waiting on an added path moves into that path's project. */
+    fun onProjectsChanged(onMoved: (NewSessionDraft) -> Unit): Boolean {
+        val pending = pendingAddedDirectory ?: return false
+        if (homeProjectsSnapshot.projectContaining(pending) == null) return false
+        pendingAddedDirectory = null
+        return moveTo(NewSessionDraftStart.forDirectory(homeProjectsSnapshot.projects.value, pending), onMoved)
+    }
+
+    private fun moveTo(
+        start: NewSessionDraftStart,
+        onMoved: (NewSessionDraft) -> Unit,
+    ): Boolean {
+        val draft = draft ?: return false
+        if (draft.projectKey == start.projectKey && draft.projectDirectory == start.projectDirectory && draft.place == start.place) {
+            return false
+        }
+        val next = draft.movedTo(start.projectKey, start.projectDirectory, start.place)
+        update(next)
+        onMoved(next)
         return true
     }
 
@@ -289,6 +330,7 @@ class SessionChatNewSessionDraft(
     fun discard(): Boolean {
         val draft = draft ?: return false
         submitJob?.cancel()
+        pendingAddedDirectory = null
         _state.value.profileId?.let { newSessionDraftStore.release(it, owner) }
         _state.update { it.copy(profileId = null, sheet = null) }
         draft.attachments.forEach { AttachmentLimits.discard(it.localPath) }
@@ -304,6 +346,7 @@ class SessionChatNewSessionDraft(
 
     /** The first send created the session: the draft is done. */
     fun release() {
+        pendingAddedDirectory = null
         _state.value.profileId?.let { newSessionDraftStore.release(it, owner) }
         _state.update { it.copy(profileId = null, draft = null, sheet = null) }
         baseJob?.cancel()
