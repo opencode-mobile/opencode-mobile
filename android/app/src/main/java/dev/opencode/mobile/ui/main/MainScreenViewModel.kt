@@ -1,6 +1,5 @@
 package dev.opencode.mobile.ui.main
 
-import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -10,28 +9,20 @@ import dev.opencode.mobile.domain.connection.AddressCheck
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
-import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.IdleForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
-import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SessionMovedUpdate
-import dev.opencode.mobile.domain.event.isWorktreeUpdated
-import dev.opencode.mobile.domain.event.namedProjectId
-import dev.opencode.mobile.domain.event.sessionMoved
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
-import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProject
-import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeWorktreeRequest
 import dev.opencode.mobile.domain.home.HomeWorktreesFeed
 import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
-import dev.opencode.mobile.domain.live.HomeSessionPaging
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionAncestry
 import dev.opencode.mobile.domain.live.SessionListSnapshot
@@ -39,36 +30,27 @@ import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRepository
-import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.session.NewSessionDraftStart
 import dev.opencode.mobile.domain.session.NewSessionDraftStore
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
-import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
-import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionForkTitle
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionSummary
-import dev.opencode.mobile.domain.session.activeSessions
-import dev.opencode.mobile.domain.session.rootSessions
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
-import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.archived.HomeArchivedMenu
 import dev.opencode.mobile.ui.archived.HomeArchivedMenuEntry
-import dev.opencode.mobile.theme.letterAccentForWorktree
-import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
-import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.main.region.HomeAddProject
 import dev.opencode.mobile.ui.main.region.HomeAddProjectResult
 import dev.opencode.mobile.ui.main.region.HomeProjectList
@@ -77,25 +59,13 @@ import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import dev.opencode.mobile.ui.main.region.HomeWorktrees
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -202,7 +172,6 @@ class MainScreenViewModel
                 onSwitchAbandoned = ::abandonSwitch,
             )
         val serversChrome: StateFlow<HomeServersChrome> = serversRegion.state
-        private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
         val liveUpdatesConnectionStatus: StateFlow<SessionConnectionStatus> =
             liveUpdates.chrome
                 .map { it.label.toSessionConnectionStatus() }
@@ -246,6 +215,7 @@ class MainScreenViewModel
                 sessionRepository = sessionRepository,
                 connectionProfileStore = connectionProfileStore,
                 sessionCache = sessionCache,
+                newSessionDraftStore = newSessionDraftStore,
                 sessionLiveStore = sessionLiveStore,
                 sessionStatusLiveStore = sessionStatusLiveStore,
                 sessionReadyStore = sessionReadyStore,
@@ -257,6 +227,7 @@ class MainScreenViewModel
                 scope = viewModelScope,
                 supportsSessionViewed = ::supportsSessionViewed,
                 serverBaseUrl = { serverBaseUrl },
+                currentProfileId = ::currentProfileId,
                 isConnected = { activeConnectionManager.current() != null },
                 addressCheckRunning = {
                     connectionSessionCoordinator.addressCheck.value.state == AddressCheck.State.Running
@@ -266,6 +237,8 @@ class MainScreenViewModel
                     _uiState.value = state.content
                     _loadingMoreScopeId.value = state.paging.loadingMoreScopeId
                     _moreSessionDirectories.value = state.paging.moreSessionDirectories
+                    _revealNewestToken.value = state.revealNewestToken
+                    _pendingScopeRequest.value = state.pendingScopeRequest
                 },
             )
 
@@ -450,15 +423,7 @@ class MainScreenViewModel
             // A draft that asked for a project gets none when the sheet closes without one.
             addProjectRegion.cancelDraftRequest()
             addProjectRegion.end()
-            projectList.updateContent { state ->
-                when (state) {
-                    is MainScreenUiState.Empty ->
-                        state.copy(showAddProjectSheet = false, addProjectSheet = null)
-                    is MainScreenUiState.Loaded ->
-                        state.copy(showAddProjectSheet = false, addProjectSheet = null)
-                    else -> state
-                }
-            }
+            projectList.setSheet(null)
         }
 
         /** Typing in the path field: filters locally, and lists a new folder after a pause. */
@@ -584,8 +549,8 @@ class MainScreenViewModel
                         val forDraft = addProjectRegion.consumeDraftRequest()
                         dismissAddProjectSheet()
                         projectList.load(skipProbe = true)
-                        if (forDraft) openDraftWithAddedProject(worktree)
-                        _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = false)
+                        if (forDraft) projectList.openDraftWithAddedProject(worktree)
+                        projectList.requestScope(HomeScopeRequest(filterId = worktree, evenFromAll = false))
                         _removalSnackbar.value =
                             HomeSnackbar(text = HomeText.alreadyOnHome(ProjectDomainAdapter.displayNameFromWorktree(worktree)))
                     }
@@ -594,8 +559,8 @@ class MainScreenViewModel
                         val forDraft = addProjectRegion.consumeDraftRequest()
                         dismissAddProjectSheet()
                         projectList.load(skipProbe = true)
-                        if (forDraft) openDraftWithAddedProject(worktree)
-                        _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = true)
+                        if (forDraft) projectList.openDraftWithAddedProject(worktree)
+                        projectList.requestScope(HomeScopeRequest(filterId = worktree, evenFromAll = true))
                         joined?.let { project ->
                             _removalSnackbar.value =
                                 HomeSnackbar(text = HomeText.joinedProject(project.displayName))
@@ -612,46 +577,23 @@ class MainScreenViewModel
          */
         fun openNewSession(start: NewSessionDraftStart) {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_CREATE_SESSION)
-            val draft = newSessionDraftStore.open(currentProfileId(), start)
-            openDraft(draft.directory)
+            projectList.openNewSession(start)
         }
 
         /** New session in [directory] (the Worktrees screen): the draft keeps its text and runs there. */
         fun openNewSessionHere(directory: String) {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_CREATE_SESSION)
-            val draft = newSessionDraftStore.openAt(currentProfileId(), NewSessionDraftStart.forDirectory(projectList.projects(), directory))
-            openDraft(draft.directory)
-        }
-
-        private fun openDraft(directory: String) {
-            clearProjectSessionCreateError()
-            _revealNewestToken.update { it + 1 }
-            projectList.updateContent { state ->
-                if (state is MainScreenUiState.Loaded) {
-                    state.copy(pendingOpenSession = newSessionOpenTarget(directory))
-                } else {
-                    state
-                }
-            }
-        }
-
-        /** A project the draft's Add project… asked for was added: it becomes the draft's, which opens again. */
-        private fun openDraftWithAddedProject(worktree: String) {
-            val profileId = currentProfileId()
-            val draft = newSessionDraftStore.openAt(profileId, NewSessionDraftStart.forDirectory(projectList.projects(), worktree))
-            openDraft(draft.directory)
+            projectList.openNewSessionHere(directory)
         }
 
         private fun currentProfileId(): String = connectionSessionCoordinator.currentProfile()?.id.orEmpty()
 
         fun consumePendingOpenSession() {
-            projectList.updateContent { state ->
-                if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = null) else state
-            }
+            projectList.consumePendingOpenSession()
         }
 
         fun consumePendingScopeRequest() {
-            _pendingScopeRequest.value = null
+            projectList.consumePendingScopeRequest()
         }
 
         /**
@@ -664,21 +606,11 @@ class MainScreenViewModel
         }
 
         fun markHomeHidden(nowEpochMs: Long = System.currentTimeMillis()) {
-            if (lastHomeHiddenAtEpochMs != null) return
-            lastHomeHiddenAtEpochMs = nowEpochMs
-            HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(nowEpochMs)
+            projectList.markHidden(nowEpochMs)
         }
 
         fun onHomeRevealed(nowEpochMs: Long = System.currentTimeMillis()) {
-            if (SessionListScrollPin.shouldResetForStaleAbsence(
-                    lastHiddenAtEpochMs = lastHomeHiddenAtEpochMs,
-                    nowEpochMs = nowEpochMs,
-                )
-            ) {
-                _revealNewestToken.update { it + 1 }
-            }
-            lastHomeHiddenAtEpochMs = null
-            HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(null)
+            projectList.onRevealed(nowEpochMs)
         }
 
         /**
@@ -687,50 +619,15 @@ class MainScreenViewModel
          * home sections, and new-session picker all derive from it.
          */
         fun reorderProjects(projectIds: List<String>) {
-            val state = content as? MainScreenUiState.Loaded ?: return
-            // Picker rows are projects; each moves with every added path it groups.
-            val worktrees = projectIds.flatMap { id -> projectList.memberPathsOf(id, state.projects) }.distinct()
-            val current = state.sections.map { it.worktree }
-            if (current == worktrees || current.size != worktrees.size || current.toSet() != worktrees.toSet()) return
-            val byWorktree = state.sections.associateBy { it.worktree }
-            projectList.updateContent { latest ->
-                if (latest is MainScreenUiState.Loaded) {
-                    latest.copy(sections = worktrees.mapNotNull { byWorktree[it] })
-                } else {
-                    latest
-                }
-            }
-            projectList.reorderObserved(worktrees)
+            val worktrees = projectList.reorder(projectIds) ?: return
             logAction(ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER, ProductAnalytics.Action.HOME_REORDER_PROJECTS)
-            val serverBaseUrl = serverBaseUrl
-            viewModelScope.launch {
-                runCatching { connectionProfileStore.setAddedWorktrees(serverBaseUrl, worktrees) }
-                    .onFailure { logI("reorder projects persist failed: ${it.message}") }
-            }
+            projectList.persistOrder(worktrees)
         }
 
         /** [projectId] is a Home project key or one of its added paths; removal takes every member path. */
         fun requestRemoveProject(projectId: String) {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_REMOVE_PROJECT)
-            projectList.updateContent { state ->
-                if (state is MainScreenUiState.Loaded) {
-                    val project = state.projects.firstOrNull { it.key == projectId || projectId in it.memberPaths }
-                    if (project != null) {
-                        state.copy(
-                            pendingProjectRemoval =
-                                ProjectRemovalUi(
-                                    worktree = project.primaryPath,
-                                    displayName = project.displayName,
-                                    worktrees = project.memberPaths,
-                                ),
-                        )
-                    } else {
-                        state
-                    }
-                } else {
-                    state
-                }
-            }
+            projectList.requestRemove(projectId)
         }
 
         fun dismissProjectRemoval() {
@@ -738,31 +635,17 @@ class MainScreenViewModel
                 ProductAnalytics.Screen.HOME_REMOVE_PROJECT_CONFIRM,
                 ProductAnalytics.Action.HOME_REMOVE_PROJECT_CANCEL,
             )
-            clearPendingProjectRemoval()
-        }
-
-        private fun clearPendingProjectRemoval() {
-            projectList.updateContent { state ->
-                if (state is MainScreenUiState.Loaded) state.copy(pendingProjectRemoval = null) else state
-            }
+            projectList.clearPendingRemoval()
         }
 
         fun confirmRemoveProject() {
-            val pending = (content as? MainScreenUiState.Loaded)?.pendingProjectRemoval ?: return
+            val pending = projectList.pendingRemoval ?: return
             logAction(
                 ProductAnalytics.Screen.HOME_REMOVE_PROJECT_CONFIRM,
                 ProductAnalytics.Action.HOME_REMOVE_PROJECT_CONFIRM,
             )
             viewModelScope.launch {
-                for (worktree in pending.worktrees) {
-                    runCatching { connectionProfileStore.removeWorktree(serverBaseUrl, worktree) }
-                    runCatching { sessionCache.purgeWorktree(serverBaseUrl, worktree) }
-                    projectList.forgetProjectLoad(worktree)
-                    worktreesRegion.forget(worktree)
-                    logI("remove project worktree=$worktree")
-                }
-                clearPendingProjectRemoval()
-                projectList.load(skipProbe = true)
+                projectList.removeProject(pending)
                 _removalSnackbar.value = HomeSnackbar(text = HomeText.removedProject(pending.displayName))
             }
         }
@@ -893,9 +776,7 @@ class MainScreenViewModel
                 ProductAnalytics.Action.HOME_FORK_OPEN,
             )
             val target = sessionActionsRegion.takeForkedOpenTarget() ?: return
-            projectList.updateContent { state ->
-                if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = target) else state
-            }
+            projectList.openSession(target)
         }
 
         fun chooseForkStay() {
@@ -973,22 +854,15 @@ class MainScreenViewModel
 
         /** Patches the Add project sheet into Empty/Loaded; a content rebuild hides it until the next change. */
         private fun publishAddProjectSheet(sheet: AddProjectSheetUi) {
-            projectList.updateContent { state ->
-                when (state) {
-                    is MainScreenUiState.Empty ->
-                        state.copy(showAddProjectSheet = true, addProjectSheet = sheet)
-                    is MainScreenUiState.Loaded ->
-                        state.copy(showAddProjectSheet = true, addProjectSheet = sheet)
-                    else -> state
-                }
-            }
+            projectList.setSheet(sheet)
         }
 
         private fun onWorktreeRequest(request: HomeWorktreeRequest) {
             when (request) {
                 is HomeWorktreeRequest.ShowSessions ->
-                    _pendingScopeRequest.value =
-                        HomeScopeRequest(HomeScope.worktreeId(request.projectKey, request.directory), evenFromAll = true)
+                    projectList.requestScope(
+                        HomeScopeRequest(HomeScope.worktreeId(request.projectKey, request.directory), evenFromAll = true),
+                    )
                 is HomeWorktreeRequest.NewSession -> openNewSessionHere(request.directory)
                 is HomeWorktreeRequest.Removed -> worktreesRegion.onWorktreeRemoved(request.directory)
             }
@@ -1016,19 +890,6 @@ class MainScreenViewModel
 
         private fun supportsSessionViewed(): Boolean = activeConnectionManager.currentCapabilities().supportsSessionViewed
 
-        private fun clearProjectSessionCreateError() {
-            setProjectSessionCreateError(null)
-        }
-
-        private fun setProjectSessionCreateError(message: UiText?) {
-            projectList.updateContent { state ->
-                when (state) {
-                    is MainScreenUiState.Empty -> state.copy(projectSessionCreateError = message)
-                    is MainScreenUiState.Loaded -> state.copy(projectSessionCreateError = message)
-                    else -> state
-                }
-            }
-        }
     }
 
 fun suggestedHomeForkTitle(currentTitle: String): String = SessionForkTitle.suggested(currentTitle)

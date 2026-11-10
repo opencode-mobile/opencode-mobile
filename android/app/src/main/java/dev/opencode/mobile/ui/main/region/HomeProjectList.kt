@@ -4,6 +4,8 @@ import androidx.annotation.StringRes
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.userMessage
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.SessionMovedUpdate
 import dev.opencode.mobile.domain.event.isWorktreeUpdated
@@ -18,10 +20,13 @@ import dev.opencode.mobile.domain.live.SessionListSnapshot
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
+import dev.opencode.mobile.domain.session.NewSessionDraftStart
+import dev.opencode.mobile.domain.session.NewSessionDraftStore
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionSummary
@@ -31,14 +36,20 @@ import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
+import dev.opencode.mobile.ui.components.SessionListScrollPin
+import dev.opencode.mobile.ui.main.AddProjectSheetUi
 import dev.opencode.mobile.ui.main.HomeDirectoryRows
 import dev.opencode.mobile.ui.main.HomeProjectFirstLoads
+import dev.opencode.mobile.ui.main.HomeScopeRequest
 import dev.opencode.mobile.ui.main.HomeSessionPagingState
 import dev.opencode.mobile.ui.main.HomeSessionRows
 import dev.opencode.mobile.ui.main.MainScreenUiState
 import dev.opencode.mobile.ui.main.ProjectFirstLoad
 import dev.opencode.mobile.ui.main.ProjectFirstLoadTiming
+import dev.opencode.mobile.ui.main.ProjectRemovalUi
 import dev.opencode.mobile.ui.main.ProjectSectionUi
+import dev.opencode.mobile.ui.main.SessionOpenTarget
+import dev.opencode.mobile.ui.main.newSessionOpenTarget
 import dev.opencode.mobile.ui.main.withSessionMoved
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +68,9 @@ import kotlinx.coroutines.launch
 data class HomeProjectListState(
     val content: MainScreenUiState = MainScreenUiState.Probing,
     val paging: HomeSessionPagingState = HomeSessionPagingState(),
+    /** Bumped when the list should scroll to its newest row. */
+    val revealNewestToken: Int = 0,
+    val pendingScopeRequest: HomeScopeRequest? = null,
 )
 
 /**
@@ -70,6 +84,7 @@ internal class HomeProjectList(
     private val sessionRepository: SessionRepository,
     private val connectionProfileStore: ConnectionProfileStore,
     private val sessionCache: SessionCache,
+    private val newSessionDraftStore: NewSessionDraftStore,
     private val sessionLiveStore: SessionLiveStore,
     private val sessionStatusLiveStore: SessionStatusLiveStore,
     private val sessionReadyStore: SessionReadyStore,
@@ -81,6 +96,7 @@ internal class HomeProjectList(
     private val scope: CoroutineScope,
     private val supportsSessionViewed: () -> Boolean,
     private val serverBaseUrl: () -> String,
+    private val currentProfileId: () -> String,
     private val isConnected: () -> Boolean,
     /** Whether other saved addresses are still being tried. */
     private val addressCheckRunning: () -> Boolean,
@@ -99,6 +115,8 @@ internal class HomeProjectList(
     var homeRowsDispatcher: CoroutineDispatcher = Dispatchers.Default
 
     private var loadMoreJob: Job? = null
+
+    private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
 
     /** An empty Home failed its probe while other saved addresses were still being tried. */
     private var probeWaitsOnAddressCheck = false
@@ -189,6 +207,162 @@ internal class HomeProjectList(
         pendingFirstServerSnapshots.clear()
     }
 
+    /** The project removal waiting for confirmation, if any. */
+    val pendingRemoval: ProjectRemovalUi?
+        get() = (content as? MainScreenUiState.Loaded)?.pendingProjectRemoval
+
+    /**
+     * New session (#1004): opens the profile's draft (it wins), else a fresh one at [start].
+     * Nothing is created on the server until the draft's first send.
+     */
+    fun openNewSession(start: NewSessionDraftStart) {
+        val draft = newSessionDraftStore.open(currentProfileId(), start)
+        openDraft(draft.directory)
+    }
+
+    /** New session in [directory] (the Worktrees screen): the draft keeps its text and runs there. */
+    fun openNewSessionHere(directory: String) {
+        val draft = newSessionDraftStore.openAt(currentProfileId(), NewSessionDraftStart.forDirectory(projects(), directory))
+        openDraft(draft.directory)
+    }
+
+    /** A project the draft's Add project… asked for was added: it becomes the draft's, which opens again. */
+    fun openDraftWithAddedProject(worktree: String) {
+        val profileId = currentProfileId()
+        val draft = newSessionDraftStore.openAt(profileId, NewSessionDraftStart.forDirectory(projects(), worktree))
+        openDraft(draft.directory)
+    }
+
+    /** Opens [target] (a fork the user chose to open). */
+    fun openSession(target: SessionOpenTarget) {
+        updateContent { state ->
+            if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = target) else state
+        }
+    }
+
+    fun consumePendingOpenSession() {
+        updateContent { state ->
+            if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = null) else state
+        }
+    }
+
+    fun requestScope(request: HomeScopeRequest) {
+        updateState { it.copy(pendingScopeRequest = request) }
+    }
+
+    fun consumePendingScopeRequest() {
+        updateState { it.copy(pendingScopeRequest = null) }
+    }
+
+    fun markHidden(nowEpochMs: Long) {
+        if (lastHomeHiddenAtEpochMs != null) return
+        lastHomeHiddenAtEpochMs = nowEpochMs
+        HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(nowEpochMs)
+    }
+
+    fun onRevealed(nowEpochMs: Long) {
+        if (SessionListScrollPin.shouldResetForStaleAbsence(
+                lastHiddenAtEpochMs = lastHomeHiddenAtEpochMs,
+                nowEpochMs = nowEpochMs,
+            )
+        ) {
+            updateState { it.copy(revealNewestToken = it.revealNewestToken + 1) }
+        }
+        lastHomeHiddenAtEpochMs = null
+        HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(null)
+    }
+
+    /**
+     * Applies a new added-project order from the project picker; returns the new added-path
+     * order, or null when nothing changed. Picker rows are projects; each moves with every
+     * added path it groups.
+     */
+    fun reorder(projectIds: List<String>): List<String>? {
+        val state = content as? MainScreenUiState.Loaded ?: return null
+        val worktrees = projectIds.flatMap { id -> memberPathsOf(id, state.projects) }.distinct()
+        val current = state.sections.map { it.worktree }
+        if (current == worktrees || current.size != worktrees.size || current.toSet() != worktrees.toSet()) return null
+        val byWorktree = state.sections.associateBy { it.worktree }
+        updateContent { latest ->
+            if (latest is MainScreenUiState.Loaded) {
+                latest.copy(sections = worktrees.mapNotNull { byWorktree[it] })
+            } else {
+                latest
+            }
+        }
+        if (observedWorktrees.isNotEmpty()) {
+            observedWorktrees = worktrees
+        }
+        return worktrees
+    }
+
+    /** Saves the added-path order to the Connection Profile; the dock and pickers derive from it. */
+    fun persistOrder(worktrees: List<String>) {
+        val serverBaseUrl = serverBaseUrl()
+        scope.launch {
+            runCatching { connectionProfileStore.setAddedWorktrees(serverBaseUrl, worktrees) }
+                .onFailure { logI("reorder projects persist failed: ${it.message}") }
+        }
+    }
+
+    /** [projectId] is a Home project key or one of its added paths; removal takes every member path. */
+    fun requestRemove(projectId: String) {
+        updateContent { state ->
+            if (state is MainScreenUiState.Loaded) {
+                val project = state.projects.firstOrNull { it.key == projectId || projectId in it.memberPaths }
+                if (project != null) {
+                    state.copy(
+                        pendingProjectRemoval =
+                            ProjectRemovalUi(
+                                worktree = project.primaryPath,
+                                displayName = project.displayName,
+                                worktrees = project.memberPaths,
+                            ),
+                    )
+                } else {
+                    state
+                }
+            } else {
+                state
+            }
+        }
+    }
+
+    fun clearPendingRemoval() {
+        updateContent { state ->
+            if (state is MainScreenUiState.Loaded) state.copy(pendingProjectRemoval = null) else state
+        }
+    }
+
+    /** Removes every path of [pending] from the profile and its cache, then reloads Home. */
+    suspend fun removeProject(pending: ProjectRemovalUi) {
+        for (worktree in pending.worktrees) {
+            runCatching { connectionProfileStore.removeWorktree(serverBaseUrl(), worktree) }
+            runCatching { sessionCache.purgeWorktree(serverBaseUrl(), worktree) }
+            forgetProjectLoad(worktree)
+            homeWorktrees.forget(worktree)
+            logI("remove project worktree=$worktree")
+        }
+        clearPendingRemoval()
+        load(skipProbe = true)
+    }
+
+    /**
+     * Patches the Add project sheet into Empty/Loaded (null hides it). A content rebuild hides it
+     * until the next sheet change (H-AH-2).
+     */
+    fun setSheet(sheet: AddProjectSheetUi?) {
+        updateContent { state ->
+            when (state) {
+                is MainScreenUiState.Empty ->
+                    state.copy(showAddProjectSheet = sheet != null, addProjectSheet = sheet)
+                is MainScreenUiState.Loaded ->
+                    state.copy(showAddProjectSheet = sheet != null, addProjectSheet = sheet)
+                else -> state
+            }
+        }
+    }
+
     /** The address check moved the connection: a probe no longer waits on it. */
     fun clearProbeWait() {
         probeWaitsOnAddressCheck = false
@@ -205,13 +379,6 @@ internal class HomeProjectList(
     suspend fun invalidateAll() {
         sessionLiveStore.invalidate(null)
         sessionStatusLiveStore.invalidate(null)
-    }
-
-    /** New added-path order; live observations follow it. */
-    fun reorderObserved(worktrees: List<String>) {
-        if (observedWorktrees.isNotEmpty()) {
-            observedWorktrees = worktrees
-        }
     }
 
     fun startLiveObservations(worktrees: List<String>) {
@@ -584,6 +751,32 @@ internal class HomeProjectList(
         @StringRes fallback: Int,
     ): UiText = error.message?.let(UiText::verbatim) ?: UiText.resource(fallback)
 
+    private fun openDraft(directory: String) {
+        setProjectSessionCreateError(null)
+        updateState { it.copy(revealNewestToken = it.revealNewestToken + 1) }
+        updateContent { state ->
+            if (state is MainScreenUiState.Loaded) {
+                state.copy(pendingOpenSession = newSessionOpenTarget(directory))
+            } else {
+                state
+            }
+        }
+    }
+
+    private fun setProjectSessionCreateError(message: UiText?) {
+        updateContent { state ->
+            when (state) {
+                is MainScreenUiState.Empty -> state.copy(projectSessionCreateError = message)
+                is MainScreenUiState.Loaded -> state.copy(projectSessionCreateError = message)
+                else -> state
+            }
+        }
+    }
+
+    private fun logI(message: String) {
+        DiagnosticLog.info(DiagnosticLogArea.Chat, message)
+    }
+
     /** Probes the server; its answer can turn on capabilities the menu entry was waiting for. */
     private suspend fun probeServer() {
         projectRepository.probeServer()
@@ -690,7 +883,11 @@ internal class HomeProjectList(
     }
 
     private fun updatePaging(transform: (HomeSessionPagingState) -> HomeSessionPagingState) {
-        state = state.copy(paging = transform(state.paging))
+        updateState { it.copy(paging = transform(it.paging)) }
+    }
+
+    private fun updateState(transform: (HomeProjectListState) -> HomeProjectListState) {
+        state = transform(state)
         onChange(state)
     }
 }
