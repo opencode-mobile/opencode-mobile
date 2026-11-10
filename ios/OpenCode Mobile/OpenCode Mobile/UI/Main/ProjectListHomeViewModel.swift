@@ -1992,7 +1992,7 @@ final class ProjectListHomeViewModel {
         if let foregroundEventStream {
             worktreeEventTask = Task { [weak self] in
                 for await event in foregroundEventStream.events() {
-                    if event.type == "worktree.updated", let projectID = event.namedProjectID {
+                    if event.isWorktreeUpdated, let projectID = event.namedProjectID {
                         await self?.refetchWorktreeMark(projectID)
                     } else if event.triggersHomeRefresh {
                         self?.scheduleWorktreeExtrasRefresh()

@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.sessionchat.region
 
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.OpencodeEventTypes
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.PermissionDecision
@@ -199,7 +200,7 @@ class SessionChatRepoStripTest {
             assertEquals("fix/probe", region.state.value.branch)
 
             repository.info = VcsInfo("main", "main")
-            events.emit(OpencodeEvent(type = SessionChatRepoStrip.BRANCH_UPDATED_EVENT, sessionId = null))
+            events.emit(OpencodeEvent(type = OpencodeEventTypes.BRANCH_UPDATED, sessionId = null))
             advanceUntilIdle()
             assertEquals("main", region.state.value.branch)
         }

@@ -2,9 +2,10 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
+import dev.opencode.mobile.domain.message.inputSessionId
+import dev.opencode.mobile.domain.message.linkDescription
+import dev.opencode.mobile.domain.message.linkedChildSessionId
+import dev.opencode.mobile.domain.message.withChildSessionId
 
 /** A child session the linker may attach to a subagent tool part. */
 data class SessionChatChildSessionCandidate(
@@ -86,20 +87,13 @@ object SessionChatChildSessionLinker {
             part is MessagePart.Tool && isSubagentTool(part.toolName) && metadataSessionId(part) == null
         }
 
-    private fun MessagePart.Tool.withSessionId(id: String): MessagePart.Tool =
-        copy(metadata = JsonObject((metadata ?: JsonObject(emptyMap())) + ("sessionID" to JsonPrimitive(id))))
+    private fun MessagePart.Tool.withSessionId(id: String): MessagePart.Tool = withChildSessionId(id)
 
     private fun ownSessionId(tool: MessagePart.Tool): String? = metadataSessionId(tool) ?: inputSessionId(tool)
 
-    private fun metadataSessionId(tool: MessagePart.Tool): String? =
-        string(tool.metadata, "sessionID") ?: string(tool.metadata, "sessionId")
+    private fun metadataSessionId(tool: MessagePart.Tool): String? = tool.linkedChildSessionId
 
-    private fun inputSessionId(tool: MessagePart.Tool): String? = string(tool.input, "sessionID")
+    private fun inputSessionId(tool: MessagePart.Tool): String? = tool.inputSessionId
 
-    private fun description(tool: MessagePart.Tool): String? = string(tool.input, "description")
-
-    private fun string(
-        json: JsonObject?,
-        key: String,
-    ): String? = (json?.get(key) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }
+    private fun description(tool: MessagePart.Tool): String? = tool.linkDescription
 }

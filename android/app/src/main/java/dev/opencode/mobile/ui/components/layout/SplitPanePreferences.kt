@@ -1,11 +1,8 @@
-package dev.opencode.mobile.domain.preferences
+package dev.opencode.mobile.ui.components
 
 import android.content.Context
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.ui.components.OpenCodeSplitPaneLayout
-import dev.opencode.mobile.ui.components.OpenCodeSplitPaneScreen
-import dev.opencode.mobile.ui.components.OpenCodeSplitPaneState
 
 /** Pure key naming and value resolution for [SplitPanePreferences]. */
 internal object SplitPanePreferencesCodec {

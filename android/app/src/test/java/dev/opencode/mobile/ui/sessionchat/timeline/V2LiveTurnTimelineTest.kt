@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.message.MessagePatch
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.MessageWindowMerge
+import dev.opencode.mobile.domain.message.PresentationBlockId
 import dev.opencode.mobile.domain.message.matchesTailIdentity
 import dev.opencode.mobile.domain.message.NoticeModelRef
 import dev.opencode.mobile.domain.message.TimelineNotice

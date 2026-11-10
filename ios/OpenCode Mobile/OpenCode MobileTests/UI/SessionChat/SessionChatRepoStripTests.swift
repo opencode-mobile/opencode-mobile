@@ -101,7 +101,7 @@ struct SessionChatRepoStripTests {
         #expect(region.state.branch == "fix/probe")
 
         repository.info = VcsInfo(currentBranch: "main", defaultBranch: "main")
-        events.emit(OpencodeEvent(type: SessionChatRepoStrip.branchUpdatedEvent, sessionID: nil))
+        events.emit(OpencodeEvent(type: OpencodeEventTypes.branchUpdated, sessionID: nil))
         await settle { region.state.branch == "main" }
         #expect(region.state.branch == "main")
         region.stop()

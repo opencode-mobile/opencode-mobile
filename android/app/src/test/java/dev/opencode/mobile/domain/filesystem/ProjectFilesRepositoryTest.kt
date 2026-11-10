@@ -5,9 +5,9 @@ import dev.opencode.mobile.data.remote.V1FileContentResponse
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.text.EnglishStrings
-import dev.opencode.mobile.ui.text.resolve
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope

@@ -84,6 +84,7 @@ import dev.opencode.mobile.domain.session.SessionRevert
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SideQuestionStore
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
 import dev.opencode.mobile.domain.worktree.CreatedWorktree
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
@@ -103,7 +104,6 @@ import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsCopy
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import kotlinx.coroutines.CompletableDeferred
@@ -8696,7 +8696,6 @@ class SessionChatViewModelTest {
             sessionReadyStore = sessionReadyStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
-            eventDomainAdapter = EventDomainAdapter(json),
             connectionSessionCoordinator = connectionSessionCoordinator,
             sessionModelSelectionStore = sessionModelSelectionStore,
             composerDraftStore = composerDraftStore,

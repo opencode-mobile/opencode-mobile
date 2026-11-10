@@ -1,7 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.R
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 
 /**
  * Status-chrome copy for Session Compact (OPE-116, prototype B).

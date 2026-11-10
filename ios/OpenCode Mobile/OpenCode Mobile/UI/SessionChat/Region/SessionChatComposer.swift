@@ -2,12 +2,6 @@ import Foundation
 
 @MainActor
 final class SessionChatComposer {
-    /// Server catalog events after which the model list is refetched. A freshly started
-    /// server can answer the first `GET model` before its catalog is ready, then announce it.
-    static let catalogUpdateEvents: Set<String> = ["model.updated", "provider.updated"]
-    /// Stream (re)connects after which the model list is refetched: catalog events the server
-    /// sent while the stream was down (a restart) are never replayed.
-    static let catalogReconnectEvents: Set<String> = ["server.connected", "stream.reconnected"]
     /// Backoff for refetching a catalog that came back empty (a server still loading providers).
     nonisolated static let defaultCatalogRetryDelaysMs = [1_000, 2_000, 4_000]
 
@@ -229,9 +223,7 @@ final class SessionChatComposer {
         catalogEventTask = Task { [weak self] in
             for await event in foregroundEventStream.events() {
                 if Task.isCancelled { return }
-                guard Self.catalogUpdateEvents.contains(event.type)
-                    || Self.catalogReconnectEvents.contains(event.type)
-                else { continue }
+                guard event.triggersModelCatalogRefresh else { continue }
                 self?.refreshCatalogAfterServerUpdate(reason: event.type)
             }
         }

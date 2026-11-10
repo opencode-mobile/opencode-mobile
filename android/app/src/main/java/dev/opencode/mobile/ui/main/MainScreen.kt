@@ -52,6 +52,8 @@ import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.NewSessionDraftStart
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -103,7 +105,6 @@ import dev.opencode.mobile.ui.keyboard.KeyboardShortcutRules
 import dev.opencode.mobile.ui.keyboard.SessionStepDirection
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.ui.worktrees.WorktreesTags
 

@@ -9,8 +9,8 @@ import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.terminal.RunningTerminal
 import dev.opencode.mobile.domain.terminal.TerminalRepository
 import dev.opencode.mobile.domain.terminal.TerminalSession
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.network.ActiveConnectionManager
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

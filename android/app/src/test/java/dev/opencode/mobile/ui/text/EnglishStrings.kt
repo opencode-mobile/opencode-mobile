@@ -1,6 +1,9 @@
 package dev.opencode.mobile.ui.text
 
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory

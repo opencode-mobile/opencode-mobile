@@ -17,12 +17,13 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
-import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
+import dev.opencode.mobile.domain.event.isWorktreeUpdated
 import dev.opencode.mobile.domain.event.namedProjectId
 import dev.opencode.mobile.domain.event.sessionMoved
+import dev.opencode.mobile.domain.event.sessionRevertUpdate
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.goal.EmptySessionGoalRepository
 import dev.opencode.mobile.domain.goal.SessionGoalAction
@@ -55,6 +56,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ServerFilePreviews
 import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
 import dev.opencode.mobile.domain.message.UnavailableServerFilePreviews
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionOption
@@ -115,7 +117,6 @@ import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
 import dev.opencode.mobile.ui.worktree.WorktreeBaseOptions
 import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -154,7 +155,6 @@ class SessionChatViewModel
         private val sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
         sessionStatusLiveStore: SessionStatusLiveStore,
         foregroundEventStream: ForegroundEventStream,
-        eventDomainAdapter: EventDomainAdapter,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionModelSelectionStore: SessionModelSelectionStore,
         composerDraftStore: ComposerDraftStore,
@@ -233,7 +233,6 @@ class SessionChatViewModel
                 sessionRepository = sessionRepository,
                 sessionStatusLiveStore = sessionStatusLiveStore,
                 foregroundEventStream = foregroundEventStream,
-                eventDomainAdapter = eventDomainAdapter,
                 scope = viewModelScope,
                 liveUpdates = liveUpdates,
             )
@@ -467,7 +466,7 @@ class SessionChatViewModel
             composer.ioDispatcher = ioDispatcher
             viewModelScope.launch {
                 foregroundEventStream.events.collect { event ->
-                    eventDomainAdapter.sessionRevertUpdate(event)?.let { update ->
+                    event.sessionRevertUpdate()?.let { update ->
                         commands.applyRevertUpdate(update)
                         return@collect
                     }
@@ -475,7 +474,7 @@ class SessionChatViewModel
                         worktreeMove.onSessionMoved(moved, boundSessionId, boundWorktree)?.let(::rebindMovedSession)
                         return@collect
                     }
-                    if (event.type != "worktree.updated") return@collect
+                    if (!event.isWorktreeUpdated) return@collect
                     val projectId = event.namedProjectId() ?: return@collect
                     if (projectId !in checkoutProjectIds) return@collect
                     boundWorktree?.let { scheduleProjectIdentityRefine(it) }

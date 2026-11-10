@@ -30,6 +30,7 @@ import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
@@ -41,7 +42,6 @@ import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellOutputUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
 data class SessionChatComposerState(

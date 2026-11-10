@@ -7,7 +7,7 @@ import androidx.compose.runtime.setValue
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import kotlinx.serialization.json.Json
 
 object ThemeManager {

@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
@@ -25,7 +26,6 @@ import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
 import dev.opencode.mobile.ui.components.SessionListScopeLoad
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
-import dev.opencode.mobile.ui.text.UiText
 
 @Composable
 fun SessionListGalleryScreen(modifier: Modifier = Modifier) {

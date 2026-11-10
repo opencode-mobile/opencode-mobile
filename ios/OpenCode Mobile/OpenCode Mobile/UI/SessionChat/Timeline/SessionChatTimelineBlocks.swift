@@ -1616,7 +1616,7 @@ nonisolated enum SessionChatTimelineBlocks {
         let startedAtMs = tool.timeStartEpochMs
         if isChildSessionTool(tool.toolName) {
             let agent = taskAgentName(tool)
-            let description = (inputString(tool.input, keys: "description", "prompt") ?? childSessionTitle(tool))
+            let description = (tool.inputTaskBrief ?? childSessionTitle(tool))
                 .flatMap(firstLine)
             let toolsSoFar = childToolCount(tool)
             let describedAs = TimelineText.verbatim(ifPresent: nonEmpty(description))
@@ -1658,7 +1658,7 @@ nonisolated enum SessionChatTimelineBlocks {
         if tool.toolName.lowercased() == "invalid" {
             // The server records a call to a tool it does not offer as `invalid`
             // and completes it; on the rail it is a step that did not run.
-            let requested = inputString(tool.input, keys: "tool").map(capitalizedToolName)
+            let requested = tool.inputRequestedTool.map(capitalizedToolName)
             return SessionChatStep(
                 id: partId,
                 kind: .tool,
@@ -1709,8 +1709,7 @@ nonisolated enum SessionChatTimelineBlocks {
 
     /// Tools a child session reported in its task metadata (`summary`), if any.
     private static func childToolCount(_ tool: ToolPart) -> Int? {
-        guard case let .array(summary)? = tool.metadata?["summary"] else { return nil }
-        return summary.count
+        tool.summaryCallCount
     }
 
     static let stepCommandMaxLength = 40
@@ -1728,21 +1727,21 @@ nonisolated enum SessionChatTimelineBlocks {
             guard let target else { return running ? .app("timeline.step.reading", "Reading\u{2026}") : card.title }
             return running ? .app("timeline.step.reading_named", "Reading \(target)") : .verbatim(target)
         case "grep", "glob":
-            let target = nonEmpty(inputString(tool.input, keys: "pattern") ?? patternPathSubtitle(tool.input))
+            let target = nonEmpty(tool.inputPattern ?? patternPathSubtitle(tool))
             guard let target else { return running ? .app("timeline.step.searching", "Searching\u{2026}") : card.title }
             return running ? .app("timeline.step.searching_named", "Searching \(target)") : .verbatim(target)
         case "list", "ls":
             let target = nonEmpty(
-                pathSubtitle(tool.input).map(lastPathComponent) ?? inputString(tool.input, keys: "directory")
+                tool.inputTargetPath.map(lastPathComponent) ?? tool.inputDirectory
             )
             guard let target else { return running ? .app("timeline.step.listing", "Listing\u{2026}") : card.title }
             return running ? .app("timeline.step.listing_named", "Listing \(target)") : .verbatim(target)
         case "websearch":
-            let target = nonEmpty(inputString(tool.input, keys: "query"))
+            let target = nonEmpty(tool.inputQuery)
             guard let target else { return running ? .app("timeline.step.searching", "Searching\u{2026}") : card.title }
             return running ? .app("timeline.step.searching_named", "Searching \(target)") : .verbatim(target)
         case "webfetch":
-            let target = nonEmpty(inputString(tool.input, keys: "url").map(hostLabel))
+            let target = nonEmpty(tool.inputURL.map(hostLabel))
             guard let target else { return running ? .app("timeline.step.fetching", "Fetching\u{2026}") : card.title }
             return running ? .app("timeline.step.fetching_named", "Fetching \(target)") : .verbatim(target)
         case "edit", "apply_patch", "patch":
@@ -1754,7 +1753,7 @@ nonisolated enum SessionChatTimelineBlocks {
             guard let target else { return running ? .app("timeline.step.writing", "Writing\u{2026}") : card.title }
             return running ? .app("timeline.step.writing_named", "Writing \(target)") : .verbatim(target)
         case "bash", "shell":
-            let command = (inputString(tool.input, keys: "command") ?? subtitle).map(stepCommandLabel)
+            let command = (tool.inputCommand ?? subtitle).map(stepCommandLabel)
             guard let command = nonEmpty(command) else {
                 return running ? .app("timeline.step.running", "Running\u{2026}") : .app("timeline.step.ran_command", "Ran command")
             }
@@ -1810,7 +1809,7 @@ nonisolated enum SessionChatTimelineBlocks {
         if isQuestionTool(tool) { return card.subtitle }
         switch tool.toolName.lowercased() {
         case "grep", "glob":
-            guard let raw = tool.metadata?["matches"] ?? tool.metadata?["count"], let count = intValue(raw) else {
+            guard let count = tool.searchResultCount else {
                 return nil
             }
             return .app("tool.count.match", "\(count) matches")
@@ -2077,16 +2076,16 @@ nonisolated enum SessionChatTimelineBlocks {
     /// Skill name: the settled server output names it in metadata; before
     /// that the request carries the skill id (older servers sent `name`).
     private static func skillName(_ tool: ToolPart) -> String? {
-        metadataString(tool.metadata, keys: "name") ?? requestedSkillID(tool)
+        tool.skillName ?? requestedSkillID(tool)
     }
 
     /// The skill the request asked for; present from the first update on.
     private static func requestedSkillID(_ tool: ToolPart) -> String? {
-        inputString(tool.input, keys: "id", "name", "skill")
+        tool.inputSkillID
     }
 
     private static func skillDirectory(_ tool: ToolPart) -> String? {
-        metadataString(tool.metadata, keys: "directory")
+        tool.skillDirectory
     }
 
     /// Skills a message loaded, in first-use order across its step paragraphs.
@@ -2214,7 +2213,7 @@ nonisolated enum SessionChatTimelineBlocks {
             kind = .agent
             family = .agent
             label = taskAgentName(tool)
-            brief = (inputString(tool.input, keys: "description", "prompt") ?? childSessionTitle(tool))
+            brief = (tool.inputTaskBrief ?? childSessionTitle(tool))
                 .flatMap(firstLine)
         } else {
             switch name {
@@ -2226,19 +2225,19 @@ nonisolated enum SessionChatTimelineBlocks {
             case "glob":
                 kind = .file
                 family = .explore
-                label = inputString(tool.input, keys: "pattern") ?? patternPathSubtitle(tool.input)
+                label = tool.inputPattern ?? patternPathSubtitle(tool)
             case "grep":
                 kind = .file
                 family = .explore
-                label = inputString(tool.input, keys: "pattern") ?? patternPathSubtitle(tool.input)
+                label = tool.inputPattern ?? patternPathSubtitle(tool)
             case "websearch":
                 kind = .file
                 family = .explore
-                label = inputString(tool.input, keys: "query")
+                label = tool.inputQuery
             case "webfetch":
                 kind = .file
                 family = .explore
-                label = inputString(tool.input, keys: "url").map(hostLabel)
+                label = tool.inputURL.map(hostLabel)
             case "edit", "write", "apply_patch", "patch":
                 kind = .file
                 family = .change
@@ -2246,7 +2245,7 @@ nonisolated enum SessionChatTimelineBlocks {
             case "bash", "shell", "execute":
                 kind = .command
                 family = .command
-                label = (inputString(tool.input, keys: "command") ?? subtitle).map(commandChipLabel)
+                label = (tool.inputCommand ?? subtitle).map(commandChipLabel)
                 if label == nil { appLabel = card.subtitle }
             case "skill":
                 kind = .skill
@@ -2291,8 +2290,8 @@ nonisolated enum SessionChatTimelineBlocks {
     /// tool name stays the fallback and the detail sheet title.
     private static func customToolLabel(_ tool: ToolPart) -> String? {
         runningTitleOverride(tool)
-            ?? inputString(tool.input, keys: "title")
-            ?? inputString(tool.input, keys: "description").flatMap(firstLine)
+            ?? tool.inputTitle
+            ?? tool.inputDescription.flatMap(firstLine)
     }
 
     private static func lastPathComponent(_ path: String) -> String {
@@ -2782,8 +2781,8 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func contextSubtitle(_ tool: ToolPart) -> String? {
         switch tool.toolName.lowercased() {
         case "read": return readPath(tool)
-        case "glob", "grep": return patternPathSubtitle(tool.input)
-        case "websearch": return inputString(tool.input, keys: "query")
+        case "glob", "grep": return patternPathSubtitle(tool)
+        case "websearch": return tool.inputQuery
         default: return nil
         }
     }
@@ -2835,14 +2834,14 @@ nonisolated enum SessionChatTimelineBlocks {
         guard let partId = tool.id else { return nil }
         let agentName = taskAgentName(tool)
         let secondLine =
-            inputString(tool.input, keys: "description", "prompt")
+            tool.inputTaskBrief
             ?? childSessionTitle(tool)
         return .childSessionRow(
             blockID: PresentationBlockId.direct(partId),
             row: SessionChatChildSessionRowBlock(
                 agentName: agentName,
                 letter: SessionChatChildSessionElapsed.letter(from: agentName),
-                isBackground: isTruthyMetadata(tool.metadata, key: "background"),
+                isBackground: tool.isBackground,
                 secondLine: secondLine,
                 timeStartEpochMs: (tool.status == .pending || tool.status == .running)
                     ? tool.timeStartEpochMs
@@ -2899,53 +2898,26 @@ nonisolated enum SessionChatTimelineBlocks {
         _ tool: ToolPart,
         fallbackTitle: TimelineText
     ) -> ToolResultPresentation? {
-        ToolResultInspector.classify(
+        let fields = tool.resultFields
+        return ToolResultInspector.classify(
             ToolResultRequest(
                 toolName: tool.toolName,
                 fallbackTitle: fallbackTitle,
-                command: inputString(tool.input, keys: "command"),
-                path: inputString(tool.input, keys: "filePath", "file", "path"),
-                pattern: inputString(tool.input, keys: "pattern"),
-                searchPath: inputString(tool.input, keys: "path", "directory"),
-                offset: inputInt(tool.input, key: "offset"),
-                limit: inputInt(tool.input, key: "limit"),
-                content: inputString(tool.input, keys: "content"),
+                command: fields.command,
+                path: fields.path,
+                pattern: fields.pattern,
+                searchPath: fields.searchPath,
+                offset: fields.offset,
+                limit: fields.limit,
+                content: fields.content,
                 output: nonBlank(tool.output),
                 error: nonBlank(tool.error),
-                exitCode: metadataInt(tool.metadata, key: "exit"),
-                patch: toolPatch(tool),
-                oldString: inputString(tool.input, keys: "oldString"),
-                newString: inputString(tool.input, keys: "newString")
+                exitCode: fields.exitCode,
+                patch: fields.metadataPatch ?? tool.output.flatMap { $0.contains("@@") ? $0 : nil },
+                oldString: fields.oldString,
+                newString: fields.newString
             )
         )
-    }
-
-    private static func toolPatch(_ tool: ToolPart) -> String? {
-        if let patch = metadataFilediffString(tool.metadata, key: "patch") {
-            return patch
-        }
-        if case let .array(files)? = tool.metadata?["files"] {
-            for element in files {
-                guard case let .dictionary(object) = element else { continue }
-                if let patch = stringFromObject(object, keys: "patch") {
-                    return patch
-                }
-            }
-        }
-        if let output = tool.output, output.contains("@@") {
-            return output
-        }
-        return nil
-    }
-
-    private static func inputInt(_ input: [String: AnyCodable]?, key: String) -> Int? {
-        guard let value = input?[key] else { return nil }
-        return intValue(value)
-    }
-
-    private static func metadataInt(_ metadata: [String: AnyCodable]?, key: String) -> Int? {
-        guard let value = metadata?[key] else { return nil }
-        return intValue(value)
     }
 
     private static func nonBlank(_ value: String?) -> String? {
@@ -2982,18 +2954,9 @@ nonisolated enum SessionChatTimelineBlocks {
     /// non-zero (`metadata.exit`): shown as failed with the exit code.
     private static func failedShellExitCode(name: String, tool: ToolPart) -> Int? {
         guard name == "bash" || name == "shell", tool.status == .completed,
-              let raw = tool.metadata?["exit"], let exit = intValue(raw), exit != 0
+              let exit = tool.exitCode, exit != 0
         else { return nil }
         return exit
-    }
-
-    private static func intValue(_ value: AnyCodable) -> Int? {
-        switch value {
-        case .int(let number): number
-        case .double(let number): Int(number)
-        case .string(let text): Int(text)
-        default: nil
-        }
     }
 
     private struct Chrome {
@@ -3036,7 +2999,7 @@ nonisolated enum SessionChatTimelineBlocks {
             }
         }
         let subtitle = distinctFromName(runningTitleOverride(tool))
-            ?? inputPreview(tool.input)
+            ?? tool.inputPreview
             ?? distinctFromName(tool.title)
         return Chrome(
             title: .verbatim(ToolPartIdentity.calledTitle(tool.toolName)),
@@ -3051,9 +3014,9 @@ nonisolated enum SessionChatTimelineBlocks {
         case "read":
             return contextChrome(tool: tool, subtitle: readPath(tool))
         case "glob":
-            return contextChrome(tool: tool, subtitle: patternPathSubtitle(tool.input))
+            return contextChrome(tool: tool, subtitle: patternPathSubtitle(tool))
         case "grep":
-            return contextChrome(tool: tool, subtitle: patternPathSubtitle(tool.input))
+            return contextChrome(tool: tool, subtitle: patternPathSubtitle(tool))
         case "bash", "shell":
             return shellChrome(tool)
         case "execute":
@@ -3063,9 +3026,9 @@ nonisolated enum SessionChatTimelineBlocks {
         case "plan_exit":
             return planExitChrome(tool)
         case "webfetch":
-            return networkChrome(tool: tool, displayTitle: .app("tool.title.fetch", "Fetch"), subtitleKey: "url")
+            return networkChrome(tool: tool, displayTitle: .app("tool.title.fetch", "Fetch"), subtitle: tool.inputURL)
         case "websearch":
-            return contextChrome(tool: tool, subtitle: inputString(tool.input, keys: "query"))
+            return contextChrome(tool: tool, subtitle: tool.inputQuery)
         case "skill":
             return Chrome(
                 title: .app("tool.title.skill", "Skill"),
@@ -3085,15 +3048,10 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func fileChangeChrome(tool: ToolPart, displayTitle: TimelineText) -> Chrome {
-        let filesArray: [AnyCodable]? = {
-            guard case let .array(array)? = tool.metadata?["files"] else { return nil }
-            return array
-        }()
-        let patchFiles = metadataFiles(tool.metadata)
-        if let filesArray, filesArray.count > 1 {
+        let patchFiles = tool.patchFiles
+        if let fileCount = tool.patchFileCount, fileCount > 1 {
             let additions = positiveCount(patchFiles.reduce(0) { $0 + ($1.additions ?? 0) })
             let deletions = positiveCount(patchFiles.reduce(0) { $0 + ($1.deletions ?? 0) })
-            let fileCount = filesArray.count
             return Chrome(
                 title: .app("tool.title.patch", "Patch"),
                 subtitle: .app("tool.count.file", "\(fileCount) files"),
@@ -3106,15 +3064,15 @@ nonisolated enum SessionChatTimelineBlocks {
 
         let singlePatchFile = patchFiles.count == 1 ? patchFiles[0] : nil
         let path =
-            metadataFilediffString(tool.metadata, key: "file")
+            tool.filediffPath
             ?? singlePatchFile?.path
-            ?? pathSubtitle(tool.input)
+            ?? tool.inputTargetPath
             ?? ToolArgumentsPreview.string(tool, keys: "filePath", "path", "file")
         let additions = positiveCount(
-            metadataFilediffInt(tool.metadata, key: "additions") ?? singlePatchFile?.additions ?? newFileLineCount(tool)
+            tool.filediffAdditions ?? singlePatchFile?.additions ?? newFileLineCount(tool)
         )
         let deletions = positiveCount(
-            metadataFilediffInt(tool.metadata, key: "deletions") ?? singlePatchFile?.deletions
+            tool.filediffDeletions ?? singlePatchFile?.deletions
         )
         let opens = path != nil && canOpenChangesReview(tool.status)
         return Chrome(
@@ -3131,8 +3089,8 @@ nonisolated enum SessionChatTimelineBlocks {
     /// overwrite an existing file adds every line of its `content`.
     private static func newFileLineCount(_ tool: ToolPart) -> Int? {
         guard tool.toolName.lowercased() == "write",
-              !isTruthyMetadata(tool.metadata, key: "exists"),
-              let content = tool.input?["content"]?.stringValue
+              !tool.fileExisted,
+              let content = tool.writeContent
         else { return nil }
         return lineCount(content)
     }
@@ -3148,60 +3106,6 @@ nonisolated enum SessionChatTimelineBlocks {
         status == .completed || status == .error
     }
 
-    private struct PatchFileEntry {
-        let path: String
-        let additions: Int?
-        let deletions: Int?
-    }
-
-    private static func metadataFiles(_ metadata: [String: AnyCodable]?) -> [PatchFileEntry] {
-        guard case let .array(array)? = metadata?["files"] else { return [] }
-        return array.compactMap { element in
-            guard case let .dictionary(obj) = element else { return nil }
-            guard let path = stringFromObject(obj, keys: "filePath", "relativePath", "file") else {
-                return nil
-            }
-            return PatchFileEntry(
-                path: path,
-                additions: intFromObject(obj, key: "additions"),
-                deletions: intFromObject(obj, key: "deletions")
-            )
-        }
-    }
-
-    private static func metadataFilediffString(_ metadata: [String: AnyCodable]?, key: String) -> String? {
-        guard case let .dictionary(filediff)? = metadata?["filediff"] else { return nil }
-        return stringFromObject(filediff, keys: key)
-    }
-
-    private static func metadataFilediffInt(_ metadata: [String: AnyCodable]?, key: String) -> Int? {
-        guard case let .dictionary(filediff)? = metadata?["filediff"] else { return nil }
-        return intFromObject(filediff, key: key)
-    }
-
-    private static func stringFromObject(_ obj: [String: AnyCodable], keys: String...) -> String? {
-        for key in keys {
-            if let value = obj[key]?.stringValue, !value.isEmpty {
-                return value
-            }
-        }
-        return nil
-    }
-
-    private static func intFromObject(_ obj: [String: AnyCodable], key: String) -> Int? {
-        guard let value = obj[key] else { return nil }
-        switch value {
-        case .int(let number):
-            return number
-        case .double(let number):
-            return Int(number)
-        case .string(let text):
-            return Int(text)
-        default:
-            return nil
-        }
-    }
-
     private static func positiveCount(_ value: Int?) -> Int? {
         guard let value, value > 0 else { return nil }
         return value
@@ -3210,10 +3114,10 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func taskChrome(_ tool: ToolPart) -> Chrome {
         let title = taskAgentName(tool)
         let description =
-            inputString(tool.input, keys: "description", "prompt")
+            tool.inputTaskBrief
             ?? runningTitleOverride(tool)
         let subtitle: TimelineText?
-        if let description, isTruthyMetadata(tool.metadata, key: "background") {
+        if let description, tool.isBackground {
             subtitle = .app("tool.subtitle.background", "\(description) (background)")
         } else {
             subtitle = TimelineText.verbatim(ifPresent: description)
@@ -3226,8 +3130,8 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func taskAgentName(_ tool: ToolPart) -> String {
-        inputString(tool.input, keys: "agent", "subagent_type")
-            ?? metadataString(tool.metadata, keys: "agent")
+        tool.inputAgent
+            ?? tool.metadataAgent
             ?? (tool.toolName.compare("subagent", options: .caseInsensitive) == .orderedSame ? "General" : "Task")
     }
 
@@ -3251,7 +3155,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func childSessionId(_ tool: ToolPart) -> String? {
-        metadataString(tool.metadata, keys: "sessionId", "sessionID")
+        tool.childSessionID
     }
 
     private static func contextChrome(tool: ToolPart, subtitle: String?) -> Chrome {
@@ -3263,7 +3167,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func shellChrome(_ tool: ToolPart) -> Chrome {
-        let command = inputString(tool.input, keys: "command")
+        let command = tool.inputCommand
             ?? runningTitleOverride(tool)
             ?? ToolArgumentsPreview.string(tool, keys: "command")
         return Chrome(
@@ -3274,7 +3178,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func executeChrome(_ tool: ToolPart) -> Chrome {
-        let calls = executeCallPreviews(tool.metadata)
+        let calls = tool.executeCallPreviews
         let subtitle: TimelineText? =
             if calls.isEmpty {
                 TimelineText.verbatim(ifPresent: runningTitleOverride(tool) ?? nonEmpty(tool.title))
@@ -3294,23 +3198,11 @@ nonisolated enum SessionChatTimelineBlocks {
         )
     }
 
-    private static func executeCallPreviews(_ metadata: [String: AnyCodable]?) -> [String] {
-        guard case let .array(array)? = metadata?["toolCalls"] else { return [] }
-        return array.compactMap { element in
-            guard case let .dictionary(obj) = element else { return nil }
-            guard let name = scalarString(obj["tool"]), !name.isEmpty else { return nil }
-            let input: [String: AnyCodable]? =
-                if case let .dictionary(dict)? = obj["input"] { dict } else { nil }
-            if let preview = inputPreview(input) { return "\(name) \(preview)" }
-            return name
-        }
-    }
-
     private static func lspChrome(_ tool: ToolPart) -> Chrome {
-        let operation = inputString(tool.input, keys: "operation")
-        let path = pathSubtitle(tool.input)
-        let line = inputScalar(tool.input, keys: "line")
-        let query = inputString(tool.input, keys: "query")
+        let operation = tool.inputOperation
+        let path = tool.inputTargetPath
+        let line = tool.inputLine
+        let query = tool.inputQuery
         let location: String? =
             if let path, let line {
                 "\(path):\(line)"
@@ -3352,49 +3244,8 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
-    private static func inputPreview(_ input: [String: AnyCodable]?) -> String? {
-        if let preferred = inputString(
-            input,
-            keys: "command", "filePath", "path", "file", "url", "query", "pattern", "name", "title", "description", "prompt",
-            "text", "id"
-        ) {
-            return preferred
-        }
-        guard let input else { return nil }
-        let parts = input.compactMap { key, value -> String? in
-            guard key != ToolArgumentsPreview.inputKey, let text = scalarString(value), !text.isEmpty, text.count <= 80 else { return nil }
-            return "\(key)=\(text)"
-        }
-        return parts.isEmpty ? nil : "[\(parts.joined(separator: ", "))]"
-    }
-
-    private static func inputScalar(_ input: [String: AnyCodable]?, keys: String...) -> String? {
-        guard let input else { return nil }
-        for key in keys {
-            if let value = scalarString(input[key]), !value.isEmpty {
-                return value
-            }
-        }
-        return nil
-    }
-
-    private static func scalarString(_ value: AnyCodable?) -> String? {
-        switch value {
-        case let .string(text) where !text.isEmpty:
-            text
-        case let .int(number):
-            String(number)
-        case let .double(number):
-            String(number)
-        case let .bool(flag):
-            String(flag)
-        default:
-            nil
-        }
-    }
-
-    private static func networkChrome(tool: ToolPart, displayTitle: TimelineText, subtitleKey: String) -> Chrome {
-        let subtitle = inputString(tool.input, keys: subtitleKey) ?? runningTitleOverride(tool)
+    private static func networkChrome(tool: ToolPart, displayTitle: TimelineText, subtitle: String?) -> Chrome {
+        let subtitle = subtitle ?? runningTitleOverride(tool)
         let detail: String? =
             switch tool.status {
             case .completed, .error:
@@ -3414,19 +3265,15 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
-    private static func pathSubtitle(_ input: [String: AnyCodable]?) -> String? {
-        inputString(input, keys: "filePath", "path", "file")
-    }
-
     /// Read chrome is the file, settled or still streaming in: v1 sends `filePath`, v2 sends `path`.
     private static func readPath(_ tool: ToolPart) -> String? {
-        inputString(tool.input, keys: "filePath", "file", "path")
+        tool.inputReadPath
             ?? ToolArgumentsPreview.string(tool, keys: "filePath", "file", "path")
     }
 
-    private static func patternPathSubtitle(_ input: [String: AnyCodable]?) -> String? {
-        let pattern = inputString(input, keys: "pattern")
-        let path = inputString(input, keys: "path", "directory")
+    private static func patternPathSubtitle(_ tool: ToolPart) -> String? {
+        let pattern = tool.inputPattern
+        let path = tool.inputSearchPath
         switch (pattern, path) {
         case let (pattern?, path?):
             return "\(pattern) · \(path)"
@@ -3440,7 +3287,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func isQuestionTool(_ tool: ToolPart) -> Bool {
-        ToolPartIdentity.isQuestion(name: tool.toolName, input: tool.input)
+        ToolPartIdentity.isQuestion(tool)
     }
 
     private static func askedQuestionsTitle(_ count: Int) -> TimelineText {
@@ -3448,10 +3295,10 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func questionChrome(_ tool: ToolPart) -> Chrome {
-        let questions = questionTexts(tool.input)
-        let answers = answerTexts(tool.metadata)
+        let questions = tool.inputQuestions
+        let answers = tool.questionAnswers
         let firstQuestion = questions.first
-            ?? inputString(tool.input, keys: "prompt", "text", "question")
+            ?? tool.inputQuestionPrompt
             ?? runningTitleOverride(tool)
         let dismissed = tool.status == .error ? nonEmpty(tool.error) : nil
         let count = max(questions.count, firstQuestion == nil ? 0 : 1)
@@ -3466,29 +3313,6 @@ nonisolated enum SessionChatTimelineBlocks {
         )
     }
 
-    private static func questionTexts(_ input: [String: AnyCodable]?) -> [String] {
-        guard case let .array(array)? = input?["questions"] else { return [] }
-        return array.compactMap { element in
-            guard case let .dictionary(obj) = element else { return nil }
-            return stringFromObject(obj, keys: "question")
-        }
-    }
-
-    private static func answerTexts(_ metadata: [String: AnyCodable]?) -> [String] {
-        guard case let .array(array)? = metadata?["answers"] else { return [] }
-        return array.compactMap { element in
-            switch element {
-            case let .array(values):
-                let joined = values.compactMap(\.stringValue).filter { !$0.isEmpty }.joined(separator: ", ")
-                return joined.isEmpty ? nil : joined
-            case let .string(text) where !text.isEmpty:
-                return text
-            default:
-                return nil
-            }
-        }
-    }
-
     private static func questionDetail(questions: [String], answers: [String], error: String? = nil) -> String? {
         let count = max(questions.count, answers.count)
         let pairs = (0..<count).map { index in
@@ -3499,39 +3323,6 @@ nonisolated enum SessionChatTimelineBlocks {
         }.filter { !$0.isEmpty }
         let parts = pairs + [error].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
-    }
-
-    private static func inputString(_ input: [String: AnyCodable]?, keys: String...) -> String? {
-        guard let input else { return nil }
-        for key in keys {
-            if let value = input[key]?.stringValue, !value.isEmpty {
-                return value
-            }
-        }
-        return nil
-    }
-
-    private static func metadataString(_ metadata: [String: AnyCodable]?, keys: String...) -> String? {
-        guard let metadata else { return nil }
-        for key in keys {
-            if let value = metadata[key]?.stringValue, !value.isEmpty {
-                return value
-            }
-        }
-        return nil
-    }
-
-    private static func isTruthyMetadata(_ metadata: [String: AnyCodable]?, key: String) -> Bool {
-        guard let value = metadata?[key] else { return false }
-        switch value {
-        case .bool(let flag):
-            return flag
-        case .string(let text):
-            let normalized = text.lowercased()
-            return normalized == "true" || normalized == "1"
-        default:
-            return false
-        }
     }
 
     private static func nonEmpty(_ value: String?) -> String? {

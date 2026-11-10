@@ -8,13 +8,13 @@ import dev.opencode.mobile.domain.home.HomeWorktree
 import dev.opencode.mobile.domain.home.HomeWorktreeCopy
 import dev.opencode.mobile.domain.session.NewSessionDraftStart
 import dev.opencode.mobile.domain.session.NewSessionPlace
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRow
 import dev.opencode.mobile.ui.components.SessionListScopeLoad
 import dev.opencode.mobile.ui.components.SessionListSession
-import dev.opencode.mobile.ui.text.UiText
-import dev.opencode.mobile.ui.text.UiTextLookup
-import dev.opencode.mobile.ui.text.resolve
 
 object SessionListHomeChrome {
     data class Project(

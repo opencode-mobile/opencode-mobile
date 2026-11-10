@@ -113,6 +113,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.FollowUpDelivery
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -126,7 +127,6 @@ import dev.opencode.mobile.ui.keyboard.KeyboardPromptKind
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
 import dev.opencode.mobile.ui.keyboard.PromptRecallDirection
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.launch
 import java.util.Locale

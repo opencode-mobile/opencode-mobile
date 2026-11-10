@@ -6,7 +6,7 @@ import dev.opencode.mobile.domain.goal.SessionGoal
 import dev.opencode.mobile.domain.goal.SessionGoalAction
 import dev.opencode.mobile.domain.goal.SessionGoalDomainAdapter
 import dev.opencode.mobile.domain.goal.SessionGoalRepository
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope

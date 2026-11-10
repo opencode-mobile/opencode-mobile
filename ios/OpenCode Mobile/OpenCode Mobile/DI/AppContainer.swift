@@ -329,7 +329,8 @@ extension Container {
                         baseURL: connection.baseURL.absoluteString,
                         username: connection.username
                     )
-                }
+                },
+                codeHighlighter: Container.codeHighlighter
             )
         }.singleton
     }
@@ -945,4 +946,9 @@ extension Container {
         shared.projectionCaches().clearAll()
         await shared.sessionCache().clearAll()
     }
+}
+
+nonisolated extension MessageContentPreparer {
+    /// The app's preparer, coloring code fences with the Session Chat highlighter.
+    static let shared = MessageContentPreparer(textMateEngine: Container.codeHighlighter)
 }

@@ -30,6 +30,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPill
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
@@ -43,8 +46,6 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatActivitySlot
 import dev.opencode.mobile.ui.sessionchat.SessionChatContextItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatNavigationPill
 import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
-import dev.opencode.mobile.ui.text.UiText
-import dev.opencode.mobile.ui.text.UiTextLookup
 import dev.opencode.mobile.ui.text.resolve
 
 /** Where the bottom pill row sits and what it reserves in the timeline. */
