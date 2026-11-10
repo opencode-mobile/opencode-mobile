@@ -296,6 +296,9 @@ final class ProjectListHomeViewModel {
         servers.onSwitchAbandoned = { [weak self] in
             guard let self else { return }
             self.projectList.clearProjectLoads()
+            // The paint may have left the abandoned server's projects here; the reload keeps
+            // whatever it finds for a path.
+            self.worktrees.reset()
             self.projectList.stopLiveObservations()
             await self.refresh()
         }

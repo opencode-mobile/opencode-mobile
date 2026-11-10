@@ -430,6 +430,68 @@ struct ProjectListHomeViewModelTests {
         #expect(rows.map(\.worktree) == ["prj_repo"])
     }
 
+    @Test func aSwitchThatDoesNotStickDropsTheOtherServersProjects() async {
+        // Both servers have the same path saved, resolved to different projects.
+        let store = InMemorySessionCacheStore()
+        func cache(_ profileID: String) -> DefaultSessionCache {
+            DefaultSessionCache(
+                store: store,
+                connectionIdProvider: { profileID },
+                debounceMilliseconds: 0,
+                activityDebounceMilliseconds: 0
+            )
+        }
+        func remembered(_ profileID: String) async -> String? {
+            for _ in 0 ..< 100 {
+                if let found = await cache(profileID).seedProjectResolution(worktree: "/repo", connectionID: nil) {
+                    return found.id
+                }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+            return nil
+        }
+        let activeCache = cache("profile-active")
+        activeCache.rememberProjectResolution(
+            worktree: "/repo",
+            resolution: HomeProjectResolution(id: "prj_active", canonical: "/repo", isRepository: true)
+        )
+        let otherCache = cache("profile-other")
+        otherCache.rememberProjectResolution(
+            worktree: "/repo",
+            resolution: HomeProjectResolution(id: "prj_other", canonical: "/repo", isRepository: true)
+        )
+        #expect(await remembered("profile-active") == "prj_active")
+        #expect(await remembered("profile-other") == "prj_other")
+
+        var active = ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
+        active.id = "profile-active"
+        var other = ConnectionProfile(baseURL: "http://192.168.1.2:4096/", username: "opencode", password: "")
+        other.id = "profile-other"
+        // The store never applies the pick, so the switch does not stick.
+        let profileStore = FakeConnectionProfileStore(
+            initial: ["/repo"],
+            activeProfile: active,
+            profiles: [active, other]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(failingDirectories: ["/repo"]),
+            connectionProfileStore: profileStore,
+            sessionCache: activeCache,
+            initialProfile: active
+        )
+        await viewModel.refresh()
+        #expect(viewModel.uiState.projects.map(\.key) == ["prj_active"])
+        await viewModel.refreshServersChrome()
+
+        // The switch is still in flight while the other server's cached projects paint.
+        profileStore.holdApply()
+        viewModel.switchProfile(id: other.id)
+        #expect(await eventually { viewModel.uiState.projects.map(\.key) == ["prj_other"] })
+        profileStore.releaseApply()
+        #expect(await eventually { viewModel.uiState.servers.active?.id == active.id })
+        #expect(await eventually { viewModel.uiState.projects.map(\.key) == ["prj_active"] })
+    }
+
     @Test func branchesOfWorktreesFoundAfterTheRefreshShowWithoutAPullToRefresh() async {
         // v2: the first inventory knows only the main checkout; the next one (after
         // POST /api/worktree/refresh) adds two worktrees while branch loads are still in flight.
@@ -2813,17 +2875,50 @@ private func folder(_ path: String) -> DirectoryNode {
 private final class FakeConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {
     private var added: [String]
     private let active: ConnectionProfile
+    private let profiles: [ConnectionProfile]?
 
     init(
         initial: [String] = [],
-        activeProfile: ConnectionProfile = ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
+        activeProfile: ConnectionProfile = ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+        profiles: [ConnectionProfile]? = nil
     ) {
         self.added = initial
         self.active = activeProfile
+        self.profiles = profiles
     }
 
     func activeProfile() async -> ConnectionProfile? {
         active
+    }
+
+    func listProfiles() async -> [ConnectionProfile] {
+        profiles ?? [active]
+    }
+
+    private let applyLock = NSLock()
+    private var applyHeld = false
+
+    func holdApply() { setApplyHeld(true) }
+
+    func releaseApply() { setApplyHeld(false) }
+
+    private func setApplyHeld(_ value: Bool) {
+        applyLock.lock()
+        applyHeld = value
+        applyLock.unlock()
+    }
+
+    private var isApplyHeld: Bool {
+        applyLock.lock()
+        defer { applyLock.unlock() }
+        return applyHeld
+    }
+
+    /// Leaves the active profile alone, once released while held.
+    func applyProfile(id _: String) async {
+        while isApplyHeld {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
     }
 
     func saveProfile(_ profile: ConnectionProfile) async {}
