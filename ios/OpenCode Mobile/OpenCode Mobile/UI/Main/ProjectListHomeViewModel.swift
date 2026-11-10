@@ -157,12 +157,9 @@ final class ProjectListHomeViewModel {
     private let sessionAdapter = SessionDomainAdapter()
     private var connectionStateObservationTask: Task<Void, Never>?
     private(set) var liveUpdatesConnectionStatus: SessionConnectionStatus = .offline
+    /// Title / server switcher chrome, copied from the region on every change.
     private(set) var serversChrome = HomeServersChrome()
-    /// Server the user just picked. A late save from the previous server must not paint over it.
-    private var pendingSwitchID: String?
-    private var switchPaintGeneration = 0
-    /// Runs server switches one after another, so the last pick is where the app ends up.
-    @ObservationIgnored private var switchTask: Task<Void, Never>?
+    @ObservationIgnored private let servers: HomeServers
     /// An empty Home failed its probe while other saved addresses were still being tried.
     private var probeWaitsOnAddressCheck = false
     private var serverBaseURL: String {
@@ -315,6 +312,11 @@ final class ProjectListHomeViewModel {
             supported: { activeConnectionManager.capabilities.supportsArchivedSessions }
         )
         lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
+        self.servers = HomeServers(
+            connectionProfileStore: connectionProfileStore,
+            connectionSessionCoordinator: connectionSessionCoordinator,
+            currentProfile: { activeConnectionManager.currentProfile() }
+        )
         self.addProjectRegion = HomeAddProject(
             projectRepository: projectRepository,
             filesystemRepository: filesystemRepository,
@@ -326,6 +328,25 @@ final class ProjectListHomeViewModel {
             Set((self?.homeProjects ?? []).compactMap { project in
                 project.key.hasPrefix(HomeProjectGrouping.pathKeyPrefix) ? nil : project.key
             })
+        }
+        servers.onChange = { [weak self] in
+            guard let self else { return }
+            self.serversChrome = self.servers.state
+        }
+        servers.onSwitchStarted = { [weak self] target, generation in
+            guard let self else { return }
+            // Drop the previous server's live updates immediately. Local projects paint next;
+            // the connection switch and session lists catch up in the background.
+            self.stopLiveObservations()
+            Task { [weak self] in
+                await self?.paintSwitchedServer(baseURL: target.baseURL, id: target.id, generation: generation)
+            }
+        }
+        servers.onSwitchAbandoned = { [weak self] in
+            guard let self else { return }
+            self.clearProjectLoads()
+            self.stopLiveObservations()
+            await self.refresh()
         }
         addProjectRegion.onChange = { [weak self] in
             guard let self else { return }
@@ -349,12 +370,11 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
-                let completesSwitch = self.pendingSwitchID != nil
-                if let pending = self.pendingSwitchID {
+                let completesSwitch = self.servers.pendingID != nil
+                if let pending = self.servers.pendingID {
                     let active = await self.connectionProfileStore.activeProfile()
                     guard active?.id == pending else { return }
-                    self.pendingSwitchID = nil
-                    self.switchPaintGeneration += 1
+                    self.servers.completeSwitch()
                 }
                 // A switch already painted its projects; their skeletons stay until sessions arrive.
                 if !completesSwitch {
@@ -366,7 +386,7 @@ final class ProjectListHomeViewModel {
         }
         connectionSessionCoordinator.onAddressCheck { [weak self] check in
             Task { @MainActor in
-                guard let self, self.pendingSwitchID == nil else { return }
+                guard let self, self.servers.pendingID == nil else { return }
                 switch check.state {
                 case .running:
                     break
@@ -396,7 +416,7 @@ final class ProjectListHomeViewModel {
                 self?.worktreeProjectIDs.removeAll()
                 self?.clearHomeProjectInputs()
                 self?.state = .disconnected
-                self?.serversChrome = HomeServersChrome()
+                self?.servers.clear()
             }
         }
         self.homeWorktreesFeed.onRequest = { [weak self] request in
@@ -472,55 +492,15 @@ final class ProjectListHomeViewModel {
     }
 
     func showServersSheet() {
-        serversChrome.sheetVisible = true
+        servers.showSheet()
     }
 
     func dismissServersSheet() {
-        serversChrome.sheetVisible = false
+        servers.dismissSheet()
     }
 
     func switchProfile(id: String) {
-        guard let target = serversChrome.others.first(where: { $0.id == id }) else { return }
-        pendingSwitchID = id
-        switchPaintGeneration += 1
-        let generation = switchPaintGeneration
-        let previous = serversChrome.active
-        serversChrome = HomeServersChrome(
-            title: .verbatim(target.displayName),
-            isSwitcher: true,
-            active: target,
-            others: ([previous].compactMap { $0 } + serversChrome.others).filter { $0.id != id },
-            sheetVisible: false
-        )
-        // Drop the previous server's live updates immediately. Local projects paint next;
-        // the connection switch and session lists catch up in the background.
-        stopLiveObservations()
-        DiagnosticLog.info(.connection, "switch profile ui id=\(id)")
-        Task { [weak self] in
-            await self?.paintSwitchedServer(baseURL: target.baseURL, id: id, generation: generation)
-        }
-        let previousSwitch = switchTask
-        switchTask = Task { [weak self] in
-            await previousSwitch?.value
-            // A newer pick replaced this one before it started; only the newest one runs.
-            guard let self, self.pendingSwitchID == id else { return }
-            await self.connectionSessionCoordinator.switchProfile(id: id)
-            if await self.connectionProfileStore.activeProfile()?.id != id {
-                await self.abandonSwitch(id: id)
-            }
-        }
-    }
-
-    /// The switch to `id` did not stick. Drop the pending pick, so later saves are not ignored,
-    /// and reload Home and its title from the server that is actually active.
-    private func abandonSwitch(id: String) async {
-        guard pendingSwitchID == id else { return }
-        DiagnosticLog.warning(.connection, "switch profile did not apply id=\(id)")
-        pendingSwitchID = nil
-        switchPaintGeneration += 1
-        clearProjectLoads()
-        stopLiveObservations()
-        await refresh()
+        servers.switchProfile(id: id)
     }
 
     /// The target server's saved projects with their cached sessions, read by profile id because
@@ -532,7 +512,7 @@ final class ProjectListHomeViewModel {
             sections.append(await sectionFromCache(worktree: worktree, connectionID: id))
         }
         let resolutions = await cachedProjectResolutions(worktrees, connectionID: id)
-        guard generation == switchPaintGeneration, pendingSwitchID == id else { return }
+        guard servers.isCurrent(id: id, generation: generation) else { return }
         clearProjectLoads()
         clearHomeProjectInputs()
         projectResolutions = resolutions
@@ -553,16 +533,7 @@ final class ProjectListHomeViewModel {
     }
 
     func refreshServersChrome() async {
-        let profiles = await connectionProfileStore.listProfiles()
-        let active = await connectionProfileStore.activeProfile()
-            ?? activeConnectionManager.currentProfile()
-        serversChrome = HomeServersChrome(
-            title: active.map { OpenCodeText.verbatim($0.displayName) } ?? "home.sessions_title",
-            isSwitcher: active != nil,
-            active: active,
-            others: profiles.filter { $0.id != active?.id },
-            sheetVisible: serversChrome.sheetVisible
-        )
+        await servers.refreshChrome()
     }
 
     /// Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner.
