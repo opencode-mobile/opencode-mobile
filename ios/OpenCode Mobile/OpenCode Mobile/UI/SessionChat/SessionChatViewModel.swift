@@ -35,25 +35,7 @@ final class SessionChatViewModel {
     /// Invalidates in-flight `withObservationTracking` for the collapse preference.
     private var collapsePreferenceGeneration = 0
     private var lastSnackbarKey: String?
-    private var loggedWorkingLamp = false
-    private var lastWorkingLamp: String?
-    private var workingChrome = WorkingTurnIndicator.Chrome.unmounted
-    private var workingHold: WorkingTurnIndicator.Hold?
-    /// Done rows of the background work panel the user has seen (#966); nil until the first
-    /// rows of the open session, which count as seen.
-    private var seenDoneSubagentIDs: Set<String>?
-    /// The background work panel shows its Done tab, so finishes are seen as they land.
-    private var backgroundWorkDoneVisible = false
-    /// When subagents seen working finished live, keyed by tool part id, for rows with no server time.
-    private var subagentFinishTimes: [String: Int64] = [:]
-    /// When the connection last became live; nil while it is not. Rows published before it
-    /// were seen before a gap, so a finish found after it is not stamped locally.
-    private var subagentLiveSinceMs: Int64?
-    /// When the published subagent rows were computed.
-    private var subagentsSeenAtMs: Int64?
-    private var workingHoldTask: Task<Void, Never>?
-    private var pendingPromptsGate = PendingPromptsStripGate()
-    private var pendingPromptsWakeTask: Task<Void, Never>?
+    private let turnStatus: SessionChatTurnStatus
     private var isSessionBound = true
     private var suppressedSnackbarKey: String?
     private var snackbarSequence: UInt64 = 0
@@ -267,6 +249,21 @@ final class SessionChatViewModel {
         )
         let boundSessionInfo = self.sessionInfo
         let boundTimeline = self.timeline
+        let boundCommands = self.commands
+        self.turnStatus = SessionChatTurnStatus(
+            sessionRepository: sessionRepository,
+            clock: clock,
+            loadedMessages: { boundTimeline.loadedMessages() },
+            childSessions: { boundTimeline.childSessions },
+            applyOptimistic: { id, action in
+                switch action {
+                case .steer: boundTimeline.applyOptimisticPendingPrompt(messageID: id, delivery: .steer)
+                case .queue: boundTimeline.applyOptimisticPendingPrompt(messageID: id, delivery: .queue)
+                case .cancel: boundTimeline.applyOptimisticPendingPrompt(messageID: id, removed: true)
+                }
+            },
+            reportError: { boundCommands.reportActionError($0) }
+        )
         self.timelineOffers = SessionChatTimelineOffers(
             clock: clock,
             loadedMessages: { boundTimeline.loadedMessages() }
@@ -304,6 +301,7 @@ final class SessionChatViewModel {
         goalRegion.onChange = { [weak self] in self?.publishUiState() }
         projectHeader.onChange = { [weak self] in self?.publishUiState() }
         dictation.onChange = { [weak self] in self?.publishUiState() }
+        turnStatus.onWake = { [weak self] in self?.publishUiState() }
         timelineOffers.onChange = { [weak self] in self?.publishUiState() }
         timelineOffers.isBound = { [weak self] in self?.isSessionBound ?? false }
         timelineOffers.isBlocked = { [weak self] in self?.uiState.blocksChipTimelineIntro ?? false }
@@ -1152,33 +1150,15 @@ final class SessionChatViewModel {
     }
 
     func steerPendingPrompt(_ id: String) {
-        runPendingPromptAction(
-            actionId: ProductAnalytics.Action.chatSteerPendingPrompt,
-            inboxID: id,
-            optimistic: { self.timeline.applyOptimisticPendingPrompt(messageID: id, delivery: .steer) }
-        ) { sessionID in
-            try await self.sessionRepository.steerPendingPrompt(sessionID: sessionID, inboxID: id)
-        }
+        runPendingPromptAction(.steer, id: id, actionId: ProductAnalytics.Action.chatSteerPendingPrompt)
     }
 
     func queuePendingPrompt(_ id: String) {
-        runPendingPromptAction(
-            actionId: ProductAnalytics.Action.chatQueuePendingPrompt,
-            inboxID: id,
-            optimistic: { self.timeline.applyOptimisticPendingPrompt(messageID: id, delivery: .queue) }
-        ) { sessionID in
-            try await self.sessionRepository.queuePendingPrompt(sessionID: sessionID, inboxID: id)
-        }
+        runPendingPromptAction(.queue, id: id, actionId: ProductAnalytics.Action.chatQueuePendingPrompt)
     }
 
     func cancelPendingPrompt(_ id: String) {
-        runPendingPromptAction(
-            actionId: ProductAnalytics.Action.chatCancelPendingPrompt,
-            inboxID: id,
-            optimistic: { self.timeline.applyOptimisticPendingPrompt(messageID: id, removed: true) }
-        ) { sessionID in
-            try await self.sessionRepository.cancelPendingPrompt(sessionID: sessionID, inboxID: id)
-        }
+        runPendingPromptAction(.cancel, id: id, actionId: ProductAnalytics.Action.chatCancelPendingPrompt)
     }
 
     func clearPendingPrompts() {
@@ -1188,29 +1168,13 @@ final class SessionChatViewModel {
     }
 
     private func runPendingPromptAction(
-        actionId: String,
-        inboxID _: String,
-        optimistic: @escaping () -> Void,
-        call: @escaping (String) async throws -> Bool
+        _ action: SessionChatTurnStatus.PendingPromptAction,
+        id: String,
+        actionId: String
     ) {
         guard activeConnectionManager.capabilities.supportsFollowUpDelivery else { return }
         logChatAction(actionId)
-        let sessionID = sessionID
-        Task {
-            do {
-                let ok = try await call(sessionID)
-                if ok {
-                    optimistic()
-                } else {
-                    commands.reportActionError(Self.pendingPromptFailure)
-                }
-            } catch is CancellationError {
-                return
-            } catch {
-                DiagnosticLog.warning(.chat, "pending prompt update failed session=\(sessionID) error=\(error.localizedDescription)")
-                commands.reportActionError(Self.pendingPromptFailure)
-            }
-        }
+        turnStatus.updatePendingPrompt(action, id: id, sessionID: sessionID)
     }
 
     func sendPrompt() async {
@@ -1394,9 +1358,7 @@ final class SessionChatViewModel {
     /// The background work panel shows (or stops showing) its Done tab (#966). While it
     /// shows, every finished row counts as seen and the tab's dot clears.
     func setBackgroundWorkDoneVisible(_ visible: Bool) {
-        guard backgroundWorkDoneVisible != visible else { return }
-        backgroundWorkDoneVisible = visible
-        if visible { publishUiState() }
+        if turnStatus.setDoneVisible(visible) { publishUiState() }
     }
 
     /// Opens the output sheet of a running shell from the background work panel.
@@ -1539,49 +1501,6 @@ final class SessionChatViewModel {
         await inbox.dismissQuestion(requestID: requestID, sessionID: sessionID)
     }
 
-    /// Subagent rows from the linked timeline, live session activity and the pending
-    /// requests of the session tree; remembers when rows seen working finish.
-    private func resolveSubagents(
-        inboxState: SessionChatInboxRegionState,
-        infoState: SessionInfoRegionState
-    ) -> [SessionChatSubagent] {
-        let nowMs = clock.nowMs()
-        let isLive = infoState.connectionStatus == .live
-        if !isLive {
-            subagentLiveSinceMs = nil
-        } else if subagentLiveSinceMs == nil {
-            subagentLiveSinceMs = nowMs
-        }
-        let seenLive = isLive
-            && subagentsSeenAtMs.map { seen in subagentLiveSinceMs.map { seen >= $0 } ?? false } == true
-        subagentsSeenAtMs = nowMs
-        let messages = SessionChatChildSessionLinker.link(
-            timeline.loadedMessages(),
-            children: timeline.childSessions
-        )
-        func rows(_ finishTimes: [String: Int64]) -> [SessionChatSubagent] {
-            SessionChatBackgroundWork.subagents(
-                messages: messages,
-                sessions: inboxState.permissionSessions + inboxState.questionSessions,
-                busySessionIDs: infoState.busySessionIDs,
-                requestSessionIDs: inboxState.permissionRequests.map(\.sessionID)
-                    + inboxState.questionRequests.map(\.sessionID),
-                localFinishedAtMs: finishTimes
-            )
-        }
-        let current = rows(subagentFinishTimes)
-        let finishTimes = SessionChatBackgroundWork.finishTimes(
-            previous: uiState.subagents,
-            current: current,
-            known: subagentFinishTimes,
-            nowMs: nowMs,
-            seenLive: seenLive
-        )
-        guard finishTimes != subagentFinishTimes else { return current }
-        subagentFinishTimes = finishTimes
-        return rows(finishTimes)
-    }
-
     nonisolated static func orderedPermissionRequests(
         rootSessionID: String,
         sessions: [Session],
@@ -1676,7 +1595,7 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID)")
         cancelDictationForDismiss()
         isSessionBound = false
-        resetWorkingFooter()
+        turnStatus.reset()
         timelineOffers.reset()
         keepSideQuestionDraft()
         composer.flushDraft()
@@ -2016,7 +1935,7 @@ final class SessionChatViewModel {
         sessionID = id
         sessionTitle = title
         expandedStepParagraphs = [:]
-        resetWorkingFooter()
+        turnStatus.reset()
         if movedCheckout {
             worktree = directory
             retargetRegions(directory)
@@ -2126,55 +2045,23 @@ final class SessionChatViewModel {
             : nextTimelineFrame
         let sessionStatusLabel =
             isCompacting ? SessionCompactChrome.statusLabel : infoState.sessionStatusLabel
-        let awaitingUser = !inboxState.permissionRequests.isEmpty || !inboxState.questionRequests.isEmpty
-        let lastIsThinking =
-            WorkingTurnIndicator.isStreamingThinking(messages: timeline.loadedMessages())
-            || WorkingTurnIndicator.lastIsThinking(messages: timelineState.messages)
-        let activeWorkingLabel = WorkingTurnIndicator.labelForActiveTurn(
-            statusLabel: sessionStatusLabel,
-            isCompacting: isCompacting,
-            isAwaitingUser: awaitingUser,
-            sendProgressPercent: composerState.sendProgressPercent,
-            isThinking: lastIsThinking
-        )
-        let workingResolution = WorkingTurnIndicator.resolveFooter(
-            activeLabel: activeWorkingLabel,
-            lastIsThinking: lastIsThinking,
-            hideImmediately: awaitingUser || !isSessionBound,
-            previous: workingChrome,
-            hold: workingHold,
-            nowMs: clock.nowMs()
-        )
-        workingChrome = workingResolution.chrome
-        workingHold = workingResolution.hold
-        scheduleWorkingFooterWake(workingResolution.wakeAfterMs)
-        let workingIndicatorLabel = workingResolution.chrome.label
-        let workingIndicatorCollapsed = workingResolution.chrome.collapsed
-        let workingIndicatorFading = workingResolution.chrome.fading
-        let workingLampKey =
-            "\(workingIndicatorLabel ?? "none"):\(workingIndicatorCollapsed ? 1 : 0):\(workingIndicatorFading ? 1 : 0):\(workingHold != nil ? 1 : 0)"
-        if !loggedWorkingLamp || lastWorkingLamp != workingLampKey {
-            loggedWorkingLamp = true
-            lastWorkingLamp = workingLampKey
-            OpenCodeLog.sessionChat.info(
-                "workingLamp label=\(workingIndicatorLabel ?? "none") collapsed=\(workingIndicatorCollapsed ? 1 : 0) fading=\(workingIndicatorFading ? 1 : 0) hold=\(workingHold != nil ? 1 : 0) status=\(sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
+        let turnStatusResolution = turnStatus.resolve(
+            SessionChatTurnStatusInputs(
+                sessionStatusLabel: sessionStatusLabel,
+                isCompacting: isCompacting,
+                isSessionBound: isSessionBound,
+                messages: timelineState.messages,
+                sendProgressPercent: composerState.sendProgressPercent,
+                pendingPrompts: Self.pendingPrompts(
+                    loaded: timeline.loadedMessages(),
+                    optimistic: timeline.pendingOptimisticItems()
+                ),
+                previousSubagents: uiState.subagents,
+                inboxState: inboxState,
+                infoState: infoState
             )
-        }
-        let pendingResolution = pendingPromptsGate.resolve(
-            Self.pendingPrompts(
-                loaded: timeline.loadedMessages(),
-                optimistic: timeline.pendingOptimisticItems()
-            ),
-            nowMs: clock.nowMs()
         )
-        schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
-        let subagents = resolveSubagents(inboxState: inboxState, infoState: infoState)
-        let seenDone = SessionChatBackgroundWork.seenDoneIDs(
-            previous: seenDoneSubagentIDs,
-            subagents: subagents,
-            viewingDone: backgroundWorkDoneVisible
-        )
-        seenDoneSubagentIDs = seenDone
+        let subagents = turnStatusResolution.subagents
         let loadedMessages = timeline.loadedMessages()
         if loadedMessages != shellTranscript {
             shellTranscript = loadedMessages
@@ -2206,7 +2093,7 @@ final class SessionChatViewModel {
             ),
             timeline: timelineState.timeline,
             messages: timelineState.messages,
-            pendingPrompts: pendingResolution.prompts,
+            pendingPrompts: turnStatusResolution.pendingPrompts,
             timelineFrame: timelineFrame,
             composer: {
                 var next = composer.state.composer
@@ -2219,11 +2106,11 @@ final class SessionChatViewModel {
             isLoadingOlder: timelineState.isLoadingOlder,
             isAborting: composerState.isAborting,
             sessionStatusLabel: sessionStatusLabel,
-            workingIndicatorLabel: workingIndicatorLabel,
+            workingIndicatorLabel: turnStatusResolution.workingIndicatorLabel,
             retryCard: infoState.retryCard,
             isRetrying: infoState.isRetrying,
-            workingIndicatorCollapsed: workingIndicatorCollapsed,
-            workingIndicatorFading: workingIndicatorFading,
+            workingIndicatorCollapsed: turnStatusResolution.workingIndicatorCollapsed,
+            workingIndicatorFading: turnStatusResolution.workingIndicatorFading,
             syncingIndicatorLabel: timelineState.isSyncingMessages
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,
@@ -2235,7 +2122,7 @@ final class SessionChatViewModel {
             sessionTodoTotalCount: inboxState.sessionTodos.count,
             subagents: subagents,
             backgroundWorkPill: SessionChatBackgroundWork.pill(for: subagents, shells: runningShells),
-            backgroundWorkDoneUnseen: SessionChatBackgroundWork.hasUnseenDone(subagents, seenDoneIDs: seenDone),
+            backgroundWorkDoneUnseen: turnStatusResolution.backgroundWorkDoneUnseen,
             shells: runningShells,
             shellOutput: shellsState.output,
             connectionStatus: infoState.connectionStatus,
@@ -2423,38 +2310,6 @@ final class SessionChatViewModel {
         )
     }
 
-    private func resetWorkingFooter() {
-        workingHoldTask?.cancel()
-        workingHoldTask = nil
-        workingHold = nil
-        workingChrome = .unmounted
-        pendingPromptsWakeTask?.cancel()
-        pendingPromptsWakeTask = nil
-        pendingPromptsGate = PendingPromptsStripGate()
-    }
-
-    private func schedulePendingPromptsWake(_ wakeAfterMs: Int64?) {
-        pendingPromptsWakeTask?.cancel()
-        pendingPromptsWakeTask = nil
-        guard let wakeAfterMs else { return }
-        pendingPromptsWakeTask = Task { [clock] in
-            await clock.sleep(milliseconds: Int(wakeAfterMs))
-            guard !Task.isCancelled else { return }
-            publishUiState()
-        }
-    }
-
-    private func scheduleWorkingFooterWake(_ wakeAfterMs: Int64?) {
-        workingHoldTask?.cancel()
-        workingHoldTask = nil
-        guard let wakeAfterMs else { return }
-        workingHoldTask = Task { [clock] in
-            await clock.sleep(milliseconds: Int(wakeAfterMs))
-            guard !Task.isCancelled else { return }
-            publishUiState()
-        }
-    }
-
     /// Union of server inbox rows and still-unmerged optimistic busy sends.
     /// `optimistic` must already be the merge leftover (echo dropped the matching
     /// optimistic row, often under a different id). This function only skips
@@ -2486,9 +2341,6 @@ final class SessionChatViewModel {
         return steers + queued
     }
 
-    private static var pendingPromptFailure: String {
-        String(localized: "session_chat.pending_prompt.update_failed", defaultValue: "Couldn't update pending prompt")
-    }
     static let chipTimelineIntroEnabledNotice = SessionChatTimelineOffers.chipTimelineIntroEnabledNotice
     /// Pause after history loads so the chat is on screen before the picker.
     static let timelineStylePickerDelayMs = SessionChatTimelineOffers.timelineStylePickerDelayMs
