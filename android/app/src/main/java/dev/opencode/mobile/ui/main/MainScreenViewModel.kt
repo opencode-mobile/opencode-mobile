@@ -23,7 +23,6 @@ import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeWorktreeRequest
 import dev.opencode.mobile.domain.home.HomeWorktreesFeed
 import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
-import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionAncestry
 import dev.opencode.mobile.domain.live.SessionListSnapshot
 import dev.opencode.mobile.domain.live.SessionLiveStore
@@ -61,11 +60,10 @@ import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -95,8 +93,17 @@ class MainScreenViewModel
         private val homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
         private val newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
-        val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
+        private val _uiState =
+            MutableStateFlow(
+                HomeUiState(
+                    liveConnectionStatus =
+                        liveUpdates.chrome.value.label
+                            .toSessionConnectionStatus(),
+                ),
+            )
+
+        /** Home's one immutable UI state; every region reports into it synchronously. */
+        val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
         /** Builds Home rows off the main thread (#981); tests run it on their scheduler. */
         internal var homeRowsDispatcher: CoroutineDispatcher
@@ -104,56 +111,35 @@ class MainScreenViewModel
             set(value) {
                 projectList.homeRowsDispatcher = value
             }
-        private val _loadingMoreScopeId = MutableStateFlow<String?>(null)
-
-        /** Scope id whose load-more runs, for the list's loading footer; null when none runs. */
-        val loadingMoreScopeId: StateFlow<String?> = _loadingMoreScopeId.asStateFlow()
-
-        private val _moreSessionDirectories = MutableStateFlow<Set<String>>(emptySet())
-
-        /**
-         * Observed directories whose latest window says older sessions may follow. A window whose
-         * refresh failed stays out until a refresh succeeds, so paging never retries in a loop.
-         */
-        val moreSessionDirectories: StateFlow<Set<String>> = _moreSessionDirectories.asStateFlow()
-        private val _isRefreshing = MutableStateFlow(false)
-        val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
-        private val _removalSnackbar = MutableStateFlow<HomeSnackbar?>(null)
-        val removalSnackbar: StateFlow<HomeSnackbar?> = _removalSnackbar.asStateFlow()
         private val sessionActionsRegion =
             HomeSessionActions(
                 sessionRepository = sessionRepository,
                 messageRepository = messageRepository,
                 scope = viewModelScope,
                 onLifecycleError = { message ->
-                    _removalSnackbar.value =
+                    setSnackbar(
                         HomeSnackbar(
                             text = message,
                             variant = OpenCodeSnackbarVariant.Error,
-                        )
+                        ),
+                    )
                 },
+                onChange = { actions -> _uiState.update { it.copy(sessionActions = actions) } },
             )
-        val sessionActions: StateFlow<HomeSessionActionsUiState> = sessionActionsRegion.state
         private val archivedMenuRegion =
             HomeArchivedMenu(
                 sessionRepository = sessionRepository,
                 projects = homeProjectsSnapshot.projects,
                 scope = viewModelScope,
                 supported = { activeConnectionManager.currentCapabilities().supportsArchivedSessions },
+                onChange = { entry -> _uiState.update { it.copy(archivedMenu = entry) } },
             )
-
-        /** Home menu's Archived sessions entry; null on servers that cannot restore archived sessions. */
-        val archivedMenu: StateFlow<HomeArchivedMenuEntry?> = archivedMenuRegion.state
 
         fun refreshArchivedMenu(
             scopeId: String,
             worktreesEnabled: Boolean,
         ) = archivedMenuRegion.refresh(scopeId, worktreesEnabled)
 
-        private val _revealNewestToken = MutableStateFlow(0)
-        val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
-        private val _pendingScopeRequest = MutableStateFlow<HomeScopeRequest?>(null)
-        val pendingScopeRequest: StateFlow<HomeScopeRequest?> = _pendingScopeRequest.asStateFlow()
         private val serversRegion: HomeServers =
             HomeServers(
                 connectionProfileStore = connectionProfileStore,
@@ -170,18 +156,8 @@ class MainScreenViewModel
                     }
                 },
                 onSwitchAbandoned = ::abandonSwitch,
+                onChange = { chrome -> _uiState.update { it.copy(servers = chrome) } },
             )
-        val serversChrome: StateFlow<HomeServersChrome> = serversRegion.state
-        val liveUpdatesConnectionStatus: StateFlow<SessionConnectionStatus> =
-            liveUpdates.chrome
-                .map { it.label.toSessionConnectionStatus() }
-                .stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
-                    initialValue =
-                        liveUpdates.chrome.value.label
-                            .toSessionConnectionStatus(),
-                )
 
         private val serverBaseUrl: String
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
@@ -233,12 +209,15 @@ class MainScreenViewModel
                     connectionSessionCoordinator.addressCheck.value.state == AddressCheck.State.Running
                 },
                 onProbed = archivedMenuRegion::recheck,
-                onChange = { state ->
-                    _uiState.value = state.content
-                    _loadingMoreScopeId.value = state.paging.loadingMoreScopeId
-                    _moreSessionDirectories.value = state.paging.moreSessionDirectories
-                    _revealNewestToken.value = state.revealNewestToken
-                    _pendingScopeRequest.value = state.pendingScopeRequest
+                onChange = { list ->
+                    _uiState.update {
+                        it.copy(
+                            content = list.content,
+                            paging = list.paging,
+                            revealNewestToken = list.revealNewestToken,
+                            pendingScopeRequest = list.pendingScopeRequest,
+                        )
+                    }
                 },
             )
 
@@ -272,7 +251,7 @@ class MainScreenViewModel
             refresh()
             viewModelScope.launch {
                 // Session Chat reads the session's project and worktrees from here.
-                worktreesRegion.publishProjects(_uiState.map { (it as? MainScreenUiState.Loaded)?.projects.orEmpty() })
+                worktreesRegion.publishProjects(_uiState.map { (it.content as? MainScreenUiState.Loaded)?.projects.orEmpty() })
             }
             viewModelScope.launch {
                 // A checkout created in Session Chat (Move to worktree) lists here at once.
@@ -281,7 +260,7 @@ class MainScreenViewModel
             viewModelScope.launch {
                 // The Worktrees screen lists Home's projects and sessions and asks Home to act.
                 worktreesRegion.publishWorktrees(
-                    _uiState.map { (it as? MainScreenUiState.Loaded)?.worktreesSnapshot() ?: HomeWorktreesSnapshot() },
+                    _uiState.map { (it.content as? MainScreenUiState.Loaded)?.worktreesSnapshot() ?: HomeWorktreesSnapshot() },
                 )
             }
             viewModelScope.launch { homeWorktreesFeed.requests.collect(::onWorktreeRequest) }
@@ -335,6 +314,12 @@ class MainScreenViewModel
                     serversRegion.clear()
                 }
             }
+            viewModelScope.launch {
+                // Pure mapping of the live updates chrome; no network, so it runs while Home lives.
+                liveUpdates.chrome.collect { chrome ->
+                    _uiState.update { it.copy(liveConnectionStatus = chrome.label.toSessionConnectionStatus()) }
+                }
+            }
         }
 
         fun refresh() {
@@ -375,8 +360,8 @@ class MainScreenViewModel
                 is MainScreenUiState.Empty,
                 -> {
                     viewModelScope.launch {
-                        if (_isRefreshing.value) return@launch
-                        _isRefreshing.value = true
+                        if (_uiState.value.isRefreshing) return@launch
+                        _uiState.update { it.copy(isRefreshing = true) }
                         // A stream backing off (e.g. after a rejected credential) retries now.
                         foregroundEventStream.onReconnectWake()
                         try {
@@ -384,7 +369,7 @@ class MainScreenViewModel
                             if (observed.isNotEmpty()) worktreesRegion.reload(observed, refreshProjects = true)
                             projectList.invalidateAll()
                         } finally {
-                            _isRefreshing.value = false
+                            _uiState.update { it.copy(isRefreshing = false) }
                         }
                     }
                 }
@@ -551,8 +536,7 @@ class MainScreenViewModel
                         projectList.load(skipProbe = true)
                         if (forDraft) projectList.openDraftWithAddedProject(worktree)
                         projectList.requestScope(HomeScopeRequest(filterId = worktree, evenFromAll = false))
-                        _removalSnackbar.value =
-                            HomeSnackbar(text = HomeText.alreadyOnHome(ProjectDomainAdapter.displayNameFromWorktree(worktree)))
+                        setSnackbar(HomeSnackbar(text = HomeText.alreadyOnHome(ProjectDomainAdapter.displayNameFromWorktree(worktree))))
                     }
                     is HomeAddProjectResult.Added -> {
                         projectList.beginProjectLoad(worktree)
@@ -562,8 +546,7 @@ class MainScreenViewModel
                         if (forDraft) projectList.openDraftWithAddedProject(worktree)
                         projectList.requestScope(HomeScopeRequest(filterId = worktree, evenFromAll = true))
                         joined?.let { project ->
-                            _removalSnackbar.value =
-                                HomeSnackbar(text = HomeText.joinedProject(project.displayName))
+                            setSnackbar(HomeSnackbar(text = HomeText.joinedProject(project.displayName)))
                         }
                     }
                     HomeAddProjectResult.Failed -> Unit
@@ -646,18 +629,18 @@ class MainScreenViewModel
             )
             viewModelScope.launch {
                 projectList.removeProject(pending)
-                _removalSnackbar.value = HomeSnackbar(text = HomeText.removedProject(pending.displayName))
+                setSnackbar(HomeSnackbar(text = HomeText.removedProject(pending.displayName)))
             }
         }
 
         fun consumeProjectRemovalSnackbar() {
-            if (_removalSnackbar.value != null) {
+            if (_uiState.value.snackbar != null) {
                 logAction(
                     ProductAnalytics.Screen.HOME,
                     ProductAnalytics.Action.HOME_DISMISS_REMOVAL_SNACKBAR,
                 )
             }
-            _removalSnackbar.value = null
+            setSnackbar(null)
         }
 
         fun onSessionLongPress(
@@ -690,7 +673,7 @@ class MainScreenViewModel
         }
 
         fun chooseRename() {
-            if (sessionActions.value.target == null) return
+            if (sessionActionsRegion.state.value.target == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
                 ProductAnalytics.Action.SESSION_ACTIONS_RENAME,
@@ -711,7 +694,7 @@ class MainScreenViewModel
         }
 
         fun cancelRename() {
-            if (sessionActions.value.renameSubmitting) return
+            if (sessionActionsRegion.state.value.renameSubmitting) return
             logAction(
                 ProductAnalytics.Screen.HOME_RENAME_SESSION,
                 ProductAnalytics.Action.HOME_RENAME_CANCEL,
@@ -730,7 +713,7 @@ class MainScreenViewModel
         }
 
         fun chooseFork() {
-            val state = sessionActions.value
+            val state = sessionActionsRegion.state.value
             if (state.target == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
@@ -752,7 +735,7 @@ class MainScreenViewModel
         }
 
         fun cancelFork() {
-            if (sessionActions.value.forkSubmitting) return
+            if (sessionActionsRegion.state.value.forkSubmitting) return
             logAction(
                 ProductAnalytics.Screen.HOME_FORK_SESSION,
                 ProductAnalytics.Action.HOME_FORK_CANCEL,
@@ -788,7 +771,7 @@ class MainScreenViewModel
         }
 
         fun chooseArchive() {
-            val state = sessionActions.value
+            val state = sessionActionsRegion.state.value
             if (state.target == null || !state.canArchive || state.lifecycleInFlight) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
@@ -798,7 +781,7 @@ class MainScreenViewModel
         }
 
         fun chooseDelete() {
-            if (sessionActions.value.target == null) return
+            if (sessionActionsRegion.state.value.target == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
                 ProductAnalytics.Action.SESSION_ACTIONS_DELETE,
@@ -807,7 +790,7 @@ class MainScreenViewModel
         }
 
         fun dismissDeleteConfirm() {
-            if (sessionActions.value.lifecycleInFlight) return
+            if (sessionActionsRegion.state.value.lifecycleInFlight) return
             logAction(
                 ProductAnalytics.Screen.HOME_DELETE_SESSION_CONFIRM,
                 ProductAnalytics.Action.HOME_DELETE_CANCEL,
@@ -816,13 +799,17 @@ class MainScreenViewModel
         }
 
         fun confirmDelete() {
-            val state = sessionActions.value
+            val state = sessionActionsRegion.state.value
             if (state.target == null || state.lifecycleInFlight) return
             logAction(
                 ProductAnalytics.Screen.HOME_DELETE_SESSION_CONFIRM,
                 ProductAnalytics.Action.HOME_DELETE_CONFIRM,
             )
             sessionActionsRegion.confirmDelete()
+        }
+
+        private fun setSnackbar(snackbar: HomeSnackbar?) {
+            _uiState.update { it.copy(snackbar = snackbar) }
         }
 
         private fun logAction(
@@ -893,6 +880,21 @@ class MainScreenViewModel
     }
 
 fun suggestedHomeForkTitle(currentTitle: String): String = SessionForkTitle.suggested(currentTitle)
+
+/** Home's one UI state: the content mode plus the chrome that persists across modes. */
+data class HomeUiState(
+    val content: MainScreenUiState = MainScreenUiState.Probing,
+    val servers: HomeServersChrome = HomeServersChrome(),
+    val liveConnectionStatus: SessionConnectionStatus,
+    val isRefreshing: Boolean = false,
+    val snackbar: HomeSnackbar? = null,
+    val sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
+    /** Home menu's Archived sessions entry; null on servers that cannot restore archived sessions. */
+    val archivedMenu: HomeArchivedMenuEntry? = null,
+    val paging: HomeSessionPagingState = HomeSessionPagingState(),
+    val revealNewestToken: Int = 0,
+    val pendingScopeRequest: HomeScopeRequest? = null,
+)
 
 /** Home's paging: which scope loads more now, and which observed directories have more. */
 data class HomeSessionPagingState(
