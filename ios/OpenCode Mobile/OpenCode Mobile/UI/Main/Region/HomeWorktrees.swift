@@ -137,10 +137,6 @@ final class HomeWorktrees {
 
     /// Added paths grouped into Home projects: worktrees of one repository are one project.
     func projects(addedPaths: [String]) -> [HomeProject] {
-        Self.projects(addedPaths: addedPaths, state: state)
-    }
-
-    static func projects(addedPaths: [String], state: HomeWorktreesState) -> [HomeProject] {
         var resolutions: [String: HomeProjectResolution] = [:]
         for path in addedPaths {
             guard var resolution = state.resolutions[path] else { continue }
@@ -163,10 +159,6 @@ final class HomeWorktrees {
 
     /// What the server listed as worktrees, minus every project's main checkout.
     func removableDirectories(projects: [HomeProject]) -> Set<String> {
-        Self.removableDirectories(projects: projects, state: state)
-    }
-
-    static func removableDirectories(projects: [HomeProject], state: HomeWorktreesState) -> Set<String> {
         let mains = Set(projects.flatMap { $0.worktrees.filter(\.isMain).map(\.directory) })
         return Set(
             state.directories.values
