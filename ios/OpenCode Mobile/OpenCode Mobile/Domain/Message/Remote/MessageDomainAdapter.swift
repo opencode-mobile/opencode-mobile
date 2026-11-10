@@ -302,10 +302,6 @@ nonisolated struct MessageDomainAdapter: Sendable {
         displayText(from: parts)
     }
 
-    func sendRequest(text: String) -> SendMessageRequestDTO {
-        SendMessageRequestDTO(parts: [SendMessagePartDTO(type: "text", text: text)])
-    }
-
     func sendRequest(options: PromptSendOptions) -> SendMessageRequestDTO {
         var parts: [SendMessagePartDTO] = []
         let text = UploadedAttachmentMetadata.promptText(options.text, uploaded: options.uploadedAttachments)

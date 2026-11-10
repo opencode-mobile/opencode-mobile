@@ -222,12 +222,12 @@ extension Container {
                 let container = try SwiftDataSessionCacheStore.makePersistentContainer()
                 return SwiftDataSessionCacheStore(container: container)
             } catch {
-                print("SessionCache: persistent SwiftData store failed (\(error)); using in-memory fallback")
+                DiagnosticLog.warning(.session, "SessionCache: persistent SwiftData store failed; using in-memory fallback", error: error)
                 do {
                     let container = try SwiftDataSessionCacheStore.makeInMemoryContainer()
                     return SwiftDataSessionCacheStore(container: container)
                 } catch {
-                    print("SessionCache: in-memory SwiftData store failed (\(error)); using InMemorySessionCacheStore")
+                    DiagnosticLog.error(.session, "SessionCache: in-memory SwiftData store failed; using InMemorySessionCacheStore", error: error)
                     return InMemorySessionCacheStore()
                 }
             }

@@ -1746,7 +1746,7 @@ private struct FallbackMessageBubble: View {
             .foregroundStyle(OpenCodeColors.textBase)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))
+            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: OpenCodeRadius.medium))
     }
 }
 

@@ -3172,8 +3172,6 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         return messages
     }
 
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message { fatalError() }
-    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message { fatalError() }
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
 
     func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}

@@ -51,3 +51,6 @@ lucide/skip-forward/skip_next:lucide_skip_next
 lucide/rotate-ccw/restart:lucide_restart
 lucide/minimize-2/minimize:lucide_minimize
 lucide/grip-vertical/drag_handle:lucide_drag_handle
+lucide/star/star:lucide_star
+lucide/message-square-heart/rate_review:lucide_rate_review
+lucide/at-sign/at_sign:lucide_at_sign

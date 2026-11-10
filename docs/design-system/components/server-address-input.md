@@ -75,15 +75,6 @@ wants scheme selection and paste-friendly host entry.
 - Previews: idle with default `http` + sample host, https selected, empty host,
   error; side-by-side with a text input.
 
-## Completion Ledger
-
-- Public API and applicable states: complete.
-- Token and typography mapping: complete; reuses `textInput.*` tokens.
-- iOS and Android implementations: complete.
-- Gallery entries and previews: complete.
-- Parity and divergences: complete; none known.
-- Automated checks: complete. Parsing/filter coverage on both platforms.
-
 ## Parity And Divergence
 
 Native caret, keyboard, and paste chrome intentionally follow each platform.

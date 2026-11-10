@@ -61,16 +61,6 @@ timeline full-screen error empty state when messages cannot load at all.
 - Component Gallery **Snackbar** entry with controls to fire `default` and
   `error` messages.
 
-## Completion Ledger
-
-- Public API and applicable states: complete.
-- Token and typography mapping: complete.
-- iOS and Android implementations: complete.
-- Gallery entries and previews: complete.
-- Parity and divergences: complete; no intentional divergence.
-- Automated checks: compile-focused; Session Chat wiring is a separate feature
-  change.
-
 ## Parity And Divergence
 
 No intentional divergence.

@@ -86,17 +86,6 @@ wire the field's done action to the primary option.
   field presence, option enabled state, and destructive primary.
 - Android Component Gallery: Dialog entry with the same controls.
 
-## Completion Ledger
-
-- Public API and applicable states: complete.
-- Token and typography mapping: complete.
-- iOS and Android implementations: complete.
-- Gallery entries and previews: complete.
-- Parity and divergences: complete; presentation primitive difference recorded
-  in `../divergences.md`.
-- Automated checks: not applicable for this component version beyond platform
-  build of the gallery surfaces.
-
 ## Parity And Divergence
 
 Shared semantics for title, optional subtitle, two options, and optional text

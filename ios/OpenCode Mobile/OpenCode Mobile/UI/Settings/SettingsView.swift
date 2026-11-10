@@ -587,6 +587,48 @@ struct SettingsView: View {
             )
             .padding(.horizontal, 16)
 
+            OpenCodeListItem(
+                title: "settings.rate_app.title",
+                subtitle: "settings.rate_app.subtitle",
+                style: .card,
+                startDecorator: .icon(.rateReview, accessibilityLabel: "settings.rate_app.title"),
+                accessory: .disclosure,
+                action: {
+                    logSettingsAction(ProductAnalytics.Action.settingsRateApp)
+                    openURL(SupportLinks.appStoreReview)
+                }
+            )
+            .padding(.horizontal, 16)
+            .accessibilityIdentifier("settings.rateApp")
+
+            OpenCodeListItem(
+                title: "settings.star_on_github.title",
+                subtitle: .verbatim("opencode-mobile/opencode-mobile"),
+                style: .card,
+                startDecorator: .icon(.star, accessibilityLabel: "settings.star_on_github.title"),
+                accessory: .disclosure,
+                action: {
+                    logSettingsAction(ProductAnalytics.Action.settingsStarOnGitHub)
+                    openURL(SupportLinks.gitHub)
+                }
+            )
+            .padding(.horizontal, 16)
+            .accessibilityIdentifier("settings.starOnGitHub")
+
+            OpenCodeListItem(
+                title: "settings.follow_on_x.title",
+                subtitle: .verbatim(SupportLinks.xHandle),
+                style: .card,
+                startDecorator: .icon(.atSign, accessibilityLabel: "settings.follow_on_x.title"),
+                accessory: .disclosure,
+                action: {
+                    logSettingsAction(ProductAnalytics.Action.settingsFollowOnX)
+                    openURL(SupportLinks.xProfile)
+                }
+            )
+            .padding(.horizontal, 16)
+            .accessibilityIdentifier("settings.followOnX")
+
             // Developer Tools rows are developer-only and stay English.
             OpenCodeListItem(
                 title: .verbatim("Developer Tools"),

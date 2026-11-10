@@ -15,8 +15,6 @@ protocol MessageRepository: Sendable {
     func loadOlderMessages(sessionID: String, directory: String?) async throws -> [Message]
     func loadOlderDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage]
     func hasOlderMessages(sessionID: String, directory: String?) -> Bool
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message
-    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws
     func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws
     /// Runs a composer `!` command in the session; its output arrives through shell events.
@@ -147,24 +145,6 @@ final class DefaultMessageRepository: MessageRepository {
 
     func hasOlderMessages(sessionID: String, directory: String?) -> Bool {
         messageSync.hasOlderMessages(sessionID: sessionID, directory: directory)
-    }
-
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
-        try await run {
-            adapter.message(from: try await api.getMessage(sessionID: sessionID, messageID: messageID, directory: directory))
-        }
-    }
-
-    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
-        try await run {
-            adapter.message(
-                from: try await api.sendMessage(
-                    sessionID: sessionID,
-                    body: adapter.sendRequest(text: text),
-                    directory: directory
-                )
-            )
-        }
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {

@@ -80,22 +80,3 @@ scale/opacity shared with other floating glass pills.
 The public copy, visibility contract, interaction, geometry, and accessibility
 meaning are shared. Material mapping follows the intentional Floating chrome
 divergence in `../divergences.md`.
-
-## Completion Ledger
-
-- Public API and applicable enabled/disabled states: complete for a positive
-  file count and nonnegative addition/deletion totals.
-- Token and typography mappings: complete; the implementations use the
-  documented `reviewChangesPill.*` geometry, floating glass capsule chrome, and
-  button typography.
-- iOS and Android implementations: complete with equivalent required totals,
-  formatting, semantic colors, disabled treatment, interaction, and
-  accessibility behavior.
-- Gallery entries and native previews: complete across mixed totals,
-  additions-only, deletions-only, zero-line, singular/plural, enabled/disabled,
-  and light/dark states.
-- Automated formatting, zero-omission, interaction, accessibility,
-  pluralization, visibility, and navigation checks: complete on both
-  platforms. Android device execution remains subject to the repository's
-  existing instrumentation build health.
-- Parity and divergences: complete; materials follow Floating chrome.
