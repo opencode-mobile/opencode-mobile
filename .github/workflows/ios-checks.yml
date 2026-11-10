@@ -75,16 +75,15 @@ jobs:
         id: simulator
         run: bash ../../.github/scripts/select-ios-simulator.sh
 
-      - name: Build for iOS Simulator
-        run: |
-          xcodebuild build \
-            -project "OpenCode Mobile.xcodeproj" \
-            -scheme "OpenCode Mobile" \
-            -configuration Debug \
-            -destination "${{ steps.simulator.outputs.destination }}" \
-            CODE_SIGNING_ALLOWED=NO
+      # xcodebuild shuts down a simulator it had to boot itself, so every run
+      # would start cold. Boot it now so that overlaps with the build instead of
+      # holding up the test step. Already booted is fine.
+      - name: Boot iOS Simulator in the background
+        run: xcrun simctl boot "${{ steps.simulator.outputs.udid }}" || true
 
-      - name: Run static analyzer
+      # analyze builds the app first, so a separate build step would only repeat
+      # the package and markdown-core phases.
+      - name: Build and run static analyzer
         run: |
           xcodebuild analyze \
             -project "OpenCode Mobile.xcodeproj" \
