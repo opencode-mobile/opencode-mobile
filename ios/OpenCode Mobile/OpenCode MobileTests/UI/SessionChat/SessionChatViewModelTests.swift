@@ -3452,7 +3452,10 @@ struct SessionChatViewModelTests {
     @Test func startObserving_afterStop_resumesEventReloads() async {
         let repository = FakeObservingMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
-        await viewModel.loadMessages()
+        // This fake publishes nothing until `emit`, so awaiting the initial load here
+        // would sit in `.loading` until its 15 s deadline. Let it finish on the emit.
+        let initialLoad = Task { await viewModel.loadMessages() }
+        try? await Task.sleep(for: .milliseconds(50))
         viewModel.stopObserving()
         viewModel.startObserving()
         try? await Task.sleep(for: .milliseconds(200))
@@ -3465,6 +3468,7 @@ struct SessionChatViewModelTests {
                 viewModel.uiState.messages.contains { $0.text == "Resumed" }
         }
         #expect(resumed)
+        await initialLoad.value
     }
 
     @Test func stopObserving_cancelsBackgroundTasks() async {
@@ -3486,12 +3490,15 @@ struct SessionChatViewModelTests {
     @Test func messageUpdatedEvent_reloadsMessages() async {
         let repository = FakeObservingMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
-        await viewModel.loadMessages()
+        // See startObserving_afterStop_resumesEventReloads: the initial load only
+        // resolves once this fake emits.
+        let initialLoad = Task { await viewModel.loadMessages() }
         try? await Task.sleep(for: .milliseconds(50))
         let updated = [
             Message(id: "msg-2", role: .assistant, text: "Updated", model: nil, mode: nil, sentAtEpochMs: nil),
         ]
         repository.emit(updated)
+        await initialLoad.value
         try? await Task.sleep(for: .milliseconds(500))
         guard viewModel.uiState.timeline == .ready else {
             Issue.record("Expected ready timeline")
