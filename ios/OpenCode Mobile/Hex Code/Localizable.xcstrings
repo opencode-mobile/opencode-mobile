@@ -576,28 +576,6 @@
         }
       }
     },
-    "artifacts.flow.checking_every": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Every 2 s"
-          }
-        }
-      }
-    },
-    "artifacts.flow.checking_sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Asks the artifact route whether it answers"
-          }
-        }
-      }
-    },
     "artifacts.flow.couldnt_run": {
       "extractionState": "manual",
       "localizations": {
@@ -642,24 +620,35 @@
         }
       }
     },
-    "artifacts.flow.fallback": {
+    "artifacts.flow.fallback_on": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Or add it yourself on %1$@, in %2$@:"
+            "value": "On %@"
           }
         }
       }
     },
-    "artifacts.flow.fallback_off": {
+    "artifacts.flow.fallback_title": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Or remove it yourself on %1$@, in %2$@:"
+            "value": "Or add it yourself"
+          }
+        }
+      }
+    },
+    "artifacts.flow.fallback_title_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Or remove it yourself"
           }
         }
       }
@@ -708,35 +697,13 @@
         }
       }
     },
-    "artifacts.flow.off_rule": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hex Code removed its artifact rule from today’s session."
-          }
-        }
-      }
-    },
     "artifacts.flow.on_body": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pages the agent makes now show as the first tile on the card."
-          }
-        }
-      }
-    },
-    "artifacts.flow.on_rule": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hex Code will ask the agent to publish pages as artifacts (a short rule for today’s session)."
+            "value": "Pages the agent makes now show as the first tile on the card. Hex Code asks it to publish them as artifacts."
           }
         }
       }
@@ -895,6 +862,28 @@
         }
       }
     },
+    "artifacts.flow.steps_done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All steps done"
+          }
+        }
+      }
+    },
+    "artifacts.flow.steps_see": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See the steps"
+          }
+        }
+      }
+    },
     "artifacts.flow.still_disabled": {
       "extractionState": "manual",
       "localizations": {
@@ -946,17 +935,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Still on on %@"
-          }
-        }
-      }
-    },
-    "artifacts.flow.sub": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In Hex Code setup · today’s session isn’t touched"
           }
         }
       }
@@ -1236,13 +1214,24 @@
         }
       }
     },
+    "artifacts.sheet.example_sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artifact · an example"
+          }
+        }
+      }
+    },
     "artifacts.sheet.intro": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Artifacts are small pages the agent publishes, like a mock-up or a chart. The newest shows on the card. They’re off on %@, so Hex Code asks the agent to turn them on."
+            "value": "Small pages the agent publishes, like a mock-up or a chart. The newest one shows on the card and opens on your phone."
           }
         }
       }
@@ -1253,18 +1242,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hex Code asks the agent to take the flag out again. The agent then can’t make pages, and the card shows no artifact tile. Pages it made stay on the computer."
-          }
-        }
-      }
-    },
-    "artifacts.sheet.new": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New"
+            "value": "The agent then can’t make pages, and the card shows no artifact tile. Pages it made stay on the computer."
           }
         }
       }
@@ -1302,28 +1280,6 @@
         }
       }
     },
-    "artifacts.sheet.prompt_exact": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "exact text"
-          }
-        }
-      }
-    },
-    "artifacts.sheet.reused": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reused"
-          }
-        }
-      }
-    },
     "artifacts.sheet.send": {
       "extractionState": "manual",
       "localizations": {
@@ -1331,6 +1287,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "Send to the agent"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.show_prompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the exact message"
           }
         }
       }
@@ -1357,13 +1324,68 @@
         }
       }
     },
-    "artifacts.sheet.where": {
+    "artifacts.sheet.what": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Goes to Hex Code setup"
+            "value": "What happens"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.what_approve": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You approve the edit first"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.what_approve_sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Then Hex Code checks %@ itself"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.what_edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent adds one line to a config file"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.what_edit_off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The agent takes one line out of a config file"
+          }
+        }
+      }
+    },
+    "artifacts.sheet.what_session": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In a separate setup session"
           }
         }
       }
@@ -1374,51 +1396,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A separate session · today’s card and messages aren’t touched"
-          }
-        }
-      }
-    },
-    "artifacts.sheet.will_edit": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Will edit"
-          }
-        }
-      }
-    },
-    "artifacts.sheet.will_edit_global": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No file sets “experimental” yet: one change for every project, nothing in the repo."
-          }
-        }
-      }
-    },
-    "artifacts.sheet.will_edit_global_block": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The global file: one change for every project, nothing in the repo."
-          }
-        }
-      }
-    },
-    "artifacts.sheet.will_edit_project": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Its own “experimental” block overrides the global file, so the change goes here."
+            "value": "Today’s card and messages aren’t touched"
           }
         }
       }

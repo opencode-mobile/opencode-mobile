@@ -26,10 +26,15 @@ struct ArtifactsSheet: View {
     }
 }
 
-/// The steps, the explanation before them, and the result after.
+/// The explanation before sending, the steps while it runs, and the result after.
 private struct ArtifactsFlowView: View {
     let artifacts: ArtifactsModel
     let flow: ArtifactsFlow
+
+    /// "Show the exact message", before sending.
+    @State private var promptShown = false
+    /// The steps under a result, folded until asked for.
+    @State private var stepsShown = false
 
     private var on: Bool { flow.mode == .enable }
     private var name: String { artifacts.serverName() }
@@ -43,7 +48,7 @@ private struct ArtifactsFlowView: View {
                 onHide: { artifacts.close() }
             )
         ) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 switch flow.stage {
                 case .preparing:
                     HStack {
@@ -56,21 +61,30 @@ private struct ArtifactsFlowView: View {
                     explain
                 case let .cantSend(reason):
                     cantSend(reason)
-                case .running, .done, .fallback, .broken, .restoring:
-                    steps
+                case .running:
+                    HexSteps(steps: stepList)
+                    if artifacts.setupSessionID != nil {
+                        ArtifactsRows { repliesRow }
+                    }
+                case .done, .fallback, .broken, .restoring:
+                    result
                 }
             }
             .padding(.bottom, 14)
         }
     }
 
+    /// Turn on artifacts, Turning on artifacts… while it runs, and plain Artifacts over a result,
+    /// which says the rest itself.
     private var title: String {
         switch flow.stage {
         case .running, .restoring:
             on
                 ? String(localized: "artifacts.flow.turning_on", defaultValue: "Turning on artifacts…")
                 : String(localized: "artifacts.flow.turning_off", defaultValue: "Turning off artifacts…")
-        default:
+        case .done, .fallback, .broken:
+            String(localized: "settings.artifacts", defaultValue: "Artifacts")
+        case .preparing, .explain, .cantSend:
             on
                 ? String(localized: "artifacts.sheet.turn_on", defaultValue: "Turn on artifacts")
                 : String(localized: "artifacts.sheet.turn_off", defaultValue: "Turn off artifacts")
@@ -81,125 +95,88 @@ private struct ArtifactsFlowView: View {
 
     @ViewBuilder
     private var explain: some View {
-        if on {
-            HStack(alignment: .top, spacing: 12) {
-                HexLinkTile(
-                    icon: .compass,
-                    label: String(localized: "artifacts.sheet.example", defaultValue: "Login page preview"),
-                    detail: String(localized: "home.tile.artifact", defaultValue: "Artifact"),
-                    detailIcon: .compass
-                ) {}
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                SummaryText(
-                    text: String(localized: "artifacts.sheet.intro", defaultValue: "Artifacts are small pages the agent publishes, like a mock-up or a chart. The newest shows on the card. They’re off on \(name), so Hex Code asks the agent to turn them on."),
-                    style: .caption
+        Text(on
+            ? LocalizedStringResource("artifacts.sheet.intro", defaultValue: "Small pages the agent publishes, like a mock-up or a chart. The newest one shows on the card and opens on your phone.")
+            : LocalizedStringResource("artifacts.sheet.intro_off", defaultValue: "The agent then can’t make pages, and the card shows no artifact tile. Pages it made stay on the computer."))
+            .hexFont(.body)
+            .foregroundStyle(HexColor.text2)
+            .fixedSize(horizontal: false, vertical: true)
+        if on { example }
+        label(LocalizedStringResource("artifacts.sheet.what", defaultValue: "What happens"))
+        ArtifactsRows {
+            if let target = flow.target {
+                ArtifactsRow(
+                    icon: .doc,
+                    title: on
+                        ? String(localized: "artifacts.sheet.what_edit", defaultValue: "The agent adds one line to a config file")
+                        : String(localized: "artifacts.sheet.what_edit_off", defaultValue: "The agent takes one line out of a config file"),
+                    detail: target.path,
+                    monoDetail: true
                 )
-                .foregroundStyle(HexColor.text2)
-                .fixedSize(horizontal: false, vertical: true)
+                ArtifactsRows.divider
             }
-        } else {
-            Text(LocalizedStringResource("artifacts.sheet.intro_off", defaultValue: "Hex Code asks the agent to take the flag out again. The agent then can’t make pages, and the card shows no artifact tile. Pages it made stay on the computer."))
-                .hexFont(.body)
-                .foregroundStyle(HexColor.text2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        if let target = flow.target {
-            willEdit(target)
-        }
-        if let prompt = flow.prompt {
-            promptBox(prompt)
-        }
-        whereItGoes
-        HStack(spacing: 8) {
-            HexButton(LocalizedStringResource("common.cancel", defaultValue: "Cancel"), size: .regular) { artifacts.close() }
-            Spacer(minLength: 0)
-            HexButton(LocalizedStringResource("artifacts.sheet.send", defaultValue: "Send to the agent"), size: .regular, style: .primary) {
-                Task { await artifacts.send() }
+            ArtifactsRow(
+                icon: .lock,
+                title: String(localized: "artifacts.sheet.what_approve", defaultValue: "You approve the edit first"),
+                detail: String(localized: "artifacts.sheet.what_approve_sub", defaultValue: "Then Hex Code checks \(name) itself")
+            )
+            ArtifactsRows.divider
+            ArtifactsRow(
+                icon: nil,
+                title: String(localized: "artifacts.sheet.what_session", defaultValue: "In a separate setup session"),
+                detail: String(localized: "artifacts.sheet.where_sub", defaultValue: "Today’s card and messages aren’t touched")
+            )
+            if let prompt = flow.prompt {
+                ArtifactsRows.divider
+                ArtifactsDisclosure(
+                    title: String(localized: "artifacts.sheet.show_prompt", defaultValue: "Show the exact message"),
+                    open: $promptShown
+                ) {
+                    SummaryText(text: prompt, style: .caption)
+                        .foregroundStyle(HexColor.text1)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+        }
+        HexPrimaryButton(LocalizedStringResource("artifacts.sheet.send", defaultValue: "Send to the agent")) {
+            Task { await artifacts.send() }
         }
         .padding(.top, 4)
     }
 
-    private func willEdit(_ target: ConfigTarget.TargetFile) -> some View {
-        let note: String = if !target.isGlobal {
-            String(localized: "artifacts.sheet.will_edit_project", defaultValue: "Its own “experimental” block overrides the global file, so the change goes here.")
-        } else if target.hasExperimental {
-            String(localized: "artifacts.sheet.will_edit_global_block", defaultValue: "The global file: one change for every project, nothing in the repo.")
-        } else {
-            String(localized: "artifacts.sheet.will_edit_global", defaultValue: "No file sets “experimental” yet: one change for every project, nothing in the repo.")
-        }
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(LocalizedStringResource("artifacts.sheet.will_edit", defaultValue: "Will edit"))
-                .hexFont(.mono)
-                .foregroundStyle(HexColor.text3)
-            Text(verbatim: target.path)
-                .hexFont(.mono)
+    /// What an artifact looks like on the card.
+    private var example: some View {
+        let shape = RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous)
+        return HStack(spacing: 12) {
+            HexIconView(.compass, size: HexIconSize.regular)
                 .foregroundStyle(HexColor.text1)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-            Text(verbatim: note)
-                .hexFont(.footnote)
-                .foregroundStyle(HexColor.text3)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(HexColor.panel2, in: RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous).strokeBorder(HexColor.line, lineWidth: 1))
-        .accessibilityElement(children: .combine)
-    }
-
-    private func promptBox(_ prompt: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(LocalizedStringResource("artifacts.sheet.prompt", defaultValue: "Sent to the agent, as you"))
-                    .foregroundStyle(HexColor.text2)
-                Spacer(minLength: 8)
-                Text(LocalizedStringResource("artifacts.sheet.prompt_exact", defaultValue: "exact text"))
-                    .foregroundStyle(HexColor.text3)
-            }
-            .hexFont(.mono)
-            SummaryText(text: prompt, style: .caption)
-                .foregroundStyle(HexColor.text1)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-        }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 11)
-        .background(HexColor.background, in: RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous).strokeBorder(HexColor.line, lineWidth: 1))
-    }
-
-    private var whereItGoes: some View {
-        HStack(spacing: 11) {
-            HexCodeMark()
-                .frame(width: 14, height: 14)
-                .colorMultiply(HexColor.text1)
-                .frame(width: 26, height: 26)
-                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(HexColor.line2, lineWidth: 1))
+                .frame(width: 34, height: 34)
+                .overlay(RoundedRectangle(cornerRadius: HexRadius.m, style: .continuous).strokeBorder(HexColor.line2, lineWidth: 1))
             VStack(alignment: .leading, spacing: 1) {
-                Text(LocalizedStringResource("artifacts.sheet.where", defaultValue: "Goes to Hex Code setup"))
-                    .hexFont(.callout)
+                Text(LocalizedStringResource("artifacts.sheet.example", defaultValue: "Login page preview"))
+                    .hexFont(HexTextStyle.row.weight(.medium))
                     .foregroundStyle(HexColor.text1)
-                Text(LocalizedStringResource("artifacts.sheet.where_sub", defaultValue: "A separate session · today’s card and messages aren’t touched"))
-                    .hexFont(.footnote)
+                Text(LocalizedStringResource("artifacts.sheet.example_sub", defaultValue: "Artifact · an example"))
+                    .hexFont(.caption)
                     .foregroundStyle(HexColor.text3)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(artifacts.setupSessionID == nil
-                ? LocalizedStringResource("artifacts.sheet.new", defaultValue: "New")
-                : LocalizedStringResource("artifacts.sheet.reused", defaultValue: "Reused"))
-                .hexFont(.badge)
-                .foregroundStyle(artifacts.setupSessionID == nil ? HexColor.green : HexColor.text3)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(HexColor.panel, in: RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous).strokeBorder(HexColor.line, lineWidth: 1))
-        .accessibilityElement(children: .combine)
+        .padding(12)
+        .background(HexColor.background, in: shape)
+        .overlay(shape.strokeBorder(HexColor.line, lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+
+    private func label(_ title: LocalizedStringResource) -> some View {
+        Text(title)
+            .hexFont(.sectionLabel)
+            .foregroundStyle(HexColor.text3)
+            .padding(.top, 4)
+            .padding(.bottom, -4)
+            .accessibilityAddTraits(.isHeader)
     }
 
     @ViewBuilder
@@ -218,43 +195,43 @@ private struct ArtifactsFlowView: View {
             .foregroundStyle(HexColor.text2)
             .fixedSize(horizontal: false, vertical: true)
         fallbackLine
-        HStack {
-            Spacer(minLength: 0)
-            HexButton(LocalizedStringResource("common.done", defaultValue: "Done"), size: .regular, style: .primary) { artifacts.close() }
-        }
-        .padding(.top, 4)
+        HexPrimaryButton(LocalizedStringResource("common.done", defaultValue: "Done")) { artifacts.close() }
+            .padding(.top, 4)
     }
 
     // MARK: The steps
 
-    @ViewBuilder
-    private var steps: some View {
-        HStack(spacing: 6) {
-            HexCodeMark()
-                .frame(width: 12, height: 12)
-                .colorMultiply(HexColor.text3)
-            Text(LocalizedStringResource("artifacts.flow.sub", defaultValue: "In Hex Code setup · today’s session isn’t touched"))
-                .hexFont(.caption)
-                .foregroundStyle(HexColor.text3)
+    private var repliesRow: some View {
+        Button { artifacts.showReplies() } label: {
+            ArtifactsRow(
+                icon: nil,
+                title: String(localized: "artifacts.flow.replies", defaultValue: "See what the agent says"),
+                detail: nil,
+                quiet: true,
+                trailing: .chevR
+            )
         }
-        .padding(.top, -6)
-        HexSteps(steps: stepList)
-        if artifacts.setupSessionID != nil {
-            Button { artifacts.showReplies() } label: {
-                HStack(spacing: 4) {
-                    Text(LocalizedStringResource("artifacts.flow.replies", defaultValue: "See what the agent says"))
-                        .hexFont(.small)
-                        .foregroundStyle(HexColor.text2)
-                    HexIconView(.chevR, size: 12)
-                        .foregroundStyle(HexColor.text3)
-                }
-                .padding(.vertical, 4)
-                .contentShape(Rectangle())
+        .buttonStyle(HexPressStyle())
+    }
+
+    /// The steps, folded under a result: "All steps done" or "See the steps".
+    private var foldedSteps: some View {
+        ArtifactsRows {
+            ArtifactsDisclosure(
+                icon: flow.stage == .done ? .check : nil,
+                iconTint: HexColor.green,
+                title: flow.stage == .done
+                    ? String(localized: "artifacts.flow.steps_done", defaultValue: "All steps done")
+                    : String(localized: "artifacts.flow.steps_see", defaultValue: "See the steps"),
+                open: $stepsShown
+            ) {
+                HexSteps(steps: stepList)
             }
-            .buttonStyle(HexPressStyle())
-            .padding(.leading, 30)
+            if stepsShown, artifacts.setupSessionID != nil {
+                ArtifactsRows.divider
+                repliesRow
+            }
         }
-        result
     }
 
     private var stepList: [HexStep] {
@@ -303,12 +280,7 @@ private struct ArtifactsFlowView: View {
                 : String(localized: "artifacts.flow.still_on", defaultValue: "\(name) still serves artifacts")
         default: String(localized: "artifacts.flow.checking", defaultValue: "Checking \(name)")
         }
-        let checkDetail: String? = switch flow.check {
-        case .doing: String(localized: "artifacts.flow.checking_every", defaultValue: "Every 2 s")
-        case .todo: String(localized: "artifacts.flow.checking_sub", defaultValue: "Asks the artifact route whether it answers")
-        default: nil
-        }
-        list.append(HexStep(id: "check", state: Self.state(flow.check), title: checkTitle, detail: checkDetail, live: flow.check == .doing))
+        list.append(HexStep(id: "check", state: Self.state(flow.check), title: checkTitle, live: flow.check == .doing))
         list.append(HexStep(
             id: "end",
             state: Self.state(flow.end),
@@ -353,28 +325,15 @@ private struct ArtifactsFlowView: View {
                 ? String(localized: "artifacts.sheet.now_on", defaultValue: "Artifacts are on")
                 : String(localized: "artifacts.flow.now_off", defaultValue: "Artifacts are off"))
             Text(on
-                ? LocalizedStringResource("artifacts.flow.on_body", defaultValue: "Pages the agent makes now show as the first tile on the card.")
+                ? LocalizedStringResource("artifacts.flow.on_body", defaultValue: "Pages the agent makes now show as the first tile on the card. Hex Code asks it to publish them as artifacts.")
                 : LocalizedStringResource("artifacts.flow.off_body", defaultValue: "The agent can’t make pages now. The ones it made stay on the computer."))
                 .hexFont(.body)
                 .foregroundStyle(HexColor.text2)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(alignment: .top, spacing: 7) {
-                HexIconView(.spark, size: 13)
-                    .foregroundStyle(HexColor.green)
-                    .padding(.top, 2)
-                Text(on
-                    ? LocalizedStringResource("artifacts.flow.on_rule", defaultValue: "Hex Code will ask the agent to publish pages as artifacts (a short rule for today’s session).")
-                    : LocalizedStringResource("artifacts.flow.off_rule", defaultValue: "Hex Code removed its artifact rule from today’s session."))
-                    .hexFont(.caption)
-                    .foregroundStyle(HexColor.text3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             if on { suggestion }
-            HStack {
-                Spacer(minLength: 0)
-                HexButton(LocalizedStringResource("common.done", defaultValue: "Done"), size: .regular, style: .primary) { artifacts.close() }
-            }
-            .padding(.top, 4)
+            foldedSteps
+            HexPrimaryButton(LocalizedStringResource("common.done", defaultValue: "Done")) { artifacts.close() }
+                .padding(.top, 4)
         case let .fallback(reason):
             fallback(reason)
         case let .broken(problem):
@@ -387,7 +346,7 @@ private struct ArtifactsFlowView: View {
     }
 
     private func resultHead(icon: HexIcon, tint: Color, title: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HexIconView(icon, size: 18)
                 .foregroundStyle(tint)
                 .frame(width: 40, height: 40)
@@ -398,7 +357,7 @@ private struct ArtifactsFlowView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
         }
-        .padding(.top, 6)
+        .padding(.bottom, -4)
     }
 
     private var suggestion: some View {
@@ -427,23 +386,31 @@ private struct ArtifactsFlowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(HexPressStyle())
-        .padding(.top, 4)
     }
 
     @ViewBuilder
     private func fallback(_ reason: ArtifactsFlow.Fallback) -> some View {
         let (icon, tint, title, body) = Self.fallbackText(reason, on: on, name: name, file: flow.target?.name ?? "")
         resultHead(icon: icon, tint: tint, title: title)
-        if let body {
+        if case let .failed(said) = reason {
+            // The agent's own words, as a quote.
+            SummaryText(text: said, style: .body)
+                .foregroundStyle(HexColor.text1)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 12)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(HexColor.line2).frame(width: 2)
+                }
+        } else if let body {
             SummaryText(text: body, style: .body)
                 .foregroundStyle(HexColor.text2)
                 .fixedSize(horizontal: false, vertical: true)
         }
         if flow.offersLine { fallbackLine }
+        foldedSteps
         HStack(spacing: 8) {
-            HexButton(LocalizedStringResource("common.close", defaultValue: "Close"), size: .regular) { artifacts.close() }
-            Spacer(minLength: 0)
-            HexButton(LocalizedStringResource("artifacts.flow.try_again", defaultValue: "Try again"), icon: .refresh, size: .regular, style: .primary) {
+            HexButton(LocalizedStringResource("common.close", defaultValue: "Close"), size: .field, fullWidth: true) { artifacts.close() }
+            HexButton(LocalizedStringResource("artifacts.flow.try_again", defaultValue: "Try again"), icon: .refresh, size: .field, style: .primary, fullWidth: true) {
                 Task { await artifacts.tryAgain() }
             }
         }
@@ -483,33 +450,46 @@ private struct ArtifactsFlowView: View {
         }
     }
 
-    /// The line to copy, the file, Copy; the check keeps going, so a hand edit flips it.
+    /// The line to add by hand: the file, the line with Copy; the check keeps going, so a hand
+    /// edit flips it.
     @ViewBuilder
     private var fallbackLine: some View {
         if let target = flow.target {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: on
-                    ? String(localized: "artifacts.flow.fallback", defaultValue: "Or add it yourself on \(name), in \(target.path):")
-                    : String(localized: "artifacts.flow.fallback_off", defaultValue: "Or remove it yourself on \(name), in \(target.path):"))
-                    .hexFont(.small)
-                    .foregroundStyle(HexColor.text2)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(alignment: .top, spacing: 8) {
-                    HexCode(lines: [HexCodeLine(on ? target.line : #""artifacts": true"#)])
+            label(on
+                ? LocalizedStringResource("artifacts.flow.fallback_title", defaultValue: "Or add it yourself")
+                : LocalizedStringResource("artifacts.flow.fallback_title_off", defaultValue: "Or remove it yourself"))
+            ArtifactsRows {
+                ArtifactsRow(
+                    icon: .doc,
+                    title: target.path,
+                    detail: String(localized: "artifacts.flow.fallback_on", defaultValue: "On \(name)"),
+                    monoTitle: true
+                )
+                .textSelection(.enabled)
+                ArtifactsRows.divider
+                HStack(spacing: 8) {
+                    Text(verbatim: on ? target.line : #""artifacts": true"#)
+                        .hexFont(.code)
+                        .foregroundStyle(HexColor.text1)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     HexButton(LocalizedStringResource("artifacts.sheet.copy", defaultValue: "Copy"), icon: .copy) { artifacts.copyLine() }
                         .fixedSize()
                 }
-                if on {
-                    HStack(spacing: 7) {
-                        HexSpinner(size: 13)
-                        Text(LocalizedStringResource("artifacts.flow.fallback_watching", defaultValue: "Hex Code keeps checking and turns to On by itself."))
-                            .hexFont(.footnote)
-                            .foregroundStyle(HexColor.text3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                .padding(.leading, 12)
+                .padding(.trailing, 8)
+                .padding(.vertical, 8)
+                .background(HexColor.background)
+            }
+            if on {
+                HStack(spacing: 7) {
+                    HexSpinner(size: 13)
+                    Text(LocalizedStringResource("artifacts.flow.fallback_watching", defaultValue: "Hex Code keeps checking and turns to On by itself."))
+                        .hexFont(.caption)
+                        .foregroundStyle(HexColor.text3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.top, 6)
         }
     }
 
@@ -535,16 +515,132 @@ private struct ArtifactsFlowView: View {
                 .foregroundStyle(HexColor.text3)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        foldedSteps
         HStack(spacing: 8) {
-            HexButton(LocalizedStringResource("common.close", defaultValue: "Close"), size: .regular, enabled: !restoring) { artifacts.close() }
-            Spacer(minLength: 0)
+            HexButton(LocalizedStringResource("common.close", defaultValue: "Close"), size: .field, enabled: !restoring, fullWidth: true) { artifacts.close() }
             if artifacts.canRestore {
-                HexButton(LocalizedStringResource("artifacts.restore", defaultValue: "Restore"), icon: .undo, size: .regular, style: .primary, loading: restoring) {
+                HexButton(LocalizedStringResource("artifacts.restore", defaultValue: "Restore"), icon: .undo, size: .field, style: .primary, loading: restoring, fullWidth: true) {
                     Task { await artifacts.restore() }
                 }
             }
         }
         .padding(.top, 4)
+    }
+}
+
+/// A group of rows in one bordered card, with `divider`s between them: what happens, the file and
+/// line to copy, the folded steps.
+private struct ArtifactsRows<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: HexRadius.l, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) { content }
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(HexColor.line, lineWidth: 1))
+    }
+}
+
+extension ArtifactsRows where Content == EmptyView {
+    static var divider: some View {
+        Rectangle().fill(HexColor.line).frame(height: 1)
+    }
+}
+
+/// One row of an `ArtifactsRows` card: a 16 pt icon (the Hex Code mark when there's none), a title
+/// and a second line. `quiet` puts the title in `text2`, for a row that only leads somewhere.
+private struct ArtifactsRow: View {
+    var icon: HexIcon?
+    var iconTint: Color = HexColor.text2
+    let title: String
+    var detail: String?
+    var monoTitle = false
+    var monoDetail = false
+    var quiet = false
+    var trailing: HexIcon?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Group {
+                if let icon {
+                    HexIconView(icon, size: HexIconSize.regular)
+                        .foregroundStyle(iconTint)
+                } else {
+                    HexCodeMark()
+                        .colorMultiply(iconTint)
+                }
+            }
+            .frame(width: HexIconSize.regular, height: HexIconSize.regular)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: title)
+                    .hexFont(monoTitle ? .code : .row)
+                    .foregroundStyle(quiet ? HexColor.text2 : HexColor.text1)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let detail {
+                    Text(verbatim: detail)
+                        .hexFont(monoDetail ? .mono : .caption)
+                        .foregroundStyle(HexColor.text3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let trailing {
+                HexIconView(trailing, size: 14)
+                    .foregroundStyle(HexColor.text3)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(minHeight: HexSize.touch)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A row that unfolds what's under it: the exact message, the steps.
+private struct ArtifactsDisclosure<Content: View>: View {
+    var icon: HexIcon?
+    var iconTint: Color = HexColor.text2
+    let title: String
+    @Binding var open: Bool
+    @ViewBuilder let content: Content
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { open.toggle() }
+            } label: {
+                HStack(spacing: 12) {
+                    Group {
+                        if let icon {
+                            HexIconView(icon, size: HexIconSize.regular)
+                                .foregroundStyle(iconTint)
+                        } else {
+                            Color.clear
+                        }
+                    }
+                    .frame(width: HexIconSize.regular, height: HexIconSize.regular)
+                    Text(verbatim: title)
+                        .hexFont(.row)
+                        .foregroundStyle(HexColor.text2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HexIconView(open ? .chevU : .chevD, size: 14)
+                        .foregroundStyle(HexColor.text3)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(minHeight: HexSize.touch)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(HexPressStyle())
+            if open {
+                content
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
+            }
+        }
     }
 }
 

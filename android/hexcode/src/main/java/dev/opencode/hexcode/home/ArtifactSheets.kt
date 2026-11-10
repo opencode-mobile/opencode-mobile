@@ -13,10 +13,10 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -29,10 +29,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -50,8 +55,7 @@ import dev.opencode.hexcode.designsystem.components.HexCode
 import dev.opencode.hexcode.designsystem.components.HexCodeLine
 import dev.opencode.hexcode.designsystem.components.HexCodeLineKind
 import dev.opencode.hexcode.designsystem.components.HexCodeText
-import dev.opencode.hexcode.designsystem.components.HexLinkKind
-import dev.opencode.hexcode.designsystem.components.HexLinkTile
+import dev.opencode.hexcode.designsystem.components.HexPrimaryButton
 import dev.opencode.hexcode.designsystem.components.HexSheet
 import dev.opencode.hexcode.designsystem.components.HexSheetAction
 import dev.opencode.hexcode.designsystem.components.HexSheetRequest
@@ -221,16 +225,16 @@ fun BoxScope.ArtifactSheets(
     Notices(ui, actions, computer, path(flow?.target), showHint, noticeTop)
 }
 
-/** The sheet's title: Turn on artifacts, then Turning on artifacts… while it runs. */
+/** The sheet's title: Turn on artifacts, Turning on artifacts… while it runs, and plain Artifacts over a result. */
 @Composable
 private fun sheetTitle(setup: ArtifactSetup): String {
     val on = setup.mode == SetupMode.On
-    return when {
-        setup.stage == SetupStage.Explain || setup.stage == SetupStage.Reading || setup.stage is SetupStage.Blocked ->
+    return when (setup.stage) {
+        SetupStage.Explain, SetupStage.Reading, is SetupStage.Blocked ->
             stringResource(if (on) R.string.artifacts_sheet_turn_on else R.string.artifacts_sheet_turn_off)
-        setup.stage == SetupStage.Running ->
+        SetupStage.Running ->
             stringResource(if (on) R.string.artifacts_flow_turning_on else R.string.artifacts_flow_turning_off)
-        else -> stringResource(if (on) R.string.artifacts_flow_turning_on else R.string.artifacts_flow_turning_off).removeSuffix("…")
+        else -> stringResource(R.string.settings_artifacts)
     }
 }
 
@@ -247,16 +251,19 @@ private fun SheetBody(
     val colors = HexTheme.colors
     val on = setup.mode == SetupMode.On
     val stage = setup.stage
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         when {
             stage == SetupStage.Explain -> {
-                Intro(on, computer)
-                WillEdit(setup.target, path)
-                PromptBox(setup.prompt.orEmpty())
-                WhereItGoes(setup.reused)
+                Text(
+                    stringResource(if (on) R.string.artifacts_sheet_intro else R.string.artifacts_sheet_intro_off),
+                    style = HexTheme.type.body,
+                    color = colors.text2,
+                )
+                if (on) Example()
+                Label(stringResource(R.string.artifacts_sheet_what))
+                WhatHappens(setup, computer, path)
             }
             stage is SetupStage.Blocked -> {
-                Intro(on, computer)
                 // A person added the line meanwhile: it's on.
                 if (on && state == ArtifactsState.On) {
                     Result(HexIcons.check, Tone.Green, stringResource(R.string.artifacts_sheet_now_on), null)
@@ -274,163 +281,225 @@ private fun SheetBody(
                     }
                 }
             }
-            else -> {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(HexIcons.mark, null, tint = colors.text3, modifier = Modifier.size(12.dp))
-                    Text(stringResource(R.string.artifacts_flow_sub), style = HexTheme.type.caption, color = colors.text3)
-                }
+            stage == SetupStage.Running -> {
                 HexSteps(steps(setup, computer, path, onReview))
-                Text(
-                    stringResource(R.string.artifacts_flow_replies) + " ›",
-                    style = HexTheme.type.callout,
-                    color = colors.text2,
-                    modifier =
-                        Modifier
-                            .padding(start = 30.dp)
-                            .clickable(role = Role.Button, onClick = onReplies)
-                            .padding(vertical = 4.dp),
-                )
-                Outcome(setup, computer, path, actions)
+                Rows { RepliesRow(onReplies) }
             }
+            else -> Outcome(setup, computer, path, actions, onReview, onReplies)
         }
     }
 }
 
-/** The tiny example tile and what artifacts are; or, turning off, what that means. */
+/** What an artifact looks like on the card. */
 @Composable
-private fun Intro(
-    on: Boolean,
-    computer: String,
-) {
-    val colors = HexTheme.colors
-    if (!on) {
-        Text(stringResource(R.string.artifacts_sheet_intro_off), style = HexTheme.type.body, color = colors.text2)
-        return
-    }
-    val intro = stringResource(R.string.artifacts_sheet_intro, computer)
-    val word = stringResource(R.string.settings_artifacts)
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        HexLinkTile(
-            label = stringResource(R.string.artifacts_sheet_example),
-            host = stringResource(R.string.home_tile_artifact),
-            kind = HexLinkKind.Artifact,
-            accessibilityLabel = "",
-            onClick = {},
-            modifier = Modifier.width(132.dp),
-        )
-        Text(
-            buildAnnotatedString {
-                // "Artifacts" leads in text1, as the prototype's bold word.
-                if (intro.startsWith(word)) {
-                    withStyle(SpanStyle(color = colors.text1, fontWeight = FontWeight.Medium)) { append(word) }
-                    append(intro.removePrefix(word))
-                } else {
-                    append(intro)
-                }
-            },
-            style = HexTheme.type.callout,
-            color = colors.text2,
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-/** "Will edit <file>" and why that file (`.tgt.will`). */
-@Composable
-private fun WillEdit(
-    target: ConfigTarget?,
-    path: String,
-) {
-    val colors = HexTheme.colors
-    val file = target as? ConfigTarget.File ?: return
-    Panel {
-        Text(stringResource(R.string.artifacts_sheet_will_edit), style = HexTheme.type.caption, color = colors.text3)
-        Text(path, style = HexTheme.type.mono, color = colors.text1)
-        Text(
-            stringResource(
-                when {
-                    !file.global -> R.string.artifacts_sheet_will_edit_project
-                    file.hasBlock -> R.string.artifacts_sheet_will_edit_global_block
-                    else -> R.string.artifacts_sheet_will_edit_global
-                },
-            ),
-            style = HexTheme.type.caption,
-            color = colors.text3,
-            modifier = Modifier.padding(top = 2.dp),
-        )
-    }
-}
-
-/** The exact prompt (`.pbox`): "Sent to the agent, as you · exact text". */
-@Composable
-private fun PromptBox(prompt: String) {
-    val colors = HexTheme.colors
-    val shape = RoundedCornerShape(HexTheme.radius.l)
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(colors.background, shape)
-            .border(1.dp, colors.line, shape)
-            .padding(start = 13.dp, end = 13.dp, top = 11.dp, bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row {
-            Text(
-                stringResource(R.string.artifacts_sheet_prompt),
-                style = HexTheme.type.monoSmall,
-                color = colors.text2,
-                modifier = Modifier.weight(1f),
-            )
-            Text(stringResource(R.string.artifacts_sheet_prompt_exact), style = HexTheme.type.monoSmall, color = colors.text3)
-        }
-        HexCodeText(summaryText(prompt), style = HexTheme.type.callout, color = colors.text1)
-    }
-}
-
-/** Where the prompt goes (`.where.wa`): the setup session, New or Reused. */
-@Composable
-private fun WhereItGoes(reused: Boolean) {
+private fun Example() {
     val colors = HexTheme.colors
     val shape = RoundedCornerShape(HexTheme.radius.l)
     Row(
         Modifier
             .fillMaxWidth()
-            .background(colors.panel, shape)
+            .background(colors.background, shape)
             .border(1.dp, colors.line, shape)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(11.dp),
+            .padding(12.dp)
+            .clearAndSetSemantics {},
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier
-                .size(26.dp)
-                .border(1.dp, colors.line2, RoundedCornerShape(7.dp)),
+            Modifier.size(34.dp).border(1.dp, colors.line2, RoundedCornerShape(HexTheme.radius.m)),
             contentAlignment = Alignment.Center,
-        ) { Icon(HexIcons.mark, null, tint = colors.text1, modifier = Modifier.size(13.dp)) }
+        ) { Icon(HexIcons.compass, null, tint = colors.text1, modifier = Modifier.size(HexTheme.size.icon)) }
         Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.artifacts_sheet_where), style = HexTheme.type.callout, color = colors.text1)
-            Text(stringResource(R.string.artifacts_sheet_where_sub), style = HexTheme.type.caption, color = colors.text3)
+            Text(
+                stringResource(R.string.artifacts_sheet_example),
+                style = HexTheme.type.row.copy(fontWeight = FontWeight.Medium),
+                color = colors.text1,
+            )
+            Text(stringResource(R.string.artifacts_sheet_example_sub), style = HexTheme.type.caption, color = colors.text3)
         }
-        Text(
-            stringResource(if (reused) R.string.artifacts_sheet_reused else R.string.artifacts_sheet_new),
-            style = HexTheme.type.caption,
-            color = if (reused) colors.text3 else colors.green,
-        )
     }
 }
 
+/** An upper-case label over a card of rows. */
 @Composable
-private fun Panel(content: @Composable ColumnScope.() -> Unit) {
-    val colors = HexTheme.colors
+private fun Label(text: String) {
+    Text(
+        text.uppercase(),
+        style = HexTheme.type.sectionLabel,
+        color = HexTheme.colors.text3,
+        modifier = Modifier.padding(top = 4.dp).semantics { heading() },
+    )
+}
+
+/** What sending does: the file, the approval, the separate session, and the exact message behind a tap. */
+@Composable
+private fun WhatHappens(
+    setup: ArtifactSetup,
+    computer: String,
+    path: String,
+) {
+    val on = setup.mode == SetupMode.On
+    var promptShown by remember { mutableStateOf(false) }
+    Rows {
+        if (setup.target is ConfigTarget.File) {
+            RowItem(
+                HexIcons.doc,
+                stringResource(if (on) R.string.artifacts_sheet_what_edit else R.string.artifacts_sheet_what_edit_off),
+                path,
+                monoDetail = true,
+            )
+            RowsDivider()
+        }
+        RowItem(
+            HexIcons.lock,
+            stringResource(R.string.artifacts_sheet_what_approve),
+            stringResource(R.string.artifacts_sheet_what_approve_sub, computer),
+        )
+        RowsDivider()
+        RowItem(
+            HexIcons.mark,
+            stringResource(R.string.artifacts_sheet_what_session),
+            stringResource(R.string.artifacts_sheet_where_sub),
+        )
+        val prompt = setup.prompt
+        if (!prompt.isNullOrEmpty()) {
+            RowsDivider()
+            Disclosure(stringResource(R.string.artifacts_sheet_show_prompt), promptShown, { promptShown = !promptShown }) {
+                HexCodeText(summaryText(prompt), style = HexTheme.type.caption, color = HexTheme.colors.text1)
+            }
+        }
+    }
+}
+
+/** A group of rows in one bordered card, with [RowsDivider]s between them. */
+@Composable
+private fun Rows(content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(HexTheme.radius.l)
     Column(
         Modifier
             .fillMaxWidth()
-            .background(colors.panel, shape)
-            .border(1.dp, colors.line, shape)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .clip(shape)
+            .border(1.dp, HexTheme.colors.line, shape),
         content = content,
     )
+}
+
+@Composable
+private fun RowsDivider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(HexTheme.colors.line))
+}
+
+/**
+ * One row of a [Rows] card: a 16 dp icon, a title and a second line. [quiet] puts the title in `text2`, for a row that
+ * only leads somewhere.
+ */
+@Composable
+private fun RowItem(
+    icon: ImageVector,
+    title: String,
+    detail: String? = null,
+    monoTitle: Boolean = false,
+    monoDetail: Boolean = false,
+    quiet: Boolean = false,
+    trailing: ImageVector? = null,
+    onClick: (() -> Unit)? = null,
+) {
+    val colors = HexTheme.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = HexTheme.size.touch)
+            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = colors.text2, modifier = Modifier.size(HexTheme.size.icon))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                title,
+                style = if (monoTitle) HexTheme.type.code else HexTheme.type.row,
+                color = if (quiet) colors.text2 else colors.text1,
+            )
+            detail?.let {
+                Text(it, style = if (monoDetail) HexTheme.type.mono else HexTheme.type.caption, color = colors.text3)
+            }
+        }
+        trailing?.let { Icon(it, null, tint = colors.text3, modifier = Modifier.size(14.dp)) }
+    }
+}
+
+/** A row that unfolds what's under it: the exact message, the steps. */
+@Composable
+private fun Disclosure(
+    title: String,
+    open: Boolean,
+    onToggle: () -> Unit,
+    icon: ImageVector? = null,
+    tint: Color = HexTheme.colors.text2,
+    content: @Composable () -> Unit,
+) {
+    val colors = HexTheme.colors
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = HexTheme.size.touch)
+                .clickable(role = Role.Button, onClick = onToggle)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(HexTheme.size.icon)) {
+                icon?.let { Icon(it, null, tint = tint, modifier = Modifier.size(HexTheme.size.icon)) }
+            }
+            Text(title, style = HexTheme.type.row, color = colors.text2, modifier = Modifier.weight(1f))
+            Icon(if (open) HexIcons.chevU else HexIcons.chevD, null, tint = colors.text3, modifier = Modifier.size(14.dp))
+        }
+        if (open) {
+            Box(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) { content() }
+        }
+    }
+}
+
+/** "See what the agent says": opens the setup session's replies. */
+@Composable
+private fun RepliesRow(onReplies: () -> Unit) {
+    RowItem(
+        HexIcons.mark,
+        stringResource(R.string.artifacts_flow_replies),
+        quiet = true,
+        trailing = HexIcons.chevR,
+        onClick = onReplies,
+    )
+}
+
+/** The steps, folded under a result: "All steps done" or "See the steps". */
+@Composable
+private fun FoldedSteps(
+    setup: ArtifactSetup,
+    computer: String,
+    path: String,
+    onReview: () -> Unit,
+    onReplies: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val done = setup.stage == SetupStage.Done
+    Rows {
+        Disclosure(
+            stringResource(if (done) R.string.artifacts_flow_steps_done else R.string.artifacts_flow_steps_see),
+            open,
+            { open = !open },
+            icon = if (done) HexIcons.check else null,
+            tint = HexTheme.colors.green,
+        ) {
+            HexSteps(steps(setup, computer, path, onReview))
+        }
+        if (open) {
+            RowsDivider()
+            RepliesRow(onReplies)
+        }
+    }
 }
 
 /** The step list for the flow's state. */
@@ -488,11 +557,6 @@ private fun steps(
                     stringResource(if (on) R.string.artifacts_flow_still_disabled else R.string.artifacts_flow_still_on, computer)
                 else -> stringResource(R.string.artifacts_flow_checking, computer)
             },
-            when (s.check) {
-                SetupStepState.Doing -> stringResource(R.string.artifacts_flow_checking_every)
-                SetupStepState.Todo -> stringResource(R.string.artifacts_flow_checking_sub)
-                else -> null
-            },
             live = s.check == SetupStepState.Doing,
         )
     list += HexStep(state(s.end), stringResource(if (on) R.string.artifacts_sheet_now_on else R.string.artifacts_flow_now_off))
@@ -522,13 +586,15 @@ private fun live(setup: ArtifactSetup): String {
     }
 }
 
-/** What happened, under the steps: On, Off, the fallback, or the broken config with Restore. */
+/** What happened: On, Off, the fallback, or the broken config with Restore; the steps fold under it. */
 @Composable
 private fun Outcome(
     setup: ArtifactSetup,
     computer: String,
     path: String,
     actions: ArtifactActions,
+    onReview: () -> Unit,
+    onReplies: () -> Unit,
 ) {
     val on = setup.mode == SetupMode.On
     when (val stage = setup.stage) {
@@ -538,7 +604,6 @@ private fun Outcome(
                 Tone.Green,
                 stringResource(if (on) R.string.artifacts_sheet_now_on else R.string.artifacts_flow_now_off),
                 stringResource(if (on) R.string.artifacts_flow_on_body else R.string.artifacts_flow_off_body),
-                rule = stringResource(if (on) R.string.artifacts_flow_on_rule else R.string.artifacts_flow_off_rule),
             )
             if (on) Suggestion(actions)
         }
@@ -552,12 +617,8 @@ private fun Outcome(
                         stringResource(R.string.artifacts_flow_rejected_body),
                     )
                 SetupStage.Fallback.Why.Failed ->
-                    Result(
-                        HexIcons.x,
-                        Tone.Red,
-                        stringResource(R.string.artifacts_flow_not_changed),
-                        stage.detail?.let { stringResource(R.string.artifacts_flow_failed_body, it) },
-                    )
+                    // The agent's own words, as a quote.
+                    Result(HexIcons.x, Tone.Red, stringResource(R.string.artifacts_flow_not_changed), stage.detail, quote = true)
                 SetupStage.Fallback.Why.FreeLimit ->
                     Result(HexIcons.x, Tone.Red, stringResource(R.string.artifacts_flow_couldnt_run), stage.detail)
                 SetupStage.Fallback.Why.TimedOut ->
@@ -605,20 +666,21 @@ private fun Outcome(
                 )
             }
         }
-        else -> Unit
+        else -> return
     }
+    FoldedSteps(setup, computer, path, onReview, onReplies)
 }
 
 private enum class Tone { Green, Amber, Red, Grey }
 
-/** A result (`.res`): a round mark, a title, a line, and the rule line. */
+/** A result (`.res`): a round mark, a title and a line; [quote] shows the line as the agent's own words. */
 @Composable
 private fun Result(
     icon: ImageVector,
     tone: Tone,
     title: String,
     body: String?,
-    rule: String? = null,
+    quote: Boolean = false,
 ) {
     val colors = HexTheme.colors
     val (tint, fill) =
@@ -628,16 +690,25 @@ private fun Result(
             Tone.Red -> colors.red to colors.redSoft
             Tone.Grey -> colors.text2 to colors.tint(6f)
         }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(40.dp).background(fill, CircleShape), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = tint, modifier = Modifier.size(18.dp))
         }
-        Text(title, style = HexTheme.type.headline, color = colors.text1, modifier = Modifier.semantics { heading() })
-        body?.let { HexCodeText(summaryText(it), style = HexTheme.type.body, color = colors.text2) }
-        rule?.let {
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Icon(HexIcons.spark, null, tint = colors.green, modifier = Modifier.padding(top = 2.dp).size(13.dp))
-                Text(it, style = HexTheme.type.caption, color = colors.text3)
+        Text(title, style = HexTheme.type.pageTitle, color = colors.text1, modifier = Modifier.semantics { heading() })
+        body?.let {
+            if (quote) {
+                val bar = colors.line2
+                HexCodeText(
+                    summaryText(it),
+                    style = HexTheme.type.body,
+                    color = colors.text1,
+                    modifier =
+                        Modifier
+                            .drawBehind { drawRect(bar, size = Size(2.dp.toPx(), size.height)) }
+                            .padding(start = 12.dp),
+                )
+            } else {
+                HexCodeText(summaryText(it), style = HexTheme.type.body, color = colors.text2)
             }
         }
     }
@@ -651,28 +722,29 @@ private fun Suggestion(actions: ArtifactActions) {
     val text = stringResource(R.string.artifacts_flow_on_suggestion)
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = HexTheme.size.touch)
-                .background(colors.panel, shape)
-                .border(1.dp, colors.line, shape)
+                .clip(shape)
+                .background(colors.panel2)
+                .border(1.dp, colors.line2, shape)
                 .clickable(role = Role.Button) { actions.artifactsSuggestion("$text ") }
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 11.dp),
     ) {
-        Box(Modifier.size(28.dp).background(colors.tint(8f), CircleShape), contentAlignment = Alignment.Center) {
-            Icon(HexIcons.mic, null, tint = colors.text2, modifier = Modifier.size(13.dp))
+        Box(Modifier.size(32.dp).background(colors.solid, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(HexIcons.mic, null, tint = colors.onSolid, modifier = Modifier.size(14.dp))
         }
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("“$text …”", style = HexTheme.type.callout, color = colors.text1)
-            Text(stringResource(R.string.artifacts_flow_on_suggestion_sub), style = HexTheme.type.caption, color = colors.text3)
+            Text(stringResource(R.string.artifacts_flow_on_suggestion_sub), style = HexTheme.type.footnote, color = colors.text3)
         }
         Icon(HexIcons.chevR, null, tint = colors.text3, modifier = Modifier.size(14.dp))
     }
 }
 
-/** The line to add by hand, with its file and Copy; the 2 s check keeps watching while the sheet is open. */
+/** The line to add by hand: the file, the line with Copy; the 2 s check keeps watching while the sheet is open. */
 @Composable
 private fun Fallback(
     setup: ArtifactSetup,
@@ -690,14 +762,19 @@ private fun Fallback(
             copied = false
         }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
-        Text(
-            stringResource(if (on) R.string.artifacts_flow_fallback else R.string.artifacts_flow_fallback_off, computer, path),
-            style = HexTheme.type.caption,
-            color = colors.text2,
-        )
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HexCode(listOf(HexCodeLine(line, HexCodeLineKind.Plain)), Modifier.weight(1f))
+    Label(stringResource(if (on) R.string.artifacts_flow_fallback_title else R.string.artifacts_flow_fallback_title_off))
+    Rows {
+        RowItem(HexIcons.doc, path, stringResource(R.string.artifacts_flow_fallback_on, computer), monoTitle = true)
+        RowsDivider()
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(colors.background)
+                .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(line, style = HexTheme.type.code, color = colors.text1, modifier = Modifier.weight(1f))
             HexButton(
                 onClick = {
                     context
@@ -709,77 +786,73 @@ private fun Fallback(
                 icon = if (copied) HexIcons.check else HexIcons.copy,
             )
         }
-        if (setup.watching && on) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                HexSpinner(size = 13.dp)
-                Text(stringResource(R.string.artifacts_flow_fallback_watching), style = HexTheme.type.caption, color = colors.text3)
-            }
+    }
+    if (setup.watching && on) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            HexSpinner(size = 13.dp)
+            Text(stringResource(R.string.artifacts_flow_fallback_watching), style = HexTheme.type.caption, color = colors.text3)
         }
     }
 }
 
-/** Cancel / Send before; Done once done; Close / Try again after a fallback; Close / Restore for a broken config. */
+/** Send before; Done once done; Close / Try again after a fallback; Close / Restore for a broken config. */
 @Composable
 private fun ColumnScope.SheetButtons(
     setup: ArtifactSetup,
     state: ArtifactsState,
     actions: ArtifactActions,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        when (val stage = setup.stage) {
-            SetupStage.Reading, SetupStage.Explain -> {
-                HexButton(onClick = actions::closeArtifacts, text = stringResource(R.string.common_cancel), size = HexButtonSize.Regular)
-                Spacer(Modifier.weight(1f))
-                HexButton(
-                    onClick = actions::sendArtifactsPrompt,
-                    text = stringResource(R.string.artifacts_sheet_send),
-                    style = HexButtonStyle.Primary,
-                    size = HexButtonSize.Regular,
-                    enabled = stage == SetupStage.Explain,
-                    loading = setup.sending,
-                )
-            }
-            SetupStage.Running -> Unit
-            SetupStage.Done -> {
-                Spacer(Modifier.weight(1f))
+    val half = Modifier.height(HexTheme.size.touch)
+    when (val stage = setup.stage) {
+        SetupStage.Reading, SetupStage.Explain ->
+            HexPrimaryButton(
+                text = stringResource(R.string.artifacts_sheet_send),
+                onClick = actions::sendArtifactsPrompt,
+                enabled = stage == SetupStage.Explain,
+                loading = setup.sending,
+            )
+        SetupStage.Running -> Unit
+        SetupStage.Done -> HexPrimaryButton(text = stringResource(R.string.common_done), onClick = actions::closeArtifacts)
+        is SetupStage.Fallback ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 HexButton(
                     onClick = actions::closeArtifacts,
-                    text = stringResource(R.string.common_done),
-                    style = HexButtonStyle.Primary,
+                    text = stringResource(R.string.common_close),
                     size = HexButtonSize.Regular,
+                    modifier = half.weight(1f),
                 )
-            }
-            is SetupStage.Fallback -> {
-                HexButton(onClick = actions::closeArtifacts, text = stringResource(R.string.common_close), size = HexButtonSize.Regular)
-                Spacer(Modifier.weight(1f))
                 HexButton(
                     onClick = actions::retryArtifacts,
                     text = stringResource(R.string.artifacts_flow_try_again),
+                    icon = HexIcons.refresh,
                     style = HexButtonStyle.Primary,
                     size = HexButtonSize.Regular,
+                    modifier = half.weight(1f),
                 )
             }
-            is SetupStage.Damaged -> {
-                HexButton(onClick = actions::closeArtifacts, text = stringResource(R.string.common_close), size = HexButtonSize.Regular)
-                Spacer(Modifier.weight(1f))
+        is SetupStage.Damaged ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                HexButton(
+                    onClick = actions::closeArtifacts,
+                    text = stringResource(R.string.common_close),
+                    size = HexButtonSize.Regular,
+                    modifier = half.weight(1f),
+                )
                 HexButton(
                     onClick = actions::restoreArtifactsConfig,
                     text = stringResource(R.string.artifacts_restore),
+                    icon = HexIcons.undo,
                     style = HexButtonStyle.Primary,
                     size = HexButtonSize.Regular,
                     loading = setup.restoring,
+                    modifier = half.weight(1f),
                 )
             }
-            is SetupStage.Blocked -> {
-                Spacer(Modifier.weight(1f))
-                HexButton(
-                    onClick = actions::closeArtifacts,
-                    text = stringResource(if (state == ArtifactsState.On) R.string.common_done else R.string.common_close),
-                    style = HexButtonStyle.Primary,
-                    size = HexButtonSize.Regular,
-                )
-            }
-        }
+        is SetupStage.Blocked ->
+            HexPrimaryButton(
+                text = stringResource(if (state == ArtifactsState.On) R.string.common_done else R.string.common_close),
+                onClick = actions::closeArtifacts,
+            )
     }
 }
 
