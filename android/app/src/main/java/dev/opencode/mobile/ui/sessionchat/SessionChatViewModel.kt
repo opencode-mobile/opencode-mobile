@@ -99,6 +99,7 @@ import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatDictation
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatGoal
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatImageViewer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionNotice
@@ -305,6 +306,15 @@ class SessionChatViewModel
                 scope = viewModelScope,
             )
 
+        /** Composer dictation card; Insert splices through [updateComposerText]. */
+        private val dictation =
+            SessionChatDictation(
+                scope = viewModelScope,
+                nowMs = { nowMs() },
+                onChange = { publishUiState() },
+                onCommit = { transcript -> spliceDictationTranscript(transcript) },
+            )
+
         private val worktreeMove =
             SessionChatWorktreeMove(
                 moveSession = { id, directory -> sessionRepository.moveSession(id, directory) },
@@ -413,12 +423,11 @@ class SessionChatViewModel
         private var liveRailMarked: List<SessionChatMessageItem> = emptyList()
         private var liveRailActive = false
 
-        // Composer dictation card. An active card is cancelled without inserting when the
-        // mode, background, or screen goes away.
-        private var dictation: ComposerDictationUiState? = null
-        private var dictationGeneration = 0
-        private var dictationInsertJob: Job? = null
-        internal var dictationFinishDelayMs: Long = 350
+        internal var dictationFinishDelayMs: Long
+            get() = dictation.finishDelayMs
+            set(value) {
+                dictation.finishDelayMs = value
+            }
 
         // One-time Chip timeline intro (OPE-270): offered after a long turn finishes.
         private var chipTimelineIntroVisible = false
@@ -1125,15 +1134,7 @@ class SessionChatViewModel
             languageLabel: String,
             onDevice: Boolean,
         ) {
-            invalidateDictationInsert()
-            dictation =
-                ComposerDictationUiState(
-                    phase = ComposerDictationPhase.Listening,
-                    languageLabel = languageLabel,
-                    onDevice = onDevice,
-                    startedAtEpochMs = nowMs(),
-                )
-            publishUiState()
+            dictation.begin(languageLabel, onDevice)
         }
 
         fun beginDictationUnavailable(
@@ -1141,19 +1142,7 @@ class SessionChatViewModel
             message: String? = null,
             languageLabel: String = "",
         ) {
-            if (!phase.isUnavailable) return
-            // A recognizer error can arrive after Insert has already been confirmed.
-            // Dropping the card here would cancel the splice.
-            if (dictation?.phase == ComposerDictationPhase.Finishing) return
-            invalidateDictationInsert()
-            dictation =
-                ComposerDictationUiState(
-                    phase = phase,
-                    languageLabel = languageLabel,
-                    startedAtEpochMs = nowMs(),
-                    errorMessage = message,
-                )
-            publishUiState()
+            dictation.beginUnavailable(phase, message, languageLabel)
         }
 
         /** Applies a model download update only while the card still shows the model. */
@@ -1161,79 +1150,43 @@ class SessionChatViewModel
             phase: ComposerDictationPhase,
             progress: Float? = null,
         ) {
-            val current = dictation ?: return
-            if (!phase.isModelPhase || !current.phase.isModelPhase) return
-            dictation = current.copy(phase = phase, downloadProgress = progress)
-            publishUiState()
+            dictation.modelDownload(phase, progress)
         }
 
         fun dictationPartial(
             committed: String,
             volatile: String,
         ) {
-            val current = dictation ?: return
-            if (current.phase != ComposerDictationPhase.Listening) return
-            dictation = current.copy(committed = committed, volatile = volatile)
-            publishUiState()
+            dictation.partial(committed, volatile)
         }
 
         fun dictationLevel(level: Float) {
-            val current = dictation ?: return
-            if (current.phase != ComposerDictationPhase.Listening) return
-            dictation = current.copy(level = level.coerceIn(0f, 1f))
-            publishUiState()
+            dictation.level(level)
         }
 
         /** Listening ended but the transcript stays on the card so Insert still works. */
         fun dictationStopped() {
-            val current = dictation ?: return
-            if (current.phase != ComposerDictationPhase.Listening) return
-            dictation = current.copy(phase = ComposerDictationPhase.Stopped, level = 0f)
-            publishUiState()
+            dictation.stopped()
         }
 
         fun dictationInsert() {
-            val current = dictation ?: return
-            if (
-                current.phase != ComposerDictationPhase.Listening &&
-                current.phase != ComposerDictationPhase.Stopped &&
-                current.phase != ComposerDictationPhase.Finishing
-            ) {
-                return
-            }
-            val transcript = current.committed + current.volatile
-            if (transcript.trim().isEmpty()) return
-            if (current.phase == ComposerDictationPhase.Finishing) return
-            val generation = ++dictationGeneration
-            dictation = current.copy(phase = ComposerDictationPhase.Finishing)
-            publishUiState()
-            dictationInsertJob?.cancel()
-            dictationInsertJob =
-                viewModelScope.launch {
-                    delay(dictationFinishDelayMs)
-                    if (generation != dictationGeneration) return@launch
-                    val latest = dictation ?: return@launch
-                    if (latest.phase != ComposerDictationPhase.Finishing) return@launch
-                    spliceDictationTranscript(latest.committed + latest.volatile)
-                    dictation = null
-                    publishUiState()
-                }
+            dictation.insert()
         }
 
         fun dictationCancel() {
-            cancelActiveDictation()
+            dictation.cancel()
         }
 
         fun cancelDictationForModeChange() {
-            if (dictation != null) cancelActiveDictation()
+            dictation.cancelIfActive()
         }
 
         fun cancelDictationForBackground() {
-            if (dictation != null) cancelActiveDictation()
+            dictation.cancelIfActive()
         }
 
         fun cancelDictationForDismiss() {
-            if (dictation != null) cancelActiveDictation()
+            dictation.cancelIfActive()
         }
 
         fun selectSlashSuggestion(commandName: String) {
@@ -2934,7 +2887,7 @@ class SessionChatViewModel
                     ),
                 goalCommandAvailable = composerState.serverCommands.any { it.name == SessionGoalLimits.COMMAND },
                 worktree = boundWorktree.orEmpty(),
-                dictation = dictation,
+                dictation = dictation.state.value.dictation,
                 sideQuestions =
                     sideQuestions.state.value.ui.let { side ->
                         val supported = supportsSideQuestion()
@@ -3203,27 +3156,13 @@ class SessionChatViewModel
 
         override fun onCleared() {
             leaveNewSessionDraft()
-            invalidateDictationInsert()
-            dictation = null
+            dictation.discardInsert()
             composer.flushDraft()
             inbox.stop()
             resetWorkingFooter()
             clearSessionReadyFocus()
             syncCoordinator.markFocused(null)
             super.onCleared()
-        }
-
-        private fun cancelActiveDictation() {
-            invalidateDictationInsert()
-            if (dictation == null) return
-            dictation = null
-            publishUiState()
-        }
-
-        private fun invalidateDictationInsert() {
-            dictationGeneration += 1
-            dictationInsertJob?.cancel()
-            dictationInsertJob = null
         }
 
         private fun spliceDictationTranscript(transcript: String) {
