@@ -234,6 +234,20 @@ final class SessionChatTimeline {
         notifyChange()
     }
 
+    /// Chip timeline: show the `chipCount` chips one step paragraph had when
+    /// its `+N more` was tapped; chips that arrive later still collapse.
+    /// Republishes without a step timing pass: expanding chips changes no step.
+    func expandStepParagraph(_ paragraphID: String, chipCount: Int) {
+        guard state.expandedStepParagraphs[paragraphID, default: -1] < chipCount else { return }
+        state.expandedStepParagraphs[paragraphID] = chipCount
+        onChange?()
+    }
+
+    /// A draft became a session: its expansions do not carry over. Silent; the caller publishes.
+    func resetExpandedStepParagraphs() {
+        state.expandedStepParagraphs = [:]
+    }
+
     func updateRevertBoundary(_ messageID: String?) {
         guard messageID != revertBoundaryMessageID else { return }
         revertBoundaryMessageID = messageID

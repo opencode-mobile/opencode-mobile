@@ -71,9 +71,6 @@ final class SessionChatViewModel {
     private var branchCopiedNotice: String?
     /// Shown instead of opening Changes when the last turn moved folders.
     private var turnDiffNotice: String?
-    /// Chip-timeline step paragraphs the user expanded past `+N more`:
-    /// paragraph id to the chip count at tap time.
-    private var expandedStepParagraphs: [String: Int] = [:]
     private let timelineOffers: SessionChatTimelineOffers
     private let dictation = SessionChatDictation()
     /// A sheet or dialog the view owns is up; see `setScreenSheetOpen`.
@@ -1058,9 +1055,7 @@ final class SessionChatViewModel {
     /// Chip timeline: show the `chipCount` chips one step paragraph had when
     /// its `+N more` was tapped; chips that arrive later still collapse.
     func expandStepParagraph(_ paragraphID: String, chipCount: Int) {
-        guard expandedStepParagraphs[paragraphID, default: -1] < chipCount else { return }
-        expandedStepParagraphs[paragraphID] = chipCount
-        publishUiState()
+        timeline.expandStepParagraph(paragraphID, chipCount: chipCount)
     }
 
     /// Activity card: open its live activity sheet.
@@ -1738,7 +1733,7 @@ final class SessionChatViewModel {
         newSessionDraft.end()
         sessionID = id
         sessionTitle = title
-        expandedStepParagraphs = [:]
+        timeline.resetExpandedStepParagraphs()
         turnStatus.reset()
         if movedCheckout {
             worktree = directory
@@ -2001,7 +1996,7 @@ final class SessionChatViewModel {
             pendingTerminalOpen: commandsState.pendingTerminalOpen,
             pendingFilesOpen: commandsState.pendingFilesOpen,
             hasPendingRevert: commandsState.hasPendingRevert,
-            expandedStepParagraphs: expandedStepParagraphs,
+            expandedStepParagraphs: timelineState.expandedStepParagraphs,
             unfoldedStepRails: timelineState.unfoldedStepRails,
             presentedActivityCard: timelineState.presentedActivityCard,
             activityCardDetailStepId: timelineState.activityCardDetailStepId,

@@ -712,6 +712,9 @@ struct SessionChatTimelineRegionState: Equatable {
     var errorMessage: String?
     /// Step rails whose earlier settled steps are shown instead of folded (#779).
     var unfoldedStepRails: Set<String> = []
+    /// Chip-timeline step paragraphs the user expanded past `+N more`:
+    /// paragraph id to the chip count at tap time.
+    var expandedStepParagraphs: [String: Int] = [:]
     /// The activity card whose live sheet is open; resolved from `messages` by id (#779).
     var presentedActivityCard: String?
     /// The presented card's step whose detail the sheet shows instead of the list.
