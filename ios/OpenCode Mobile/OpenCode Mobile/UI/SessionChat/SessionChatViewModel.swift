@@ -44,23 +44,14 @@ final class SessionChatViewModel {
     private var loggedRenameTitleEdit = false
     private var loggedForkTitleEdit = false
     private var loggedQuestionCustomTextEdit: String?
-    // New session draft (#1004). `draft` is set while nothing exists on the server yet.
-    private var draft: NewSessionDraft?
-    private let newSessionDraftStore: NewSessionDraftStore
-    /// Connection Profile the draft belongs to; nil without an active profile.
-    private let draftProfileKey: String?
-    private var draftContext = NewSessionDraftContext()
-    private var draftCreating = false
-    private var draftErrorMessage: String?
-    private var draftBaseBranches: NewSessionBaseBranchesLoad = .idle
-    /// The probed protocol: the connection's stored one can still be unset when the draft opens,
-    /// which hid Starts from on v2.
-    private var draftServerProtocol: ServerProtocol?
-    private var draftBaseBranchesTask: Task<Void, Never>?
+    /// New session draft (#1004).
+    private let newSessionDraft: SessionChatNewSessionDraft
     /// Refreshes Home's checkouts of a directory after a draft's first send created a worktree.
     /// The screen sets it from Home's environment.
-    @ObservationIgnored var refreshWorktreeInventory: (@MainActor @Sendable (String) async -> Void)?
-    private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
+    var refreshWorktreeInventory: (@MainActor @Sendable (String) async -> Void)? {
+        get { newSessionDraft.refreshWorktreeInventory }
+        set { newSessionDraft.refreshWorktreeInventory = newValue }
+    }
     private let activeConnectionManager: ActiveConnectionManager
     private let liveUpdates: any LiveUpdates
     private let syncCoordinator: (any SyncCoordinator)?
@@ -73,7 +64,6 @@ final class SessionChatViewModel {
     let attachmentImageLoader: (any AttachmentImageLoading)?
     /// Applies live revert updates (`session.revert` / `session.revert.staged`) to Commands.
     private var sessionEventTask: Task<Void, Never>?
-    private let worktreeRepository: any WorktreeRepository
     /// Move to worktree (#785).
     private let worktreeMove: SessionChatWorktreeMove
     /// New worktree form of the Move sheet.
@@ -140,14 +130,10 @@ final class SessionChatViewModel {
             ?? NewSessionDraft(projectKey: nil, projectDirectory: worktree)
             : nil
         let worktree = initialDraft?.directory ?? worktree
-        self.newSessionDraftStore = draftStore
-        self.draftProfileKey = draftProfileKey
-        self.draft = initialDraft
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
         self.worktree = worktree
         self.attachmentImageLoader = attachmentImageLoader
-        self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
         self.liveUpdates = liveUpdates
         self.syncCoordinator = syncCoordinator
@@ -161,7 +147,6 @@ final class SessionChatViewModel {
         self.sessionReadyStore = sessionReadyStore ?? EmptySessionReadyStore()
         self.sessionViewReporter = sessionViewReporter ?? EmptySessionViewReporter()
         self.foregroundEventStream = foregroundEventStream
-        self.worktreeRepository = worktreeRepository
         self.worktreeMove = SessionChatWorktreeMove(
             sessionID: sessionID,
             worktree: worktree,
@@ -209,6 +194,20 @@ final class SessionChatViewModel {
         if let initialDraft {
             composer.restoreDraftContent(initialDraft.composer, attachments: initialDraft.attachments)
         }
+        let boundComposer = self.composer
+        self.newSessionDraft = SessionChatNewSessionDraft(
+            draft: initialDraft,
+            profileKey: draftProfileKey,
+            store: draftStore,
+            worktreeRepository: worktreeRepository,
+            sessionRepository: sessionRepository,
+            modelSelectionResolver: newSessionModelSelectionResolver,
+            currentProfile: { activeConnectionManager.currentProfile() },
+            currentProtocolOrProbe: { await activeConnectionManager.currentProtocolOrProbe() },
+            serverProtocol: { activeConnectionManager.serverProtocol },
+            composerContent: { boundComposer.draftContent },
+            composerModelSelection: { boundComposer.draftModelSelection }
+        )
         self.sessionInfo = SessionInfo(
             worktree: worktree,
             sessionRepository: sessionRepository,
@@ -303,6 +302,7 @@ final class SessionChatViewModel {
         goalRegion.onChange = { [weak self] in self?.publishUiState() }
         projectHeader.onChange = { [weak self] in self?.publishUiState() }
         dictation.onChange = { [weak self] in self?.publishUiState() }
+        newSessionDraft.onChange = { [weak self] in self?.publishUiState() }
         worktreeMove.onChange = { [weak self] in self?.publishUiState() }
         turnStatus.onWake = { [weak self] in self?.publishUiState() }
         timelineOffers.onChange = { [weak self] in self?.publishUiState() }
@@ -946,7 +946,7 @@ final class SessionChatViewModel {
             logChatAction(ProductAnalytics.Action.chatDismissSnackbar)
         }
         suppressedSnackbarKey = lastSnackbarKey
-        draftErrorMessage = nil
+        newSessionDraft.clearError()
         timelineOffers.clearNotices()
         worktreeMove.clearMessages()
         branchCopiedNotice = nil
@@ -1555,9 +1555,7 @@ final class SessionChatViewModel {
         timelineOffers.reset()
         keepSideQuestionDraft()
         composer.flushDraft()
-        saveDraft()
-        draftBaseBranchesTask?.cancel()
-        draftBaseBranchesTask = nil
+        newSessionDraft.stop()
         pendingSend = nil
         projectHeader.stopObserving()
         sessionEventTask?.cancel()
@@ -1606,7 +1604,7 @@ final class SessionChatViewModel {
 
     /// Nothing exists on the server yet: the first send creates the worktree (if asked for),
     /// then the session, then sends the prompt.
-    var isDraft: Bool { draft != nil }
+    var isDraft: Bool { newSessionDraft.isActive }
 
     private func startDraftObserving() {
         OpenCodeLog.sessionChat.info("draft observing worktree=\(self.worktree)")
@@ -1614,106 +1612,45 @@ final class SessionChatViewModel {
         sessionInfo.startObservingConnection()
         composer.startCatalogLoads()
         publishUiState()
-        Task { [weak self] in
-            guard let manager = self?.activeConnectionManager else { return }
-            let detected = await manager.currentProtocolOrProbe()
-            guard let self, self.draftServerProtocol != detected else { return }
-            self.draftServerProtocol = detected
-            self.publishUiState()
-        }
+        newSessionDraft.startObserving()
     }
 
     /// Home's projects, the Worktrees setting and running counts, for the card and its sheets.
     func updateDraftContext(_ context: NewSessionDraftContext) {
-        guard draftContext != context else { return }
-        draftContext = context
-        guard var current = draft else { return }
-        // A draft opened before Home knew its project picks the key up once it does.
-        if current.projectKey == nil,
-           let project = NewSessionDraftPresentation.project(of: current, in: context.projects)
-        {
-            current.projectKey = project.key
-            draft = current
-            saveDraft()
-        }
-        publishUiState()
+        newSessionDraft.updateContext(context)
     }
 
     /// Project sheet pick: another project starts on its main checkout.
     func selectDraftProject(key: String) {
-        guard let current = draft, !draftCreating,
-              let project = draftContext.projects.first(where: { $0.key == key })
-        else { return }
-        guard project.key != NewSessionDraftPresentation.project(of: current, in: draftContext.projects)?.key else { return }
-        draft = current.movingTo(projectKey: project.key, projectDirectory: project.mainCheckoutDirectory)
-        draftBaseBranches = .idle
+        guard newSessionDraft.selectProject(key: key) else { return }
         applyDraftPlace()
     }
 
     /// A project added from the Project sheet's Add project… becomes the draft's project.
     func selectDraftProject(addedPath path: String) {
-        let canonical = ServerPathPolicy.canonical(path)
-        guard let project = draftContext.projects.first(where: { $0.hasMember(canonical) || $0.worktree(at: canonical) != nil })
-        else { return }
-        selectDraftProject(key: project.key)
+        guard newSessionDraft.selectProject(addedPath: path) else { return }
+        applyDraftPlace()
     }
 
     /// Worktree sheet pick. Picking New worktree again keeps its Starts from branch.
     func selectDraftPlace(_ place: NewSessionPlace) {
-        guard var current = draft, !draftCreating else { return }
-        if place.isNewWorktree, current.place.isNewWorktree { return }
-        current.place = place
-        if !place.isNewWorktree {
-            current.createdWorktree = nil
-        }
-        draft = current
+        guard newSessionDraft.selectPlace(place) else { return }
         applyDraftPlace()
     }
 
     /// Starts from sheet pick; nil (or the main checkout's own branch) is the default.
     func selectDraftBaseBranch(_ branch: String?) {
-        guard var current = draft, !draftCreating, current.place.isNewWorktree else { return }
-        let mainBranch = NewSessionDraftPresentation.project(of: current, in: draftContext.projects)?
-            .worktree(at: current.projectDirectory)?.branch
-        let trimmed = branch?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalized = (trimmed?.isEmpty ?? true) || trimmed == mainBranch ? nil : trimmed
-        guard current.place != .newWorktree(baseBranch: normalized) else { return }
-        current.place = .newWorktree(baseBranch: normalized)
-        // A worktree made from another base no longer matches.
-        current.createdWorktree = nil
-        draft = current
-        saveDraft()
-        publishUiState()
+        newSessionDraft.selectBaseBranch(branch)
     }
 
     /// The Starts from sheet opened: loads the v2 branches of the main checkout once.
     func loadDraftBaseBranches() {
-        guard let current = draft else { return }
-        switch draftBaseBranches {
-        case .loading, .loaded: return
-        case .idle, .failed: break
-        }
-        draftBaseBranches = .loading
-        publishUiState()
-        let directory = current.projectDirectory
-        let repository = worktreeRepository
-        draftBaseBranchesTask?.cancel()
-        draftBaseBranchesTask = Task { [weak self] in
-            let result = try? await repository.baseBranches(directory: directory)
-            guard let self, !Task.isCancelled, self.draft?.projectDirectory == directory else { return }
-            self.draftBaseBranches = result.map { .loaded($0) } ?? .failed
-            self.publishUiState()
-        }
+        newSessionDraft.loadBaseBranches()
     }
 
     /// Discard draft (⋯): forgets the draft and everything in it. The screen leaves.
     func discardDraft() {
-        guard isDraft, !draftCreating else { return }
-        if let draftProfileKey {
-            newSessionDraftStore.clear(profile: draftProfileKey, discardingAttachments: false)
-        }
-        draft = nil
-        draftErrorMessage = nil
+        guard newSessionDraft.discard() else { return }
         // Resetting the composer deletes its attachment files.
         composer.reset()
         sessionInfo.requestLeaveSession()
@@ -1722,8 +1659,8 @@ final class SessionChatViewModel {
     /// The draft's place changed: every region binds to its checkout, and the composer loads
     /// that checkout's commands, agents and models.
     private func applyDraftPlace() {
-        guard let current = draft else { return }
-        saveDraft()
+        guard let current = newSessionDraft.draft else { return }
+        newSessionDraft.save()
         let directory = current.directory
         if directory != worktree {
             OpenCodeLog.sessionChat.info("draft retarget worktree=\(directory)")
@@ -1752,142 +1689,53 @@ final class SessionChatViewModel {
         worktreeMove.retarget(worktree: directory)
     }
 
-    /// Mirrors the draft (with what the composer holds) into the per-profile store.
-    private func saveDraft() {
-        guard var current = draft, let draftProfileKey else { return }
-        let content = composer.draftContent
-        current.composer = content.composer
-        current.attachments = content.attachments
-        current.modelSelection = composer.draftModelSelection
-        draft = current
-        newSessionDraftStore.save(current, forProfile: draftProfileKey)
-    }
-
     /// First send: creates the worktree (New worktree; reused after a failed attempt), then the
     /// session in that checkout, seeds its model selection, promotes the screen, and sends the
     /// prompt through the normal send path. A failure keeps the draft and offers Retry.
     private func sendDraft() async {
-        guard let current = draft, !draftCreating, !sendInFlight, !composer.state.isSending else { return }
+        guard newSessionDraft.isActive, !newSessionDraft.state.isCreating, !sendInFlight,
+              !composer.state.isSending
+        else { return }
         let composerState = composer.state.composer
         guard composerState.hasSendableContent, !composerState.hasPendingUploads,
               composerState.selectedModel != nil, composerState.isModelSelectionReady
         else { return }
         guard liveUpdates.chrome.canMutate else {
-            draftErrorMessage = String(localized: "home.error.reconnect_to_create", defaultValue: "Reconnect to create a session")
+            newSessionDraft.showSendError(
+                String(localized: "home.error.reconnect_to_create", defaultValue: "Reconnect to create a session")
+            )
             publishUiState()
             return
         }
-        draftCreating = true
-        draftErrorMessage = nil
+        newSessionDraft.beginCreate()
         composer.setDraftSending(true)
         publishUiState()
-        let directory: String
-        let session: Session
+        let created: (directory: String, session: Session)
         do {
-            if case let .newWorktree(base) = current.place {
-                if let created = current.createdWorktree {
-                    directory = created.directory
-                } else {
-                    let project = NewSessionDraftPresentation.project(of: current, in: draftContext.projects)
-                    let created = try await worktreeRepository.create(
-                        CreateWorktreeRequest(
-                            projectID: project?.projectID,
-                            sourceDirectory: current.projectDirectory,
-                            name: nil,
-                            baseRef: await activeConnectionManager.currentProtocolOrProbe() == .v2 ? base : nil
-                        )
-                    )
-                    OpenCodeLog.sessionChat.info("draft worktree created directory=\(created.directory)")
-                    draft?.createdWorktree = created
-                    saveDraft()
-                    directory = created.directory
-                    await refreshWorktreeInventory?(created.directory)
-                }
-            } else {
-                directory = current.directory
-            }
-            session = try await sessionRepository.createSession(parentID: nil, title: nil, directory: directory)
+            created = try await newSessionDraft.create(currentModelSelection: { composer.currentModelSelection })
         } catch {
-            OpenCodeLog.sessionChat.warning("draft create failed error=\(error.localizedDescription)")
-            draftCreating = false
             composer.setDraftSending(false)
-            draftErrorMessage = draftCreateErrorMessage(error)
+            newSessionDraft.showCreateError(error)
             publishUiState()
             return
         }
-        OpenCodeLog.sessionChat.info("draft session created id=\(session.id)")
-        if let profile = activeConnectionManager.currentProfile() {
-            let selection: SessionModelSelection? = if let picked = composer.currentModelSelection {
-                picked
-            } else {
-                await newSessionModelSelectionResolver.resolve(profile: profile, worktree: directory)
-            }
-            if let selection {
-                await newSessionModelSelectionResolver.seedSession(
-                    profile: profile,
-                    worktree: directory,
-                    sessionID: session.id,
-                    selection: selection
-                )
-            }
-        }
-        if let draftProfileKey {
-            // The composer now owns the text and attachments; the session row shows on Home.
-            newSessionDraftStore.clear(profile: draftProfileKey, discardingAttachments: false)
-        }
-        draftCreating = false
         // Ends drafting first, so nothing writes the draft back to the store.
-        promoteDraft(id: session.id, title: session.title, directory: directory)
+        promoteDraft(id: created.session.id, title: created.session.title, directory: created.directory)
         composer.setDraftSending(false)
         await sendPrompt()
     }
 
     /// Retry on the draft's error snackbar.
     func retryDraftSend() async {
-        draftErrorMessage = nil
+        newSessionDraft.clearError()
         await sendPrompt()
-    }
-
-    private func draftCreateErrorMessage(_ error: Error) -> String {
-        if let worktreeError = error as? WorktreeCreateError {
-            return String(localized: WorktreeCreateCopy.failed(worktreeError.message))
-        }
-        return createSessionErrorMessage(error)
-    }
-
-    private var draftUiState: SessionChatDraftUiState? {
-        guard let draft else { return nil }
-        return NewSessionDraftPresentation.uiState(
-            draft: draft,
-            context: draftContext,
-            serverProtocol: draftServerProtocol ?? activeConnectionManager.serverProtocol ?? .v1,
-            serverCanCreateWorktrees: worktreeRepository.canCreateWorktrees,
-            isCreating: draftCreating,
-            baseBranches: draftBaseBranches
-        )
-    }
-
-    private func createSessionErrorMessage(_ error: Error) -> String {
-        guard let sessionError = error as? SessionError else {
-            return error.localizedDescription
-        }
-        switch sessionError {
-        case let .http(_, message):
-            return message ?? "Unable to create session"
-        case .transport:
-            return "Unable to reach the server"
-        case .decoding:
-            return "Unable to read server response"
-        }
     }
 
     /// The first send created the session: every region binds to it (and to the checkout it
     /// was created in) and starts what a created session observes. The composer keeps the draft.
     private func promoteDraft(id: String, title: String, directory: String) {
         let movedCheckout = directory != worktree
-        draft = nil
-        draftBaseBranchesTask?.cancel()
-        draftBaseBranchesTask = nil
+        newSessionDraft.end()
         sessionID = id
         sessionTitle = title
         expandedStepParagraphs = [:]
@@ -1917,7 +1765,7 @@ final class SessionChatViewModel {
 
     private func publishUiState() {
         if isDraft {
-            saveDraft()
+            newSessionDraft.save()
         }
         inbox.refilterOrphans()
         let inboxState = inbox.state
@@ -1967,6 +1815,7 @@ final class SessionChatViewModel {
         let worktreeMoveState = worktreeMove.state
         let visibleQuestion = inboxState.visibleQuestionRequest
         let timelineEmptyError: String? = timelineState.timeline == .error ? timelineState.errorMessage : nil
+        let draftErrorMessage = newSessionDraft.state.sendError
         let transientError: String? = {
             if let draftErrorMessage { return draftErrorMessage }
             if timelineState.timeline == .error { return nil }
@@ -2169,7 +2018,7 @@ final class SessionChatViewModel {
                 next.composerMode = next.composerMode && next.supported
                 return next
             }(),
-            draft: draftUiState,
+            draft: newSessionDraft.uiState(),
             directory: worktree,
             goal: goalState,
             goalCommandAvailable: composerState.serverCommands.contains { $0.name == SessionGoalKickoff.commandName }
