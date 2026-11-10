@@ -74,18 +74,13 @@ final class SessionChatViewModel {
     /// Applies live revert updates (`session.revert` / `session.revert.staged`) to Commands.
     private var sessionEventTask: Task<Void, Never>?
     private let worktreeRepository: any WorktreeRepository
-    /// New worktree form of the Move sheet.
-    let worktreeCreate: WorktreeCreateModel
     /// Move to worktree (#785).
-    private var moveSheetVisible = false
-    private var moveInFlight = false
-    private var moveErrorMessage: String?
-    private var moveNotice: String?
+    private let worktreeMove: SessionChatWorktreeMove
+    /// New worktree form of the Move sheet.
+    var worktreeCreate: WorktreeCreateModel { worktreeMove.form }
     private var branchCopiedNotice: String?
     /// Shown instead of opening Changes when the last turn moved folders.
     private var turnDiffNotice: String?
-    private var movedDirectory: String?
-    private var sessionMoveTask: Task<Void, Never>?
     /// Chip-timeline step paragraphs the user expanded past `+N more`:
     /// paragraph id to the chip count at tap time.
     private var expandedStepParagraphs: [String: Int] = [:]
@@ -167,7 +162,14 @@ final class SessionChatViewModel {
         self.sessionViewReporter = sessionViewReporter ?? EmptySessionViewReporter()
         self.foregroundEventStream = foregroundEventStream
         self.worktreeRepository = worktreeRepository
-        self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
+        self.worktreeMove = SessionChatWorktreeMove(
+            sessionID: sessionID,
+            worktree: worktree,
+            sessionRepository: sessionRepository,
+            worktreeRepository: worktreeRepository,
+            foregroundEventStream: foregroundEventStream,
+            serverProtocol: { activeConnectionManager.serverProtocol }
+        )
         // What Home already loaded decides the identity before the first frame; the refresh
         // below only changes it when the server now answers differently.
         self.projectHeader = SessionChatProjectHeader(
@@ -301,6 +303,7 @@ final class SessionChatViewModel {
         goalRegion.onChange = { [weak self] in self?.publishUiState() }
         projectHeader.onChange = { [weak self] in self?.publishUiState() }
         dictation.onChange = { [weak self] in self?.publishUiState() }
+        worktreeMove.onChange = { [weak self] in self?.publishUiState() }
         turnStatus.onWake = { [weak self] in self?.publishUiState() }
         timelineOffers.onChange = { [weak self] in self?.publishUiState() }
         timelineOffers.isBound = { [weak self] in self?.isSessionBound ?? false }
@@ -338,7 +341,7 @@ final class SessionChatViewModel {
         }
         startSessionEventObservation()
         projectHeader.startObserving()
-        startSessionMoveObservation()
+        worktreeMove.startObserving()
         startCollapsePreferenceObservation()
         repoStrip.start()
         reviewChanges.start()
@@ -789,29 +792,22 @@ final class SessionChatViewModel {
             presentation: ProductAnalytics.Presentation.sheet,
             trigger: ProductAnalytics.Trigger.present
         )
-        worktreeCreate.dismiss()
-        moveSheetVisible = true
-        publishUiState()
+        worktreeMove.openSheet()
     }
 
     func dismissMoveToWorktree() {
-        worktreeCreate.dismiss()
-        guard moveSheetVisible else { return }
-        moveSheetVisible = false
-        publishUiState()
+        worktreeMove.dismissSheet()
     }
 
     /// False once a v1 server answered 404 for its worktree routes.
     var serverCanCreateWorktrees: Bool {
-        worktreeRepository.canCreateWorktrees
+        worktreeMove.serverCanCreateWorktrees
     }
 
     /// Switches the Move sheet to the New worktree form, creating from the session's checkout.
     func openMoveToNewWorktree(projectID: String?, sourceDirectory: String, sourceBranch: String?) {
-        guard hasCreatedSession, moveSheetVisible, !moveInFlight else { return }
-        worktreeCreate.open(
-            origin: .move(sessionID: sessionID),
-            serverProtocol: activeConnectionManager.serverProtocol ?? .v1,
+        guard hasCreatedSession else { return }
+        worktreeMove.openNewWorktreeForm(
             projectID: projectID,
             sourceDirectory: sourceDirectory,
             sourceBranch: sourceBranch
@@ -823,56 +819,17 @@ final class SessionChatViewModel {
     func submitMoveToNewWorktree(
         refreshInventory: @MainActor (CreatedWorktree) async -> Void = { _ in }
     ) async {
-        guard case .move? = worktreeCreate.state?.origin else { return }
-        guard let created = await worktreeCreate.submit() else { return }
-        await refreshInventory(created)
-        worktreeCreate.dismiss()
-        moveSheetVisible = false
-        publishUiState()
+        guard let created = await worktreeMove.submitNewWorktree(refreshInventory: refreshInventory) else { return }
         await moveSession(to: created.directory, worktreeTitle: created.branch ?? created.name)
     }
 
     /// `POST /api/session/{id}/move`. The server moves an idle session at once and a busy one
     /// when its turn ends; `session.moved` then rebinds the screen to `directory`.
     func moveSession(to directory: String, worktreeTitle: String) async {
-        guard hasCreatedSession, !moveInFlight else { return }
-        moveInFlight = true
-        moveErrorMessage = nil
-        moveNotice = nil
-        publishUiState()
-        let wasBusy = uiState.sessionStatusLabel != nil || effectiveCompacting()
-        do {
-            try await sessionRepository.moveSession(id: sessionID, directory: directory)
-            if wasBusy {
-                moveNotice = SessionChatMoveToWorktree.movesAfterTurn(worktreeTitle)
-            }
-        } catch {
-            moveErrorMessage = SessionChatMoveToWorktree.failure(SessionChatMoveToWorktree.serverMessage(error))
+        guard hasCreatedSession else { return }
+        await worktreeMove.moveSession(to: directory, worktreeTitle: worktreeTitle) {
+            uiState.sessionStatusLabel != nil || effectiveCompacting()
         }
-        moveInFlight = false
-        moveSheetVisible = false
-        publishUiState()
-    }
-
-    private func startSessionMoveObservation() {
-        sessionMoveTask?.cancel()
-        sessionMoveTask = Task { [weak self] in
-            guard let self else { return }
-            for await event in self.foregroundEventStream.events() {
-                guard let moved = event.sessionMoved,
-                      moved.sessionID == self.sessionID
-                else { continue }
-                self.applySessionMoved(to: moved.directory)
-            }
-        }
-    }
-
-    private func applySessionMoved(to directory: String) {
-        let canonical = ServerPathPolicy.canonical(directory)
-        guard canonical != ServerPathPolicy.canonical(worktree), canonical != movedDirectory else { return }
-        OpenCodeLog.sessionChat.info("session moved session=\(self.sessionID) directory=\(canonical)")
-        movedDirectory = canonical
-        publishUiState()
     }
 
     func updateForkDraft(_ text: String) {
@@ -991,8 +948,7 @@ final class SessionChatViewModel {
         suppressedSnackbarKey = lastSnackbarKey
         draftErrorMessage = nil
         timelineOffers.clearNotices()
-        moveErrorMessage = nil
-        moveNotice = nil
+        worktreeMove.clearMessages()
         branchCopiedNotice = nil
         turnDiffNotice = nil
         commands.clearActionFeedback()
@@ -1606,8 +1562,7 @@ final class SessionChatViewModel {
         projectHeader.stopObserving()
         sessionEventTask?.cancel()
         sessionEventTask = nil
-        sessionMoveTask?.cancel()
-        sessionMoveTask = nil
+        worktreeMove.stopObserving()
         timeline.stopObserving()
         sessionInfo.stopObserving()
         inbox.stop()
@@ -1794,6 +1749,7 @@ final class SessionChatViewModel {
         inbox.retarget(worktree: directory)
         goalRegion.retarget(worktree: directory)
         projectHeader.retarget(worktree: directory)
+        worktreeMove.retarget(worktree: directory)
     }
 
     /// Mirrors the draft (with what the composer holds) into the per-profile store.
@@ -1950,6 +1906,7 @@ final class SessionChatViewModel {
         inbox.bind(sessionID: id)
         shells.rebind(sessionID: id)
         goalRegion.rebind(sessionID: id)
+        worktreeMove.rebind(sessionID: id)
         // Left before the create finished: the next screen to show it starts observing.
         if isSessionBound {
             startObserving()
@@ -2007,6 +1964,7 @@ final class SessionChatViewModel {
         let repoStripState = repoStrip.state
         let timelineOffersState = timelineOffers.state
         let projectIdentity = projectHeader.identity
+        let worktreeMoveState = worktreeMove.state
         let visibleQuestion = inboxState.visibleQuestionRequest
         let timelineEmptyError: String? = timelineState.timeline == .error ? timelineState.errorMessage : nil
         let transientError: String? = {
@@ -2017,7 +1975,7 @@ final class SessionChatViewModel {
             if let error = composerState.abortErrorMessage { return error }
             if let error = commandsState.actionErrorMessage { return error }
             if let error = goalRegion.state.errorNotice { return error }
-            if let error = moveErrorMessage { return error }
+            if let error = worktreeMoveState.moveErrorMessage { return error }
             if let error = turnDiffNotice { return error }
             if let error = infoState.errorMessage { return error }
             if inboxState.permissionRequests.isEmpty, let error = inboxState.permissionTopologyError { return error }
@@ -2031,7 +1989,7 @@ final class SessionChatViewModel {
             sideQuestionNotice: sideQuestions.notice,
             successNotice: composerState.followUpNotice
                 ?? commandsState.actionSuccessMessage
-                ?? moveNotice
+                ?? worktreeMoveState.moveNotice
                 ?? branchCopiedNotice
                 ?? timelineOffersState.chipTimelineIntroNotice
                 ?? timelineOffersState.timelineStylePickerNotice
@@ -2169,9 +2127,9 @@ final class SessionChatViewModel {
             archivedAtEpochMs: infoState.archivedAtEpochMs,
             supportsArchivedSessions: activeConnectionManager.capabilities.supportsArchivedSessions,
             supportsSessionMove: activeConnectionManager.capabilities.supportsSessionMove,
-            moveSheetVisible: moveSheetVisible,
-            moveInFlight: moveInFlight,
-            movedDirectory: movedDirectory,
+            moveSheetVisible: worktreeMoveState.moveSheetVisible,
+            moveInFlight: worktreeMoveState.moveInFlight,
+            movedDirectory: worktreeMoveState.movedDirectory,
             rename: infoState.rename,
             slashSuggestionsVisible: composerState.slashSuggestionsVisible,
             slashSuggestions: composerState.slashSuggestions,
