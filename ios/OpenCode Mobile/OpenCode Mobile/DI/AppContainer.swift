@@ -687,7 +687,8 @@ extension Container {
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 worldSignals: self.worldSignals(),
                 appOnboardingPreferences: AppOnboardingPreferences.shared,
-                sessionChatDisplayPreferences: SessionChatDisplayPreferences.shared
+                sessionChatDisplayPreferences: SessionChatDisplayPreferences.shared,
+                newFeatures: NewFeatureStore.shared
             )
         }
     }

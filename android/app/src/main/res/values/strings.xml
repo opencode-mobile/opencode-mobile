@@ -144,6 +144,8 @@
     <string name="common_delete">Delete</string>
     <string name="common_edit">Edit</string>
     <string name="common_done">Done</string>
+    <!-- Badge on a feature added in the current app version. -->
+    <string name="common_new">New</string>
     <string name="common_open">Open</string>
     <string name="common_settings">Settings</string>
     <string name="common_terminal">Terminal</string>
@@ -798,6 +800,9 @@
     <string name="session_chat_sheet_message_actions_fork">Fork from here</string>
     <string name="session_chat_sheet_message_actions_copy_code_block">Copy code block</string>
     <string name="session_chat_sheet_message_actions_copy_message">Copy message</string>
+    <string name="session_chat_sheet_message_actions_select_text">Select text</string>
+    <string name="session_chat_sheet_select_text_title">Select text</string>
+    <string name="session_chat_sheet_select_text_copy_all">Copy all</string>
     <!-- Android clipboard label for a copied code block. -->
     <string name="session_chat_sheet_message_actions_clip_label_code">Code</string>
     <string name="session_chat_sheet_mcp_loading_title">Checking MCP servers</string>

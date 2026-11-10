@@ -21,6 +21,7 @@ struct BottomSheetGalleryView: View {
     @State private var entryEnabled = true
     @State private var entrySelected = false
     @State private var entryTagged = false
+    @State private var entryNew = false
     @State private var showsHeaderBack = false
     @State private var showsHeaderTextAction = false
     @State private var headerTextActionEditing = false
@@ -79,6 +80,11 @@ struct BottomSheetGalleryView: View {
                         label: "Entry tag",
                         selected: entryTagged,
                         action: { entryTagged.toggle() }
+                    )
+                    OpenCodeChoiceBadge(
+                        label: "Entry new",
+                        selected: entryNew,
+                        action: { entryNew.toggle() }
                     )
                     OpenCodeChoiceBadge(
                         label: "Header back",
@@ -258,6 +264,7 @@ struct BottomSheetGalleryView: View {
                 endDecorator: entryEndDecorator,
                 selected: entrySelected,
                 tag: entryTagged ? "Recommended" : nil,
+                isNew: entryNew,
                 action: { isPresented = false }
             )
             OpenCodeBottomSheetEntry(

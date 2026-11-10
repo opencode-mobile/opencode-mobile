@@ -7,6 +7,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.components.SingletonComponent
+import dev.opencode.mobile.domain.app.NewFeatures
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.MainThreadHangWatchdog
 import dev.opencode.mobile.domain.featureflags.FeatureFlags
@@ -41,6 +42,7 @@ class OpenCodeMobileApplication : Application() {
         SessionChatDisplayPreferences.initialize(this)
         SplitPanePreferences.initialize(this)
         FeatureFlags.initialize(this)
+        NewFeatures.initialize(this)
         OpenCodeReleaseObservability.initialize(this)
         EntryPointAccessors
             .fromApplication(this, TextMatePressureEntryPoint::class.java)

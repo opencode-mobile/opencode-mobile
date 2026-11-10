@@ -162,6 +162,7 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSelectTextSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSideQuestionSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
@@ -315,6 +316,7 @@ private fun SessionChatScreenBody(
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
     var messageActionsTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
+    var selectTextTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
     var showPendingPromptsSheet by rememberSaveable { mutableStateOf(false) }
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
     var skillsTarget by remember { mutableStateOf<SessionChatSkillsTarget?>(null) }
@@ -1727,6 +1729,12 @@ private fun SessionChatScreenBody(
             onDismiss = { messageActionsTarget = null },
             onRevertMessage = viewModel::revertMessage,
             onForkFromMessage = viewModel::forkFromMessage,
+            onSelectText = { selectTextTarget = it },
+        )
+
+        SessionChatSelectTextSheet(
+            target = selectTextTarget,
+            onDismiss = { selectTextTarget = null },
         )
 
         SessionChatPendingPromptsSheet(
