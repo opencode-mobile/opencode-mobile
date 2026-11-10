@@ -109,20 +109,12 @@ final class ProjectListHomeViewModel {
     /// Soft pull-to-refresh indicator; content stays on Loaded/Empty.
     private var userRefreshing = false
     private(set) var isRefreshing = false
+    /// Add project sheet state, copied from the region on every change.
+    private(set) var addProject = HomeAddProjectUiState()
     /// Sheet presentation is tracked here so SwiftUI `.sheet` can observe it directly.
-    private(set) var isAddProjectPresented = false
-    private(set) var addProjectSheet = AddProjectSheetState.empty
-    private var addProjectInputs = AddProjectSheetInputs()
-    /// Bumped per presentation so a late listing from a closed sheet is dropped.
-    private var addProjectGeneration = 0
-    private var addProjectListingTask: Task<Void, Never>?
-    private var addProjectListingsInFlight: Set<String> = []
-    /// Row listings for folder counts and git tags: waiting (first in, first out), loading,
-    /// and failed this presentation (never retried, never shown as a list error).
-    private var addProjectSummaryQueue: [String] = []
-    private var addProjectSummariesInFlight: Set<String> = []
-    private var addProjectSummaryFailures: Set<String> = []
-    private let addProjectListingDebounce: Duration
+    var isAddProjectPresented: Bool { addProject.isPresented }
+    var addProjectSheet: AddProjectSheetState { addProject.sheet }
+    @ObservationIgnored private let addProjectRegion: HomeAddProject
     /// Projects added this session whose first server load is outstanding, keyed by worktree.
     /// Loading appears only after the grace delay; failures appear at once.
     private(set) var projectLoadStates: [String: ProjectLoadState] = [:]
@@ -143,7 +135,6 @@ final class ProjectListHomeViewModel {
     var sessionDeleteConfirmVisible: Bool { sessionActions.deleteConfirmVisible }
     var sessionActionInFlight: Bool { sessionActions.actionInFlight }
     private let projectRepository: any ProjectRepository
-    private let filesystemRepository: any FilesystemRepository
     private let sessionRepository: any SessionRepository
     private let messageRepository: any MessageRepository
     private let connectionProfileStore: any ConnectionProfileStore
@@ -242,10 +233,8 @@ final class ProjectListHomeViewModel {
         newSessionDraftStore: NewSessionDraftStore? = nil
     ) {
         self.newSessionDraftStore = newSessionDraftStore ?? NewSessionDraftStore()
-        self.addProjectListingDebounce = addProjectListingDebounce
         self.projectLoadTiming = projectLoadTiming
         self.projectRepository = projectRepository
-        self.filesystemRepository = filesystemRepository
         self.sessionRepository = sessionRepository
         self.messageRepository = messageRepository
         self.connectionProfileStore = connectionProfileStore
@@ -326,6 +315,25 @@ final class ProjectListHomeViewModel {
             supported: { activeConnectionManager.capabilities.supportsArchivedSessions }
         )
         lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
+        self.addProjectRegion = HomeAddProject(
+            projectRepository: projectRepository,
+            filesystemRepository: filesystemRepository,
+            connectionProfileStore: connectionProfileStore,
+            serverBaseURL: { activeConnectionManager.connection?.baseURL.absoluteString ?? "" },
+            listingDebounce: addProjectListingDebounce
+        )
+        addProjectRegion.addedProjectIDs = { [weak self] in
+            Set((self?.homeProjects ?? []).compactMap { project in
+                project.key.hasPrefix(HomeProjectGrouping.pathKeyPrefix) ? nil : project.key
+            })
+        }
+        addProjectRegion.onChange = { [weak self] in
+            guard let self else { return }
+            self.addProject = self.addProjectRegion.state
+        }
+        addProjectRegion.onSheetPublished = { [weak self] sheet in
+            self?.showAddProjectSheetInContent(sheet)
+        }
         sessionActionsRegion.onChange = { [weak self] in
             guard let self else { return }
             self.sessionActions = self.sessionActionsRegion.state
@@ -600,23 +608,11 @@ final class ProjectListHomeViewModel {
             presentation: ProductAnalytics.Presentation.sheet,
             trigger: ProductAnalytics.Trigger.present
         )
-        addProjectGeneration += 1
-        addProjectListingTask?.cancel()
-        resetAddProjectLoads()
-        addProjectInputs = AddProjectSheetInputs()
-        isAddProjectPresented = true
-        publishAddProjectSheet()
-        await loadAddProjectSheet(generation: addProjectGeneration)
+        await addProjectRegion.open()
     }
 
     func dismissAddProjectSheet() {
-        isAddProjectPresented = false
-        addProjectGeneration += 1
-        addProjectListingTask?.cancel()
-        addProjectListingTask = nil
-        resetAddProjectLoads()
-        addProjectInputs = AddProjectSheetInputs()
-        addProjectSheet = .empty
+        addProjectRegion.dismiss()
         switch state {
         case let .empty(_, _, createError):
             state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: createError)
@@ -634,101 +630,74 @@ final class ProjectListHomeViewModel {
 
     /// Path field edits. Filtering is local; a new folder is listed after a short pause.
     func updateAddProjectField(_ text: String) {
-        guard isAddProjectPresented, !addProjectInputs.isValidating,
-              text != addProjectInputs.fieldText
-        else { return }
-        addProjectInputs.fieldText = text
-        addProjectInputs.fieldError = nil
-        publishAddProjectSheet()
-        scheduleAddProjectListing()
+        addProjectRegion.updateField(text)
     }
 
     func addProjectUp() async {
-        guard isAddProjectPresented, !addProjectInputs.isValidating,
+        guard addProjectRegion.canNavigate,
               let target = addProjectSheet.upTarget
         else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectGoUp)
-        await showAddProjectFolder(target)
+        await addProjectRegion.showFolder(target)
     }
 
     func selectAddProjectRoot(path: String) async {
-        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
+        guard addProjectRegion.canNavigate else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectSelectRoot)
-        await showAddProjectFolder(path)
+        await addProjectRegion.showFolder(path)
     }
 
     func openAddProjectFolder(path: String) async {
-        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
+        guard addProjectRegion.canNavigate else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectEnterDirectory)
-        await showAddProjectFolder(path)
+        await addProjectRegion.showFolder(path)
     }
 
     /// Return in the path field ("go"): opens the typed folder, or the only matching one.
     /// It never adds; Add stays a deliberate tap.
     func submitAddProjectField() async {
-        guard isAddProjectPresented, !addProjectInputs.isValidating,
+        guard addProjectRegion.canNavigate,
               let target = addProjectSheet.goTarget
         else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectEnterDirectory)
-        await showAddProjectFolder(target)
+        await addProjectRegion.showFolder(target)
     }
 
     /// A browser row came on screen: load its own listing for the folder count and git tag.
     func addProjectFolderRowAppeared(path: String) {
-        guard isAddProjectPresented,
-              addProjectInputs.listings[path] == nil,
-              !addProjectSummariesInFlight.contains(path),
-              !addProjectSummaryFailures.contains(path),
-              !addProjectSummaryQueue.contains(path)
-        else { return }
-        addProjectSummaryQueue.append(path)
-        startAddProjectSummaries()
+        addProjectRegion.rowAppeared(path: path)
     }
 
     /// A browser row left the screen before its listing started: drop it from the queue.
     func addProjectFolderRowDisappeared(path: String) {
-        addProjectSummaryQueue.removeAll { $0 == path }
+        addProjectRegion.rowDisappeared(path: path)
     }
 
     func selectAddProjectSuggestion(path: String) async {
-        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
+        guard addProjectRegion.canNavigate else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectSelectSuggestion)
         await addProject(worktree: path)
     }
 
     /// Replaces the suggestion sheet with the full-screen folder browser.
     func browseAddProjectFolders() {
-        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
+        guard addProjectRegion.canNavigate else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectBrowse)
-        addProjectInputs.isBrowsing = true
-        publishAddProjectSheet()
+        addProjectRegion.browse()
     }
 
     /// Back from the browser. Returns to the suggestion sheet at the server home, so
     /// "On this server" is not lost because the field was left in a subfolder.
     func closeAddProjectBrowser() {
-        guard isAddProjectPresented, addProjectInputs.isBrowsing else { return }
+        guard isAddProjectPresented, addProjectRegion.isBrowsing else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectBrowseBack)
-        addProjectListingTask?.cancel()
-        addProjectInputs.isBrowsing = false
-        if !addProjectInputs.home.isEmpty {
-            addProjectInputs.fieldText = ServerPathPolicy.fieldText(addProjectInputs.home)
-            addProjectInputs.fieldError = nil
-        }
-        publishAddProjectSheet()
+        addProjectRegion.closeBrowser()
     }
 
     func retryAddProjectListing() async {
-        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
+        guard addProjectRegion.canNavigate else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectRetryNavigator)
-        let generation = addProjectGeneration
-        if addProjectInputs.home.isEmpty {
-            await loadAddProjectSheet(generation: generation)
-            return
-        }
-        guard let directory = addProjectSheet.directory else { return }
-        addProjectInputs.listErrors[directory] = nil
-        await loadAddProjectListing(directory, generation: generation)
+        await addProjectRegion.retryListing()
     }
 
     func confirmAddProject() async {
@@ -748,8 +717,13 @@ final class ProjectListHomeViewModel {
     }
 
     func addProject(worktree: String) async {
-        let added = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
-        if added.contains(worktree) {
+        let result = await addProjectRegion.add(
+            path: worktree,
+            projects: { [weak self] in self?.homeProjects ?? [] },
+            remember: { [weak self] path, resolution in self?.projectResolutions[path] = resolution }
+        )
+        switch result {
+        case .alreadyAdded:
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
             pendingSelectedFilterId = worktree
@@ -757,22 +731,7 @@ final class ProjectListHomeViewModel {
             removalSnackbar = OpenCodeSnackbarMessage(
                 text: String(localized: LocalizedStringResource("home.snackbar.already_on_home", defaultValue: "\"\(name)\" is already on home"))
             )
-            return
-        }
-        addProjectInputs.isValidating = true
-        addProjectInputs.fieldError = nil
-        publishAddProjectSheet()
-        do {
-            // Validate the path is usable, then persist the selected directory (web
-            // open-project behavior). Non-git dirs resolve /project/current to "/".
-            let project = try await projectRepository.getCurrentProject(directory: worktree)
-            let resolution = HomeProjectResolution(project)
-            // A worktree of a repository already on Home joins that project.
-            let joined = resolution.isMergeable
-                ? homeProjects.first { $0.key == resolution.id.trimmingCharacters(in: .whitespacesAndNewlines) }
-                : nil
-            projectResolutions[worktree] = resolution
-            await connectionProfileStore.addWorktree(serverBaseURL: serverBaseURL, worktree: worktree)
+        case let .added(_, joined):
             beginProjectLoad(worktree, showImmediately: false)
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
@@ -783,10 +742,8 @@ final class ProjectListHomeViewModel {
             if let joined {
                 removalSnackbar = OpenCodeSnackbarMessage(text: HomeProjectCopy.joinedExisting(joined.displayName))
             }
-        } catch {
-            addProjectInputs.isValidating = false
-            addProjectInputs.fieldError = error.localizedDescription
-            publishAddProjectSheet()
+        case .failed:
+            break
         }
     }
 
@@ -1511,163 +1468,8 @@ final class ProjectListHomeViewModel {
         }
     }
 
-    /// Loads home, the added projects, the server's projects, and `/Volumes` for one presentation.
-    private func loadAddProjectSheet(generation: Int) async {
-        addProjectInputs.pathsError = nil
-        publishAddProjectSheet()
-        let added = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
-        let paths: ServerPaths
-        do {
-            paths = try await filesystemRepository.getPaths()
-        } catch {
-            guard generation == addProjectGeneration else { return }
-            DiagnosticLog.warning(.connection, "add project: server paths failed", error: error)
-            addProjectInputs.added = added
-            addProjectInputs.pathsError = AddProjectSheetState.listErrorMessage
-            publishAddProjectSheet()
-            return
-        }
-        guard generation == addProjectGeneration else { return }
-        let home = ServerPathPolicy.canonical(paths.home)
-        addProjectInputs.added = added
-        addProjectInputs.addedProjectIDs = Set(homeProjects.compactMap { project in
-            project.key.hasPrefix(HomeProjectGrouping.pathKeyPrefix) ? nil : project.key
-        })
-        addProjectInputs.home = home
-        addProjectInputs.fieldText = ServerPathPolicy.fieldText(home)
-        publishAddProjectSheet()
-
-        let projectRepository = projectRepository
-        let filesystemRepository = filesystemRepository
-        // Suggestions and volumes are optional: failures hide them.
-        async let projects = (try? await projectRepository.listProjects()) ?? []
-        async let volumes: [DirectoryNode] = ServerPathPolicy.root(home) == "/" && !ServerPathPolicy.isWindows(home)
-            ? (try? await filesystemRepository.listDirectory(path: "/Volumes"))?.folders ?? []
-            : []
-        if let directory = addProjectSheet.directory {
-            await loadAddProjectListing(directory, generation: generation)
-        }
-        let loadedProjects = await projects
-        let loadedVolumes = await volumes
-        guard generation == addProjectGeneration else { return }
-        addProjectInputs.serverProjects = loadedProjects
-        addProjectInputs.suggestionsResolved = true
-        addProjectInputs.volumes = loadedVolumes.filter { !DirectoryListingPolicy.isHidden($0.name) }
-        publishAddProjectSheet()
-    }
-
-    /// Points the field at `folder` and lists it now (taps skip the typing pause).
-    private func showAddProjectFolder(_ folder: String) async {
-        addProjectListingTask?.cancel()
-        addProjectInputs.fieldText = ServerPathPolicy.fieldText(folder)
-        addProjectInputs.fieldError = nil
-        publishAddProjectSheet()
-        if let directory = addProjectSheet.directory {
-            await loadAddProjectListing(directory, generation: addProjectGeneration)
-        }
-    }
-
-    /// Lists the field's folder after the typing pause unless it is cached or already loading.
-    private func scheduleAddProjectListing() {
-        addProjectListingTask?.cancel()
-        addProjectListingTask = nil
-        guard let directory = addProjectSheet.directory,
-              addProjectInputs.listings[directory] == nil,
-              addProjectInputs.listErrors[directory] == nil,
-              !addProjectInputs.missingDirectories.contains(directory),
-              !addProjectListingsInFlight.contains(directory)
-        else { return }
-        let generation = addProjectGeneration
-        let debounce = addProjectListingDebounce
-        addProjectListingTask = Task { [weak self] in
-            if debounce > .zero {
-                try? await Task.sleep(for: debounce)
-            }
-            guard !Task.isCancelled, let self else { return }
-            // The fetch outlives later keystrokes so its listing still lands in the cache.
-            Task { await self.loadAddProjectListing(directory, generation: generation) }
-        }
-    }
-
-    private func loadAddProjectListing(_ directory: String, generation: Int) async {
-        guard generation == addProjectGeneration,
-              addProjectInputs.listings[directory] == nil,
-              !addProjectInputs.missingDirectories.contains(directory),
-              !addProjectListingsInFlight.contains(directory)
-        else { return }
-        addProjectListingsInFlight.insert(directory)
-        addProjectInputs.listErrors[directory] = nil
-        publishAddProjectSheet()
-        let result: Result<DirectoryListing, Error>
-        do {
-            result = .success(try await filesystemRepository.listDirectory(path: directory))
-        } catch {
-            result = .failure(error)
-        }
-        guard generation == addProjectGeneration else { return }
-        addProjectListingsInFlight.remove(directory)
-        switch result {
-        case let .success(listing):
-            storeAddProjectListing(listing, for: directory)
-        case .failure(FilesystemError.directoryNotFound):
-            addProjectInputs.missingDirectories.insert(directory)
-        case let .failure(error):
-            DiagnosticLog.warning(.connection, "add project: folder listing failed", error: error)
-            addProjectInputs.listErrors[directory] = AddProjectSheetState.listErrorMessage
-        }
-        publishAddProjectSheet()
-    }
-
-    private func storeAddProjectListing(_ listing: DirectoryListing, for directory: String) {
-        addProjectInputs.listings[directory] = listing
-        if ServerPathPolicy.isWindows(directory) {
-            let root = ServerPathPolicy.root(directory)
-            if !addProjectInputs.listedRoots.contains(root) {
-                addProjectInputs.listedRoots.append(root)
-            }
-        }
-    }
-
-    private func resetAddProjectLoads() {
-        addProjectListingsInFlight = []
-        addProjectSummaryQueue = []
-        addProjectSummariesInFlight = []
-        addProjectSummaryFailures = []
-    }
-
-    /// Starts queued row listings up to `folderSummaryConcurrency` at once. A listing that
-    /// lands fills the browser's cache, so entering that folder needs no new request.
-    private func startAddProjectSummaries() {
-        let generation = addProjectGeneration
-        while addProjectSummariesInFlight.count < AddProjectSheetState.folderSummaryConcurrency,
-              !addProjectSummaryQueue.isEmpty {
-            let path = addProjectSummaryQueue.removeFirst()
-            guard addProjectInputs.listings[path] == nil else { continue }
-            addProjectSummariesInFlight.insert(path)
-            let filesystemRepository = filesystemRepository
-            Task { [weak self] in
-                let listing = try? await filesystemRepository.listDirectory(path: path)
-                guard let self, generation == self.addProjectGeneration else { return }
-                self.addProjectSummariesInFlight.remove(path)
-                if let listing {
-                    if self.addProjectInputs.listings[path] == nil {
-                        self.storeAddProjectListing(listing, for: path)
-                        self.publishAddProjectSheet()
-                    }
-                } else {
-                    self.addProjectSummaryFailures.insert(path)
-                }
-                self.startAddProjectSummaries()
-            }
-        }
-    }
-
-    private func publishAddProjectSheet() {
-        guard isAddProjectPresented else { return }
-        let sheet = AddProjectSheetState.make(addProjectInputs)
-        if sheet != addProjectSheet {
-            addProjectSheet = sheet
-        }
+    /// Writes the Add project sheet into Home's content when it changed.
+    private func showAddProjectSheetInContent(_ sheet: AddProjectSheetState) {
         switch state {
         case let .empty(showAdd, current, createError):
             guard !showAdd || current != sheet else { return }
