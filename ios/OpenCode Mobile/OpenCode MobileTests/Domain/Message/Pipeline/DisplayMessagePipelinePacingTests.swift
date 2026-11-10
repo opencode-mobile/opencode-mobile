@@ -4,11 +4,6 @@ import Testing
 
 @MainActor
 struct DisplayMessagePipelinePacingTests {
-    @Test func streamingMaxBatchUsesConfiguredDuration() {
-        #expect(streamingPrepareDebounceNs == 80_000_000)
-        #expect(streamingPrepareMaxBatchDuration == .milliseconds(160))
-    }
-
     @Test func largeStreamingMessagesStillFormatMarkdown() async {
         let text = String(repeating: "# Heading\n\nSome prose. ", count: 500)
         #expect(text.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold)

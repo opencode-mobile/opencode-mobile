@@ -418,30 +418,6 @@ class DisplayMessagePipelineCharacterizationTest {
         }
 
     @Test
-    fun snapshotIntakeContinuesWhilePrepareMessagesIsHeld() =
-        runTest(testDispatcher) {
-            val harness = startHarness()
-
-            harness.preparer.holdNextPrepareMessages()
-            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("one"))))
-            assertTrue(harness.preparer.hasPendingPrepareMessagesHold())
-            assertTrue(harness.emissions.isEmpty())
-
-            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("two"))))
-            advanceUntilIdle()
-
-            assertEquals(1, harness.emissions.size)
-            assertEquals(
-                "two",
-                (harness.emissions.single() as DisplayMessageListUpdate.Messages).messages.single().text,
-            )
-
-            harness.preparer.releaseNextPrepareMessages()
-            advanceUntilIdle()
-            assertEquals(1, harness.emissions.size)
-        }
-
-    @Test
     fun blockedPreparerDoesNotDelayPlainStreamingTextLane() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)

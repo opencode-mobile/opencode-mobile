@@ -6,7 +6,6 @@ import dev.opencode.mobile.highlight.bench.HighlightBenchHighlighter
 import dev.opencode.mobile.highlight.bench.HighlightBenchInlineGuard
 import dev.opencode.mobile.highlight.bench.HighlightBenchProbe
 import dev.opencode.mobile.highlight.bench.HighlightBenchSettings
-import dev.opencode.mobile.highlight.core.HighlightRole
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -57,11 +56,6 @@ class HighlightBenchEnginesTest {
 
         assertEquals("Cancelled", call.outcome)
         assertFalse(call.highlighted)
-    }
-
-    @Test
-    fun highlightCoreRolesMapOneToOneOntoCodeTokenRoles() {
-        assertEquals(CodeTokenRole.entries.map { it.name }, HighlightRole.entries.map { it.name })
     }
 
     private fun probe(

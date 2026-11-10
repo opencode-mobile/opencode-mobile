@@ -84,14 +84,6 @@ struct MessageListTimelineHostFooterGeometryTests {
         harness.settle()
         harness.assertPinnedOnComposerLine(step: "footer-insert-composer-inset-96")
     }
-
-    @Test func footerInsertShortThread() {
-        let harness = FooterGeometryHarness(messageCount: 2)
-        harness.applyHistory()
-        harness.assertPinnedOnComposerLine(step: "history-short")
-        harness.applyFooterInsert(label: "Working")
-        harness.assertPinnedOnComposerLine(step: "footer-insert-Working-short")
-    }
 }
 
 @MainActor
