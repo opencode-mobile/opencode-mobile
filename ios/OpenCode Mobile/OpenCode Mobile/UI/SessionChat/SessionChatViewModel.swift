@@ -80,24 +80,20 @@ final class SessionChatViewModel {
     @ObservationIgnored var refreshWorktreeInventory: (@MainActor @Sendable (String) async -> Void)?
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     private let activeConnectionManager: ActiveConnectionManager
-    private let connectionProfileStore: any ConnectionProfileStore
     private let liveUpdates: any LiveUpdates
     private let syncCoordinator: (any SyncCoordinator)?
     private let clock: any SyncClock
     private var pendingSend: PendingSend?
     private var armedSendAcceptance: ArmedSendAcceptance?
     private var sendInFlight = false
-    private var projectIdentity: SessionChatProjectIdentity
+    private let projectHeader: SessionChatProjectHeader
     /// Loads timeline image attachments (inline data or server files); nil in tests.
     let attachmentImageLoader: (any AttachmentImageLoading)?
-    private var checkoutProjectIDs: Set<String> = []
-    private var worktreeEventTask: Task<Void, Never>?
+    /// Applies live revert updates (`session.revert` / `session.revert.staged`) to Commands.
+    private var sessionEventTask: Task<Void, Never>?
     private let worktreeRepository: any WorktreeRepository
     /// New worktree form of the Move sheet.
     let worktreeCreate: WorktreeCreateModel
-    private let worktreeInventoryCache: WorktreeInventoryCache
-    private let projectRepository: any ProjectRepository
-    private var projectIdentityTask: Task<Void, Never>?
     /// Move to worktree (#785).
     private var moveSheetVisible = false
     private var moveInFlight = false
@@ -176,7 +172,6 @@ final class SessionChatViewModel {
         self.attachmentImageLoader = attachmentImageLoader
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
-        self.connectionProfileStore = connectionProfileStore
         self.liveUpdates = liveUpdates
         self.syncCoordinator = syncCoordinator
         self.clock = clock
@@ -191,15 +186,18 @@ final class SessionChatViewModel {
         self.foregroundEventStream = foregroundEventStream
         self.worktreeRepository = worktreeRepository
         self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
-        self.projectRepository = projectRepository
-        self.worktreeInventoryCache = worktreeInventoryCache
         // What Home already loaded decides the identity before the first frame; the refresh
         // below only changes it when the server now answers differently.
-        self.projectIdentity = Self.cachedProjectIdentity(
+        self.projectHeader = SessionChatProjectHeader(
             worktree: worktree,
-            serverBaseURL: activeConnectionManager.connection?.baseURL.absoluteString,
-            cache: worktreeInventoryCache
-        ) ?? .folder(worktree)
+            worktreeInventoryCache: worktreeInventoryCache,
+            connectionProfileStore: connectionProfileStore,
+            projectRepository: projectRepository,
+            worktreeRepository: worktreeRepository,
+            foregroundEventStream: foregroundEventStream,
+            currentProfile: { activeConnectionManager.currentProfile() },
+            inventoryServerKey: { activeConnectionManager.connection?.baseURL.absoluteString }
+        )
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
             worktree: worktree,
@@ -304,6 +302,7 @@ final class SessionChatViewModel {
         sideQuestions.onChange = { [weak self] in self?.publishUiState() }
         shells.onChange = { [weak self] in self?.publishUiState() }
         goalRegion.onChange = { [weak self] in self?.publishUiState() }
+        projectHeader.onChange = { [weak self] in self?.publishUiState() }
         dictation.onChange = { [weak self] in self?.publishUiState() }
         timelineOffers.onChange = { [weak self] in self?.publishUiState() }
         timelineOffers.isBound = { [weak self] in self?.isSessionBound ?? false }
@@ -313,7 +312,7 @@ final class SessionChatViewModel {
         dictation.onLevelChange = { [weak self] current in self?.uiState.dictation = current }
         dictation.onCommit = { [weak self] transcript in self?.spliceDictationTranscript(transcript) }
         sideQuestions.canPresentAnswer = { [weak self] in self?.canPresentSideQuestionAnswer ?? false }
-        refreshProjectIdentity()
+        projectHeader.refresh()
         publishUiState()
     }
 
@@ -340,6 +339,7 @@ final class SessionChatViewModel {
             return
         }
         startSessionEventObservation()
+        projectHeader.startObserving()
         startSessionMoveObservation()
         startCollapsePreferenceObservation()
         repoStrip.start()
@@ -350,7 +350,7 @@ final class SessionChatViewModel {
         sessionViewReporter.focus(sessionId: sessionID)
         syncCoordinator?.markFocused(.transcript(directory: worktree, sessionID: sessionID))
         // Peers may have changed while the screen was away; re-resolve smart label.
-        refreshProjectIdentity()
+        projectHeader.refresh()
         composer.startCatalogLoads()
         commands.start()
         sessionInfo.startObserving()
@@ -1684,10 +1684,9 @@ final class SessionChatViewModel {
         draftBaseBranchesTask?.cancel()
         draftBaseBranchesTask = nil
         pendingSend = nil
-        projectIdentityTask?.cancel()
-        projectIdentityTask = nil
-        worktreeEventTask?.cancel()
-        worktreeEventTask = nil
+        projectHeader.stopObserving()
+        sessionEventTask?.cancel()
+        sessionEventTask = nil
         sessionMoveTask?.cancel()
         sessionMoveTask = nil
         timeline.stopObserving()
@@ -1707,134 +1706,13 @@ final class SessionChatViewModel {
         composer.stopCatalogEventRefresh()
     }
 
-    /// Identity from the inventories Home (or an earlier Session Chat) loaded; nil when the
-    /// added paths of this server are not known yet.
-    private static func cachedProjectIdentity(
-        worktree: String,
-        serverBaseURL: String?,
-        cache: WorktreeInventoryCache
-    ) -> SessionChatProjectIdentity? {
-        guard let serverBaseURL, let snapshot = cache.snapshot(server: serverBaseURL) else { return nil }
-        return .resolve(worktree: worktree, addedPaths: snapshot.addedPaths, inventoryFor: snapshot.inventory(for:))
-    }
-
-    private var inventoryServerKey: String? {
-        activeConnectionManager.connection?.baseURL.absoluteString
-    }
-
-    private func applyProjectIdentity(_ identity: SessionChatProjectIdentity) {
-        guard identity != projectIdentity else { return }
-        projectIdentity = identity
-        publishUiState()
-    }
-
-    /// Re-resolves the identity from the server. Keeps the identity on screen until the answer
-    /// lands, so an agreeing answer changes nothing.
-    private func refreshProjectIdentity() {
-        projectIdentityTask?.cancel()
-        guard !worktree.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            applyProjectIdentity(.none)
-            return
-        }
-        if let cached = Self.cachedProjectIdentity(
-            worktree: worktree,
-            serverBaseURL: inventoryServerKey,
-            cache: worktreeInventoryCache
-        ) {
-            applyProjectIdentity(cached)
-        }
-        checkoutProjectIDs = []
-        projectIdentityTask = Task { [worktree, connectionProfileStore, activeConnectionManager] in
-            let baseURL: String?
-            if let current = activeConnectionManager.currentProfile()?.baseURL, !current.isEmpty {
-                baseURL = current
-            } else if let stored = await connectionProfileStore.activeProfile()?.baseURL, !stored.isEmpty {
-                baseURL = stored
-            } else {
-                baseURL = nil
-            }
-            let peers: [String]
-            if let baseURL {
-                peers = await connectionProfileStore.addedWorktrees(serverBaseURL: baseURL)
-            } else {
-                peers = []
-            }
-            guard !Task.isCancelled else { return }
-            let inventories = await loadInventories(peers: peers)
-            guard !Task.isCancelled, let inventories else { return }
-            await MainActor.run {
-                guard !Task.isCancelled else { return }
-                self.applyProjectIdentity(
-                    .resolve(worktree: worktree, addedPaths: peers) { inventories[$0] ?? .unloaded }
-                )
-            }
-        }
-    }
-
-    /// Fresh inventory of every added path. A load that did not succeed falls back to the last
-    /// known one, so a transient failure does not turn a checkout back into a project letter.
-    /// Nil when cancelled.
-    private func loadInventories(peers: [String]) async -> [String: WorktreeInventory]? {
-        let server = inventoryServerKey
-        let cached = server.flatMap { worktreeInventoryCache.snapshot(server: $0) }
-        if let server {
-            worktreeInventoryCache.setAddedPaths(peers, server: server)
-        }
-        guard !peers.isEmpty else { return [:] }
-        let baseURL = await connectionProfileStore.activeProfile()?.baseURL ?? activeConnectionManager.currentProfile()?.baseURL
-        if let baseURL, !baseURL.isEmpty {
-            worktreeRepository.onConnection(key: baseURL)
-        }
-        var inventories: [String: WorktreeInventory] = [:]
-        var projectIDs: Set<String> = []
-        for added in peers {
-            if Task.isCancelled { return nil }
-            let projectID = try? await projectRepository.getCurrentProject(directory: added).id
-            let usable = projectID?.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let usable, !usable.isEmpty {
-                projectIDs.insert(usable)
-                if Task.isCancelled { return nil }
-                await MainActor.run {
-                    guard !Task.isCancelled else { return }
-                    checkoutProjectIDs.insert(usable)
-                }
-            }
-            let loaded = await worktreeRepository.loadRefreshed(addedPath: added, projectID: usable)
-            switch loaded {
-            case let .loaded(directories, _):
-                let inventory = WorktreeInventory.loaded(directories)
-                inventories[added] = inventory
-                if let server {
-                    worktreeInventoryCache.record(inventory, addedPath: added, server: server)
-                }
-            case .failed:
-                inventories[added] = cached?.inventories[added] ?? .failed
-            case .unloaded, .stopped:
-                inventories[added] = cached?.inventories[added] ?? .unloaded
-            }
-        }
-        if Task.isCancelled { return nil }
-        await MainActor.run {
-            guard !Task.isCancelled else { return }
-            checkoutProjectIDs = projectIDs
-        }
-        guard !Task.isCancelled else { return nil }
-        return inventories
-    }
-
     private func startSessionEventObservation() {
-        worktreeEventTask?.cancel()
-        worktreeEventTask = Task { [weak self] in
+        sessionEventTask?.cancel()
+        sessionEventTask = Task { [weak self] in
             guard let self else { return }
             for await event in self.foregroundEventStream.events() {
-                if let revert = event.sessionRevertUpdate {
-                    await MainActor.run { self.commands.applyRevertUpdate(revert) }
-                    continue
-                }
-                guard event.isWorktreeUpdated, let projectID = event.namedProjectID else { continue }
-                let known = await MainActor.run { self.checkoutProjectIDs.contains(projectID) }
-                guard known else { continue }
-                await MainActor.run { self.refreshProjectIdentity() }
+                guard let revert = event.sessionRevertUpdate else { continue }
+                await MainActor.run { self.commands.applyRevertUpdate(revert) }
             }
         }
     }
@@ -1978,7 +1856,7 @@ final class SessionChatViewModel {
             worktree = directory
             composer.retargetDraft(worktree: directory)
             retargetRegions(directory)
-            refreshProjectIdentity()
+            projectHeader.refresh()
             Task { [weak self] in
                 await self?.composer.loadCatalog()
             }
@@ -1996,6 +1874,7 @@ final class SessionChatViewModel {
         shells.retarget(worktree: directory)
         inbox.retarget(worktree: directory)
         goalRegion.retarget(worktree: directory)
+        projectHeader.retarget(worktree: directory)
     }
 
     /// Mirrors the draft (with what the composer holds) into the per-profile store.
@@ -2141,7 +2020,7 @@ final class SessionChatViewModel {
         if movedCheckout {
             worktree = directory
             retargetRegions(directory)
-            refreshProjectIdentity()
+            projectHeader.refresh()
         }
         composer.promoteDraft(sessionID: id, worktree: directory)
         timeline.rebind(sessionID: id)
@@ -2208,6 +2087,7 @@ final class SessionChatViewModel {
         let reviewChangesState = reviewChanges.state
         let repoStripState = repoStrip.state
         let timelineOffersState = timelineOffers.state
+        let projectIdentity = projectHeader.identity
         let visibleQuestion = inboxState.visibleQuestionRequest
         let timelineEmptyError: String? = timelineState.timeline == .error ? timelineState.errorMessage : nil
         let transientError: String? = {
