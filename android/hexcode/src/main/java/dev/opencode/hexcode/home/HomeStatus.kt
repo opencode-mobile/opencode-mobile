@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.home
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -38,7 +39,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.LinearGradientShader
 import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalDensity
@@ -297,7 +298,6 @@ private fun Summary(
     work: Work,
 ) {
     val label = summary.label(now)
-    val dim by animateFloatAsState(if (summary.loading) 0.35f else 1f, HexTheme.motion.fade(), label = "loading")
     when (val card = summary.summary) {
         is StatusSummary.Card ->
             Card(
@@ -305,7 +305,6 @@ private fun Summary(
                 card.now,
                 card.next,
                 work,
-                dim,
                 label,
                 vm::refreshSummary,
                 size,
@@ -321,7 +320,6 @@ private fun Summary(
                 listOf(NowLine(stringResource(if (card.started) R.string.home_summary_started_now else R.string.home_summary_empty_now))),
                 if (card.started) null else stringResource(R.string.home_summary_empty_next),
                 work,
-                dim,
                 label,
                 vm::refreshSummary,
             )
@@ -331,7 +329,6 @@ private fun Summary(
                 listOf(NowLine(stringResource(R.string.home_summary_working_now))),
                 stringResource(R.string.home_summary_working_next),
                 work,
-                dim,
                 label,
                 vm::refreshSummary,
             )
@@ -342,7 +339,6 @@ private fun Summary(
                 card.now,
                 card.next,
                 work,
-                dim,
                 label,
                 vm::refreshSummary,
                 size,
@@ -421,7 +417,6 @@ private fun Card(
     now: List<NowLine>,
     next: String?,
     work: Work,
-    dim: Float,
     label: RefreshLabel?,
     onRefresh: () -> Unit,
     size: NowSize = NowSize.Display,
@@ -435,7 +430,7 @@ private fun Card(
     val nextHint = stringResource(R.string.a11y_next_hint)
     // The title is a header for a screen reader (app-plan.md, Accessibility › Status card).
     Label { Box(Modifier.semantics { heading() }) { CardLabel(title, work.phase) } }
-    NowText(now, size, nowLines, Modifier.alpha(dim))
+    NowText(now, size, nowLines)
     // The path lines of files that went with it aren't shown (app-plan.md, Attach files › Showing the text).
     val you = work.you?.let(PromptFiles::strip)
     when {
@@ -444,7 +439,6 @@ private fun Card(
             YouLine(
                 stringResource(if (work.youGoal) R.string.home_you_goal else R.string.home_summary_you, you),
                 you,
-                dim,
                 work.onReadYou,
                 youWith(work.youWith),
             )
@@ -454,23 +448,19 @@ private fun Card(
                 style = HexTheme.type.body,
                 color = colors.text2,
                 modifier =
-                    Modifier
-                        .alpha(dim)
-                        .then(
-                            // Next is what the user might say: a tap puts it into the draft, never sends it.
-                            if (nextTappable) {
-                                Modifier
-                                    .clickable(role = Role.Button) { work.onNext(SummaryText.shown(next)) }
-                                    .semantics { stateDescription = nextHint }
-                            } else {
-                                Modifier
-                            },
-                        ),
+                    // Next is what the user might say: a tap puts it into the draft, never sends it.
+                    if (nextTappable) {
+                        Modifier
+                            .clickable(role = Role.Button) { work.onNext(SummaryText.shown(next)) }
+                            .semantics { stateDescription = nextHint }
+                    } else {
+                        Modifier
+                    },
             )
     }
     val artifact = links?.artifact
     if ((tiles.isNotEmpty() || artifact != null) && links != null) {
-        HexTileRow(Modifier.alpha(dim)) {
+        HexTileRow {
             // The newest artifact of the latest run comes first (app-plan.md, Artifacts (M8) › Using it).
             if (artifact != null) {
                 val kind = stringResource(R.string.home_tile_artifact)
@@ -515,7 +505,6 @@ fun youWith(names: List<String>): String? =
 private fun YouLine(
     line: String,
     message: String,
-    dim: Float,
     onReadAll: () -> Unit,
     with: String? = null,
 ) {
@@ -530,7 +519,6 @@ private fun YouLine(
             maxLines = YOU_LINES,
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { clamped = it.hasVisualOverflow },
-            modifier = Modifier.alpha(dim),
         )
     }
     if (!clamped && with == null) return
@@ -542,7 +530,7 @@ private fun YouLine(
                 color = colors.text3,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.alpha(dim).padding(vertical = 4.dp).weight(1f, fill = false),
+                modifier = Modifier.padding(vertical = 4.dp).weight(1f, fill = false),
             )
         }
         if (clamped) {
@@ -554,7 +542,6 @@ private fun YouLine(
                 maxLines = 1,
                 modifier =
                     Modifier
-                        .alpha(dim)
                         .clip(RoundedCornerShape(HexTheme.radius.s))
                         .clickable(role = Role.Button, onClick = onReadAll)
                         .padding(vertical = 4.dp),
@@ -604,7 +591,8 @@ private fun CardLabel(
 
 /**
  * The prototype's `.lab-shine`: [base] with a band of [light] crossing the text left to right every 2.4 s. The
- * gradient is three times the text's width (light at its middle fifth), and slides across it.
+ * gradient is three times the text's width (light at its middle fifth), and slides across it. The card label's and
+ * ↻'s "updating…" ([Refresh]).
  */
 @Composable
 private fun shine(
@@ -783,7 +771,12 @@ private fun Meta(
     }
 }
 
-/** ↻ (`.fx-upd`): the refresh icon, turning while a request runs, and "now", "3m ago", "updating…" or "Couldn't update". */
+/**
+ * ↻ (`.fx-upd`): the refresh icon, turning while a request runs, and "now", "3m ago", "updating…" or "Couldn't update"
+ * (`amber`). While a summary is on its way the card stays as it is and ↻ carries the signal (the prototype's B2): the
+ * icon in `text1`, and "updating…" in `text2` with the card label's light sweep ([shine], a `text1` band). The colours
+ * and the sweep fade in and out; with animations off the word is still.
+ */
 @Composable
 private fun Refresh(
     label: RefreshLabel,
@@ -799,12 +792,13 @@ private fun Refresh(
             RefreshLabel.Now -> stringResource(R.string.home_summary_updated_now)
             is RefreshLabel.MinutesAgo -> stringResource(R.string.home_summary_updated_ago, label.minutes)
         }
-    val color =
-        when {
-            pressed -> colors.text1
-            label == RefreshLabel.Failed -> colors.amber
-            else -> colors.text3
-        }
+    val updating = label == RefreshLabel.Updating
+    val rest = if (label == RefreshLabel.Failed) colors.amber else colors.text3
+    val iconColor by animateColorAsState(if (updating) colors.text1 else rest, HexTheme.motion.fade(), label = "refresh-icon")
+    val wordColor by animateColorAsState(if (updating) colors.text2 else rest, HexTheme.motion.fade(), label = "refresh-word")
+    // How far the sweep's band shows: it fades in and out with the colours rather than cutting in.
+    val sweeping = updating && !HexMotion.reduced
+    val band by animateFloatAsState(if (sweeping) 1f else 0f, HexTheme.motion.fade(), label = "refresh-sweep")
     val spoken = stringResource(R.string.a11y_refresh)
     val value =
         when (label) {
@@ -838,8 +832,13 @@ private fun Refresh(
             } else {
                 0f
             }
-        Icon(HexIcons.refresh, null, tint = color, modifier = Modifier.size(HexTheme.size.iconSmall).rotate(turn))
-        Text(text, style = HexTheme.type.mono, color = color, maxLines = 1)
+        Icon(HexIcons.refresh, null, tint = if (pressed) colors.text1 else iconColor, modifier = Modifier.size(HexTheme.size.iconSmall).rotate(turn))
+        if (pressed || band == 0f) {
+            Text(text, style = HexTheme.type.mono, color = if (pressed) colors.text1 else wordColor, maxLines = 1)
+        } else {
+            val brush = shine(lerp(wordColor, colors.text1, band), wordColor)
+            Text(text, style = HexTheme.type.mono.copy(brush = brush), maxLines = 1)
+        }
     }
 }
 

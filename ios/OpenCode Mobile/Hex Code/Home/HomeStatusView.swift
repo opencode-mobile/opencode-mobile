@@ -146,7 +146,6 @@ struct StatusCardView: View {
         VStack(alignment: .leading, spacing: 14) {
             CardLabel(title: card.title, state: labelState)
             NowText(lines: layout.shown(card.lines), style: layout.size.style, rowLimit: layout.rowLimit)
-                .opacity(summary.isUpdating ? 0.35 : 1)
                 // Now is one element, its text as written (code without backticks).
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(verbatim: layout.shown(card.lines).map { InlineMarkdown.plain($0.text) }.joined(separator: "\n")))
@@ -163,7 +162,6 @@ struct StatusCardView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(NextPressStyle())
-                .opacity(summary.isUpdating ? 0.35 : 1)
                 .accessibilityLabel(Text(verbatim: String(localized: "home.summary.next", defaultValue: "Next: \(InlineMarkdown.plain(next))")))
                 .accessibilityHint(Text(LocalizedStringResource("a11y.next.hint", defaultValue: "Adds it to your draft")))
             }
@@ -199,7 +197,6 @@ struct StatusCardView: View {
             }
             .frame(minHeight: 30)
         }
-        .hexAnimation(HexMotion.ease(HexMotion.fade), value: summary.isUpdating)
     }
 
     /// First in the row: `compass`, the artifact's title and "Artifact".
@@ -387,7 +384,7 @@ struct CardLabel: View {
                     // The phase comes from the clock, so a re-render doesn't restart the sweep.
                     TimelineView(.animation) { context in
                         label(SummaryText.text(Self.text(title: title, state: state), style: style, scale: scale))
-                            .foregroundStyle(sweep(at: context.date))
+                            .foregroundStyle(Self.sweep(at: context.date, band: state == .waiting ? HexColor.amber : HexColor.text1))
                     }
                 }
             }
@@ -419,18 +416,19 @@ struct CardLabel: View {
         return label(text).foregroundStyle(HexColor.text3)
     }
 
-    /// A gradient three times the label's width, `text3` with a band in the middle, moving from
-    /// left of the words to right of them: the prototype's `background-position` 100 % → 0 %.
-    private func sweep(at date: Date) -> LinearGradient {
-        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.period) / Self.period
-        let band = state == .waiting ? HexColor.amber : HexColor.text1
+    /// The slow light sweep (the prototype's `.lab-shine`), one pass every `period`: a gradient
+    /// three times the text's width, `base` with a `band` in the middle, moving from left of the
+    /// words to right of them (the prototype's `background-position` 100 % → 0 %). The phase comes
+    /// from the clock, so draw it in a `TimelineView(.animation)`. Also ↻'s "updating…".
+    static func sweep(at date: Date, base: Color = HexColor.text3, band: Color) -> LinearGradient {
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
         return LinearGradient(
             stops: [
-                .init(color: HexColor.text3, location: 0),
-                .init(color: HexColor.text3, location: 0.4),
+                .init(color: base, location: 0),
+                .init(color: base, location: 0.4),
                 .init(color: band, location: 0.5),
-                .init(color: HexColor.text3, location: 0.6),
-                .init(color: HexColor.text3, location: 1),
+                .init(color: base, location: 0.6),
+                .init(color: base, location: 1),
             ],
             startPoint: UnitPoint(x: -2 + 2 * phase, y: 0.5),
             endPoint: UnitPoint(x: 1 + 2 * phase, y: 0.5)
@@ -531,23 +529,27 @@ private struct LightsWhenPressed: ButtonStyle {
     }
 }
 
-/// ↻ and its label: "now", "3m ago", "updating…" (the arrow turns), or "Couldn't update".
+/// ↻ and its label: "now", "3m ago", "updating…", or "Couldn't update" (`amber`). While a summary
+/// is on its way the card stays as it is and ↻ carries the signal: the arrow turns in `text1`, and
+/// "updating…" is `text2` with the card label's slow light sweep (a `text1` band every 2.4 s), as
+/// the prototype's B2. The colours fade in and out; with Reduce Motion the word is still.
 struct SummaryRefreshButton: View {
     let summary: StatusSummaryModel
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 15)) { context in
             let label = summary.refreshLabel(at: context.date)
+            let updating = label == .updating
             Button {
                 Task { await summary.refresh() }
             } label: {
                 HStack(spacing: 5) {
-                    RefreshMark(turning: label == .updating)
-                    Text(verbatim: label.text)
-                        .lineLimit(1)
+                    RefreshMark(turning: updating)
+                        .foregroundStyle(updating ? HexColor.text1 : color(label))
+                    RefreshWord(text: label.text, color: updating ? HexColor.text2 : color(label), sweeping: updating)
                 }
                 .hexFont(.mono)
-                .foregroundStyle(label == .failed ? HexColor.amber : HexColor.text3)
+                .hexAnimation(HexMotion.ease(HexMotion.fade), value: updating)
                 .padding(.leading, 8)
                 .frame(minHeight: 30)
                 .contentShape(Rectangle())
@@ -557,6 +559,36 @@ struct SummaryRefreshButton: View {
             .accessibilityLabel(Text(LocalizedStringResource("a11y.refresh", defaultValue: "Refresh the summary")))
             .accessibilityValue(Text(verbatim: label.spoken))
         }
+    }
+
+    private func color(_ label: SummaryRefreshLabel) -> Color {
+        label == .failed ? HexColor.amber : HexColor.text3
+    }
+}
+
+/// ↻'s word in `color`; while `sweeping`, the light sweep crosses it (`color` as the base, a `text1`
+/// band), fading in over the plain word. Still with Reduce Motion.
+private struct RefreshWord: View {
+    let text: String
+    let color: Color
+    let sweeping: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Text(verbatim: text)
+            .lineLimit(1)
+            .foregroundStyle(color)
+            .overlay(alignment: .leading) {
+                if sweeping, !reduceMotion {
+                    TimelineView(.animation) { context in
+                        Text(verbatim: text)
+                            .lineLimit(1)
+                            .foregroundStyle(CardLabel.sweep(at: context.date, base: color, band: HexColor.text1))
+                    }
+                    .transition(.opacity)
+                }
+            }
     }
 }
 
