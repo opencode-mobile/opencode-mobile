@@ -72,6 +72,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.main.region.HomeAddProject
 import dev.opencode.mobile.ui.main.region.HomeAddProjectResult
+import dev.opencode.mobile.ui.main.region.HomeServers
 import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
@@ -184,13 +185,23 @@ class MainScreenViewModel
         val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
         private val _pendingScopeRequest = MutableStateFlow<HomeScopeRequest?>(null)
         val pendingScopeRequest: StateFlow<HomeScopeRequest?> = _pendingScopeRequest.asStateFlow()
-        private val _serversChrome = MutableStateFlow(HomeServersChrome())
-        val serversChrome: StateFlow<HomeServersChrome> = _serversChrome.asStateFlow()
+        private val serversRegion =
+            HomeServers(
+                connectionProfileStore = connectionProfileStore,
+                connectionSessionCoordinator = connectionSessionCoordinator,
+                currentProfile = { activeConnectionManager.currentProfile() },
+                scope = viewModelScope,
+                onSwitchStarted = { target, generation ->
+                    // Drop the previous server's live updates immediately. Local projects paint next;
+                    // the connection switch and session lists catch up in the background.
+                    stopLiveObservations()
+                    DiagnosticLog.info(DiagnosticLogArea.Connection, "switch profile ui id=${target.id}")
+                    viewModelScope.launch { paintSwitchedServer(target.baseUrl, target.id, generation) }
+                },
+                onSwitchAbandoned = ::abandonSwitch,
+            )
+        val serversChrome: StateFlow<HomeServersChrome> = serversRegion.state
         private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
-
-        /** Server the user just picked. A late save from the previous server must not paint over it. */
-        private var pendingSwitchId: String? = null
-        private var switchPaintGeneration = 0
 
         /** An empty Home failed its probe while other saved addresses were still being tried. */
         private var probeWaitsOnAddressCheck = false
@@ -307,10 +318,9 @@ class MainScreenViewModel
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     val active = connectionProfileStore.activeProfile()
-                    val pending = pendingSwitchId
+                    val pending = serversRegion.pendingId
                     if (pending != null && active?.id != pending) return@collect
-                    pendingSwitchId = null
-                    switchPaintGeneration++
+                    serversRegion.completeSwitch()
                     stopLiveObservations()
                     // A switch already painted its projects; their skeletons stay until sessions arrive.
                     if (pending == null) projectFirstLoads.clearAll()
@@ -321,7 +331,7 @@ class MainScreenViewModel
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.addressCheck.collect { check ->
-                    if (pendingSwitchId != null) return@collect
+                    if (serversRegion.pendingId != null) return@collect
                     when (check.state) {
                         AddressCheck.State.Running -> Unit
                         AddressCheck.State.Moved -> {
@@ -349,7 +359,7 @@ class MainScreenViewModel
                     pendingFirstServerSnapshots.clear()
                     resetHomeIndex()
                     _uiState.value = MainScreenUiState.Disconnected
-                    _serversChrome.value = HomeServersChrome()
+                    serversRegion.clear()
                 }
             }
         }
@@ -361,59 +371,24 @@ class MainScreenViewModel
         }
 
         private suspend fun refreshSuspending() {
-            refreshServersChrome()
+            serversRegion.refreshChrome()
             runHomeLoad()
         }
 
         fun showServersSheet() {
-            _serversChrome.update { it.copy(sheetVisible = true) }
+            serversRegion.showSheet()
         }
 
         fun dismissServersSheet() {
-            _serversChrome.update { it.copy(sheetVisible = false) }
+            serversRegion.dismissSheet()
         }
 
         fun switchProfile(id: String) {
-            val chrome = _serversChrome.value
-            val target = chrome.others.firstOrNull { it.id == id } ?: return
-            pendingSwitchId = id
-            val generation = ++switchPaintGeneration
-            _serversChrome.value =
-                chrome.copy(
-                    title = UiText.verbatim(target.displayName),
-                    isSwitcher = true,
-                    active = target,
-                    others = (listOfNotNull(chrome.active) + chrome.others).filter { it.id != id },
-                    sheetVisible = false,
-                )
-            // Drop the previous server's live updates immediately. Local projects paint next;
-            // the connection switch and session lists catch up in the background.
-            stopLiveObservations()
-            DiagnosticLog.info(DiagnosticLogArea.Connection, "switch profile ui id=$id")
-            viewModelScope.launch { paintSwitchedServer(target.baseUrl, id, generation) }
-            viewModelScope.launch {
-                val landed =
-                    try {
-                        connectionSessionCoordinator.switchProfile(id)
-                        connectionProfileStore.activeProfile()?.id == id
-                    } catch (cancellation: CancellationException) {
-                        throw cancellation
-                    } catch (error: Exception) {
-                        DiagnosticLog.warning(DiagnosticLogArea.Connection, "switch profile failed id=$id", error)
-                        false
-                    }
-                if (!landed) abandonSwitch(id)
-            }
+            serversRegion.switchProfile(id)
         }
 
-        /**
-         * The switch to [id] failed or did not stick. Drop the pending pick, so later saves are
-         * not ignored, and reload Home and its title from the server that is actually active.
-         */
-        private fun abandonSwitch(id: String) {
-            if (pendingSwitchId != id) return
-            pendingSwitchId = null
-            switchPaintGeneration++
+        /** A switch did not stick: reload Home and its title from the server that is actually active. */
+        private fun abandonSwitch() {
             projectFirstLoads.clearAll()
             pendingFirstServerSnapshots.clear()
             resetHomeIndex()
@@ -431,10 +406,10 @@ class MainScreenViewModel
         ) {
             val worktrees = connectionProfileStore.addedWorktrees(baseUrl)
             val sections = worktrees.map { worktree -> sectionFromCache(worktree, connectionId = id) }
-            if (generation != switchPaintGeneration || pendingSwitchId != id) return
+            if (!serversRegion.isCurrent(generation, id)) return
             resetHomeIndex()
             seedProjectResolutions(worktrees, connectionId = id)
-            if (generation != switchPaintGeneration || pendingSwitchId != id) return
+            if (!serversRegion.isCurrent(generation, id)) return
             projectFirstLoads.clearAll()
             pendingFirstServerSnapshots.clear()
             probeWaitsOnAddressCheck = false
@@ -449,21 +424,6 @@ class MainScreenViewModel
                     projectLoads = projectFirstLoads.visible,
                     home = homeIndex,
                 )
-        }
-
-        private suspend fun refreshServersChrome() {
-            val profiles = connectionProfileStore.listProfiles()
-            val active =
-                connectionProfileStore.activeProfile()
-                    ?: activeConnectionManager.currentProfile()
-            _serversChrome.update { current ->
-                current.copy(
-                    title = active?.displayName?.let(UiText::verbatim) ?: UiText.resource(R.string.home_sessions_title),
-                    isSwitcher = active != null,
-                    active = active,
-                    others = profiles.filter { it.id != active?.id },
-                )
-            }
         }
 
         /** Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner. */
