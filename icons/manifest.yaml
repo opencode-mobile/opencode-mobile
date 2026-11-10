@@ -32,6 +32,9 @@ icons:
   - name: content_copy
     lucide: copy
     notes: Copy action
+  - name: text_select
+    lucide: text-select
+    notes: Message sheet Select text
   - name: collapse_content
     lucide: minimize-2
     notes: Outgoing message expanded state

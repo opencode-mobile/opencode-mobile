@@ -1348,6 +1348,8 @@ struct OpenCodeBottomSheetEntry: View {
     let selected: Bool
     /// Short label after the title, such as "Recommended" or "Current".
     let tag: OpenCodeText?
+    /// Shows a small accent "New" tag after the title (and after `tag`).
+    let isNew: Bool
     let action: () -> Void
 
     init(
@@ -1359,11 +1361,13 @@ struct OpenCodeBottomSheetEntry: View {
         endDecorator: BottomSheetEntryDecorator = .none,
         selected: Bool = false,
         tag: OpenCodeText? = nil,
+        isNew: Bool = false,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.subtitle = subtitle
         self.tag = tag
+        self.isNew = isNew
         self.enabled = enabled
         self.destructive = destructive
         self.startDecorator = startDecorator
@@ -1401,6 +1405,9 @@ struct OpenCodeBottomSheetEntry: View {
                             .multilineTextAlignment(.leading)
                         if let tag, !tag.isEmpty {
                             OpenCodeTag(tag, size: .small)
+                        }
+                        if isNew {
+                            OpenCodeTag("common.new", size: .small, tone: .accent)
                         }
                     }
                     if let subtitle, !subtitle.isEmpty {

@@ -13,6 +13,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case keyboardArrowDown = "lucide_keyboard_arrow_down"
     case close = "lucide_close"
     case contentCopy = "lucide_content_copy"
+    case textSelect = "lucide_text_select"
     case collapseContent = "lucide_collapse_content"
     case delete = "lucide_delete"
     case description = "lucide_description"

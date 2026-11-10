@@ -44,6 +44,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     var enabled by rememberSaveable { mutableStateOf(true) }
     var selected by rememberSaveable { mutableStateOf(false) }
     var showsTag by rememberSaveable { mutableStateOf(false) }
+    var showsNew by rememberSaveable { mutableStateOf(false) }
     var showsHeaderBack by rememberSaveable { mutableStateOf(false) }
     var showsHeaderTextAction by rememberSaveable { mutableStateOf(false) }
     var headerEditing by rememberSaveable { mutableStateOf(false) }
@@ -84,6 +85,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                 OpenCodeChoiceBadge(label = "Entry enabled", selected = enabled, onClick = { enabled = !enabled })
                 OpenCodeChoiceBadge(label = "Entry selected", selected = selected, onClick = { selected = !selected })
                 OpenCodeChoiceBadge(label = "Entry tag", selected = showsTag, onClick = { showsTag = !showsTag })
+                OpenCodeChoiceBadge(label = "Entry new", selected = showsNew, onClick = { showsNew = !showsNew })
                 OpenCodeChoiceBadge(label = "Header back", selected = showsHeaderBack, onClick = { showsHeaderBack = !showsHeaderBack })
                 OpenCodeChoiceBadge(
                     label = "Header Edit",
@@ -228,6 +230,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             enabled = enabled,
             selected = selected,
             tag = if (showsTag) "Recommended" else null,
+            isNew = showsNew,
             startDecorator = startDecorator,
             endDecorator = endDecorator,
             itemCount = itemCount,
@@ -275,6 +278,7 @@ private fun ActionSheetEntries(
     enabled: Boolean,
     selected: Boolean,
     tag: String?,
+    isNew: Boolean,
     startDecorator: BottomSheetEntryDecorator,
     endDecorator: BottomSheetEntryDecorator,
     itemCount: Int,
@@ -292,6 +296,7 @@ private fun ActionSheetEntries(
     OpenCodeBottomSheetEntry(
         title = "Create new session",
         startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add),
+        isNew = isNew,
         onClick = onDismiss,
     )
     if (itemCount >= 4) {

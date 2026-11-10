@@ -8,6 +8,8 @@ import androidx.compose.ui.res.stringResource
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.app.NewFeature
+import dev.opencode.mobile.domain.app.NewFeatures
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
@@ -27,10 +29,13 @@ internal fun SessionChatMessageActionsSheet(
     onDismiss: () -> Unit,
     onRevertMessage: (String) -> Unit,
     onForkFromMessage: (messageId: String, messageText: String) -> Unit,
+    onSelectText: (SessionChatMessageActionsTarget) -> Unit,
 ) {
     val context = LocalContext.current
     val messageLabel = stringResource(R.string.session_chat_sheet_message_actions_title)
     val codeLabel = stringResource(R.string.session_chat_sheet_message_actions_clip_label_code)
+    // Read here, not in the sheet body, so the badge stays put while the sheet closes.
+    val selectTextIsNew = NewFeatures.isNew(NewFeature.SelectMessageText)
 
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.SESSION_MESSAGE_ACTIONS,
@@ -86,10 +91,21 @@ internal fun SessionChatMessageActionsSheet(
                 onDismiss()
             },
         )
+        OpenCodeBottomSheetEntry(
+            title = stringResource(R.string.session_chat_sheet_message_actions_select_text),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.TextSelect),
+            isNew = selectTextIsNew,
+            onClick = {
+                logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_SELECT_TEXT)
+                NewFeatures.markUsed(NewFeature.SelectMessageText)
+                target?.let(onSelectText)
+                onDismiss()
+            },
+        )
     }
 }
 
-private fun Context.copyToClipboard(
+internal fun Context.copyToClipboard(
     label: String,
     text: String,
 ) {
