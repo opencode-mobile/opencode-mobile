@@ -10,9 +10,7 @@ import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ComposerShellCommand
 import dev.opencode.mobile.domain.command.CommandRepository
-import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
-import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
@@ -24,7 +22,6 @@ import dev.opencode.mobile.domain.event.isWorktreeUpdated
 import dev.opencode.mobile.domain.event.namedProjectId
 import dev.opencode.mobile.domain.event.sessionMoved
 import dev.opencode.mobile.domain.event.sessionRevertUpdate
-import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.goal.EmptySessionGoalRepository
 import dev.opencode.mobile.domain.goal.SessionGoalAction
 import dev.opencode.mobile.domain.goal.SessionGoalDraft
@@ -44,13 +41,10 @@ import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
-import dev.opencode.mobile.domain.message.AttachmentLimits
-import dev.opencode.mobile.domain.message.AttachmentUpload
 import dev.opencode.mobile.domain.message.AttachmentIngestionResult
 import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
-import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ServerFilePreviews
@@ -61,17 +55,12 @@ import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
-import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
-import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
-import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.UnavailableProjectRepository
-import dev.opencode.mobile.domain.session.NewSessionCreatedSession
 import dev.opencode.mobile.domain.session.NewSessionDraft
-import dev.opencode.mobile.domain.session.NewSessionDraftStart
 import dev.opencode.mobile.domain.session.NewSessionDraftStore
 import dev.opencode.mobile.domain.session.NewSessionPlace
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
@@ -79,7 +68,6 @@ import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
-import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.session.SideQuestion
@@ -89,19 +77,14 @@ import dev.opencode.mobile.domain.shell.EmptyAgentShellRepository
 import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
-import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
-import dev.opencode.mobile.domain.worktree.WorktreeCreateError
-import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
-import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatDictation
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatGoal
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatImageViewer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionNotice
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShells
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestions
@@ -116,32 +99,20 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimelineOffers
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatPendingPromptAction
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTurnStatus
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMove
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveAvailability
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveRow
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
-import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
-import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
-import dev.opencode.mobile.ui.worktree.WorktreeBaseOptions
-import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
-import kotlin.coroutines.coroutineContext
 
 @HiltViewModel
 class SessionChatViewModel
@@ -163,23 +134,23 @@ class SessionChatViewModel
         composerDraftStore: ComposerDraftStore,
         projectFilesRepository: dev.opencode.mobile.domain.filesystem.ProjectFilesRepository,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
-        private val connectionProfileStore: ConnectionProfileStore,
+        connectionProfileStore: ConnectionProfileStore,
         private val activeConnectionManager: ActiveConnectionManager,
         lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
         private val syncCoordinator: SyncCoordinator = NoOpSyncCoordinator,
         mcpRepository: McpRepository = EmptyMcpRepository,
         private val sessionViewReporter: SessionViewReporter = NoOpSessionViewReporter,
-        private val worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
-        private val projectRepository: ProjectRepository = UnavailableProjectRepository,
-        private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
-        private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
+        projectRepository: ProjectRepository = UnavailableProjectRepository,
+        homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
         sideQuestionStore: SideQuestionStore? = null,
-        private val serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
+        serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
         private val attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
         agentShellRepository: AgentShellRepository = EmptyAgentShellRepository,
-        private val newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
-        private val homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
+        newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
+        homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
         sessionGoalRepository: SessionGoalRepository = EmptySessionGoalRepository,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
