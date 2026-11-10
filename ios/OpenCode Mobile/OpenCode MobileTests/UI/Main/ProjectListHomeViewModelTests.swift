@@ -16,7 +16,7 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         let loaded = await waitUntil {
-            if case let .loaded(sections, _, _, _) = viewModel.state {
+            if case let .loaded(sections, _, _, _) = viewModel.uiState.content {
                 return sections.first?.allSessions.isEmpty == false
             }
             return false
@@ -26,12 +26,12 @@ struct ProjectListHomeViewModelTests {
         sessionRepository.holdNextListSessions()
         let refreshTask = Task { await viewModel.pullToRefresh() }
         let blocked = await waitUntil(timeoutMs: 5_000) {
-            viewModel.isRefreshing && sessionRepository.isListBlocked
+            viewModel.uiState.isRefreshing && sessionRepository.isListBlocked
         }
         #expect(blocked)
         sessionRepository.resumeListSessions()
         await refreshTask.value
-        #expect(!viewModel.isRefreshing)
+        #expect(!viewModel.uiState.isRefreshing)
     }
 
     @Test func catchUpChrome_doesNotDriveHomePullToRefresh() async {
@@ -46,13 +46,13 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         let loaded = await waitUntil {
-            if case let .loaded(sections, _, _, _) = viewModel.state {
+            if case let .loaded(sections, _, _, _) = viewModel.uiState.content {
                 return sections.first?.allSessions.isEmpty == false
             }
             return false
         }
         #expect(loaded)
-        #expect(!viewModel.isRefreshing)
+        #expect(!viewModel.uiState.isRefreshing)
     }
 
     @Test func pullToRefresh_recoversFromAStalledCatchUp_andStillWorksAfterwards() async {
@@ -68,7 +68,7 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         let loaded = await waitUntil {
-            if case let .loaded(sections, _, _, _) = viewModel.state {
+            if case let .loaded(sections, _, _, _) = viewModel.uiState.content {
                 return sections.first?.allSessions.isEmpty == false
             }
             return false
@@ -78,11 +78,11 @@ struct ProjectListHomeViewModelTests {
         sessionRepository.holdNextListSessions()
         let refreshTask = Task { await viewModel.pullToRefresh() }
         let blocked = await waitUntil(timeoutMs: 5_000) {
-            viewModel.isRefreshing && sessionRepository.isListBlocked
+            viewModel.uiState.isRefreshing && sessionRepository.isListBlocked
         }
         #expect(blocked)
 
-        let released = await waitUntil(timeoutMs: 5_000) { !viewModel.isRefreshing }
+        let released = await waitUntil(timeoutMs: 5_000) { !viewModel.uiState.isRefreshing }
         #expect(
             released,
             "the spinner must drop once the ack ceiling passes; a never-acked invalidate leaves isRefreshing latched true forever"
@@ -101,7 +101,7 @@ struct ProjectListHomeViewModelTests {
             refetched,
             "a later pull-to-refresh must still reach the server; the isRefreshing guard makes a lost ack a permanent no-op"
         )
-        #expect(!viewModel.isRefreshing)
+        #expect(!viewModel.uiState.isRefreshing)
     }
 
     @Test func refresh_probeFailed() async {
@@ -109,7 +109,7 @@ struct ProjectListHomeViewModelTests {
             projectRepository: FakeProjectRepository(shouldFailProbe: true)
         )
         await viewModel.refresh()
-        guard case .probeFailed = viewModel.state else {
+        guard case .probeFailed = viewModel.uiState.content else {
             Issue.record("Expected probeFailed")
             return
         }
@@ -132,7 +132,7 @@ struct ProjectListHomeViewModelTests {
             onCoordinator: { coordinator = $0 }
         )
         await viewModel.refresh()
-        guard case .probeFailed = viewModel.state else {
+        guard case .probeFailed = viewModel.uiState.content else {
             Issue.record("Expected probeFailed before the save")
             return
         }
@@ -140,16 +140,16 @@ struct ProjectListHomeViewModelTests {
         probe.hold()
         // A switch reloads Home before the saved addresses are checked; its probe fails meanwhile.
         let switching = Task { await coordinator?.switchProfile(id: profile.id) }
-        #expect(await eventually { if case .empty = viewModel.state { true } else { false } })
+        #expect(await eventually { if case .empty = viewModel.uiState.content { true } else { false } })
         try await Task.sleep(for: .milliseconds(100))
-        guard case .empty = viewModel.state else {
-            Issue.record("Expected empty while the address check runs, got \(viewModel.state)")
+        guard case .empty = viewModel.uiState.content else {
+            Issue.record("Expected empty while the address check runs, got \(viewModel.uiState.content)")
             return
         }
 
         probe.release()
         await switching.value
-        #expect(await eventually { if case .probeFailed = viewModel.state { true } else { false } })
+        #expect(await eventually { if case .probeFailed = viewModel.uiState.content { true } else { false } })
     }
 
     @Test func refresh_staysEmpty_whenNoAddedProjects() async {
@@ -160,7 +160,7 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").isEmpty)
-        guard case .empty = viewModel.state else {
+        guard case .empty = viewModel.uiState.content else {
             Issue.record("Expected empty without auto-seeded projects")
             return
         }
@@ -178,13 +178,13 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         // Disk-first paints empty cache immediately; wait for live SWR to fill sections.
         let populated = await waitUntil {
-            if case let .loaded(sections, _, _, _) = viewModel.state {
+            if case let .loaded(sections, _, _, _) = viewModel.uiState.content {
                 return sections.first?.allSessions.count == HomeSessionPaging.pageSize
             }
             return false
         }
         #expect(populated)
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -215,13 +215,13 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         let populated = await waitUntil {
-            if case let .loaded(sections, _, _, _) = viewModel.state {
+            if case let .loaded(sections, _, _, _) = viewModel.uiState.content {
                 return sections.first?.allSessions.map(\.id) == ["active"]
             }
             return false
         }
         #expect(populated)
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -236,7 +236,7 @@ struct ProjectListHomeViewModelTests {
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/slow", "/fast"])
         )
         await viewModel.refresh()
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -254,16 +254,16 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.addProject(worktree: "/two")
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
         #expect(sections.map(\.worktree).contains("/two"))
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/two"))
-        #expect(viewModel.pendingSelectedFilterId == "/two")
-        #expect(viewModel.pendingSelectedFilterOverridesAll)
+        #expect(viewModel.uiState.pendingScopeRequest?.filterID == "/two")
+        #expect((viewModel.uiState.pendingScopeRequest?.overridesAll ?? false))
         viewModel.consumePendingSelectedFilter()
-        #expect(!viewModel.pendingSelectedFilterOverridesAll)
+        #expect(!(viewModel.uiState.pendingScopeRequest?.overridesAll ?? false))
     }
 
     @Test func addProject_alreadyAdded_selectsWorktree() async {
@@ -274,11 +274,11 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.addProject(worktree: "/two")
-        #expect(viewModel.pendingSelectedFilterId == "/two")
+        #expect(viewModel.uiState.pendingScopeRequest?.filterID == "/two")
         // Already on home: the scope only moves when a single project is shown, not from All.
-        #expect(!viewModel.pendingSelectedFilterOverridesAll)
-        #expect(viewModel.projectLoadStates["/two"] == nil)
-        #expect(viewModel.removalSnackbar?.text == "\"two\" is already on home")
+        #expect(!(viewModel.uiState.pendingScopeRequest?.overridesAll ?? false))
+        #expect(viewModel.uiState.projectLoadStates["/two"] == nil)
+        #expect(viewModel.uiState.snackbar?.text == "\"two\" is already on home")
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/two"])
     }
 
@@ -292,7 +292,7 @@ struct ProjectListHomeViewModelTests {
 
         viewModel.reorderProjects(worktrees: ["/three", "/one", "/two"])
 
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -313,7 +313,7 @@ struct ProjectListHomeViewModelTests {
         viewModel.reorderProjects(worktrees: ["/two", "/one", "/extra"])
         viewModel.reorderProjects(worktrees: ["/one", "/two"])
 
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -329,8 +329,8 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         viewModel.requestRemoveProject(worktree: "/one")
-        #expect(viewModel.pendingProjectRemoval?.worktree == "/one")
-        #expect(viewModel.pendingProjectRemoval?.displayName == "one")
+        #expect(viewModel.uiState.pendingProjectRemoval?.worktree == "/one")
+        #expect(viewModel.uiState.pendingProjectRemoval?.displayName == "one")
     }
 
     @Test func dismissProjectRemoval_clearsPending() async {
@@ -341,7 +341,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         viewModel.requestRemoveProject(worktree: "/one")
         viewModel.dismissProjectRemoval()
-        #expect(viewModel.pendingProjectRemoval == nil)
+        #expect(viewModel.uiState.pendingProjectRemoval == nil)
     }
 
     @Test func confirmRemoveProject_dropsWorktreeAndShowsSnackbar() async {
@@ -355,16 +355,16 @@ struct ProjectListHomeViewModelTests {
         await viewModel.confirmRemoveProject()
 
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/two"])
-        #expect(viewModel.pendingProjectRemoval == nil)
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        #expect(viewModel.uiState.pendingProjectRemoval == nil)
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
         #expect(sections.map(\.worktree) == ["/two"])
-        #expect(viewModel.removalSnackbar?.text == "Removed \"one\" from home")
+        #expect(viewModel.uiState.snackbar?.text == "Removed \"one\" from home")
 
         viewModel.consumeProjectRemovalSnackbar()
-        #expect(viewModel.removalSnackbar == nil)
+        #expect(viewModel.uiState.snackbar == nil)
     }
 
     @Test func worktreesOfOneRepositoryShowAsOneProject() async {
@@ -378,11 +378,11 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
 
-        let merged = await waitUntil { viewModel.homeProjects.count == 2 }
+        let merged = await waitUntil { viewModel.uiState.projects.count == 2 }
         #expect(merged)
-        #expect(viewModel.homeProjects.map(\.key) == ["prj_repo", "prj:/other"])
-        #expect(viewModel.homeProjects.first?.memberPaths == ["/repo", "/repo-wt"])
-        #expect(viewModel.homeProjects.first?.worktrees.map(\.directory) == ["/repo", "/repo-wt"])
+        #expect(viewModel.uiState.projects.map(\.key) == ["prj_repo", "prj:/other"])
+        #expect(viewModel.uiState.projects.first?.memberPaths == ["/repo", "/repo-wt"])
+        #expect(viewModel.uiState.projects.first?.worktrees.map(\.directory) == ["/repo", "/repo-wt"])
     }
 
     @Test func cachedPaintKeepsTheProjectKeyTheServerResolves() async {
@@ -402,7 +402,7 @@ struct ProjectListHomeViewModelTests {
             sessionCache: cache
         )
         await live.refresh()
-        #expect(await waitUntil { live.homeProjects.map(\.key) == ["prj_repo"] })
+        #expect(await waitUntil { live.uiState.projects.map(\.key) == ["prj_repo"] })
         var remembered: HomeProjectResolution?
         for _ in 0 ..< 100 where remembered == nil {
             remembered = await cache.seedProjectResolution(worktree: "/repo", connectionID: nil)
@@ -420,12 +420,12 @@ struct ProjectListHomeViewModelTests {
             sessionCache: cache
         )
         await cold.refresh()
-        guard case let .loaded(sections, _, _, _) = cold.state else {
+        guard case let .loaded(sections, _, _, _) = cold.uiState.content else {
             Issue.record("Expected the cached paint")
             return
         }
-        #expect(cold.homeProjects.map(\.key) == ["prj_repo"])
-        let rows = sections.crossProjectSessionListSessions(projects: cold.homeProjects)
+        #expect(cold.uiState.projects.map(\.key) == ["prj_repo"])
+        let rows = sections.crossProjectSessionListSessions(projects: cold.uiState.projects)
         #expect(rows.map(\.id) == ["s1"])
         #expect(rows.map(\.worktree) == ["prj_repo"])
     }
@@ -460,22 +460,22 @@ struct ProjectListHomeViewModelTests {
         #expect(await waitUntil { vcs.waitingDirectories == ["/repo"] })
         // Home reloads (the inventory grows) while the first branch load is still waiting.
         await viewModel.refresh()
-        #expect(await waitUntil { viewModel.homeProjects.first?.worktrees.count == 3 })
+        #expect(await waitUntil { viewModel.uiState.projects.first?.worktrees.count == 3 })
         #expect(await waitUntil { Set(vcs.waitingDirectories) == ["/repo", "/wt/tax", "/wt/export"] })
         vcs.open()
 
         // Rows are built off the main actor, so they can land after the branches.
         let shown = await waitUntil {
-            viewModel.homeProjects.first?.worktrees.map(\.branch) == ["main", "feature/export", "feature/tax-rounding"]
+            viewModel.uiState.projects.first?.worktrees.map(\.branch) == ["main", "feature/export", "feature/tax-rounding"]
                 && homeSession(viewModel, id: "s-tax") != nil
                 && homeSession(viewModel, id: "s-main") != nil
         }
         #expect(shown)
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
-        let rows = sections.crossProjectSessionListSessions(projects: viewModel.homeProjects)
+        let rows = sections.crossProjectSessionListSessions(projects: viewModel.uiState.projects)
         #expect(rows.first { $0.id == "s-tax" }?.location?.parts == [.branch("feature/tax-rounding"), .text("tax")])
         #expect(rows.first { $0.id == "s-main" }?.location?.parts == [.branch("main")])
     }
@@ -529,15 +529,15 @@ struct ProjectListHomeViewModelTests {
 
         // Rows are built off the main actor, so they can land after the branches.
         let shown = await waitUntil {
-            viewModel.homeProjects.first?.worktrees.map(\.branch) == ["main", "feature/tax-rounding"]
+            viewModel.uiState.projects.first?.worktrees.map(\.branch) == ["main", "feature/tax-rounding"]
                 && homeSession(viewModel, id: "s-tax") != nil
         }
         #expect(shown)
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
-        let rows = sections.crossProjectSessionListSessions(projects: viewModel.homeProjects)
+        let rows = sections.crossProjectSessionListSessions(projects: viewModel.uiState.projects)
         #expect(rows.first { $0.id == "s-tax" }?.location?.parts == [.branch("feature/tax-rounding"), .text("tax")])
         // A folder the server never detects stops after the bounded retries.
         #expect(await waitUntil { calls.count("/notes") == 3 })
@@ -553,14 +553,14 @@ struct ProjectListHomeViewModelTests {
             connectionProfileStore: store
         )
         await viewModel.refresh()
-        #expect(await waitUntil { viewModel.homeProjects.count == 2 })
+        #expect(await waitUntil { viewModel.uiState.projects.count == 2 })
 
         viewModel.requestRemoveProject(worktree: "prj_repo")
-        #expect(viewModel.pendingProjectRemoval?.worktrees == ["/repo", "/repo-wt"])
+        #expect(viewModel.uiState.pendingProjectRemoval?.worktrees == ["/repo", "/repo-wt"])
         await viewModel.confirmRemoveProject()
 
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/other"])
-        #expect(viewModel.removalSnackbar?.text == "Removed \"repo\" from home")
+        #expect(viewModel.uiState.snackbar?.text == "Removed \"repo\" from home")
     }
 
     @Test func addingAWorktreeOfAnAddedRepositoryJoinsIt() async {
@@ -571,14 +571,14 @@ struct ProjectListHomeViewModelTests {
             connectionProfileStore: store
         )
         await viewModel.refresh()
-        #expect(await waitUntil { viewModel.homeProjects.first?.key == "prj_repo" })
+        #expect(await waitUntil { viewModel.uiState.projects.first?.key == "prj_repo" })
 
         await viewModel.addProject(worktree: "/repo-wt")
 
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/repo", "/repo-wt"])
-        #expect(viewModel.removalSnackbar?.text == "Same repo as repo. Showing it as a worktree there.")
-        #expect(viewModel.homeProjects.map(\.key) == ["prj_repo"])
-        #expect(viewModel.homeProjects.first?.memberPaths == ["/repo", "/repo-wt"])
+        #expect(viewModel.uiState.snackbar?.text == "Same repo as repo. Showing it as a worktree there.")
+        #expect(viewModel.uiState.projects.map(\.key) == ["prj_repo"])
+        #expect(viewModel.uiState.projects.first?.memberPaths == ["/repo", "/repo-wt"])
     }
 
     @Test func addingAnotherGlobalFolderStaysSeparate() async {
@@ -592,8 +592,8 @@ struct ProjectListHomeViewModelTests {
 
         await viewModel.addProject(worktree: "/scratch")
 
-        #expect(viewModel.removalSnackbar == nil)
-        #expect(await waitUntil { viewModel.homeProjects.map(\.key) == ["path:/notes", "path:/scratch"] })
+        #expect(viewModel.uiState.snackbar == nil)
+        #expect(await waitUntil { viewModel.uiState.projects.map(\.key) == ["path:/notes", "path:/scratch"] })
     }
 
     @Test func confirmRemoveProject_lastProject_showsEmpty() async {
@@ -607,11 +607,11 @@ struct ProjectListHomeViewModelTests {
         await viewModel.confirmRemoveProject()
 
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").isEmpty)
-        guard case .empty = viewModel.state else {
+        guard case .empty = viewModel.uiState.content else {
             Issue.record("Expected empty")
             return
         }
-        #expect(viewModel.removalSnackbar?.text == "Removed \"one\" from home")
+        #expect(viewModel.uiState.snackbar?.text == "Removed \"one\" from home")
     }
 
     @Test func showAddProjectSheet_opensAtHomeWithSuggestions() async {
@@ -639,11 +639,11 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
-        guard case let .loaded(_, show, payload, _) = viewModel.state else {
+        guard case let .loaded(_, show, payload, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
-        let sheet = viewModel.addProjectSheet
+        let sheet = viewModel.uiState.addProject.sheet
         #expect(show)
         #expect(payload == sheet)
         #expect(sheet.fieldText == "/Users/me/")
@@ -677,14 +677,14 @@ struct ProjectListHomeViewModelTests {
         await viewModel.showAddProjectSheet()
 
         viewModel.browseAddProjectFolders()
-        #expect(viewModel.isAddProjectPresented)
-        #expect(viewModel.addProjectSheet.isBrowsing)
-        #expect(viewModel.addProjectSheet.fieldText == "/home/")
+        #expect(viewModel.uiState.addProject.isPresented)
+        #expect(viewModel.uiState.addProject.sheet.isBrowsing)
+        #expect(viewModel.uiState.addProject.sheet.fieldText == "/home/")
 
         viewModel.closeAddProjectBrowser()
-        #expect(viewModel.isAddProjectPresented)
-        #expect(!viewModel.addProjectSheet.isBrowsing)
-        #expect(viewModel.addProjectSheet.fieldText == "/home/")
+        #expect(viewModel.uiState.addProject.isPresented)
+        #expect(!viewModel.uiState.addProject.sheet.isBrowsing)
+        #expect(viewModel.uiState.addProject.sheet.fieldText == "/home/")
     }
 
     @Test func closeAddProjectBrowser_afterEnteringAFolder_restoresHomeSuggestions() async {
@@ -703,20 +703,20 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
-        #expect(viewModel.addProjectSheet.showSuggestions)
+        #expect(viewModel.uiState.addProject.sheet.showSuggestions)
 
         viewModel.browseAddProjectFolders()
         await viewModel.openAddProjectFolder(path: "/Users/me/code")
-        #expect(viewModel.addProjectSheet.directory == "/Users/me/code")
-        #expect(!viewModel.addProjectSheet.showSuggestions)
+        #expect(viewModel.uiState.addProject.sheet.directory == "/Users/me/code")
+        #expect(!viewModel.uiState.addProject.sheet.showSuggestions)
 
         viewModel.closeAddProjectBrowser()
-        #expect(viewModel.isAddProjectPresented)
-        #expect(!viewModel.addProjectSheet.isBrowsing)
-        #expect(viewModel.addProjectSheet.fieldText == "/Users/me/")
-        #expect(viewModel.addProjectSheet.directory == "/Users/me")
-        #expect(viewModel.addProjectSheet.showSuggestions)
-        #expect(viewModel.addProjectSheet.suggestions.map(\.path) == ["/Users/me/web"])
+        #expect(viewModel.uiState.addProject.isPresented)
+        #expect(!viewModel.uiState.addProject.sheet.isBrowsing)
+        #expect(viewModel.uiState.addProject.sheet.fieldText == "/Users/me/")
+        #expect(viewModel.uiState.addProject.sheet.directory == "/Users/me")
+        #expect(viewModel.uiState.addProject.sheet.showSuggestions)
+        #expect(viewModel.uiState.addProject.sheet.suggestions.map(\.path) == ["/Users/me/web"])
     }
 
     @Test func addProjectField_filtersLocallyWithoutRefetching() async {
@@ -737,7 +737,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.showAddProjectSheet()
 
         viewModel.updateAddProjectField("/home/co")
-        var sheet = viewModel.addProjectSheet
+        var sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.directory == "/home")
         #expect(sheet.filter == "co")
         #expect(sheet.entries.map(\.name) == ["code", "Codex"])
@@ -750,14 +750,14 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.roots.allSatisfy { !$0.selected })
 
         viewModel.updateAddProjectField("/home/zz")
-        #expect(viewModel.addProjectSheet.entries.isEmpty)
-        #expect(viewModel.addProjectSheet.emptyMessage?.resolved == "Nothing in home starts with \u{201C}zz\u{201D}")
+        #expect(viewModel.uiState.addProject.sheet.entries.isEmpty)
+        #expect(viewModel.uiState.addProject.sheet.emptyMessage?.resolved == "Nothing in home starts with \u{201C}zz\u{201D}")
 
         viewModel.updateAddProjectField("/home/Code")
-        #expect(viewModel.addProjectSheet.addTarget == nil)
+        #expect(viewModel.uiState.addProject.sheet.addTarget == nil)
 
         viewModel.updateAddProjectField("/home/code")
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.addTarget == "/home/code")
         #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.addEnabled)
@@ -780,7 +780,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
 
-        var sheet = viewModel.addProjectSheet
+        var sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.entries.count == DirectoryListingPolicy.maxVisibleDirectories)
         #expect(sheet.entries.first?.name == "f000")
         #expect(sheet.entries.last?.name == "f199")
@@ -789,7 +789,7 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.emptyMessage == nil)
 
         viewModel.updateAddProjectField("/home/f24")
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.entries.map(\.name) == (240 ... 249).map { "f\($0)" })
         #expect(sheet.truncationHint == nil)
         #expect(sheet.emptyMessage == nil)
@@ -797,28 +797,28 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.addEnabled == false)
 
         viewModel.updateAddProjectField("/home/f249")
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.entries.map(\.name) == ["f249"])
         #expect(sheet.addTarget == "/home/f249")
         #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/.")
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.directory == "/home")
         #expect(sheet.filter == ".")
         #expect(sheet.entries.map(\.name) == [".cache", ".config"])
         #expect(sheet.addTarget == nil)
 
         viewModel.updateAddProjectField("/home/.config")
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.entries.map(\.name) == [".config"])
         #expect(sheet.addTarget == "/home/.config")
         #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/f3")
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.entries.isEmpty)
         #expect(sheet.truncationHint == nil)
         #expect(sheet.emptyMessage?.resolved == "Nothing in home starts with \u{201C}f3\u{201D}")
@@ -842,14 +842,14 @@ struct ProjectListHomeViewModelTests {
         await viewModel.showAddProjectSheet()
 
         viewModel.updateAddProjectField("/home/code/")
-        #expect(viewModel.addProjectSheet.isLoading)
-        let listed = await waitUntil { viewModel.addProjectSheet.entries.map(\.name) == ["app"] }
+        #expect(viewModel.uiState.addProject.sheet.isLoading)
+        let listed = await waitUntil { viewModel.uiState.addProject.sheet.entries.map(\.name) == ["app"] }
         #expect(listed)
-        #expect(viewModel.addProjectSheet.isLoading == false)
+        #expect(viewModel.uiState.addProject.sheet.isLoading == false)
 
         viewModel.updateAddProjectField("/home/")
-        #expect(viewModel.addProjectSheet.entries.map(\.name) == ["code"])
-        #expect(viewModel.addProjectSheet.isLoading == false)
+        #expect(viewModel.uiState.addProject.sheet.entries.map(\.name) == ["code"])
+        #expect(viewModel.uiState.addProject.sheet.isLoading == false)
         #expect(filesystem.requestedPaths.filter { $0 == "/home" }.count == 1)
     }
 
@@ -869,7 +869,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
         await viewModel.openAddProjectFolder(path: "/home/code")
-        let sheet = viewModel.addProjectSheet
+        let sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.fieldText == "/home/code/")
         #expect(sheet.directory == "/home/code")
         #expect(sheet.entries.isEmpty)
@@ -894,10 +894,10 @@ struct ProjectListHomeViewModelTests {
 
         viewModel.updateAddProjectField("/home/co")
         await viewModel.addProjectUp()
-        #expect(viewModel.addProjectSheet.fieldText == "/home/")
+        #expect(viewModel.uiState.addProject.sheet.fieldText == "/home/")
 
         await viewModel.addProjectUp()
-        var sheet = viewModel.addProjectSheet
+        var sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.fieldText == "/")
         #expect(sheet.directory == "/")
         #expect(sheet.entries.map(\.name) == ["home"])
@@ -905,7 +905,7 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.roots.first { $0.path == "/" }?.selected == true)
 
         await viewModel.addProjectUp()
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.fieldText == "/")
         #expect(sheet.directory == "/")
     }
@@ -929,7 +929,7 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
-        var sheet = viewModel.addProjectSheet
+        var sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.fieldText == #"C:\Users\me\"#)
         #expect(sheet.roots.map(\.label.resolved) == ["Home", "C:", "D:", "E:"])
         #expect(sheet.roots.map(\.path) == [#"C:\Users\me"#, #"C:\"#, #"D:\"#, #"E:\"#])
@@ -937,7 +937,7 @@ struct ProjectListHomeViewModelTests {
 
         await viewModel.addProjectUp()
         await viewModel.addProjectUp()
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.fieldText == #"C:\"#)
         #expect(sheet.directory == #"C:\"#)
         #expect(sheet.entries.map(\.name) == ["Users"])
@@ -960,25 +960,25 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
-        #expect(viewModel.addProjectSheet.roots.map(\.label.resolved) == ["Home", "C:"])
+        #expect(viewModel.uiState.addProject.sheet.roots.map(\.label.resolved) == ["Home", "C:"])
 
         viewModel.updateAddProjectField("d:")
-        let listed = await waitUntil { viewModel.addProjectSheet.entries.map(\.name) == ["code"] }
+        let listed = await waitUntil { viewModel.uiState.addProject.sheet.entries.map(\.name) == ["code"] }
         #expect(listed)
-        var sheet = viewModel.addProjectSheet
+        var sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.directory == #"D:\"#)
         #expect(sheet.upTarget == nil)
         #expect(sheet.roots.map(\.label.resolved) == ["Home", "C:", "D:"])
         #expect(sheet.roots.last?.selected == true)
 
         viewModel.updateAddProjectField(#"D:\CODE"#)
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.addTarget == #"D:\code"#)
         #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
 
         await viewModel.selectAddProjectRoot(path: #"C:\Users\me"#)
-        #expect(viewModel.addProjectSheet.fieldText == #"C:\Users\me\"#)
-        #expect(viewModel.addProjectSheet.roots.first?.selected == true)
+        #expect(viewModel.uiState.addProject.sheet.fieldText == #"C:\Users\me\"#)
+        #expect(viewModel.uiState.addProject.sheet.roots.first?.selected == true)
     }
 
     @Test func windowsField_unlistableDriveDoesNotBecomeAChip() async {
@@ -996,16 +996,16 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
-        var sheet = viewModel.addProjectSheet
+        var sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.homePath == #"C:\Users\me"#)
         #expect(sheet.fieldText == #"C:\Users\me\"#)
         #expect(sheet.roots.first?.selected == true)
         #expect(sheet.showSuggestions)
 
         viewModel.updateAddProjectField("X:")
-        let failed = await waitUntil { viewModel.addProjectSheet.listError != nil }
+        let failed = await waitUntil { viewModel.uiState.addProject.sheet.listError != nil }
         #expect(failed)
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.listError == AddProjectSheetState.listErrorMessage)
         #expect(sheet.roots.map(\.label.resolved) == ["Home", "C:"])
     }
@@ -1024,18 +1024,18 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
-        var sheet = viewModel.addProjectSheet
+        var sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.entries.map(\.isAdded) == [true, false])
         #expect(sheet.suggestions.isEmpty)
         #expect(sheet.showSuggestions == false)
 
         viewModel.updateAddProjectField("/home/app")
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.addTarget == "/home/app")
         #expect(sheet.addTitle == AddProjectSheetState.alreadyAddedTitle)
         #expect(sheet.addEnabled == false)
         await viewModel.confirmAddProject()
-        #expect(viewModel.isAddProjectPresented)
+        #expect(viewModel.uiState.addProject.isPresented)
     }
 
     @Test func addProjectRows_loadCountsAndGitTagsWhenTheyAppear() async {
@@ -1059,14 +1059,14 @@ struct ProjectListHomeViewModelTests {
         await viewModel.showAddProjectSheet()
         viewModel.browseAddProjectFolders()
 
-        var rows = viewModel.addProjectSheet.entries
+        var rows = viewModel.uiState.addProject.sheet.entries
         #expect(rows.map { $0.subtitle?.resolved } == ["On Home", nil, nil])
         // A server project tracked by git shows its tag before its listing loads.
         #expect(rows.map(\.isGitRepository) == [false, false, true])
 
         for row in rows { viewModel.addProjectFolderRowAppeared(path: row.path) }
-        #expect(await waitUntil { viewModel.addProjectSheet.entries.allSatisfy { $0.folderCount != nil } })
-        rows = viewModel.addProjectSheet.entries
+        #expect(await waitUntil { viewModel.uiState.addProject.sheet.entries.allSatisfy { $0.folderCount != nil } })
+        rows = viewModel.uiState.addProject.sheet.entries
         #expect(rows.map(\.folderCount) == [2, 0, 1])
         #expect(rows.map { $0.subtitle?.resolved } == ["On Home \u{00B7} 2 folders", "Empty", "1 folder"])
         #expect(rows.map(\.isGitRepository) == [true, false, true])
@@ -1074,8 +1074,8 @@ struct ProjectListHomeViewModelTests {
         // Seen again, or entered, the folder comes from the cache.
         viewModel.addProjectFolderRowAppeared(path: "/home/code")
         await viewModel.openAddProjectFolder(path: "/home/code")
-        #expect(viewModel.addProjectSheet.entries.map(\.name) == ["a", "b"])
-        #expect(viewModel.addProjectSheet.barTarget == AddProjectBarTarget(name: "code", path: "/home/code", isGitRepository: true))
+        #expect(viewModel.uiState.addProject.sheet.entries.map(\.name) == ["a", "b"])
+        #expect(viewModel.uiState.addProject.sheet.barTarget == AddProjectBarTarget(name: "code", path: "/home/code", isGitRepository: true))
         #expect(filesystem.requestedPaths.filter { $0 == "/home/code" }.count == 1)
     }
 
@@ -1103,7 +1103,7 @@ struct ProjectListHomeViewModelTests {
         filesystem.release("/home/f1")
         #expect(await waitUntil { filesystem.requestedPaths.contains("/home/f6") })
         for path in names { filesystem.release(path) }
-        #expect(await waitUntil { viewModel.addProjectSheet.entries.filter { $0.folderCount != nil }.count == 5 })
+        #expect(await waitUntil { viewModel.uiState.addProject.sheet.entries.filter { $0.folderCount != nil }.count == 5 })
         #expect(!filesystem.requestedPaths.contains("/home/f5"))
         #expect(filesystem.maxInFlight == AddProjectSheetState.folderSummaryConcurrency)
     }
@@ -1127,15 +1127,15 @@ struct ProjectListHomeViewModelTests {
         #expect(await waitUntil { filesystem.requestedPaths.contains("/home/locked") })
         try? await Task.sleep(for: .milliseconds(20))
         viewModel.addProjectFolderRowAppeared(path: "/home/locked")
-        #expect(viewModel.addProjectSheet.entries.first?.subtitle == nil)
-        #expect(viewModel.addProjectSheet.listError == nil)
+        #expect(viewModel.uiState.addProject.sheet.entries.first?.subtitle == nil)
+        #expect(viewModel.uiState.addProject.sheet.listError == nil)
         #expect(filesystem.requestedPaths.filter { $0 == "/home/locked" }.count == 1)
 
         // Entering the folder still asks the server, and its failure shows with Retry.
         await viewModel.openAddProjectFolder(path: "/home/locked")
         #expect(filesystem.requestedPaths.filter { $0 == "/home/locked" }.count == 2)
-        #expect(viewModel.addProjectSheet.listError == AddProjectSheetState.listErrorMessage)
-        #expect(!viewModel.addProjectSheet.pathNotFound)
+        #expect(viewModel.uiState.addProject.sheet.listError == AddProjectSheetState.listErrorMessage)
+        #expect(!viewModel.uiState.addProject.sheet.pathNotFound)
     }
 
     @Test func submitAddProjectField_opensTheTypedOrOnlyMatchingFolderAndNeverAdds() async {
@@ -1158,31 +1158,31 @@ struct ProjectListHomeViewModelTests {
         viewModel.browseAddProjectFolders()
 
         // No filter: Return has nothing to open.
-        #expect(viewModel.addProjectSheet.goTarget == nil)
+        #expect(viewModel.uiState.addProject.sheet.goTarget == nil)
         await viewModel.submitAddProjectField()
-        #expect(viewModel.addProjectSheet.fieldText == "/home/")
+        #expect(viewModel.uiState.addProject.sheet.fieldText == "/home/")
 
         // Several matches: Return stays put.
         viewModel.updateAddProjectField("/home/co")
-        #expect(viewModel.addProjectSheet.goTarget == nil)
+        #expect(viewModel.uiState.addProject.sheet.goTarget == nil)
         await viewModel.submitAddProjectField()
-        #expect(viewModel.addProjectSheet.fieldText == "/home/co")
+        #expect(viewModel.uiState.addProject.sheet.fieldText == "/home/co")
 
         // The only match opens.
         viewModel.updateAddProjectField("/home/d")
-        #expect(viewModel.addProjectSheet.goTarget == "/home/docs")
+        #expect(viewModel.uiState.addProject.sheet.goTarget == "/home/docs")
         await viewModel.submitAddProjectField()
-        #expect(viewModel.addProjectSheet.fieldText == "/home/docs/")
-        #expect(viewModel.addProjectSheet.directory == "/home/docs")
+        #expect(viewModel.uiState.addProject.sheet.fieldText == "/home/docs/")
+        #expect(viewModel.uiState.addProject.sheet.directory == "/home/docs")
 
         // An exact name opens even when other names start with it.
         viewModel.updateAddProjectField("/home/code")
-        #expect(viewModel.addProjectSheet.goTarget == "/home/code")
+        #expect(viewModel.uiState.addProject.sheet.goTarget == "/home/code")
         await viewModel.submitAddProjectField()
-        #expect(viewModel.addProjectSheet.directory == "/home/code")
-        #expect(viewModel.addProjectSheet.entries.map(\.name) == ["app"])
+        #expect(viewModel.uiState.addProject.sheet.directory == "/home/code")
+        #expect(viewModel.uiState.addProject.sheet.entries.map(\.name) == ["app"])
 
-        #expect(viewModel.isAddProjectPresented)
+        #expect(viewModel.uiState.addProject.isPresented)
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one"])
     }
 
@@ -1203,25 +1203,25 @@ struct ProjectListHomeViewModelTests {
         await viewModel.showAddProjectSheet()
         viewModel.browseAddProjectFolders()
 
-        var sheet = viewModel.addProjectSheet
+        var sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.barTarget == AddProjectBarTarget(name: "home", path: "/home", isGitRepository: false))
         #expect(sheet.addTitle == AddProjectSheetState.homeFolderTitle)
         #expect(sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/co")
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.barTarget?.path == "/home")
         #expect(sheet.addTitle.resolved == "Pick a folder")
         #expect(!sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/zz")
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.addTitle.resolved == "No folder named \u{201C}zz\u{201D}")
         #expect(sheet.emptyMessage?.resolved == "Nothing in home starts with \u{201C}zz\u{201D}")
         #expect(!sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/code")
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.barTarget == AddProjectBarTarget(name: "code", path: "/home/code", isGitRepository: false))
         #expect(sheet.addTitle.resolved == "Add this folder")
         #expect(sheet.addEnabled)
@@ -1229,9 +1229,9 @@ struct ProjectListHomeViewModelTests {
         // While a folder lists, the button keeps its title but waits.
         filesystem.heldPaths = ["/home/Codex"]
         viewModel.updateAddProjectField("/home/Codex/")
-        #expect(viewModel.addProjectSheet.isLoading)
-        #expect(viewModel.addProjectSheet.addTitle.resolved == "Add this folder")
-        #expect(!viewModel.addProjectSheet.addEnabled)
+        #expect(viewModel.uiState.addProject.sheet.isLoading)
+        #expect(viewModel.uiState.addProject.sheet.addTitle.resolved == "Add this folder")
+        #expect(!viewModel.uiState.addProject.sheet.addEnabled)
         filesystem.release("/home/Codex")
     }
 
@@ -1251,8 +1251,8 @@ struct ProjectListHomeViewModelTests {
         viewModel.browseAddProjectFolders()
 
         viewModel.updateAddProjectField("/srv/apps/")
-        #expect(await waitUntil { viewModel.addProjectSheet.pathNotFound })
-        var sheet = viewModel.addProjectSheet
+        #expect(await waitUntil { viewModel.uiState.addProject.sheet.pathNotFound })
+        var sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.emptyMessage?.resolved == "Path not found")
         #expect(sheet.listError == nil)
         #expect(sheet.isLoading == false)
@@ -1265,7 +1265,7 @@ struct ProjectListHomeViewModelTests {
         // Typing on inside the missing folder asks the server nothing new.
         viewModel.updateAddProjectField("/srv/apps/x")
         try? await Task.sleep(for: .milliseconds(20))
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.pathNotFound)
         #expect(sheet.addTitle == AddProjectSheetState.pathNotFoundTitle)
         #expect(filesystem.requestedPaths.filter { $0 == "/srv/apps" }.count == 1)
@@ -1286,16 +1286,16 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
         await viewModel.confirmAddProject()
-        guard case let .loaded(_, show, _, createError) = viewModel.state else {
+        guard case let .loaded(_, show, _, createError) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
         #expect(show == false)
-        #expect(viewModel.isAddProjectPresented == false)
+        #expect(viewModel.uiState.addProject.isPresented == false)
         #expect(createError == nil)
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/home"))
         #expect(projectRepository.validatedDirectories.contains("/home"))
-        #expect(viewModel.pendingSelectedFilterId == "/home")
+        #expect(viewModel.uiState.pendingScopeRequest?.filterID == "/home")
     }
 
     @Test func confirmAddProject_persistsSelectedPathEvenWhenCurrentResolvesGlobal() async {
@@ -1317,7 +1317,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
         await viewModel.confirmAddProject()
-        guard case let .loaded(_, show, _, _) = viewModel.state else {
+        guard case let .loaded(_, show, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -1345,7 +1345,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.showAddProjectSheet()
         viewModel.updateAddProjectField("/repo/android")
         await viewModel.confirmAddProject()
-        guard case let .loaded(_, show, _, _) = viewModel.state else {
+        guard case let .loaded(_, show, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -1368,13 +1368,13 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
         await viewModel.confirmAddProject()
-        #expect(viewModel.isAddProjectPresented)
-        #expect(viewModel.addProjectSheet.fieldError == .verbatim("Not a project"))
-        #expect(viewModel.addProjectSheet.isValidating == false)
-        #expect(viewModel.addProjectSheet.addEnabled)
+        #expect(viewModel.uiState.addProject.isPresented)
+        #expect(viewModel.uiState.addProject.sheet.fieldError == .verbatim("Not a project"))
+        #expect(viewModel.uiState.addProject.sheet.isValidating == false)
+        #expect(viewModel.uiState.addProject.sheet.addEnabled)
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one"])
         viewModel.updateAddProjectField("/home/x")
-        #expect(viewModel.addProjectSheet.fieldError == nil)
+        #expect(viewModel.uiState.addProject.sheet.fieldError == nil)
     }
 
     @Test func selectAddProjectSuggestion_addsTheServerProject() async {
@@ -1392,11 +1392,11 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
-        #expect(viewModel.addProjectSheet.suggestions.map(\.name) == ["app"])
+        #expect(viewModel.uiState.addProject.sheet.suggestions.map(\.name) == ["app"])
         await viewModel.selectAddProjectSuggestion(path: "/srv/app")
-        #expect(viewModel.isAddProjectPresented == false)
+        #expect(viewModel.uiState.addProject.isPresented == false)
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/srv/app"])
-        #expect(viewModel.pendingSelectedFilterId == "/srv/app")
+        #expect(viewModel.uiState.pendingScopeRequest?.filterID == "/srv/app")
     }
 
     @Test func listingError_showsRetryAndRecovers() async {
@@ -1412,7 +1412,7 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
-        var sheet = viewModel.addProjectSheet
+        var sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.listError == AddProjectSheetState.listErrorMessage)
         #expect(sheet.isLoading == false)
         #expect(sheet.addEnabled == false)
@@ -1422,7 +1422,7 @@ struct ProjectListHomeViewModelTests {
 
         filesystem.failingPaths = []
         await viewModel.retryAddProjectListing()
-        sheet = viewModel.addProjectSheet
+        sheet = viewModel.uiState.addProject.sheet
         #expect(sheet.listError == nil)
         #expect(sheet.entries.map(\.name) == ["code"])
     }
@@ -1441,9 +1441,9 @@ struct ProjectListHomeViewModelTests {
         await viewModel.showAddProjectSheet()
         viewModel.updateAddProjectField("/home/co")
         viewModel.dismissAddProjectSheet()
-        #expect(viewModel.isAddProjectPresented == false)
-        #expect(viewModel.addProjectSheet == .empty)
-        guard case let .loaded(_, show, payload, _) = viewModel.state else {
+        #expect(viewModel.uiState.addProject.isPresented == false)
+        #expect(viewModel.uiState.addProject.sheet == .empty)
+        guard case let .loaded(_, show, payload, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -1451,7 +1451,7 @@ struct ProjectListHomeViewModelTests {
         #expect(payload == nil)
 
         await viewModel.showAddProjectSheet()
-        #expect(viewModel.addProjectSheet.fieldText == "/home/")
+        #expect(viewModel.uiState.addProject.sheet.fieldText == "/home/")
     }
 
     // MARK: New session draft (#1004)
@@ -1464,16 +1464,16 @@ struct ProjectListHomeViewModelTests {
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
-        #expect(viewModel.revealNewestToken == 0)
+        #expect(viewModel.uiState.revealNewestToken == 0)
 
         viewModel.openNewSessionDraft(NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo"))
 
         #expect(sessionRepository.createdDirectories.isEmpty)
-        #expect(viewModel.revealNewestToken == 1)
-        #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
-        #expect(viewModel.pendingSessionOpen?.worktree == "/repo")
-        #expect(viewModel.pendingSessionOpen?.optimisticNavigationInstanceID != nil)
-        guard case let .loaded(_, _, _, createError) = viewModel.state else {
+        #expect(viewModel.uiState.revealNewestToken == 1)
+        #expect(viewModel.uiState.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
+        #expect(viewModel.uiState.pendingSessionOpen?.worktree == "/repo")
+        #expect(viewModel.uiState.pendingSessionOpen?.optimisticNavigationInstanceID != nil)
+        guard case let .loaded(_, _, _, createError) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -1489,10 +1489,10 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         let start = NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo")
         viewModel.openNewSessionDraft(start)
-        let first = viewModel.pendingSessionOpen?.optimisticNavigationInstanceID
+        let first = viewModel.uiState.pendingSessionOpen?.optimisticNavigationInstanceID
         viewModel.consumePendingSessionOpen()
         viewModel.openNewSessionDraft(start)
-        let second = viewModel.pendingSessionOpen?.optimisticNavigationInstanceID
+        let second = viewModel.uiState.pendingSessionOpen?.optimisticNavigationInstanceID
         #expect(first != nil)
         #expect(second != nil)
         #expect(first != second)
@@ -1513,7 +1513,7 @@ struct ProjectListHomeViewModelTests {
 
         viewModel.openNewSessionDraft(NewSessionDraft(projectKey: "path:/repo", projectDirectory: "/repo"))
 
-        #expect(viewModel.pendingSessionOpen?.worktree == "/other")
+        #expect(viewModel.uiState.pendingSessionOpen?.worktree == "/other")
         #expect(store.draft(forProfile: homeDraftProfileKey)?.composer.text == "half typed")
     }
 
@@ -1532,8 +1532,8 @@ struct ProjectListHomeViewModelTests {
 
         await viewModel.handleWorktreeRequest(.newSession(directory: "/wt/feature"))
 
-        #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
-        #expect(viewModel.pendingSessionOpen?.worktree == "/wt/feature")
+        #expect(viewModel.uiState.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
+        #expect(viewModel.uiState.pendingSessionOpen?.worktree == "/wt/feature")
         #expect(store.draft(forProfile: homeDraftProfileKey)?.composer.text == "keep")
     }
 
@@ -1547,7 +1547,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         viewModel.markHomeHidden(nowEpochMs: 0)
         viewModel.onHomeRevealed(nowEpochMs: SessionListScrollPin.staleAfterMs)
-        #expect(viewModel.revealNewestToken == 1)
+        #expect(viewModel.uiState.revealNewestToken == 1)
     }
 
     @Test func homeReveal_beforeStaleAbsenceKeepsScroll() async {
@@ -1560,7 +1560,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         viewModel.markHomeHidden(nowEpochMs: 0)
         viewModel.onHomeRevealed(nowEpochMs: SessionListScrollPin.staleAfterMs - 1)
-        #expect(viewModel.revealNewestToken == 0)
+        #expect(viewModel.uiState.revealNewestToken == 0)
     }
 
     @Test func onSessionLongPress_opensSheetWithoutFetchingMessages() async {
@@ -1573,9 +1573,9 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
 
-        #expect(viewModel.sessionActionsSheetVisible)
-        #expect(viewModel.sessionActionsTarget?.sessionId == "s1")
-        #expect(viewModel.sessionActionsTarget?.title == "Alpha")
+        #expect(viewModel.uiState.sessionActions.sheetVisible)
+        #expect(viewModel.uiState.sessionActions.target?.sessionId == "s1")
+        #expect(viewModel.uiState.sessionActions.target?.title == "Alpha")
         let fetched = await waitUntil(timeoutMs: 200) { messageRepository.listCallCount > 0 }
         #expect(fetched == false)
     }
@@ -1591,9 +1591,9 @@ struct ProjectListHomeViewModelTests {
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
         viewModel.openSessionFork()
 
-        #expect(viewModel.sessionForkDialog.isVisible)
+        #expect(viewModel.uiState.sessionActions.forkDialog.isVisible)
         #expect(await waitUntil { messageRepository.listCallCount == 1 })
-        let blocked = await waitUntil(timeoutMs: 200) { viewModel.sessionForkDialog.blockedMessage != nil }
+        let blocked = await waitUntil(timeoutMs: 200) { viewModel.uiState.sessionActions.forkDialog.blockedMessage != nil }
         #expect(blocked == false)
     }
 
@@ -1608,8 +1608,8 @@ struct ProjectListHomeViewModelTests {
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
         viewModel.openSessionFork()
 
-        #expect(await waitUntil { viewModel.sessionForkDialog.blockedMessage?.resolved == "Nothing to fork yet" })
-        #expect(viewModel.sessionForkDialog.isVisible)
+        #expect(await waitUntil { viewModel.uiState.sessionActions.forkDialog.blockedMessage?.resolved == "Nothing to fork yet" })
+        #expect(viewModel.uiState.sessionActions.forkDialog.isVisible)
         await viewModel.confirmSessionFork()
         #expect(sessionRepository.forkedIDs.isEmpty)
     }
@@ -1627,8 +1627,8 @@ struct ProjectListHomeViewModelTests {
         await viewModel.confirmSessionFork()
 
         #expect(sessionRepository.forkedIDs.isEmpty)
-        #expect(viewModel.sessionForkDialog.isSubmitting == false)
-        #expect(viewModel.sessionForkDialog.blockedMessage?.resolved == "Nothing to fork yet")
+        #expect(viewModel.uiState.sessionActions.forkDialog.isSubmitting == false)
+        #expect(viewModel.uiState.sessionActions.forkDialog.blockedMessage?.resolved == "Nothing to fork yet")
     }
 
     @Test func openSessionFork_checkFailureLeavesForkToServer() async {
@@ -1644,7 +1644,7 @@ struct ProjectListHomeViewModelTests {
         viewModel.openSessionFork()
         await viewModel.confirmSessionFork()
 
-        #expect(viewModel.sessionForkDialog.blockedMessage == nil)
+        #expect(viewModel.uiState.sessionActions.forkDialog.blockedMessage == nil)
         #expect(sessionRepository.forkedIDs == ["s1"])
     }
 
@@ -1657,8 +1657,8 @@ struct ProjectListHomeViewModelTests {
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
         viewModel.dismissSessionActions()
 
-        #expect(viewModel.sessionActionsSheetVisible == false)
-        #expect(viewModel.sessionActionsTarget == nil)
+        #expect(viewModel.uiState.sessionActions.sheetVisible == false)
+        #expect(viewModel.uiState.sessionActions.target == nil)
     }
 
     @Test func confirmSessionRename_updatesSessionAndClosesDialog() async {
@@ -1671,15 +1671,15 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
         viewModel.openSessionRename()
-        #expect(viewModel.sessionRenameDialog.draftTitle == "Alpha")
-        #expect(viewModel.sessionActionsSheetVisible == false)
+        #expect(viewModel.uiState.sessionActions.renameDialog.draftTitle == "Alpha")
+        #expect(viewModel.uiState.sessionActions.sheetVisible == false)
 
         viewModel.updateSessionRenameDraft("Beta")
         await viewModel.confirmSessionRename()
 
         #expect(sessionRepository.updatedTitles.map(\.title) == ["Beta"])
-        #expect(viewModel.sessionRenameDialog.isVisible == false)
-        #expect(viewModel.sessionActionsTarget == nil)
+        #expect(viewModel.uiState.sessionActions.renameDialog.isVisible == false)
+        #expect(viewModel.uiState.sessionActions.target == nil)
     }
 
     @Test func confirmSessionRename_emptyTitleShowsDialogError() async {
@@ -1696,8 +1696,8 @@ struct ProjectListHomeViewModelTests {
         await viewModel.confirmSessionRename()
 
         #expect(sessionRepository.updatedTitles.isEmpty)
-        #expect(viewModel.sessionRenameDialog.isVisible)
-        #expect(viewModel.sessionRenameDialog.errorMessage?.resolved == "Enter a session title")
+        #expect(viewModel.uiState.sessionActions.renameDialog.isVisible)
+        #expect(viewModel.uiState.sessionActions.renameDialog.errorMessage?.resolved == "Enter a session title")
     }
 
     @Test func confirmSessionRename_unchangedTitleClosesWithoutRequest() async {
@@ -1713,8 +1713,8 @@ struct ProjectListHomeViewModelTests {
         await viewModel.confirmSessionRename()
 
         #expect(sessionRepository.updatedTitles.isEmpty)
-        #expect(viewModel.sessionRenameDialog.isVisible == false)
-        #expect(viewModel.sessionActionsTarget == nil)
+        #expect(viewModel.uiState.sessionActions.renameDialog.isVisible == false)
+        #expect(viewModel.uiState.sessionActions.target == nil)
     }
 
     @Test func confirmSessionRename_failureKeepsDialogError() async {
@@ -1730,9 +1730,9 @@ struct ProjectListHomeViewModelTests {
         viewModel.updateSessionRenameDraft("Beta")
         await viewModel.confirmSessionRename()
 
-        #expect(viewModel.sessionRenameDialog.isVisible)
-        #expect(viewModel.sessionRenameDialog.isSubmitting == false)
-        #expect(viewModel.sessionRenameDialog.errorMessage?.resolved == "nope")
+        #expect(viewModel.uiState.sessionActions.renameDialog.isVisible)
+        #expect(viewModel.uiState.sessionActions.renameDialog.isSubmitting == false)
+        #expect(viewModel.uiState.sessionActions.renameDialog.errorMessage?.resolved == "nope")
     }
 
     @Test func openSessionFork_suggestsForkTitle() async {
@@ -1744,7 +1744,7 @@ struct ProjectListHomeViewModelTests {
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
         viewModel.openSessionFork()
 
-        #expect(viewModel.sessionForkDialog.draftTitle == "Fork of Alpha")
+        #expect(viewModel.uiState.sessionActions.forkDialog.draftTitle == "Fork of Alpha")
         #expect(ProjectListHomeViewModel.suggestedForkTitle(for: "  ") == "Forked session")
     }
 
@@ -1763,13 +1763,13 @@ struct ProjectListHomeViewModelTests {
 
         #expect(sessionRepository.forkedIDs == ["s1"])
         #expect(sessionRepository.updatedTitles.map(\.id) == ["forked"])
-        #expect(viewModel.sessionForkResult.isVisible)
-        #expect(viewModel.sessionForkResult.forkedTitle == "Fork of Alpha")
+        #expect(viewModel.uiState.sessionActions.forkResult.isVisible)
+        #expect(viewModel.uiState.sessionActions.forkResult.forkedTitle == "Fork of Alpha")
 
         viewModel.chooseSessionForkOpen()
-        #expect(viewModel.pendingSessionOpen?.id == "forked")
-        #expect(viewModel.pendingSessionOpen?.worktree == "/repo")
-        #expect(viewModel.sessionForkResult.isVisible == false)
+        #expect(viewModel.uiState.pendingSessionOpen?.id == "forked")
+        #expect(viewModel.uiState.pendingSessionOpen?.worktree == "/repo")
+        #expect(viewModel.uiState.sessionActions.forkResult.isVisible == false)
     }
 
     @Test func confirmSessionFork_stayChoiceKeepsHome() async {
@@ -1784,9 +1784,9 @@ struct ProjectListHomeViewModelTests {
         await viewModel.confirmSessionFork()
         viewModel.chooseSessionForkStay()
 
-        #expect(viewModel.pendingSessionOpen == nil)
-        #expect(viewModel.sessionForkResult.isVisible == false)
-        #expect(viewModel.sessionActionsTarget == nil)
+        #expect(viewModel.uiState.pendingSessionOpen == nil)
+        #expect(viewModel.uiState.sessionActions.forkResult.isVisible == false)
+        #expect(viewModel.uiState.sessionActions.target == nil)
     }
 
     @Test func confirmSessionFork_failureKeepsDialogError() async {
@@ -1802,9 +1802,9 @@ struct ProjectListHomeViewModelTests {
         viewModel.openSessionFork()
         await viewModel.confirmSessionFork()
 
-        #expect(viewModel.sessionForkDialog.isVisible)
-        #expect(viewModel.sessionForkDialog.errorMessage?.resolved == "no fork")
-        #expect(viewModel.sessionForkResult.isVisible == false)
+        #expect(viewModel.uiState.sessionActions.forkDialog.isVisible)
+        #expect(viewModel.uiState.sessionActions.forkDialog.errorMessage?.resolved == "no fork")
+        #expect(viewModel.uiState.sessionActions.forkResult.isVisible == false)
     }
 
     @Test func archiveSessionAction_archivesAndClearsTarget() async {
@@ -1819,8 +1819,8 @@ struct ProjectListHomeViewModelTests {
         await viewModel.archiveSessionAction()
 
         #expect(sessionRepository.archivedIDs == ["s1"])
-        #expect(viewModel.sessionActionsTarget == nil)
-        #expect(viewModel.removalSnackbar == nil)
+        #expect(viewModel.uiState.sessionActions.target == nil)
+        #expect(viewModel.uiState.snackbar == nil)
     }
 
     @Test func archiveSessionAction_failureShowsSnackbar() async {
@@ -1834,9 +1834,9 @@ struct ProjectListHomeViewModelTests {
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
         await viewModel.archiveSessionAction()
 
-        #expect(viewModel.removalSnackbar?.text == "Couldn't archive session.")
-        #expect(viewModel.sessionActionInFlight == false)
-        #expect(viewModel.sessionActionsTarget == nil)
+        #expect(viewModel.uiState.snackbar?.text == "Couldn't archive session.")
+        #expect(viewModel.uiState.sessionActions.actionInFlight == false)
+        #expect(viewModel.uiState.sessionActions.target == nil)
     }
 
     @Test func confirmDeleteSessionAction_deletesAfterConfirmation() async {
@@ -1849,15 +1849,15 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
         viewModel.requestDeleteSessionAction()
-        #expect(viewModel.sessionDeleteConfirmVisible)
+        #expect(viewModel.uiState.sessionActions.deleteConfirmVisible)
         #expect(sessionRepository.deletedIDs.isEmpty)
 
         await viewModel.confirmDeleteSessionAction()
 
         #expect(sessionRepository.deletedIDs == ["s1"])
-        #expect(viewModel.sessionDeleteConfirmVisible == false)
-        #expect(viewModel.sessionActionsTarget == nil)
-        #expect(viewModel.removalSnackbar == nil)
+        #expect(viewModel.uiState.sessionActions.deleteConfirmVisible == false)
+        #expect(viewModel.uiState.sessionActions.target == nil)
+        #expect(viewModel.uiState.snackbar == nil)
     }
 
     @Test func confirmDeleteSessionAction_failureShowsSnackbar() async {
@@ -1872,8 +1872,8 @@ struct ProjectListHomeViewModelTests {
         viewModel.requestDeleteSessionAction()
         await viewModel.confirmDeleteSessionAction()
 
-        #expect(viewModel.removalSnackbar?.text == "Couldn't delete session.")
-        #expect(viewModel.sessionActionsTarget == nil)
+        #expect(viewModel.uiState.snackbar?.text == "Couldn't delete session.")
+        #expect(viewModel.uiState.sessionActions.target == nil)
     }
 
     @Test func returningToHome_readyIdsBeforeStatuses_doesNotFlashReady() async {
@@ -2059,7 +2059,7 @@ struct ProjectListHomeViewModelTests {
         #expect(merged)
         // Busy in another directory: not this section's row.
         #expect(homeSession(viewModel, id: "elsewhere") == nil)
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -2100,16 +2100,16 @@ struct ProjectListHomeViewModelTests {
         #expect(loaded)
 
         viewModel.loadMoreSessions(scopeId: HomeProjectGrouping.pathKeyPrefix + "/repo")
-        #expect(await waitUntil { !viewModel.isLoadingMoreSessions })
+        #expect(await waitUntil { !viewModel.uiState.isLoadingMoreSessions })
         #expect(sessionLive.loadMoreDirectories == ["/repo"])
 
         viewModel.loadMoreSessions(scopeId: SessionListFilterTab.allId)
-        #expect(await waitUntil { !viewModel.isLoadingMoreSessions })
+        #expect(await waitUntil { !viewModel.uiState.isLoadingMoreSessions })
         #expect(sessionLive.loadMoreDirectories.sorted() == ["/other", "/repo", "/repo"])
 
         // Nothing in scope has more: no request.
         viewModel.loadMoreSessions(scopeId: HomeProjectGrouping.pathKeyPrefix + "/done")
-        #expect(!viewModel.isLoadingMoreSessions)
+        #expect(!viewModel.uiState.isLoadingMoreSessions)
         #expect(sessionLive.loadMoreDirectories.count == 3)
     }
 
@@ -2144,7 +2144,7 @@ struct ProjectListHomeViewModelTests {
         sessionLive.emit(directory: "/repo", sessions: [session], loadFailed: true, hasMore: true)
         #expect(await waitUntil { !viewModel.canLoadMoreSessions(scopeId: SessionListFilterTab.allId) })
         viewModel.loadMoreSessions(scopeId: SessionListFilterTab.allId)
-        #expect(!viewModel.isLoadingMoreSessions)
+        #expect(!viewModel.uiState.isLoadingMoreSessions)
         #expect(sessionLive.loadMoreDirectories.isEmpty)
     }
 
@@ -2379,20 +2379,20 @@ struct ProjectListHomeViewModelTests {
 
         await viewModel.addProject(worktree: "/two")
         // Home is on All (three projects); the new project takes the scope anyway.
-        #expect(viewModel.pendingSelectedFilterId == "/two")
-        #expect(viewModel.pendingSelectedFilterOverridesAll)
+        #expect(viewModel.uiState.pendingScopeRequest?.filterID == "/two")
+        #expect((viewModel.uiState.pendingScopeRequest?.overridesAll ?? false))
         // Inside the grace delay nothing reads as loading yet.
-        #expect(viewModel.projectLoadStates["/two"] == nil)
-        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+        #expect(viewModel.uiState.projectLoadStates["/two"] == nil)
+        #expect(await waitUntil { viewModel.uiState.projectLoadStates["/two"] == .loading(isSlow: false) })
 
         // A cached publish is not the server answer.
         stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true)
         try? await Task.sleep(for: .milliseconds(50))
-        #expect(viewModel.projectLoadStates["/two"] == .loading(isSlow: false))
+        #expect(viewModel.uiState.projectLoadStates["/two"] == .loading(isSlow: false))
 
         stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
         #expect(await waitUntil {
-            viewModel.projectLoadStates["/two"] == nil && homeSession(viewModel, id: "two-1") != nil
+            viewModel.uiState.projectLoadStates["/two"] == nil && homeSession(viewModel, id: "two-1") != nil
         })
     }
 
@@ -2410,7 +2410,7 @@ struct ProjectListHomeViewModelTests {
         var exposed = false
         let deadline = Date().addingTimeInterval(0.6)
         while Date() < deadline {
-            if viewModel.projectLoadStates["/two"] != nil { exposed = true }
+            if viewModel.uiState.projectLoadStates["/two"] != nil { exposed = true }
             try? await Task.sleep(for: .milliseconds(5))
         }
         #expect(!exposed)
@@ -2423,11 +2423,11 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
 
         await viewModel.addProject(worktree: "/two")
-        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+        #expect(await waitUntil { viewModel.uiState.projectLoadStates["/two"] == .loading(isSlow: false) })
 
         stores.sessions.emit(directory: "/two", sessions: [])
-        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == nil })
-        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+        #expect(await waitUntil { viewModel.uiState.projectLoadStates["/two"] == nil })
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
             Issue.record("Expected loaded")
             return
         }
@@ -2443,14 +2443,14 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
 
         await viewModel.addProject(worktree: "/two")
-        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+        #expect(await waitUntil { viewModel.uiState.projectLoadStates["/two"] == .loading(isSlow: false) })
         let shown = Date()
 
         stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
         // Rows land at once; the loading marker holds for the rest of its minimum time.
         #expect(await waitUntil { homeSession(viewModel, id: "two-1") != nil })
-        #expect(viewModel.projectLoadStates["/two"] == .loading(isSlow: false))
-        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == nil })
+        #expect(viewModel.uiState.projectLoadStates["/two"] == .loading(isSlow: false))
+        #expect(await waitUntil { viewModel.uiState.projectLoadStates["/two"] == nil })
         #expect(Date().timeIntervalSince(shown) >= 0.25)
     }
 
@@ -2462,17 +2462,17 @@ struct ProjectListHomeViewModelTests {
         await viewModel.addProject(worktree: "/two")
         stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true, loadFailed: true)
         #expect(await waitUntil {
-            viewModel.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
+            viewModel.uiState.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
         })
         #expect(ProjectLoadState.failedMessage == "Couldn\u{2019}t load sessions")
 
         await viewModel.retryProjectLoad(worktree: "/two")
-        #expect(viewModel.projectLoadStates["/two"] == .loading(isSlow: false))
+        #expect(viewModel.uiState.projectLoadStates["/two"] == .loading(isSlow: false))
         #expect(stores.sessions.invalidatedDirectories.contains("/two"))
 
         stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
         #expect(await waitUntil {
-            viewModel.projectLoadStates["/two"] == nil && homeSession(viewModel, id: "two-1") != nil
+            viewModel.uiState.projectLoadStates["/two"] == nil && homeSession(viewModel, id: "two-1") != nil
         })
     }
 
@@ -2484,12 +2484,12 @@ struct ProjectListHomeViewModelTests {
         await viewModel.addProject(worktree: "/two")
         stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true, loadFailed: true)
         #expect(await waitUntil {
-            viewModel.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
+            viewModel.uiState.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
         })
 
         // The coordinator's own retry succeeds later.
         stores.sessions.emit(directory: "/two", sessions: [])
-        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == nil })
+        #expect(await waitUntil { viewModel.uiState.projectLoadStates["/two"] == nil })
     }
 
     @Test func addProject_slowLoad_marksSlowAfterThreshold() async {
@@ -2501,8 +2501,8 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
 
         await viewModel.addProject(worktree: "/two")
-        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
-        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: true) })
+        #expect(await waitUntil { viewModel.uiState.projectLoadStates["/two"] == .loading(isSlow: false) })
+        #expect(await waitUntil { viewModel.uiState.projectLoadStates["/two"] == .loading(isSlow: true) })
     }
 
     @Test func addProject_noOutcome_failsAfterSafetyTimeout() async {
@@ -2514,9 +2514,9 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
 
         await viewModel.addProject(worktree: "/two")
-        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+        #expect(await waitUntil { viewModel.uiState.projectLoadStates["/two"] == .loading(isSlow: false) })
         #expect(await waitUntil {
-            viewModel.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
+            viewModel.uiState.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
         })
     }
 
@@ -2527,11 +2527,11 @@ struct ProjectListHomeViewModelTests {
 
         await viewModel.addProject(worktree: "/two")
         stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true, loadFailed: true)
-        #expect(await waitUntil { viewModel.projectLoadStates["/two"] != nil })
+        #expect(await waitUntil { viewModel.uiState.projectLoadStates["/two"] != nil })
 
         viewModel.requestRemoveProject(worktree: "/two")
         await viewModel.confirmRemoveProject()
-        #expect(viewModel.projectLoadStates.isEmpty)
+        #expect(viewModel.uiState.projectLoadStates.isEmpty)
     }
 
     @Test func homeChromeProjects_carryLoadIntoScopeTabs() {
@@ -2559,7 +2559,7 @@ struct ProjectListHomeViewModelTests {
 
 @MainActor
 private func homeSession(_ viewModel: ProjectListHomeViewModel, id: String) -> SessionListItem? {
-    guard case let .loaded(sections, _, _, _) = viewModel.state else { return nil }
+    guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else { return nil }
     return sections.flatMap(\.allSessions).first { $0.id == id }
 }
 

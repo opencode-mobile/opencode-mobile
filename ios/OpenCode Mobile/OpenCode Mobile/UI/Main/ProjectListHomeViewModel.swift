@@ -102,38 +102,58 @@ enum ProjectListHomeState: Equatable {
     )
 }
 
+/// Home's one UI state: the content plus the chrome, dialogs, and requests around it.
+struct HomeUiState: Equatable {
+    var content: ProjectListHomeState = .probing
+    var servers = HomeServersChrome()
+    var liveConnectionStatus: SessionConnectionStatus = .offline
+    /// Soft pull-to-refresh indicator; content stays on Loaded/Empty.
+    var isRefreshing = false
+    /// Shared home snackbar: project removal plus archive / delete failures.
+    var snackbar: OpenCodeSnackbarMessage?
+    var sessionActions = HomeSessionActionsState()
+    /// Home menu's Archived sessions entry; nil on servers that cannot restore archived sessions.
+    var archivedMenu: HomeArchivedMenuEntry?
+    var addProject = HomeAddProjectUiState()
+    /// Added paths grouped into Home projects: worktrees of one repository are one project.
+    var projects: [HomeProject] = []
+    var worktrees = HomeWorktreesUiState()
+    /// Projects added this session whose first server load is outstanding, keyed by worktree.
+    /// Loading appears only after the grace delay; failures appear at once.
+    var projectLoadStates: [String: ProjectLoadState] = [:]
+    var pendingProjectRemoval: ProjectRemovalItem?
+    /// A load more is running for the scope Home shows.
+    var isLoadingMoreSessions = false
+    var pendingSessionOpen: SessionListItem?
+    /// The project Add project last added; a New session draft that asked for it takes it.
+    var lastAddedProject: HomeAddedProject?
+    var pendingScopeRequest: HomeScopeRequest?
+    var revealNewestToken = 0
+}
+
+struct HomeWorktreesUiState: Equatable {
+    /// v1: non-added worktree directories whose sessions each added path's section folds in.
+    var extraDirectories: [String: [String]] = [:]
+    /// Home has listed some project's worktrees.
+    var hasListedWorktrees = false
+    /// What the server listed as worktrees, minus every project's main checkout.
+    var removableDirectories: Set<String> = []
+    /// Worktree directories removed from this app; their sessions stay on Home marked removed.
+    var removedDirectories: Set<String> = []
+}
+
 @MainActor
 @Observable
 final class ProjectListHomeViewModel {
-    /// Home content and what sits beside it, copied from the region on every change.
-    private(set) var projectListState = HomeProjectListState()
-    var state: ProjectListHomeState { projectListState.content }
+    /// Home's only observable state; every region change republishes it.
+    private(set) var uiState = HomeUiState()
     @ObservationIgnored private let projectList: HomeProjectList
     /// Soft pull-to-refresh indicator; content stays on Loaded/Empty.
-    private var userRefreshing = false
-    private(set) var isRefreshing = false
-    /// Add project sheet state, copied from the region on every change.
-    private(set) var addProject = HomeAddProjectUiState()
-    /// Sheet presentation is tracked here so SwiftUI `.sheet` can observe it directly.
-    var isAddProjectPresented: Bool { addProject.isPresented }
-    var addProjectSheet: AddProjectSheetState { addProject.sheet }
+    @ObservationIgnored private var userRefreshing = false
+    @ObservationIgnored private var isRefreshing = false
     @ObservationIgnored private let addProjectRegion: HomeAddProject
-    /// Projects added this session whose first server load is outstanding, keyed by worktree.
-    /// Loading appears only after the grace delay; failures appear at once.
-    var projectLoadStates: [String: ProjectLoadState] { projectListState.projectLoadStates }
-    var pendingProjectRemoval: ProjectRemovalItem? { projectListState.pendingProjectRemoval }
     /// Shared home snackbar: project removal plus archive / delete failures.
-    private(set) var removalSnackbar: OpenCodeSnackbarMessage?
-    /// Long-press actions state, copied from the region on every change.
-    private(set) var sessionActions = HomeSessionActionsState()
-    var sessionActionsTarget: HomeSessionActionTarget? { sessionActions.target }
-    var sessionActionsSheetVisible: Bool { sessionActions.sheetVisible }
-    var sessionActionsCanArchive: Bool { sessionActions.canArchive }
-    var sessionRenameDialog: HomeSessionTitleDialogState { sessionActions.renameDialog }
-    var sessionForkDialog: HomeSessionTitleDialogState { sessionActions.forkDialog }
-    var sessionForkResult: HomeSessionForkResultState { sessionActions.forkResult }
-    var sessionDeleteConfirmVisible: Bool { sessionActions.deleteConfirmVisible }
-    var sessionActionInFlight: Bool { sessionActions.actionInFlight }
+    @ObservationIgnored private var snackbar: OpenCodeSnackbarMessage?
     private let connectionProfileStore: any ConnectionProfileStore
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
@@ -143,25 +163,15 @@ final class ProjectListHomeViewModel {
     /// Session search over Home's pane (#929).
     let sessionSearch: SessionSearchModel
     private let foregroundEventStream: (any ForegroundEventStream)?
-    private var connectionStateObservationTask: Task<Void, Never>?
-    private(set) var liveUpdatesConnectionStatus: SessionConnectionStatus = .offline
-    /// Title / server switcher chrome, copied from the region on every change.
-    private(set) var serversChrome = HomeServersChrome()
+    @ObservationIgnored private var connectionStateObservationTask: Task<Void, Never>?
+    @ObservationIgnored private var liveConnectionStatus: SessionConnectionStatus = .offline
     @ObservationIgnored private let servers: HomeServers
-    /// Project grouping inputs, copied from the region on every change.
-    private(set) var worktreesState = HomeWorktreesState()
     @ObservationIgnored private let worktrees: HomeWorktrees
-    /// v1: non-added worktree directories whose sessions each added path's section folds in.
-    var homeExtraDirectories: [String: [String]] { worktreesState.extraDirectories }
-    /// A load more is running for the scope Home shows.
-    var isLoadingMoreSessions: Bool { projectListState.isLoadingMoreSessions }
     @ObservationIgnored private let sessionActionsRegion: HomeSessionActions
-    /// Home menu's Archived sessions entry; nil on servers that cannot restore archived sessions.
-    private(set) var archivedMenuEntry: HomeArchivedMenuEntry?
     @ObservationIgnored private let archivedMenu: HomeArchivedMenu
     /// Title-edit Analytics fires once per dialog so keystrokes are not events.
-    private var loggedRenameTitleEdit = false
-    private var loggedForkTitleEdit = false
+    @ObservationIgnored private var loggedRenameTitleEdit = false
+    @ObservationIgnored private var loggedForkTitleEdit = false
 
     init(
         projectRepository: any ProjectRepository,
@@ -254,26 +264,17 @@ final class ProjectListHomeViewModel {
                 project.key.hasPrefix(HomeProjectGrouping.pathKeyPrefix) ? nil : project.key
             })
         }
-        projectList.onChange = { [weak self] in
-            guard let self else { return }
-            self.projectListState = self.projectList.state
-        }
+        projectList.onChange = { [weak self] in self?.publishUiState() }
         projectList.onProbed = { [weak self] in
             guard let self else { return }
             self.archivedMenu.recheck(projects: self.homeProjects)
         }
-        worktrees.onChange = { [weak self] in
-            guard let self else { return }
-            self.worktreesState = self.worktrees.state
-        }
+        worktrees.onChange = { [weak self] in self?.publishUiState() }
         worktrees.onSectionMark = { [weak self] update in
             self?.projectList.applySectionMark(update)
         }
         worktrees.homeProjects = { [weak self] in self?.homeProjects ?? [] }
-        servers.onChange = { [weak self] in
-            guard let self else { return }
-            self.serversChrome = self.servers.state
-        }
+        servers.onChange = { [weak self] in self?.publishUiState() }
         servers.onSwitchStarted = { [weak self] target, generation in
             guard let self else { return }
             // Drop the previous server's live updates immediately. Local projects paint next;
@@ -296,23 +297,14 @@ final class ProjectListHomeViewModel {
             self.projectList.stopLiveObservations()
             await self.refresh()
         }
-        addProjectRegion.onChange = { [weak self] in
-            guard let self else { return }
-            self.addProject = self.addProjectRegion.state
-        }
+        addProjectRegion.onChange = { [weak self] in self?.publishUiState() }
         addProjectRegion.onSheetPublished = { [weak self] sheet in
             self?.projectList.showSheet(sheet)
         }
-        sessionActionsRegion.onChange = { [weak self] in
-            guard let self else { return }
-            self.sessionActions = self.sessionActionsRegion.state
-        }
-        archivedMenu.onChange = { [weak self] in
-            guard let self else { return }
-            self.archivedMenuEntry = self.archivedMenu.state
-        }
+        sessionActionsRegion.onChange = { [weak self] in self?.publishUiState() }
+        archivedMenu.onChange = { [weak self] in self?.publishUiState() }
         sessionActionsRegion.onLifecycleError = { [weak self] message in
-            self?.removalSnackbar = OpenCodeSnackbarMessage(text: message, variant: .error)
+            self?.setSnackbar(OpenCodeSnackbarMessage(text: message, variant: .error))
         }
         sessionReadyStore.bindProfile(profileID: activeConnectionManager.currentProfile()?.id)
         connectionSessionCoordinator.onProfileSaved { [weak self] in
@@ -340,7 +332,7 @@ final class ProjectListHomeViewModel {
                     break
                 case .moved:
                     self.projectList.probeWaitsOnAddressCheck = false
-                    if case .loaded = self.state {
+                    if case .loaded = self.content {
                         await self.projectList.invalidateAll()
                     } else {
                         // Empty, unreachable, or still loading against the old address.
@@ -368,15 +360,56 @@ final class ProjectListHomeViewModel {
         startObservingConnectionState()
     }
 
+    /// Rebuilds `uiState` from the regions; assigns only when something changed, so an
+    /// unchanged rebuild does not notify the view.
+    private func publishUiState() {
+        let projectListState = projectList.state
+        let projects = projectList.projects
+        let worktreesState = worktrees.state
+        var next = HomeUiState()
+        next.content = projectListState.content
+        next.servers = servers.state
+        next.liveConnectionStatus = liveConnectionStatus
+        next.isRefreshing = isRefreshing
+        next.snackbar = snackbar
+        next.sessionActions = sessionActionsRegion.state
+        next.archivedMenu = archivedMenu.state
+        next.addProject = addProjectRegion.state
+        next.projects = projects
+        next.worktrees = HomeWorktreesUiState(
+            extraDirectories: worktreesState.extraDirectories,
+            hasListedWorktrees: worktrees.hasListedWorktrees,
+            removableDirectories: worktrees.removableDirectories(projects: projects),
+            removedDirectories: worktrees.removedDirectories
+        )
+        next.projectLoadStates = projectListState.projectLoadStates
+        next.pendingProjectRemoval = projectListState.pendingProjectRemoval
+        next.isLoadingMoreSessions = projectListState.isLoadingMoreSessions
+        next.pendingSessionOpen = projectListState.pendingSessionOpen
+        next.lastAddedProject = projectListState.lastAddedProject
+        next.pendingScopeRequest = projectListState.pendingScopeRequest
+        next.revealNewestToken = projectListState.revealNewestToken
+        if next != uiState {
+            uiState = next
+        }
+    }
+
+    private var content: ProjectListHomeState { projectList.state.content }
+
     /// Added paths grouped into Home projects: worktrees of one repository are one project.
-    var homeProjects: [HomeProject] {
-        guard case let .loaded(sections, _, _, _) = state else { return [] }
-        return HomeWorktrees.projects(addedPaths: sections.map(\.worktree), state: worktreesState)
+    private var homeProjects: [HomeProject] { projectList.projects }
+
+    private var sessionActionsState: HomeSessionActionsState { sessionActionsRegion.state }
+
+    private func setSnackbar(_ message: OpenCodeSnackbarMessage?) {
+        snackbar = message
+        publishUiState()
     }
 
     private func publishRefreshing() {
         if isRefreshing != userRefreshing {
             isRefreshing = userRefreshing
+            publishUiState()
         }
     }
 
@@ -391,7 +424,11 @@ final class ProjectListHomeViewModel {
     }
 
     private func applyComposedConnectionStatus() {
-        liveUpdatesConnectionStatus = SessionConnectionStatus(label: liveUpdates.chrome.label)
+        let status = SessionConnectionStatus(label: liveUpdates.chrome.label)
+        // Idle chrome updates with the same status leave `uiState` alone.
+        guard status != liveConnectionStatus else { return }
+        liveConnectionStatus = status
+        publishUiState()
     }
 
     func refresh() async {
@@ -417,7 +454,7 @@ final class ProjectListHomeViewModel {
 
     /// Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner.
     func pullToRefresh() async {
-        switch state {
+        switch content {
         case .loaded, .empty:
             guard !userRefreshing else { return }
             ProductAnalytics.logUserAction(
@@ -472,7 +509,7 @@ final class ProjectListHomeViewModel {
 
     func addProjectUp() async {
         guard addProjectRegion.canNavigate,
-              let target = addProjectSheet.upTarget
+              let target = addProjectRegion.state.sheet.upTarget
         else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectGoUp)
         await addProjectRegion.showFolder(target)
@@ -494,7 +531,7 @@ final class ProjectListHomeViewModel {
     /// It never adds; Add stays a deliberate tap.
     func submitAddProjectField() async {
         guard addProjectRegion.canNavigate,
-              let target = addProjectSheet.goTarget
+              let target = addProjectRegion.state.sheet.goTarget
         else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectEnterDirectory)
         await addProjectRegion.showFolder(target)
@@ -526,7 +563,7 @@ final class ProjectListHomeViewModel {
     /// Back from the browser. Returns to the suggestion sheet at the server home, so
     /// "On this server" is not lost because the field was left in a subfolder.
     func closeAddProjectBrowser() {
-        guard isAddProjectPresented, addProjectRegion.isBrowsing else { return }
+        guard addProjectRegion.state.isPresented, addProjectRegion.isBrowsing else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectBrowseBack)
         addProjectRegion.closeBrowser()
     }
@@ -538,8 +575,9 @@ final class ProjectListHomeViewModel {
     }
 
     func confirmAddProject() async {
-        guard isAddProjectPresented, addProjectSheet.addEnabled,
-              let target = addProjectSheet.addTarget
+        let sheet = addProjectRegion.state.sheet
+        guard addProjectRegion.state.isPresented, sheet.addEnabled,
+              let target = sheet.addTarget
         else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectSelectCurrent)
         await addProject(worktree: target)
@@ -565,9 +603,9 @@ final class ProjectListHomeViewModel {
             await projectList.load(skipProbe: true)
             projectList.requestScope(filterID: worktree, overridesAll: nil)
             let name = ProjectDomainAdapter.displayName(from: worktree)
-            removalSnackbar = OpenCodeSnackbarMessage(
+            setSnackbar(OpenCodeSnackbarMessage(
                 text: String(localized: LocalizedStringResource("home.snackbar.already_on_home", defaultValue: "\"\(name)\" is already on home"))
-            )
+            ))
         case let .added(_, joined):
             projectList.beginProjectLoad(worktree, showImmediately: false)
             dismissAddProjectSheet()
@@ -576,7 +614,7 @@ final class ProjectListHomeViewModel {
             projectList.requestScope(filterID: worktree, overridesAll: true)
             projectList.noteAddedProject(path: worktree)
             if let joined {
-                removalSnackbar = OpenCodeSnackbarMessage(text: HomeProjectCopy.joinedExisting(joined.displayName))
+                setSnackbar(OpenCodeSnackbarMessage(text: HomeProjectCopy.joinedExisting(joined.displayName)))
             }
         case .failed:
             break
@@ -600,17 +638,6 @@ final class ProjectListHomeViewModel {
         projectList.openNewSessionDraft(start, forcePlace: forcePlace)
         logCreateSession(outcome: "started")
     }
-
-    /// Home has listed some project's worktrees.
-    var hasListedWorktrees: Bool { !worktreesState.directories.isEmpty }
-
-    /// What the server listed as worktrees, minus every project's main checkout.
-    var removableWorktreeDirectories: Set<String> {
-        HomeWorktrees.removableDirectories(projects: homeProjects, state: worktreesState)
-    }
-
-    /// Worktree directories removed from this app; their sessions stay on Home marked removed.
-    var removedWorktreeDirectories: Set<String> { homeWorktreesFeed.removedDirectories }
 
     /// Show sessions, New session here, and a finished remove from the Worktrees screen.
     func handleWorktreeRequest(_ request: HomeWorktreeRequest) async {
@@ -647,14 +674,6 @@ final class ProjectListHomeViewModel {
             parameters: [ProductAnalytics.Param.outcome: outcome]
         )
     }
-
-    var pendingSessionOpen: SessionListItem? { projectListState.pendingSessionOpen }
-    /// The project Add project last added; a New session draft that asked for it takes it.
-    var lastAddedProject: HomeAddedProject? { projectListState.lastAddedProject }
-    var pendingSelectedFilterId: String? { projectListState.pendingScopeRequest?.filterID }
-    /// True when `pendingSelectedFilterId` must replace the All scope too (a newly added project).
-    var pendingSelectedFilterOverridesAll: Bool { projectListState.pendingScopeRequest?.overridesAll ?? false }
-    var revealNewestToken: Int { projectListState.revealNewestToken }
 
     func consumePendingSessionOpen() {
         projectList.consumePendingSessionOpen()
@@ -702,7 +721,7 @@ final class ProjectListHomeViewModel {
     }
 
     func dismissProjectRemoval() {
-        guard pendingProjectRemoval != nil else { return }
+        guard projectList.state.pendingProjectRemoval != nil else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeRemoveProjectConfirm,
             actionId: ProductAnalytics.Action.homeRemoveProjectCancel
@@ -711,24 +730,24 @@ final class ProjectListHomeViewModel {
     }
 
     func confirmRemoveProject() async {
-        guard pendingProjectRemoval != nil else { return }
+        guard projectList.state.pendingProjectRemoval != nil else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeRemoveProjectConfirm,
             actionId: ProductAnalytics.Action.homeRemoveProjectConfirm
         )
         guard let name = await projectList.confirmRemove() else { return }
-        removalSnackbar = OpenCodeSnackbarMessage(
+        setSnackbar(OpenCodeSnackbarMessage(
             text: String(localized: LocalizedStringResource("home.snackbar.removed", defaultValue: "Removed \"\(name)\" from home"))
-        )
+        ))
     }
 
     func consumeProjectRemovalSnackbar() {
-        guard removalSnackbar != nil else { return }
+        guard snackbar != nil else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.home,
             actionId: ProductAnalytics.Action.homeDismissRemovalSnackbar
         )
-        removalSnackbar = nil
+        setSnackbar(nil)
     }
 
     func onSessionLongPress(sessionId: String, title: String, worktree: String) {
@@ -752,7 +771,7 @@ final class ProjectListHomeViewModel {
     /// Dismissal from the sheet chrome. Action handlers hide the sheet themselves and
     /// keep the target alive for the dialog they open.
     func dismissSessionActions() {
-        if sessionActionsSheetVisible {
+        if sessionActionsState.sheetVisible {
             ProductAnalytics.logUserAction(
                 screenId: ProductAnalytics.Screen.homeSessionActions,
                 actionId: ProductAnalytics.Action.sessionActionsDismiss
@@ -762,7 +781,7 @@ final class ProjectListHomeViewModel {
     }
 
     func openSessionRename() {
-        guard sessionActionsTarget != nil else { return }
+        guard sessionActionsState.target != nil else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeSessionActions,
             actionId: ProductAnalytics.Action.sessionActionsRename
@@ -789,7 +808,7 @@ final class ProjectListHomeViewModel {
     }
 
     func cancelSessionRename() {
-        guard !sessionRenameDialog.isSubmitting else { return }
+        guard !sessionActionsState.renameDialog.isSubmitting else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeRenameSession,
             actionId: ProductAnalytics.Action.homeRenameCancel
@@ -812,7 +831,7 @@ final class ProjectListHomeViewModel {
     }
 
     func openSessionFork() {
-        guard sessionActionsTarget != nil else { return }
+        guard sessionActionsState.target != nil else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeSessionActions,
             actionId: ProductAnalytics.Action.sessionActionsFork
@@ -838,7 +857,7 @@ final class ProjectListHomeViewModel {
     }
 
     func cancelSessionFork() {
-        guard !sessionForkDialog.isSubmitting else { return }
+        guard !sessionActionsState.forkDialog.isSubmitting else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeForkSession,
             actionId: ProductAnalytics.Action.homeForkCancel
@@ -876,7 +895,7 @@ final class ProjectListHomeViewModel {
     }
 
     func chooseSessionForkStay() {
-        if sessionForkResult.isVisible {
+        if sessionActionsState.forkResult.isVisible {
             ProductAnalytics.logUserAction(
                 screenId: ProductAnalytics.Screen.homeForkResult,
                 actionId: ProductAnalytics.Action.homeForkStay
@@ -886,7 +905,7 @@ final class ProjectListHomeViewModel {
     }
 
     func archiveSessionAction() async {
-        guard sessionActionsTarget != nil, sessionActionsCanArchive, !sessionActionInFlight else { return }
+        guard sessionActionsState.target != nil, sessionActionsState.canArchive, !sessionActionsState.actionInFlight else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeSessionActions,
             actionId: ProductAnalytics.Action.sessionActionsArchive
@@ -895,7 +914,7 @@ final class ProjectListHomeViewModel {
     }
 
     func requestDeleteSessionAction() {
-        guard sessionActionsTarget != nil else { return }
+        guard sessionActionsState.target != nil else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeSessionActions,
             actionId: ProductAnalytics.Action.sessionActionsDelete
@@ -909,8 +928,8 @@ final class ProjectListHomeViewModel {
     }
 
     func cancelDeleteSessionAction() {
-        guard !sessionActionInFlight else { return }
-        if sessionDeleteConfirmVisible {
+        guard !sessionActionsState.actionInFlight else { return }
+        if sessionActionsState.deleteConfirmVisible {
             ProductAnalytics.logUserAction(
                 screenId: ProductAnalytics.Screen.homeDeleteSessionConfirm,
                 actionId: ProductAnalytics.Action.homeDeleteCancel
@@ -920,7 +939,7 @@ final class ProjectListHomeViewModel {
     }
 
     func confirmDeleteSessionAction() async {
-        guard sessionActionsTarget != nil, !sessionActionInFlight else { return }
+        guard sessionActionsState.target != nil, !sessionActionsState.actionInFlight else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.homeDeleteSessionConfirm,
             actionId: ProductAnalytics.Action.homeDeleteConfirm
