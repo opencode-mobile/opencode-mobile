@@ -7,7 +7,8 @@ plugins {
 }
 
 android {
-    namespace = "dev.opencode.mobile.screenshot"
+    // Same namespace as :app so shared sources resolve dev.opencode.mobile.R.
+    namespace = "dev.opencode.mobile"
     compileSdk = 37
     defaultConfig {
         minSdk = 24
@@ -28,6 +29,9 @@ android {
             java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/icons")
             java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/sessionchat/failure")
             java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/components/layout")
+            java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/keyboard")
+            java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/text")
+            java.srcDir("../app/src/main/java/dev/opencode/mobile/domain/text")
             assets.srcDir("../app/src/main/assets")
             res.srcDir("../app/src/main/res")
         }
