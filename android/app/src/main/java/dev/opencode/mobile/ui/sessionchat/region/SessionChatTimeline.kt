@@ -81,7 +81,8 @@ interface SessionChatTimelinePresentationHost {
     val boundWorktree: String?
 }
 
-private object DetachedTimelinePresentationHost : SessionChatTimelinePresentationHost {
+/** Stand-in host for a timeline built without a facade (tests). One per timeline. */
+private class DetachedTimelinePresentationHost : SessionChatTimelinePresentationHost {
     override var publishedUiState: SessionChatUiState = SessionChatUiState.initial(sessionId = "", sessionTitle = "")
 
     override fun patchUiState(state: SessionChatUiState) {
@@ -101,7 +102,7 @@ class SessionChatTimeline(
     /** Reads server images for timeline previews. */
     private val serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
-    private val presentationHost: SessionChatTimelinePresentationHost = DetachedTimelinePresentationHost,
+    private val presentationHost: SessionChatTimelinePresentationHost = DetachedTimelinePresentationHost(),
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
 

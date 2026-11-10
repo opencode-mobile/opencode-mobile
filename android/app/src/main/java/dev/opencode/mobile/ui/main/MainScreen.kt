@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -147,6 +148,9 @@ fun MainScreen(
 ) {
     val home by viewModel.uiState.collectAsStateWithLifecycle()
     val searchState by searchViewModel.uiState.collectAsStateWithLifecycle()
+    // Read through derived state so the list that asks "can load more" only recomposes when the
+    // paging set changes, not on every Home state change.
+    val moreSessionDirectories by remember { derivedStateOf { home.paging.moreSessionDirectories } }
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
     }
@@ -166,7 +170,7 @@ fun MainScreen(
         loadingMoreScopeId = home.paging.loadingMoreScopeId,
         onLoadMoreSessions = viewModel::loadMoreSessions,
         canLoadMoreSessions = { scopeId, worktreesEnabled ->
-            viewModel.canLoadMoreSessions(home.paging.moreSessionDirectories, scopeId, worktreesEnabled)
+            viewModel.canLoadMoreSessions(moreSessionDirectories, scopeId, worktreesEnabled)
         },
         serversChrome = home.servers,
         sessionActionsCallbacks =
