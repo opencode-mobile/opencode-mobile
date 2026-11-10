@@ -109,6 +109,7 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatInbox
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatRepoStrip
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimelineOffers
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMove
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveAvailability
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveRow
@@ -315,6 +316,17 @@ class SessionChatViewModel
                 onCommit = { transcript -> spliceDictationTranscript(transcript) },
             )
 
+        /** The one-time Chip timeline intro (OPE-270) and Timeline Style picker (#805). */
+        private val timelineOffers =
+            SessionChatTimelineOffers(
+                scope = viewModelScope,
+                nowMs = { nowMs() },
+                loadedMessages = { timeline.loadedMessages() },
+                isBlocked = { _uiState.value.blocksChipTimelineIntro() },
+                isSessionBusy = { isSessionBusy() },
+                onChange = { publishUiState() },
+            )
+
         private val worktreeMove =
             SessionChatWorktreeMove(
                 moveSession = { id, directory -> sessionRepository.moveSession(id, directory) },
@@ -429,21 +441,6 @@ class SessionChatViewModel
                 dictation.finishDelayMs = value
             }
 
-        // One-time Chip timeline intro (OPE-270): offered after a long turn finishes.
-        private var chipTimelineIntroVisible = false
-        private var chipTimelineIntroNotice: String? = null
-        private var chipTimelineIntroTurnActive: Boolean? = null
-        private var chipTimelineIntroJob: Job? = null
-
-        // One-time Timeline Style picker (#805): offered once per ViewModel after the first
-        // history load shows messages. The answer notice shares the Chip intro's notice slot.
-        private var timelineStylePickerVisible = false
-
-        // Taken when the picker shows, so its rows stay put while the sheet slides out.
-        private var timelineStylePickerOptions: List<SessionChatTimelineStyleOption> = emptyList()
-        private var timelineStylePickerChecked = false
-        private var timelineStylePickerJob: Job? = null
-
         // Title / custom-answer fields change per keystroke; report the first edit per
         // dialog appearance so analytics measures engagement instead of typing volume.
         private var renameDraftEditReported = false
@@ -520,7 +517,7 @@ class SessionChatViewModel
                     )
                     if (infoState.hasResolvedSessionStatus) {
                         repoStrip.updateTurnActive(isTurnActive)
-                        updateChipTimelineIntroTurnActive(isTurnActive)
+                        timelineOffers.updateTurnActive(isTurnActive)
                     }
                     commands.updateVisibility(
                         messages = timelineState.messages,
@@ -530,7 +527,7 @@ class SessionChatViewModel
                         messages = timeline.loadedMessages(),
                         isSessionBusy = infoState.sessionStatusLabel != null,
                     )
-                    observeTimelineStylePickerLoad(timelineState.timeline)
+                    timelineOffers.observeTimelineLoad(timelineState.timeline)
                     shellMessages.value = timeline.loadedMessages()
                     publishUiState(
                         timelineState,
@@ -630,7 +627,7 @@ class SessionChatViewModel
             imageViewer.dismiss()
             resetActivityCards()
             resetBackgroundWorkSeen()
-            resetChipTimelineIntro()
+            timelineOffers.reset()
             resetWorkingFooter()
             worktreeMove.reset()
             worktreeCreate.dismiss()
@@ -742,7 +739,7 @@ class SessionChatViewModel
             imageViewer.dismiss()
             resetActivityCards()
             resetBackgroundWorkSeen()
-            resetChipTimelineIntro()
+            timelineOffers.reset()
             resetWorkingFooter()
             worktreeMove.reset()
             worktreeCreate.dismiss()
@@ -1530,118 +1527,44 @@ class SessionChatViewModel
         }
 
         fun enableChipTimelineFromIntro() {
-            hideChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_ENABLE)
-            SessionChatDisplayPreferences.updateChipTimeline(true)
-            chipTimelineIntroNotice = CHIP_TIMELINE_INTRO_ENABLED_NOTICE
+            if (timelineOffers.enableChipTimeline()) logChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_ENABLE)
             publishUiState()
         }
 
         /** Later button, swipe, scrim, or back. */
         fun postponeChipTimelineIntro() {
-            hideChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_LATER)
-            SessionChatDisplayPreferences.postponeChipTimelineIntro(nowMs())
+            if (timelineOffers.postponeChipTimelineIntro(nowMs())) logChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_LATER)
             publishUiState()
         }
 
         fun dismissChipTimelineIntro() {
-            hideChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_NEVER)
-            SessionChatDisplayPreferences.finishChipTimelineIntro()
+            if (timelineOffers.dismissChipTimelineIntro()) logChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_NEVER)
             publishUiState()
         }
 
         /** Use button of the Timeline Style picker. */
         fun chooseTimelineStyleFromPicker(style: SessionChatTimelineStyle) {
-            if (!timelineStylePickerVisible) return
-            timelineStylePickerVisible = false
+            if (!timelineOffers.chooseTimelineStyle(style)) return
             logAction(
                 ProductAnalytics.Action.TIMELINE_STYLE_PICKER_USE,
                 screenId = ProductAnalytics.Screen.SESSION_TIMELINE_STYLE_PICKER,
                 parameters = mapOf(ProductAnalytics.Param.MODE to style.wireValue),
             )
-            SessionChatDisplayPreferences.updateTimelineStyle(style)
-            chipTimelineIntroNotice = timelineStylePickerNotice(style)
             publishUiState()
         }
 
         /** Timeline Style picker swipe, scrim, back, or close: keeps the recommended Activity Card. */
         fun dismissTimelineStylePicker() {
-            if (!timelineStylePickerVisible) return
-            timelineStylePickerVisible = false
+            if (!timelineOffers.dismissTimelineStylePicker()) return
             logAction(
                 ProductAnalytics.Action.TIMELINE_STYLE_PICKER_DISMISS,
                 screenId = ProductAnalytics.Screen.SESSION_TIMELINE_STYLE_PICKER,
             )
-            SessionChatDisplayPreferences.dismissTimelineStylePicker()
-            chipTimelineIntroNotice = timelineStylePickerNotice(SessionChatTimelineStyle.ActivityCard)
             publishUiState()
         }
 
-        /**
-         * The first settled history load decides the picker for this ViewModel: messages on
-         * screen schedule it; a new or empty session skips it. A failed load waits for a retry.
-         */
-        private fun observeTimelineStylePickerLoad(state: SessionChatTimelineState) {
-            if (timelineStylePickerChecked) return
-            when (state) {
-                SessionChatTimelineState.Loading, SessionChatTimelineState.Error -> return
-                SessionChatTimelineState.Draft, SessionChatTimelineState.Empty -> {
-                    timelineStylePickerChecked = true
-                    return
-                }
-                SessionChatTimelineState.Ready -> timelineStylePickerChecked = true
-            }
-            if (!SessionChatDisplayPreferences.timelineStylePickerPending) return
-            timelineStylePickerJob?.cancel()
-            timelineStylePickerJob =
-                viewModelScope.launch {
-                    delay(TIMELINE_STYLE_PICKER_DELAY_MILLIS)
-                    if (!SessionChatDisplayPreferences.timelineStylePickerPending) return@launch
-                    // Blocked: skip for this ViewModel; the next session open offers it again.
-                    if (chipTimelineIntroVisible || _uiState.value.blocksChipTimelineIntro()) return@launch
-                    timelineStylePickerOptions =
-                        SessionChatTimelineStyleOption.pickerOptions(
-                            available = SessionChatDisplayPreferences.availableTimelineStyles,
-                            current = SessionChatDisplayPreferences.timelineStyle,
-                        )
-                    timelineStylePickerVisible = true
-                    publishUiState()
-                }
-        }
-
-        private fun hideChipTimelineIntro(actionId: String) {
-            if (!chipTimelineIntroVisible) return
-            chipTimelineIntroVisible = false
+        private fun logChipTimelineIntro(actionId: String) {
             logAction(actionId, screenId = ProductAnalytics.Screen.SESSION_CHIP_TIMELINE_INTRO)
-        }
-
-        private fun resetChipTimelineIntro() {
-            chipTimelineIntroJob?.cancel()
-            chipTimelineIntroJob = null
-            chipTimelineIntroVisible = false
-            chipTimelineIntroNotice = null
-            chipTimelineIntroTurnActive = null
-        }
-
-        /** Offers the intro once a long turn goes busy → idle and stays settled. */
-        private fun updateChipTimelineIntroTurnActive(isTurnActive: Boolean) {
-            val previous = chipTimelineIntroTurnActive
-            chipTimelineIntroTurnActive = isTurnActive
-            if (isTurnActive) {
-                chipTimelineIntroJob?.cancel()
-                return
-            }
-            if (previous != true || chipTimelineIntroVisible) return
-            val toolCalls = ChipTimelineIntro.lastTurnToolCalls(timeline.loadedMessages())
-            if (!SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(toolCalls, nowMs())) return
-            chipTimelineIntroJob?.cancel()
-            chipTimelineIntroJob =
-                viewModelScope.launch {
-                    delay(ChipTimelineIntro.SETTLE_DELAY_MILLIS)
-                    if (isSessionBusy() || _uiState.value.blocksChipTimelineIntro()) return@launch
-                    if (!SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(toolCalls, nowMs())) return@launch
-                    chipTimelineIntroVisible = true
-                    publishUiState()
-                }
         }
 
         /** The last turn moved folders, so its combined diff cannot be shown. Stay on this screen. */
@@ -1667,7 +1590,7 @@ class SessionChatViewModel
             draftSendError = null
             turnDiffNotice = null
             branchCopiedNotice = null
-            chipTimelineIntroNotice = null
+            timelineOffers.clearNotices()
             commands.clearActionFeedback()
             sideQuestions.clearNotice()
             goal.clearNotice()
@@ -2665,6 +2588,7 @@ class SessionChatViewModel
                         else -> null
                     }
                 }
+            val timelineOffersState = timelineOffers.state.value
             val snackbar =
                 resolveSnackbar(
                     transientError,
@@ -2672,7 +2596,7 @@ class SessionChatViewModel
                     sideQuestions.state.value.notice,
                     TimelineText.verbatim(composerState.followUpNotice ?: worktreeMove.state.value.notice)
                         ?: commandsState.actionSuccessMessage
-                        ?: TimelineText.verbatim(branchCopiedNotice ?: chipTimelineIntroNotice),
+                        ?: TimelineText.verbatim(branchCopiedNotice ?: timelineOffersState.chipTimelineIntroNotice),
                 )
             val sessionStatusLabel =
                 if (isCompacting) {
@@ -2862,9 +2786,9 @@ class SessionChatViewModel
                 activityCardChildren = activityCardChildren,
                 activityCardFooters = activityCardFooters,
                 debouncedStepIds = debouncedStepIds,
-                chipTimelineIntroVisible = chipTimelineIntroVisible,
-                timelineStylePickerVisible = timelineStylePickerVisible,
-                timelineStylePickerOptions = timelineStylePickerOptions,
+                chipTimelineIntroVisible = timelineOffersState.chipTimelineIntroVisible,
+                timelineStylePickerVisible = timelineOffersState.timelineStylePickerVisible,
+                timelineStylePickerOptions = timelineOffersState.timelineStylePickerOptions,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 pendingFilesOpen = commandsState.pendingFilesOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
@@ -3224,14 +3148,14 @@ class SessionChatViewModel
         companion object {
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
-            const val CHIP_TIMELINE_INTRO_ENABLED_NOTICE = "Chip timeline is on. Turn it off in Settings."
+            const val CHIP_TIMELINE_INTRO_ENABLED_NOTICE = SessionChatTimelineOffers.CHIP_TIMELINE_INTRO_ENABLED_NOTICE
             const val BRANCH_COPIED_MESSAGE = "Branch name copied"
 
             /** Pause after the first history load before the Timeline Style picker rises (#805). */
-            const val TIMELINE_STYLE_PICKER_DELAY_MILLIS = 600L
+            const val TIMELINE_STYLE_PICKER_DELAY_MILLIS = SessionChatTimelineOffers.TIMELINE_STYLE_PICKER_DELAY_MILLIS
 
             fun timelineStylePickerNotice(style: SessionChatTimelineStyle): String =
-                "Timeline: ${style.title}. Change it any time in Settings."
+                SessionChatTimelineOffers.timelineStylePickerNotice(style)
         }
     }
 
