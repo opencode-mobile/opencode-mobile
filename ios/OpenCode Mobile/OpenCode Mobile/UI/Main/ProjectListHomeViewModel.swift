@@ -132,14 +132,16 @@ final class ProjectListHomeViewModel {
     private(set) var pendingProjectRemoval: ProjectRemovalItem?
     /// Shared home snackbar: project removal plus archive / delete failures.
     private(set) var removalSnackbar: OpenCodeSnackbarMessage?
-    var sessionActionsTarget: HomeSessionActionTarget? { sessionActionsRegion.target }
-    var sessionActionsSheetVisible: Bool { sessionActionsRegion.sheetVisible }
-    var sessionActionsCanArchive: Bool { sessionActionsRegion.canArchive }
-    var sessionRenameDialog: HomeSessionTitleDialogState { sessionActionsRegion.renameDialog }
-    var sessionForkDialog: HomeSessionTitleDialogState { sessionActionsRegion.forkDialog }
-    var sessionForkResult: HomeSessionForkResultState { sessionActionsRegion.forkResult }
-    var sessionDeleteConfirmVisible: Bool { sessionActionsRegion.deleteConfirmVisible }
-    var sessionActionInFlight: Bool { sessionActionsRegion.actionInFlight }
+    /// Long-press actions state, copied from the region on every change.
+    private(set) var sessionActions = HomeSessionActionsState()
+    var sessionActionsTarget: HomeSessionActionTarget? { sessionActions.target }
+    var sessionActionsSheetVisible: Bool { sessionActions.sheetVisible }
+    var sessionActionsCanArchive: Bool { sessionActions.canArchive }
+    var sessionRenameDialog: HomeSessionTitleDialogState { sessionActions.renameDialog }
+    var sessionForkDialog: HomeSessionTitleDialogState { sessionActions.forkDialog }
+    var sessionForkResult: HomeSessionForkResultState { sessionActions.forkResult }
+    var sessionDeleteConfirmVisible: Bool { sessionActions.deleteConfirmVisible }
+    var sessionActionInFlight: Bool { sessionActions.actionInFlight }
     private let projectRepository: any ProjectRepository
     private let filesystemRepository: any FilesystemRepository
     private let sessionRepository: any SessionRepository
@@ -209,9 +211,10 @@ final class ProjectListHomeViewModel {
     /// A load more is running for the scope Home shows.
     private(set) var isLoadingMoreSessions = false
     @ObservationIgnored private var loadMoreTask: Task<Void, Never>?
-    private let sessionActionsRegion: HomeSessionActions
-    /// Home menu's Archived sessions entry; its `entry` is nil on servers that cannot restore archived sessions.
-    let archivedMenu: HomeArchivedMenu
+    @ObservationIgnored private let sessionActionsRegion: HomeSessionActions
+    /// Home menu's Archived sessions entry; nil on servers that cannot restore archived sessions.
+    private(set) var archivedMenuEntry: HomeArchivedMenuEntry?
+    @ObservationIgnored private let archivedMenu: HomeArchivedMenu
     /// Title-edit Analytics fires once per dialog so keystrokes are not events.
     private var loggedRenameTitleEdit = false
     private var loggedForkTitleEdit = false
@@ -323,6 +326,14 @@ final class ProjectListHomeViewModel {
             supported: { activeConnectionManager.capabilities.supportsArchivedSessions }
         )
         lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
+        sessionActionsRegion.onChange = { [weak self] in
+            guard let self else { return }
+            self.sessionActions = self.sessionActionsRegion.state
+        }
+        archivedMenu.onChange = { [weak self] in
+            guard let self else { return }
+            self.archivedMenuEntry = self.archivedMenu.state
+        }
         sessionActionsRegion.onLifecycleError = { [weak self] message in
             self?.removalSnackbar = OpenCodeSnackbarMessage(text: message, variant: .error)
         }
@@ -1206,6 +1217,12 @@ final class ProjectListHomeViewModel {
             actionId: ProductAnalytics.Action.homeDeleteConfirm
         )
         await sessionActionsRegion.confirmDelete()
+    }
+
+    /// Recounts the ⋯ menu's Archived sessions entry for Home scope `scopeID`; the view calls it
+    /// as the menu opens.
+    func refreshArchivedMenu(scopeID: String, worktreesEnabled: Bool) {
+        archivedMenu.refresh(scopeID: scopeID, projects: homeProjects, worktreesEnabled: worktreesEnabled)
     }
 
     static func suggestedForkTitle(for title: String) -> String {

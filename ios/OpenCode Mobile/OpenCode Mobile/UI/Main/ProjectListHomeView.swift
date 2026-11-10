@@ -1026,9 +1026,8 @@ struct ProjectListHomeView: View {
                     actionId: ProductAnalytics.Action.homeOpenMenu
                 )
                 // Before presenting, so the Archived sessions entry is in the menu from its first frame.
-                viewModel.archivedMenu.refresh(
+                viewModel.refreshArchivedMenu(
                     scopeID: selectedSessionFilterId,
-                    projects: viewModel.homeProjects,
                     worktreesEnabled: homeDisplayPreferences.showsWorktrees
                 )
                 homeMenuPresented = true
@@ -1078,7 +1077,7 @@ struct ProjectListHomeView: View {
     }
 
     private var archivedMenuEntry: OpenCodeOverflowMenuEntry? {
-        guard let entry = viewModel.archivedMenu.entry else { return nil }
+        guard let entry = viewModel.archivedMenuEntry else { return nil }
         return OpenCodeOverflowMenuEntry(
             id: HomeMenu.archivedSessionsID,
             title: "archived_sessions.title",
