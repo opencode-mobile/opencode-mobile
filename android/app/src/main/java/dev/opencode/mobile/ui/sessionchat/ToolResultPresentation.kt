@@ -2,13 +2,9 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.MessagePart
+import dev.opencode.mobile.domain.message.resultFields
 import dev.opencode.mobile.domain.text.UiText
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
 
 /**
  * Typed body for the tool-result sheet. Feature code classifies a part into one
@@ -239,26 +235,28 @@ internal data class ToolResultRequest(
 )
 
 internal object ToolResultInspector {
-    fun fromTool(tool: MessagePart.Tool, fallbackTitle: UiText): ToolResultPresentation? =
-        classify(
+    fun fromTool(tool: MessagePart.Tool, fallbackTitle: UiText): ToolResultPresentation? {
+        val fields = tool.resultFields
+        return classify(
             ToolResultRequest(
                 toolName = tool.toolName,
                 fallbackTitle = fallbackTitle,
-                command = jsonString(tool.input, "command"),
-                path = jsonString(tool.input, "filePath", "file", "path"),
-                pattern = jsonString(tool.input, "pattern"),
-                searchPath = jsonString(tool.input, "path", "directory"),
-                offset = jsonInt(tool.input, "offset"),
-                limit = jsonInt(tool.input, "limit"),
-                content = jsonString(tool.input, "content"),
+                command = fields.command,
+                path = fields.path,
+                pattern = fields.pattern,
+                searchPath = fields.searchPath,
+                offset = fields.offset,
+                limit = fields.limit,
+                content = fields.content,
                 output = tool.output?.takeIf { it.isNotBlank() },
                 error = tool.error?.takeIf { it.isNotBlank() },
-                exitCode = jsonInt(tool.metadata, "exit"),
-                patch = patchOf(tool),
-                oldString = jsonString(tool.input, "oldString"),
-                newString = jsonString(tool.input, "newString"),
+                exitCode = fields.exitCode,
+                patch = fields.metadataPatch ?: tool.output?.takeIf { it.contains("@@") },
+                oldString = fields.oldString,
+                newString = fields.newString,
             ),
         )
+    }
 
     fun thought(text: String, durationLabel: String?): ToolResultPresentation.Thought? {
         val trimmed = text.trim()
@@ -649,27 +647,6 @@ internal object ToolResultInspector {
     }
 
     private fun nonEmptyLines(text: String) = text.lines().map { it.trimEnd() }.filter { it.isNotBlank() }
-
-    private fun jsonString(obj: JsonObject?, vararg keys: String): String? {
-        if (obj == null) return null
-        for (key in keys) {
-            val value = (obj[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }
-            if (value != null) return value
-        }
-        return null
-    }
-
-    private fun jsonInt(obj: JsonObject?, key: String): Int? = (obj?.get(key) as? JsonPrimitive)?.intOrNull
-
-    private fun patchOf(tool: MessagePart.Tool): String? {
-        val metadata = tool.metadata
-        jsonString(metadata?.get("filediff") as? JsonObject, "patch")?.let { return it }
-        val files = metadata?.get("files") as? JsonArray
-        files?.forEach { element ->
-            jsonString(element as? JsonObject, "patch")?.let { return it }
-        }
-        return tool.output?.takeIf { it.contains("@@") }
-    }
 
     private fun toolLabel(name: String): UiText =
         when (name) {

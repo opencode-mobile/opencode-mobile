@@ -8,6 +8,11 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.ToolStartTime
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.message.isBackground
+import dev.opencode.mobile.domain.message.subagentAgentName
+import dev.opencode.mobile.domain.message.subagentDescription
+import dev.opencode.mobile.domain.message.subagentSessionId
+import dev.opencode.mobile.domain.message.summaryCalls
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
@@ -15,12 +20,6 @@ import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.ui.text.resolve
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
 
 /** Where one subagent of the open session is. */
 enum class SessionChatSubagentStatus {
@@ -197,7 +196,7 @@ object SessionChatBackgroundWork {
                     id = partId,
                     childSessionId = childId,
                     agentName = agentName(tool, session),
-                    title = string(tool.input, "description") ?: session?.title?.takeIf { it.isNotEmpty() },
+                    title = tool.subagentDescription ?: session?.title?.takeIf { it.isNotEmpty() },
                     status = status,
                     startedAtMs = tool.timeStartEpochMs,
                     finishedAtMs = if (isActive) null else finishTime(tool, session, localFinishedAtMs[partId]),
@@ -326,26 +325,7 @@ object SessionChatBackgroundWork {
      * latest call as a step title. Null when the part carries no summary.
      */
     fun childToolSummary(tool: MessagePart.Tool): SessionChatChildToolSummary? {
-        val summary = tool.metadata?.get("summary") as? JsonArray ?: return null
-        val calls =
-            summary.mapIndexedNotNull { index, element ->
-                val part = runCatching { element.jsonObject }.getOrNull() ?: return@mapIndexedNotNull null
-                val state = part["state"] as? JsonObject
-                val name = string(part, "tool") ?: return@mapIndexedNotNull null
-                MessagePart.Tool(
-                    toolName = name,
-                    status =
-                        when (string(state, "status")) {
-                            "pending" -> ToolStatus.Pending
-                            "running" -> ToolStatus.Running
-                            "error" -> ToolStatus.Error
-                            else -> ToolStatus.Completed
-                        },
-                    title = string(state, "title"),
-                    input = state?.get("input") as? JsonObject,
-                    id = string(part, "id") ?: "summary-$index",
-                )
-            }
+        val calls = tool.summaryCalls ?: return null
         if (calls.isEmpty()) return null
         // The activity card's rule: the latest running call's running title, else the last call.
         val activity = SessionChatActivityCard.childActivity(listOf(Message(id = "summary", role = MessageRole.Assistant, text = "", parts = calls)))
@@ -521,25 +501,15 @@ object SessionChatBackgroundWork {
         tool: MessagePart.Tool,
         session: Session?,
     ): String? =
-        string(tool.input, "agent")
-            ?: string(tool.input, "subagent_type")
-            ?: string(tool.metadata, "agent")
+        tool.subagentAgentName
             ?: session?.agentName
             ?: session?.let { InboxRequestAttribution.agentName(fromTitle = it.title) }
 
-    private fun isBackground(tool: MessagePart.Tool): Boolean {
-        val value = tool.metadata?.get("background") as? JsonPrimitive ?: return false
-        return value.booleanOrNull ?: (value.contentOrNull?.let { it.equals("true", ignoreCase = true) || it == "1" } ?: false)
-    }
+    private fun isBackground(tool: MessagePart.Tool): Boolean = tool.isBackground
 
     private const val DEFAULT_AGENT = "general"
 
-    private fun childSessionId(tool: MessagePart.Tool): String? = string(tool.metadata, "sessionID") ?: string(tool.metadata, "sessionId")
-
-    private fun string(
-        json: JsonObject?,
-        key: String,
-    ): String? = (json?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.takeIf { it.isNotEmpty() }
+    private fun childSessionId(tool: MessagePart.Tool): String? = tool.subagentSessionId
 }
 
 /** What a task part says about its child's tool calls: how many, and the latest as a step title. */

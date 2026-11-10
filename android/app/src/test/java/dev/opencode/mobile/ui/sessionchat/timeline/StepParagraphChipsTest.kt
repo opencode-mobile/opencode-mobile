@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.PresentationBlockId
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.text.UiText
 import org.junit.Assert.assertEquals
