@@ -111,6 +111,8 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatRepoStrip
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimelineOffers
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatPendingPromptAction
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatTurnStatus
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMove
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveAvailability
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveRow
@@ -194,6 +196,7 @@ class SessionChatViewModel
                 worktreeMove.ioDispatcher = value
                 worktreeCreate.ioDispatcher = value
                 projectHeader.ioDispatcher = value
+                turnStatus.ioDispatcher = value
             }
 
         internal var nowMs: () -> Long = { System.currentTimeMillis() }
@@ -343,6 +346,17 @@ class SessionChatViewModel
                 onChange = { publishUiState() },
             )
 
+        /** Working footer, pending-prompts strip, and background work rows. */
+        private val turnStatus =
+            SessionChatTurnStatus(
+                sessionRepository = sessionRepository,
+                scope = viewModelScope,
+                nowMs = { nowMs() },
+                applyOptimistic = { id, delivery, removed -> timeline.applyOptimisticPendingPrompt(id, delivery, removed) },
+                reportError = { text -> commands.reportActionError(text) },
+                onWake = { publishUiState() },
+            )
+
         private val worktreeMove =
             SessionChatWorktreeMove(
                 moveSession = { id, directory -> sessionRepository.moveSession(id, directory) },
@@ -386,13 +400,6 @@ class SessionChatViewModel
         // keeps it so the timeline does not reload.
         private var transcriptWorktree: String? = null
         private var lastSnackbarKey: String? = null
-        private var loggedWorkingLamp = false
-        private var lastWorkingLamp: String? = null
-        private var workingChrome: WorkingTurnIndicator.Chrome = WorkingTurnIndicator.Chrome.Unmounted
-        private var workingHold: WorkingTurnIndicator.Hold? = null
-        private var workingHoldJob: Job? = null
-        private val pendingPromptsGate = PendingPromptsStripGate()
-        private var pendingPromptsWakeJob: Job? = null
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
         private var turnDiffNotice: String? = null
@@ -422,26 +429,6 @@ class SessionChatViewModel
         private var stepEntryDebounce = SessionChatStepEntryDebounce()
         private var activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap()
 
-        /**
-         * Done rows of the background work panel the user has seen (#966); null until the first
-         * rows of the open session, which count as seen.
-         */
-        private var seenDoneSubagentIds: Set<String>? = null
-
-        /** The background work panel shows its Done tab, so finishes are seen as they land. */
-        private var backgroundWorkDoneVisible = false
-
-        /** When subagents seen working finished live, keyed by tool part id, for rows with no server time. */
-        private var subagentFinishTimes: Map<String, Long> = emptyMap()
-
-        /**
-         * When the connection last became live; null while it is not. Rows published before it
-         * were seen before a gap, so a finish found after it is not stamped locally.
-         */
-        private var subagentLiveSinceMs: Long? = null
-
-        /** When the published subagent rows were computed. */
-        private var subagentsSeenAtMs: Long? = null
         private var debouncedStepIds: Set<String> = emptySet()
         private var stepTimingJob: Job? = null
         private var liveRailSource: List<SessionChatMessageItem>? = null
@@ -638,9 +625,8 @@ class SessionChatViewModel
             unfoldedStepRails = emptySet()
             imageViewer.dismiss()
             resetActivityCards()
-            resetBackgroundWorkSeen()
             timelineOffers.reset()
-            resetWorkingFooter()
+            turnStatus.reset()
             worktreeMove.reset()
             worktreeCreate.dismiss()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
@@ -751,9 +737,8 @@ class SessionChatViewModel
             unfoldedStepRails = emptySet()
             imageViewer.dismiss()
             resetActivityCards()
-            resetBackgroundWorkSeen()
             timelineOffers.reset()
-            resetWorkingFooter()
+            turnStatus.reset()
             worktreeMove.reset()
             worktreeCreate.dismiss()
             draftSheet = null
@@ -869,7 +854,7 @@ class SessionChatViewModel
             boundSessionTitle = sessionTitle
             boundWorktree = directory
             transcriptWorktree = directory
-            resetWorkingFooter()
+            turnStatus.resetFooter()
             sessionReadyStore.setFocusedSession(sessionId, directory)
             sessionViewReporter.focus(sessionId)
             projectHeader.seed(directory)
@@ -908,14 +893,7 @@ class SessionChatViewModel
          * shows, every finished row counts as seen and the tab's dot clears.
          */
         fun setBackgroundWorkDoneVisible(visible: Boolean) {
-            if (backgroundWorkDoneVisible == visible) return
-            backgroundWorkDoneVisible = visible
-            if (visible) publishUiState()
-        }
-
-        private fun resetBackgroundWorkSeen() {
-            seenDoneSubagentIds = null
-            backgroundWorkDoneVisible = false
+            if (turnStatus.setDoneVisible(visible)) publishUiState()
         }
 
         // Goal (#1007): the goal pill, sheet and status row.
@@ -1661,35 +1639,15 @@ class SessionChatViewModel
         }
 
         fun steerPendingPrompt(id: String) {
-            runPendingPromptAction(
-                actionId = ProductAnalytics.Action.CHAT_STEER_PENDING_PROMPT,
-                inboxId = id,
-                optimistic = { timeline.applyOptimisticPendingPrompt(id, FollowUpDelivery.Steer) },
-            ) { sessionId, worktree ->
-                sessionRepository.steerPendingPrompt(sessionId, id, worktree)
-            }
+            runPendingPromptAction(ProductAnalytics.Action.CHAT_STEER_PENDING_PROMPT, SessionChatPendingPromptAction.Steer, id)
         }
 
         fun queuePendingPrompt(id: String) {
-            runPendingPromptAction(
-                actionId = ProductAnalytics.Action.CHAT_QUEUE_PENDING_PROMPT,
-                inboxId = id,
-                optimistic = { timeline.applyOptimisticPendingPrompt(id, FollowUpDelivery.Queue) },
-            ) { sessionId, worktree ->
-                sessionRepository.queuePendingPrompt(sessionId, id, worktree)
-            }
+            runPendingPromptAction(ProductAnalytics.Action.CHAT_QUEUE_PENDING_PROMPT, SessionChatPendingPromptAction.Queue, id)
         }
 
         fun cancelPendingPrompt(id: String) {
-            runPendingPromptAction(
-                actionId = ProductAnalytics.Action.CHAT_CANCEL_PENDING_PROMPT,
-                inboxId = id,
-                optimistic = {
-                    timeline.applyOptimisticPendingPrompt(id, removed = true)
-                },
-            ) { sessionId, worktree ->
-                sessionRepository.cancelPendingPrompt(sessionId, id, worktree)
-            }
+            runPendingPromptAction(ProductAnalytics.Action.CHAT_CANCEL_PENDING_PROMPT, SessionChatPendingPromptAction.Cancel, id)
         }
 
         fun clearPendingPrompts() {
@@ -1701,33 +1659,12 @@ class SessionChatViewModel
 
         private fun runPendingPromptAction(
             actionId: String,
+            action: SessionChatPendingPromptAction,
             inboxId: String,
-            optimistic: () -> Unit,
-            call: suspend (sessionId: String, worktree: String) -> Boolean,
         ) {
             if (!activeConnectionManager.currentCapabilities().supportsFollowUpDelivery) return
             logAction(actionId)
-            val sessionId = boundSessionId ?: return
-            val worktree = boundWorktree ?: return
-            viewModelScope.launch {
-                runCatching {
-                    withContext(ioDispatcher) { call(sessionId, worktree) }
-                }.onSuccess { ok ->
-                    if (ok) {
-                        optimistic()
-                    } else {
-                        commands.reportActionError(UiText.resource(R.string.session_chat_pending_prompt_update_failed))
-                    }
-                }.onFailure { error ->
-                    if (error is CancellationException) throw error
-                    DiagnosticLog.warning(
-                        DiagnosticLogArea.Chat,
-                        "pending prompt $actionId failed id=$inboxId",
-                        error,
-                    )
-                    commands.reportActionError(UiText.resource(R.string.session_chat_pending_prompt_update_failed))
-                }
-            }
+            turnStatus.updatePendingPrompt(action, inboxId, logLabel = actionId, sessionId = boundSessionId, worktree = boundWorktree)
         }
 
         fun sendPrompt() {
@@ -2371,52 +2308,6 @@ class SessionChatViewModel
             syncActivityChildren(_uiState.value.messages)
         }
 
-        /**
-         * Subagent rows from the linked timeline, live session activity and the pending
-         * requests of the session tree; remembers when rows seen working finish.
-         */
-        private fun resolveSubagents(
-            inboxState: SessionChatInboxRegionState,
-            infoState: SessionInfoRegionState,
-        ): List<SessionChatSubagent> {
-            val now = nowMs()
-            val isLive = infoState.connectionStatus == SessionConnectionStatus.Live
-            if (!isLive) {
-                subagentLiveSinceMs = null
-            } else if (subagentLiveSinceMs == null) {
-                subagentLiveSinceMs = now
-            }
-            val liveSince = subagentLiveSinceMs
-            val seenAt = subagentsSeenAtMs
-            val seenLive = isLive && liveSince != null && seenAt != null && seenAt >= liveSince
-            subagentsSeenAtMs = now
-            val messages = SessionChatChildSessionLinker.link(timeline.loadedMessages(), timeline.childSessions)
-            val sessions = inboxState.permissionSessions + inboxState.questionSessions
-            val requestSessionIds =
-                inboxState.permissionRequests.map { it.sessionId } + inboxState.questionRequests.map { it.sessionId }
-
-            fun rows(finishTimes: Map<String, Long>) =
-                SessionChatBackgroundWork.subagents(
-                    messages = messages,
-                    sessions = sessions,
-                    busySessionIds = infoState.busySessionIds,
-                    requestSessionIds = requestSessionIds,
-                    localFinishedAtMs = finishTimes,
-                )
-            val current = rows(subagentFinishTimes)
-            val finishTimes =
-                SessionChatBackgroundWork.finishTimes(
-                    previous = _uiState.value.subagents,
-                    current = current,
-                    known = subagentFinishTimes,
-                    nowMs = now,
-                    seenLive = seenLive,
-                )
-            if (finishTimes == subagentFinishTimes) return current
-            subagentFinishTimes = finishTimes
-            return rows(finishTimes)
-        }
-
         private fun mergeUiState(
             timelineState: SessionChatTimelineRegionState,
             composerState: SessionChatComposerRegionState,
@@ -2512,74 +2403,27 @@ class SessionChatViewModel
                 } else {
                     infoState.sessionStatusLabel
                 }
-            val awaitingUser =
-                inboxSnapshot.permissionRequests.isNotEmpty() || inboxSnapshot.questionRequests.isNotEmpty()
-            val lastIsThinking =
-                WorkingTurnIndicator.isStreamingThinking(timeline.loadedMessages()) ||
-                    WorkingTurnIndicator.lastIsThinking(messages)
-            val activeWorkingLabel =
-                WorkingTurnIndicator.labelForActiveTurn(
-                    statusLabel = sessionStatusLabel,
+            val turn =
+                turnStatus.resolve(
+                    sessionStatusLabel = sessionStatusLabel,
                     isCompacting = isCompacting,
-                    isAwaitingUser = awaitingUser,
                     sendProgressPercent = composerState.sendProgressPercent,
-                    isThinking = lastIsThinking,
+                    isBound = boundSessionId != null,
+                    messages = messages,
+                    loadedMessages = { timeline.loadedMessages() },
+                    pendingOptimistic = { timeline.pendingOptimisticItems() },
+                    childSessions = { timeline.childSessions },
+                    inboxState = inboxSnapshot,
+                    infoState = infoState,
+                    previousSubagents = _uiState.value.subagents,
                 )
-            val workingResolution =
-                WorkingTurnIndicator.resolveFooter(
-                    activeLabel = activeWorkingLabel,
-                    lastIsThinking = lastIsThinking,
-                    hideImmediately = awaitingUser || boundSessionId == null,
-                    previous = workingChrome,
-                    hold = workingHold,
-                    nowMs = nowMs(),
-                )
-            workingChrome = workingResolution.chrome
-            workingHold = workingResolution.hold
-            scheduleWorkingFooterWake(workingResolution.wakeAfterMs)
-            // Step rail / activity card: the live rail's or card's running or Thinking… line is the indicator (#779).
-            val workingIndicatorLabel =
-                workingResolution.chrome.label.takeUnless {
-                    activeWorkingLabel != null && SessionChatStepRail.hasLiveRail(messages)
-                }
-            val workingIndicatorCollapsed = workingResolution.chrome.collapsed
-            val workingIndicatorFading = workingResolution.chrome.fading
-            val workingLampKey =
-                "${workingIndicatorLabel ?: "none"}:" +
-                    "${if (workingIndicatorCollapsed) 1 else 0}:" +
-                    "${if (workingIndicatorFading) 1 else 0}:" +
-                    "${if (workingHold != null) 1 else 0}"
-            if (!loggedWorkingLamp || lastWorkingLamp != workingLampKey) {
-                loggedWorkingLamp = true
-                lastWorkingLamp = workingLampKey
-                logI(
-                    "workingLamp label=${workingIndicatorLabel ?: "none"} " +
-                        "collapsed=${if (workingIndicatorCollapsed) 1 else 0} " +
-                        "fading=${if (workingIndicatorFading) 1 else 0} " +
-                        "hold=${if (workingHold != null) 1 else 0} " +
-                        "status=${sessionStatusLabel ?: "none"} " +
-                        "awaitingUser=${if (awaitingUser) 1 else 0} " +
-                        "lastIsThinking=${if (lastIsThinking) 1 else 0}",
-                )
-            }
             val syncingIndicatorLabel =
                 if (timelineState.isSyncingMessages) {
                     SessionMessageSyncChrome.statusLabel
                 } else {
                     null
                 }
-            val pendingResolution =
-                pendingPromptsGate.resolve(
-                    pendingPromptsFrom(
-                        loaded = timeline.loadedMessages(),
-                        optimistic = timeline.pendingOptimisticItems(),
-                    ),
-                    nowMs = nowMs(),
-                )
-            schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
-            val subagents = resolveSubagents(inboxSnapshot, infoState)
-            val seenDone = SessionChatBackgroundWork.seenDoneIds(seenDoneSubagentIds, subagents, backgroundWorkDoneVisible)
-            seenDoneSubagentIds = seenDone
+            val subagents = turn.subagents
             val shellsState = shells.state.value
             val projectIdentity = projectHeader.identity
             return SessionChatUiState(
@@ -2587,7 +2431,7 @@ class SessionChatViewModel
                 sessionTitle = infoState.sessionTitle,
                 timeline = timelineState.timeline,
                 messages = messages,
-                pendingPrompts = pendingResolution.prompts,
+                pendingPrompts = turn.pendingPrompts,
                 timelineFrame = timelineFrame,
                 composer =
                     composerState.composer.copy(
@@ -2601,11 +2445,11 @@ class SessionChatViewModel
                 isLoadingOlder = timelineState.isLoadingOlder,
                 isAborting = composerState.isAborting,
                 sessionStatusLabel = sessionStatusLabel,
-                workingIndicatorLabel = workingIndicatorLabel,
+                workingIndicatorLabel = turn.workingIndicatorLabel,
                 retryCard = infoState.retryCard,
                 isRetrying = infoState.isRetrying,
-                workingIndicatorCollapsed = workingIndicatorCollapsed,
-                workingIndicatorFading = workingIndicatorFading,
+                workingIndicatorCollapsed = turn.workingIndicatorCollapsed,
+                workingIndicatorFading = turn.workingIndicatorFading,
                 syncingIndicatorLabel = syncingIndicatorLabel,
                 sessionTodos = inboxSnapshot.sessionTodos,
                 sessionTodosVisible = SessionTodoList.isVisible(inboxSnapshot.sessionTodos),
@@ -2617,7 +2461,7 @@ class SessionChatViewModel
                 shells = shellsState.shells,
                 shellOutput = shellsState.output,
                 backgroundWorkPill = SessionChatBackgroundWork.pill(subagents, shellsState.shells),
-                backgroundWorkDoneUnseen = SessionChatBackgroundWork.hasUnseenDone(subagents, seenDone),
+                backgroundWorkDoneUnseen = turn.backgroundWorkDoneUnseen,
                 connectionStatus = infoState.connectionStatus,
                 canMutate = infoState.canMutate,
                 composerEnabled = infoState.composerEnabled,
@@ -2992,7 +2836,7 @@ class SessionChatViewModel
             dictation.discardInsert()
             composer.flushDraft()
             inbox.stop()
-            resetWorkingFooter()
+            turnStatus.resetFooter()
             clearSessionReadyFocus()
             syncCoordinator.markFocused(null)
             super.onCleared()
@@ -3004,38 +2848,6 @@ class SessionChatViewModel
             val cursor = composerState.cursor.coerceIn(0, text.length)
             val updated = text.substring(0, cursor) + transcript + text.substring(cursor)
             updateComposerText(updated, cursor + transcript.length)
-        }
-
-        private fun resetWorkingFooter() {
-            workingHoldJob?.cancel()
-            workingHoldJob = null
-            workingHold = null
-            workingChrome = WorkingTurnIndicator.Chrome.Unmounted
-            pendingPromptsWakeJob?.cancel()
-            pendingPromptsWakeJob = null
-            pendingPromptsGate.reset()
-        }
-
-        private fun schedulePendingPromptsWake(wakeAfterMs: Long?) {
-            pendingPromptsWakeJob?.cancel()
-            pendingPromptsWakeJob = null
-            if (wakeAfterMs == null) return
-            pendingPromptsWakeJob =
-                viewModelScope.launch {
-                    delay(wakeAfterMs)
-                    publishUiState()
-                }
-        }
-
-        private fun scheduleWorkingFooterWake(wakeAfterMs: Long?) {
-            workingHoldJob?.cancel()
-            workingHoldJob = null
-            if (wakeAfterMs == null) return
-            workingHoldJob =
-                viewModelScope.launch {
-                    delay(wakeAfterMs)
-                    publishUiState()
-                }
         }
 
         private fun logI(message: String) {
