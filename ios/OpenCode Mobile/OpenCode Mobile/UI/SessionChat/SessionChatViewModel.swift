@@ -26,6 +26,14 @@ final class SessionChatViewModel {
     private let sideQuestions: SessionChatSideQuestions
     private let shells: SessionChatShells
     private let goalRegion: SessionChatGoal
+    private let turnStatus: SessionChatTurnStatus
+    private let projectHeader: SessionChatProjectHeader
+    /// Move to worktree (#785).
+    private let worktreeMove: SessionChatWorktreeMove
+    /// New session draft (#1004).
+    private let newSessionDraft: SessionChatNewSessionDraft
+    private let timelineOffers: SessionChatTimelineOffers
+    private let dictation = SessionChatDictation()
     /// The loaded messages last pushed to `shells`, so unchanged publishes push nothing.
     @ObservationIgnored private var shellTranscript: [Message]?
     private let sessionRepository: any SessionRepository
@@ -35,7 +43,6 @@ final class SessionChatViewModel {
     /// Invalidates in-flight `withObservationTracking` for the collapse preference.
     private var collapsePreferenceGeneration = 0
     private var lastSnackbarKey: String?
-    private let turnStatus: SessionChatTurnStatus
     private var isSessionBound = true
     private var suppressedSnackbarKey: String?
     private var snackbarSequence: UInt64 = 0
@@ -44,8 +51,6 @@ final class SessionChatViewModel {
     private var loggedRenameTitleEdit = false
     private var loggedForkTitleEdit = false
     private var loggedQuestionCustomTextEdit: String?
-    /// New session draft (#1004).
-    private let newSessionDraft: SessionChatNewSessionDraft
     /// Refreshes Home's checkouts of a directory after a draft's first send created a worktree.
     /// The screen sets it from Home's environment.
     var refreshWorktreeInventory: (@MainActor @Sendable (String) async -> Void)? {
@@ -59,20 +64,15 @@ final class SessionChatViewModel {
     private var pendingSend: PendingSend?
     private var armedSendAcceptance: ArmedSendAcceptance?
     private var sendInFlight = false
-    private let projectHeader: SessionChatProjectHeader
     /// Loads timeline image attachments (inline data or server files); nil in tests.
     let attachmentImageLoader: (any AttachmentImageLoading)?
     /// Applies live revert updates (`session.revert` / `session.revert.staged`) to Commands.
     private var sessionEventTask: Task<Void, Never>?
-    /// Move to worktree (#785).
-    private let worktreeMove: SessionChatWorktreeMove
     /// New worktree form of the Move sheet.
     var worktreeCreate: WorktreeCreateModel { worktreeMove.form }
     private var branchCopiedNotice: String?
     /// Shown instead of opening Changes when the last turn moved folders.
     private var turnDiffNotice: String?
-    private let timelineOffers: SessionChatTimelineOffers
-    private let dictation = SessionChatDictation()
     /// A sheet or dialog the view owns is up; see `setScreenSheetOpen`.
     @ObservationIgnored private var screenSheetOpen = false
     /// Tests set this to 0 to commit an insert synchronously.
