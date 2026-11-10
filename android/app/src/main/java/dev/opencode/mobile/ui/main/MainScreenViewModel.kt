@@ -22,7 +22,6 @@ import dev.opencode.mobile.domain.event.SessionMovedUpdate
 import dev.opencode.mobile.domain.event.isWorktreeUpdated
 import dev.opencode.mobile.domain.event.namedProjectId
 import dev.opencode.mobile.domain.event.sessionMoved
-import dev.opencode.mobile.domain.filesystem.DirectoryNotFoundException
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProject
@@ -32,7 +31,6 @@ import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeWorktreeRequest
 import dev.opencode.mobile.domain.home.HomeWorktreesFeed
 import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
-import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.live.HomeSessionPaging
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionAncestry
@@ -72,6 +70,8 @@ import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import dev.opencode.mobile.ui.components.SessionListScrollPin
+import dev.opencode.mobile.ui.main.region.HomeAddProject
+import dev.opencode.mobile.ui.main.region.HomeAddProjectResult
 import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
@@ -82,7 +82,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -256,16 +255,22 @@ class MainScreenViewModel
         private var renameDraftEditReported = false
         private var forkDraftEditReported = false
 
-        // Add project sheet session; results from an earlier session are dropped by generation.
-        private var addProjectSession: AddProjectSheetSession? = null
-        private var addProjectGeneration = 0
-        private var addProjectDebounceJob: Job? = null
-
-        // Row summaries (folder count, git) for visible browser rows: FIFO, a few at a time,
-        // each path tried once per sheet session.
-        private val addProjectSummaryQueue = ArrayDeque<String>()
-        private val addProjectSummariesInFlight = mutableSetOf<String>()
-        private val addProjectSummaryFailures = mutableSetOf<String>()
+        private val addProjectRegion =
+            HomeAddProject(
+                filesystemRepository = filesystemRepository,
+                projectRepository = projectRepository,
+                connectionProfileStore = connectionProfileStore,
+                newSessionDraftStore = newSessionDraftStore,
+                scope = viewModelScope,
+                serverBaseUrl = { serverBaseUrl },
+                currentProfileId = ::currentProfileId,
+                addedProjectIds = { added ->
+                    added
+                        .mapNotNull { path -> homeIndex.resolutions[path]?.takeIf { it.isMergeable }?.projectId }
+                        .toSet()
+                },
+                onSheetChanged = ::publishAddProjectSheet,
+            )
 
         init {
             refresh()
@@ -510,13 +515,13 @@ class MainScreenViewModel
 
         fun showAddProjectSheet() {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_ADD_PROJECT)
-            openAddProjectSheet()
+            addProjectRegion.open()
         }
 
         fun dismissAddProjectSheet() {
             // A draft that asked for a project gets none when the sheet closes without one.
-            newSessionDraftStore.cancelAddProject(currentProfileId())
-            endAddProjectSession()
+            addProjectRegion.cancelDraftRequest()
+            addProjectRegion.end()
             _uiState.update { state ->
                 when (state) {
                     is MainScreenUiState.Empty ->
@@ -530,10 +535,7 @@ class MainScreenViewModel
 
         /** Typing in the path field: filters locally, and lists a new folder after a pause. */
         fun updateAddProjectField(text: String) {
-            val session = addProjectSession ?: return
-            if (session.fieldText == text) return
-            updateAddProjectSession { it.copy(fieldText = text, fieldError = null) }
-            scheduleAddProjectListing()
+            addProjectRegion.updateField(text)
         }
 
         fun addProjectUp() {
@@ -542,25 +544,25 @@ class MainScreenViewModel
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_GO_UP,
             )
-            setAddProjectFolder(target)
+            addProjectRegion.setFolder(target)
         }
 
         fun selectAddProjectRoot(path: String) {
-            if (addProjectSession == null) return
+            if (addProjectRegion.session == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_SELECT_ROOT,
             )
-            setAddProjectFolder(path)
+            addProjectRegion.setFolder(path)
         }
 
         fun openAddProjectFolder(path: String) {
-            if (addProjectSession == null) return
+            if (addProjectRegion.session == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_ENTER_DIRECTORY,
             )
-            setAddProjectFolder(path)
+            addProjectRegion.setFolder(path)
         }
 
         /**
@@ -568,33 +570,23 @@ class MainScreenViewModel
          * the only matching row). Does nothing otherwise; never adds.
          */
         fun submitAddProjectField() {
-            if (addProjectSession == null) return
+            if (addProjectRegion.session == null) return
             val target = currentAddProjectSheet()?.goTarget ?: return
             openAddProjectFolder(target)
         }
 
         /** A browser row came on screen: queue its folder count and git check. */
         fun addProjectFolderRowAppeared(path: String) {
-            val session = addProjectSession ?: return
-            val key = ServerPathPolicy.canonical(path)
-            if (session.listings.containsKey(key) ||
-                key in addProjectSummariesInFlight ||
-                key in addProjectSummaryQueue ||
-                key in addProjectSummaryFailures
-            ) {
-                return
-            }
-            addProjectSummaryQueue.addLast(key)
-            startAddProjectSummaries()
+            addProjectRegion.rowAppeared(path)
         }
 
         /** A browser row left the screen: drop its summary if it has not started. */
         fun addProjectFolderRowDisappeared(path: String) {
-            addProjectSummaryQueue.remove(ServerPathPolicy.canonical(path))
+            addProjectRegion.rowDisappeared(path)
         }
 
         fun selectAddProjectSuggestion(path: String) {
-            if (addProjectSession?.isValidating != false) return
+            if (addProjectRegion.session?.isValidating != false) return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_SELECT_SUGGESTION,
@@ -604,12 +596,12 @@ class MainScreenViewModel
 
         /** Replaces the suggestion sheet with the full-screen folder browser. */
         fun browseAddProjectFolders() {
-            if (addProjectSession == null || addProjectSession?.isValidating == true) return
+            if (addProjectRegion.session == null || addProjectRegion.session?.isValidating == true) return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_BROWSE,
             )
-            updateAddProjectSession { it.copy(browsing = true) }
+            addProjectRegion.browse()
         }
 
         /**
@@ -617,41 +609,22 @@ class MainScreenViewModel
          * "On this server" is not lost because the field was left in a subfolder.
          */
         fun closeAddProjectBrowser() {
-            val session = addProjectSession ?: return
+            val session = addProjectRegion.session ?: return
             if (!session.browsing) return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_BROWSE_BACK,
             )
-            val home = session.home
-            if (home.isEmpty()) {
-                updateAddProjectSession { it.copy(browsing = false) }
-                return
-            }
-            addProjectDebounceJob?.cancel()
-            updateAddProjectSession {
-                it.copy(
-                    browsing = false,
-                    fieldText = ServerPathPolicy.fieldText(home),
-                    fieldError = null,
-                )
-            }
-            loadAddProjectListing(home)
+            addProjectRegion.closeBrowser()
         }
 
         fun retryAddProjectListing() {
-            val session = addProjectSession ?: return
+            if (addProjectRegion.session == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_RETRY_NAVIGATOR,
             )
-            if (session.openError != null) {
-                openAddProjectSheet()
-                return
-            }
-            val directory = session.parts.directory ?: return
-            updateAddProjectSession { it.copy(listings = it.listings - directory) }
-            loadAddProjectListing(directory)
+            addProjectRegion.retryListing()
         }
 
         fun confirmAddProject() {
@@ -667,53 +640,42 @@ class MainScreenViewModel
 
         fun addProject(worktree: String) {
             viewModelScope.launch {
-                val added = connectionProfileStore.addedWorktrees(serverBaseUrl)
-                if (worktree in added) {
-                    // Before the sheet closes, which would drop the draft's request.
-                    val forDraft = newSessionDraftStore.consumeAddProjectRequest(currentProfileId())
-                    dismissAddProjectSheet()
-                    runHomeLoad(skipProbe = true)
-                    if (forDraft) openDraftWithAddedProject(worktree)
-                    _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = false)
-                    _removalSnackbar.value =
-                        HomeSnackbar(text = HomeText.alreadyOnHome(ProjectDomainAdapter.displayNameFromWorktree(worktree)))
-                    return@launch
-                }
-                updateAddProjectSession { it.copy(isValidating = true, fieldError = null) }
-                val result = runCatching { projectRepository.getCurrentProject(directory = worktree) }
-                result
-                    .onSuccess { project ->
+                var joined: HomeProject? = null
+                val result =
+                    addProjectRegion.add(worktree) { resolution ->
                         // A path of a repository already on Home joins that project as a worktree.
-                        val resolution = ResolvedHomePath.from(project)
-                        val joined =
+                        joined =
                             currentHomeProjects().firstOrNull { home ->
                                 resolution.isMergeable && home.projectId == resolution.projectId
                             }
                         worktreeLoader.remember(worktree, resolution)
                         updateHomeIndex { it.copy(resolutions = it.resolutions + (worktree to resolution)) }
-                        // Persist the selected directory (web open-project behavior), not the
-                        // /project/current worktree — non-git dirs resolve to global "/".
-                        connectionProfileStore.addWorktree(serverBaseUrl, worktree)
+                    }
+                when (result) {
+                    HomeAddProjectResult.AlreadyAdded -> {
+                        // Before the sheet closes, which would drop the draft's request.
+                        val forDraft = addProjectRegion.consumeDraftRequest()
+                        dismissAddProjectSheet()
+                        runHomeLoad(skipProbe = true)
+                        if (forDraft) openDraftWithAddedProject(worktree)
+                        _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = false)
+                        _removalSnackbar.value =
+                            HomeSnackbar(text = HomeText.alreadyOnHome(ProjectDomainAdapter.displayNameFromWorktree(worktree)))
+                    }
+                    is HomeAddProjectResult.Added -> {
                         projectFirstLoads.start(worktree)
-                        val forDraft = newSessionDraftStore.consumeAddProjectRequest(currentProfileId())
+                        val forDraft = addProjectRegion.consumeDraftRequest()
                         dismissAddProjectSheet()
                         runHomeLoad(skipProbe = true)
                         if (forDraft) openDraftWithAddedProject(worktree)
                         _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = true)
-                        if (joined != null) {
+                        joined?.let { project ->
                             _removalSnackbar.value =
-                                HomeSnackbar(text = HomeText.joinedProject(joined.displayName))
-                        }
-                    }.onFailure { error ->
-                        updateAddProjectSession {
-                            it.copy(
-                                isValidating = false,
-                                fieldError =
-                                    error.message?.let(UiText::verbatim)
-                                        ?: UiText.resource(R.string.add_project_error_add_failed),
-                            )
+                                HomeSnackbar(text = HomeText.joinedProject(project.displayName))
                         }
                     }
+                    HomeAddProjectResult.Failed -> Unit
+                }
             }
         }
 
@@ -1311,182 +1273,6 @@ class MainScreenViewModel
             )
         }
 
-        private fun openAddProjectSheet() {
-            endAddProjectSession()
-            val generation = addProjectGeneration
-            addProjectSession = AddProjectSheetSession()
-            publishAddProjectSheet()
-            viewModelScope.launch {
-                val paths =
-                    try {
-                        filesystemRepository.getPaths()
-                    } catch (cancellation: CancellationException) {
-                        throw cancellation
-                    } catch (error: Exception) {
-                        DiagnosticLog.warning(DiagnosticLogArea.Connection, "add project home lookup failed", error)
-                        if (generation != addProjectGeneration) return@launch
-                        updateAddProjectSession {
-                            it.copy(isOpening = false, openError = AddProjectSheetUi.LIST_ERROR_MESSAGE)
-                        }
-                        return@launch
-                    }
-                val added = connectionProfileStore.addedWorktrees(serverBaseUrl)
-                if (generation != addProjectGeneration) return@launch
-                val home = ServerPathPolicy.canonical(paths.home)
-                updateAddProjectSession {
-                    it.copy(
-                        home = home,
-                        isOpening = false,
-                        openError = null,
-                        fieldText = ServerPathPolicy.fieldText(home),
-                        addedWorktrees = added,
-                        addedProjectIds =
-                            added
-                                .mapNotNull { path -> homeIndex.resolutions[path]?.takeIf { it.isMergeable }?.projectId }
-                                .toSet(),
-                    )
-                }
-                loadAddProjectListing(home)
-                loadAddProjectServerProjects(generation)
-                if (ServerPathPolicy.root(home) == "/") loadAddProjectVolumes(generation)
-            }
-        }
-
-        private fun endAddProjectSession() {
-            addProjectGeneration++
-            addProjectDebounceJob?.cancel()
-            addProjectDebounceJob = null
-            addProjectSession = null
-            addProjectSummaryQueue.clear()
-            addProjectSummariesInFlight.clear()
-            addProjectSummaryFailures.clear()
-        }
-
-        /** Chip, row, and Up taps list the folder right away. */
-        private fun setAddProjectFolder(path: String) {
-            addProjectDebounceJob?.cancel()
-            updateAddProjectSession {
-                it.copy(fieldText = ServerPathPolicy.fieldText(path), fieldError = null)
-            }
-            addProjectSession?.parts?.directory?.let(::loadAddProjectListing)
-        }
-
-        private fun scheduleAddProjectListing() {
-            addProjectDebounceJob?.cancel()
-            val directory = addProjectSession?.parts?.directory ?: return
-            if (addProjectSession?.listings?.containsKey(directory) == true) return
-            addProjectDebounceJob =
-                viewModelScope.launch {
-                    delay(AddProjectSheetModel.LISTING_DEBOUNCE_MS)
-                    loadAddProjectListing(directory)
-                }
-        }
-
-        /** Lists [directory] once per sheet session; a failure stays until Retry. */
-        private fun loadAddProjectListing(directory: String) {
-            val session = addProjectSession ?: return
-            if (session.listings.containsKey(directory)) return
-            val generation = addProjectGeneration
-            updateAddProjectSession { it.copy(listings = it.listings + (directory to AddProjectListing.Loading)) }
-            viewModelScope.launch {
-                val listing =
-                    try {
-                        AddProjectListing.Loaded(filesystemRepository.listDirectory(directory))
-                    } catch (cancellation: CancellationException) {
-                        throw cancellation
-                    } catch (_: DirectoryNotFoundException) {
-                        AddProjectListing.NotFound
-                    } catch (error: Exception) {
-                        DiagnosticLog.warning(DiagnosticLogArea.Connection, "add project listing failed", error)
-                        AddProjectListing.Failed(AddProjectSheetUi.LIST_ERROR_MESSAGE)
-                    }
-                if (generation != addProjectGeneration) return@launch
-                updateAddProjectSession { session ->
-                    val updated = session.copy(listings = session.listings + (directory to listing))
-                    if (listing is AddProjectListing.Loaded) updated.withListedRoot(directory) else updated
-                }
-            }
-        }
-
-        /** Starts queued row summaries, oldest first, up to [AddProjectSheetModel.FOLDER_SUMMARY_CONCURRENCY]. */
-        private fun startAddProjectSummaries() {
-            while (addProjectSummariesInFlight.size < AddProjectSheetModel.FOLDER_SUMMARY_CONCURRENCY) {
-                val path = addProjectSummaryQueue.removeFirstOrNull() ?: return
-                // The browser may have listed it while it waited.
-                if (addProjectSession?.listings?.containsKey(path) != false) continue
-                loadAddProjectSummary(path)
-            }
-        }
-
-        /**
-         * Lists one row's folder into the browser's listing cache, so opening it is instant. A
-         * failure only hides the row's count: no error, no retry this session.
-         */
-        private fun loadAddProjectSummary(path: String) {
-            val generation = addProjectGeneration
-            addProjectSummariesInFlight += path
-            viewModelScope.launch {
-                val listing =
-                    try {
-                        filesystemRepository.listDirectory(path)
-                    } catch (cancellation: CancellationException) {
-                        throw cancellation
-                    } catch (_: Exception) {
-                        null
-                    }
-                if (generation != addProjectGeneration) return@launch
-                addProjectSummariesInFlight -= path
-                if (listing == null) {
-                    addProjectSummaryFailures += path
-                } else {
-                    updateAddProjectSession { session ->
-                        when (session.listings[path]) {
-                            null, AddProjectListing.Loading ->
-                                session
-                                    .copy(listings = session.listings + (path to AddProjectListing.Loaded(listing)))
-                                    .withListedRoot(path)
-                            else -> session
-                        }
-                    }
-                }
-                startAddProjectSummaries()
-            }
-        }
-
-        private fun loadAddProjectServerProjects(generation: Int) {
-            viewModelScope.launch {
-                val projects =
-                    try {
-                        projectRepository.listProjects()
-                    } catch (cancellation: CancellationException) {
-                        throw cancellation
-                    } catch (_: Exception) {
-                        // The section stays hidden.
-                        if (generation != addProjectGeneration) return@launch
-                        updateAddProjectSession { it.copy(suggestionsResolved = true) }
-                        return@launch
-                    }
-                if (generation != addProjectGeneration) return@launch
-                updateAddProjectSession { it.copy(serverProjects = projects, suggestionsResolved = true) }
-            }
-        }
-
-        private fun loadAddProjectVolumes(generation: Int) {
-            viewModelScope.launch {
-                val volumes =
-                    try {
-                        filesystemRepository.listDirectory(AddProjectSheetModel.VOLUMES_PATH).folders
-                    } catch (cancellation: CancellationException) {
-                        throw cancellation
-                    } catch (_: Exception) {
-                        // Linux has no /Volumes.
-                        return@launch
-                    }
-                if (generation != addProjectGeneration) return@launch
-                updateAddProjectSession { it.copy(volumes = volumes) }
-            }
-        }
-
         private fun currentAddProjectSheet(): AddProjectSheetUi? =
             when (val state = _uiState.value) {
                 is MainScreenUiState.Empty -> state.addProjectSheet
@@ -1494,14 +1280,8 @@ class MainScreenViewModel
                 else -> null
             }
 
-        private fun updateAddProjectSession(transform: (AddProjectSheetSession) -> AddProjectSheetSession) {
-            val session = addProjectSession ?: return
-            addProjectSession = transform(session)
-            publishAddProjectSheet()
-        }
-
-        private fun publishAddProjectSheet() {
-            val sheet = addProjectSession?.let { AddProjectSheetModel.build(it) } ?: return
+        /** Patches the Add project sheet into Empty/Loaded; a content rebuild hides it until the next change. */
+        private fun publishAddProjectSheet(sheet: AddProjectSheetUi) {
             _uiState.update { state ->
                 when (state) {
                     is MainScreenUiState.Empty ->
