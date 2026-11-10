@@ -1,5 +1,9 @@
 package dev.opencode.mobile.ui.main.region
 
+import androidx.annotation.StringRes
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.SessionMovedUpdate
 import dev.opencode.mobile.domain.event.isWorktreeUpdated
@@ -8,14 +12,25 @@ import dev.opencode.mobile.domain.event.sessionMoved
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeScope
+import dev.opencode.mobile.domain.live.HomeSessionPaging
 import dev.opencode.mobile.domain.live.SessionAncestry
 import dev.opencode.mobile.domain.live.SessionListSnapshot
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
+import dev.opencode.mobile.domain.project.ProjectDomainAdapter
+import dev.opencode.mobile.domain.project.ProjectRepository
+import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.domain.session.activeSessions
+import dev.opencode.mobile.domain.session.rootSessions
+import dev.opencode.mobile.domain.sessioncache.SessionCache
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.main.HomeDirectoryRows
 import dev.opencode.mobile.ui.main.HomeProjectFirstLoads
 import dev.opencode.mobile.ui.main.HomeSessionPagingState
@@ -23,11 +38,14 @@ import dev.opencode.mobile.ui.main.HomeSessionRows
 import dev.opencode.mobile.ui.main.MainScreenUiState
 import dev.opencode.mobile.ui.main.ProjectFirstLoad
 import dev.opencode.mobile.ui.main.ProjectFirstLoadTiming
+import dev.opencode.mobile.ui.main.ProjectSectionUi
 import dev.opencode.mobile.ui.main.withSessionMoved
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -48,6 +66,10 @@ data class HomeProjectListState(
  * and paging. Every state change goes to [onChange] synchronously, in the same call as the write.
  */
 internal class HomeProjectList(
+    private val projectRepository: ProjectRepository,
+    private val sessionRepository: SessionRepository,
+    private val connectionProfileStore: ConnectionProfileStore,
+    private val sessionCache: SessionCache,
     private val sessionLiveStore: SessionLiveStore,
     private val sessionStatusLiveStore: SessionStatusLiveStore,
     private val sessionReadyStore: SessionReadyStore,
@@ -55,21 +77,31 @@ internal class HomeProjectList(
     private val sessionAncestry: SessionAncestry,
     private val foregroundEventStream: ForegroundEventStream,
     projectFirstLoadTiming: ProjectFirstLoadTiming,
-    private val worktrees: HomeWorktrees,
+    private val homeWorktrees: HomeWorktrees,
     private val scope: CoroutineScope,
     private val supportsSessionViewed: () -> Boolean,
+    private val serverBaseUrl: () -> String,
+    private val isConnected: () -> Boolean,
+    /** Whether other saved addresses are still being tried. */
+    private val addressCheckRunning: () -> Boolean,
+    /** A probe answered; capabilities other regions wait for may have changed. */
+    private val onProbed: () -> Unit,
     private val onChange: (HomeProjectListState) -> Unit,
 ) {
     var state = HomeProjectListState()
         private set
 
-    val content: MainScreenUiState
+    var content: MainScreenUiState
         get() = state.content
+        private set(value) = replaceContent(value)
 
     /** Builds Home rows off the main thread (#981); tests run it on their scheduler. */
     var homeRowsDispatcher: CoroutineDispatcher = Dispatchers.Default
 
     private var loadMoreJob: Job? = null
+
+    /** An empty Home failed its probe while other saved addresses were still being tried. */
+    private var probeWaitsOnAddressCheck = false
     private var liveObservationJobs: List<Job> = emptyList()
 
     /** Added paths with running live observations; empty while none run. */
@@ -102,13 +134,13 @@ internal class HomeProjectList(
     val observing: Boolean
         get() = liveObservationJobs.isNotEmpty()
 
-    fun setContent(next: MainScreenUiState) {
+    fun replaceContent(next: MainScreenUiState) {
         state = state.copy(content = next)
         onChange(state)
     }
 
     fun updateContent(transform: (MainScreenUiState) -> MainScreenUiState) {
-        setContent(transform(state.content))
+        replaceContent(transform(state.content))
     }
 
     /** Home projects: added paths of one repository grouped, in added order. */
@@ -157,6 +189,18 @@ internal class HomeProjectList(
         pendingFirstServerSnapshots.clear()
     }
 
+    /** The address check moved the connection: a probe no longer waits on it. */
+    fun clearProbeWait() {
+        probeWaitsOnAddressCheck = false
+    }
+
+    /** Whether a failed probe waited on the address check; clears it. */
+    fun consumeProbeWait(): Boolean {
+        if (!probeWaitsOnAddressCheck) return false
+        probeWaitsOnAddressCheck = false
+        return true
+    }
+
     /** Every live list and status refetches. */
     suspend fun invalidateAll() {
         sessionLiveStore.invalidate(null)
@@ -193,10 +237,10 @@ internal class HomeProjectList(
                         }
                         val projectId = event.namedProjectId() ?: return@collect
                         if (!event.isWorktreeUpdated) return@collect
-                        this@HomeProjectList.worktrees.onWorktreeUpdated(projectId)
+                        homeWorktrees.onWorktreeUpdated(projectId)
                     }
                 }
-        this.worktrees.syncExtraObservations()
+        homeWorktrees.syncExtraObservations()
     }
 
     /** Stops every live list, load-more and worktree reload, and resets paging (H-AH-7). */
@@ -207,10 +251,10 @@ internal class HomeProjectList(
         updatePaging { it.copy(moreSessionDirectories = emptySet()) }
         liveObservationJobs.forEach { it.cancel() }
         liveObservationJobs = emptyList()
-        worktrees.stopExtraObservations()
+        homeWorktrees.stopExtraObservations()
         observedWorktrees = emptyList()
         livePaintedWorktrees.clear()
-        worktrees.stopReload()
+        homeWorktrees.stopReload()
     }
 
     fun liveObservationsRunning(worktrees: List<String>): Boolean = liveObservationJobs.isNotEmpty() && observedWorktrees == worktrees
@@ -288,9 +332,267 @@ internal class HomeProjectList(
             }
     }
 
+    /**
+     * The target server's saved projects with their cached sessions, read by profile id because
+     * the switch has not bound that server yet. A project with no cache shows the skeleton.
+     */
+    suspend fun paintSwitchedServer(
+        baseUrl: String,
+        id: String,
+        isCurrent: () -> Boolean,
+    ) {
+        val worktrees = connectionProfileStore.addedWorktrees(baseUrl)
+        val sections = worktrees.map { worktree -> sectionFromCache(worktree, connectionId = id) }
+        if (!isCurrent()) return
+        homeWorktrees.reset()
+        homeWorktrees.seedResolutions(worktrees, connectionId = id)
+        if (!isCurrent()) return
+        resetLoads()
+        probeWaitsOnAddressCheck = false
+        if (sections.isEmpty()) {
+            content = MainScreenUiState.Empty()
+            return
+        }
+        awaitServer(sections.filterNot { it.sessionsFromCache }.map { it.worktree })
+        content =
+            MainScreenUiState.Loaded(
+                sections = sections,
+                projectLoads = visibleProjectLoads,
+                home = homeWorktrees.index,
+            )
+    }
+
+    suspend fun load(
+        skipProbe: Boolean = false,
+        preserveContent: Boolean = false,
+    ) {
+        if (!isConnected()) {
+            content = MainScreenUiState.Disconnected
+            return
+        }
+
+        val worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl())
+
+        // Disk-first home: local worktrees + Session Cache paint Loaded
+        // without Probing/Loading. Live store then SWR-refreshes.
+        if (!preserveContent && worktrees.isNotEmpty()) {
+            if (content is MainScreenUiState.Loaded && liveObservationsRunning(worktrees)) {
+                homeWorktrees.reload(worktrees)
+                return
+            }
+            val sections = loadSectionsFromCache(worktrees)
+            homeWorktrees.seedResolutions(worktrees)
+            content =
+                MainScreenUiState.Loaded(sections = sections, projectLoads = visibleProjectLoads, home = homeWorktrees.index)
+            applyPendingFirstServerSnapshots()
+            if (!skipProbe) {
+                runCatching { probeServer() }
+                    .onFailure {
+                        // Keep cached home; connection chrome reflects reachability.
+                    }
+            }
+            startLiveObservations(worktrees)
+            startAwaitingProjectLoads()
+            homeWorktrees.reload(worktrees)
+            return
+        }
+
+        if (worktrees.isEmpty() && !preserveContent) {
+            stopLiveObservations()
+            content = MainScreenUiState.Empty()
+            if (!skipProbe) {
+                val probedBaseUrl = serverBaseUrl()
+                runCatching { probeServer() }
+                    .onFailure { error ->
+                        if (!probeFailureIsFinal(probedBaseUrl)) return@onFailure
+                        content =
+                            MainScreenUiState.ProbeFailed(
+                                when (error) {
+                                    is ServerProbeError -> probeErrorMessage(error)
+                                    else -> serverMessage(error, R.string.connection_error_unreachable)
+                                },
+                            )
+                    }
+            }
+            return
+        }
+
+        if (!skipProbe) {
+            if (!preserveContent) {
+                content = MainScreenUiState.Probing
+            }
+            try {
+                probeServer()
+            } catch (error: ServerProbeError) {
+                if (preserveContent) return
+                stopLiveObservations()
+                content = MainScreenUiState.ProbeFailed(probeErrorMessage(error))
+                return
+            } catch (error: Throwable) {
+                if (preserveContent) return
+                stopLiveObservations()
+                content = MainScreenUiState.ProbeFailed(serverMessage(error, R.string.connection_error_unreachable))
+                return
+            }
+        }
+
+        val previous = content
+        if (!preserveContent) {
+            content = MainScreenUiState.Loading
+        }
+        try {
+            if (worktrees.isEmpty()) {
+                stopLiveObservations()
+                content =
+                    when {
+                        preserveContent && previous is MainScreenUiState.Empty -> previous
+                        else -> MainScreenUiState.Empty()
+                    }
+                return
+            }
+
+            val sections = loadProjectSections(worktrees)
+            if (sections.isEmpty()) {
+                stopLiveObservations()
+                content =
+                    when {
+                        preserveContent && previous is MainScreenUiState.Empty -> previous
+                        else -> MainScreenUiState.Empty()
+                    }
+                return
+            }
+            content =
+                when {
+                    preserveContent && previous is MainScreenUiState.Loaded ->
+                        previous.copy(sections = sections, home = homeWorktrees.index)
+                    else ->
+                        MainScreenUiState.Loaded(
+                            sections = sections,
+                            projectLoads = visibleProjectLoads,
+                            home = homeWorktrees.index,
+                        )
+                }
+            applyPendingFirstServerSnapshots()
+            startLiveObservations(worktrees)
+            homeWorktrees.reload(worktrees)
+        } catch (error: Throwable) {
+            if (preserveContent) return
+            stopLiveObservations()
+            content = MainScreenUiState.ProbeFailed(serverMessage(error, R.string.home_error_load_projects))
+        }
+    }
+
+    private suspend fun loadSectionsFromCache(worktrees: List<String>): List<ProjectSectionUi> =
+        worktrees.map { worktree -> sectionFromCache(worktree) }
+
+    private suspend fun sectionFromCache(
+        worktree: String,
+        connectionId: String? = null,
+    ): ProjectSectionUi {
+        val seeded =
+            runCatching {
+                if (connectionId != null) {
+                    sessionCache.seedSessions(worktree, connectionId)
+                } else {
+                    sessionCache.seedSessions(worktree)
+                }
+            }.getOrNull()
+        val sessions =
+            seeded
+                ?.activeSessions()
+                ?.rootSessions()
+                ?.sortedByDescending { it.updatedAtEpochMs ?: 0L }
+                .orEmpty()
+        // No status here, so no unread outcome: the live paint adds both once seeded.
+        val summaries = sessions.map { session -> sessionDomainAdapter.toSessionSummary(session) }
+        val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
+        return ProjectSectionUi(
+            worktree = worktree,
+            displayName = displayName,
+            pathSubtitle = worktree,
+            letter = letterCharacterForProject(displayName),
+            letterAccent = letterAccentForWorktree(worktree),
+            allSessions = summaries,
+            loadError = null,
+            sessionsFromCache = seeded != null,
+        )
+    }
+
+    /**
+     * False while another saved address may still answer: the address check's result reloads
+     * Home. Also false when the address moved during the probe, since a newer load is running.
+     */
+    private fun probeFailureIsFinal(probedBaseUrl: String): Boolean {
+        if (serverBaseUrl() != probedBaseUrl) return false
+        if (addressCheckRunning()) {
+            probeWaitsOnAddressCheck = true
+            return false
+        }
+        return true
+    }
+
+    private suspend fun loadProjectSections(worktrees: List<String>): List<ProjectSectionUi> =
+        coroutineScope {
+            worktrees
+                .map { worktree ->
+                    async {
+                        runCatching { loadSection(worktree) }
+                            .getOrElse { throwable ->
+                                ProjectSectionUi(
+                                    worktree = worktree,
+                                    displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree),
+                                    pathSubtitle = worktree,
+                                    letter = letterCharacterForProject(ProjectDomainAdapter.displayNameFromWorktree(worktree)),
+                                    letterAccent = letterAccentForWorktree(worktree),
+                                    allSessions = emptyList(),
+                                    loadError = throwable.message ?: "Unable to load sessions",
+                                )
+                            }
+                    }
+                }.awaitAll()
+        }
+
+    private suspend fun loadSection(worktree: String): ProjectSectionUi {
+        projectRepository.getCurrentProject(directory = worktree)
+        // Home's first page only (#981); the live window takes over from here.
+        val sessions =
+            sessionRepository
+                .listRootSessionsWindow(directory = worktree, limit = HomeSessionPaging.PAGE_SIZE)
+                .sessions
+                .activeSessions()
+                .rootSessions()
+                .sortedByDescending { it.updatedAtEpochMs ?: 0L }
+        // No status here, so no unread outcome: the live paint adds both once seeded.
+        val summaries = sessions.map { session -> sessionDomainAdapter.toSessionSummary(session) }
+        return ProjectSectionUi(
+            worktree = worktree,
+            displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree),
+            pathSubtitle = worktree,
+            letter = letterCharacterForProject(ProjectDomainAdapter.displayNameFromWorktree(worktree)),
+            letterAccent = letterAccentForWorktree(worktree),
+            allSessions = summaries,
+            loadError = null,
+        )
+    }
+
+    /** The domain's probe message, shown as is (the shared domain messages are not keyed yet). */
+    private fun probeErrorMessage(error: ServerProbeError): UiText = UiText.verbatim(error.userMessage())
+
+    /** The error's own text, verbatim, else the keyed [fallback]. */
+    private fun serverMessage(
+        error: Throwable,
+        @StringRes fallback: Int,
+    ): UiText = error.message?.let(UiText::verbatim) ?: UiText.resource(fallback)
+
+    /** Probes the server; its answer can turn on capabilities the menu entry was waiting for. */
+    private suspend fun probeServer() {
+        projectRepository.probeServer()
+        onProbed()
+    }
+
     /** Regroups a moved session's row at once; the list refetch on the same event confirms it. */
     private fun applySessionMoved(moved: SessionMovedUpdate) {
-        worktrees.applySessionMoved(moved)
+        homeWorktrees.applySessionMoved(moved)
         updateContent { state ->
             if (state is MainScreenUiState.Loaded) state.withSessionMoved(moved) else state
         }
@@ -312,7 +614,7 @@ internal class HomeProjectList(
             state.sections.map { current ->
                 if (current.worktree == worktree) updatedSection else current
             }
-        setContent(state.copy(sections = updatedSections))
+        replaceContent(state.copy(sections = updatedSections))
     }
 
     /**
@@ -370,7 +672,7 @@ internal class HomeProjectList(
         scopeId: String,
         worktreesEnabled: Boolean,
     ): List<String> {
-        val extras = worktrees.extraDirectories
+        val extras = homeWorktrees.extraDirectories
         val projects = projects()
         return when (val scope = HomeScope.resolve(scopeId, projects, worktreesEnabled)) {
             null, HomeScope.All -> observedWorktrees + extras
