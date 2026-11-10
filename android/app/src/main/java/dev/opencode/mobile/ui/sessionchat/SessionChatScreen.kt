@@ -1,5 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.ui.main.AddProjectSheet
+import dev.opencode.mobile.ui.main.AddProjectSheetCallbacks
+import dev.opencode.mobile.ui.main.AddProjectSheetUi
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -213,8 +216,6 @@ fun SessionChatScreen(
     onNavigateBack: () -> Unit = {},
     /** Ctrl+N: open the New session draft (its checkout is [worktree]) the way Home's New session does; null turns Ctrl+N off. */
     onNewSessionRequested: ((worktree: String) -> Unit)? = null,
-    /** The draft's Add project…: Home's Add project flow; the project it adds becomes the draft's. */
-    onAddProjectRequested: () -> Unit = {},
     onSessionContextClick: () -> Unit = {},
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit = {},
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit = {},
@@ -247,7 +248,6 @@ fun SessionChatScreen(
             parentId = parentId,
             onNavigateBack = onNavigateBack,
             onNewSessionRequested = onNewSessionRequested,
-            onAddProjectRequested = onAddProjectRequested,
             onSessionContextClick = onSessionContextClick,
             onReviewChangesClick = onReviewChangesClick,
             onChildSessionClick = onChildSessionClick,
@@ -274,7 +274,6 @@ private fun SessionChatScreenBody(
     parentId: String?,
     onNavigateBack: () -> Unit,
     onNewSessionRequested: ((worktree: String) -> Unit)?,
-    onAddProjectRequested: () -> Unit,
     onSessionContextClick: () -> Unit,
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit,
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit,
@@ -353,10 +352,7 @@ private fun SessionChatScreenBody(
                 onDismissSheet = viewModel::dismissNewSessionSheet,
                 onProjectQueryChange = viewModel::updateNewSessionProjectQuery,
                 onSelectProject = viewModel::selectNewSessionProject,
-                onAddProject = {
-                    viewModel.requestNewSessionAddProject()
-                    onAddProjectRequested()
-                },
+                onAddProject = viewModel::requestNewSessionAddProject,
                 onSelectPlace = viewModel::selectNewSessionPlace,
                 onSelectBaseBranch = viewModel::selectNewSessionBaseBranch,
             )
@@ -767,6 +763,29 @@ private fun SessionChatScreenBody(
     )
 
     NewSessionDraftSheets(state = uiState.newSessionDraft, callbacks = newSessionDraftCallbacks)
+    val addProjectCallbacks =
+        remember(viewModel) {
+            AddProjectSheetCallbacks(
+                onFieldChange = viewModel::updateNewSessionAddProjectField,
+                onUp = viewModel::newSessionAddProjectUp,
+                onSelectRoot = viewModel::selectNewSessionAddProjectRoot,
+                onOpenFolder = viewModel::openNewSessionAddProjectFolder,
+                onSelectSuggestion = viewModel::selectNewSessionAddProjectSuggestion,
+                onRetry = viewModel::retryNewSessionAddProjectListing,
+                onConfirm = viewModel::confirmNewSessionAddProject,
+                onBrowse = viewModel::browseNewSessionAddProjectFolders,
+                onCloseBrowser = viewModel::closeNewSessionAddProjectBrowser,
+                onSubmitField = viewModel::submitNewSessionAddProjectField,
+                onFolderRowAppeared = viewModel::newSessionAddProjectFolderRowAppeared,
+                onFolderRowDisappeared = viewModel::newSessionAddProjectFolderRowDisappeared,
+            )
+        }
+    AddProjectSheet(
+        visible = uiState.newSessionAddProjectSheet != null,
+        sheet = uiState.newSessionAddProjectSheet ?: AddProjectSheetUi.empty(),
+        callbacks = addProjectCallbacks,
+        onDismiss = viewModel::dismissNewSessionAddProject,
+    )
 
     SessionChatMoveToWorktreeSheet(
         state = uiState.moveToWorktree,
