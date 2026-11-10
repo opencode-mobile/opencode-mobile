@@ -121,14 +121,14 @@ final class SessionChatViewModel {
     private var timelineStylePickerOffered = false
     private var timelineStylePickerNotice: String?
     private var timelineStylePickerTask: Task<Void, Never>?
-    /// Composer dictation card. Kept off `uiState` so a republish does not drop it.
-    private var dictation: ComposerDictationUiState?
-    private var dictationInsertGeneration: UInt64 = 0
-    private var dictationFinishTask: Task<Void, Never>?
+    private let dictation = SessionChatDictation()
     /// A sheet or dialog the view owns is up; see `setScreenSheetOpen`.
     @ObservationIgnored private var screenSheetOpen = false
     /// Tests set this to 0 to commit an insert synchronously.
-    var dictationFinishDelayNs: UInt64 = 350_000_000
+    var dictationFinishDelayNs: UInt64 {
+        get { dictation.finishDelayNs }
+        set { dictation.finishDelayNs = newValue }
+    }
 
     init(
         sessionID: String,
@@ -309,6 +309,10 @@ final class SessionChatViewModel {
         sideQuestions.onChange = { [weak self] in self?.publishUiState() }
         shells.onChange = { [weak self] in self?.publishUiState() }
         goalRegion.onChange = { [weak self] in self?.publishUiState() }
+        dictation.onChange = { [weak self] in self?.publishUiState() }
+        // The meter's level only: no full publish.
+        dictation.onLevelChange = { [weak self] current in self?.uiState.dictation = current }
+        dictation.onCommit = { [weak self] transcript in self?.spliceDictationTranscript(transcript) }
         sideQuestions.canPresentAnswer = { [weak self] in self?.canPresentSideQuestionAnswer ?? false }
         refreshProjectIdentity()
         publishUiState()
@@ -506,18 +510,7 @@ final class SessionChatViewModel {
     }
 
     func beginDictation(languageLabel: String, onDevice: Bool) {
-        discardDictationInsert()
-        dictation = ComposerDictationUiState(
-            phase: .listening,
-            committed: "",
-            volatile: "",
-            level: 0,
-            languageLabel: languageLabel,
-            onDevice: onDevice,
-            startedAt: Date(),
-            errorMessage: nil
-        )
-        publishUiState()
+        dictation.begin(languageLabel: languageLabel, onDevice: onDevice)
     }
 
     func beginDictationUnavailable(
@@ -525,81 +518,40 @@ final class SessionChatViewModel {
         message: String? = nil,
         languageLabel: String = ""
     ) {
-        // A recognizer error can arrive after Insert has already been confirmed.
-        // Dropping the card here would cancel the splice.
-        guard dictation?.phase != .finishing else { return }
-        discardDictationInsert()
-        dictation = ComposerDictationUiState(
-            phase: phase,
-            languageLabel: languageLabel,
-            errorMessage: message
-        )
-        publishUiState()
+        dictation.beginUnavailable(phase, message: message, languageLabel: languageLabel)
     }
 
     /// Applies a model download update only while the card still shows the model.
     func dictationModelDownload(_ phase: ComposerDictationPhase, progress: Double? = nil) {
-        guard phase.isModelPhase, var current = dictation, current.phase.isModelPhase else { return }
-        current.phase = phase
-        current.downloadProgress = progress
-        dictation = current
-        publishUiState()
+        dictation.modelDownload(phase, progress: progress)
     }
 
     func dictationPartial(committed: String, volatile: String) {
-        guard var current = dictation, current.phase == .listening else { return }
-        current.committed = committed
-        current.volatile = volatile
-        dictation = current
-        publishUiState()
+        dictation.partial(committed: committed, volatile: volatile)
     }
 
     func dictationLevel(_ level: Double) {
-        guard var current = dictation else { return }
-        let clamped = min(1, max(0, level.isFinite ? level : 0))
-        guard clamped != current.level else { return }
-        current.level = clamped
-        dictation = current
-        uiState.dictation = current
+        dictation.level(level)
     }
 
     func dictationInsert() {
-        guard let current = dictation else { return }
-        let transcript = current.committed + current.volatile
-        guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        dictationInsertGeneration &+= 1
-        let generation = dictationInsertGeneration
-        var finishing = current
-        finishing.phase = .finishing
-        dictation = finishing
-        publishUiState()
-        if dictationFinishDelayNs == 0 {
-            commitDictationInsert(generation: generation)
-            return
-        }
-        let delay = dictationFinishDelayNs
-        dictationFinishTask?.cancel()
-        dictationFinishTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: delay)
-            guard !Task.isCancelled, let self else { return }
-            self.commitDictationInsert(generation: generation)
-        }
+        dictation.insert()
     }
 
     func dictationCancel() {
-        cancelDictationCard()
+        dictation.cancel()
     }
 
     func cancelDictationForModeChange() {
-        cancelDictationCard()
+        dictation.cancel()
     }
 
     func cancelDictationForBackground() {
-        cancelDictationCard()
+        dictation.cancel()
     }
 
     func cancelDictationForDismiss() {
-        cancelDictationCard()
+        dictation.cancel()
     }
 
     func selectSlashSuggestion(commandName: String) {
@@ -2563,7 +2515,7 @@ final class SessionChatViewModel {
             imageViewer: timelineState.imageViewer,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
             timelineStylePickerVisible: timelineStylePickerVisible,
-            dictation: dictation,
+            dictation: dictation.state.dictation,
             sideQuestions: {
                 var next = sideQuestions.state
                 next.supported = activeConnectionManager.capabilities.supportsSideQuestion
@@ -2577,30 +2529,13 @@ final class SessionChatViewModel {
         )
     }
 
-    /// Drops a listening card and any in-flight finishing insert. Does not touch composer text.
-    private func cancelDictationCard() {
-        let hadCard = dictation != nil || dictationFinishTask != nil
-        discardDictationInsert()
-        dictation = nil
-        guard hadCard else { return }
-        publishUiState()
-    }
-
-    private func discardDictationInsert() {
-        dictationInsertGeneration &+= 1
-        dictationFinishTask?.cancel()
-        dictationFinishTask = nil
-    }
-
-    private func commitDictationInsert(generation: UInt64) {
-        guard generation == dictationInsertGeneration, let current = dictation else { return }
-        let transcript = current.committed + current.volatile
+    /// Dictation's Insert: splices the transcript at the composer cursor through
+    /// `updateComposerText`, so `/btw` detection still runs.
+    private func spliceDictationTranscript(_ transcript: String) {
         let text = uiState.composer.text
         let cursor = min(max(0, uiState.composer.cursor), text.count)
         let updated = String(text.prefix(cursor)) + transcript + String(text.dropFirst(cursor))
         updateComposerText(updated, cursor: cursor + transcript.count)
-        dictation = nil
-        publishUiState()
     }
 
     private func resolveSnackbar(
