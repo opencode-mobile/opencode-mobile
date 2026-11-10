@@ -106,6 +106,7 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionNotice
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShells
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestions
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatInbox
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatProjectHeader
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatRepoStrip
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
@@ -192,6 +193,7 @@ class SessionChatViewModel
                 inbox.ioDispatcher = value
                 worktreeMove.ioDispatcher = value
                 worktreeCreate.ioDispatcher = value
+                projectHeader.ioDispatcher = value
             }
 
         internal var nowMs: () -> Long = { System.currentTimeMillis() }
@@ -327,6 +329,20 @@ class SessionChatViewModel
                 onChange = { publishUiState() },
             )
 
+        /** The header's project label, letter, accent and worktree-checkout flag. */
+        private val projectHeader =
+            SessionChatProjectHeader(
+                worktreeInventoryCache = worktreeInventoryCache,
+                connectionProfileStore = connectionProfileStore,
+                projectRepository = projectRepository,
+                worktreeRepository = worktreeRepository,
+                currentProfileBaseUrl = { connectionSessionCoordinator.currentProfile()?.baseUrl },
+                inventoryServerKey = { activeConnectionManager.current()?.baseUrl.orEmpty() },
+                boundWorktree = { boundWorktree },
+                scope = viewModelScope,
+                onChange = { publishUiState() },
+            )
+
         private val worktreeMove =
             SessionChatWorktreeMove(
                 moveSession = { id, directory -> sessionRepository.moveSession(id, directory) },
@@ -369,9 +385,6 @@ class SessionChatViewModel
         // The directory the transcript (timeline cache and sync projection) is keyed by; a move
         // keeps it so the timeline does not reload.
         private var transcriptWorktree: String? = null
-        private var projectIdentity = SessionChatProjectIdentity.None
-        private var projectIdentityJob: kotlinx.coroutines.Job? = null
-        private val checkoutProjectIds = mutableSetOf<String>()
         private var lastSnackbarKey: String? = null
         private var loggedWorkingLamp = false
         private var lastWorkingLamp: String? = null
@@ -482,8 +495,7 @@ class SessionChatViewModel
                     }
                     if (!event.isWorktreeUpdated) return@collect
                     val projectId = event.namedProjectId() ?: return@collect
-                    if (projectId !in checkoutProjectIds) return@collect
-                    boundWorktree?.let { scheduleProjectIdentityRefine(it) }
+                    projectHeader.onWorktreeUpdated(projectId)
                 }
             }
             viewModelScope.launch {
@@ -634,7 +646,8 @@ class SessionChatViewModel
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             // A new session starts from no messages, so no shell carries over from the last one.
             shellMessages.value = emptyList()
-            seedProjectIdentity(worktree)
+            projectHeader.seed(worktree)
+            val projectIdentity = projectHeader.identity
             _uiState.value =
                 SessionChatUiState.initial(sessionId = sessionId, sessionTitle = sessionTitle).copy(
                     projectLabel = projectIdentity.label,
@@ -642,7 +655,7 @@ class SessionChatViewModel
                     projectLetterAccent = projectIdentity.accent,
                     worktreeCheckout = projectIdentity.isWorktreeCheckout,
                 )
-            scheduleProjectIdentityRefine(worktree)
+            projectHeader.refine(worktree)
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
             bindTitleIfChanged(sessionId, sessionTitle, worktree)
@@ -672,7 +685,7 @@ class SessionChatViewModel
             sessionViewReporter.focus(sessionId)
             bindTitleIfChanged(sessionId, sessionTitle, worktree)
             // Peers may have changed while the screen was away; re-resolve smart label.
-            scheduleProjectIdentityRefine(worktree)
+            projectHeader.refine(worktree)
             timeline.restartLiveObservation()
             sideQuestions.bind(sessionId)
             // Goal changes while the screen was away were missed.
@@ -692,8 +705,8 @@ class SessionChatViewModel
             logI("session moved session=$sessionId from=$previous to=$directory")
             boundWorktree = directory
             sessionReadyStore.setFocusedSession(sessionId, directory)
-            seedProjectIdentity(directory)
-            scheduleProjectIdentityRefine(directory)
+            projectHeader.seed(directory)
+            projectHeader.refine(directory)
             composer.moveDirectory(directory)
             sessionInfo.moveDirectory(directory)
             commands.moveDirectory(directory)
@@ -859,8 +872,8 @@ class SessionChatViewModel
             resetWorkingFooter()
             sessionReadyStore.setFocusedSession(sessionId, directory)
             sessionViewReporter.focus(sessionId)
-            seedProjectIdentity(directory)
-            scheduleProjectIdentityRefine(directory)
+            projectHeader.seed(directory)
+            projectHeader.refine(directory)
             timeline.bind(sessionId, directory)
             composer.adoptCreatedSession(sessionId, directory)
             sessionInfo.bind(sessionId, sessionTitle, directory)
@@ -2331,111 +2344,6 @@ class SessionChatViewModel
             )
         }
 
-        /** Connection key Home records worktree inventories under. */
-        private fun inventoryServerKey(): String = activeConnectionManager.current()?.baseUrl.orEmpty()
-
-        /** Identity from the inventories Home (or an earlier Session Chat) loaded; null when unknown. */
-        private fun cachedProjectIdentity(worktree: String): SessionChatProjectIdentity? {
-            val snapshot = worktreeInventoryCache.snapshot(inventoryServerKey()) ?: return null
-            return SessionChatProjectIdentity.resolve(worktree, snapshot.addedPaths, snapshot::inventoryFor)
-        }
-
-        /**
-         * What Home already loaded decides the identity before the first frame; the refine only
-         * changes it when the server now answers differently.
-         */
-        private fun seedProjectIdentity(worktree: String) {
-            projectIdentityJob?.cancel()
-            checkoutProjectIds.clear()
-            projectIdentity =
-                if (worktree.isBlank()) {
-                    SessionChatProjectIdentity.None
-                } else {
-                    cachedProjectIdentity(worktree) ?: SessionChatProjectIdentity.folder(worktree)
-                }
-        }
-
-        private fun applyProjectIdentity(identity: SessionChatProjectIdentity) {
-            if (identity == projectIdentity) return
-            projectIdentity = identity
-            publishUiState()
-        }
-
-        /**
-         * Re-resolves the identity from the server. Keeps the identity on screen until the answer
-         * lands, so an agreeing answer changes nothing.
-         */
-        private fun scheduleProjectIdentityRefine(worktree: String) {
-            if (worktree.isBlank()) return
-            projectIdentityJob?.cancel()
-            cachedProjectIdentity(worktree)?.let(::applyProjectIdentity)
-            projectIdentityJob =
-                viewModelScope.launch {
-                    val peers =
-                        withContext(ioDispatcher) {
-                            val baseUrl =
-                                connectionSessionCoordinator.currentProfile()?.baseUrl
-                                    ?: connectionProfileStore.activeProfile()?.baseUrl
-                            if (baseUrl.isNullOrBlank()) {
-                                emptyList()
-                            } else {
-                                connectionProfileStore.addedWorktrees(baseUrl)
-                            }
-                        }
-                    coroutineContext.ensureActive()
-                    if (boundWorktree != worktree) return@launch
-                    val inventories = loadInventories(peers)
-                    coroutineContext.ensureActive()
-                    if (boundWorktree != worktree) return@launch
-                    applyProjectIdentity(
-                        SessionChatProjectIdentity.resolve(worktree, peers) { added ->
-                            inventories[added] ?: WorktreeInventory.Unloaded
-                        },
-                    )
-                }
-        }
-
-        /**
-         * Fresh inventory of every added path. A load that did not succeed falls back to the last
-         * known one, so a transient failure does not turn a checkout back into a project letter.
-         */
-        private suspend fun loadInventories(peers: List<String>): Map<String, WorktreeInventory> {
-            val server = inventoryServerKey()
-            val cached = worktreeInventoryCache.snapshot(server)
-            worktreeInventoryCache.setAddedPaths(peers, server)
-            if (peers.isEmpty()) return emptyMap()
-            val baseUrl =
-                connectionSessionCoordinator.currentProfile()?.baseUrl
-                    ?: connectionProfileStore.activeProfile()?.baseUrl
-            if (!baseUrl.isNullOrBlank()) worktreeRepository.onConnection(baseUrl)
-            val inventories = mutableMapOf<String, WorktreeInventory>()
-            checkoutProjectIds.clear()
-            for (added in peers) {
-                coroutineContext.ensureActive()
-                val project =
-                    try {
-                        projectRepository.getCurrentProject(added)
-                    } catch (cancellation: CancellationException) {
-                        throw cancellation
-                    } catch (_: Exception) {
-                        null
-                    }
-                val projectId = project?.id?.takeIf { it.isNotBlank() }
-                if (projectId != null) checkoutProjectIds += projectId
-                val load = worktreeRepository.loadRefreshed(added, projectId, project?.worktree?.takeIf { it != "/" })
-                inventories[added] =
-                    when (load) {
-                        is WorktreeLoad.Loaded ->
-                            WorktreeInventory.loaded(load.directories).also { inventory ->
-                                worktreeInventoryCache.record(inventory, added, server)
-                            }
-                        is WorktreeLoad.Failed -> cached?.inventories?.get(added) ?: WorktreeInventory.Failed
-                        WorktreeLoad.Unloaded, WorktreeLoad.Stopped -> cached?.inventories?.get(added) ?: WorktreeInventory.Unloaded
-                    }
-            }
-            return inventories
-        }
-
         private fun publishUiState(
             timelineState: SessionChatTimelineRegionState,
             composerState: SessionChatComposerRegionState,
@@ -2673,6 +2581,7 @@ class SessionChatViewModel
             val seenDone = SessionChatBackgroundWork.seenDoneIds(seenDoneSubagentIds, subagents, backgroundWorkDoneVisible)
             seenDoneSubagentIds = seenDone
             val shellsState = shells.state.value
+            val projectIdentity = projectHeader.identity
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
