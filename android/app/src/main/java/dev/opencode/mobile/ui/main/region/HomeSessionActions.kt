@@ -30,6 +30,8 @@ class HomeSessionActions(
     private val messageRepository: MessageRepository,
     private val scope: CoroutineScope,
     private val onLifecycleError: (UiText) -> Unit,
+    /** Reports every state change synchronously, in the same call as the write. */
+    private val onChange: (HomeSessionActionsUiState) -> Unit = {},
 ) {
     private val _state = MutableStateFlow(HomeSessionActionsUiState())
     val state: StateFlow<HomeSessionActionsUiState> = _state.asStateFlow()
@@ -46,7 +48,7 @@ class HomeSessionActions(
         forkCheckJob?.cancel()
         forkCheckJob = null
         forkedOpenTarget = null
-        _state.value =
+        setState(
             HomeSessionActionsUiState(
                 target =
                     HomeSessionActionTarget(
@@ -56,11 +58,12 @@ class HomeSessionActions(
                     ),
                 sheetVisible = true,
                 canArchive = canArchive,
-            )
+            ),
+        )
     }
 
     fun dismissSheet() {
-        _state.update { it.copy(sheetVisible = false) }
+        updateState { it.copy(sheetVisible = false) }
         if (!_state.value.hasOpenDialog) {
             clear()
         }
@@ -68,7 +71,7 @@ class HomeSessionActions(
 
     fun chooseRename() {
         val target = _state.value.target ?: return
-        _state.update {
+        updateState {
             it.copy(
                 sheetVisible = false,
                 renameVisible = true,
@@ -80,7 +83,7 @@ class HomeSessionActions(
     }
 
     fun updateRenameDraft(text: String) {
-        _state.update { it.copy(renameDraft = text, renameError = null) }
+        updateState { it.copy(renameDraft = text, renameError = null) }
     }
 
     fun cancelRename() {
@@ -95,7 +98,7 @@ class HomeSessionActions(
         val trimmed = snapshot.renameDraft.trim()
         if (trimmed.isEmpty()) {
             onOutcome(OUTCOME_BLOCKED)
-            _state.update { it.copy(renameError = EMPTY_TITLE_ERROR) }
+            updateState { it.copy(renameError = EMPTY_TITLE_ERROR) }
             return
         }
         if (trimmed == target.title) {
@@ -103,7 +106,7 @@ class HomeSessionActions(
             clear()
             return
         }
-        _state.update { it.copy(renameSubmitting = true, renameError = null) }
+        updateState { it.copy(renameSubmitting = true, renameError = null) }
         logI("rename submit session=${target.sessionId}")
         scope.launch {
             runCatching {
@@ -119,7 +122,7 @@ class HomeSessionActions(
             }.onFailure { error ->
                 logW("rename failed session=${target.sessionId} message=${error.message}")
                 onOutcome(OUTCOME_FAILURE)
-                _state.update { current ->
+                updateState { current ->
                     if (current.target?.sessionId != target.sessionId) {
                         current
                     } else {
@@ -132,7 +135,7 @@ class HomeSessionActions(
 
     fun chooseFork() {
         val target = _state.value.target ?: return
-        _state.update {
+        updateState {
             it.copy(
                 sheetVisible = false,
                 forkVisible = true,
@@ -147,7 +150,7 @@ class HomeSessionActions(
     }
 
     fun updateForkDraft(text: String) {
-        _state.update { it.copy(forkDraft = text, forkError = null) }
+        updateState { it.copy(forkDraft = text, forkError = null) }
     }
 
     fun cancelFork() {
@@ -166,10 +169,10 @@ class HomeSessionActions(
         val title = snapshot.forkDraft.trim()
         if (title.isEmpty()) {
             onOutcome(OUTCOME_BLOCKED)
-            _state.update { it.copy(forkError = EMPTY_TITLE_ERROR) }
+            updateState { it.copy(forkError = EMPTY_TITLE_ERROR) }
             return
         }
-        _state.update { it.copy(forkSubmitting = true, forkError = null) }
+        updateState { it.copy(forkSubmitting = true, forkError = null) }
         logI("fork submit session=${target.sessionId}")
         val check = forkCheckJob
         scope.launch {
@@ -179,7 +182,7 @@ class HomeSessionActions(
             if (checked.target?.sessionId != target.sessionId) return@launch
             if (checked.forkBlockedMessage != null) {
                 onOutcome(OUTCOME_BLOCKED)
-                _state.update { it.copy(forkSubmitting = false) }
+                updateState { it.copy(forkSubmitting = false) }
                 return@launch
             }
             runCatching {
@@ -203,7 +206,7 @@ class HomeSessionActions(
                         title = forked.title,
                         worktree = target.worktree,
                     )
-                _state.update { current ->
+                updateState { current ->
                     if (current.target?.sessionId != target.sessionId) {
                         current
                     } else {
@@ -218,7 +221,7 @@ class HomeSessionActions(
             }.onFailure { error ->
                 logW("fork failed session=${target.sessionId} message=${error.message}")
                 onOutcome(OUTCOME_FAILURE)
-                _state.update { current ->
+                updateState { current ->
                     if (current.target?.sessionId != target.sessionId) {
                         current
                     } else {
@@ -246,7 +249,7 @@ class HomeSessionActions(
         val target = snapshot.target ?: return
         if (!snapshot.canArchive) return
         if (snapshot.lifecycleInFlight) return
-        _state.update { it.copy(sheetVisible = false, lifecycleInFlight = true) }
+        updateState { it.copy(sheetVisible = false, lifecycleInFlight = true) }
         logI("archive start session=${target.sessionId}")
         scope.launch {
             runCatching { sessionRepository.archiveSession(id = target.sessionId, directory = target.worktree) }
@@ -263,7 +266,7 @@ class HomeSessionActions(
 
     fun chooseDelete() {
         if (_state.value.target == null) return
-        _state.update { it.copy(sheetVisible = false, deleteConfirmVisible = true) }
+        updateState { it.copy(sheetVisible = false, deleteConfirmVisible = true) }
     }
 
     fun dismissDeleteConfirm() {
@@ -275,7 +278,7 @@ class HomeSessionActions(
         val snapshot = _state.value
         val target = snapshot.target ?: return
         if (snapshot.lifecycleInFlight) return
-        _state.update { it.copy(deleteConfirmVisible = false, lifecycleInFlight = true) }
+        updateState { it.copy(deleteConfirmVisible = false, lifecycleInFlight = true) }
         logI("delete start session=${target.sessionId}")
         scope.launch {
             runCatching { sessionRepository.deleteSession(id = target.sessionId, directory = target.worktree) }
@@ -325,7 +328,7 @@ class HomeSessionActions(
                 hasSelectedComposerModel = false,
             )
         if (visibility.visibleUserMessageCount > 0) return
-        _state.update { current ->
+        updateState { current ->
             if (current.target?.sessionId != sessionId || !current.forkVisible) {
                 current
             } else {
@@ -338,13 +341,23 @@ class HomeSessionActions(
     private fun clear(sessionId: String? = null) {
         forkCheckJob?.cancel()
         forkCheckJob = null
-        _state.update { current ->
+        updateState { current ->
             if (sessionId != null && current.target?.sessionId != sessionId) {
                 current
             } else {
                 HomeSessionActionsUiState()
             }
         }
+    }
+
+    private fun setState(next: HomeSessionActionsUiState) {
+        _state.value = next
+        onChange(_state.value)
+    }
+
+    private fun updateState(transform: (HomeSessionActionsUiState) -> HomeSessionActionsUiState) {
+        _state.update(transform)
+        onChange(_state.value)
     }
 
     /** Server text stays verbatim; the app's own fallbacks are keyed. */

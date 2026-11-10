@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -145,18 +146,11 @@ fun MainScreen(
     viewModel: MainScreenViewModel = hiltViewModel(),
     searchViewModel: SessionSearchViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val home by viewModel.uiState.collectAsStateWithLifecycle()
     val searchState by searchViewModel.uiState.collectAsStateWithLifecycle()
-    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-    val liveUpdatesConnectionStatus by viewModel.liveUpdatesConnectionStatus.collectAsStateWithLifecycle()
-    val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
-    val sessionActions by viewModel.sessionActions.collectAsStateWithLifecycle()
-    val revealNewestToken by viewModel.revealNewestToken.collectAsStateWithLifecycle()
-    val pendingScopeRequest by viewModel.pendingScopeRequest.collectAsStateWithLifecycle()
-    val serversChrome by viewModel.serversChrome.collectAsStateWithLifecycle()
-    val archivedMenu by viewModel.archivedMenu.collectAsStateWithLifecycle()
-    val loadingMoreScopeId by viewModel.loadingMoreScopeId.collectAsStateWithLifecycle()
-    val moreSessionDirectories by viewModel.moreSessionDirectories.collectAsStateWithLifecycle()
+    // Read through derived state so the list that asks "can load more" only recomposes when the
+    // paging set changes, not on every Home state change.
+    val moreSessionDirectories by remember { derivedStateOf { home.paging.moreSessionDirectories } }
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
     }
@@ -164,21 +158,21 @@ fun MainScreen(
         viewModel.markHomeHidden()
     }
     MainScreen(
-        uiState = state,
-        isRefreshing = isRefreshing,
-        liveUpdatesConnectionStatus = liveUpdatesConnectionStatus,
-        removalSnackbar = removalSnackbar?.toSnackbarMessage(),
-        sessionActions = sessionActions,
-        revealNewestToken = revealNewestToken,
-        pendingScopeRequest = pendingScopeRequest,
+        uiState = home.content,
+        isRefreshing = home.isRefreshing,
+        liveUpdatesConnectionStatus = home.liveConnectionStatus,
+        removalSnackbar = home.snackbar?.toSnackbarMessage(),
+        sessionActions = home.sessionActions,
+        revealNewestToken = home.revealNewestToken,
+        pendingScopeRequest = home.pendingScopeRequest,
         onConsumePendingScopeRequest = viewModel::consumePendingScopeRequest,
         onRetryProjectLoad = viewModel::retryProjectLoad,
-        loadingMoreScopeId = loadingMoreScopeId,
+        loadingMoreScopeId = home.paging.loadingMoreScopeId,
         onLoadMoreSessions = viewModel::loadMoreSessions,
         canLoadMoreSessions = { scopeId, worktreesEnabled ->
             viewModel.canLoadMoreSessions(moreSessionDirectories, scopeId, worktreesEnabled)
         },
-        serversChrome = serversChrome,
+        serversChrome = home.servers,
         sessionActionsCallbacks =
             HomeSessionActionsCallbacks(
                 onSessionLongPress = { session ->
@@ -206,7 +200,7 @@ fun MainScreen(
             ),
         onSettingsClick = onSettingsClick,
         onTerminalClick = onTerminalClick,
-        archivedMenu = archivedMenu,
+        archivedMenu = home.archivedMenu,
         onHomeMenuOpen = viewModel::refreshArchivedMenu,
         onArchivedSessionsClick = onArchivedSessionsClick,
         onWorktreesClick = onWorktreesClick,
