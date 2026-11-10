@@ -145,7 +145,7 @@ internal class HomeProjectList(
         )
 
     /** First loads Home shows now. */
-    val visibleProjectLoads: Map<String, ProjectFirstLoad>
+    private val visibleProjectLoads: Map<String, ProjectFirstLoad>
         get() = projectFirstLoads.visible
 
     /** Whether live observations run. */
@@ -165,7 +165,7 @@ internal class HomeProjectList(
     fun projects(): List<HomeProject> = (content as? MainScreenUiState.Loaded)?.projects.orEmpty()
 
     /** Added paths for a project key, or the path itself. */
-    fun memberPathsOf(
+    private fun memberPathsOf(
         id: String,
         projects: List<HomeProject> = projects(),
     ): List<String> =
@@ -179,11 +179,11 @@ internal class HomeProjectList(
     }
 
     /** Projects painted from the switched-to server's cache whose sessions wait for the server. */
-    fun awaitServer(worktrees: Collection<String>) {
+    private fun awaitServer(worktrees: Collection<String>) {
         projectFirstLoads.awaitServer(worktrees)
     }
 
-    fun startAwaitingProjectLoads() {
+    private fun startAwaitingProjectLoads() {
         projectFirstLoads.startAwaiting()
     }
 
@@ -196,7 +196,7 @@ internal class HomeProjectList(
     }
 
     /** A removed project's path: its first load and any parked snapshot go. */
-    fun forgetProjectLoad(worktree: String) {
+    private fun forgetProjectLoad(worktree: String) {
         projectFirstLoads.clear(worktree)
         pendingFirstServerSnapshots.remove(worktree)
     }
@@ -381,7 +381,7 @@ internal class HomeProjectList(
         sessionStatusLiveStore.invalidate(null)
     }
 
-    fun startLiveObservations(worktrees: List<String>) {
+    private fun startLiveObservations(worktrees: List<String>) {
         if (liveObservationsRunning(worktrees)) return
         stopLiveObservations()
         observedWorktrees = worktrees
@@ -424,9 +424,9 @@ internal class HomeProjectList(
         homeWorktrees.stopReload()
     }
 
-    fun liveObservationsRunning(worktrees: List<String>): Boolean = liveObservationJobs.isNotEmpty() && observedWorktrees == worktrees
+    private fun liveObservationsRunning(worktrees: List<String>): Boolean = liveObservationJobs.isNotEmpty() && observedWorktrees == worktrees
 
-    fun applyPendingFirstServerSnapshots() {
+    private fun applyPendingFirstServerSnapshots() {
         pendingFirstServerSnapshots.toMap().forEach { (worktree, snapshot) ->
             paintFirstServerSnapshot(worktree, snapshot)
         }

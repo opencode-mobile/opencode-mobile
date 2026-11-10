@@ -71,27 +71,27 @@ import javax.inject.Inject
 class MainScreenViewModel
     @Inject
     constructor(
-        private val projectRepository: ProjectRepository,
-        private val filesystemRepository: FilesystemRepository,
-        private val sessionRepository: SessionRepository,
-        private val messageRepository: MessageRepository,
+        projectRepository: ProjectRepository,
+        filesystemRepository: FilesystemRepository,
+        sessionRepository: SessionRepository,
+        messageRepository: MessageRepository,
         private val connectionProfileStore: ConnectionProfileStore,
-        private val sessionDomainAdapter: SessionDomainAdapter,
-        private val sessionLiveStore: SessionLiveStore,
-        private val sessionStatusLiveStore: SessionStatusLiveStore,
-        private val sessionReadyStore: SessionReadyStore,
+        sessionDomainAdapter: SessionDomainAdapter,
+        sessionLiveStore: SessionLiveStore,
+        sessionStatusLiveStore: SessionStatusLiveStore,
+        sessionReadyStore: SessionReadyStore,
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
-        private val sessionCache: SessionCache,
-        private val sessionAncestry: SessionAncestry,
-        private val liveUpdates: LiveUpdates = FixedLiveUpdates(),
+        sessionCache: SessionCache,
+        sessionAncestry: SessionAncestry,
+        liveUpdates: LiveUpdates = FixedLiveUpdates(),
         worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
         private val foregroundEventStream: ForegroundEventStream = IdleForegroundEventStream,
         projectFirstLoadTiming: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
-        private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
-        private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
-        private val homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
-        private val newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
+        homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
+        newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
     ) : ViewModel() {
         private val _uiState =
             MutableStateFlow(
@@ -222,9 +222,8 @@ class MainScreenViewModel
             )
 
         /** Home's content; HomeProjectList owns it and every write goes through it. */
-        private var content: MainScreenUiState
+        private val content: MainScreenUiState
             get() = projectList.content
-            set(value) = projectList.replaceContent(value)
 
         // Title fields report one edit per dialog appearance instead of per keystroke.
         private var renameDraftEditReported = false
@@ -310,7 +309,7 @@ class MainScreenViewModel
                     projectList.stopLiveObservations()
                     projectList.resetLoads()
                     worktreesRegion.reset()
-                    content = MainScreenUiState.Disconnected
+                    projectList.replaceContent(MainScreenUiState.Disconnected)
                     serversRegion.clear()
                 }
             }
@@ -822,14 +821,6 @@ class MainScreenViewModel
                 actionId = actionId,
                 parameters = parameters,
             )
-        }
-
-        private fun logI(message: String) {
-            DiagnosticLog.info(DiagnosticLogArea.Chat, message)
-        }
-
-        private fun logW(message: String) {
-            DiagnosticLog.warning(DiagnosticLogArea.Chat, message)
         }
 
         private fun currentAddProjectSheet(): AddProjectSheetUi? =
