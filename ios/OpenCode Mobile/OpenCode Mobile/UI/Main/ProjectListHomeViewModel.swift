@@ -144,8 +144,6 @@ final class ProjectListHomeViewModel {
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let liveUpdates: any LiveUpdates
-    private let worktreeRepository: any WorktreeRepository
-    private let worktreeInventoryCache: WorktreeInventoryCache
     /// The Worktrees screen reads Home's projects and sessions here and asks Home to act.
     let homeWorktreesFeed: HomeWorktreesFeed
     /// Session search over Home's pane (#929).
@@ -154,7 +152,6 @@ final class ProjectListHomeViewModel {
     private let newSessionDraftStore: NewSessionDraftStore
     private let foregroundEventStream: (any ForegroundEventStream)?
     private let sessionCache: any SessionCache
-    private let sessionAdapter = SessionDomainAdapter()
     private var connectionStateObservationTask: Task<Void, Never>?
     private(set) var liveUpdatesConnectionStatus: SessionConnectionStatus = .offline
     /// Title / server switcher chrome, copied from the region on every change.
@@ -167,24 +164,11 @@ final class ProjectListHomeViewModel {
     }
     private var liveObservationTasks: [Task<Void, Never>] = []
     private var observedWorktrees: [String] = []
-    @ObservationIgnored private var worktreeMarks: HomeWorktreeMarks
-    private var worktreeInventories: [String: WorktreeInventory] = [:]
-    private var worktreeProjectIDs: [String: String] = [:]
-    /// Current project per added path, once resolved.
-    private var projectResolutions: [String: HomeProjectResolution] = [:]
-    /// Worktree directories the server listed, per added path.
-    private var worktreeDirectories: [String: [String]] = [:]
+    /// Project grouping inputs, copied from the region on every change.
+    private(set) var worktreesState = HomeWorktreesState()
+    @ObservationIgnored private let worktrees: HomeWorktrees
     /// v1: non-added worktree directories whose sessions each added path's section folds in.
-    private(set) var homeExtraDirectories: [String: [String]] = [:]
-    /// Current branch by canonical worktree directory.
-    private var worktreeBranches: [String: String] = [:]
-    /// Name and VCS from the server's project list, by project id.
-    private var serverProjectInfo: [String: (name: String?, isRepository: Bool)] = [:]
-    @ObservationIgnored private var branchLookups: HomeBranchLookups
-    @ObservationIgnored private var serverProjectsTask: Task<Void, Never>?
-    @ObservationIgnored private var worktreeExtrasRefreshTask: Task<Void, Never>?
-    private var worktreeMarkTask: Task<Void, Never>?
-    private var worktreeEventTask: Task<Void, Never>?
+    var homeExtraDirectories: [String: [String]] { worktreesState.extraDirectories }
     private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
     private var liveStatusesByWorktree: [String: SessionActivitySnapshot] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
@@ -240,67 +224,25 @@ final class ProjectListHomeViewModel {
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.sessionReadyStore = sessionReadyStore
         self.liveUpdates = liveUpdates
-        self.worktreeRepository = worktreeRepository
-        self.worktreeInventoryCache = worktreeInventoryCache
-        self.homeWorktreesFeed = homeWorktreesFeed ?? HomeWorktreesFeed()
+        let homeWorktreesFeed = homeWorktreesFeed ?? HomeWorktreesFeed()
+        self.homeWorktreesFeed = homeWorktreesFeed
         self.sessionSearch = SessionSearchModel(
             repository: sessionRepository,
             archivedSessionsSupported: { activeConnectionManager.capabilities.supportsArchivedSessions }
         )
         self.foregroundEventStream = foregroundEventStream
-        let projects = projectRepository
-        let sessions = sessionRepository
-        let adapter = sessionAdapter
-        self.worktreeMarks = HomeWorktreeMarks(
-            repository: worktreeRepository,
-            resolveProject: { directory in
-                guard let project = try? await projects.getCurrentProject(directory: directory) else { return nil }
-                let canonical = project.canonical?.isEmpty == false ? project.canonical! : project.worktree
-                return HomeProjectResolution(
-                    id: project.id,
-                    canonical: canonical,
-                    name: project.name,
-                    isRepository: project.isRepository
-                )
-            },
-            listSessions: { directory in
-                // The first page of roots, like the added paths' own windows.
-                let listed = (try? await sessions.listRootSessionsWindow(
-                    directory: directory,
-                    limit: HomeSessionPaging.pageSize
-                ))?.sessions ?? []
-                return listed.map { session in
-                    let item = adapter.listItem(from: session, worktree: directory)
-                    if item.directory?.isEmpty == false { return item }
-                    return SessionListItem(
-                        id: item.id,
-                        title: item.title,
-                        worktree: item.worktree,
-                        statusLabel: item.statusLabel,
-                        updatedAtLabel: item.updatedAtLabel,
-                        updatedAtEpochMs: item.updatedAtEpochMs,
-                        isReady: item.isReady,
-                        unreadOutcome: item.unreadOutcome,
-                        statusIsStale: item.statusIsStale,
-                        parentID: item.parentID,
-                        directory: directory
-                    )
-                }
-            }
+        self.worktrees = HomeWorktrees(
+            projectRepository: projectRepository,
+            sessionRepository: sessionRepository,
+            worktreeRepository: worktreeRepository,
+            worktreeInventoryCache: worktreeInventoryCache,
+            homeWorktreesFeed: homeWorktreesFeed,
+            sessionCache: sessionCache,
+            foregroundEventStream: foregroundEventStream,
+            branchRetryDelays: branchRetryDelays,
+            serverBaseURL: { activeConnectionManager.connection?.baseURL.absoluteString ?? "" },
+            serverProtocol: { activeConnectionManager.serverProtocol }
         )
-        self.branchLookups = HomeBranchLookups(retryDelays: branchRetryDelays) { directory in
-            do {
-                let info = try await sessions.getVcsInfo(directory: directory)
-                // A cold v2 server answers without a provider first; ask again shortly.
-                guard info.isSettled else { return .unknown }
-                return .branch(HomeProjectGrouping.usableBranch(info.currentBranch))
-            } catch let SessionError.http(statusCode, _) where (400 ..< 500).contains(statusCode) {
-                // No VCS routes, or not a repository: there is no branch to show.
-                return .branch(nil)
-            } catch {
-                return .unknown
-            }
-        }
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.sessionCache = sessionCache
         self.sessionActionsRegion = HomeSessionActions(
@@ -329,6 +271,14 @@ final class ProjectListHomeViewModel {
                 project.key.hasPrefix(HomeProjectGrouping.pathKeyPrefix) ? nil : project.key
             })
         }
+        worktrees.onChange = { [weak self] in
+            guard let self else { return }
+            self.worktreesState = self.worktrees.state
+        }
+        worktrees.onSectionMark = { [weak self] update in
+            self?.applySectionMark(update)
+        }
+        worktrees.homeProjects = { [weak self] in self?.homeProjects ?? [] }
         servers.onChange = { [weak self] in
             guard let self else { return }
             self.serversChrome = self.servers.state
@@ -410,11 +360,7 @@ final class ProjectListHomeViewModel {
             Task { @MainActor in
                 self?.clearProjectLoads()
                 self?.stopLiveObservations()
-                self?.worktreeMarks.onDisconnected()
-                self?.worktreeInventoryCache.clear()
-                self?.worktreeInventories.removeAll()
-                self?.worktreeProjectIDs.removeAll()
-                self?.clearHomeProjectInputs()
+                self?.worktrees.disconnect()
                 self?.state = .disconnected
                 self?.servers.clear()
             }
@@ -422,48 +368,13 @@ final class ProjectListHomeViewModel {
         self.homeWorktreesFeed.onRequest = { [weak self] request in
             Task { @MainActor in await self?.handleWorktreeRequest(request) }
         }
-        branchLookups.onChange = { [weak self] branches in
-            guard let self, self.worktreeBranches != branches else { return }
-            self.worktreeBranches = branches
-        }
         startObservingConnectionState()
     }
 
     /// Added paths grouped into Home projects: worktrees of one repository are one project.
     var homeProjects: [HomeProject] {
         guard case let .loaded(sections, _, _, _) = state else { return [] }
-        return homeProjects(addedPaths: sections.map(\.worktree))
-    }
-
-    private func homeProjects(addedPaths: [String]) -> [HomeProject] {
-        var resolutions: [String: HomeProjectResolution] = [:]
-        for path in addedPaths {
-            guard var resolution = projectResolutions[path] else { continue }
-            if let info = serverProjectInfo[resolution.id] {
-                if resolution.name?.isEmpty != false { resolution.name = info.name }
-                resolution.isRepository = resolution.isRepository || info.isRepository
-            }
-            resolutions[path] = resolution
-        }
-        return HomeProjectGrouping.group(
-            addedPaths: addedPaths,
-            resolutions: resolutions,
-            inventories: worktreeDirectories,
-            branches: worktreeBranches
-        )
-    }
-
-    private func clearHomeProjectInputs() {
-        homeWorktreesFeed.clear()
-        worktreeMarks.retain(removedDirectories: [])
-        projectResolutions.removeAll()
-        worktreeDirectories.removeAll()
-        homeExtraDirectories.removeAll()
-        worktreeBranches.removeAll()
-        serverProjectInfo.removeAll()
-        branchLookups.clear()
-        serverProjectsTask?.cancel()
-        serverProjectsTask = nil
+        return HomeWorktrees.projects(addedPaths: sections.map(\.worktree), state: worktreesState)
     }
 
     private func publishRefreshing() {
@@ -511,11 +422,11 @@ final class ProjectListHomeViewModel {
         for worktree in worktrees {
             sections.append(await sectionFromCache(worktree: worktree, connectionID: id))
         }
-        let resolutions = await cachedProjectResolutions(worktrees, connectionID: id)
+        let resolutions = await self.worktrees.cachedResolutions(worktrees, connectionID: id)
         guard servers.isCurrent(id: id, generation: generation) else { return }
         clearProjectLoads()
-        clearHomeProjectInputs()
-        projectResolutions = resolutions
+        self.worktrees.reset()
+        self.worktrees.replaceResolutions(resolutions)
         probeWaitsOnAddressCheck = false
         if sections.isEmpty {
             state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
@@ -553,7 +464,7 @@ final class ProjectListHomeViewModel {
             }
             // A stream backing off (e.g. after a rejected credential) retries now.
             foregroundEventStream?.onReconnectWake()
-            refreshBranches()
+            worktrees.refreshBranches()
             await sessionLiveStore.invalidate(directory: nil)
             await sessionStatusLiveStore.invalidate(directory: nil)
         default:
@@ -691,7 +602,7 @@ final class ProjectListHomeViewModel {
         let result = await addProjectRegion.add(
             path: worktree,
             projects: { [weak self] in self?.homeProjects ?? [] },
-            remember: { [weak self] path, resolution in self?.projectResolutions[path] = resolution }
+            remember: { [weak self] path, resolution in self?.worktrees.remember(path, resolution: resolution) }
         )
         switch result {
         case .alreadyAdded:
@@ -754,17 +665,11 @@ final class ProjectListHomeViewModel {
     }
 
     /// Home has listed some project's worktrees.
-    var hasListedWorktrees: Bool { !worktreeDirectories.isEmpty }
+    var hasListedWorktrees: Bool { !worktreesState.directories.isEmpty }
 
     /// What the server listed as worktrees, minus every project's main checkout.
     var removableWorktreeDirectories: Set<String> {
-        let mains = Set(homeProjects.flatMap { $0.worktrees.filter(\.isMain).map(\.directory) })
-        return Set(
-            worktreeDirectories.values
-                .flatMap { $0 }
-                .map { ServerPathPolicy.canonical($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                .filter { !$0.isEmpty && !mains.contains($0) }
-        )
+        HomeWorktrees.removableDirectories(projects: homeProjects, state: worktreesState)
     }
 
     /// Worktree directories removed from this app; their sessions stay on Home marked removed.
@@ -782,32 +687,18 @@ final class ProjectListHomeViewModel {
                 forcePlace: true
             )
         case let .removed(_, directory):
-            worktreeMarks.retain(removedDirectories: homeWorktreesFeed.removedDirectories)
-            await refreshWorktreeInventory(containing: directory)
+            await worktrees.handleRemoved(directory: directory)
         }
     }
 
     /// Reloads the checkouts of the project that owns `directory` (Session Chat after a create).
     func refreshWorktreeInventory(containing directory: String) async {
-        let canonical = ServerPathPolicy.canonical(directory)
-        guard let project = homeProjects.first(where: { $0.worktree(at: canonical) != nil || $0.hasMember(canonical) })
-        else { return }
-        await refreshWorktreeInventory(projectKey: project.key)
+        await worktrees.refreshInventory(containing: directory)
     }
 
     /// v2 refetches the project's list; v1 reloads each added path, as a Home refresh does.
     func refreshWorktreeInventory(projectKey: String) async {
-        guard let project = homeProjects.first(where: { $0.key == projectKey }) else { return }
-        if activeConnectionManager.serverProtocol == .v2, let projectID = project.projectID,
-           worktreeMarks.knows(projectID)
-        {
-            await refetchWorktreeMark(projectID)
-            return
-        }
-        for path in project.memberPaths {
-            let update = await worktreeMarks.load(addedPath: path)
-            applyWorktreeMark(update)
-        }
+        await worktrees.refreshInventory(projectKey: projectKey)
     }
 
     private func logCreateSession(outcome: String) {
@@ -929,9 +820,7 @@ final class ProjectListHomeViewModel {
             await connectionProfileStore.removeWorktree(serverBaseURL: serverBaseURL, worktree: path)
             await sessionCache.purgeWorktree(serverBaseURL: serverBaseURL, worktree: path)
             clearProjectLoad(path)
-            projectResolutions[path] = nil
-            worktreeDirectories[path] = nil
-            homeExtraDirectories[path] = nil
+            worktrees.forget(path)
         }
         pendingProjectRemoval = nil
         await runHomeLoad(skipProbe: true)
@@ -1175,11 +1064,11 @@ final class ProjectListHomeViewModel {
         // without .probing/.loading. Live store then SWR-refreshes.
         if !preserveContent, !worktrees.isEmpty {
             if case .loaded = state, liveObservationsRunning(for: worktrees) {
-                reloadWorktreeMarks(worktrees)
+                self.worktrees.reload(worktrees)
                 return
             }
             let sections = await loadSectionsFromCache(worktrees: worktrees)
-            await seedProjectResolutions(worktrees)
+            await self.worktrees.seedResolutions(worktrees)
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: false,
@@ -1194,7 +1083,7 @@ final class ProjectListHomeViewModel {
                 }
             }
             startLiveObservations(worktrees: worktrees)
-            reloadWorktreeMarks(worktrees)
+            self.worktrees.reload(worktrees)
             return
         }
 
@@ -1281,35 +1170,12 @@ final class ProjectListHomeViewModel {
                 )
             }
             startLiveObservations(worktrees: worktrees)
-            reloadWorktreeMarks(worktrees)
+            self.worktrees.reload(worktrees)
         } catch {
             if preserveContent { return }
             stopLiveObservations()
             state = .probeFailed(error.localizedDescription)
         }
-    }
-
-    /// Cached projects for paths not resolved yet, so the cached paint groups (and keys its
-    /// scopes) the way the live load will. A key that changes later reloads the whole list.
-    private func seedProjectResolutions(_ worktrees: [String]) async {
-        let missing = worktrees.filter { projectResolutions[$0] == nil }
-        for (path, resolution) in await cachedProjectResolutions(missing, connectionID: nil)
-            where projectResolutions[path] == nil {
-            projectResolutions[path] = resolution
-        }
-    }
-
-    private func cachedProjectResolutions(
-        _ worktrees: [String],
-        connectionID: String?
-    ) async -> [String: HomeProjectResolution] {
-        var resolutions: [String: HomeProjectResolution] = [:]
-        for worktree in worktrees {
-            if let resolution = await sessionCache.seedProjectResolution(worktree: worktree, connectionID: connectionID) {
-                resolutions[worktree] = resolution
-            }
-        }
-        return resolutions
     }
 
     private func loadSectionsFromCache(worktrees: [String]) async -> [ProjectSectionItem] {
@@ -1369,7 +1235,7 @@ final class ProjectListHomeViewModel {
             activity: cachedSnapshot,
             readyIDs: [],
             ancestry: sessionLiveStore.ancestry.snapshot(),
-            projectID: rowScopeProjectID(worktree),
+            projectID: worktrees.rowScopeProjectID(worktree),
             readsServerUnread: false
         )).items
         let name = ProjectDomainAdapter.displayName(from: worktree)
@@ -1468,106 +1334,11 @@ final class ProjectListHomeViewModel {
                     await observeWorktree(worktree)
                 }
             }
-        worktreeEventTask?.cancel()
-        if let foregroundEventStream {
-            worktreeEventTask = Task { [weak self] in
-                for await event in foregroundEventStream.events() {
-                    if event.isWorktreeUpdated, let projectID = event.namedProjectID {
-                        await self?.refetchWorktreeMark(projectID)
-                    } else if event.triggersHomeRefresh {
-                        self?.scheduleWorktreeExtrasRefresh()
-                    }
-                }
-            }
-        }
+        self.worktrees.startObserving()
     }
 
-    private func reloadWorktreeMarks(_ worktrees: [String]) {
-        worktreeMarkTask?.cancel()
-        worktreeMarks.onConnection(serverBaseURL)
-        worktreeMarks.setAddedPaths(worktrees)
-        worktreeInventoryCache.setAddedPaths(worktrees, server: serverBaseURL)
-        branchLookups.refresh()
-        loadServerProjectInfo()
-        worktreeMarkTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            for worktree in worktrees {
-                guard !Task.isCancelled else { return }
-                let update = await self.worktreeMarks.load(addedPath: worktree)
-                guard !Task.isCancelled else { return }
-                self.applyWorktreeMark(update)
-            }
-        }
-    }
-
-    private func refetchWorktreeMark(_ projectID: String) async {
-        guard worktreeMarks.knows(projectID) else { return }
-        for update in await worktreeMarks.refetch(projectID: projectID) {
-            applyWorktreeMark(update)
-        }
-    }
-
-    /// v1: sessions in worktrees nobody added refresh on the same session events (and debounce)
-    /// as the added paths' own lists.
-    private func scheduleWorktreeExtrasRefresh() {
-        worktreeExtrasRefreshTask?.cancel()
-        worktreeExtrasRefreshTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.sessionDebounceMs))
-            guard !Task.isCancelled, let self else { return }
-            for update in await self.worktreeMarks.refreshExtras() {
-                guard !Task.isCancelled else { return }
-                self.applyWorktreeMark(update)
-            }
-        }
-    }
-
-    /// Server project names and VCS for display names; optional, a failure keeps folder names.
-    private func loadServerProjectInfo() {
-        serverProjectsTask?.cancel()
-        let projectRepository = projectRepository
-        serverProjectsTask = Task { @MainActor [weak self] in
-            guard let projects = try? await projectRepository.listProjects() else { return }
-            guard !Task.isCancelled, let self else { return }
-            var info: [String: (name: String?, isRepository: Bool)] = [:]
-            for project in projects where info[project.id] == nil {
-                info[project.id] = (project.name, project.isRepository)
-            }
-            self.serverProjectInfo = info
-        }
-    }
-
-    /// Pull to refresh asks every worktree for its branch again.
-    private func refreshBranches() {
-        branchLookups.refresh()
-        lookUpBranchesForResolvedProjects()
-    }
-
-    /// Branch names load behind the session list for every worktree of a resolved project.
-    private func lookUpBranchesForResolvedProjects() {
-        for project in homeProjects where project.memberPaths.contains(where: { projectResolutions[$0] != nil }) {
-            branchLookups.lookUp(project.worktrees.map(\.directory))
-        }
-    }
-
-    private func applyWorktreeMark(_ update: WorktreeMarkUpdate) {
-        worktreeInventories[update.addedPath] = update.inventory
-        worktreeInventoryCache.record(update.inventory, addedPath: update.addedPath, server: serverBaseURL)
-        if let projectID = update.projectID {
-            worktreeProjectIDs[update.addedPath] = projectID
-        }
-        if let resolution = update.resolution, projectResolutions[update.addedPath] != resolution {
-            projectResolutions[update.addedPath] = resolution
-            sessionCache.rememberProjectResolution(worktree: update.addedPath, resolution: resolution)
-        }
-        if homeExtraDirectories[update.addedPath] ?? [] != update.extraDirectories {
-            homeExtraDirectories[update.addedPath] = update.extraDirectories.isEmpty ? nil : update.extraDirectories
-        }
-        // A failed reload keeps the worktrees Home already knows.
-        if update.inventory != .failed, worktreeDirectories[update.addedPath] != update.directories {
-            worktreeDirectories[update.addedPath] = update.directories
-        }
-        // The inventory may have grown (v2 lists again after its refresh): ask for new worktrees.
-        lookUpBranchesForResolvedProjects()
+    /// Patches the added path's section with its worktree mark (inventory, project, v1 extras).
+    private func applySectionMark(_ update: WorktreeMarkUpdate) {
         guard case let .loaded(sections, showAdd, addProjectSheet, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == update.addedPath }) else { return }
         let updated = ProjectSectionItem(
@@ -1577,14 +1348,14 @@ final class ProjectListHomeViewModel {
             pathSubtitle: section.pathSubtitle,
             letter: section.letter,
             letterAccent: section.letterAccent,
-            allSessions: worktreeMarks.applyExtras(
+            allSessions: worktrees.applyExtras(
                 addedPath: update.addedPath,
                 current: section.allSessions,
                 extras: update.extras
             ),
             loadError: section.loadError,
             sessionsFromCache: section.sessionsFromCache,
-            projectID: worktreeProjectIDs[update.addedPath] ?? section.projectID,
+            projectID: worktrees.state.projectIDs[update.addedPath] ?? section.projectID,
             worktreeInventory: update.inventory,
             hasMoreSessions: section.hasMoreSessions,
             oldestWindowUpdatedAtEpochMs: section.oldestWindowUpdatedAtEpochMs
@@ -1601,12 +1372,7 @@ final class ProjectListHomeViewModel {
         liveObservationTasks.forEach { $0.cancel() }
         liveObservationTasks = []
         observedWorktrees = []
-        worktreeMarkTask?.cancel()
-        worktreeMarkTask = nil
-        worktreeEventTask?.cancel()
-        worktreeEventTask = nil
-        worktreeExtrasRefreshTask?.cancel()
-        worktreeExtrasRefreshTask = nil
+        worktrees.stopObserving()
         liveSessionsByWorktree = [:]
         liveStatusesByWorktree = [:]
         liveReadyIdsByWorktree = [:]
@@ -1798,15 +1564,9 @@ final class ProjectListHomeViewModel {
             activity: liveStatusesByWorktree[worktree],
             readyIDs: readyIds,
             ancestry: sessionLiveStore.ancestry.snapshot(),
-            projectID: rowScopeProjectID(worktree),
+            projectID: worktrees.rowScopeProjectID(worktree),
             readsServerUnread: activeConnectionManager.capabilities.supportsSessionViewed
         )
-    }
-
-    /// The repository project an added path lists whole (worktrees of one repository merge).
-    private func rowScopeProjectID(_ worktree: String) -> String? {
-        guard let resolution = projectResolutions[worktree], resolution.isMergeable else { return nil }
-        return resolution.id
     }
 
     /// Looks up the roots of busy sessions Home cannot place yet, then rebuilds the section when
@@ -1847,11 +1607,11 @@ final class ProjectListHomeViewModel {
             pathSubtitle: section.pathSubtitle,
             letter: section.letter,
             letterAccent: section.letterAccent,
-            allSessions: worktreeMarks.withLive(addedPath: worktree, primary: items),
+            allSessions: worktrees.withLive(addedPath: worktree, primary: items),
             loadError: section.loadError,
             sessionsFromCache: snapshot.isFromCache,
-            projectID: worktreeProjectIDs[worktree] ?? section.projectID,
-            worktreeInventory: worktreeInventories[worktree] ?? section.worktreeInventory,
+            projectID: worktrees.state.projectIDs[worktree] ?? section.projectID,
+            worktreeInventory: worktrees.state.inventories[worktree] ?? section.worktreeInventory,
             hasMoreSessions: snapshot.hasMore,
             oldestWindowUpdatedAtEpochMs: snapshot.sessions.compactMap(\.updatedAtEpochMs).min()
         )
