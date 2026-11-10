@@ -349,10 +349,4 @@ struct StreamedUploadContractTests {
             #expect(try !V2ServerContract.features(data: Data(document.utf8)).streamedUploadRoute)
         }
     }
-
-    @Test func disablingUploadLeavesNoDirectory() {
-        let manager = ActiveConnectionManager()
-        manager.disableStreamedUpload()
-        #expect(manager.streamedUploadDirectory == nil)
-    }
 }

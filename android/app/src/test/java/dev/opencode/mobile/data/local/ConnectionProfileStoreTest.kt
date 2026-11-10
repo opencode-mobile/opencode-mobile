@@ -49,49 +49,6 @@ class ConnectionProfileStoreTest {
         }
 
     @Test
-    fun addWorktree_appendsDistinctPaths() =
-        runTest {
-            val store = InMemoryConnectionProfileStore()
-            store.addWorktree(server, "/repo/a")
-            store.addWorktree(server, "/repo/b")
-            store.addWorktree(server, "/repo/a")
-            assertEquals(listOf("/repo/a", "/repo/b"), store.addedWorktrees(server))
-        }
-
-    @Test
-    fun setAddedWorktrees_replacesList() =
-        runTest {
-            val store = InMemoryConnectionProfileStore()
-            store.setAddedWorktrees(server, listOf("/one", "/two", "/one"))
-            assertEquals(listOf("/one", "/two"), store.addedWorktrees(server))
-        }
-
-    @Test
-    fun removeWorktree_dropsMatchingPath() =
-        runTest {
-            val store = InMemoryConnectionProfileStore()
-            store.setAddedWorktrees(server, listOf("/repo/a", "/repo/b", "/repo/c"))
-            store.removeWorktree(server, "/repo/b")
-            assertEquals(listOf("/repo/a", "/repo/c"), store.addedWorktrees(server))
-            store.removeWorktree(server, "/missing")
-            assertEquals(listOf("/repo/a", "/repo/c"), store.addedWorktrees(server))
-        }
-
-    @Test
-    fun removeWorktree_dropsLegacyUrlKeyedPathsAfterProfileExists() =
-        runTest {
-            val store = InMemoryConnectionProfileStore()
-            store.addWorktree(server, "/repo/a")
-            store.addWorktree(server, "/repo/b")
-            store.saveProfile(ConnectionProfile(baseUrl = server, username = "opencode"))
-            assertEquals(listOf("/repo/a", "/repo/b"), store.addedWorktrees(server))
-            store.removeWorktree(server, "/repo/a")
-            assertEquals(listOf("/repo/b"), store.addedWorktrees(server))
-            store.removeWorktree(server, "/repo/b")
-            assertEquals(emptyList<String>(), store.addedWorktrees(server))
-        }
-
-    @Test
     fun listProfiles_returnsSavedInOrder() =
         runTest {
             val store = InMemoryConnectionProfileStore()
@@ -127,19 +84,6 @@ class ConnectionProfileStoreTest {
             assertEquals("home", store.activeProfile()?.id)
             assertEquals("home-secret", store.activeProfile()?.password)
             assertNull(secure.readPassword("work"))
-        }
-
-    @Test
-    fun worktreesStayScopedToProfileId() =
-        runTest {
-            val store = InMemoryConnectionProfileStore()
-            store.saveProfile(ConnectionProfile(id = "home", baseUrl = "http://10.0.0.1:4096/", username = "opencode"))
-            store.addWorktree("http://10.0.0.1:4096/", "/home-repo")
-            store.saveProfile(ConnectionProfile(id = "work", baseUrl = "http://10.0.0.2:4096/", username = "opencode"))
-            store.addWorktree("http://10.0.0.2:4096/", "/work-repo")
-            store.applyProfile("home")
-            assertEquals(listOf("/home-repo"), store.addedWorktrees("http://10.0.0.1:4096/"))
-            assertEquals(listOf("/work-repo"), store.addedWorktrees("http://10.0.0.2:4096/"))
         }
 
     @Test

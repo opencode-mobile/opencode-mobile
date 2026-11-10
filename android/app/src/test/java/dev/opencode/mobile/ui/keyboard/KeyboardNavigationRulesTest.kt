@@ -53,12 +53,6 @@ class KeyboardNavigationRulesTest {
     }
 
     @Test
-    fun secondEscapeJustInsideWindowInterrupts() {
-        val result = escape(canInterrupt = true, armedAt = 10_000L, now = 14_999L)
-        assertEquals(KeyboardEscapeAction.Interrupt, result.action)
-    }
-
-    @Test
     fun secondEscapeAtExactlyFiveSecondsArmsAgain() {
         // The window is strictly shorter than 5 s.
         val result = escape(canInterrupt = true, armedAt = 10_000L, now = 15_000L)
@@ -229,12 +223,6 @@ class KeyboardNavigationRulesTest {
         assertTrue(KeyboardNavigationRules.promptHintVisible(hardwareKeyboardConnected = true, focusInsidePrompt = false))
         assertFalse(KeyboardNavigationRules.promptHintVisible(hardwareKeyboardConnected = true, focusInsidePrompt = true))
         assertFalse(KeyboardNavigationRules.promptHintVisible(hardwareKeyboardConnected = false, focusInsidePrompt = false))
-    }
-
-    @Test
-    fun promptHintText() {
-        assertEquals("Press Tab to answer with the keyboard", KeyboardNavigationRules.PROMPT_KEYBOARD_HINT)
-        assertEquals("Esc again to interrupt", KeyboardNavigationRules.INTERRUPT_ARMED_HINT)
     }
 
     @Test

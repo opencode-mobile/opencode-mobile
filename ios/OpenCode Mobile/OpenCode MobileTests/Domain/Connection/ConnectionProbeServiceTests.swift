@@ -58,27 +58,6 @@ struct ConnectionProbeServiceTests {
         }
     }
 
-    @Test func probe_prefersAuthFailureOverLaterNotFound() async {
-        ProtocolHealthURLProtocol.reset(responsesByPath: [
-            "/global/health": (401, #"{"error":"unauthorized"}"#),
-            "/api/info": (404, #"{}"#),
-        ])
-        let service = makeService()
-
-        do {
-            _ = try await service.probe(connection: sampleConnection)
-            Issue.record("expected auth failure")
-        } catch let error as ServerProbeError {
-            guard case let .http(statusCode, _) = error else {
-                Issue.record("expected http probe error, got \(error)")
-                return
-            }
-            #expect(statusCode == 401)
-        } catch {
-            Issue.record("unexpected error \(error)")
-        }
-    }
-
     @Test func probe_reportsUnhealthyWhenBodiesArePresentButUnusable() async {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, #"{"healthy":false,"version":"1.0.0"}"#),

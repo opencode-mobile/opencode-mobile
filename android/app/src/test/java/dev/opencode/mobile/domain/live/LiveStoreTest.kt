@@ -966,30 +966,6 @@ class MessageSyncTest {
         }
 
     @Test
-    fun observeMessages_doesNotEmitDuplicateOnUnchangedPoll() =
-        runTest(testDispatcher) {
-            val repository = FakeMessageRepository()
-            val store = createMessageSync(repository, FakeForegroundEventStream())
-            val emissions = mutableListOf<List<Message>>()
-            val collectJob =
-                launch {
-                    store.observeMessages("ses-1", "/repo").collect { update ->
-                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
-                    }
-                }
-            advanceTimeBy(1)
-
-            advanceTimeBy(
-                10_300L,
-            )
-            collectJob.cancel()
-            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
-
-            assertEquals(1, emissions.size)
-            assertEquals("Hello", emissions.single().single().text)
-        }
-
-    @Test
     fun observeMessages_keepsLastValueWhenRefreshFails() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()

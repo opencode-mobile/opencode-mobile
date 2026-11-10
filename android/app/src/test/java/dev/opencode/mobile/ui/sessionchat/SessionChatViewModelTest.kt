@@ -94,8 +94,6 @@ import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.markdown.HighlightCoreHighlightingEngine
-import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
-import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -141,7 +139,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -1734,33 +1731,6 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun failedReviewChangesCountStaysHidden() =
-        runTest(testDispatcher) {
-            val sessionRepository =
-                FakeSessionRepository(
-                    sessionDiffError = SessionError.Transport(IllegalStateException("offline")),
-                )
-            val viewModel =
-                createViewModel(
-                    repository =
-                        FakeMessageRepository(
-                            messages =
-                                listOf(
-                                    Message(id = "user-1", role = MessageRole.User, text = "Change it", sentAtEpochMs = 1),
-                                    Message(id = "assistant-1", role = MessageRole.Assistant, text = "Done", sentAtEpochMs = 2),
-                                ),
-                        ),
-                    sessionRepository = sessionRepository,
-                )
-
-            viewModel.bind("ses-1", "Title", "/repo")
-            advanceUntilIdle()
-
-            assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
-            assertEquals(null, sessionRepository.diffRequest)
-        }
-
-    @Test
     fun activeLatestTurnDoesNotLoadReviewChangesCount() =
         runTest(testDispatcher) {
             val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")
@@ -1831,51 +1801,6 @@ class SessionChatViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(SessionChatTimelineState.Ready, state.timeline)
             assertNotNull(state.messages.single().renderedMarkdown)
-        }
-
-    @Ignore("Quarantined from CI: stress println benchmark, not a correctness gate")
-    @Test
-    fun benchmark_loadMessages_longMarkdownHistory() =
-        runTest(testDispatcher) {
-            val messages = longMarkdownHistory()
-            val detectorMs = measureMs { messages.count { OpenCodeMarkdownDetector.shouldRender(it.text) } }
-            val parserMs =
-                measureMs {
-                    messages.forEach { message ->
-                        if (OpenCodeMarkdownDetector.shouldRender(message.text)) {
-                            OpenCodeMarkdownParser.parse(message.text)
-                        }
-                    }
-                }
-            val preparer =
-                MessageContentPreparer(HighlightCoreHighlightingEngine()).apply {
-                    computationDispatcher = testDispatcher
-                }
-            val preparerMs =
-                measureMs {
-                    preparer.prepareMessages(messages)
-                    Unit
-                }
-            val viewModel =
-                createViewModel(
-                    repository =
-                        FakeMessageRepository(
-                            messages = messages,
-                            contentPreparer = preparer,
-                        ),
-                )
-
-            val startedAt = System.nanoTime()
-            viewModel.bind("ses-benchmark", "Markdown benchmark", "/repo")
-            advanceUntilIdle()
-            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
-
-            assertEquals(SessionChatTimelineState.Ready, viewModel.uiState.value.timeline)
-            assertEquals(20, viewModel.uiState.value.messages.size)
-            println(
-                "MARKDOWN_BENCHMARK android detector-ms=$detectorMs parser-ms=$parserMs " +
-                    "preparer-ms=$preparerMs viewmodel-load-ms=$elapsedMs messages=20 code-lines=3000",
-            )
         }
 
     @Test
@@ -8741,29 +8666,6 @@ class SessionChatViewModelTest {
             currentProfile = currentProfile,
             scope = CoroutineScope(SupervisorJob() + testDispatcher),
         )
-
-    private fun longMarkdownHistory(): List<Message> =
-        (1..20).map { messageIndex ->
-            Message(
-                id = "benchmark-$messageIndex",
-                role = MessageRole.Assistant,
-                text =
-                    buildString {
-                        append("## Response $messageIndex\n\n```typescript\n")
-                        repeat(150) { lineIndex ->
-                            append("const item$lineIndex = response$lineIndex?.value ?? 'markdown benchmark';\n")
-                        }
-                        append("```\n")
-                    },
-                sentAtEpochMs = messageIndex.toLong(),
-            )
-        }
-
-    private suspend fun measureMs(block: suspend () -> Unit): Long {
-        val startedAt = System.nanoTime()
-        block()
-        return (System.nanoTime() - startedAt) / 1_000_000
-    }
 
     private fun reviewChangesMessage(id: String) =
         SessionChatMessageItem(

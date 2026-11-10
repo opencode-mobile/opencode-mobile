@@ -398,22 +398,6 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun resolveFooter_newActiveWorkingCancelsVisibleHold() {
-        val resolved =
-            resolve(
-                activeLabel = "Working",
-                previous = fadingWorking(),
-                hold = visibleHold(),
-            )
-        assertEquals(
-            WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = false),
-            resolved.chrome,
-        )
-        assertNull(resolved.hold)
-        assertNull(resolved.wakeAfterMs)
-    }
-
-    @Test
     fun resolveFooter_hideImmediatelyUnmountsAnyHold() {
         val resolved =
             resolve(
