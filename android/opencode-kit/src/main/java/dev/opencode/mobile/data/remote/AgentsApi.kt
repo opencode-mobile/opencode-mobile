@@ -15,7 +15,7 @@ class AgentsApi private constructor(
 ) {
     constructor(httpClient: OpencodeHttpClient) : this(ClientProvider(httpClient::get))
 
-    internal constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
+    constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
 
     suspend fun listAgents(directory: String? = null): List<AgentDto> =
         httpClient

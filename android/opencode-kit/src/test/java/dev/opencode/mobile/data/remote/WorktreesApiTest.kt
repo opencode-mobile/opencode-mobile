@@ -35,7 +35,12 @@ class WorktreesApiTest {
 
             assertEquals(listOf("/worktrees/crisp-cactus"), api.listV2("proj"))
             assertEquals("proj", captured.single().url.parameters["projectID"])
-            assertTrue(captured.single().url.encodedPath.endsWith("/api/worktree"))
+            assertTrue(
+                captured
+                    .single()
+                    .url.encodedPath
+                    .endsWith("/api/worktree"),
+            )
         }
 
     @Test
@@ -87,7 +92,12 @@ class WorktreesApiTest {
 
             assertEquals(V1WorktreeHttp.Ok("""["/abs/wt-a","/abs/wt-b"]"""), api.listV1("/repo"))
             assertEquals("/repo", captured.single().url.parameters["directory"])
-            assertTrue(captured.single().url.encodedPath.endsWith("/experimental/worktree"))
+            assertTrue(
+                captured
+                    .single()
+                    .url.encodedPath
+                    .endsWith("/experimental/worktree"),
+            )
         }
 
     @Test

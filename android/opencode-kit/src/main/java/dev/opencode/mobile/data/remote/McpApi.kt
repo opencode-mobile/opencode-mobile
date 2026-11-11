@@ -15,7 +15,7 @@ class McpApi private constructor(
 ) {
     constructor(httpClient: OpencodeHttpClient) : this(ClientProvider(httpClient::get))
 
-    internal constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
+    constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
 
     suspend fun listServers(directory: String? = null): Map<String, McpStatusDto> =
         httpClient

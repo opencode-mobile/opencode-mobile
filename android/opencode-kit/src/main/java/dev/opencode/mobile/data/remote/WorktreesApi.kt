@@ -119,7 +119,7 @@ class WorktreesApi private constructor(
 ) : WorktreeRemote {
     constructor(httpClient: OpencodeHttpClient) : this(ClientProvider(httpClient::get))
 
-    internal constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
+    constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
 
     override suspend fun listV2(projectId: String): List<String> =
         httpClient
