@@ -96,6 +96,8 @@ struct ComponentGalleryDetailView: View {
             TagGalleryView()
         case .keyValueRow:
             KeyValueRowGalleryView()
+        case .featureItem:
+            FeatureItemGalleryView()
         case .attachment:
             AttachmentGalleryView()
         case .imageGallery:

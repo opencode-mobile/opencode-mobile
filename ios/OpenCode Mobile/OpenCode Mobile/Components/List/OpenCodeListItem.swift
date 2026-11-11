@@ -143,6 +143,8 @@ struct OpenCodeListItem<Trailing: View>: View {
     let caption: OpenCodeText?
     /// Small tag after the title, such as "git". The title truncates first; the tag stays.
     let titleTag: OpenCodeText?
+    /// Accent "New" badge after the title, for a feature the person has not opened yet.
+    let isNew: Bool
     let selected: Bool
     let enabled: Bool
     let style: OpenCodeListItemStyle
@@ -167,6 +169,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         status: OpenCodeListItemStatus? = nil,
         caption: OpenCodeText? = nil,
         titleTag: OpenCodeText? = nil,
+        isNew: Bool = false,
         selected: Bool = false,
         enabled: Bool = true,
         style: OpenCodeListItemStyle = .plain,
@@ -188,6 +191,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.status = status
         self.caption = caption
         self.titleTag = titleTag?.isEmpty == true ? nil : titleTag
+        self.isNew = isNew
         self.selected = selected
         self.enabled = enabled
         self.style = style
@@ -422,6 +426,9 @@ struct OpenCodeListItem<Trailing: View>: View {
                         .lineLimit(1)
                     if let titleTag {
                         OpenCodeTag(titleTag, size: .small)
+                    }
+                    if isNew {
+                        OpenCodeTag("common.new", size: .small, tone: .accent)
                     }
                 }
 
