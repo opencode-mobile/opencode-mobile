@@ -296,6 +296,16 @@ struct BottomSheetGalleryView: View {
                     action: { isPresented = false }
                 )
             }
+            if itemCount >= 40 {
+                // Taller than the screen: Fit all must rest at its limit and scroll.
+                ForEach(7 ... itemCount, id: \.self) { index in
+                    OpenCodeBottomSheetEntry(
+                        title: .verbatim("Worktree \(index)"),
+                        startDecorator: .icon(.gitBranch),
+                        action: { isPresented = false }
+                    )
+                }
+            }
     }
 }
 
@@ -359,7 +369,7 @@ private struct ItemCountControls: View {
                 .foregroundStyle(OpenCodeColors.textStrong)
 
             HStack(spacing: 8) {
-                ForEach([2, 4, 6], id: \.self) { count in
+                ForEach([2, 4, 6, 40], id: \.self) { count in
                     OpenCodeChoiceBadge(
                         label: "\(count)",
                         selected: selected == count,
