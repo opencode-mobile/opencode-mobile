@@ -182,6 +182,10 @@ android {
     }
 
     sourceSets {
+        // What's new (#1027) reads the repo-root release notes as the asset release-notes.json.
+        getByName("main") {
+            assets.srcDir("../../release-notes")
+        }
         // The Highlighting Lab ships in debug and benchmark only; release has a no-op seam.
         getByName("debug") {
             java.srcDir("src/lab/java")
@@ -197,6 +201,7 @@ android {
         getByName("test") {
             resources.srcDir("../../shared/sse-recovery")
             resources.srcDir("../../shared/feedback")
+            resources.srcDir("../../release-notes")
         }
     }
 }
