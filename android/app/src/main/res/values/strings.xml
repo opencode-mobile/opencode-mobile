@@ -1667,14 +1667,14 @@
     <string name="worktrees_menu_subtitle">%1$d across %2$s</string>
     <string name="worktrees_menu_none">None</string>
     <string name="session_list_worktree_removed">worktree removed</string>
-    <string name="whats_new_title">What\'s new</string>
+    <string name="whats_new_title">What’s new</string>
     <string name="whats_new_version">Version %1$s</string>
-    <string name="whats_new_skipped_one">You skipped one update, so it\'s included below.</string>
-    <string name="whats_new_skipped_many">You skipped %1$d updates, so they\'re included below.</string>
+    <string name="whats_new_skipped_one">You skipped one update, so it’s included below.</string>
+    <string name="whats_new_skipped_many">You skipped %1$d updates, so they’re included below.</string>
     <string name="whats_new_in_version">In %1$s</string>
     <string name="whats_new_also_since">Also new since your last update · %1$s</string>
     <string name="whats_new_fixes">Fixes</string>
     <string name="whats_new_done">Done</string>
-    <string name="whats_new_find_again">Find this again in Settings → What\'s new</string>
+    <string name="whats_new_find_again">Find this again in Settings → What’s new</string>
     <string name="whats_new_installed">Installed</string>
 </resources>

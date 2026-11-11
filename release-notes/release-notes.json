@@ -53,7 +53,7 @@
         {
           "kind": "new",
           "icon": "sparkle",
-          "title": "What's new",
+          "title": "What’s new",
           "body": "This screen. Find past releases any time in Settings.",
           "prs": []
         },
