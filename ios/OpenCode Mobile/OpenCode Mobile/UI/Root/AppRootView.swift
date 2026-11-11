@@ -21,6 +21,7 @@ final class AppRootViewModel {
     private let appOnboardingPreferences: AppOnboardingPreferences
     private let sessionChatDisplayPreferences: SessionChatDisplayPreferences
     private let newFeatures: NewFeatureStore
+    private let whatsNew: WhatsNewStore
 
     init(
         connectionProfileStore: any ConnectionProfileStore,
@@ -29,7 +30,8 @@ final class AppRootViewModel {
         worldSignals: SceneWorldSignals,
         appOnboardingPreferences: AppOnboardingPreferences,
         sessionChatDisplayPreferences: SessionChatDisplayPreferences,
-        newFeatures: NewFeatureStore
+        newFeatures: NewFeatureStore,
+        whatsNew: WhatsNewStore
     ) {
         self.connectionProfileStore = connectionProfileStore
         self.activeConnectionManager = activeConnectionManager
@@ -38,6 +40,7 @@ final class AppRootViewModel {
         self.appOnboardingPreferences = appOnboardingPreferences
         self.sessionChatDisplayPreferences = sessionChatDisplayPreferences
         self.newFeatures = newFeatures
+        self.whatsNew = whatsNew
 
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
@@ -53,6 +56,8 @@ final class AppRootViewModel {
         sessionChatDisplayPreferences.resolveTimelineForInstall(existingInstall: existingInstall)
         // Before Home appears, so no screen reads a badge that is not settled yet.
         newFeatures.sync(isFreshInstall: !existingInstall)
+        // Existing app data is the upgrade signal the first version with notes needs.
+        whatsNew.prepareLaunch(isUpgrade: existingInstall)
         if !existingInstall {
             state = .appOnboarding
         } else {

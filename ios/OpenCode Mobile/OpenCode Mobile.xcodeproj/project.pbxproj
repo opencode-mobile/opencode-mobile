@@ -13,6 +13,7 @@
 		63OCFIREBF00200002BDFFC /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD002002BDFFC /* FirebaseCrashlytics */; };
 		63OCFIREBF00300002BDFFC /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD003002BDFFC /* FirebaseRemoteConfig */; };
 		63OCFIREBF00400002BDFFC /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD004002BDFFC /* FirebaseAppCheck */; };
+		63OCRELNOTES001002BDFFC0 /* release-notes.json in Resources */ = {isa = PBXBuildFile; fileRef = 63OCRELNOTES002002BDFFC0 /* release-notes.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +37,7 @@
 		63369C0F2FA933AE002BDFFC /* OpenCode Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "OpenCode Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		63369C1E2FA933AF002BDFFC /* OpenCode MobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "OpenCode MobileTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		63369C282FA933AF002BDFFC /* OpenCode MobileUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "OpenCode MobileUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		63OCRELNOTES002002BDFFC0 /* release-notes.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "release-notes.json"; path = "../../release-notes/release-notes.json"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -93,6 +95,7 @@
 				63369C112FA933AE002BDFFC /* OpenCode Mobile */,
 				63369C212FA933AF002BDFFC /* OpenCode MobileTests */,
 				63369C2B2FA933AF002BDFFC /* OpenCode MobileUITests */,
+				63OCRELNOTES002002BDFFC0 /* release-notes.json */,
 				63369C102FA933AE002BDFFC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -241,6 +244,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				63OCRELNOTES001002BDFFC0 /* release-notes.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

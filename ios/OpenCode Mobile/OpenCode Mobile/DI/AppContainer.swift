@@ -688,7 +688,8 @@ extension Container {
                 worldSignals: self.worldSignals(),
                 appOnboardingPreferences: AppOnboardingPreferences.shared,
                 sessionChatDisplayPreferences: SessionChatDisplayPreferences.shared,
-                newFeatures: NewFeatureStore.shared
+                newFeatures: NewFeatureStore.shared,
+                whatsNew: WhatsNewStore.shared
             )
         }
     }
