@@ -1,0 +1,610 @@
+{
+  "releases": [
+    {
+      "android": {
+        "version": "1.5.0",
+        "released": null
+      },
+      "ios": {
+        "version": "1.4.0",
+        "released": null
+      },
+      "items": [
+        {
+          "kind": "new",
+          "icon": "edit",
+          "title": "Start a session as a draft",
+          "body": "Write first, then pick the project and worktree. The session is created when you send.",
+          "prs": [
+            1005,
+            1022
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "goal",
+          "title": "Follow a /goal",
+          "body": "See the session goal in Session Chat, and pause or clear it from its sheet.",
+          "prs": [
+            1008
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "agent",
+          "title": "Floating pills in Session Chat",
+          "body": "Branch changes, background work from subagents and shells, and anything waiting on you, always in reach.",
+          "prs": [
+            908,
+            916,
+            917,
+            924,
+            927,
+            971
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "image",
+          "title": "Images as galleries",
+          "body": "Images in a message show inline and open full screen.",
+          "prs": [
+            911
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "note",
+          "title": "Deny with a note",
+          "body": "Tell the agent what to do instead when you deny a permission.",
+          "prs": [
+            1006
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "search",
+          "title": "Search and restore sessions",
+          "body": "Search sessions on Home, and bring archived sessions back.",
+          "prs": [
+            977,
+            978,
+            992
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "keyboard",
+          "title": "Keyboard and mouse",
+          "body": "Shortcuts and pointer support with a hardware keyboard or mouse.",
+          "prs": [
+            928
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "attach",
+          "title": "Attach any file",
+          "body": "Attach videos and other files when your server supports streamed uploads.",
+          "prs": [
+            993
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "attach",
+          "title": "Paste and drop attachments",
+          "body": "Paste or drop files into Session Chat. Large files upload as they stream.",
+          "platforms": [
+            "android"
+          ],
+          "prs": [
+            855,
+            875
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "sparkle",
+          "title": "What's new",
+          "body": "This screen. Find past releases any time in Settings.",
+          "prs": []
+        },
+        {
+          "kind": "improved",
+          "icon": "text-select",
+          "title": "Select and copy text",
+          "body": "Select part of a message, and copy a whole code block in one tap.",
+          "prs": [
+            885,
+            1016
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "chat",
+          "title": "Steering messages in the timeline",
+          "body": "Messages you send while the agent works now show where they landed.",
+          "prs": [
+            909
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "time",
+          "title": "Message times",
+          "body": "Drag your message to the left to see when you sent it.",
+          "prs": [
+            897
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "sheet",
+          "title": "Sheets open halfway",
+          "body": "Drag a sheet up to full height, or down to close it.",
+          "prs": [
+            996
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "server",
+          "title": "Faster server switching",
+          "body": "Switching servers no longer waits for the old one to answer.",
+          "prs": [
+            880
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "star",
+          "title": "Support the project",
+          "body": "Rate the app, star it on GitHub, or follow along on X from Settings.",
+          "prs": [
+            1011
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "send",
+          "title": "Prompts send right away",
+          "body": "Prompts send directly, with Retry if one gets stuck.",
+          "platforms": [
+            "ios"
+          ],
+          "prs": [
+            1003
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "fix",
+          "title": "Back gesture",
+          "body": "Going back no longer opens message actions.",
+          "platforms": [
+            "android"
+          ],
+          "prs": [
+            1023
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "fix",
+          "title": "Crash fixes",
+          "body": "Switching servers on Home and selecting text with a mouse no longer crash.",
+          "prs": [
+            945,
+            991
+          ],
+          "platforms": [
+            "android"
+          ]
+        }
+      ]
+    },
+    {
+      "android": {
+        "version": "1.3.1",
+        "released": "2026-10-27"
+      },
+      "ios": {
+        "version": "1.2.1",
+        "released": "2026-10-27"
+      },
+      "items": [
+        {
+          "kind": "new",
+          "icon": "chat",
+          "title": "Ask a side question",
+          "body": "Use /btw to ask something without interrupting the session.",
+          "prs": [
+            847
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "attach",
+          "title": "Paste and drop attachments",
+          "body": "Paste or drop files into Session Chat. Large files upload as they stream.",
+          "platforms": [
+            "ios"
+          ],
+          "prs": [
+            855,
+            875
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "code",
+          "title": "Source code in About",
+          "body": "Settings links to the app's source code.",
+          "prs": [
+            859
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "qr",
+          "title": "Inverted pairing QR codes",
+          "body": "Light-on-dark pairing QR codes now scan.",
+          "platforms": [
+            "android"
+          ],
+          "prs": [
+            865
+          ]
+        }
+      ]
+    },
+    {
+      "android": {
+        "version": "1.3.0",
+        "released": "2026-10-25"
+      },
+      "ios": {
+        "version": "1.2.0",
+        "released": "2026-10-25"
+      },
+      "items": [
+        {
+          "kind": "new",
+          "icon": "git-branch",
+          "title": "Worktrees",
+          "body": "Create worktrees from the app and see their sessions grouped under the project on Home.",
+          "prs": [
+            781,
+            786,
+            788
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "list",
+          "title": "Timeline styles",
+          "body": "Choose how Session Chat shows the agent's work: step rail or activity cards.",
+          "prs": [
+            782,
+            807
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "terminal",
+          "title": "Run shell commands",
+          "body": "Start a message with ! to run it as a shell command.",
+          "prs": [
+            769
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "agent",
+          "title": "Inspect tool results",
+          "body": "Open any tool call to see its full input and output.",
+          "prs": [
+            767,
+            799
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "slash",
+          "title": "Several skills per prompt",
+          "body": "Mention skills inline, as many as you need.",
+          "prs": [
+            801
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "list",
+          "title": "Compact Home rows",
+          "body": "Denser session rows, with a Classic option in Settings.",
+          "prs": [
+            800,
+            804,
+            813
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "time",
+          "title": "Rate limits",
+          "body": "A countdown and next steps when a provider limits your usage.",
+          "prs": [
+            834
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "lock",
+          "title": "Safer connections",
+          "body": "Saved addresses are checked without sending your password.",
+          "prs": [
+            756,
+            770
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "folder",
+          "title": "New project loading",
+          "body": "Home shows progress while a newly added project's sessions load.",
+          "platforms": [
+            "ios"
+          ],
+          "prs": [
+            743
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "archive",
+          "title": "Archive on newer servers",
+          "body": "Archiving sessions works again on OpenCode 2.1 and later.",
+          "prs": [
+            758
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "server",
+          "title": "Server upgrades",
+          "body": "The app reconnects when your server switches protocol versions.",
+          "prs": [
+            830
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "fix",
+          "title": "Crash fixes",
+          "body": "Fixed crashes when live updates or worktrees reconnect.",
+          "platforms": [
+            "ios"
+          ],
+          "prs": [
+            747,
+            778
+          ]
+        }
+      ]
+    },
+    {
+      "android": {
+        "version": "1.2.1",
+        "released": "2026-10-20"
+      },
+      "items": [
+        {
+          "kind": "fixed",
+          "icon": "fix",
+          "title": "Android 7 support",
+          "body": "The app launches on Android 7 again.",
+          "prs": [
+            746
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "folder",
+          "title": "New project loading",
+          "body": "Home shows progress while a newly added project's sessions load.",
+          "prs": [
+            743
+          ]
+        }
+      ]
+    },
+    {
+      "android": {
+        "version": "1.2.0",
+        "released": "2026-10-19"
+      },
+      "ios": {
+        "version": "1.1.0",
+        "released": "2026-10-19"
+      },
+      "items": [
+        {
+          "kind": "new",
+          "icon": "sidebar",
+          "title": "Tablet split view",
+          "body": "Home, Settings, Changes and Terminals side by side, with keyboard shortcuts.",
+          "prs": [
+            356,
+            642,
+            643,
+            647
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "mic",
+          "title": "Dictation",
+          "body": "Dictate prompts in the composer.",
+          "prs": [
+            650,
+            657,
+            736,
+            740
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "at-sign",
+          "title": "Mention files",
+          "body": "Type @ to add a file from your project to a prompt.",
+          "prs": [
+            678
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "folder",
+          "title": "Browse files",
+          "body": "Open a read-only file browser from Session Chat.",
+          "prs": [
+            651
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "fork",
+          "title": "Fork a session",
+          "body": "Fork from the Session Chat menu or from any message.",
+          "prs": [
+            658,
+            716
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "qr",
+          "title": "Pair with a code",
+          "body": "Scan a pairing QR code or type the pairing code to connect.",
+          "prs": [
+            347,
+            355
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "feedback",
+          "title": "Report a problem",
+          "body": "Send feedback from inside the app.",
+          "prs": [
+            722,
+            724
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "phone",
+          "title": "iPhone Duo",
+          "body": "Layouts for every iPhone Duo pose.",
+          "platforms": [
+            "ios"
+          ],
+          "prs": [
+            725
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "git-branch",
+          "title": "Branch and changes",
+          "body": "A Session Chat pill shows the branch and working-tree changes. Worktree sessions show on Home.",
+          "prs": [
+            317,
+            699,
+            704
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "folder",
+          "title": "Add any project",
+          "body": "Type a path or browse other drives, with suggestions from your server.",
+          "prs": [
+            675,
+            698,
+            713
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "terminal",
+          "title": "New shell",
+          "body": "Start a new shell from the Terminals screen.",
+          "prs": [
+            364
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "send",
+          "title": "Reliable sends",
+          "body": "Prompts are kept when the connection drops while sending.",
+          "prs": [
+            318,
+            363
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "fix",
+          "title": "Crash fixes",
+          "body": "Fixed the crashes reported in 1.0.0.",
+          "prs": [
+            323,
+            346
+          ]
+        }
+      ]
+    },
+    {
+      "android": {
+        "version": "1.0.0",
+        "released": "2026-09-18"
+      },
+      "ios": {
+        "version": "1.0.0",
+        "released": "2026-09-18"
+      },
+      "items": [
+        {
+          "kind": "new",
+          "icon": "server",
+          "title": "Connect to your opencode server",
+          "body": "Over your LAN, VPN, HTTPS or a tunnel. Passwords stay in the device keychain.",
+          "prs": []
+        },
+        {
+          "kind": "new",
+          "icon": "list",
+          "title": "All your sessions",
+          "body": "See every project's sessions on Home, with live status.",
+          "prs": []
+        },
+        {
+          "kind": "new",
+          "icon": "chat",
+          "title": "Live Session Chat",
+          "body": "Follow the agent as it works and send prompts from your phone.",
+          "prs": []
+        },
+        {
+          "kind": "new",
+          "icon": "lock",
+          "title": "Permissions and questions",
+          "body": "Answer the agent's permission requests and questions from anywhere.",
+          "prs": []
+        }
+      ]
+    }
+  ]
+}
