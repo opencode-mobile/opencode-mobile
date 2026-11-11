@@ -465,7 +465,7 @@ fun SettingsScreen(
                     isNew = whatsNewBadgePending,
                     selected = selectedDetail == SettingsDetail.WhatsNew,
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Star, whatsNewTitle),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Sparkles, whatsNewTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = onWhatsNewClick,
                     modifier = Modifier.padding(horizontal = 16.dp),

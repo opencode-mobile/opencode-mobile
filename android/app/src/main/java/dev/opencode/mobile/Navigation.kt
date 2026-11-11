@@ -113,7 +113,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ReasoningRowGalleryScr
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.FeatureRowGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.FeatureItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SectionHeaderGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SelectableCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
@@ -450,7 +450,7 @@ fun MainNavigation(appCovered: Boolean = false) {
                                                     backStack.addAll(routes)
                                                 }
                                             // What's new waits for Home to be the idle, visible screen: nothing pushed
-                                            // over it, no session open in its pane, nothing over its list.
+                                            // over it and nothing over its list.
                                             val whatsNewViewModel: WhatsNewSheetViewModel = hiltViewModel()
                                             val whatsNewState by whatsNewViewModel.state.collectAsStateWithLifecycle()
                                             var homeContentIdle by remember { mutableStateOf(false) }
@@ -460,8 +460,8 @@ fun MainNavigation(appCovered: Boolean = false) {
                                                 homeContentIdle &&
                                                     !appCovered &&
                                                     homeLifecycleState.isAtLeast(Lifecycle.State.RESUMED) &&
-                                                    backStack.lastOrNull() == ProjectListHome &&
-                                                    (!showsSplit || paneSelection == null)
+                                                    // A session open in the tablet pane still leaves Home visible.
+                                                    backStack.lastOrNull() == ProjectListHome
                                             LaunchedEffect(homeIdle) { whatsNewViewModel.onHomeIdleChange(homeIdle) }
                                             WhatsNewSheet(state = whatsNewState, onDismiss = whatsNewViewModel::dismiss)
                                             // Screens pushed in the pane pop through its own NavDisplay first.
@@ -820,7 +820,7 @@ fun MainNavigation(appCovered: Boolean = false) {
                                                         ComponentGalleryEntryId.PickerCard -> PickerCardGalleryScreen()
                                                         ComponentGalleryEntryId.ListGroup -> ListGroupGalleryScreen()
                                                         ComponentGalleryEntryId.SectionHeader -> SectionHeaderGalleryScreen()
-                                                        ComponentGalleryEntryId.FeatureRow -> FeatureRowGalleryScreen()
+                                                        ComponentGalleryEntryId.FeatureItem -> FeatureItemGalleryScreen()
                                                         ComponentGalleryEntryId.ReorderableList -> ReorderableListGalleryScreen()
                                                         ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                                                         ComponentGalleryEntryId.FilterTabs -> FilterTabsGalleryScreen()

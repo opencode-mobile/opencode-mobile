@@ -570,7 +570,7 @@ struct SettingsView: View {
                 isNew: whatsNewStore.badgePending,
                 selected: isDetailSelected(.whatsNew),
                 style: .card,
-                startDecorator: .icon(.star, accessibilityLabel: "whats_new.title"),
+                startDecorator: .icon(.sparkles, accessibilityLabel: "whats_new.title"),
                 accessory: .disclosure,
                 action: { open(.whatsNew) }
             )

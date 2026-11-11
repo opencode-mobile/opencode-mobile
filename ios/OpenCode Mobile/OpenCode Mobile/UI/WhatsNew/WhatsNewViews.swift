@@ -5,24 +5,24 @@ extension ReleaseNoteIcon {
     var openCodeIcon: OpenCodeIcon {
         switch self {
         case .edit: .edit
-        case .goal: .radioButtonChecked
+        case .goal: .target
         case .agent: .agent
-        case .image: .widgets
-        case .note: .rateReview
+        case .image: .image
+        case .note: .description
         case .search: .search
-        case .keyboard: .code
-        case .attach: .description
-        case .sparkle: .star
+        case .keyboard: .keyboard
+        case .attach: .paperclip
+        case .sparkle: .sparkles
         case .textSelect: .textSelect
-        case .chat: .rateReview
-        case .time: .restart
+        case .chat: .messageSquare
+        case .time: .clock
         case .sheet: .expandContent
         case .server: .cloud
         case .star: .star
         case .send: .arrowUpward
-        case .fix: .check
+        case .fix: .wrench
         case .code: .code
-        case .qr: .widgets
+        case .qr: .qrCode
         case .gitBranch: .gitBranch
         case .list: .list
         case .terminal: .terminal
@@ -33,9 +33,9 @@ extension ReleaseNoteIcon {
         case .sidebar: .sidebar
         case .mic: .mic
         case .atSign: .atSign
-        case .fork: .callSplit
-        case .feedback: .edit
-        case .phone: .widgets
+        case .fork: .gitFork
+        case .feedback: .rateReview
+        case .phone: .smartphone
         }
     }
 }

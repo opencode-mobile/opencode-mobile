@@ -9,8 +9,8 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.releasenotes.ReleaseNote
 import dev.opencode.mobile.domain.releasenotes.ReleaseNoteItem
 import dev.opencode.mobile.domain.releasenotes.ReleaseNoteKind
-import dev.opencode.mobile.ui.components.OpenCodeFeatureRow
-import dev.opencode.mobile.ui.components.OpenCodeFeatureRowTone
+import dev.opencode.mobile.ui.components.OpenCodeFeatureItem
+import dev.opencode.mobile.ui.components.OpenCodeFeatureItemTone
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -18,22 +18,22 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 internal fun releaseNoteIcon(key: String): ImageVector =
     when (key) {
         "edit" -> OpenCodeIcons.Edit
-        "goal" -> OpenCodeIcons.RadioButtonChecked
+        "goal" -> OpenCodeIcons.Target
         "agent" -> OpenCodeIcons.Agent
-        "image" -> OpenCodeIcons.Widgets
+        "image" -> OpenCodeIcons.Image
         "note" -> OpenCodeIcons.Description
         "search" -> OpenCodeIcons.Search
-        "keyboard" -> OpenCodeIcons.Terminal
-        "attach" -> OpenCodeIcons.Add
+        "keyboard" -> OpenCodeIcons.Keyboard
+        "attach" -> OpenCodeIcons.Paperclip
         "text-select" -> OpenCodeIcons.TextSelect
-        "chat" -> OpenCodeIcons.RateReview
-        "time" -> OpenCodeIcons.Restart
+        "chat" -> OpenCodeIcons.MessageSquare
+        "time" -> OpenCodeIcons.Clock
         "sheet" -> OpenCodeIcons.ExpandContent
         "server" -> OpenCodeIcons.Cloud
         "send" -> OpenCodeIcons.ArrowUpward
-        "fix" -> OpenCodeIcons.Check
+        "fix" -> OpenCodeIcons.Wrench
         "code" -> OpenCodeIcons.Code
-        "qr" -> OpenCodeIcons.Widgets
+        "qr" -> OpenCodeIcons.QrCode
         "git-branch" -> OpenCodeIcons.GitBranch
         "list" -> OpenCodeIcons.List
         "terminal" -> OpenCodeIcons.Terminal
@@ -44,16 +44,16 @@ internal fun releaseNoteIcon(key: String): ImageVector =
         "sidebar" -> OpenCodeIcons.Sidebar
         "mic" -> OpenCodeIcons.Mic
         "at-sign" -> OpenCodeIcons.AtSign
-        "fork" -> OpenCodeIcons.CallSplit
+        "fork" -> OpenCodeIcons.GitFork
         "feedback" -> OpenCodeIcons.RateReview
-        "phone" -> OpenCodeIcons.Widgets
+        "phone" -> OpenCodeIcons.Smartphone
         "star" -> OpenCodeIcons.Star
         else -> WhatsNewSparkleIcon
     }
 
-/** The app has no sparkle icon; the star stands in for it. */
+/** The What's new eyebrow and the icon for an unknown key. */
 internal val WhatsNewSparkleIcon: ImageVector
-    get() = OpenCodeIcons.Star
+    get() = OpenCodeIcons.Sparkles
 
 /** One release's items: new, then improved, then a Fixes header over the fixes. */
 @Composable
@@ -73,10 +73,10 @@ internal fun WhatsNewReleaseItems(
 
 @Composable
 private fun WhatsNewItemRow(item: ReleaseNoteItem) {
-    OpenCodeFeatureRow(
+    OpenCodeFeatureItem(
         title = item.title,
         body = item.body,
         icon = releaseNoteIcon(item.iconKey),
-        tone = if (item.kind == ReleaseNoteKind.Fixed) OpenCodeFeatureRowTone.Success else OpenCodeFeatureRowTone.Neutral,
+        tone = if (item.kind == ReleaseNoteKind.Fixed) OpenCodeFeatureItemTone.Success else OpenCodeFeatureItemTone.Neutral,
     )
 }
