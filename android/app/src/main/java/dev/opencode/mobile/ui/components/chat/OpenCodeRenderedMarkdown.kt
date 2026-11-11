@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -562,7 +563,9 @@ val LocalOpenCodeUserScrollInProgress = staticCompositionLocalOf<() -> Boolean> 
  * tap that opens message actions. Long-press belongs to text selection, and
  * the first tap after a selection only dismisses it. A mouse click is never a
  * tap: like on a desktop it places, clears or (double-click) extends a
- * selection, and a right-click opens message actions instead.
+ * selection, and a right-click opens message actions instead. A touch the
+ * system took over, such as the back gesture starting at the screen edge, is
+ * never a tap and leaves any selection as it was.
  */
 internal class MessageTextTapClassifier {
     private var selectionActive = false
@@ -573,7 +576,9 @@ internal class MessageTextTapClassifier {
         linkHandled: Boolean,
         startedDuringScroll: Boolean,
         mouse: Boolean = false,
+        canceled: Boolean = false,
     ): Boolean {
+        if (canceled) return false
         if (linkHandled) {
             selectionActive = false
             return false
@@ -654,6 +659,7 @@ private fun Modifier.opensMessageActionsOnTextTap(
             val start = System.nanoTime()
             var moved = false
             var released = false
+            var canceled = false
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Final)
                 if ((System.nanoTime() - start) / 1_000_000 >= timeout) break
@@ -668,6 +674,7 @@ private fun Modifier.opensMessageActionsOnTextTap(
                 }
                 if (!change.pressed) {
                     released = true
+                    canceled = change.isSyntheticCancel()
                     break
                 }
             }
@@ -680,6 +687,7 @@ private fun Modifier.opensMessageActionsOnTextTap(
                     linkHandled = linkHandled,
                     startedDuringScroll = startedDuringScroll,
                     mouse = down.type == PointerType.Mouse,
+                    canceled = canceled,
                 )
             if (!isTap) return@awaitEachGesture
             val code = tapGate?.codeBlock
@@ -692,6 +700,14 @@ private fun Modifier.opensMessageActionsOnTextTap(
         }
     }
 }
+
+/**
+ * True for the lift Compose makes up when the system cancels a touch, for
+ * example when the edge back gesture takes it over. That lift arrives already
+ * consumed and repeats the previous event's time; a real lift is a new event.
+ */
+internal fun PointerInputChange.isSyntheticCancel(): Boolean =
+    !pressed && previousPressed && isConsumed && uptimeMillis == previousUptimeMillis
 
 /**
  * Marks a touch that starts on this block so a tap copies the block, and

@@ -8,8 +8,8 @@ import dev.opencode.mobile.domain.goal.SessionGoalPause
 import dev.opencode.mobile.domain.goal.SessionGoalPauseKind
 import dev.opencode.mobile.domain.goal.SessionGoalStatus
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatGoalRegionState
-import dev.opencode.mobile.ui.text.UiText
 
 /** What a goal is doing now, as the pill, the sheet's tag and the status row show it. */
 enum class SessionChatGoalActivity {

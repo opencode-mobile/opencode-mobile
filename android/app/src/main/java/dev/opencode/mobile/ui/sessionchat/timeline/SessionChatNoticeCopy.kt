@@ -4,7 +4,7 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.model.ModelSelectionOption
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 
 /**
  * One notice row's copy: [label] in the weak tone, then [value] in the info tint.

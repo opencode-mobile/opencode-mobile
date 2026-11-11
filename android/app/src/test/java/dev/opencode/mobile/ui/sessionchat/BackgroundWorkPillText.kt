@@ -1,6 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.text.english
 
 /** A pill with fixed text, for tests that pass it around as a value. */

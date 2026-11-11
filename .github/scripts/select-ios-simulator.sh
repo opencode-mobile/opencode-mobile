@@ -23,3 +23,4 @@ PY
 )"
 
 echo "destination=platform=iOS Simulator,id=${device_id}" >> "${GITHUB_OUTPUT}"
+echo "udid=${device_id}" >> "${GITHUB_OUTPUT}"

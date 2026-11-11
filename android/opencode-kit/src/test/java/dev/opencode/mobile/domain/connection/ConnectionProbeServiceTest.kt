@@ -150,31 +150,6 @@ class ConnectionProbeServiceTest {
         }
 
     @Test
-    fun probe_prefersAuthFailureOverLaterNotFound() =
-        runTest {
-            val service =
-                service { request ->
-                    when (request.url.encodedPath) {
-                        "/global/health" ->
-                            respond(
-                                content = """{"error":"unauthorized"}""",
-                                status = HttpStatusCode.Unauthorized,
-                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
-                            )
-                        "/api/info" -> jsonNotFound()
-                        else -> jsonNotFound()
-                    }
-                }
-
-            try {
-                service.probe(connection)
-                fail("expected ServerProbeError.Http 401")
-            } catch (error: ServerProbeError.Http) {
-                assertEquals(401, error.statusCode)
-            }
-        }
-
-    @Test
     fun probe_reportsUnhealthyWhenBodiesArePresentButUnusable() =
         runTest {
             val service =

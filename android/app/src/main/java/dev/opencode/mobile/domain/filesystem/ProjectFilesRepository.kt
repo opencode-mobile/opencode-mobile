@@ -4,8 +4,8 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.V1FileContentResponse
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.network.ActiveConnectionManager
-import dev.opencode.mobile.ui.text.UiText
 import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.CancellationException
 import javax.inject.Inject

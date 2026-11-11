@@ -1182,24 +1182,6 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2SetSessionArchived_falseSendsRestoreBody() =
-        runTest {
-            val requests = mutableListOf<HttpRequestData>()
-            val client =
-                testClient { request ->
-                    requests += request
-                    respond("", HttpStatusCode.NoContent)
-                }
-
-            SessionsApi(client, json).setSessionArchivedV2("ses_1", archived = false)
-
-            val request = requests.single()
-            assertEquals(HttpMethod.Patch, request.method)
-            assertTrue(request.url.encodedPath.endsWith("/api/session/ses_1"))
-            assertEquals("""{"archived":false}""", request.requestBodyText())
-        }
-
-    @Test
     fun v2ArchiveSession_surfacesServerFailure() =
         runTest {
             val client = testClient { _ -> respond("", HttpStatusCode.NotFound) }

@@ -8,6 +8,9 @@ import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.PresentationBlockId
+import dev.opencode.mobile.domain.message.TimelineSegment
+import dev.opencode.mobile.domain.message.TimelineSegments
 import dev.opencode.mobile.domain.message.PromptSkill
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
@@ -15,14 +18,43 @@ import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolArgumentsPreview
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.message.childSessionId
+import dev.opencode.mobile.domain.message.executeCallPreviews
+import dev.opencode.mobile.domain.message.exitCode
+import dev.opencode.mobile.domain.message.fileExisted
+import dev.opencode.mobile.domain.message.filediffAdditions
+import dev.opencode.mobile.domain.message.filediffDeletions
+import dev.opencode.mobile.domain.message.filediffPath
+import dev.opencode.mobile.domain.message.globFileCount
+import dev.opencode.mobile.domain.message.grepMatchCount
+import dev.opencode.mobile.domain.message.inputAgent
+import dev.opencode.mobile.domain.message.inputCommand
+import dev.opencode.mobile.domain.message.inputDescription
+import dev.opencode.mobile.domain.message.inputLine
+import dev.opencode.mobile.domain.message.inputOperation
+import dev.opencode.mobile.domain.message.inputPattern
+import dev.opencode.mobile.domain.message.inputPreview
+import dev.opencode.mobile.domain.message.inputQuery
+import dev.opencode.mobile.domain.message.inputQuestionPrompt
+import dev.opencode.mobile.domain.message.inputQuestions
+import dev.opencode.mobile.domain.message.inputReadPath
+import dev.opencode.mobile.domain.message.inputSearchPath
+import dev.opencode.mobile.domain.message.inputSkillId
+import dev.opencode.mobile.domain.message.inputTargetPath
+import dev.opencode.mobile.domain.message.inputTaskBrief
+import dev.opencode.mobile.domain.message.inputTitle
+import dev.opencode.mobile.domain.message.inputUrl
+import dev.opencode.mobile.domain.message.isBackground
+import dev.opencode.mobile.domain.message.metadataAgent
+import dev.opencode.mobile.domain.message.patchFileCount
+import dev.opencode.mobile.domain.message.patchFiles
+import dev.opencode.mobile.domain.message.questionAnswers
+import dev.opencode.mobile.domain.message.skillDirectory
+import dev.opencode.mobile.domain.message.skillName
+import dev.opencode.mobile.domain.message.summaryCallCount
+import dev.opencode.mobile.domain.message.writeContent
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
-import dev.opencode.mobile.ui.text.UiText
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
 
 /**
  * Session Chat presentation units inside one message timeline item.
@@ -396,8 +428,6 @@ data class SessionChatSkillUse(
 enum class ToolChipFamily { Explore, Change, Command, Agent, Skill }
 
 object SessionChatTimelineBlocks {
-    private val contextToolNames = setOf("read", "glob", "grep", "websearch")
-
     /**
      * Neutral copy for a tool the user stopped or declined (never the raw abort text). [declined]
      * is the domain's permission-denied flag; v2 sends the deny note, not a "rejected" text.
@@ -514,121 +544,41 @@ object SessionChatTimelineBlocks {
             }
         }
 
-        val allowToolCards = role == MessageRole.Assistant
+        val segments =
+            TimelineSegments.segments(role, parts, collapseConsecutiveToolCalls)
+                ?: return SessionChatTimelineBlocksResult.MissingPartIds
         val blocks = mutableListOf<SessionChatTimelineBlock>()
-        val pendingText = mutableListOf<Pair<String, String>>()
-
-        fun flushText(): Boolean {
-            if (pendingText.isEmpty()) return true
-            val merged = pendingText.joinToString("\n") { it.second }
-            val ids = pendingText.map { it.first }
-            pendingText.clear()
-            if (merged.isNotEmpty()) {
-                blocks +=
-                    SessionChatTimelineBlock.Text(
-                        blockID = PresentationBlockId.mergedText(ids),
-                        text = merged,
-                    )
-            }
-            return true
-        }
-
-        var index = 0
-        while (index < parts.size) {
-            when (val part = parts[index]) {
-                is MessagePart.Text -> {
-                    if (part.isDisplayable) {
-                        val trimmed = part.text.trim()
-                        if (trimmed.isNotEmpty()) {
-                            val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                            pendingText += partId to trimmed
-                        }
-                    }
-                    index += 1
+        for (segment in segments) {
+            when (segment) {
+                is TimelineSegment.Text ->
+                    blocks += SessionChatTimelineBlock.Text(blockID = segment.blockId, text = segment.text)
+                is TimelineSegment.ToolGroup -> {
+                    val group = toToolGroup(segment.tools) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                    blocks += group
+                    toolGallery(group)?.let { blocks += it }
                 }
-                is MessagePart.Tool -> {
-                    if (!allowToolCards || !isVisibleTool(part)) {
-                        index += 1
-                        continue
-                    }
-                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    if (isGroupableTool(part, collapseConsecutiveToolCalls)) {
-                        val groupTools = mutableListOf<MessagePart.Tool>()
-                        var lookAhead = index
-                        while (lookAhead < parts.size) {
-                            val candidatePart = parts[lookAhead]
-                            if (isTransparentPart(candidatePart)) {
-                                lookAhead += 1
-                                continue
-                            }
-                            val candidate = candidatePart as? MessagePart.Tool ?: break
-                            if (!isGroupableTool(candidate, collapseConsecutiveToolCalls)) break
-                            groupTools += candidate
-                            lookAhead += 1
-                        }
-                        if (groupTools.size >= 2) {
-                            val group = toToolGroup(groupTools) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                            blocks += group
-                            toolGallery(group)?.let { blocks += it }
-                            index = lookAhead
-                        } else {
-                            val block = toToolBlock(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                            blocks += block
-                            toolGallery(block)?.let { blocks += it }
-                            index += 1
-                        }
-                    } else {
-                        val block = toToolBlock(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                        blocks += block
-                        toolGallery(block)?.let { blocks += it }
-                        index += 1
-                    }
+                is TimelineSegment.Tool -> {
+                    val block = toToolBlock(segment.tool) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                    blocks += block
+                    toolGallery(block)?.let { blocks += it }
                 }
-                is MessagePart.File -> {
-                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    var lookAhead = index
-                    val run = mutableListOf<SessionChatAttachmentItem>()
-                    while (lookAhead < parts.size) {
-                        val file = parts[lookAhead] as? MessagePart.File ?: break
-                        run += AttachmentPresentationMapper.from(file)
-                        lookAhead += 1
-                    }
-                    blocks += attachmentBlocks(run)
-                    index = lookAhead
+                is TimelineSegment.Files ->
+                    blocks += attachmentBlocks(segment.files.map(AttachmentPresentationMapper::from))
+                is TimelineSegment.Reasoning -> {
+                    val part = segment.part
+                    blocks +=
+                        SessionChatTimelineBlock.Reasoning(
+                            blockID = PresentationBlockId.direct(segment.partId),
+                            text = ThoughtPartChrome.displayText(part),
+                            isStreaming = part.isStreaming,
+                            durationMs = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs),
+                        )
                 }
-                is MessagePart.Reasoning -> {
-                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    // Live thought is footer chrome (Thinking); only settled thoughts become rows.
-                    if (ThoughtPartChrome.isVisible(part) && !part.isStreaming) {
-                        val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                        val text = ThoughtPartChrome.displayText(part)
-                        blocks +=
-                            SessionChatTimelineBlock.Reasoning(
-                                blockID = PresentationBlockId.direct(partId),
-                                text = text,
-                                isStreaming = part.isStreaming,
-                                durationMs = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs),
-                            )
-                    }
-                    index += 1
-                }
-                is MessagePart.Compaction -> {
-                    // v1 marks compaction on the user message that asked for it;
-                    // only the v2 compaction item (an assistant row) gets a marker.
-                    if (allowToolCards) {
-                        if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                        blocks += compactionCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                    }
-                    index += 1
-                }
-                is MessagePart.Notice -> {
-                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    blocks += noticeBlock(part)
-                    index += 1
-                }
+                is TimelineSegment.Compaction ->
+                    blocks += compactionCard(segment.part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                is TimelineSegment.Notice -> blocks += noticeBlock(segment.part)
             }
         }
-        if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
         return SessionChatTimelineBlocksResult.Ok(blocks)
     }
 
@@ -894,7 +844,7 @@ object SessionChatTimelineBlocks {
         if (isChildSessionTool(name)) {
             val agent = taskAgentName(tool)
             val description = chipBrief(tool)
-            val toolsSoFar = (tool.metadata?.get("summary") as? JsonArray)?.size?.takeIf { it > 0 }
+            val toolsSoFar = tool.summaryCallCount
             val detail =
                 when {
                     status == SessionChatStepStatus.Failed -> failedStepDetail(card) ?: TimelineText.verbatim(description)
@@ -989,15 +939,15 @@ object SessionChatTimelineBlocks {
                 verbed(
                     R.string.timeline_step_searching,
                     R.string.timeline_step_searching_named,
-                    inputString(tool.input, "pattern") ?: inputString(tool.input, "path", "directory"),
+                    tool.inputPattern ?: tool.inputSearchPath,
                 )
             "websearch" ->
-                verbed(R.string.timeline_step_searching, R.string.timeline_step_searching_named, inputString(tool.input, "query"))
+                verbed(R.string.timeline_step_searching, R.string.timeline_step_searching_named, tool.inputQuery)
             "list", "ls" ->
                 verbed(
                     R.string.timeline_step_listing,
                     R.string.timeline_step_listing_named,
-                    inputString(tool.input, "path", "directory")?.let(::lastPathComponent) ?: ".",
+                    tool.inputSearchPath?.let(::lastPathComponent) ?: ".",
                 )
             "edit", "apply_patch", "patch" ->
                 verbed(R.string.timeline_step_editing, R.string.timeline_step_editing_named, changedFile(card))
@@ -1016,7 +966,7 @@ object SessionChatTimelineBlocks {
                 verbed(
                     R.string.timeline_step_fetching,
                     R.string.timeline_step_fetching_named,
-                    inputString(tool.input, "url")?.let(::urlHost),
+                    tool.inputUrl?.let(::urlHost),
                 )
             "skill" -> {
                 val skill = skillName(tool)
@@ -1051,8 +1001,8 @@ object SessionChatTimelineBlocks {
         }
         if (status != SessionChatStepStatus.Completed) return null
         return when (name) {
-            "grep" -> intFromObject(tool.metadata ?: return null, "matches")?.let { UiText.plural(R.plurals.tool_count_match, it) }
-            "glob" -> intFromObject(tool.metadata ?: return null, "count")?.let { UiText.plural(R.plurals.tool_count_file, it) }
+            "grep" -> (tool.grepMatchCount ?: return null)?.let { UiText.plural(R.plurals.tool_count_match, it) }
+            "glob" -> (tool.globFileCount ?: return null)?.let { UiText.plural(R.plurals.tool_count_file, it) }
             else -> null
         }
     }
@@ -1197,12 +1147,12 @@ object SessionChatTimelineBlocks {
      * Skill name: the settled server output names it in metadata; before that
      * the request carries the skill id (older servers sent `name`).
      */
-    private fun skillName(tool: MessagePart.Tool): String? = metadataString(tool.metadata, "name") ?: requestedSkillId(tool)
+    private fun skillName(tool: MessagePart.Tool): String? = tool.skillName ?: requestedSkillId(tool)
 
     /** The skill the request asked for; present from the first update on. */
-    private fun requestedSkillId(tool: MessagePart.Tool): String? = inputString(tool.input, "id", "name", "skill")
+    private fun requestedSkillId(tool: MessagePart.Tool): String? = tool.inputSkillId
 
-    private fun skillDirectory(tool: MessagePart.Tool): String? = metadataString(tool.metadata, "directory")
+    private fun skillDirectory(tool: MessagePart.Tool): String? = tool.skillDirectory
 
     /**
      * Skills a message loaded, in first-use order across its step paragraphs.
@@ -1286,7 +1236,7 @@ object SessionChatTimelineBlocks {
         when {
             isChildSessionTool(name) -> ToolChipFamily.Agent
             name == "skill" -> ToolChipFamily.Skill
-            name in contextToolNames || name == "webfetch" -> ToolChipFamily.Explore
+            name in TimelineSegments.contextToolNames || name == "webfetch" -> ToolChipFamily.Explore
             name == "edit" || name == "write" || name == "apply_patch" || name == "patch" -> ToolChipFamily.Change
             else -> ToolChipFamily.Command
         }
@@ -1301,9 +1251,9 @@ object SessionChatTimelineBlocks {
         return when (name) {
             "read" -> readPath(tool)?.let(::lastPathComponent)?.let(UiText::verbatim) ?: placeholder
             "edit", "write", "apply_patch", "patch" -> subtitle?.let(::lastPathComponent)?.let(UiText::verbatim)
-            "glob", "grep" -> TimelineText.verbatim(inputString(tool.input, "pattern") ?: inputString(tool.input, "path", "directory"))
-            "websearch" -> TimelineText.verbatim(inputString(tool.input, "query"))
-            "webfetch" -> TimelineText.verbatim(inputString(tool.input, "url")?.let(::urlHost))
+            "glob", "grep" -> TimelineText.verbatim(tool.inputPattern ?: tool.inputSearchPath)
+            "websearch" -> TimelineText.verbatim(tool.inputQuery)
+            "webfetch" -> TimelineText.verbatim(tool.inputUrl?.let(::urlHost))
             "bash", "shell" ->
                 shellCommand(tool)?.let(StepParagraphChips::commandLabel)?.let(UiText::verbatim) ?: placeholder
             // An execute subtitle is a call preview (server content) or `N tools`, which reads as is.
@@ -1322,15 +1272,15 @@ object SessionChatTimelineBlocks {
      */
     private fun customToolLabel(tool: MessagePart.Tool): String? =
         runningTitleOverride(tool)
-            ?: inputString(tool.input, "title")
-            ?: inputString(tool.input, "description")
+            ?: tool.inputTitle
+            ?: tool.inputDescription
                 ?.lineSequence()
                 ?.firstOrNull()
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
 
     private fun chipBrief(tool: MessagePart.Tool): String? =
-        (inputString(tool.input, "description", "prompt") ?: childSessionTitle(tool))
+        (tool.inputTaskBrief ?: childSessionTitle(tool))
             ?.lineSequence()
             ?.firstOrNull()
             ?.trim()
@@ -1909,41 +1859,9 @@ object SessionChatTimelineBlocks {
         return duration.takeIf { it >= 0 }
     }
 
-    private fun isLiveReasoning(part: MessagePart.Reasoning): Boolean = ThoughtPartChrome.isVisible(part)
-
     private fun isVisibleTool(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isVisibleOnTimeline(tool)
 
-    /**
-     * Parts that never become timeline blocks. Grouping looks through them so
-     * hidden todos, empty text, and compaction markers do not split a visible
-     * tool run (web filters to renderable parts before grouping).
-     */
-    private fun isTransparentPart(part: MessagePart): Boolean =
-        when (part) {
-            is MessagePart.Compaction -> true
-            is MessagePart.Notice -> false
-            is MessagePart.Text -> !part.isDisplayable || part.text.isBlank()
-            is MessagePart.Tool -> !isVisibleTool(part)
-            is MessagePart.File -> false
-            is MessagePart.Reasoning -> !isLiveReasoning(part)
-        }
-
-    private fun isContextTool(toolName: String): Boolean = toolName.lowercase() in contextToolNames
-
-    /**
-     * A visible tool can join a group. Child-session tools (`task` / v2
-     * `subagent`) never group so their child-session tap stays available; when
-     * collapse is on every other visible tool groups, otherwise only context
-     * tools do.
-     */
-    private fun isGroupableTool(
-        tool: MessagePart.Tool,
-        collapse: Boolean,
-    ): Boolean {
-        if (isChildSessionTool(tool.toolName)) return false
-        if (collapse) return true
-        return isContextTool(tool.toolName)
-    }
+    private fun isContextTool(toolName: String): Boolean = TimelineSegments.isContextTool(toolName)
 
     private fun toToolGroup(tools: List<MessagePart.Tool>): SessionChatTimelineBlock.ToolGroup? {
         val memberIds = tools.map { it.id ?: return null }
@@ -2018,8 +1936,8 @@ object SessionChatTimelineBlocks {
     private fun contextSubtitle(tool: MessagePart.Tool): String? =
         when (tool.toolName.lowercase()) {
             "read" -> readPath(tool)
-            "glob", "grep" -> patternPathSubtitle(tool.input)
-            "websearch" -> inputString(tool.input, "query")
+            "glob", "grep" -> patternPathSubtitle(tool)
+            "websearch" -> tool.inputQuery
             else -> null
         }
 
@@ -2076,13 +1994,13 @@ object SessionChatTimelineBlocks {
         val partId = tool.id ?: return null
         val agentName = taskAgentName(tool)
         val secondLine =
-            inputString(tool.input, "description", "prompt")
+            tool.inputTaskBrief
                 ?: childSessionTitle(tool)
         return SessionChatTimelineBlock.ChildSessionRow(
             blockID = PresentationBlockId.direct(partId),
             agentName = agentName,
             letter = SessionChatChildSessionElapsed.letter(from = agentName),
-            isBackground = isTruthyMetadata(tool.metadata, "background"),
+            isBackground = tool.isBackground,
             secondLine = secondLine,
             timeStartEpochMs =
                 if (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running) {
@@ -2151,7 +2069,7 @@ object SessionChatTimelineBlocks {
     ): Int? {
         if (name != "bash" && name != "shell") return null
         if (tool.status != ToolStatus.Completed) return null
-        val exit = (tool.metadata?.get("exit") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: return null
+        val exit = tool.exitCode ?: return null
         return exit.takeIf { it != 0 }
     }
 
@@ -2169,7 +2087,7 @@ object SessionChatTimelineBlocks {
     private fun genericChrome(tool: MessagePart.Tool): Chrome {
         val subtitle =
             runningTitleOverride(tool)?.takeIf { !it.equals(tool.toolName, ignoreCase = true) }
-                ?: inputPreview(tool.input)
+                ?: tool.inputPreview
                 ?: tool.title?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
         return Chrome(
             title = UiText.verbatim(ToolPartIdentity.calledTitle(tool.toolName)),
@@ -2185,14 +2103,14 @@ object SessionChatTimelineBlocks {
         if (isQuestionTool(tool)) return questionChrome(tool)
         return when (name) {
             "read" -> contextChrome(tool, subtitle = readPath(tool))
-            "glob" -> contextChrome(tool, subtitle = patternPathSubtitle(tool.input))
-            "grep" -> contextChrome(tool, subtitle = patternPathSubtitle(tool.input))
+            "glob" -> contextChrome(tool, subtitle = patternPathSubtitle(tool))
+            "grep" -> contextChrome(tool, subtitle = patternPathSubtitle(tool))
             "bash", "shell" -> shellChrome(tool)
             "execute" -> executeChrome(tool)
             "lsp" -> lspChrome(tool)
             "plan_exit" -> planExitChrome(tool)
-            "webfetch" -> networkChrome(tool, displayTitle = UiText.resource(R.string.tool_title_fetch), subtitleKey = "url")
-            "websearch" -> contextChrome(tool, subtitle = inputString(tool.input, "query"))
+            "webfetch" -> networkChrome(tool, displayTitle = UiText.resource(R.string.tool_title_fetch), subtitle = tool.inputUrl)
+            "websearch" -> contextChrome(tool, subtitle = tool.inputQuery)
             "skill" ->
                 Chrome(
                     title = UiText.resource(R.string.tool_title_skill),
@@ -2210,14 +2128,14 @@ object SessionChatTimelineBlocks {
         tool: MessagePart.Tool,
         displayTitle: UiText,
     ): Chrome {
-        val filesArray = tool.metadata?.get("files") as? JsonArray
-        val patchFiles = metadataFiles(tool.metadata)
-        if (filesArray != null && filesArray.size > 1) {
+        val fileCount = tool.patchFileCount
+        val patchFiles = tool.patchFiles
+        if (fileCount != null && fileCount > 1) {
             val additions = positiveCount(patchFiles.sumOf { it.additions ?: 0 })
             val deletions = positiveCount(patchFiles.sumOf { it.deletions ?: 0 })
             return Chrome(
                 title = UiText.resource(R.string.tool_title_patch),
-                subtitle = UiText.plural(R.plurals.tool_count_file, filesArray.size),
+                subtitle = UiText.plural(R.plurals.tool_count_file, fileCount),
                 additions = additions,
                 deletions = deletions,
                 opensChangesReview = canOpenChangesReview(tool.status),
@@ -2227,19 +2145,19 @@ object SessionChatTimelineBlocks {
 
         val singlePatchFile = patchFiles.singleOrNull()
         val path =
-            metadataFilediffString(tool.metadata, "file")
+            tool.filediffPath
                 ?: singlePatchFile?.path
-                ?: pathSubtitle(tool.input)
+                ?: tool.inputTargetPath
                 ?: ToolArgumentsPreview.string(tool, "filePath", "path", "file")
         val additions =
             positiveCount(
-                metadataFilediffInt(tool.metadata, "additions")
+                tool.filediffAdditions
                     ?: singlePatchFile?.additions
                     ?: newFileLineCount(tool),
             )
         val deletions =
             positiveCount(
-                metadataFilediffInt(tool.metadata, "deletions")
+                tool.filediffDeletions
                     ?: singlePatchFile?.deletions,
             )
         val opens = path != null && canOpenChangesReview(tool.status)
@@ -2259,8 +2177,8 @@ object SessionChatTimelineBlocks {
      */
     private fun newFileLineCount(tool: MessagePart.Tool): Int? {
         if (!tool.toolName.equals("write", ignoreCase = true)) return null
-        if (isTruthyMetadata(tool.metadata, "exists")) return null
-        val content = (tool.input?.get("content") as? JsonPrimitive)?.contentOrNull ?: return null
+        if (tool.fileExisted) return null
+        val content = tool.writeContent ?: return null
         return lineCount(content)
     }
 
@@ -2273,69 +2191,16 @@ object SessionChatTimelineBlocks {
 
     private fun canOpenChangesReview(status: ToolStatus): Boolean = status == ToolStatus.Completed || status == ToolStatus.Error
 
-    private data class PatchFileEntry(
-        val path: String,
-        val additions: Int?,
-        val deletions: Int?,
-    )
-
-    private fun metadataFiles(metadata: JsonObject?): List<PatchFileEntry> {
-        val array = metadata?.get("files") as? JsonArray ?: return emptyList()
-        return array.mapNotNull { element ->
-            val obj = element as? JsonObject ?: return@mapNotNull null
-            val path =
-                stringFromObject(obj, "filePath", "relativePath", "file")
-                    ?: return@mapNotNull null
-            PatchFileEntry(
-                path = path,
-                additions = intFromObject(obj, "additions"),
-                deletions = intFromObject(obj, "deletions"),
-            )
-        }
-    }
-
-    private fun metadataFilediffString(
-        metadata: JsonObject?,
-        key: String,
-    ): String? {
-        val filediff = metadata?.get("filediff") as? JsonObject ?: return null
-        return stringFromObject(filediff, key)
-    }
-
-    private fun metadataFilediffInt(
-        metadata: JsonObject?,
-        key: String,
-    ): Int? {
-        val filediff = metadata?.get("filediff") as? JsonObject ?: return null
-        return intFromObject(filediff, key)
-    }
-
-    private fun stringFromObject(
-        obj: JsonObject,
-        vararg keys: String,
-    ): String? {
-        for (key in keys) {
-            val value = (obj[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }
-            if (value != null) return value
-        }
-        return null
-    }
-
-    private fun intFromObject(
-        obj: JsonObject,
-        key: String,
-    ): Int? = (obj[key] as? JsonPrimitive)?.intOrNull
-
     private fun positiveCount(value: Int?): Int? = value?.takeIf { it > 0 }
 
     private fun taskChrome(tool: MessagePart.Tool): Chrome {
         val title = taskAgentName(tool)
         val description =
-            inputString(tool.input, "description", "prompt")
+            tool.inputTaskBrief
                 ?: runningTitleOverride(tool)
         val subtitle =
             when {
-                description != null && isTruthyMetadata(tool.metadata, "background") ->
+                description != null && tool.isBackground ->
                     UiText.resource(R.string.tool_subtitle_background, description)
                 else -> TimelineText.verbatim(description)
             }
@@ -2347,8 +2212,8 @@ object SessionChatTimelineBlocks {
     }
 
     private fun taskAgentName(tool: MessagePart.Tool): String =
-        inputString(tool.input, "agent", "subagent_type")
-            ?: metadataString(tool.metadata, "agent")
+        tool.inputAgent
+            ?: tool.metadataAgent
             ?: if (tool.toolName.equals("subagent", ignoreCase = true)) "General" else "Task"
 
     private fun childSessionTitle(tool: MessagePart.Tool): String? {
@@ -2365,12 +2230,9 @@ object SessionChatTimelineBlocks {
             title.contains(" – ")
     }
 
-    private fun isChildSessionTool(toolName: String): Boolean {
-        val name = toolName.lowercase()
-        return name == "task" || name == "subagent"
-    }
+    private fun isChildSessionTool(toolName: String): Boolean = TimelineSegments.isChildSessionTool(toolName)
 
-    private fun childSessionId(tool: MessagePart.Tool): String? = metadataString(tool.metadata, "sessionId", "sessionID")
+    private fun childSessionId(tool: MessagePart.Tool): String? = tool.childSessionId
 
     private fun contextChrome(
         tool: MessagePart.Tool,
@@ -2384,7 +2246,7 @@ object SessionChatTimelineBlocks {
 
     private fun shellChrome(tool: MessagePart.Tool): Chrome {
         val command =
-            inputString(tool.input, "command")
+            tool.inputCommand
                 ?: runningTitleOverride(tool)
                 ?: ToolArgumentsPreview.string(tool, "command")
         return Chrome(
@@ -2395,7 +2257,7 @@ object SessionChatTimelineBlocks {
     }
 
     private fun executeChrome(tool: MessagePart.Tool): Chrome {
-        val calls = executeCallPreviews(tool.metadata)
+        val calls = tool.executeCallPreviews
         val subtitle =
             when {
                 calls.isEmpty() ->
@@ -2418,21 +2280,11 @@ object SessionChatTimelineBlocks {
         return Chrome(title = UiText.resource(R.string.tool_title_execute), subtitle = subtitle, detailText = detail)
     }
 
-    private fun executeCallPreviews(metadata: JsonObject?): List<String> {
-        val array = metadata?.get("toolCalls") as? JsonArray ?: return emptyList()
-        return array.mapNotNull { element ->
-            val obj = element as? JsonObject ?: return@mapNotNull null
-            val name = (obj["tool"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            val preview = inputPreview(obj["input"] as? JsonObject)
-            if (preview != null) "$name $preview" else name
-        }
-    }
-
     private fun lspChrome(tool: MessagePart.Tool): Chrome {
-        val operation = inputString(tool.input, "operation")
-        val path = pathSubtitle(tool.input)
-        val line = inputString(tool.input, "line")
-        val query = inputString(tool.input, "query")
+        val operation = tool.inputOperation
+        val path = tool.inputTargetPath
+        val line = tool.inputLine
+        val query = tool.inputQuery
         val location =
             when {
                 path != null && line != null -> "$path:$line"
@@ -2475,41 +2327,13 @@ object SessionChatTimelineBlocks {
             ToolStatus.Pending, ToolStatus.Running -> null
         }
 
-    private fun inputPreview(input: JsonObject?): String? {
-        if (input == null) return null
-        inputString(
-            input,
-            "command",
-            "filePath",
-            "path",
-            "file",
-            "url",
-            "query",
-            "pattern",
-            "name",
-            "title",
-            "description",
-            "prompt",
-            "text",
-            "id",
-        )?.let { return it }
-        val parts =
-            input.mapNotNull { (key, value) ->
-                if (key == ToolArgumentsPreview.INPUT_KEY) return@mapNotNull null
-                val primitive = value as? JsonPrimitive ?: return@mapNotNull null
-                val text = primitive.content.takeIf { it.isNotEmpty() && it.length <= 80 } ?: return@mapNotNull null
-                "$key=$text"
-            }
-        return parts.takeIf { it.isNotEmpty() }?.joinToString(", ")?.let { "[$it]" }
-    }
-
     private fun networkChrome(
         tool: MessagePart.Tool,
         displayTitle: UiText,
-        subtitleKey: String,
+        subtitle: String?,
     ): Chrome {
         val subtitle =
-            inputString(tool.input, subtitleKey)
+            subtitle
                 ?: runningTitleOverride(tool)
         val detail =
             when (tool.status) {
@@ -2531,20 +2355,18 @@ object SessionChatTimelineBlocks {
             else -> null
         }
 
-    private fun pathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "path", "file")
-
     /** Read chrome is the file, settled or still streaming in: v1 sends `filePath`, v2 sends `path`. */
     private fun readPath(tool: MessagePart.Tool): String? =
-        inputString(tool.input, "filePath", "file", "path")
+        tool.inputReadPath
             ?: ToolArgumentsPreview.string(tool, "filePath", "file", "path")
 
     /** The shell command, settled or still streaming in. */
     private fun shellCommand(tool: MessagePart.Tool): String? =
-        inputString(tool.input, "command") ?: ToolArgumentsPreview.string(tool, "command")
+        tool.inputCommand ?: ToolArgumentsPreview.string(tool, "command")
 
-    private fun patternPathSubtitle(input: JsonObject?): String? {
-        val pattern = inputString(input, "pattern")
-        val path = inputString(input, "path", "directory")
+    private fun patternPathSubtitle(tool: MessagePart.Tool): String? {
+        val pattern = tool.inputPattern
+        val path = tool.inputSearchPath
         return when {
             pattern != null && path != null -> "$pattern · $path"
             pattern != null -> pattern
@@ -2553,16 +2375,16 @@ object SessionChatTimelineBlocks {
         }
     }
 
-    private fun isQuestionTool(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isQuestion(tool.toolName, tool.input)
+    private fun isQuestionTool(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isQuestion(tool)
 
     private fun askedQuestionsTitle(count: Int): UiText = UiText.plural(R.plurals.tool_title_asked_questions, count)
 
     private fun questionChrome(tool: MessagePart.Tool): Chrome {
-        val questions = questionTexts(tool.input)
-        val answers = answerTexts(tool.metadata)
+        val questions = tool.inputQuestions
+        val answers = tool.questionAnswers
         val firstQuestion =
             questions.firstOrNull()
-                ?: inputString(tool.input, "prompt", "text", "question")
+                ?: tool.inputQuestionPrompt
                 ?: runningTitleOverride(tool)
         val firstAnswer = answers.firstOrNull()
         val dismissed = if (tool.status == ToolStatus.Error) tool.error?.takeIf { it.isNotEmpty() } else null
@@ -2577,29 +2399,6 @@ object SessionChatTimelineBlocks {
                     error = dismissed,
                 ),
         )
-    }
-
-    private fun questionTexts(input: JsonObject?): List<String> {
-        val array = input?.get("questions") as? JsonArray ?: return emptyList()
-        return array.mapNotNull { element ->
-            val obj = element as? JsonObject ?: return@mapNotNull null
-            (obj["question"] as? JsonPrimitive)?.content?.takeIf { it.isNotEmpty() }
-        }
-    }
-
-    private fun answerTexts(metadata: JsonObject?): List<String> {
-        val array = metadata?.get("answers") as? JsonArray ?: return emptyList()
-        return array.mapNotNull { element ->
-            when (element) {
-                is JsonArray ->
-                    element
-                        .mapNotNull { (it as? JsonPrimitive)?.content?.takeIf { text -> text.isNotEmpty() } }
-                        .joinToString(", ")
-                        .takeIf { it.isNotEmpty() }
-                is JsonPrimitive -> element.content.takeIf { it.isNotEmpty() }
-                else -> null
-            }
-        }
     }
 
     private fun questionDetail(
@@ -2621,33 +2420,5 @@ object SessionChatTimelineBlocks {
         return (pairs.filter { it.isNotEmpty() } + listOfNotNull(error))
             .takeIf { it.isNotEmpty() }
             ?.joinToString("\n\n")
-    }
-
-    private fun inputString(
-        input: JsonObject?,
-        vararg keys: String,
-    ): String? {
-        if (input == null) return null
-        for (key in keys) {
-            val primitive = input[key] as? JsonPrimitive ?: continue
-            val value = primitive.content.takeIf { it.isNotEmpty() } ?: continue
-            return value
-        }
-        return null
-    }
-
-    private fun metadataString(
-        metadata: JsonObject?,
-        vararg keys: String,
-    ): String? = inputString(metadata, *keys)
-
-    private fun isTruthyMetadata(
-        metadata: JsonObject?,
-        key: String,
-    ): Boolean {
-        val primitive = metadata?.get(key) as? JsonPrimitive ?: return false
-        primitive.booleanOrNull?.let { return it }
-        val content = primitive.content.lowercase()
-        return content == "true" || content == "1"
     }
 }

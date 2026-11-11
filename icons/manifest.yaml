@@ -32,6 +32,9 @@ icons:
   - name: content_copy
     lucide: copy
     notes: Copy action
+  - name: text_select
+    lucide: text-select
+    notes: Message sheet Select text
   - name: collapse_content
     lucide: minimize-2
     notes: Outgoing message expanded state
@@ -152,3 +155,12 @@ icons:
   - name: drag_handle
     lucide: grip-vertical
     notes: Drag grip of a floating capsule
+  - name: star
+    lucide: star
+    notes: Star the repository on GitHub, Settings About
+  - name: rate_review
+    lucide: message-square-heart
+    notes: Rate the app in the App Store or Google Play, Settings About
+  - name: at_sign
+    lucide: at-sign
+    notes: Follow the developer on X, Settings About

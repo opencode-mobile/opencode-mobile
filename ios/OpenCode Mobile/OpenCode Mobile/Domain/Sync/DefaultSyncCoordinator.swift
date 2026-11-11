@@ -299,7 +299,12 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
 
     private func onWorldSignal(_ signal: WorldSignal) {
         switch signal {
-        case .backgroundStop, .pathLost:
+        case .backgroundStop:
+            // `onOccupancy(.stopped)` already invalidated. Signals and occupancy
+            // arrive on separate tasks, so invalidating here too could land after
+            // a foreground catch-up started and force a second reload.
+            break
+        case .pathLost:
             invalidate(nil)
         case .profileSwitched:
             lock.lock()

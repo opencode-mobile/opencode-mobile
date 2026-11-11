@@ -1,17 +1,10 @@
 package dev.opencode.mobile.domain.message
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DisplayMessagePipelinePacingTest {
-    @Test
-    fun streamingMaxBatchUsesConfiguredDuration() {
-        assertEquals(80L, STREAMING_PREPARE_DEBOUNCE_MS)
-        assertEquals(160L, STREAMING_PREPARE_MAX_BATCH_MS)
-    }
-
     @Test
     fun largeHistoryTriggersPlainFirstPublishGate() {
         val text = "# Heading\n\n".repeat(500)

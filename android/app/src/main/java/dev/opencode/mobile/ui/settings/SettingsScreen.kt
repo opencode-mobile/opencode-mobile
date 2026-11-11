@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.settings
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
@@ -29,12 +30,14 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.R
 import dev.opencode.mobile.SourceCode
+import dev.opencode.mobile.SupportLinks
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.openCodeColor
@@ -56,7 +59,6 @@ import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.components.openCodeBottomSheetScrollTarget
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 
 @Composable
@@ -487,6 +489,48 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val rateAppTitle = stringResource(R.string.settings_rate_app_title)
+                OpenCodeListItem(
+                    title = rateAppTitle,
+                    subtitle = stringResource(R.string.settings_rate_app_subtitle),
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.RateReview, rateAppTitle),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_RATE_APP)
+                        openPlayStoreListing(context)
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsRateApp"),
+                )
+
+                val starOnGitHubTitle = stringResource(R.string.settings_star_on_github_title)
+                OpenCodeListItem(
+                    title = starOnGitHubTitle,
+                    subtitle = "opencode-mobile/opencode-mobile",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Star, starOnGitHubTitle),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_STAR_ON_GITHUB)
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.GITHUB)))
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsStarOnGitHub"),
+                )
+
+                val followOnXTitle = stringResource(R.string.settings_follow_on_x_title)
+                OpenCodeListItem(
+                    title = followOnXTitle,
+                    subtitle = SupportLinks.X_HANDLE,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.AtSign, followOnXTitle),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_FOLLOW_ON_X)
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.X_PROFILE)))
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsFollowOnX"),
+                )
+
                 OpenCodeListItem(
                     title = DeveloperToolsCopy.TITLE,
                     selected = selectedDetail == SettingsDetail.DeveloperTools,
@@ -718,6 +762,16 @@ private fun logSettingsAction(actionId: String) {
         screenId = ProductAnalytics.Screen.SETTINGS,
         actionId = actionId,
     )
+}
+
+/** Opens this app's Play Store page, or its web page when no store app is installed. */
+private fun openPlayStoreListing(context: Context) {
+    val packageName = context.packageName
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.playStoreMarket(packageName))))
+    } catch (_: ActivityNotFoundException) {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.playStoreWeb(packageName))))
+    }
 }
 
 private fun copyAboutValueToClipboard(

@@ -42,6 +42,9 @@ import dev.opencode.mobile.domain.home.HomeSessionLadderSection
 import dev.opencode.mobile.domain.home.HomeSessionOrderStabilizer
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -49,8 +52,6 @@ import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
-import dev.opencode.mobile.ui.text.UiText
-import dev.opencode.mobile.ui.text.UiTextLookup
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged

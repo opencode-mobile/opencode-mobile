@@ -1248,6 +1248,17 @@
         }
       }
     },
+    "common.new" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New"
+          }
+        }
+      }
+    },
     "common.open" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9780,6 +9791,17 @@
         }
       }
     },
+    "session_chat_sheet.message_actions.select_text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select text"
+          }
+        }
+      }
+    },
     "session_chat_sheet.message_actions.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9942,6 +9964,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Variant"
+          }
+        }
+      }
+    },
+    "session_chat_sheet.select_text.copy_all" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy all"
+          }
+        }
+      }
+    },
+    "session_chat_sheet.select_text.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select text"
           }
         }
       }
@@ -11513,6 +11557,17 @@
         }
       }
     },
+    "settings.follow_on_x.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follow on X"
+          }
+        }
+      }
+    },
     "settings.follow_up.queue" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11619,6 +11674,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Privacy Policy"
+          }
+        }
+      }
+    },
+    "settings.rate_app.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A review helps others find the app"
+          }
+        }
+      }
+    },
+    "settings.rate_app.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rate on App Store"
           }
         }
       }
@@ -11962,6 +12039,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Source Code"
+          }
+        }
+      }
+    },
+    "settings.star_on_github.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Star on GitHub"
           }
         }
       }

@@ -32,6 +32,8 @@ struct MessageSyncTests {
             },
             store: SessionMessageEngine(store: store),
             eventStream: eventStream,
+            // Short stand-in for the 5 s upstream stop delay.
+            subscriberStopTimeoutMs: 50,
             connectionProfileIDProvider: { "local" },
             recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
         )
@@ -41,7 +43,7 @@ struct MessageSyncTests {
         let firstTask = Task { await first.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
         _ = await waitUntil { first.latest()?.first?.text == "Hello" }
         firstTask.cancel()
-        try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.subscriberStopTimeoutMs + 50))
+        try? await Task.sleep(for: .milliseconds(150))
 
         // Warm reopen: same store rows, REST unchanged, no disk seed. The
         // unchanged identity must still yield cacheSyncConfirmed.

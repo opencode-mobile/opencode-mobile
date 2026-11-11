@@ -3,8 +3,8 @@ package dev.opencode.mobile.ui.keyboard
 import android.view.KeyEvent
 import androidx.annotation.StringRes
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.components.OpenCodeFocusedTextInput
-import dev.opencode.mobile.ui.text.UiText
 
 /** Groups of the Keyboard Shortcuts Helper (Meta+/), in the order they are listed. */
 enum class KeyboardShortcutGroupKind(

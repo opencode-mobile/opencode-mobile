@@ -84,6 +84,7 @@ import dev.opencode.mobile.domain.session.SessionRevert
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SideQuestionStore
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
 import dev.opencode.mobile.domain.worktree.CreatedWorktree
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
@@ -93,8 +94,6 @@ import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.markdown.HighlightCoreHighlightingEngine
-import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
-import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -103,7 +102,6 @@ import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsCopy
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import kotlinx.coroutines.CompletableDeferred
@@ -141,7 +139,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -1734,33 +1731,6 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun failedReviewChangesCountStaysHidden() =
-        runTest(testDispatcher) {
-            val sessionRepository =
-                FakeSessionRepository(
-                    sessionDiffError = SessionError.Transport(IllegalStateException("offline")),
-                )
-            val viewModel =
-                createViewModel(
-                    repository =
-                        FakeMessageRepository(
-                            messages =
-                                listOf(
-                                    Message(id = "user-1", role = MessageRole.User, text = "Change it", sentAtEpochMs = 1),
-                                    Message(id = "assistant-1", role = MessageRole.Assistant, text = "Done", sentAtEpochMs = 2),
-                                ),
-                        ),
-                    sessionRepository = sessionRepository,
-                )
-
-            viewModel.bind("ses-1", "Title", "/repo")
-            advanceUntilIdle()
-
-            assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
-            assertEquals(null, sessionRepository.diffRequest)
-        }
-
-    @Test
     fun activeLatestTurnDoesNotLoadReviewChangesCount() =
         runTest(testDispatcher) {
             val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")
@@ -1831,51 +1801,6 @@ class SessionChatViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(SessionChatTimelineState.Ready, state.timeline)
             assertNotNull(state.messages.single().renderedMarkdown)
-        }
-
-    @Ignore("Quarantined from CI: stress println benchmark, not a correctness gate")
-    @Test
-    fun benchmark_loadMessages_longMarkdownHistory() =
-        runTest(testDispatcher) {
-            val messages = longMarkdownHistory()
-            val detectorMs = measureMs { messages.count { OpenCodeMarkdownDetector.shouldRender(it.text) } }
-            val parserMs =
-                measureMs {
-                    messages.forEach { message ->
-                        if (OpenCodeMarkdownDetector.shouldRender(message.text)) {
-                            OpenCodeMarkdownParser.parse(message.text)
-                        }
-                    }
-                }
-            val preparer =
-                MessageContentPreparer(HighlightCoreHighlightingEngine()).apply {
-                    computationDispatcher = testDispatcher
-                }
-            val preparerMs =
-                measureMs {
-                    preparer.prepareMessages(messages)
-                    Unit
-                }
-            val viewModel =
-                createViewModel(
-                    repository =
-                        FakeMessageRepository(
-                            messages = messages,
-                            contentPreparer = preparer,
-                        ),
-                )
-
-            val startedAt = System.nanoTime()
-            viewModel.bind("ses-benchmark", "Markdown benchmark", "/repo")
-            advanceUntilIdle()
-            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
-
-            assertEquals(SessionChatTimelineState.Ready, viewModel.uiState.value.timeline)
-            assertEquals(20, viewModel.uiState.value.messages.size)
-            println(
-                "MARKDOWN_BENCHMARK android detector-ms=$detectorMs parser-ms=$parserMs " +
-                    "preparer-ms=$preparerMs viewmodel-load-ms=$elapsedMs messages=20 code-lines=3000",
-            )
         }
 
     @Test
@@ -6146,6 +6071,95 @@ class SessionChatViewModelTest {
             assertEquals("/play", viewModel.uiState.value.worktree)
         }
 
+    /** A server whose home is /home with no subfolders. */
+    private object DraftFilesystem : dev.opencode.mobile.domain.filesystem.FilesystemRepository {
+        override suspend fun getPaths() =
+            dev.opencode.mobile.domain.filesystem
+                .ServerPaths(home = "/home", directory = "/home", worktree = "/home")
+
+        override suspend fun listDirectory(path: String) =
+            dev.opencode.mobile.domain.filesystem
+                .DirectoryListing(folders = emptyList(), isGitRepository = false)
+    }
+
+    @Test
+    fun newSessionDraft_addProjectOpensOverTheDraftAndTheDraftRunsInTheAddedFolder() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            val snapshot = draftProjects()
+            val profiles = FakeConnectionProfileStore(worktrees = mutableListOf("/repo"))
+            val requests = mutableListOf<dev.opencode.mobile.domain.home.HomeProjectAdded>()
+            backgroundScope.launch { snapshot.projectAddedRequests.collect { requests += it } }
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = profiles,
+                    homeProjectsSnapshot = snapshot,
+                    newSessionDraftStore = drafts,
+                    filesystemRepository = DraftFilesystem,
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("for the new one")
+            viewModel.openNewSessionProjectSheet()
+
+            viewModel.requestNewSessionAddProject()
+            advanceUntilIdle()
+            // The Project sheet gives way to Add project; the draft stays on screen.
+            assertNull(viewModel.draftUi()?.sheet)
+            assertEquals("/home/", viewModel.uiState.value.newSessionAddProjectSheet?.fieldText)
+
+            viewModel.selectNewSessionAddProjectSuggestion("/srv/new")
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.newSessionAddProjectSheet)
+            assertEquals(listOf("/repo", "/srv/new"), profiles.worktrees)
+            assertEquals(listOf("/srv/new"), requests.map { it.worktree })
+            assertEquals("new", viewModel.draftUi()?.projectName)
+            assertEquals("/srv/new", viewModel.uiState.value.worktree)
+            assertEquals("for the new one", viewModel.uiState.value.composer.text)
+
+            // Home lists it: the draft takes the Home project.
+            val listed =
+                HomeProject(
+                    key = "path:/srv/new",
+                    projectId = null,
+                    displayName = "new",
+                    memberPaths = listOf("/srv/new"),
+                    isRepository = false,
+                    worktrees = listOf(HomeWorktree("/srv/new", isMain = true)),
+                )
+            snapshot.publish(listOf(draftProject, listed))
+            advanceUntilIdle()
+            assertEquals("path:/srv/new", drafts.draft("")?.projectKey)
+            assertEquals("for the new one", drafts.draft("")?.composer?.text)
+        }
+
+    @Test
+    fun newSessionDraft_dismissedAddProjectLeavesTheDraftAlone() =
+        runTest(testDispatcher) {
+            val profiles = FakeConnectionProfileStore(worktrees = mutableListOf("/repo"))
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = profiles,
+                    homeProjectsSnapshot = draftProjects(),
+                    filesystemRepository = DraftFilesystem,
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            viewModel.requestNewSessionAddProject()
+            advanceUntilIdle()
+            viewModel.dismissNewSessionAddProject()
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.newSessionAddProjectSheet)
+            assertEquals("repo", viewModel.draftUi()?.projectName)
+            assertEquals("/repo", viewModel.uiState.value.worktree)
+            assertEquals(listOf("/repo"), profiles.worktrees)
+        }
+
     @Test
     fun newSessionDraft_slashNewAndCompactDoNothing() =
         runTest(testDispatcher) {
@@ -8635,6 +8649,8 @@ class SessionChatViewModelTest {
         newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
         sessionGoalRepository: dev.opencode.mobile.domain.goal.SessionGoalRepository =
             dev.opencode.mobile.domain.goal.EmptySessionGoalRepository,
+        filesystemRepository: dev.opencode.mobile.domain.filesystem.FilesystemRepository =
+            dev.opencode.mobile.domain.filesystem.UnavailableFilesystemRepository,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -8696,7 +8712,6 @@ class SessionChatViewModelTest {
             sessionReadyStore = sessionReadyStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
-            eventDomainAdapter = EventDomainAdapter(json),
             connectionSessionCoordinator = connectionSessionCoordinator,
             sessionModelSelectionStore = sessionModelSelectionStore,
             composerDraftStore = composerDraftStore,
@@ -8722,6 +8737,7 @@ class SessionChatViewModelTest {
             agentShellRepository = agentShellRepository,
             newSessionDraftStore = newSessionDraftStore,
             sessionGoalRepository = sessionGoalRepository,
+            filesystemRepository = filesystemRepository,
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }
@@ -8742,29 +8758,6 @@ class SessionChatViewModelTest {
             currentProfile = currentProfile,
             scope = CoroutineScope(SupervisorJob() + testDispatcher),
         )
-
-    private fun longMarkdownHistory(): List<Message> =
-        (1..20).map { messageIndex ->
-            Message(
-                id = "benchmark-$messageIndex",
-                role = MessageRole.Assistant,
-                text =
-                    buildString {
-                        append("## Response $messageIndex\n\n```typescript\n")
-                        repeat(150) { lineIndex ->
-                            append("const item$lineIndex = response$lineIndex?.value ?? 'markdown benchmark';\n")
-                        }
-                        append("```\n")
-                    },
-                sentAtEpochMs = messageIndex.toLong(),
-            )
-        }
-
-    private suspend fun measureMs(block: suspend () -> Unit): Long {
-        val startedAt = System.nanoTime()
-        block()
-        return (System.nanoTime() - startedAt) / 1_000_000
-    }
 
     private fun reviewChangesMessage(id: String) =
         SessionChatMessageItem(

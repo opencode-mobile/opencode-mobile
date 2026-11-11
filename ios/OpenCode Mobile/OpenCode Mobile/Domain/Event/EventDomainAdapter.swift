@@ -1386,68 +1386,24 @@ nonisolated struct EventDomainAdapter: Sendable {
         }
     }
 
-    /// Title change carried by a `session.updated` event for a concrete session id.
-    /// Returns nil when the event is not a usable title update.
+    /// See `OpencodeEvent.sessionTitleUpdate`.
     func sessionTitleUpdate(from event: OpencodeEvent) -> SessionTitleUpdate? {
-        guard event.type == "session.updated" else { return nil }
-        let info = event.rawProperties?["info"]?.dictionaryValue
-        let sessionID =
-            event.sessionID
-            ?? info?["id"]?.stringValue
-            ?? info?["sessionID"]?.stringValue
-            ?? info?["sessionId"]?.stringValue
-        guard let sessionID else { return nil }
-        guard let title = info?["title"]?.stringValue else { return nil }
-        return SessionTitleUpdate(sessionID: sessionID, title: title)
+        event.sessionTitleUpdate
     }
 
-    /// Pending-revert change. v1 `session.updated` carries the whole session, so an absent
-    /// `info.revert` means none; v2 stages, clears and commits with dedicated events. A partial
-    /// `info` (the v2 `session.renamed` projection) says nothing about the revert and is ignored.
+    /// See `OpencodeEvent.sessionRevertUpdate`.
     func sessionRevertUpdate(from event: OpencodeEvent) -> SessionRevertUpdate? {
-        switch event.type {
-        case "session.updated":
-            guard let info = event.rawProperties?["info"]?.dictionaryValue, info["time"] != nil else { return nil }
-            guard let sessionID = event.sessionID ?? info["id"]?.stringValue else { return nil }
-            let messageID = info["revert"]?.dictionaryValue?["messageID"]?.stringValue
-            return SessionRevertUpdate(sessionID: sessionID, messageID: messageID)
-        case "session.revert.staged":
-            guard let sessionID = event.sessionID,
-                  let messageID = event.rawProperties?["revert"]?.dictionaryValue?["messageID"]?.stringValue
-            else { return nil }
-            return SessionRevertUpdate(sessionID: sessionID, messageID: messageID)
-        case "session.revert.cleared", "session.revert.committed":
-            guard let sessionID = event.sessionID else { return nil }
-            return SessionRevertUpdate(sessionID: sessionID, messageID: nil)
-        default:
-            return nil
-        }
+        event.sessionRevertUpdate
     }
 
-    /// New directory of a session the server moved (v2 `session.moved`, projected onto
-    /// `session.updated` with the move's `location`). Nil for any other event, including a v1
-    /// `session.updated` that carries the whole session under `info`.
+    /// See `OpencodeEvent.sessionMoved`.
     func sessionMoved(from event: OpencodeEvent) -> SessionMovedUpdate? {
-        guard event.type == "session.updated", event.rawProperties?["info"] == nil else { return nil }
-        guard let sessionID = event.sessionID, !sessionID.isEmpty else { return nil }
-        let directory = event.rawProperties?["location"]?.dictionaryValue?["directory"]?.stringValue?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let directory, !directory.isEmpty else { return nil }
-        return SessionMovedUpdate(
-            sessionID: sessionID,
-            directory: directory,
-            projectID: event.namedProjectID
-        )
+        event.sessionMoved
     }
 
-    /// Session removed on the server. v1 carries the id only in `info.id`; v2 sends `sessionID`.
+    /// See `OpencodeEvent.sessionDeletedID`.
     func sessionDeletedID(from event: OpencodeEvent) -> String? {
-        guard event.type == "session.deleted" else { return nil }
-        let info = event.rawProperties?["info"]?.dictionaryValue
-        return event.sessionID
-            ?? info?["id"]?.stringValue
-            ?? info?["sessionID"]?.stringValue
-            ?? info?["sessionId"]?.stringValue
+        event.sessionDeletedID
     }
 
     /// Viewed watermark carried by a v2 `session.viewed` event (`{ sessionID, idle }`).

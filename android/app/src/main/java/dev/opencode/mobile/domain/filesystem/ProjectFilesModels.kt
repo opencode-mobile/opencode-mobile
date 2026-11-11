@@ -1,6 +1,6 @@
 package dev.opencode.mobile.domain.filesystem
 
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import java.net.URLEncoder
 
 /** What the File Viewer can show for one file. */

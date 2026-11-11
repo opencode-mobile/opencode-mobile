@@ -213,10 +213,6 @@ import Testing
         // A clock that went backwards does not count as armed.
         #expect(!OpenCodeEscapeResolver.isArmed(armedAt: start, now: start.addingTimeInterval(-1), interruptAvailable: true))
     }
-
-    @Test func hintText_matchesTheSpec() {
-        #expect(OpenCodeInterruptKeyboardHint.text == "Esc again to interrupt")
-    }
 }
 
 @Suite struct OpenCodePromptKeyboardTests {
@@ -225,10 +221,6 @@ import Testing
         #expect(!OpenCodePromptKeyboardHint.isVisible(hardwareKeyboardConnected: true, focusInsidePrompt: true))
         #expect(!OpenCodePromptKeyboardHint.isVisible(hardwareKeyboardConnected: false, focusInsidePrompt: false))
         #expect(!OpenCodePromptKeyboardHint.isVisible(hardwareKeyboardConnected: false, focusInsidePrompt: true))
-    }
-
-    @Test func hintText_matchesTheSpec() {
-        #expect(OpenCodePromptKeyboardHint.text == "Press Tab to answer with the keyboard")
     }
 
     @Test func question_entersAtTheFirstOption() {

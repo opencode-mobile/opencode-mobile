@@ -2,11 +2,11 @@ package dev.opencode.mobile.ui.worktree
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
 import dev.opencode.mobile.domain.worktree.CreatedWorktree
 import dev.opencode.mobile.domain.worktree.WorktreeCreateError
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

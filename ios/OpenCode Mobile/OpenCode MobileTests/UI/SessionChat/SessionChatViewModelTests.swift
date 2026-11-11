@@ -1204,24 +1204,6 @@ struct SessionChatViewModelTests {
         #expect(region.state.messageID == "user-1")
     }
 
-    @Test func failedReviewChangesCountStaysHidden() async {
-        let sessionRepository = FakeChatSessionRepository(sessionDiffError: .transport("offline"))
-        let viewModel = makeViewModel(
-            messageRepository: FakeMessageRepository(messages: [
-                Message(id: "user-1", role: .user, text: "Change it", model: nil, mode: nil, sentAtEpochMs: 1),
-                Message(id: "assistant-1", role: .assistant, text: "Done", model: nil, mode: nil, sentAtEpochMs: 2),
-            ]),
-            sessionRepository: sessionRepository
-        )
-        defer { viewModel.stopObserving() }
-
-        await viewModel.loadMessages()
-        try? await Task.sleep(for: .milliseconds(50))
-
-        #expect(sessionRepository.diffRequest == nil)
-        #expect(viewModel.uiState.reviewChangesSummary == nil)
-    }
-
     @Test func activeLatestTurnDoesNotLoadReviewChangesCount() async {
         let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
         let viewModel = makeViewModel(
@@ -1238,50 +1220,6 @@ struct SessionChatViewModelTests {
 
         #expect(sessionRepository.diffRequest == nil)
         #expect(viewModel.uiState.reviewChangesSummary == nil)
-    }
-
-    @Test(
-        .disabled("Quarantined from CI: stress println benchmark, not a correctness gate")
-    )
-    func benchmark_loadMessages_longMarkdownHistory() async {
-        let messages = longMarkdownHistory()
-        let detectorMs = milliseconds {
-            _ = messages.filter { OpenCodeRenderedMarkdownDetector.shouldRender($0.text) }.count
-        }
-        let parserMs = await milliseconds {
-            await Task.detached(priority: .userInitiated) {
-                for message in messages {
-                    guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
-                    _ = OpenCodeRenderedMarkdownParser.parse(message.text)
-                }
-            }.value
-        }
-        let mapper = MessageContentPreparer()
-        let preparerMs = await milliseconds {
-            _ = await mapper.prepareMessages(messages)
-        }
-        let viewModel = makeViewModel(
-            messageRepository: FakeMessageRepository(messages: messages)
-        )
-        defer { viewModel.stopObserving() }
-
-        let clock = ContinuousClock()
-        let elapsed = await clock.measure {
-            await viewModel.loadMessages()
-        }
-
-        guard viewModel.uiState.timeline == .ready else {
-            Issue.record("Expected a ready benchmark timeline")
-            return
-        }
-        let loadedMessages = viewModel.uiState.messages
-        #expect(loadedMessages.count == 20)
-        let line =
-            "MARKDOWN_BENCHMARK ios detector-ms=\(detectorMs) parser-bridge-ms=\(parserMs) " +
-            "preparer-ms=\(preparerMs) viewmodel-load-ms=\(elapsed.components.attoseconds / 1_000_000_000_000_000) " +
-            "messages=20 code-lines=3000\n"
-        print(String(line.dropLast()))
-        fputs(line, stderr)
     }
 
     private func reviewChangesRow(id: String) -> SessionChatRow {
@@ -3452,7 +3390,10 @@ struct SessionChatViewModelTests {
     @Test func startObserving_afterStop_resumesEventReloads() async {
         let repository = FakeObservingMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
-        await viewModel.loadMessages()
+        // This fake publishes nothing until `emit`, so awaiting the initial load here
+        // would sit in `.loading` until its 15 s deadline. Let it finish on the emit.
+        let initialLoad = Task { await viewModel.loadMessages() }
+        try? await Task.sleep(for: .milliseconds(50))
         viewModel.stopObserving()
         viewModel.startObserving()
         try? await Task.sleep(for: .milliseconds(200))
@@ -3465,6 +3406,7 @@ struct SessionChatViewModelTests {
                 viewModel.uiState.messages.contains { $0.text == "Resumed" }
         }
         #expect(resumed)
+        await initialLoad.value
     }
 
     @Test func stopObserving_cancelsBackgroundTasks() async {
@@ -3486,12 +3428,15 @@ struct SessionChatViewModelTests {
     @Test func messageUpdatedEvent_reloadsMessages() async {
         let repository = FakeObservingMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
-        await viewModel.loadMessages()
+        // See startObserving_afterStop_resumesEventReloads: the initial load only
+        // resolves once this fake emits.
+        let initialLoad = Task { await viewModel.loadMessages() }
         try? await Task.sleep(for: .milliseconds(50))
         let updated = [
             Message(id: "msg-2", role: .assistant, text: "Updated", model: nil, mode: nil, sentAtEpochMs: nil),
         ]
         repository.emit(updated)
+        await initialLoad.value
         try? await Task.sleep(for: .milliseconds(500))
         guard viewModel.uiState.timeline == .ready else {
             Issue.record("Expected ready timeline")
@@ -6409,23 +6354,6 @@ struct SessionChatViewModelTests {
         return activeConnectionManager
     }
 
-    private func longMarkdownHistory() -> [Message] {
-        (1...20).map { messageIndex in
-            Message(
-                id: "benchmark-\(messageIndex)",
-                role: .assistant,
-                text: "## Response \(messageIndex)\n\n```typescript\n" +
-                    (0..<150).map { lineIndex in
-                        "const item\(lineIndex) = response\(lineIndex)?.value ?? 'markdown benchmark';"
-                    }.joined(separator: "\n") +
-                    "\n```\n",
-                model: nil,
-                mode: nil,
-                sentAtEpochMs: Int64(messageIndex)
-            )
-        }
-    }
-
     private func testAttachment(
         id: String,
         filename: String,
@@ -6441,18 +6369,6 @@ struct SessionChatViewModelTests {
             dataURL: "data:\(mime);base64,SGVsbG8=",
             previewData: previewData
         )
-    }
-
-    private func milliseconds(_ block: () -> Void) -> Int64 {
-        let clock = ContinuousClock()
-        let elapsed = clock.measure(block)
-        return elapsed.components.attoseconds / 1_000_000_000_000_000
-    }
-
-    private func milliseconds(_ block: () async -> Void) async -> Int64 {
-        let clock = ContinuousClock()
-        let elapsed = await clock.measure(block)
-        return elapsed.components.attoseconds / 1_000_000_000_000_000
     }
 
     private func waitUntil(

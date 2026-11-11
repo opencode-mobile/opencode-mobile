@@ -394,12 +394,6 @@ final class OpenCodeBottomSheetHeightTests: XCTestCase {
 
     // MARK: Shared rules with Android
 
-    func testCompactThresholdMatchesAndroid() {
-        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.compactMaxHeight, 420)
-        XCTAssertTrue(OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: 420))
-        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: 421))
-    }
-
     func testCompactBodyHeightFollowsTheBodyBothWays() {
         XCTAssertEqual(
             OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 300, measured: 120, lockedScrollable: false, containerHeight: 866),

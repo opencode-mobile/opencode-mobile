@@ -1,7 +1,7 @@
 package dev.opencode.mobile.domain.time
 
 import dev.opencode.mobile.R
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter

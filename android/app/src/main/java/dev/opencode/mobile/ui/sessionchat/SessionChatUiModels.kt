@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.ui.main.AddProjectSheetUi
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
@@ -30,6 +31,7 @@ import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
@@ -41,7 +43,6 @@ import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellOutputUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
 data class SessionChatComposerState(
@@ -379,6 +380,8 @@ data class SessionChatUiState(
     val sideQuestions: SessionChatSideQuestionsUiState = SessionChatSideQuestionsUiState(),
     /** New session before its first send (#1004); null once the session exists. */
     val newSessionDraft: NewSessionDraftUiState? = null,
+    /** The draft's Add project sheet (#1021); null when closed. */
+    val newSessionAddProjectSheet: AddProjectSheetUi? = null,
 ) {
     /** A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet. */
     fun blocksChipTimelineIntro(): Boolean =

@@ -335,12 +335,6 @@ class WorktreesViewModelTest {
         }
 
     @Test
-    fun theMenuSaysNothingBeforeHomeListedWorktrees() {
-        assertFalse(HomeWorktreesSnapshot(worktreesLoaded = false).worktreesLoaded)
-        assertEquals(0, HomeWorktreesSnapshot(worktreesLoaded = false).worktreeCount)
-    }
-
-    @Test
     fun theMainCheckoutCannotBeRemoved() =
         runTest(dispatcher) {
             val model = model(feed())

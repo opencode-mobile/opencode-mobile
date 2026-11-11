@@ -11,9 +11,12 @@ import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageError
+import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ServerFilePreviews
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
+import dev.opencode.mobile.domain.message.UnavailableServerFilePreviews
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.sessionchat.ContentRevision
@@ -22,14 +25,21 @@ import dev.opencode.mobile.ui.sessionchat.DisplayMessageBody
 import dev.opencode.mobile.ui.sessionchat.LatestAgentHint
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.OptimisticInputs
+import dev.opencode.mobile.ui.sessionchat.SessionChatActivityCard
+import dev.opencode.mobile.ui.sessionchat.SessionChatActivityFooter
+import dev.opencode.mobile.ui.sessionchat.SessionChatActivityFooterHold
+import dev.opencode.mobile.ui.sessionchat.SessionChatChildActivity
 import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionCandidate
 import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionLinker
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatStepEntryDebounce
+import dev.opencode.mobile.ui.sessionchat.SessionChatStepRail
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.TimelineChangeNotices
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
+import dev.opencode.mobile.ui.sessionchat.SessionChatUiState
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineDisplayOrder
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
@@ -43,9 +53,45 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** Minimum time a child session's current action stays on screen before the next one replaces it. */
+private const val ACTIVITY_CHILD_UPDATE_HOLD_MS = 800L
+private const val ATTACHMENT_PREVIEW_MAX_BYTES = 32 * 1024 * 1024
+
+/**
+ * What the timeline's presentation pass reads from, and patches into, the Screen Model that
+ * publishes it. Presentation changes are partial writes of the published UI state, not a full
+ * publish, and they do not go through [SessionChatTimeline.state].
+ */
+interface SessionChatTimelinePresentationHost {
+    /** The UI state the Screen Model published last. */
+    val publishedUiState: SessionChatUiState
+
+    /** Replaces the published UI state with a partial copy of it. */
+    fun patchUiState(state: SessionChatUiState)
+
+    /** The session Session Chat shows now. */
+    val boundSessionId: String?
+
+    /** The directory the session runs in now; after `session.moved` it differs from the transcript's. */
+    val boundWorktree: String?
+}
+
+/** Stand-in host for a timeline built without a facade (tests). One per timeline. */
+private class DetachedTimelinePresentationHost : SessionChatTimelinePresentationHost {
+    override var publishedUiState: SessionChatUiState = SessionChatUiState.initial(sessionId = "", sessionTitle = "")
+
+    override fun patchUiState(state: SessionChatUiState) {
+        publishedUiState = state
+    }
+
+    override val boundSessionId: String? = null
+    override val boundWorktree: String? = null
+}
 
 class SessionChatTimeline(
     private val messageRepository: MessageRepository,
@@ -53,6 +99,10 @@ class SessionChatTimeline(
     private val listChildSessions: (suspend (String) -> List<Session>)? = null,
     /** True when the server records no agent/model notices (v1), so the timeline derives them. */
     private val derivesChangeNotices: () -> Boolean = { false },
+    /** Reads server images for timeline previews. */
+    private val serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
+    private val nowMs: () -> Long = { System.currentTimeMillis() },
+    private val presentationHost: SessionChatTimelinePresentationHost = DetachedTimelinePresentationHost(),
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
 
@@ -1239,6 +1289,263 @@ class SessionChatTimeline(
 
     private fun logD(message: String) {
         runCatching { Log.d(TAG, message) }
+    }
+
+    // Presentation (#779, #898): how the built rows are shown once the Screen Model publishes
+    // them. Kept out of [state] on purpose: these changes patch the published UI state in place
+    // instead of triggering a full publish.
+
+    // Chip-timeline paragraphs the user expanded past `+N more`, keyed by
+    // expansion id with the chip count at tap time; reset per session.
+    var expandedStepParagraphs: Map<String, Int> = emptyMap()
+        private set
+
+    // Step rails the user unfolded past `N earlier steps`, keyed by rail id; reset per session.
+    var unfoldedStepRails: Set<String> = emptySet()
+        private set
+    private val imageViewer = SessionChatImageViewer()
+
+    // Activity card whose sheet is open, by block id; reset per session (#779).
+    var presentedActivityCard: String? = null
+        private set
+
+    // Step of the presented card whose detail the sheet shows in place of its list (#779).
+    var activityCardDetailStepId: String? = null
+        private set
+
+    // Child sessions observed for activity cards: their jobs and what they are doing (#779).
+    private val activityChildJobs = mutableMapOf<String, Job>()
+    var activityCardChildren: Map<String, SessionChatChildActivity> = emptyMap()
+        private set
+
+    // Activity card footer hold per live card, step entry debounce, and their next tick (#779).
+    private val activityFooterHolds = mutableMapOf<String, SessionChatActivityFooterHold>()
+    private var stepEntryDebounce = SessionChatStepEntryDebounce()
+    var activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap()
+        private set
+    var debouncedStepIds: Set<String> = emptySet()
+        private set
+    private var stepTimingJob: Job? = null
+    private var liveRailSource: List<SessionChatMessageItem>? = null
+    private var liveRailMarked: List<SessionChatMessageItem> = emptyList()
+    private var liveRailActive = false
+
+    /**
+     * Marks the trailing rail of a working turn live. Cached on the source
+     * list so a republish from another region keeps the same message list.
+     */
+    fun presentMessages(
+        messages: List<SessionChatMessageItem>,
+        isTurnActive: Boolean,
+    ): List<SessionChatMessageItem> {
+        if (messages === liveRailMarked && isTurnActive == liveRailActive) return messages
+        if (messages === liveRailSource && isTurnActive == liveRailActive) return liveRailMarked
+        // Re-mark from the built list: a marked list has settled one-step cards swapped
+        // for standard blocks, which could not turn back into a live card.
+        val source = if (messages === liveRailMarked) liveRailSource ?: messages else messages
+        val marked = SessionChatStepRail.markLive(source, isTurnActive)
+        liveRailSource = source
+        liveRailActive = isTurnActive
+        liveRailMarked = marked
+        return marked
+    }
+
+    /**
+     * Shows the [chipCount] chips a chip-timeline paragraph had when its
+     * `+N more` was tapped; chips that arrive later still collapse.
+     */
+    fun expandStepParagraph(
+        expansionId: String,
+        chipCount: Int,
+    ) {
+        if ((expandedStepParagraphs[expansionId] ?: -1) >= chipCount) return
+        expandedStepParagraphs = expandedStepParagraphs + (expansionId to chipCount)
+        presentationHost.patchUiState(presentationHost.publishedUiState.copy(expandedStepParagraphs = expandedStepParagraphs))
+    }
+
+    /** Opens the full-screen viewer on image [index] of timeline gallery [galleryId] (#898). */
+    fun openImageViewer(
+        galleryId: String,
+        index: Int,
+    ) {
+        imageViewer.open(galleryId, index)
+        publishImageViewer()
+    }
+
+    fun showImageViewerPage(index: Int) {
+        imageViewer.showPage(index)
+        publishImageViewer()
+    }
+
+    fun dismissImageViewer() {
+        imageViewer.dismiss()
+        publishImageViewer()
+    }
+
+    /** The image viewer for [messages]; closes once its gallery left the timeline. */
+    fun reconcileImageViewer(messages: List<SessionChatMessageItem>) = imageViewer.reconcile(messages)
+
+    private fun publishImageViewer() {
+        val viewer = imageViewer.reconcile(presentationHost.publishedUiState.messages)
+        if (viewer != presentationHost.publishedUiState.imageViewer) {
+            presentationHost.patchUiState(presentationHost.publishedUiState.copy(imageViewer = viewer))
+        }
+    }
+
+    /** Shows every step of a folded step rail, or folds it again. */
+    fun toggleStepRailFold(railId: String) {
+        unfoldedStepRails = if (railId in unfoldedStepRails) unfoldedStepRails - railId else unfoldedStepRails + railId
+        presentationHost.patchUiState(presentationHost.publishedUiState.copy(unfoldedStepRails = unfoldedStepRails))
+    }
+
+    /** Opens the live activity sheet for card [blockId] (#779). */
+    fun openActivityCard(blockId: String) {
+        presentedActivityCard = blockId
+        activityCardDetailStepId = null
+        presentationHost.patchUiState(presentationHost.publishedUiState.copy(presentedActivityCard = blockId, activityCardDetailStepId = null))
+        syncActivityChildren(presentationHost.publishedUiState.messages)
+    }
+
+    fun dismissActivityCard() {
+        if (presentedActivityCard == null) return
+        presentedActivityCard = null
+        activityCardDetailStepId = null
+        presentationHost.patchUiState(presentationHost.publishedUiState.copy(presentedActivityCard = null, activityCardDetailStepId = null))
+        syncActivityChildren(presentationHost.publishedUiState.messages)
+    }
+
+    /** Shows step [stepId]'s detail inside the open activity sheet, in place of its list. */
+    fun openActivityCardStep(stepId: String) {
+        val presented = presentedActivityCard ?: return
+        if (!SessionChatActivityCard.hasStep(presentationHost.publishedUiState.messages, presented, stepId)) return
+        activityCardDetailStepId = stepId
+        presentationHost.patchUiState(presentationHost.publishedUiState.copy(activityCardDetailStepId = stepId))
+    }
+
+    /** Returns the open activity sheet from a step's detail to its list. */
+    fun closeActivityCardStep() {
+        if (activityCardDetailStepId == null) return
+        activityCardDetailStepId = null
+        presentationHost.patchUiState(presentationHost.publishedUiState.copy(activityCardDetailStepId = null))
+    }
+
+    /** A new session or draft: paragraphs, rails, the image viewer and activity cards start over. */
+    fun resetPresentation() {
+        expandedStepParagraphs = emptyMap()
+        unfoldedStepRails = emptySet()
+        imageViewer.dismiss()
+        resetActivityCards()
+    }
+
+    private fun resetActivityCards() {
+        presentedActivityCard = null
+        activityCardDetailStepId = null
+        activityChildJobs.values.forEach { it.cancel() }
+        activityChildJobs.clear()
+        activityCardChildren = emptyMap()
+        stepTimingJob?.cancel()
+        stepTimingJob = null
+        activityFooterHolds.clear()
+        stepEntryDebounce = SessionChatStepEntryDebounce()
+        activityCardFooters = emptyMap()
+        debouncedStepIds = emptySet()
+    }
+
+    /**
+     * Step timing (#779): the entry debounce hides steps seen in flight for
+     * less than 300 ms (step rail and activity card), and each live activity
+     * card's footer hold latches what its band shows. Re-runs itself at the
+     * next due time; a card that stops being live drops its hold.
+     */
+    fun syncStepTiming(
+        messages: List<SessionChatMessageItem>,
+        now: Long,
+    ) {
+        val blocks = messages.flatMap { it.blocks }
+        val steps =
+            blocks.flatMap { block ->
+                when (block) {
+                    is SessionChatTimelineBlock.StepRail -> block.steps
+                    is SessionChatTimelineBlock.ActivityCard -> block.steps
+                    else -> emptyList()
+                }
+            }
+        debouncedStepIds = stepEntryDebounce.submit(steps, now)
+        val liveCards = blocks.filterIsInstance<SessionChatTimelineBlock.ActivityCard>().filter { it.isLive }
+        activityFooterHolds.keys.retainAll(liveCards.mapTo(HashSet()) { it.blockID })
+        activityCardFooters =
+            liveCards.associate { card ->
+                val hold = activityFooterHolds.getOrPut(card.blockID) { SessionChatActivityFooterHold() }
+                card.blockID to hold.submit(card.steps.filter { it.id !in debouncedStepIds }, now)
+            }
+        val due = (listOfNotNull(stepEntryDebounce.nextDueMs) + activityFooterHolds.values.mapNotNull { it.expiresAtMs }).minOrNull()
+        stepTimingJob?.cancel()
+        stepTimingJob =
+            due?.let {
+                scope.launch {
+                    delay((it - now).coerceAtLeast(0))
+                    stepTimingJob = null
+                    // Never earlier than due, so a test's virtual clock still expires the hold.
+                    syncStepTiming(presentationHost.publishedUiState.messages, maxOf(nowMs(), it))
+                    val current = presentationHost.publishedUiState
+                    if (current.activityCardFooters != activityCardFooters || current.debouncedStepIds != debouncedStepIds) {
+                        presentationHost.patchUiState(current.copy(activityCardFooters = activityCardFooters, debouncedStepIds = debouncedStepIds))
+                    }
+                }
+            }
+    }
+
+    /**
+     * Observes the messages of running child sessions on the live card and
+     * the presented one, through the same store and live events as the
+     * child's own Session Chat, so agent rows show what each child does.
+     * Closes the sheet once its card left the timeline.
+     */
+    fun syncActivityChildren(messages: List<SessionChatMessageItem>) {
+        val presented = presentedActivityCard
+        if (presented != null && messages.isNotEmpty() && !SessionChatActivityCard.hasCard(messages, presented)) {
+            presentedActivityCard = null
+            activityCardDetailStepId = null
+            presentationHost.patchUiState(presentationHost.publishedUiState.copy(presentedActivityCard = null, activityCardDetailStepId = null))
+        }
+        // A detail whose step left the card goes back to the list.
+        val detailStep = activityCardDetailStepId
+        val card = presentedActivityCard
+        val detailLeft =
+            detailStep != null &&
+                messages.isNotEmpty() &&
+                (card == null || !SessionChatActivityCard.hasStep(messages, card, detailStep))
+        if (detailLeft) {
+            activityCardDetailStepId = null
+            presentationHost.patchUiState(presentationHost.publishedUiState.copy(activityCardDetailStepId = null))
+        }
+        val worktree = presentationHost.boundWorktree
+        val wanted =
+            if (worktree == null) emptySet() else SessionChatActivityCard.observedChildSessionIds(messages, presentedActivityCard)
+        (activityChildJobs.keys - wanted).forEach { id -> activityChildJobs.remove(id)?.cancel() }
+        for (childId in wanted - activityChildJobs.keys) {
+            val parentId = presentationHost.boundSessionId
+            activityChildJobs[childId] =
+                scope.launch {
+                    // conflate + delay: a child's current action changes at most once per
+                    // hold period, always settling on the latest value, so fast tool bursts
+                    // read as a smooth update instead of flicker.
+                    messageRepository.observeMessages(childId, worktree).conflate().collect { update ->
+                        if (presentationHost.boundSessionId != parentId || update !is MessageListUpdate.Messages) return@collect
+                        val activity = SessionChatActivityCard.childActivity(update.messages)
+                        if (activityCardChildren[childId] == activity) return@collect
+                        activityCardChildren = activityCardChildren + (childId to activity)
+                        presentationHost.patchUiState(presentationHost.publishedUiState.copy(activityCardChildren = activityCardChildren))
+                        delay(ACTIVITY_CHILD_UPDATE_HOLD_MS)
+                    }
+                }
+        }
+    }
+
+    /** Bytes of an image that lives on the server, for a timeline preview; null on any failure. */
+    suspend fun loadAttachmentPreview(serverPath: String): ByteArray? {
+        val directory = presentationHost.boundWorktree ?: return null
+        return serverFilePreviews.read(serverPath, directory, ATTACHMENT_PREVIEW_MAX_BYTES)
     }
 
     private fun logE(

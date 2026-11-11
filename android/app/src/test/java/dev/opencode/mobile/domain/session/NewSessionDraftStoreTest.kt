@@ -86,18 +86,6 @@ class NewSessionDraftStoreTest {
     }
 
     @Test
-    fun addProjectRequest_isConsumedOnceAndDroppedOnCancel() {
-        val store = NewSessionDraftStore()
-        store.requestAddProject("a")
-        assertTrue(store.consumeAddProjectRequest("a"))
-        assertFalse(store.consumeAddProjectRequest("a"))
-
-        store.requestAddProject("a")
-        store.cancelAddProject("a")
-        assertFalse(store.consumeAddProjectRequest("a"))
-    }
-
-    @Test
     fun movedTo_dropsWhatTheFirstSendMadeForTheOldPlace() {
         val draft =
             NewSessionDraft

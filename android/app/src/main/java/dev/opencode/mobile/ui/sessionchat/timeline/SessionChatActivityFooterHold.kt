@@ -1,6 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 
 /**
  * What a live activity card's footer band shows (#779): a tool, running (title,

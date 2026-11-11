@@ -253,7 +253,7 @@ final class ChangesViewModel {
         let idle = AsyncStream<Void> { continuation in
             let task = Task.detached {
                 for await event in foregroundEventStream.events()
-                    where event.type == Self.sessionIdleEvent && event.sessionID == sessionID {
+                    where event.isSessionRunEnd && event.sessionID == sessionID {
                     continuation.yield()
                 }
                 continuation.finish()
@@ -266,7 +266,6 @@ final class ChangesViewModel {
         }
     }
 
-    private nonisolated static let sessionIdleEvent = "session.idle"
 
     func selectSource(_ source: ChangeSource) async {
         guard source != state.selectedSource, availableSources.contains(source) else { return }

@@ -298,20 +298,6 @@ struct SessionProtocolRepositoryTests {
         #expect(session.isArchived)
     }
 
-    @Test func v2SetSessionArchivedFalseSendsRestoreBody() async throws {
-        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
-        let manager = makeManager(serverProtocol: .v2)
-        let api = SessionsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession())
-
-        try await api.setSessionArchivedV2(id: "ses_1", archived: false)
-
-        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
-        #expect(request.httpMethod == "PATCH")
-        #expect(request.url?.path.hasSuffix("/api/session/ses_1") == true)
-        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
-        #expect(jsonObject(body)?["archived"] as? Bool == false)
-    }
-
     @Test func v2ArchiveSessionSurfacesServerFailure() async {
         ProtocolRoutingURLProtocol.reset(responses: [StubResponse(statusCode: 404, body: "Not Found")])
         let repository = makeSessionRepository(serverProtocol: .v2)

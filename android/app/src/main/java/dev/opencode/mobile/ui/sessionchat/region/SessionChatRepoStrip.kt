@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.isBranchUpdated
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.VcsFileStatus
@@ -62,7 +63,7 @@ class SessionChatRepoStrip(
             foregroundEventStream?.let { stream ->
                 scope.launch {
                     stream.events
-                        .filter { it.type == BRANCH_UPDATED_EVENT }
+                        .filter { it.isBranchUpdated }
                         .collect { refresh() }
                 }
             }
@@ -149,9 +150,5 @@ class SessionChatRepoStrip(
             files = files,
             isExpanded = isExpanded,
         )
-    }
-
-    companion object {
-        const val BRANCH_UPDATED_EVENT = "vcs.branch.updated"
     }
 }

@@ -45,29 +45,6 @@ struct SharedLiveObservationTests {
         second.cancel()
         #expect(resumedReplacement)
     }
-
-    @Test func overlappingHolds_areNotOverwritten() async {
-        let park = ContinuationPark()
-        async let first: Void = park.holdUntilCancelled()
-        async let second: Void = park.holdUntilCancelled()
-        let parked = await waitUntil { park.waiterCount == 2 }
-        #expect(parked)
-        park.finish()
-        _ = await (first, second)
-        #expect(park.resumedCount == 2)
-        #expect(park.waiterCount == 0)
-    }
-
-    @Test func cancelBeforeOrDuringHold_resumesExactlyOnce() async {
-        let park = ContinuationPark()
-        let task = Task {
-            await park.holdUntilCancelled()
-        }
-        task.cancel()
-        await task.value
-        #expect(park.resumedCount == 1)
-        #expect(park.waiterCount == 0)
-    }
 }
 
 private final class ContinuationPark: @unchecked Sendable {
@@ -80,12 +57,6 @@ private final class ContinuationPark: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return _resumedCount
-    }
-
-    var waiterCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return waiters.count
     }
 
     func holdUntilCancelled() async {

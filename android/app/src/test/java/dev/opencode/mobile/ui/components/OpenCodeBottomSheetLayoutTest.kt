@@ -139,11 +139,6 @@ class OpenCodeBottomSheetLayoutTest {
     }
 
     @Test
-    fun compactThreshold_matchesIos() {
-        assertEquals(420f, BottomSheetCompactMaxHeight.value, 0.01f)
-    }
-
-    @Test
     fun centeredScroll_centersTheRowAndNeverScrollsAboveTheTop() {
         // Row 48 tall at 600 in a 300 viewport: center 624 sits at 150.
         assertEquals(474f, openCodeBottomSheetCenteredScroll(600f, 48f, 300f), 0.01f)

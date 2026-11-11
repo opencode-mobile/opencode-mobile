@@ -8,11 +8,11 @@ import dev.opencode.mobile.domain.home.HomeWorktree
 import dev.opencode.mobile.domain.home.HomeWorktreeCopy
 import dev.opencode.mobile.domain.session.NewSessionDraft
 import dev.opencode.mobile.domain.session.NewSessionPlace
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.main.HomeText
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import dev.opencode.mobile.ui.worktree.WorktreeBaseOptions
 import dev.opencode.mobile.ui.worktree.WorktreeBaseRow

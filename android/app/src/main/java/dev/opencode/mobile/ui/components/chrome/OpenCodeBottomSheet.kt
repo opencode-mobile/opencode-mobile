@@ -1343,7 +1343,8 @@ private fun restoreDecorSiblingAccessibility(hiddenSiblings: List<Pair<View, Int
  * Tappable row in a bottom sheet. [selected] marks the current choice in a picker: it shows a
  * check in the end slot (replacing [endDecorator]) and exposes the selected state to
  * accessibility. Titles wrap to two lines at large font scales. [tag] adds a small
- * [OpenCodeTag] right after the title (for example "Recommended" or "Current").
+ * [OpenCodeTag] right after the title (for example "Recommended" or "Current"). [isNew] adds an
+ * accent "New" tag after the title and [tag], for a feature added in the current app version.
  */
 @Composable
 fun OpenCodeBottomSheetEntry(
@@ -1358,6 +1359,7 @@ fun OpenCodeBottomSheetEntry(
     /** Optional second line that explains the entry, for pickers whose options need a description. */
     subtitle: String? = null,
     tag: String? = null,
+    isNew: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1414,6 +1416,7 @@ fun OpenCodeBottomSheetEntry(
             BottomSheetEntryTitle(
                 title = title,
                 tag = tag,
+                isNew = isNew,
                 color = contentColor,
                 modifier = Modifier.weight(1f),
             )
@@ -1422,7 +1425,7 @@ fun OpenCodeBottomSheetEntry(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                BottomSheetEntryTitle(title = title, tag = tag, color = contentColor)
+                BottomSheetEntryTitle(title = title, tag = tag, isNew = isNew, color = contentColor)
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -1436,15 +1439,16 @@ fun OpenCodeBottomSheetEntry(
     }
 }
 
-/** Entry title, with an optional small tag right after it on the same line. */
+/** Entry title, with an optional small tag and "New" tag right after it on the same line. */
 @Composable
 private fun BottomSheetEntryTitle(
     title: String,
     tag: String?,
+    isNew: Boolean,
     color: Color,
     modifier: Modifier = Modifier,
 ) {
-    if (tag.isNullOrBlank()) {
+    if (tag.isNullOrBlank() && !isNew) {
         Text(
             text = title,
             modifier = modifier,
@@ -1468,7 +1472,14 @@ private fun BottomSheetEntryTitle(
             maxLines = BottomSheetEntryMaxLines,
             overflow = TextOverflow.Ellipsis,
         )
-        OpenCodeTag(title = tag, size = OpenCodeTagSize.Small)
+        if (!tag.isNullOrBlank()) OpenCodeTag(title = tag, size = OpenCodeTagSize.Small)
+        if (isNew) {
+            OpenCodeTag(
+                title = stringResource(R.string.common_new),
+                size = OpenCodeTagSize.Small,
+                tone = OpenCodeTagTone.Accent,
+            )
+        }
     }
 }
 

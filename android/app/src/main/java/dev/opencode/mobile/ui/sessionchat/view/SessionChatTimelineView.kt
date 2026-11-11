@@ -76,10 +76,10 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.goal.SessionGoalAction
 import dev.opencode.mobile.domain.message.TimelineNotice
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageLabel
 import dev.opencode.mobile.ui.sessionchat.SessionChatGoalTimeline
 import dev.opencode.mobile.ui.sessionchat.SessionChatGoalUiState
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason

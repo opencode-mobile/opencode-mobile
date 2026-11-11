@@ -35,6 +35,7 @@ struct SessionChatView: View {
     /// Report-a-problem sheet (#721); set to open it.
     @State private var feedbackModel: FeedbackViewModel?
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
+    @State private var selectTextTarget: SessionChatSelectTextTarget?
     @State private var showPendingPromptsSheet = false
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
     @State private var toolGroupTarget: SessionChatToolGroupTarget?
@@ -765,9 +766,11 @@ struct SessionChatView: View {
             }
             .sessionChatMessageActionsSheet(
                 target: $messageActionsTarget,
+                selectTextTarget: $selectTextTarget,
                 onRevertMessage: { viewModel.revertMessage($0) },
                 onForkFromMessage: { viewModel.openForkDialog(atMessageID: $0) }
             )
+            .sessionChatSelectTextSheet(target: $selectTextTarget)
             .sessionChatPendingPromptsSheet(
                 isPresented: $showPendingPromptsSheet,
                 prompts: viewModel.uiState.pendingPrompts,
@@ -1360,6 +1363,7 @@ struct SessionChatView: View {
     private var viewSheetOpen: Bool {
         shownGoal?.sheetOpen == true
             || messageActionsTarget != nil
+            || selectTextTarget != nil
             || showPendingPromptsSheet
             || toolDetailTarget != nil
             || skillsTarget != nil
