@@ -1,20 +1,20 @@
 import Foundation
 
-nonisolated struct CommandDTO: Codable, Sendable {
-    let name: String
-    let description: String?
-    let agent: String?
-    let model: String?
-    let source: String?
-    let template: String?
-    let subtask: Bool?
-    let hints: [String]?
+public nonisolated struct CommandDTO: Codable, Sendable {
+    public let name: String
+    public let description: String?
+    public let agent: String?
+    public let model: String?
+    public let source: String?
+    public let template: String?
+    public let subtask: Bool?
+    public let hints: [String]?
 
     private enum CodingKeys: String, CodingKey {
         case name, description, agent, model, source, template, subtask, hints
     }
 
-    init(
+    public init(
         name: String,
         description: String? = nil,
         agent: String? = nil,
@@ -34,7 +34,7 @@ nonisolated struct CommandDTO: Codable, Sendable {
         self.hints = hints
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
         description = try container.decodeIfPresent(String.self, forKey: .description)
@@ -47,16 +47,16 @@ nonisolated struct CommandDTO: Codable, Sendable {
     }
 }
 
-nonisolated struct RunCommandRequestDTO: Codable, Sendable {
-    let command: String
-    let arguments: String
-    let agent: String?
-    let model: String?
-    let variant: String?
-    let parts: [CommandFilePartDTO]
-    let messageID: String?
+public nonisolated struct RunCommandRequestDTO: Codable, Sendable {
+    public let command: String
+    public let arguments: String
+    public let agent: String?
+    public let model: String?
+    public let variant: String?
+    public let parts: [CommandFilePartDTO]
+    public let messageID: String?
 
-    init(
+    public init(
         command: String,
         arguments: String,
         agent: String? = nil,
@@ -75,14 +75,14 @@ nonisolated struct RunCommandRequestDTO: Codable, Sendable {
     }
 }
 
-nonisolated struct CommandFilePartDTO: Codable, Sendable {
-    let type: String
-    let mime: String
-    let url: String
-    let filename: String?
-    let id: String?
+public nonisolated struct CommandFilePartDTO: Codable, Sendable {
+    public let type: String
+    public let mime: String
+    public let url: String
+    public let filename: String?
+    public let id: String?
 
-    init(
+    public init(
         type: String = "file",
         mime: String,
         url: String,
@@ -97,14 +97,14 @@ nonisolated struct CommandFilePartDTO: Codable, Sendable {
     }
 }
 
-nonisolated struct V2RunCommandRequestDTO: Encodable, Sendable {
-    let name: String
-    let text: String
-    let files: [V2PromptFileDTO]?
-    let skills: [V2PromptSkillDTO]?
-    let delivery: String
+public nonisolated struct V2RunCommandRequestDTO: Encodable, Sendable {
+    public let name: String
+    public let text: String
+    public let files: [V2PromptFileDTO]?
+    public let skills: [V2PromptSkillDTO]?
+    public let delivery: String
 
-    init(
+    public init(
         name: String,
         text: String,
         files: [V2PromptFileDTO]? = nil,
@@ -126,7 +126,7 @@ nonisolated struct V2RunCommandRequestDTO: Encodable, Sendable {
         case delivery
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
         try container.encode(text, forKey: .text)

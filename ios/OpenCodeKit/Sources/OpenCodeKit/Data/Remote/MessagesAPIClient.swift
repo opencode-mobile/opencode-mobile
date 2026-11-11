@@ -1,12 +1,12 @@
 import Foundation
 
-nonisolated enum MessagesAPIError: Error {
+public nonisolated enum MessagesAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
 }
 
-protocol MessagesAPI: Sendable {
+public protocol MessagesAPI: Sendable {
     func listMessages(sessionID: String, directory: String?) async throws -> [MessageDTO]
     func listMessagesPage(
         sessionID: String,
@@ -34,7 +34,7 @@ protocol MessagesAPI: Sendable {
 }
 
 extension MessagesAPI {
-    func listMessagesPage(
+    public func listMessagesPage(
         sessionID: String,
         directory: String?,
         limit _: Int,
@@ -43,11 +43,11 @@ extension MessagesAPI {
         (try await listMessages(sessionID: sessionID, directory: directory), nil)
     }
 
-    func listMessagesV2(sessionID: String, directory: String?) async throws -> [V2SessionMessageDTO] {
+    public func listMessagesV2(sessionID: String, directory: String?) async throws -> [V2SessionMessageDTO] {
         []
     }
 
-    func listMessagesV2Page(
+    public func listMessagesV2Page(
         sessionID: String,
         directory: String?,
         limit _: Int,
@@ -57,38 +57,38 @@ extension MessagesAPI {
         (try await listMessagesV2(sessionID: sessionID, directory: directory), nil)
     }
 
-    func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, attachments: [Attachment], directory: String?) async throws {
+    public func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, attachments: [Attachment], directory: String?) async throws {
         try await sendPromptAsync(sessionID: sessionID, body: body, directory: directory)
     }
 
-    func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String?) async throws {}
+    public func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String?) async throws {}
 
-    func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws {
+    public func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws {
         try await sendPromptV2(sessionID: sessionID, body: body, directory: directory)
     }
 
-    func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws {}
+    public func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws {}
 
-    func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws {}
+    public func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws {}
 
-    func listInboxV2(sessionID _: String) async throws -> [V2InboxItemDTO] { [] }
+    public func listInboxV2(sessionID _: String) async throws -> [V2InboxItemDTO] { [] }
 
-    func runShell(sessionID _: String, body _: V1ShellRequestDTO, directory _: String?) async throws {}
+    public func runShell(sessionID _: String, body _: V1ShellRequestDTO, directory _: String?) async throws {}
 
-    func runShellV2(sessionID _: String, body _: V2ShellRequestDTO) async throws {}
+    public func runShellV2(sessionID _: String, body _: V2ShellRequestDTO) async throws {}
 }
 
-nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
+public nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let resolveURLSession: @Sendable () -> URLSession
-    private let bodyUploader: DurableJSONUploader?
+    private let bodyUploader: (any DurableJSONUploading)?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(
+    public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         urlSession: URLSession? = nil,
-        bodyUploader: DurableJSONUploader? = nil
+        bodyUploader: (any DurableJSONUploading)? = nil
     ) {
         self.connectionProvider = connectionProvider
         self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
@@ -102,11 +102,11 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         return connection
     }
 
-    func listMessages(sessionID: String, directory: String? = nil) async throws -> [MessageDTO] {
+    public func listMessages(sessionID: String, directory: String? = nil) async throws -> [MessageDTO] {
         try await get(path: "session/\(sessionID)/message", directory: directory)
     }
 
-    func listMessagesPage(
+    public func listMessagesPage(
         sessionID: String,
         directory: String? = nil,
         limit: Int,
@@ -124,7 +124,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         return (messages, MessageListCursor.nextCursor(headers: headers))
     }
 
-    func listMessagesV2(sessionID: String, directory: String? = nil) async throws -> [V2SessionMessageDTO] {
+    public func listMessagesV2(sessionID: String, directory: String? = nil) async throws -> [V2SessionMessageDTO] {
         var messages: [V2SessionMessageDTO] = []
         var cursor: String?
         var pages = 0
@@ -151,7 +151,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         return messages
     }
 
-    func listMessagesV2Page(
+    public func listMessagesV2Page(
         sessionID: String,
         directory: String? = nil,
         limit: Int,
@@ -173,7 +173,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         return (envelope.data, next)
     }
 
-    func listInboxV2(sessionID: String) async throws -> [V2InboxItemDTO] {
+    public func listInboxV2(sessionID: String) async throws -> [V2InboxItemDTO] {
         let envelope: APIListEnvelope<V2InboxItemDTO> = try await get(
             path: "api/session/\(sessionID)/inbox",
             directory: nil
@@ -181,11 +181,11 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         return envelope.data
     }
 
-    func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String? = nil) async throws {
+    public func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String? = nil) async throws {
         try await sendPromptAsync(sessionID: sessionID, body: body, attachments: [], directory: directory)
     }
 
-    func sendPromptAsync(
+    public func sendPromptAsync(
         sessionID: String,
         body: SendMessageRequestDTO,
         attachments: [Attachment],
@@ -202,11 +202,11 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         }, fallback: { try encoder.encode(body) })
     }
 
-    func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String? = nil) async throws {
+    public func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String? = nil) async throws {
         try await sendPromptV2(sessionID: sessionID, body: body, attachments: [], directory: directory)
     }
 
-    func sendPromptV2(
+    public func sendPromptV2(
         sessionID: String,
         body: V2PromptRequestDTO,
         attachments: [Attachment],
@@ -215,7 +215,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         try await postPrompt(path: "api/session/\(sessionID)/prompt", body: body, attachments: attachments, directory: nil)
     }
 
-    func switchSessionAgent(sessionID: String, agent: String, directory: String? = nil) async throws {
+    public func switchSessionAgent(sessionID: String, agent: String, directory: String? = nil) async throws {
         try await postNoContent(
             path: "api/session/\(sessionID)/agent",
             body: V2SwitchAgentRequestDTO(agent: agent),
@@ -223,18 +223,18 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         )
     }
 
-    func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String? = nil) async throws {
+    public func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String? = nil) async throws {
         try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: nil)
     }
 
     /// Both protocols run the command before they answer, so the request stays open for as
     /// long as the command does. It goes through the durable uploader, like a prompt, instead
     /// of the REST pool's 60-second resource ceiling.
-    func runShell(sessionID: String, body: V1ShellRequestDTO, directory: String? = nil) async throws {
+    public func runShell(sessionID: String, body: V1ShellRequestDTO, directory: String? = nil) async throws {
         try await postShell(path: "session/\(sessionID)/shell", body: body, directory: directory)
     }
 
-    func runShellV2(sessionID: String, body: V2ShellRequestDTO) async throws {
+    public func runShellV2(sessionID: String, body: V2ShellRequestDTO) async throws {
         try await postShell(path: "api/session/\(sessionID)/shell", body: body, directory: nil)
     }
 

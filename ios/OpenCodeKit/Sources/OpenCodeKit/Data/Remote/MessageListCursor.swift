@@ -1,14 +1,14 @@
 import Foundation
 
-nonisolated enum MessageListCursor {
-    static func nextCursor(headers: [AnyHashable: Any]) -> String? {
+public nonisolated enum MessageListCursor {
+    public static func nextCursor(headers: [AnyHashable: Any]) -> String? {
         if let value = header(headers, name: "X-Next-Cursor"), !value.isEmpty {
             return value
         }
         return nextCursor(fromLink: header(headers, name: "Link"))
     }
 
-    static func nextCursor(fromLink link: String?) -> String? {
+    public static func nextCursor(fromLink link: String?) -> String? {
         guard let link, !link.isEmpty else { return nil }
         for part in link.split(separator: ",") {
             let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)

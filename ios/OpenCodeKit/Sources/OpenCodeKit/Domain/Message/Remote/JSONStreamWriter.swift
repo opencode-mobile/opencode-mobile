@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct JSONStreamWriter {
+public nonisolated struct JSONStreamWriter {
     private let handle: FileHandle
     private var frames: [Frame] = [Frame()]
 
@@ -9,40 +9,40 @@ nonisolated struct JSONStreamWriter {
         var afterKey = false
     }
 
-    init(fileURL: URL) throws {
+    public init(fileURL: URL) throws {
         FileManager.default.createFile(atPath: fileURL.path, contents: nil)
         handle = try FileHandle(forWritingTo: fileURL)
     }
 
-    func close() throws {
+    public func close() throws {
         try handle.close()
     }
 
-    mutating func beginObject() throws {
+    public mutating func beginObject() throws {
         try writeSeparator()
         try writeRaw("{")
         frames.append(Frame())
     }
 
-    mutating func endObject() throws {
+    public mutating func endObject() throws {
         _ = frames.popLast()
         try writeRaw("}")
         markValueWritten()
     }
 
-    mutating func beginArray() throws {
+    public mutating func beginArray() throws {
         try writeSeparator()
         try writeRaw("[")
         frames.append(Frame())
     }
 
-    mutating func endArray() throws {
+    public mutating func endArray() throws {
         _ = frames.popLast()
         try writeRaw("]")
         markValueWritten()
     }
 
-    mutating func key(_ name: String) throws {
+    public mutating func key(_ name: String) throws {
         try writeSeparator()
         try writeRaw(Self.escape(name))
         try writeRaw(":")
@@ -50,19 +50,19 @@ nonisolated struct JSONStreamWriter {
         frames[frames.count - 1].needsComma = false
     }
 
-    mutating func writeString(_ value: String) throws {
+    public mutating func writeString(_ value: String) throws {
         try writeSeparator()
         try writeRaw(Self.escape(value))
         markValueWritten()
     }
 
-    mutating func writeInt(_ value: Int) throws {
+    public mutating func writeInt(_ value: Int) throws {
         try writeSeparator()
         try writeRaw(String(value))
         markValueWritten()
     }
 
-    mutating func writeDataURL(mime: String, fileURL: URL) throws {
+    public mutating func writeDataURL(mime: String, fileURL: URL) throws {
         try writeSeparator()
         try writeRaw("\"data:")
         try writeRaw(mime.lowercased())
@@ -72,7 +72,7 @@ nonisolated struct JSONStreamWriter {
         markValueWritten()
     }
 
-    mutating func writeDataURLString(_ value: String) throws {
+    public mutating func writeDataURLString(_ value: String) throws {
         try writeString(value)
     }
 
@@ -124,7 +124,7 @@ nonisolated struct JSONStreamWriter {
         }
     }
 
-    static func escape(_ value: String) -> String {
+    public static func escape(_ value: String) -> String {
         var output = "\""
         for scalar in value.unicodeScalars {
             switch scalar {

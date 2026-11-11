@@ -1,45 +1,45 @@
 import Foundation
 
-nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
-    let id: String
-    let type: String
-    let text: String?
-    let files: [V2FileAttachmentDTO]
-    let agents: [V2AgentAttachmentDTO]
+public nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
+    public let id: String
+    public let type: String
+    public let text: String?
+    public let files: [V2FileAttachmentDTO]
+    public let agents: [V2AgentAttachmentDTO]
     /// Skills admitted on a `user` prompt. The body is model-facing and not decoded.
-    let skills: [V2UserSkillDTO]
-    let agent: String?
-    let model: V2ModelRefDTO?
-    let content: [V2AssistantContentDTO]
-    let cost: Double?
-    let tokens: MessageTokensDTO?
-    let error: V2UnknownErrorDTO?
-    let outcome: String?
-    let retry: V2RetryDTO?
-    let finish: String?
-    let time: V2MessageTimeDTO?
-    let reason: String?
-    let summary: String?
-    let status: String?
-    let command: String?
-    let output: String?
+    public let skills: [V2UserSkillDTO]
+    public let agent: String?
+    public let model: V2ModelRefDTO?
+    public let content: [V2AssistantContentDTO]
+    public let cost: Double?
+    public let tokens: MessageTokensDTO?
+    public let error: V2UnknownErrorDTO?
+    public let outcome: String?
+    public let retry: V2RetryDTO?
+    public let finish: String?
+    public let time: V2MessageTimeDTO?
+    public let reason: String?
+    public let summary: String?
+    public let status: String?
+    public let command: String?
+    public let output: String?
     /// `shell` items: the command's exit code once it ended.
-    let exit: Int?
-    let callID: String?
-    let name: String?
-    let description: String?
+    public let exit: Int?
+    public let callID: String?
+    public let name: String?
+    public let description: String?
     /// Notice items: the agent, model or location before a switch.
-    let previous: V2PreviousDTO?
+    public let previous: V2PreviousDTO?
     /// `location-switched`: the session's new location.
-    let location: V2LocationRefDTO?
-    let metadata: [String: AnyCodable]?
+    public let location: V2LocationRefDTO?
+    public let metadata: [String: AnyCodable]?
 
     private enum CodingKeys: String, CodingKey {
         case id, type, text, files, agents, skills, agent, model, content, cost, tokens, error, outcome, retry, finish, time
         case reason, summary, status, command, output, exit, callID, name, description, previous, location, metadata
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         type = try container.decode(String.self, forKey: .type)
@@ -72,7 +72,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     }
 
     /// The fields a timeline notice reads, shared with the live projection.
-    var notice: V2NoticeDTO {
+    public var notice: V2NoticeDTO {
         V2NoticeDTO(
             type: type,
             agent: agent,
@@ -92,33 +92,59 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     }
 }
 
-nonisolated struct V2ShellOutputDTO: Decodable, Sendable {
-    let output: String?
+public nonisolated struct V2ShellOutputDTO: Decodable, Sendable {
+    public let output: String?
+
+    public init(output: String?) {
+        self.output = output
+    }
 }
 
-nonisolated struct V2MessageTimeDTO: Decodable, Sendable {
-    let created: Int64?
-    let completed: Int64?
+public nonisolated struct V2MessageTimeDTO: Decodable, Sendable {
+    public let created: Int64?
+    public let completed: Int64?
+
+    public init(
+        created: Int64?,
+        completed: Int64?
+    ) {
+        self.created = created
+        self.completed = completed
+    }
 }
 
-nonisolated struct V2ModelRefDTO: Codable, Sendable {
-    let id: String?
-    let providerID: String?
-    let variant: String?
+public nonisolated struct V2ModelRefDTO: Codable, Sendable {
+    public let id: String?
+    public let providerID: String?
+    public let variant: String?
+
+    public init(
+        id: String?,
+        providerID: String?,
+        variant: String?
+    ) {
+        self.id = id
+        self.providerID = providerID
+        self.variant = variant
+    }
 }
 
-nonisolated struct V2LocationRefDTO: Codable, Sendable {
-    let directory: String?
+public nonisolated struct V2LocationRefDTO: Codable, Sendable {
+    public let directory: String?
+
+    public init(directory: String?) {
+        self.directory = directory
+    }
 }
 
 /// `previous` on a switch item: an agent id (`agent-switched`), a model ref
 /// (`model-switched`) or `{location}` (`location-switched`).
-nonisolated struct V2PreviousDTO: Codable, Sendable {
-    let agent: String?
-    let model: V2ModelRefDTO?
-    let location: V2LocationRefDTO?
+public nonisolated struct V2PreviousDTO: Codable, Sendable {
+    public let agent: String?
+    public let model: V2ModelRefDTO?
+    public let location: V2LocationRefDTO?
 
-    init(agent: String? = nil, model: V2ModelRefDTO? = nil, location: V2LocationRefDTO? = nil) {
+    public init(agent: String? = nil, model: V2ModelRefDTO? = nil, location: V2LocationRefDTO? = nil) {
         self.agent = agent
         self.model = model
         self.location = location
@@ -128,7 +154,7 @@ nonisolated struct V2PreviousDTO: Codable, Sendable {
         case id, providerID, variant, location
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         if let agent = try? decoder.singleValueContainer().decode(String.self) {
             self.init(agent: agent)
             return
@@ -146,7 +172,7 @@ nonisolated struct V2PreviousDTO: Codable, Sendable {
         self.init(model: model, location: location)
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         if let agent {
             var container = encoder.singleValueContainer()
             try container.encode(agent)
@@ -163,16 +189,16 @@ nonisolated struct V2PreviousDTO: Codable, Sendable {
 /// The fields of a v2 notice item (`location-switched`, `agent-switched`,
 /// `model-switched`, `system`, `synthetic`). REST reads them off the session
 /// message; the live projection carries them on a client-only `notice` part.
-nonisolated struct V2NoticeDTO: Codable, Sendable {
-    let type: String
-    let agent: String?
-    let model: V2ModelRefDTO?
-    let previous: V2PreviousDTO?
-    let location: V2LocationRefDTO?
-    let metadata: [String: AnyCodable]?
-    let description: String?
+public nonisolated struct V2NoticeDTO: Codable, Sendable {
+    public let type: String
+    public let agent: String?
+    public let model: V2ModelRefDTO?
+    public let previous: V2PreviousDTO?
+    public let location: V2LocationRefDTO?
+    public let metadata: [String: AnyCodable]?
+    public let description: String?
 
-    init(
+    public init(
         type: String,
         agent: String? = nil,
         model: V2ModelRefDTO? = nil,
@@ -191,15 +217,15 @@ nonisolated struct V2NoticeDTO: Codable, Sendable {
     }
 }
 
-nonisolated struct V2UnknownErrorDTO: Decodable, Sendable {
-    let type: String?
-    let message: String?
-    let status: Int?
-    let response: V2ErrorResponseDTO?
+public nonisolated struct V2UnknownErrorDTO: Decodable, Sendable {
+    public let type: String?
+    public let message: String?
+    public let status: Int?
+    public let response: V2ErrorResponseDTO?
     /// How long the provider asked to wait, counted from when the failure was recorded.
-    let retryAfterMs: Int64?
+    public let retryAfterMs: Int64?
 
-    init(
+    public init(
         type: String? = nil,
         message: String? = nil,
         status: Int? = nil,
@@ -214,31 +240,45 @@ nonisolated struct V2UnknownErrorDTO: Decodable, Sendable {
     }
 }
 
-nonisolated struct V2ErrorResponseDTO: Decodable, Sendable {
-    let body: String?
+public nonisolated struct V2ErrorResponseDTO: Decodable, Sendable {
+    public let body: String?
+
+    public init(body: String?) {
+        self.body = body
+    }
 }
 
 /// In-progress retry on an assistant message. The working label reads the live event, not this field.
-nonisolated struct V2RetryDTO: Decodable, Sendable {
-    let attempt: Int?
-    let at: Int64?
-    let error: V2UnknownErrorDTO?
+public nonisolated struct V2RetryDTO: Decodable, Sendable {
+    public let attempt: Int?
+    public let at: Int64?
+    public let error: V2UnknownErrorDTO?
+
+    public init(
+        attempt: Int?,
+        at: Int64?,
+        error: V2UnknownErrorDTO?
+    ) {
+        self.attempt = attempt
+        self.at = at
+        self.error = error
+    }
 }
 
-nonisolated struct V2FileAttachmentDTO: Decodable, Sendable {
-    let uri: String?
-    let mime: String?
-    let name: String?
-    let description: String?
-    let data: String?
-    let source: V2FileSourceDTO?
-    let mention: V2PromptSourceDTO?
+public nonisolated struct V2FileAttachmentDTO: Decodable, Sendable {
+    public let uri: String?
+    public let mime: String?
+    public let name: String?
+    public let description: String?
+    public let data: String?
+    public let source: V2FileSourceDTO?
+    public let mention: V2PromptSourceDTO?
 
     private enum CodingKeys: String, CodingKey {
         case uri, mime, name, description, data, source, mention
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         uri = try container.decodeIfPresent(String.self, forKey: .uri)
         mime = try container.decodeIfPresent(String.self, forKey: .mime)
@@ -254,24 +294,38 @@ nonisolated struct V2FileAttachmentDTO: Decodable, Sendable {
     }
 }
 
-nonisolated struct V2FileSourceDTO: Decodable, Sendable {
-    let type: String?
-    let uri: String?
-    let start: Int?
-    let end: Int?
-    let text: String?
+public nonisolated struct V2FileSourceDTO: Decodable, Sendable {
+    public let type: String?
+    public let uri: String?
+    public let start: Int?
+    public let end: Int?
+    public let text: String?
+
+    public init(
+        type: String?,
+        uri: String?,
+        start: Int?,
+        end: Int?,
+        text: String?
+    ) {
+        self.type = type
+        self.uri = uri
+        self.start = start
+        self.end = end
+        self.text = text
+    }
 }
 
-nonisolated struct V2AgentAttachmentDTO: Decodable, Sendable {
-    let name: String?
-    let source: V2PromptSourceDTO?
-    let mention: V2PromptSourceDTO?
+public nonisolated struct V2AgentAttachmentDTO: Decodable, Sendable {
+    public let name: String?
+    public let source: V2PromptSourceDTO?
+    public let mention: V2PromptSourceDTO?
 
     private enum CodingKeys: String, CodingKey {
         case name, source, mention
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         source = try container.decodeIfPresent(V2PromptSourceDTO.self, forKey: .source)
@@ -280,47 +334,73 @@ nonisolated struct V2AgentAttachmentDTO: Decodable, Sendable {
     }
 }
 
-nonisolated struct V2UserSkillDTO: Codable, Sendable {
-    let id: String?
-    let name: String?
-    let mention: V2PromptSourceDTO?
+public nonisolated struct V2UserSkillDTO: Codable, Sendable {
+    public let id: String?
+    public let name: String?
+    public let mention: V2PromptSourceDTO?
+
+    public init(
+        id: String?,
+        name: String?,
+        mention: V2PromptSourceDTO?
+    ) {
+        self.id = id
+        self.name = name
+        self.mention = mention
+    }
 }
 
-nonisolated struct V2PromptSourceDTO: Codable, Sendable, Equatable {
-    let start: Int?
-    let end: Int?
-    let text: String?
+public nonisolated struct V2PromptSourceDTO: Codable, Sendable, Equatable {
+    public let start: Int?
+    public let end: Int?
+    public let text: String?
 
-    init(start: Int?, end: Int?, text: String?) {
+    public init(start: Int?, end: Int?, text: String?) {
         self.start = start
         self.end = end
         self.text = text
     }
 }
 
-nonisolated struct V2AssistantContentDTO: Decodable, Sendable {
-    let type: String
-    let id: String?
-    let text: String?
-    let name: String?
-    let state: V2ToolStateDTO?
-    let time: V2MessageTimeDTO?
+public nonisolated struct V2AssistantContentDTO: Decodable, Sendable {
+    public let type: String
+    public let id: String?
+    public let text: String?
+    public let name: String?
+    public let state: V2ToolStateDTO?
+    public let time: V2MessageTimeDTO?
+
+    public init(
+        type: String,
+        id: String?,
+        text: String?,
+        name: String?,
+        state: V2ToolStateDTO?,
+        time: V2MessageTimeDTO?
+    ) {
+        self.type = type
+        self.id = id
+        self.text = text
+        self.name = name
+        self.state = state
+        self.time = time
+    }
 }
 
-nonisolated struct V2ToolStateDTO: Decodable, Sendable {
-    let status: String?
-    let input: AnyCodable?
-    let content: [V2ToolContentDTO]
-    let error: V2UnknownErrorDTO?
-    let executed: Bool?
-    let structured: [String: AnyCodable]?
-    let metadata: [String: AnyCodable]?
+public nonisolated struct V2ToolStateDTO: Decodable, Sendable {
+    public let status: String?
+    public let input: AnyCodable?
+    public let content: [V2ToolContentDTO]
+    public let error: V2UnknownErrorDTO?
+    public let executed: Bool?
+    public let structured: [String: AnyCodable]?
+    public let metadata: [String: AnyCodable]?
 
     private enum CodingKeys: String, CodingKey {
         case status, input, content, error, executed, structured, metadata
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         status = try container.decodeIfPresent(String.self, forKey: .status)
         input = try container.decodeIfPresent(AnyCodable.self, forKey: .input)
@@ -332,10 +412,24 @@ nonisolated struct V2ToolStateDTO: Decodable, Sendable {
     }
 }
 
-nonisolated struct V2ToolContentDTO: Decodable, Sendable {
-    let type: String
-    let text: String?
-    let uri: String?
-    let mime: String?
-    let name: String?
+public nonisolated struct V2ToolContentDTO: Decodable, Sendable {
+    public let type: String
+    public let text: String?
+    public let uri: String?
+    public let mime: String?
+    public let name: String?
+
+    public init(
+        type: String,
+        text: String?,
+        uri: String?,
+        mime: String?,
+        name: String?
+    ) {
+        self.type = type
+        self.text = text
+        self.uri = uri
+        self.mime = mime
+        self.name = name
+    }
 }

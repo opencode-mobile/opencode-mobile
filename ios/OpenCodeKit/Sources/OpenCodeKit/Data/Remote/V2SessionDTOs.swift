@@ -1,10 +1,10 @@
 import Foundation
 
-nonisolated struct V2LocationDTO: Codable, Sendable {
-    let directory: String
-    let workspaceID: String?
+public nonisolated struct V2LocationDTO: Codable, Sendable {
+    public let directory: String
+    public let workspaceID: String?
 
-    init(directory: String, workspaceID: String? = nil) {
+    public init(directory: String, workspaceID: String? = nil) {
         self.directory = directory
         self.workspaceID = workspaceID
     }
@@ -14,32 +14,36 @@ nonisolated struct V2LocationDTO: Codable, Sendable {
         case workspaceID
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         directory = try container.decodeIfPresent(String.self, forKey: .directory) ?? ""
         workspaceID = try container.decodeIfPresent(String.self, forKey: .workspaceID)
     }
 }
 
-nonisolated struct V2SessionForkDTO: Decodable, Sendable {
-    let sessionID: String?
+public nonisolated struct V2SessionForkDTO: Decodable, Sendable {
+    public let sessionID: String?
+
+    public init(sessionID: String?) {
+        self.sessionID = sessionID
+    }
 }
 
-nonisolated struct V2SessionDTO: Decodable, Sendable {
-    let id: String
-    let title: String
-    let projectID: String?
-    let parentID: String?
-    let fork: V2SessionForkDTO?
-    let cost: Double?
-    let tokens: MessageTokensDTO?
-    let time: SessionTimeDTO?
-    let location: V2LocationDTO?
-    let revert: SessionRevertDTO?
+public nonisolated struct V2SessionDTO: Decodable, Sendable {
+    public let id: String
+    public let title: String
+    public let projectID: String?
+    public let parentID: String?
+    public let fork: V2SessionForkDTO?
+    public let cost: Double?
+    public let tokens: MessageTokensDTO?
+    public let time: SessionTimeDTO?
+    public let location: V2LocationDTO?
+    public let revert: SessionRevertDTO?
     /// How the latest run ended: `succeeded` | `failed` | `interrupted`.
-    let outcome: String?
+    public let outcome: String?
     /// The agent a subagent session runs (`general`, `explore`).
-    let agent: String?
+    public let agent: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -56,7 +60,7 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
         case agent
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
@@ -74,28 +78,44 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
 }
 
 /// Body for `POST /api/session/{id}/view`.
-nonisolated struct V2ViewSessionRequestDTO: Encodable, Sendable {
-    let idle: Int64
+public nonisolated struct V2ViewSessionRequestDTO: Encodable, Sendable {
+    public let idle: Int64
+
+    public init(idle: Int64) {
+        self.idle = idle
+    }
 }
 
-nonisolated struct V2MoveSessionRequestDTO: Encodable, Sendable {
-    let directory: String
+public nonisolated struct V2MoveSessionRequestDTO: Encodable, Sendable {
+    public let directory: String
+
+    public init(directory: String) {
+        self.directory = directory
+    }
 }
 
-nonisolated struct V2SessionGenerateRequestDTO: Encodable, Sendable {
-    let prompt: String
+public nonisolated struct V2SessionGenerateRequestDTO: Encodable, Sendable {
+    public let prompt: String
+
+    public init(prompt: String) {
+        self.prompt = prompt
+    }
 }
 
-nonisolated struct V2SessionGenerateResponseDTO: Decodable, Sendable {
-    let text: String
+public nonisolated struct V2SessionGenerateResponseDTO: Decodable, Sendable {
+    public let text: String
+
+    public init(text: String) {
+        self.text = text
+    }
 }
 
-nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
-    let parentID: String?
-    let title: String?
-    let location: V2LocationDTO?
+public nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
+    public let parentID: String?
+    public let title: String?
+    public let location: V2LocationDTO?
 
-    init(parentID: String? = nil, title: String? = nil, location: V2LocationDTO? = nil) {
+    public init(parentID: String? = nil, title: String? = nil, location: V2LocationDTO? = nil) {
         self.parentID = parentID
         self.title = title
         self.location = location
@@ -107,7 +127,7 @@ nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
         case location
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(parentID, forKey: .parentID)
         try container.encodeIfPresent(title, forKey: .title)
@@ -115,23 +135,35 @@ nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
     }
 }
 
-nonisolated struct V2RenameSessionRequestDTO: Encodable, Sendable {
-    let title: String
+public nonisolated struct V2RenameSessionRequestDTO: Encodable, Sendable {
+    public let title: String
+
+    public init(title: String) {
+        self.title = title
+    }
 }
 
 /// `PATCH /api/session/{id}` body that archives (`true`) or restores (`false`) a session.
-nonisolated struct V2ArchiveSessionRequestDTO: Encodable, Sendable {
-    let archived: Bool
+public nonisolated struct V2ArchiveSessionRequestDTO: Encodable, Sendable {
+    public let archived: Bool
+
+    public init(archived: Bool) {
+        self.archived = archived
+    }
 }
 
-nonisolated struct V2InboxDeliveryRequestDTO: Encodable, Sendable {
-    let delivery: String
+public nonisolated struct V2InboxDeliveryRequestDTO: Encodable, Sendable {
+    public let delivery: String
+
+    public init(delivery: String) {
+        self.delivery = delivery
+    }
 }
 
-nonisolated struct V2ForkSessionRequestDTO: Encodable, Sendable {
-    let before: String?
+public nonisolated struct V2ForkSessionRequestDTO: Encodable, Sendable {
+    public let before: String?
 
-    init(before: String? = nil) {
+    public init(before: String? = nil) {
         self.before = before
     }
 
@@ -139,20 +171,20 @@ nonisolated struct V2ForkSessionRequestDTO: Encodable, Sendable {
         case before
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(before, forKey: .before)
     }
 }
 
-nonisolated struct V2PermissionRequestDTO: Decodable, Sendable {
-    let id: String
-    let sessionID: String
-    let action: String
-    let resources: [String]
-    let save: [String]
-    let metadata: [String: AnyCodable]
-    let source: V2PermissionSourceDTO?
+public nonisolated struct V2PermissionRequestDTO: Decodable, Sendable {
+    public let id: String
+    public let sessionID: String
+    public let action: String
+    public let resources: [String]
+    public let save: [String]
+    public let metadata: [String: AnyCodable]
+    public let source: V2PermissionSourceDTO?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -164,7 +196,7 @@ nonisolated struct V2PermissionRequestDTO: Decodable, Sendable {
         case source
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         sessionID = try container.decode(String.self, forKey: .sessionID)
@@ -176,16 +208,16 @@ nonisolated struct V2PermissionRequestDTO: Decodable, Sendable {
     }
 }
 
-nonisolated struct V2PermissionSourceDTO: Decodable, Sendable {
-    let type: String?
-    let messageID: String?
-    let callID: String?
+public nonisolated struct V2PermissionSourceDTO: Decodable, Sendable {
+    public let type: String?
+    public let messageID: String?
+    public let callID: String?
 
     private enum CodingKeys: String, CodingKey {
         case type, messageID, callID, id
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         type = try container.decodeIfPresent(String.self, forKey: .type)
         messageID = try container.decodeIfPresent(String.self, forKey: .messageID)
@@ -194,56 +226,69 @@ nonisolated struct V2PermissionSourceDTO: Decodable, Sendable {
     }
 }
 
-nonisolated struct V2PermissionReplyRequestDTO: Encodable, Sendable {
-    let decision: String
+public nonisolated struct V2PermissionReplyRequestDTO: Encodable, Sendable {
+    public let decision: String
     /// Note sent with a `reject`. The v2 body allows no extra properties, so the key is left out when nil.
-    let message: String?
+    public let message: String?
 
-    init(decision: String, message: String? = nil) {
+    public init(decision: String, message: String? = nil) {
         self.decision = decision
         self.message = message
     }
 }
 
-nonisolated struct V2CompactSessionRequestDTO: Encodable, Sendable {
-    let delivery: String
+public nonisolated struct V2CompactSessionRequestDTO: Encodable, Sendable {
+    public let delivery: String
 
-    init(delivery: String = "steer") {
+    public init(delivery: String = "steer") {
         self.delivery = delivery
     }
 }
 
-nonisolated struct V2RevertStageRequestDTO: Encodable, Sendable {
-    let messageID: String
-    let files: Bool
+public nonisolated struct V2RevertStageRequestDTO: Encodable, Sendable {
+    public let messageID: String
+    public let files: Bool
 
-    init(messageID: String, files: Bool = true) {
+    public init(messageID: String, files: Bool = true) {
         self.messageID = messageID
         self.files = files
     }
 }
 
-nonisolated struct V2VcsInfoDTO: Decodable, Sendable {
+public nonisolated struct V2VcsInfoDTO: Decodable, Sendable {
     /// `git` once the server has detected the repository. A cold server first answers
     /// `{"branch":{}}` with no provider while detection warms up.
-    let provider: String?
-    let branch: V2VcsBranchDTO?
+    public let provider: String?
+    public let branch: V2VcsBranchDTO?
+
+    public init(
+        provider: String?,
+        branch: V2VcsBranchDTO?
+    ) {
+        self.provider = provider
+        self.branch = branch
+    }
 }
 
-nonisolated struct V2VcsBranchDTO: Decodable, Sendable {
-    let current: String?
-    let `default`: String?
+public nonisolated struct V2VcsBranchDTO: Decodable, Sendable {
+    public let current: String?
+    public let `default`: String?
+
+    public init(current: String?, default: String?) {
+        self.current = current
+        self.`default` = `default`
+    }
 }
 
-nonisolated struct V2InboxItemDTO: Decodable, Sendable, Equatable {
-    let id: String
-    let sessionID: String?
-    let timeCreated: Int64
-    let type: String
-    let payload: V2InboxUserPayloadDTO?
-    let delivery: String?
+public nonisolated struct V2InboxItemDTO: Decodable, Sendable, Equatable {
+    public let id: String
+    public let sessionID: String?
+    public let timeCreated: Int64
+    public let type: String
+    public let payload: V2InboxUserPayloadDTO?
+    public let delivery: String?
 
-    init(
+    public init(
         id: String,
         sessionID: String? = nil,
         timeCreated: Int64 = 0,
@@ -273,7 +318,7 @@ nonisolated struct V2InboxItemDTO: Decodable, Sendable, Equatable {
         case created
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID)
@@ -288,10 +333,10 @@ nonisolated struct V2InboxItemDTO: Decodable, Sendable, Equatable {
     }
 }
 
-nonisolated struct V2InboxUserPayloadDTO: Decodable, Sendable, Equatable {
-    let text: String
+public nonisolated struct V2InboxUserPayloadDTO: Decodable, Sendable, Equatable {
+    public let text: String
 
-    init(text: String = "") {
+    public init(text: String = "") {
         self.text = text
     }
 
@@ -299,7 +344,7 @@ nonisolated struct V2InboxUserPayloadDTO: Decodable, Sendable, Equatable {
         case text
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         text = try container.decodeIfPresent(String.self, forKey: .text) ?? ""
     }

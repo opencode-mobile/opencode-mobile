@@ -1,24 +1,24 @@
 import Foundation
 
-nonisolated enum ShellAPIError: Error, Equatable {
+public nonisolated enum ShellAPIError: Error, Equatable {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
 
     /// The shell is gone (removed, or stopped and cleaned up).
-    var isNotFound: Bool {
+    public var isNotFound: Bool {
         if case .httpStatus(404, _) = self { return true }
         return false
     }
 }
 
 /// v2 agent shell routes (`/api/shell`), scoped by `location[directory]`. v1 has none.
-nonisolated struct ShellAPIClient: Sendable {
+public nonisolated struct ShellAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
 
-    init(
+    public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         urlSession: URLSession? = nil
     ) {
@@ -27,19 +27,19 @@ nonisolated struct ShellAPIClient: Sendable {
     }
 
     /// Running shells of `directory` (exited ones are not listed).
-    func list(directory: String) async throws -> [ShellInfoDTO] {
+    public func list(directory: String) async throws -> [ShellInfoDTO] {
         let data = try await data(for: try request(path: "api/shell", directory: directory))
         return try decoder.decode(APIListEnvelope<ShellInfoDTO>.self, from: data).data
     }
 
     /// One shell, with its exit code once exited. 404 once removed.
-    func get(id: String, directory: String) async throws -> ShellInfoDTO {
+    public func get(id: String, directory: String) async throws -> ShellInfoDTO {
         let data = try await data(for: try request(path: "api/shell/\(id)", directory: directory))
         return try decoder.decode(APIDataEnvelope<ShellInfoDTO>.self, from: data).data
     }
 
     /// The page of output from byte `cursor`; a cursor past the end answers an empty page with the size.
-    func output(id: String, directory: String, cursor: Int64) async throws -> ShellOutputPageDTO {
+    public func output(id: String, directory: String, cursor: Int64) async throws -> ShellOutputPageDTO {
         var request = try request(path: "api/shell/\(id)/output", directory: directory)
         if let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
             components.queryItems = (components.queryItems ?? []) + [URLQueryItem(name: "cursor", value: String(cursor))]
@@ -50,7 +50,7 @@ nonisolated struct ShellAPIClient: Sendable {
     }
 
     /// Kills and removes the shell and its output (204).
-    func delete(id: String, directory: String) async throws {
+    public func delete(id: String, directory: String) async throws {
         _ = try await data(for: try request(path: "api/shell/\(id)", method: "DELETE", directory: directory))
     }
 

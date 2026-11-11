@@ -392,18 +392,6 @@ struct VcsInfo: Sendable, Equatable {
     }
 }
 
-enum VcsDiffMode: String, Sendable {
-    case workingTree = "git"
-    case mainBranch = "branch"
-
-    var v2WireValue: String {
-        switch self {
-        case .workingTree: "working"
-        case .mainBranch: "branch"
-        }
-    }
-}
-
 enum PermissionDecision: Sendable {
     case allowOnce
     /// Allow and save the request's `always` patterns (v1 `always`, v2 `decision: "always"`).

@@ -288,15 +288,7 @@ nonisolated struct SessionFailure: Equatable, Sendable {
 
     /// Upstream `unwrapErrorMessage`: a JSON envelope `{type: "message", message}` is the text inside it.
     static func unwrap(_ raw: String?) -> String {
-        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard trimmed.hasPrefix("{"),
-              let data = trimmed.data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              (root["type"] as? String) == "message",
-              let nested = (root["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !nested.isEmpty
-        else { return trimmed }
-        return unwrap(nested)
+        SessionFailureMessage.unwrap(raw)
     }
 
     static func fromV1(
@@ -489,85 +481,6 @@ nonisolated struct TextPart: Equatable, Sendable {
         self.isSynthetic = isSynthetic
         self.isIgnored = isIgnored
     }
-}
-
-nonisolated enum AttachmentKind: String, Equatable, Sendable {
-    case image
-    case pdf
-    case text
-    /// Anything else, which only travels as a file uploaded to the server.
-    case file
-}
-
-/// Where an attachment's bytes live: in the prompt body (`inline`), on their way to the server,
-/// or already on the server at `serverPath` (streamed upload, #644).
-nonisolated enum AttachmentUploadState: Equatable, Sendable {
-    case inline
-    case uploading(fraction: Double)
-    case uploaded(serverPath: String)
-
-    var isPending: Bool {
-        if case .uploading = self { return true }
-        return false
-    }
-
-    var serverPath: String? {
-        if case let .uploaded(path) = self { return path }
-        return nil
-    }
-}
-
-nonisolated struct Attachment: Equatable, Sendable, Identifiable {
-    let id: String
-    let filename: String
-    let mime: String
-    let kind: AttachmentKind
-    let dataURL: String
-    let fileURL: URL?
-    let byteCount: Int64
-    let previewData: Data?
-    var upload: AttachmentUploadState
-
-    var usesFileBackedBody: Bool { fileURL != nil }
-    /// Bytes already on the server: the prompt names the path instead of carrying them.
-    var uploadedServerPath: String? { upload.serverPath }
-    var isServerFile: Bool { uploadedServerPath != nil }
-    var isUploadPending: Bool { upload.isPending }
-
-    init(
-        id: String,
-        filename: String,
-        mime: String,
-        kind: AttachmentKind,
-        dataURL: String,
-        fileURL: URL? = nil,
-        byteCount: Int64 = 0,
-        previewData: Data? = nil,
-        upload: AttachmentUploadState = .inline
-    ) {
-        self.id = id
-        self.filename = filename
-        self.mime = mime
-        self.kind = kind
-        self.dataURL = dataURL
-        self.fileURL = fileURL
-        self.byteCount = byteCount
-        self.previewData = previewData
-        self.upload = upload
-    }
-
-    func withUpload(_ upload: AttachmentUploadState) -> Attachment {
-        var copy = self
-        copy.upload = upload
-        return copy
-    }
-}
-
-extension Sequence where Element == Attachment {
-    /// Attachments whose bytes ride in the prompt body.
-    var inlineAttachments: [Attachment] { filter { !$0.isServerFile } }
-    /// Attachments already on the server; the prompt names their paths.
-    var uploadedAttachments: [Attachment] { filter(\.isServerFile) }
 }
 
 nonisolated struct FilePart: Equatable, Sendable {

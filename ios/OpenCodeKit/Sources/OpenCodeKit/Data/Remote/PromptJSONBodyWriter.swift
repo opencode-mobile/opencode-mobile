@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated enum PromptJSONBodyWriter {
-    static func writeV1Prompt(_ body: SendMessageRequestDTO, attachments: [Attachment]) throws -> URL {
+public nonisolated enum PromptJSONBodyWriter {
+    public static func writeV1Prompt(_ body: SendMessageRequestDTO, attachments: [Attachment]) throws -> URL {
         try writeBody(to: newFile()) { writer in
             try writer.beginObject()
             try writer.key("parts")
@@ -90,7 +90,7 @@ nonisolated enum PromptJSONBodyWriter {
         }
     }
 
-    static func writeV2Prompt(_ body: V2PromptRequestDTO, attachments: [Attachment]) throws -> URL {
+    public static func writeV2Prompt(_ body: V2PromptRequestDTO, attachments: [Attachment]) throws -> URL {
         try writeBody(to: newFile()) { writer in
             try writer.beginObject()
             if let id = body.id {
@@ -219,7 +219,7 @@ nonisolated enum PromptJSONBodyWriter {
         }
     }
 
-    static func writeV1Command(_ body: RunCommandRequestDTO, attachments: [Attachment]) throws -> URL {
+    public static func writeV1Command(_ body: RunCommandRequestDTO, attachments: [Attachment]) throws -> URL {
         try writeBody(to: newFile()) { writer in
             try writer.beginObject()
             try writer.key("command")
@@ -263,7 +263,7 @@ nonisolated enum PromptJSONBodyWriter {
         }
     }
 
-    static func writeV2Command(_ body: V2RunCommandRequestDTO, attachments: [Attachment]) throws -> URL {
+    public static func writeV2Command(_ body: V2RunCommandRequestDTO, attachments: [Attachment]) throws -> URL {
         try writeBody(to: newFile()) { writer in
             try writer.beginObject()
             try writer.key("name")

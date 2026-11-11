@@ -1,33 +1,33 @@
 import Foundation
 
-nonisolated enum CommandsAPIError: Error {
+public nonisolated enum CommandsAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
 }
 
-nonisolated struct CommandsAPIClient: Sendable {
+public nonisolated struct CommandsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let resolveURLSession: @Sendable () -> URLSession
-    private let bodyUploader: DurableJSONUploader?
+    private let bodyUploader: (any DurableJSONUploading)?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(
+    public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         urlSession: URLSession? = nil,
-        bodyUploader: DurableJSONUploader? = nil
+        bodyUploader: (any DurableJSONUploading)? = nil
     ) {
         self.connectionProvider = connectionProvider
         self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
         self.bodyUploader = bodyUploader
     }
 
-    func listCommands(directory: String? = nil) async throws -> [CommandDTO] {
+    public func listCommands(directory: String? = nil) async throws -> [CommandDTO] {
         try await get(path: "command", directory: directory)
     }
 
-    func listCommandsV2(directory: String? = nil) async throws -> [V2CommandDTO] {
+    public func listCommandsV2(directory: String? = nil) async throws -> [V2CommandDTO] {
         let envelope: APIListEnvelope<V2CommandDTO> = try await get(
             path: "api/command",
             locationDirectory: directory
@@ -35,7 +35,7 @@ nonisolated struct CommandsAPIClient: Sendable {
         return envelope.data
     }
 
-    func listSkillsV2(directory: String? = nil) async throws -> [V2SkillDTO] {
+    public func listSkillsV2(directory: String? = nil) async throws -> [V2SkillDTO] {
         let envelope: APIListEnvelope<V2SkillDTO> = try await get(
             path: "api/skill",
             locationDirectory: directory
@@ -43,7 +43,7 @@ nonisolated struct CommandsAPIClient: Sendable {
         return envelope.data
     }
 
-    func runCommand(
+    public func runCommand(
         sessionID: String,
         body: RunCommandRequestDTO,
         attachments: [Attachment] = [],
@@ -52,7 +52,7 @@ nonisolated struct CommandsAPIClient: Sendable {
         try await post(path: "session/\(sessionID)/command", body: body, attachments: attachments, directory: directory)
     }
 
-    func runCommandV2(sessionID: String, body: V2RunCommandRequestDTO, attachments: [Attachment] = []) async throws {
+    public func runCommandV2(sessionID: String, body: V2RunCommandRequestDTO, attachments: [Attachment] = []) async throws {
         try await post(
             path: "api/session/\(sessionID)/command",
             body: body,

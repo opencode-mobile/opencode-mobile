@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum GoalAPIError: Error, Equatable {
+public nonisolated enum GoalAPIError: Error, Equatable {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
@@ -8,11 +8,14 @@ nonisolated enum GoalAPIError: Error, Equatable {
 
 /// v2 goal plugin RPC (`POST /api/rpc/opencode.goal/:method`), scoped by `location[directory]`
 /// like other v2 calls. v1 has no plugin RPC.
-nonisolated struct GoalAPIClient: Sendable {
+public nonisolated struct GoalAPIClient: Sendable {
+    /// The goal plugin's RPC id.
+    public static let rpcID = "opencode.goal"
+
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let resolveURLSession: @Sendable () -> URLSession
 
-    init(
+    public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         urlSession: URLSession? = nil
     ) {
@@ -21,10 +24,10 @@ nonisolated struct GoalAPIClient: Sendable {
     }
 
     /// The raw `{"output": Goal.State | null}` body of `get`.
-    func get(sessionID: String, directory: String) async throws -> Data {
+    public func get(sessionID: String, directory: String) async throws -> Data {
         guard let connection = connectionProvider() else { throw GoalAPIError.noActiveConnection }
         var request = connection.authorizedRequest(
-            path: "api/rpc/\(SessionGoalAdapter.rpcID)/get",
+            path: "api/rpc/\(Self.rpcID)/get",
             method: "POST",
             locationDirectory: directory
         )
