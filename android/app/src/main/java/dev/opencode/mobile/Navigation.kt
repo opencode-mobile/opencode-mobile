@@ -112,6 +112,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ReasoningRowGalleryScr
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.FeatureRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SectionHeaderGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SelectableCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
@@ -776,6 +777,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.PickerCard -> PickerCardGalleryScreen()
                                                         ComponentGalleryEntryId.ListGroup -> ListGroupGalleryScreen()
                                                         ComponentGalleryEntryId.SectionHeader -> SectionHeaderGalleryScreen()
+                                                        ComponentGalleryEntryId.FeatureRow -> FeatureRowGalleryScreen()
                                                         ComponentGalleryEntryId.ReorderableList -> ReorderableListGalleryScreen()
                                                         ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                                                         ComponentGalleryEntryId.FilterTabs -> FilterTabsGalleryScreen()
