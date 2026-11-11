@@ -795,20 +795,20 @@ struct OpenCodeSessionComposer: View {
                     OpenCodeButton(
                         variant: .iconCircle(.add, accessibilityLabel: "component.composer.add_attachment"),
                         enabled: prompt.attachEnabled,
-                        contrast: .low,
+                        contrast: .subtle,
                         action: { onAction(.attach) }
                     )
 
                     OpenCodeButton(
                         variant: .iconCircle(.slash, accessibilityLabel: "component.composer.open_commands"),
-                        contrast: .low,
+                        contrast: .subtle,
                         action: { onAction(.openCommands) }
                     )
 
                     if prompt.showDictationButton {
                         OpenCodeButton(
                             variant: .iconCircle(.mic, accessibilityLabel: "component.composer.dictate"),
-                            contrast: .low,
+                            contrast: .subtle,
                             action: { onAction(.beginDictation) }
                         )
                     }

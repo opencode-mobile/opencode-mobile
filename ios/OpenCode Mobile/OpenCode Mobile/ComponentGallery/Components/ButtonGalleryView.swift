@@ -85,6 +85,11 @@ struct ButtonGalleryView: View {
                     action: { contrast = .low }
                 )
                 OpenCodeChoiceBadge(
+                    label: "Subtle",
+                    selected: contrast == .subtle,
+                    action: { contrast = .subtle }
+                )
+                OpenCodeChoiceBadge(
                     label: "Accent",
                     selected: contrast == .accent,
                     action: { contrast = .accent }
