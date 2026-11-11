@@ -189,6 +189,10 @@ data class AgentPartSourceDto(
     val end: Int,
 )
 
+/**
+ * `POST /api/session/{id}/prompt`: [delivery] `queue` (after this turn) or `steer` (at the next step; an idle session
+ * starts a run). Null fields are left out.
+ */
 @Serializable
 data class V2PromptRequestDto(
     val id: String? = null,
@@ -197,7 +201,10 @@ data class V2PromptRequestDto(
     val agents: List<V2PromptAgentDto>? = null,
     val skills: List<V2PromptSkillDto>? = null,
     val delivery: String,
-    /** `{attachments: [{name, mime, path}]}` for files uploaded to the server instead of sent inline. */
+    /**
+     * The prompt's `metadata`, stored with the message as it is: clients read `attachments: [{name, mime, path}]`
+     * (files uploaded to the server instead of sent inline) and `displayText` from it.
+     */
     val metadata: JsonObject? = null,
     /** Project-file mentions. Written into `files` as literal URIs, after device attachments. */
     @Transient val fileMentions: List<V2PromptFileMentionDto>? = null,
@@ -215,6 +222,11 @@ data class V2PromptSkillDto(
     val mention: V2PromptSourceDto? = null,
 )
 
+/**
+ * One file of a prompt: [uri] a `data:` URL whose base64 is canonical (no line breaks; the server rejects wrapped
+ * base64), with a [name] that the message, the inbox and the server's errors show. There is no mime field on the
+ * wire: the server works the type out from the bytes.
+ */
 @Serializable
 data class V2PromptFileDto(
     val uri: String,

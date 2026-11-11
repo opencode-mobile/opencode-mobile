@@ -1,6 +1,6 @@
 package dev.opencode.mobile.domain.goal
 
-import dev.opencode.mobile.data.remote.GoalApi
+import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -55,7 +55,7 @@ object EmptySessionGoalRepository : SessionGoalRepository {
 class DefaultSessionGoalRepository
     @Inject
     constructor(
-        private val api: GoalApi,
+        private val api: SessionsApi,
         private val eventStream: ForegroundEventStream,
         private val activeConnectionManager: ActiveConnectionManager,
     ) : SessionGoalRepository {
@@ -66,7 +66,7 @@ class DefaultSessionGoalRepository
             directory: String?,
         ): SessionGoal? {
             check(isAvailable()) { "Goals need a v2 server" }
-            return SessionGoalDomainAdapter.goal(api.getGoalV2(sessionId, directory))
+            return SessionGoalDomainAdapter.fromState(api.goalV2(sessionId, directory))
         }
 
         override suspend fun send(
@@ -74,7 +74,7 @@ class DefaultSessionGoalRepository
             action: SessionGoalAction,
         ) {
             check(isAvailable()) { "Goals need a v2 server" }
-            api.runGoalCommandV2(sessionId, action.commandText)
+            api.runSessionCommandV2(sessionId, SessionGoalLimits.COMMAND, action.commandText)
         }
 
         override fun changes(): Flow<SessionGoalChange> = eventStream.events.mapNotNull(SessionGoalDomainAdapter::change)

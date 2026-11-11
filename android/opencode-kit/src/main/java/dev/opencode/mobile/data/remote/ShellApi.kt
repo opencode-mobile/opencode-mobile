@@ -29,7 +29,7 @@ class ShellApi private constructor(
 ) {
     constructor(httpClient: OpencodeHttpClient, json: Json) : this(ClientProvider(httpClient::get), json)
 
-    internal constructor(httpClient: HttpClient, json: Json) : this(ClientProvider { httpClient }, json)
+    constructor(httpClient: HttpClient, json: Json) : this(ClientProvider { httpClient }, json)
 
     /** Running shells in [directory]; exited ones are not listed. */
     suspend fun listV2(directory: String): List<ShellInfoDto> {

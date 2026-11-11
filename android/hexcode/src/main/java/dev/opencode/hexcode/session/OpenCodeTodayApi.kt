@@ -3,6 +3,7 @@ package dev.opencode.hexcode.session
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.data.remote.SessionsApi
+import dev.opencode.mobile.data.remote.ShellApi
 import dev.opencode.mobile.data.remote.SseAttemptOutcome
 import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
@@ -35,6 +36,7 @@ private suspend fun <T> signedIn(call: suspend () -> T): T =
 /** Today's session over OpenCode v2.2.5's API (m2-api-notes.md); the calls themselves are in `:opencode-kit`. */
 class OpenCodeTodayApi(
     private val sessions: SessionsApi,
+    private val shellsApi: ShellApi,
     private val clock: () -> Long = System::currentTimeMillis,
     /** Waits until the saved server is bound; the app binds it while home is already opening. */
     private val ready: suspend () -> Unit = {},
@@ -281,7 +283,7 @@ class OpenCodeTodayApi(
             ready()
             val active = async { sessions.getActiveSessionsV2().keys }
             val children = async { sessions.listSessionsV2(parentId = rootId) }
-            val shells = async { sessions.listShellsV2(directory) }
+            val shells = async { shellsApi.listV2(directory) }
             val childList = children.await()
             val owners = setOf(rootId) + childList.map { it.id }
             RunningRead(

@@ -277,8 +277,10 @@ object PromptJsonBodyWriter {
                 writer.endArray()
             }
             writeSkills(body.skills, writer)
-            writer.key("delivery")
-            writer.writeString(body.delivery)
+            body.delivery?.let {
+                writer.key("delivery")
+                writer.writeString(it)
+            }
             writer.endObject()
         }
 

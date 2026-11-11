@@ -76,34 +76,6 @@ data class V2MoveSessionRequestDto(
     val directory: String,
 )
 
-/**
- * `POST /api/session/{id}/prompt` with text only: [delivery] `queue` (after this turn) or `steer` (at the next step;
- * an idle session starts a run).
- */
-@Serializable
-data class V2TextPromptRequestDto(
-    val text: String,
-    val delivery: String,
-    /** Left out when there are none; the default isn't encoded. */
-    val files: List<V2PromptFileDto>? = null,
-    /**
-     * The prompt's `metadata`, stored with the message as it is: clients read `attachments: [{name, mime, path}]`
-     * and `displayText` from it. Left out when null.
-     */
-    val metadata: JsonObject? = null,
-)
-
-/**
- * One file of a prompt: [uri] a `data:` URL whose base64 is canonical (no line breaks; the server rejects wrapped
- * base64), with a [name] that the message, the inbox and the server's errors show. There is no mime field: the server
- * works the type out from the bytes.
- */
-@Serializable
-data class V2PromptFileDto(
-    val uri: String,
-    val name: String? = null,
-)
-
 /** `PUT /api/experimental/session/{id}/instructions/entries/{key}`: a string value is used as it is. */
 @Serializable
 data class V2InstructionEntryRequestDto(
@@ -156,22 +128,6 @@ data class V2PermissionReplyRequestDto(
 @Serializable
 data class V2InterruptResultDto(
     val interrupted: Boolean = false,
-)
-
-/** v2 `ShellInfo` from `GET /api/shell`: one agent-run shell command; [metadata] carries its `sessionID`. */
-@Serializable
-data class V2ShellDto(
-    val id: String,
-    val status: String = "",
-    val command: String = "",
-    val metadata: JsonObject? = null,
-    val time: V2ShellTimeDto? = null,
-)
-
-@Serializable
-data class V2ShellTimeDto(
-    val started: Double? = null,
-    val completed: Double? = null,
 )
 
 @Serializable
@@ -229,18 +185,6 @@ data class V2InboxFileDto(
     val mime: String? = null,
 )
 
-/**
- * `POST /api/session/{id}/command` with a command's [name] and its [text] (the field is `text`: `arguments` gets a
- * `400`), plus the prompt's [files]. No `delivery`: a goal's kickoff steers by default.
- */
-@Serializable
-data class V2SessionCommandRequestDto(
-    val name: String,
-    val text: String,
-    /** Left out when there are none; the default isn't encoded. */
-    val files: List<V2PromptFileDto>? = null,
-)
-
 /** `POST /api/rpc/opencode.goal/get`'s body: `{"input": {"sessionID": …}}`. */
 @Serializable
 data class V2GoalGetRequestDto(
@@ -271,6 +215,7 @@ data class V2GoalStateDto(
     val reason: String? = null,
     val rounds: Int = 0,
     val maxRounds: Int = 50,
-    val stalls: Int = 0,
+    /** Null when the state leaves it out. */
+    val stalls: Int? = null,
     val updatedAt: Long? = null,
 )

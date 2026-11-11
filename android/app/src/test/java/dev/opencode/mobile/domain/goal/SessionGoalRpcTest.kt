@@ -1,7 +1,7 @@
-package dev.opencode.mobile.data.remote
+package dev.opencode.mobile.domain.goal
 
-import dev.opencode.mobile.domain.goal.SessionGoalDomainAdapter
-import dev.opencode.mobile.domain.goal.SessionGoalStatus
+import dev.opencode.mobile.data.remote.HttpBodyResponseException
+import dev.opencode.mobile.data.remote.SessionsApi
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandler
@@ -16,13 +16,14 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNull
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
-class GoalApiTest {
+/** The goal's RPC read and its `/goal` controls, through the kit's [SessionsApi] into [SessionGoal]. */
+class SessionGoalRpcTest {
     @Test
     fun getCallsTheGoalRpcAtTheSessionLocation() =
         runTest {
@@ -36,7 +37,7 @@ class GoalApiTest {
                     )
                 }
 
-            val goal = SessionGoalDomainAdapter.goal(api.getGoalV2("ses_1", "/Users/example/project"))
+            val goal = SessionGoalDomainAdapter.fromState(api.goalV2("ses_1", "/Users/example/project"))
 
             val request = captured.single()
             assertEquals("POST", request.method.value)
@@ -52,7 +53,7 @@ class GoalApiTest {
         runTest {
             val api = api { respondJson("""{"output":null}""") }
 
-            assertEquals(JsonNull, api.getGoalV2("ses_1", null))
+            assertNull(api.goalV2("ses_1", null))
         }
 
     @Test
@@ -61,7 +62,7 @@ class GoalApiTest {
             val api = api { respond("""{"_tag":"RpcError","message":"Unknown RPC"}""", HttpStatusCode.NotFound) }
 
             try {
-                api.getGoalV2("ses_1", null)
+                api.goalV2("ses_1", null)
                 fail("expected failure")
             } catch (error: HttpBodyResponseException) {
                 assertEquals(404, error.response.status.value)
@@ -87,7 +88,7 @@ class GoalApiTest {
                     }
                 }
 
-            api.runGoalCommandV2("ses_1", "pause")
+            api.runSessionCommandV2("ses_1", SessionGoalLimits.COMMAND, SessionGoalAction.Pause.commandText)
             assertTrue(
                 captured
                     .single()
@@ -98,20 +99,20 @@ class GoalApiTest {
 
             fail = true
             try {
-                api.runGoalCommandV2("ses_1", "pause")
+                api.runSessionCommandV2("ses_1", SessionGoalLimits.COMMAND, SessionGoalAction.Pause.commandText)
                 fail("expected failure")
             } catch (error: HttpBodyResponseException) {
                 assertEquals("No active goal to pause", SessionGoalDomainAdapter.errorMessage(error))
             }
         }
 
-    private fun api(handler: MockRequestHandler): GoalApi {
+    private fun api(handler: MockRequestHandler): SessionsApi {
         val json = Json { ignoreUnknownKeys = true }
         val client =
             HttpClient(MockEngine(handler)) {
                 install(ContentNegotiation) { json(json) }
             }
-        return GoalApi(client, json)
+        return SessionsApi(client, json)
     }
 
     private fun io.ktor.client.engine.mock.MockRequestHandleScope.respondJson(body: String) =

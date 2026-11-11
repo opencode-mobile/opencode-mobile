@@ -39,16 +39,15 @@ import dev.opencode.mobile.data.remote.dto.V2MoveSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
+import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RevertStageRequestDto
-import dev.opencode.mobile.data.remote.dto.V2SessionCommandRequestDto
+import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2SessionGenerateRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionGenerateResponseDto
 import dev.opencode.mobile.data.remote.dto.V2SessionViewRequestDto
-import dev.opencode.mobile.data.remote.dto.V2ShellDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
-import dev.opencode.mobile.data.remote.dto.V2TextPromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsFileStatusDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
@@ -239,19 +238,6 @@ class SessionsApi private constructor(
             .post("api/session/$id/interrupt")
             .bodyOnSuccess<V2InterruptResultDto>()
             .interrupted
-
-    /**
-     * `GET /api/shell?location[directory]=…`: the agent shells running in [directory] (exited ones aren't listed),
-     * for every session there; each one's `metadata.sessionID` says whose it is.
-     */
-    suspend fun listShellsV2(directory: String): List<V2ShellDto> =
-        json.decodeDataEnvelope(
-            httpClient
-                .get()
-                .get("api/shell") {
-                    applyLocationDirectory(directory)
-                }.bodyOnSuccess<JsonElement>(),
-        )
 
     suspend fun listInboxV2(sessionId: String): List<V2InboxItemDto> =
         httpClient
@@ -654,7 +640,7 @@ class SessionsApi private constructor(
             .post("api/session/$id/prompt") {
                 setJsonBody(
                     json,
-                    V2TextPromptRequestDto(text = text, delivery = delivery, files = files.ifEmpty { null }, metadata = metadata),
+                    V2PromptRequestDto(text = text, delivery = delivery, files = files.ifEmpty { null }, metadata = metadata),
                 )
             }.bodyOnSuccess<ApiDataEnvelope<V2InboxItemDto>>()
             .data
@@ -673,7 +659,7 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .post("api/session/$id/command") {
-                setJsonBody(json, V2SessionCommandRequestDto(name = name, text = text, files = files.ifEmpty { null }))
+                setJsonBody(json, V2RunCommandRequestDto(name = name, text = text, files = files.ifEmpty { null }))
             }.ensureSuccess()
 
     /**

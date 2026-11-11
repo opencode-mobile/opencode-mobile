@@ -4,7 +4,6 @@ import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.data.remote.dto.V1ShellRequestDto
-import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
 import dev.opencode.mobile.data.remote.dto.V2ShellRequestDto
@@ -112,13 +111,6 @@ class MessagesApi private constructor(
                     parameter("cursor", cursor)
                 }
             }.body()
-
-    suspend fun listInboxV2(sessionId: String): List<V2InboxItemDto> =
-        httpClient
-            .get()
-            .get("api/session/$sessionId/inbox")
-            .body<ApiListEnvelope<V2InboxItemDto>>()
-            .data
 
     suspend fun sendPromptAsync(
         sessionId: String,

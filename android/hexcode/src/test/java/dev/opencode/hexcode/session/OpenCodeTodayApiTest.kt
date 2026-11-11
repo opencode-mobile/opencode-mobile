@@ -2,6 +2,7 @@ package dev.opencode.hexcode.session
 
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.mobile.data.remote.SessionsApi
+import dev.opencode.mobile.data.remote.ShellApi
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -46,7 +47,7 @@ class OpenCodeTodayApiTest {
                     if (reply == null) respond("", HttpStatusCode.NoContent) else respond(reply, HttpStatusCode.OK, headers)
                 },
             ) { install(ContentNegotiation) { json(json) } }
-        return OpenCodeTodayApi(SessionsApi(client, json)) { 777 }
+        return OpenCodeTodayApi(SessionsApi(client, json), ShellApi(client, json)) { 777 }
     }
 
     @Test
@@ -229,8 +230,8 @@ class OpenCodeTodayApiTest {
                     .getEncoder()
                     .encodeToString(jpeg.readBytes())
             assertEquals(
-                """{"text":"What is this?","delivery":"queue","files":[{"uri":"data:image/jpeg;base64,$b64","name":"Photo 1.jpg"},""" +
-                    """{"uri":"data:image/jpeg;base64,$b64","name":"Screenshot 1.jpg"}]}""",
+                """{"text":"What is this?","files":[{"uri":"data:image/jpeg;base64,$b64","name":"Photo 1.jpg"},""" +
+                    """{"uri":"data:image/jpeg;base64,$b64","name":"Screenshot 1.jpg"}],"delivery":"queue"}""",
                 body,
             )
             assertFalse(body.contains('\n'))
@@ -323,7 +324,7 @@ class OpenCodeTodayApiTest {
                         }
                     },
                 ) { install(ContentNegotiation) { json(json) } }
-            val api = OpenCodeTodayApi(SessionsApi(client, json))
+            val api = OpenCodeTodayApi(SessionsApi(client, json), ShellApi(client, json))
             assertTrue(runCatching { api.goalCommand("ses_1", "pause") }.exceptionOrNull() is GoalChangedException)
             assertTrue(runCatching { api.ask("ses_1", "Why?") }.exceptionOrNull() is SessionGoneException)
         }

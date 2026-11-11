@@ -28,6 +28,7 @@ import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.ModelsApi
 import dev.opencode.mobile.data.remote.ProjectsApi
 import dev.opencode.mobile.data.remote.SessionsApi
+import dev.opencode.mobile.data.remote.ShellApi
 import dev.opencode.mobile.domain.connection.ConnectionProbeService
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
@@ -170,6 +171,7 @@ class HexServices(
     /** The event stream's own client: no read timeout, and its own connection pool. */
     val sseClient = OpencodeSseHttpClient(json, connection)
     val sessions = SessionsApi(httpClient, json)
+    private val shells = ShellApi(httpClient, json)
     private val events = EventsApi(sseClient)
     val networkPath = ConnectivityDeviceNetworkPath(appContext)
 
@@ -179,7 +181,7 @@ class HexServices(
         directory: () -> String,
         model: () -> ModelChoice?,
     ): TodaySession {
-        val api = OpenCodeTodayApi(sessions, ready = { connectionLoaded.await() })
+        val api = OpenCodeTodayApi(sessions, shells, ready = { connectionLoaded.await() })
         return TodaySession(
             scope = scope,
             beforeSetup = ::beforeSetup,

@@ -96,36 +96,6 @@ class SessionsApiNeedsYouTest {
             assertEquals(404, (error as HttpBodyResponseException).response.status.value)
         }
 
-    @Test
-    fun shellsAreListedForTheFolderWithTheirSession() =
-        runTest {
-            val captured = mutableListOf<HttpRequestData>()
-            val api =
-                api { request ->
-                    captured += request
-                    respond(
-                        """{"location":{"directory":"/tmp/p"},"data":[{"id":"sh_1","status":"running","command":"bun dev",
-                        "cwd":"/tmp/p","metadata":{"sessionID":"ses_1"},"time":{"started":1793986674864}}]}""",
-                        HttpStatusCode.OK,
-                        jsonHeaders,
-                    )
-                }
-
-            val shells = api.listShellsV2("/tmp/p")
-
-            assertEquals("/tmp/p", captured.single().url.parameters["location[directory]"])
-            val shell = shells.single()
-            assertEquals("bun dev", shell.command)
-            assertEquals(
-                "ses_1",
-                shell.metadata
-                    ?.get("sessionID")
-                    ?.jsonPrimitive
-                    ?.content,
-            )
-            assertEquals(1793986674864.0, shell.time?.started)
-        }
-
     private fun api(handler: MockRequestHandler): SessionsApi {
         val json = Json { ignoreUnknownKeys = true }
         val client =

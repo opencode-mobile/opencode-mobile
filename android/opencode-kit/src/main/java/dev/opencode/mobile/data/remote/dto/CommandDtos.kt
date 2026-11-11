@@ -36,12 +36,16 @@ data class CommandFilePartDto(
     val id: String? = null,
 )
 
+/**
+ * `POST /api/session/{id}/command` with a command's [name] and its [text] (the field is `text`: `arguments` gets a
+ * `400`), plus the prompt's [files]. Null fields are left out; without a [delivery], a goal's kickoff steers.
+ */
 @Serializable
 data class V2RunCommandRequestDto(
     val name: String,
     val text: String,
     val files: List<V2PromptFileDto>? = null,
-    val delivery: String,
+    val delivery: String? = null,
     /** v2 skills mentioned in the draft, `[{id}]`; mention offsets are meaningless after the token is cut. */
     val skills: List<V2PromptSkillDto>? = null,
 )
