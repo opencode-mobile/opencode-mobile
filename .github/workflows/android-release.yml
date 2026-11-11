@@ -21,8 +21,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  notes:
+    # GitHub-hosted on purpose: a plain Node check with no secrets. A release needs
+    # notes for its version before anything is built.
+    if: github.repository == 'opencode-mobile/opencode-mobile' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version_name }}
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION:-$(./scripts/read-app-version.sh)}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Release notes exist for this version
+        run: node scripts/release-notes.mjs check --platform android --version "${{ steps.version.outputs.version }}"
+
   release:
     if: github.repository == 'opencode-mobile/opencode-mobile' && github.ref == 'refs/heads/main'
+    needs: notes
     runs-on: [self-hosted, Linux, X64, android]
     environment: android-release
     defaults:
@@ -155,3 +178,28 @@ jobs:
         if: always()
         shell: bash
         run: rm -f "$RUNNER_TEMP/opencode-mobile-upload.jks" "$GITHUB_WORKSPACE/android/app/google-services.json"
+
+  tag:
+    # Record the release: <platform>-v<version> points at the commit this run shipped.
+    # Release notes and `release-notes.mjs draft` count changes from these tags, not
+    # from version bumps. A rebuild of the same version moves the tag.
+    needs: [notes, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Tag the shipped commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: android-v${{ needs.notes.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+            echo "Moved $TAG to $GITHUB_SHA"
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null
+            echo "Created $TAG at $GITHUB_SHA"
+          fi
+          echo "- Release tag: \`$TAG\` at \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"

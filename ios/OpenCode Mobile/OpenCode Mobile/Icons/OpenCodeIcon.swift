@@ -59,6 +59,17 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case star = "lucide_star"
     case rateReview = "lucide_rate_review"
     case atSign = "lucide_at_sign"
+    case sparkles = "lucide_sparkles"
+    case image = "lucide_image"
+    case keyboard = "lucide_keyboard"
+    case paperclip = "lucide_paperclip"
+    case qrCode = "lucide_qr_code"
+    case clock = "lucide_clock"
+    case target = "lucide_target"
+    case gitFork = "lucide_git_fork"
+    case wrench = "lucide_wrench"
+    case smartphone = "lucide_smartphone"
+    case messageSquare = "lucide_message_square"
 
     var accessibilityIdentifier: String { rawValue }
 }

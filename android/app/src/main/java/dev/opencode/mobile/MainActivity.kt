@@ -97,7 +97,7 @@ class MainActivity : FragmentActivity() {
                             Modifier.fillMaxSize()
                         },
                     ) {
-                        KeyboardFocusRoot { MainNavigation() }
+                        KeyboardFocusRoot { MainNavigation(appCovered = cover.covered || cover.locked) }
                         PerformanceOverlayHost()
                     }
                     // MainNavigation applies the theme inside itself; the cover sits beside it.

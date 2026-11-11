@@ -8,6 +8,7 @@ enum SettingsDetail: Hashable {
     case appearance
     case diagnosticLogs
     case developerTools
+    case whatsNew
 }
 
 struct SettingsView: View {
@@ -27,6 +28,8 @@ struct SettingsView: View {
     @State private var showClearSessionCacheConfirmation = false
     @State private var sessionCacheSizeLabel = String(localized: "settings.session_cache.empty", defaultValue: "Empty")
     @State private var showAppearance = false
+    @State private var showWhatsNew = false
+    @State private var whatsNewStore = WhatsNewStore.shared
     @State private var showRecentWindowPicker = false
     @State private var showFollowUpPicker = false
     @State private var showTimelineStylePicker = false
@@ -77,6 +80,9 @@ struct SettingsView: View {
         }
         .navigationDestination(isPresented: $showAppearance) {
             AppearanceSettingsView()
+        }
+        .navigationDestination(isPresented: $showWhatsNew) {
+            WhatsNewHistoryView()
         }
         .typeErased()
         .openCodeBottomSheet(
@@ -560,6 +566,19 @@ struct SettingsView: View {
             OpenCodeSectionHeader(title: "settings.section.about")
 
             OpenCodeListItem(
+                title: "whats_new.title",
+                subtitle: "whats_new.settings_subtitle",
+                isNew: whatsNewStore.badgePending,
+                selected: isDetailSelected(.whatsNew),
+                style: .card,
+                startDecorator: .icon(.sparkles, accessibilityLabel: "whats_new.title"),
+                accessory: .disclosure,
+                action: { open(.whatsNew) }
+            )
+            .padding(.horizontal, 16)
+            .accessibilityIdentifier("settings.whatsNew")
+
+            OpenCodeListItem(
                 title: "settings.version",
                 subtitle: .verbatim(version),
                 style: .card,
@@ -699,6 +718,7 @@ struct SettingsView: View {
         case .appearance: showAppearance = true
         case .diagnosticLogs: showDiagnosticLogs = true
         case .developerTools: showDeveloperTools = true
+        case .whatsNew: showWhatsNew = true
         }
     }
 
@@ -729,6 +749,8 @@ struct SettingsView: View {
             DiagnosticLogsView(detailControl: control)
         case .developerTools:
             DeveloperToolsView(detailControl: control)
+        case .whatsNew:
+            WhatsNewHistoryView(detailControl: control)
         }
     }
 

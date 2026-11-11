@@ -143,6 +143,8 @@ fun MainScreen(
     modifier: Modifier = Modifier,
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
+    /** Whether Home shows its sessions with nothing over them: no sheet, dialog, menu, or search. */
+    onHomeIdleChange: (Boolean) -> Unit = {},
     viewModel: MainScreenViewModel = hiltViewModel(),
     searchViewModel: SessionSearchViewModel = hiltViewModel(),
 ) {
@@ -247,6 +249,7 @@ fun MainScreen(
         modifier = modifier,
         selectedSessionId = selectedSessionId,
         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
+        onHomeIdleChange = onHomeIdleChange,
         search =
             HomeSessionSearch(
                 state = searchState,
@@ -316,6 +319,8 @@ internal fun MainScreen(
     archivedMenu: HomeArchivedMenuEntry? = null,
     onHomeMenuOpen: (scopeId: String, worktreesEnabled: Boolean) -> Unit = { _, _ -> },
     onArchivedSessionsClick: (scopeId: String) -> Unit = {},
+    /** Whether Home shows its sessions with nothing over them: no sheet, dialog, menu, or search. */
+    onHomeIdleChange: (Boolean) -> Unit = {},
 ) {
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
@@ -339,6 +344,20 @@ internal fun MainScreen(
 
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var homeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    // Saveable like the picker it mirrors, so a restored open picker never reads as idle Home.
+    var projectPickerShown by rememberSaveable { mutableStateOf(false) }
+    val homeIdle =
+        (uiState is MainScreenUiState.Loaded || uiState is MainScreenUiState.Empty) &&
+            !showAddSheet &&
+            !serversChrome.sheetVisible &&
+            !sessionActions.sheetVisible &&
+            !sessionActions.hasOpenDialog &&
+            (uiState as? MainScreenUiState.Loaded)?.pendingProjectRemoval == null &&
+            pendingOpenSession == null &&
+            !homeMenuExpanded &&
+            !search.state.open &&
+            !projectPickerShown
+    LaunchedEffect(homeIdle) { onHomeIdleChange(homeIdle) }
     // Counts only: the menu subtitle needs no session list.
     val loadedWorktrees =
         (uiState as? MainScreenUiState.Loaded)?.let { state ->
@@ -604,6 +623,7 @@ internal fun MainScreen(
                         canLoadMoreSessions = canLoadMoreSessions,
                         selectedSessionId = selectedSessionId,
                         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
+                        onProjectPickerShownChange = { projectPickerShown = it },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -944,6 +964,7 @@ private fun HomeProjectsContent(
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
     worktreesEnabled: Boolean = true,
+    onProjectPickerShownChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Rows exactly as the list renders them for the selected filter; read by Ctrl+Tab stepping.
@@ -992,6 +1013,7 @@ private fun HomeProjectsContent(
             )
         val worktreeTabs = SessionListHomeChrome.worktreeTabs(chromeProjects, text, worktreesEnabled)
         var showProjectPicker by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(showProjectPicker) { onProjectPickerShownChange(showProjectPicker) }
         var pickerState by remember { mutableStateOf(HomeProjectPickerState()) }
         // An older scope id (an added path) reads as the project that path now belongs to, and
         // so does a worktree scope while worktrees are off.

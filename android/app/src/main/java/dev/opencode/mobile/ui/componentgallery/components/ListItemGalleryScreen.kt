@@ -382,6 +382,18 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             )
         }
 
+        Text(text = "New tag", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        Column {
+            OpenCodeListItem(
+                title = "What's new",
+                isNew = true,
+                style = OpenCodeListItemStyle.Card,
+                startDecorator = StartDecorator.Icon(imageVector = OpenCodeIcons.Star, contentDescription = null),
+                accessory = OpenCodeListItemAccessory.Disclosure,
+                onClick = {},
+            )
+        }
+
         Text(text = "Plain selection", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         Column {
             OpenCodeListItem(

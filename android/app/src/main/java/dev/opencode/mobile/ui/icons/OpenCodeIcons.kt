@@ -68,6 +68,17 @@ private var _drag_handle: ImageVector? = null
 private var _star: ImageVector? = null
 private var _rate_review: ImageVector? = null
 private var _at_sign: ImageVector? = null
+private var _sparkles: ImageVector? = null
+private var _image: ImageVector? = null
+private var _keyboard: ImageVector? = null
+private var _paperclip: ImageVector? = null
+private var _qr_code: ImageVector? = null
+private var _clock: ImageVector? = null
+private var _target: ImageVector? = null
+private var _git_fork: ImageVector? = null
+private var _wrench: ImageVector? = null
+private var _smartphone: ImageVector? = null
+private var _message_square: ImageVector? = null
 
   val Add: ImageVector
     get() {
@@ -813,7 +824,7 @@ private var _at_sign: ImageVector? = null
       pathFillType = PathFillType.NonZero,
     )
     addPath(
-      pathData = PathParser().parsePathString("M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4").toNodes(),
+      pathData = PathParser().parsePathString("M15 13a4.17 4.17 0 01-3-4 4.17 4.17 0 01-3 4").toNodes(),
       fill = null,
       stroke = SolidColor(Color.Black),
       strokeLineWidth = 1.5f,
@@ -822,7 +833,7 @@ private var _at_sign: ImageVector? = null
       pathFillType = PathFillType.NonZero,
     )
     addPath(
-      pathData = PathParser().parsePathString("M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5").toNodes(),
+      pathData = PathParser().parsePathString("M17.707 6.294A3 3 0 1012 5a3 3 0 10-5.707 1.294").toNodes(),
       fill = null,
       stroke = SolidColor(Color.Black),
       strokeLineWidth = 1.5f,
@@ -831,7 +842,7 @@ private var _at_sign: ImageVector? = null
       pathFillType = PathFillType.NonZero,
     )
     addPath(
-      pathData = PathParser().parsePathString("M17.997 5.125a4 4 0 0 1 2.526 5.77").toNodes(),
+      pathData = PathParser().parsePathString("M17.996 5.125a4 4 0 012.526 5.77").toNodes(),
       fill = null,
       stroke = SolidColor(Color.Black),
       strokeLineWidth = 1.5f,
@@ -840,7 +851,7 @@ private var _at_sign: ImageVector? = null
       pathFillType = PathFillType.NonZero,
     )
     addPath(
-      pathData = PathParser().parsePathString("M18 18a4 4 0 0 0 2-7.464").toNodes(),
+      pathData = PathParser().parsePathString("M18 18a4 4 0 002-7.465").toNodes(),
       fill = null,
       stroke = SolidColor(Color.Black),
       strokeLineWidth = 1.5f,
@@ -849,7 +860,7 @@ private var _at_sign: ImageVector? = null
       pathFillType = PathFillType.NonZero,
     )
     addPath(
-      pathData = PathParser().parsePathString("M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517").toNodes(),
+      pathData = PathParser().parsePathString("M19.967 17.482a4 4 0 11-7.967.517 4 4 0 11-7.967-.517").toNodes(),
       fill = null,
       stroke = SolidColor(Color.Black),
       strokeLineWidth = 1.5f,
@@ -858,7 +869,7 @@ private var _at_sign: ImageVector? = null
       pathFillType = PathFillType.NonZero,
     )
     addPath(
-      pathData = PathParser().parsePathString("M6 18a4 4 0 0 1-2-7.464").toNodes(),
+      pathData = PathParser().parsePathString("M6 18a4 4 0 01-2-7.465").toNodes(),
       fill = null,
       stroke = SolidColor(Color.Black),
       strokeLineWidth = 1.5f,
@@ -867,7 +878,7 @@ private var _at_sign: ImageVector? = null
       pathFillType = PathFillType.NonZero,
     )
     addPath(
-      pathData = PathParser().parsePathString("M6.003 5.125a4 4 0 0 0-2.526 5.77").toNodes(),
+      pathData = PathParser().parsePathString("M6.004 5.125a4 4 0 00-2.526 5.77").toNodes(),
       fill = null,
       stroke = SolidColor(Color.Black),
       strokeLineWidth = 1.5f,
@@ -2368,5 +2379,546 @@ private var _at_sign: ImageVector? = null
     )
       }.build()
       return _at_sign!!
+    }
+
+  val Sparkles: ImageVector
+    get() {
+      if (_sparkles != null) return _sparkles!!
+      _sparkles = ImageVector.Builder(
+        name = "Sparkles",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M20 2v4").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M22 4h-4").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 2 20 a 2 2 0 1 0 4 0 a 2 2 0 1 0 -4 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _sparkles!!
+    }
+
+  val Image: ImageVector
+    get() {
+      if (_image != null) return _image!!
+      _image = ImageVector.Builder(
+        name = "Image",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M 5 3 h 14 a 2 2 0 0 1 2 2 v 14 a 2 2 0 0 1 -2 2 h -14 a 2 2 0 0 1 -2 -2 v -14 a 2 2 0 0 1 2 -2 z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 7 9 a 2 2 0 1 0 4 0 a 2 2 0 1 0 -4 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _image!!
+    }
+
+  val Keyboard: ImageVector
+    get() {
+      if (_keyboard != null) return _keyboard!!
+      _keyboard = ImageVector.Builder(
+        name = "Keyboard",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M10 8h.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M12 12h.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M14 8h.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M16 12h.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M18 8h.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M6 8h.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M7 16h10").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M8 12h.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 4 4 h 16 a 2 2 0 0 1 2 2 v 12 a 2 2 0 0 1 -2 2 h -16 a 2 2 0 0 1 -2 -2 v -12 a 2 2 0 0 1 2 -2 z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _keyboard!!
+    }
+
+  val Paperclip: ImageVector
+    get() {
+      if (_paperclip != null) return _paperclip!!
+      _paperclip = ImageVector.Builder(
+        name = "Paperclip",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _paperclip!!
+    }
+
+  val QrCode: ImageVector
+    get() {
+      if (_qr_code != null) return _qr_code!!
+      _qr_code = ImageVector.Builder(
+        name = "QrCode",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M 4 3 h 3 a 1 1 0 0 1 1 1 v 3 a 1 1 0 0 1 -1 1 h -3 a 1 1 0 0 1 -1 -1 v -3 a 1 1 0 0 1 1 -1 z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 17 3 h 3 a 1 1 0 0 1 1 1 v 3 a 1 1 0 0 1 -1 1 h -3 a 1 1 0 0 1 -1 -1 v -3 a 1 1 0 0 1 1 -1 z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 4 16 h 3 a 1 1 0 0 1 1 1 v 3 a 1 1 0 0 1 -1 1 h -3 a 1 1 0 0 1 -1 -1 v -3 a 1 1 0 0 1 1 -1 z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M21 16h-3a2 2 0 0 0-2 2v3").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M21 21v.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M12 7v3a2 2 0 0 1-2 2H7").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M3 12h.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M12 3h.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M12 16v.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M16 12h1").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M21 12v.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M12 21v-1").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _qr_code!!
+    }
+
+  val Clock: ImageVector
+    get() {
+      if (_clock != null) return _clock!!
+      _clock = ImageVector.Builder(
+        name = "Clock",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M 2 12 a 10 10 0 1 0 20 0 a 10 10 0 1 0 -20 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M12 6v6l4 2").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _clock!!
+    }
+
+  val Target: ImageVector
+    get() {
+      if (_target != null) return _target!!
+      _target = ImageVector.Builder(
+        name = "Target",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M 2 12 a 10 10 0 1 0 20 0 a 10 10 0 1 0 -20 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 6 12 a 6 6 0 1 0 12 0 a 6 6 0 1 0 -12 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 10 12 a 2 2 0 1 0 4 0 a 2 2 0 1 0 -4 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _target!!
+    }
+
+  val GitFork: ImageVector
+    get() {
+      if (_git_fork != null) return _git_fork!!
+      _git_fork = ImageVector.Builder(
+        name = "GitFork",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M 9 18 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 3 6 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 15 6 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M12 12v3").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _git_fork!!
+    }
+
+  val Wrench: ImageVector
+    get() {
+      if (_wrench != null) return _wrench!!
+      _wrench = ImageVector.Builder(
+        name = "Wrench",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _wrench!!
+    }
+
+  val Smartphone: ImageVector
+    get() {
+      if (_smartphone != null) return _smartphone!!
+      _smartphone = ImageVector.Builder(
+        name = "Smartphone",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M 7 2 h 10 a 2 2 0 0 1 2 2 v 16 a 2 2 0 0 1 -2 2 h -10 a 2 2 0 0 1 -2 -2 v -16 a 2 2 0 0 1 2 -2 z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M12 18h.01").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _smartphone!!
+    }
+
+  val MessageSquare: ImageVector
+    get() {
+      if (_message_square != null) return _message_square!!
+      _message_square = ImageVector.Builder(
+        name = "MessageSquare",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _message_square!!
     }
 }
