@@ -69,7 +69,18 @@ final class WhatsNewStore {
         defaults.set(true, forKey: StorageKeys.badgePending)
     }
 
-    /// The person opened Settings → What's new.
+    /// The person opened Settings → What's new: pending notes count as seen
+    /// there, so the sheet never repeats them, and the badge clears.
+    func markSeenInHistory() {
+        if !pendingReleases.isEmpty {
+            pendingReleases = []
+            if let pendingLastSeen { store(lastSeen: pendingLastSeen) }
+            pendingLastSeen = nil
+        }
+        clearBadge()
+    }
+
+    /// The badge alone clears; see `markSeenInHistory()`.
     func clearBadge() {
         guard badgePending else { return }
         badgePending = false

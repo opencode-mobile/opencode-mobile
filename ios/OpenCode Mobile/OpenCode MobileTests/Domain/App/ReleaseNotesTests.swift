@@ -256,6 +256,21 @@ private func release(_ string: String, kinds: [ReleaseNoteKind] = [.new]) -> Rel
         #expect(!WhatsNewStore(defaults: defaults, installedVersion: "1.4.0", releases: releases).badgePending)
     }
 
+    @Test func openingHistoryFirstCountsPendingAsSeenSoTheSheetNeverShows() {
+        let defaults = freshDefaults()
+        defaults.set("1.2.0", forKey: WhatsNewStore.StorageKeys.lastSeenVersion)
+        let store = WhatsNewStore(defaults: defaults, installedVersion: "1.4.0", releases: releases)
+        store.prepareLaunch(isUpgrade: true)
+        let sheet = WhatsNewSheetModel(store: store)
+
+        WhatsNewHistoryModel(store: store).onAppear()
+        sheet.homeIsIdle()
+
+        #expect(sheet.sheet == nil)
+        #expect(!store.badgePending)
+        #expect(defaults.string(forKey: WhatsNewStore.StorageKeys.lastSeenVersion) == "1.4.0")
+    }
+
     @Test func freshInstallRecordsInstalledAtLaunch() {
         let defaults = freshDefaults()
         let store = WhatsNewStore(defaults: defaults, installedVersion: "1.4.0-beta+3", releases: releases)

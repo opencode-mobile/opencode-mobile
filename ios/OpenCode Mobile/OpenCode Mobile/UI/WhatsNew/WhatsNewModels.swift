@@ -105,6 +105,6 @@ final class WhatsNewHistoryModel {
     }
 
     func onAppear() {
-        store.clearBadge()
+        store.markSeenInHistory()
     }
 }

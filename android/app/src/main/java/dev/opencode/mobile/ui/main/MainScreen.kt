@@ -344,7 +344,8 @@ internal fun MainScreen(
 
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var homeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var projectPickerShown by remember { mutableStateOf(false) }
+    // Saveable like the picker it mirrors, so a restored open picker never reads as idle Home.
+    var projectPickerShown by rememberSaveable { mutableStateOf(false) }
     val homeIdle =
         (uiState is MainScreenUiState.Loaded || uiState is MainScreenUiState.Empty) &&
             !showAddSheet &&

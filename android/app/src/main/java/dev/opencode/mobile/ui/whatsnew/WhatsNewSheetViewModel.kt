@@ -68,7 +68,8 @@ class WhatsNewSheetViewModel internal constructor(
         val releases = pending ?: return
         if (!homeIdle || releases.isEmpty()) return
         pending = emptyList()
-        whatsNew.markPresented()
+        // Opening the Settings history first already counts them as seen.
+        if (!whatsNew.markPresented()) return
         _state.update { it.copy(visible = true, releases = releases) }
     }
 }

@@ -115,6 +115,21 @@ class WhatsNewTest {
     }
 
     @Test
+    fun markSeenInHistory_countsPendingReleasesAsSeenSoTheSheetNeverShowsThem() {
+        val store = InMemoryStore(lastSeen = "1.3.1")
+        val whatsNew = whatsNew(store, installed = "1.5.0")
+        assertEquals(listOf("1.5.0"), whatsNew.pendingReleases().versions())
+
+        whatsNew.markSeenInHistory()
+
+        assertEquals("1.5.0", store.lastSeenReleaseNotesVersion)
+        assertFalse(store.badgePending)
+        assertFalse(whatsNew.markPresented())
+        assertFalse(store.badgePending)
+        assertTrue(whatsNew(store, installed = "1.5.0").pendingReleases().isEmpty())
+    }
+
+    @Test
     fun history_listsReleasesUpToInstalledAndClearBadgeClearsIt() {
         val store = InMemoryStore(lastSeen = "1.5.0", badgePending = true)
         val whatsNew = whatsNew(store, installed = "1.5.0")

@@ -22,7 +22,7 @@ data class WhatsNewHistoryUiState(
     val loaded: Boolean = false,
 )
 
-/** Opening the history clears the Settings New badge. */
+/** Opening the history clears the Settings New badge and counts pending notes as seen. */
 @HiltViewModel
 class WhatsNewHistoryViewModel internal constructor(
     private val whatsNew: WhatsNew,
@@ -35,9 +35,13 @@ class WhatsNewHistoryViewModel internal constructor(
     val state: StateFlow<WhatsNewHistoryUiState> = _state.asStateFlow()
 
     init {
-        whatsNew.clearBadge()
         viewModelScope.launch {
-            val releases = withContext(ioDispatcher) { whatsNew.history() }
+            val releases =
+                withContext(ioDispatcher) {
+                    // Reading the history counts pending notes as seen, so the sheet won't repeat them.
+                    whatsNew.markSeenInHistory()
+                    whatsNew.history()
+                }
             _state.update { it.copy(releases = releases, loaded = true) }
         }
     }

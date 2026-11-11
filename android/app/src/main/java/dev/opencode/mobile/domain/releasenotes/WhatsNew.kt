@@ -125,14 +125,30 @@ class WhatsNew(
         return pending?.releases.orEmpty()
     }
 
-    /** The sheet appeared: its releases count as seen, and Settings shows the badge. */
+    /**
+     * The sheet is about to appear: its releases count as seen, and Settings shows the badge.
+     * False when they were already seen (the history was opened first), so the sheet stays away.
+     */
     @Synchronized
-    fun markPresented() {
-        val decision = pending ?: return
+    fun markPresented(): Boolean {
+        val decision = pending ?: return false
         pending = null
         decision.recordLastSeen?.let { store.lastSeenReleaseNotesVersion = it.toString() }
         store.badgePending = true
         _badgePending.value = true
+        return true
+    }
+
+    /**
+     * The Settings history was opened: pending releases count as seen there, so the sheet will
+     * not show them again, and the badge clears. Blocking on the first decision.
+     */
+    @Synchronized
+    fun markSeenInHistory() {
+        pendingReleases()
+        pending?.recordLastSeen?.let { store.lastSeenReleaseNotesVersion = it.toString() }
+        pending = null
+        clearBadge()
     }
 
     /** Every release up to the installed one, newest first. */
@@ -142,6 +158,7 @@ class WhatsNew(
     }
 
     /** The Settings history was opened. */
+    @Synchronized
     fun clearBadge() {
         if (!_badgePending.value && !store.badgePending) return
         store.badgePending = false
