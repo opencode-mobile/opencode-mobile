@@ -396,30 +396,30 @@ final class OpenCodeBottomSheetHeightTests: XCTestCase {
 
     func testCompactBodyHeightFollowsTheBodyBothWays() {
         XCTAssertEqual(
-            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 300, measured: 120, lockedScrollable: false, containerHeight: 866),
+            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 300, measured: CGSize(width: 370, height: 120), lockedScrollable: false),
             120
         )
         XCTAssertEqual(
-            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 120, measured: 300, lockedScrollable: false, containerHeight: 866),
+            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 120, measured: CGSize(width: 370, height: 300), lockedScrollable: false),
             300
         )
-        XCTAssertNil(OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 120, measured: 120, lockedScrollable: false, containerHeight: 866))
-        XCTAssertNil(OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 120, measured: 0, lockedScrollable: false, containerHeight: 866))
+        XCTAssertNil(OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 120, measured: CGSize(width: 370, height: 120), lockedScrollable: false))
+        XCTAssertNil(OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 120, measured: CGSize(width: 370, height: 0), lockedScrollable: false))
     }
 
-    func testMeasureBeforeTheOverlayHasASizeIsIgnored() {
+    func testMeasureAtNoWidthIsIgnored() {
         // The first pass lays out at zero size: text wraps at no width and reads far too tall.
         XCTAssertNil(
-            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 0, measured: 775, lockedScrollable: false, containerHeight: 0)
+            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 0, measured: CGSize(width: 0, height: 775), lockedScrollable: false)
         )
         XCTAssertEqual(
-            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 0, measured: 160, lockedScrollable: false, containerHeight: 866),
+            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 0, measured: CGSize(width: 370, height: 160), lockedScrollable: false),
             160
         )
     }
 
     func testLockedScrollableSheetStopsMeasuring() {
-        XCTAssertNil(OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 900, measured: 120, lockedScrollable: true, containerHeight: 866))
+        XCTAssertNil(OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 900, measured: CGSize(width: 370, height: 120), lockedScrollable: true))
     }
 
     func testHiddenOffsetSlidesTheCardJustBelowTheEdge() {
