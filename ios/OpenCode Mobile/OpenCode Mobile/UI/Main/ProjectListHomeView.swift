@@ -34,6 +34,9 @@ struct ProjectListHomeView: View {
     @State private var revealSelectedSessionToken = 0
     /// The split's sidebar control, so ⌘F can reopen a collapsed sidebar to show search.
     @State private var splitSidebar = HomeSplitSidebarHandle()
+    /// What's new sheet (#1027): shown once over an idle Home after an update.
+    @State private var whatsNew = WhatsNewSheetModel()
+    @State private var appLockState = AppLockState.shared
     @Environment(\.scenePhase) private var scenePhase
     var splitGate = OpenCodeSplitLayoutGate()
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -461,6 +464,14 @@ struct ProjectListHomeView: View {
                     action: viewModel.cancelDeleteSessionAction
                 )
             )
+            .whatsNewSheet(whatsNew)
+            .task(id: isIdleForWhatsNew) {
+                guard isIdleForWhatsNew else { return }
+                // Let Home settle first; anything that opens meanwhile cancels this.
+                try? await Task.sleep(for: .milliseconds(600))
+                guard !Task.isCancelled, isIdleForWhatsNew else { return }
+                whatsNew.homeIsIdle()
+            }
         }
         // Session Chat's "Move to worktree…" lists the session's project worktrees from Home.
         .environment(\.homeProjects, viewModel.uiState.projects)
@@ -560,6 +571,33 @@ struct ProjectListHomeView: View {
 
     private var isHomeVisible: Bool {
         homeRoutes.isEmpty && !showSettings && scenePhase == .active
+    }
+
+    /// Home is the visible screen with nothing over it: no connection setup or
+    /// onboarding, sheet, dialog, menu, search or App Lock, and no pushed screen
+    /// (so not a Session Chat the app opened into).
+    private var isIdleForWhatsNew: Bool {
+        guard isHomeVisible,
+              !appLockState.isLocked,
+              connectionSetupPresentation == nil,
+              !presentConnectionSetupOnAppear,
+              !homeMenuPresented,
+              !showProjectPicker,
+              !sessionSearch.isPresented,
+              !viewModel.uiState.addProject.isPresented,
+              !viewModel.uiState.servers.sheetVisible,
+              !viewModel.uiState.sessionActions.sheetVisible,
+              !viewModel.uiState.sessionActions.renameDialog.isVisible,
+              !viewModel.uiState.sessionActions.forkDialog.isVisible,
+              !viewModel.uiState.sessionActions.forkResult.isVisible,
+              !viewModel.uiState.sessionActions.deleteConfirmVisible,
+              viewModel.uiState.pendingProjectRemoval == nil,
+              viewModel.uiState.pendingSessionOpen == nil
+        else { return false }
+        switch viewModel.uiState.content {
+        case .loaded, .empty, .probeFailed: return true
+        case .disconnected, .probing, .loading: return false
+        }
     }
 
     private var homeSections: [ProjectSectionItem] {
