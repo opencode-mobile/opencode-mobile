@@ -1677,4 +1677,5 @@
     <string name="whats_new_done">Done</string>
     <string name="whats_new_find_again">Find this again in Settings → What’s new</string>
     <string name="whats_new_installed">Installed</string>
+    <string name="whats_new_settings_subtitle">Release notes for every version</string>
 </resources>

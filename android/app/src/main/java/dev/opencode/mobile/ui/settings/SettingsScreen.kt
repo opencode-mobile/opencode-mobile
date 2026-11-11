@@ -462,6 +462,7 @@ fun SettingsScreen(
                 val whatsNewTitle = stringResource(R.string.whats_new_title)
                 OpenCodeListItem(
                     title = whatsNewTitle,
+                    subtitle = stringResource(R.string.whats_new_settings_subtitle),
                     isNew = whatsNewBadgePending,
                     selected = selectedDetail == SettingsDetail.WhatsNew,
                     style = OpenCodeListItemStyle.Card,

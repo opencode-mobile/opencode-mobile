@@ -567,6 +567,7 @@ struct SettingsView: View {
 
             OpenCodeListItem(
                 title: "whats_new.title",
+                subtitle: "whats_new.settings_subtitle",
                 isNew: whatsNewStore.badgePending,
                 selected: isDetailSelected(.whatsNew),
                 style: .card,

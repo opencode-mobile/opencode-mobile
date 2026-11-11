@@ -22,6 +22,7 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonSize
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
@@ -48,26 +49,18 @@ fun WhatsNewSheet(
         onDismissRequest = onDismiss,
         modifier = modifier.testTag(WhatsNewSheetTags.SHEET),
         height = OpenCodeBottomSheetHeight.Half,
-        titleContent = { WhatsNewSheetTitle(version = state.installedVersion, title = title) },
         pinnedTop = {
-            if (state.skippedCount > 0) {
-                Text(
-                    text =
-                        if (state.skippedCount == 1) {
-                            stringResource(R.string.whats_new_skipped_one)
-                        } else {
-                            stringResource(R.string.whats_new_skipped_many, state.skippedCount)
-                        },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = openCodeColor("text-weak"),
-                    modifier = Modifier.openCodeBottomSheetContentInset(),
-                )
-            }
+            WhatsNewSheetIntro(
+                version = state.installedVersion,
+                skippedCount = state.skippedCount,
+                modifier = Modifier.openCodeBottomSheetContentInset(),
+            )
         },
         pinnedBottom = {
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.whats_new_done)),
                 onClick = onDismiss,
+                size = OpenCodeButtonSize.Large,
                 modifier = Modifier.testTag(WhatsNewSheetTags.DONE),
             )
             Text(
@@ -100,13 +93,14 @@ fun WhatsNewSheet(
     }
 }
 
-/** Accent "Version X.Y.Z" eyebrow with the sparkle over the "What's new" title. */
+/** Under the standard sheet title: the accent "Version X.Y.Z" line, then the skipped-updates line. */
 @Composable
-private fun WhatsNewSheetTitle(
+private fun WhatsNewSheetIntro(
     version: String,
-    title: String,
+    skippedCount: Int,
+    modifier: Modifier = Modifier,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -123,10 +117,17 @@ private fun WhatsNewSheetTitle(
                 color = openCodeColor("text-interactive-base"),
             )
         }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            color = openCodeColor("text-strong"),
-        )
+        if (skippedCount > 0) {
+            Text(
+                text =
+                    if (skippedCount == 1) {
+                        stringResource(R.string.whats_new_skipped_one)
+                    } else {
+                        stringResource(R.string.whats_new_skipped_many, skippedCount)
+                    },
+                style = MaterialTheme.typography.bodyMedium,
+                color = openCodeColor("text-weak"),
+            )
+        }
     }
 }

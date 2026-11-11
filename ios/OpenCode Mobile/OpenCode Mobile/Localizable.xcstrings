@@ -14544,6 +14544,17 @@
         }
       }
     },
+    "whats_new.settings_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Release notes for every version"
+          }
+        }
+      }
+    },
     "whats_new.skipped_many" : {
       "extractionState" : "manual",
       "localizations" : {
