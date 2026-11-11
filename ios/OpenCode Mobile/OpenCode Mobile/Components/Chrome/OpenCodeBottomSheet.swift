@@ -183,18 +183,20 @@ enum OpenCodeBottomSheetLayoutMath {
 
     /// Body height to keep after a measure of a `.fitContent` card. A compact
     /// card follows its body both ways; once locked to the scrollable detent
-    /// it stops measuring. A measure taken at no width (the pass before the
-    /// overlay has a size) wraps text far too tall, so it is ignored rather
-    /// than locking a short body to the scrollable detent; the body measures
-    /// again once it has a width. `nil` keeps the current value.
+    /// it stops measuring. A measure taken before the overlay has a size
+    /// (`containerHeight` 0) lays the body out at a narrow width, so wrapping
+    /// text reads far too tall; it is ignored rather than locking a short body
+    /// to the scrollable detent. The body reports again at its real width (see
+    /// `BottomSheetContentSizeKey`). `nil` keeps the current value.
     static func nextContentHeight(
         current: CGFloat,
         measured: CGSize,
-        lockedScrollable: Bool
+        lockedScrollable: Bool,
+        containerHeight: CGFloat
     ) -> CGFloat? {
-        guard measured.width > 0, !lockedScrollable, measured.height > 0, measured.height != current else {
-            return nil
-        }
+        guard containerHeight > 0, measured.width > 0, !lockedScrollable,
+              measured.height > 0, measured.height != current
+        else { return nil }
         return measured.height
     }
     /// Tight bottom inset shared with Android, so a short picker (Model,
@@ -487,9 +489,9 @@ enum BottomSheetPresentationMode: Equatable {
     case compact
 }
 
-/// The body's measured size. The width is part of the value so a body that
-/// first measured at no width reports again once it has one, even when its
-/// height stays the same (single-line rows).
+/// The body's measured size. The width is part of the value so a body first
+/// measured before the overlay had a size reports again at its real width,
+/// even when its height stays the same (single-line rows).
 private struct BottomSheetContentSizeKey: PreferenceKey {
     static var defaultValue: CGSize = .zero
 
@@ -716,7 +718,8 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
                 if let next = OpenCodeBottomSheetLayoutMath.nextContentHeight(
                     current: contentHeight,
                     measured: size,
-                    lockedScrollable: hasLockedScrollable
+                    lockedScrollable: hasLockedScrollable,
+                    containerHeight: availableHeight
                 ) {
                     contentHeight = next
                 }
@@ -771,8 +774,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             mode = .scrollable
             return
         }
-        // The limits need a sized container; a change of `availableHeight` reruns this.
-        guard contentHeight > 0, availableHeight > 0 else { return }
+        guard contentHeight > 0 else { return }
 
         // Keep the fixed scrollable fraction once a long list has been shown so
         // filtering or other body changes do not collapse the sheet.
