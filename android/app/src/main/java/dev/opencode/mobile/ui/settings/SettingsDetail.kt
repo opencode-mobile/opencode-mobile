@@ -6,4 +6,5 @@ enum class SettingsDetail {
     Appearance,
     DiagnosticLogs,
     DeveloperTools,
+    WhatsNew,
 }
