@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
@@ -175,6 +176,10 @@ import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.SyntaxHighlightPickerScreen
 import dev.opencode.mobile.ui.settings.ThemePickerScreen
 import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
+import dev.opencode.mobile.ui.whatsnew.WhatsNewHistoryViewModel
+import dev.opencode.mobile.ui.whatsnew.WhatsNewScreen
+import dev.opencode.mobile.ui.whatsnew.WhatsNewSheet
+import dev.opencode.mobile.ui.whatsnew.WhatsNewSheetViewModel
 import dev.opencode.mobile.ui.worktrees.WorktreesScreen
 
 /**
@@ -202,8 +207,9 @@ internal fun <T : Any> rememberMainNavEntryDecorators(): List<NavEntryDecorator<
         rememberViewModelStoreNavEntryDecorator(),
     )
 
+/** [appCovered]: the privacy cover or App Lock hides the app, so Home is not idle. */
 @Composable
-fun MainNavigation() {
+fun MainNavigation(appCovered: Boolean = false) {
     val rootViewModel: AppRootViewModel = hiltViewModel()
     val rootState by rootViewModel.state.collectAsStateWithLifecycle()
     val presentConnectionSetupAfterOnboarding by
@@ -213,6 +219,7 @@ fun MainNavigation() {
     val setupUiState by setupViewModel.uiState.collectAsStateWithLifecycle()
     val sessionCacheSizeLabel by settingsViewModel.sessionCacheSizeLabel.collectAsStateWithLifecycle()
     val serversSummary by settingsViewModel.serversSummary.collectAsStateWithLifecycle()
+    val whatsNewBadgePending by settingsViewModel.whatsNewBadgePending.collectAsStateWithLifecycle()
     val serversViewModel: ServersViewModel = hiltViewModel()
     val serversUiState by serversViewModel.uiState.collectAsStateWithLifecycle()
 
@@ -327,6 +334,15 @@ fun MainNavigation() {
                         onExportWindowChange = diagnosticLogsViewModel::setExportWindow,
                     )
                 }
+                SettingsDetail.WhatsNew -> {
+                    val whatsNewHistoryViewModel: WhatsNewHistoryViewModel = hiltViewModel()
+                    val whatsNewHistoryState by whatsNewHistoryViewModel.state.collectAsStateWithLifecycle()
+                    WhatsNewScreen(
+                        state = whatsNewHistoryState,
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                    )
+                }
                 // Each tool opens as a full-screen route, also on wide windows.
                 SettingsDetail.DeveloperTools ->
                     DeveloperToolsScreen(
@@ -433,6 +449,21 @@ fun MainNavigation() {
                                                 rememberHomeSessionPaneHandoff(useSplitLayout, paneStack) { routes ->
                                                     backStack.addAll(routes)
                                                 }
+                                            // What's new waits for Home to be the idle, visible screen: nothing pushed
+                                            // over it, no session open in its pane, nothing over its list.
+                                            val whatsNewViewModel: WhatsNewSheetViewModel = hiltViewModel()
+                                            val whatsNewState by whatsNewViewModel.state.collectAsStateWithLifecycle()
+                                            var homeContentIdle by remember { mutableStateOf(false) }
+                                            val homeLifecycleState by
+                                                LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+                                            val homeIdle =
+                                                homeContentIdle &&
+                                                    !appCovered &&
+                                                    homeLifecycleState.isAtLeast(Lifecycle.State.RESUMED) &&
+                                                    backStack.lastOrNull() == ProjectListHome &&
+                                                    (!showsSplit || paneSelection == null)
+                                            LaunchedEffect(homeIdle) { whatsNewViewModel.onHomeIdleChange(homeIdle) }
+                                            WhatsNewSheet(state = whatsNewState, onDismiss = whatsNewViewModel::dismiss)
                                             // Screens pushed in the pane pop through its own NavDisplay first.
                                             BackHandler(
                                                 enabled = useSplitLayout && paneSelection != null && paneStack.size == 1,
@@ -464,6 +495,7 @@ fun MainNavigation() {
                                                     onManageServersClick = { backStack.add(SettingsHome) },
                                                     selectedSessionId = if (useSplitLayout) paneSelection?.sessionId else null,
                                                     sessionKeyboardNavigationEnabled = useSplitLayout,
+                                                    onHomeIdleChange = { homeContentIdle = it },
                                                 )
                                             }
                                             if (showsSplit) {
@@ -545,6 +577,10 @@ fun MainNavigation() {
                                                     onAppearanceClick = {
                                                         openSettingsDetail(SettingsDetail.Appearance)
                                                     },
+                                                    onWhatsNewClick = {
+                                                        openSettingsDetail(SettingsDetail.WhatsNew)
+                                                    },
+                                                    whatsNewBadgePending = whatsNewBadgePending,
                                                     selectedDetail = if (useSplitLayout) visibleSettingsDetail else null,
                                                     serversSummary = serversSummary,
                                                     onClearData = settingsViewModel::clearAllData,
@@ -699,6 +735,13 @@ fun MainNavigation() {
                                     entry<FeatureFlagsHome> {
                                         RouteSurface {
                                             FeatureFlagsRoute(onNavigateBack = { backStack.popRouteUnlessRoot() })
+                                        }
+                                    }
+                                    entry<WhatsNewHome> {
+                                        RouteSurface {
+                                            settingsDetailContent(SettingsDetail.WhatsNew, null) {
+                                                backStack.popRouteUnlessRoot()
+                                            }
                                         }
                                     }
                                     entry<DiagnosticLogsHome> {
@@ -959,6 +1002,7 @@ private val SettingsDetail.route: NavKey
             SettingsDetail.Appearance -> AppearanceHome
             SettingsDetail.DiagnosticLogs -> DiagnosticLogsHome
             SettingsDetail.DeveloperTools -> DeveloperToolsHome
+            SettingsDetail.WhatsNew -> WhatsNewHome
         }
 
 /**

@@ -66,6 +66,9 @@ fun SettingsScreen(
     onDeveloperToolsClick: () -> Unit,
     onDiagnosticLogsClick: () -> Unit,
     onNavigateBack: () -> Unit,
+    onWhatsNewClick: () -> Unit = {},
+    /** Shows the New tag on What's new from when the sheet appeared until the history is opened. */
+    whatsNewBadgePending: Boolean = false,
     onServersClick: () -> Unit,
     onAppearanceClick: () -> Unit,
     onSendFeedbackClick: () -> Unit = {},
@@ -455,6 +458,18 @@ fun SettingsScreen(
                 )
 
                 OpenCodeSectionHeader(title = stringResource(R.string.settings_section_about))
+
+                val whatsNewTitle = stringResource(R.string.whats_new_title)
+                OpenCodeListItem(
+                    title = whatsNewTitle,
+                    isNew = whatsNewBadgePending,
+                    selected = selectedDetail == SettingsDetail.WhatsNew,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Star, whatsNewTitle),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = onWhatsNewClick,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
 
                 val versionTitle = stringResource(R.string.settings_version)
                 OpenCodeListItem(
