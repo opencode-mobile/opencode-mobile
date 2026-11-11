@@ -706,16 +706,8 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             content: sheetContent,
             pinnedBottom: pinnedBottom,
             onContentHeightChange: { newHeight in
-                // The body measures at its intrinsic height, so a compact card
-                // shrinks with it too (Commands to the shorter MCP page).
-                if let next = OpenCodeBottomSheetLayoutMath.nextContentHeight(
-                    current: contentHeight,
-                    measured: newHeight,
-                    lockedScrollable: hasLockedScrollable,
-                    containerHeight: availableHeight
-                ) {
-                    contentHeight = next
-                }
+                cardMeasure.bodyHeight = newHeight
+                applyBodyMeasure()
             },
             onHeaderHeightChange: { headerHeight = $0 },
             onPinnedTopHeightChange: { pinnedTopHeight = $0 },
@@ -744,6 +736,10 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             updatePresentationMode()
         }
         .onChange(of: availableHeight) { _, _ in
+            // A body measured before the overlay had a size was ignored, and
+            // fixed-height rows never measure again: apply it now, or a long
+            // list stays a compact card taller than the screen that cannot scroll.
+            applyBodyMeasure()
             updatePresentationMode()
         }
         .onChange(of: height) { _, newHeight in
@@ -758,6 +754,22 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
                 hasLockedScrollable = false
                 mode = .compact
             }
+            // The body may not measure again at the same size.
+            applyBodyMeasure()
+        }
+    }
+
+    /// Takes the body's last measure as its content height when it counts.
+    /// The body measures at its intrinsic height, so a compact card shrinks
+    /// with it too (Commands to the shorter MCP page).
+    private func applyBodyMeasure() {
+        if let next = OpenCodeBottomSheetLayoutMath.nextContentHeight(
+            current: contentHeight,
+            measured: cardMeasure.bodyHeight,
+            lockedScrollable: hasLockedScrollable,
+            containerHeight: availableHeight
+        ) {
+            contentHeight = next
         }
     }
 
@@ -944,9 +956,11 @@ final class OpenCodeBottomSheetPresentation {
     }
 }
 
-/// Last laid-out card height, kept outside SwiftUI observation.
+/// Last laid-out card and body heights, kept outside SwiftUI observation.
 private final class BottomSheetCardMeasure {
     var height: CGFloat = 0
+    /// The body's last measure, including one taken before the overlay had a size.
+    var bodyHeight: CGFloat = 0
 }
 
 /// Window-level bottom sheet driven by `isPresented`.
