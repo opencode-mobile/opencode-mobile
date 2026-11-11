@@ -350,7 +350,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         let metadata = uploaded.isEmpty ? nil : V2PromptMetadataDTO(
             attachments: uploaded.compactMap { attachment in
                 attachment.uploadedServerPath.map {
-                    V2PromptUploadedAttachmentDTO(name: attachment.filename, mime: attachment.mime, path: $0)
+                    PromptAttachment(name: attachment.filename, mime: attachment.mime, path: $0)
                 }
             }
         )

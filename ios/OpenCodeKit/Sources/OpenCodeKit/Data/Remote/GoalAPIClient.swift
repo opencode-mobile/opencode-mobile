@@ -23,17 +23,22 @@ public nonisolated struct GoalAPIClient: Sendable {
         self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
-    /// The raw `{"output": Goal.State | null}` body of `get`.
-    public func get(sessionID: String, directory: String) async throws -> Data {
+    /// The raw `{"output": Goal.State | null}` body of `get`. The goal lives in the server's store,
+    /// not in the session. A `+` in the folder is sent as `%2B`.
+    public func get(sessionID: String, directory: String?) async throws -> Data {
         guard let connection = connectionProvider() else { throw GoalAPIError.noActiveConnection }
-        var request = connection.authorizedRequest(
-            path: "api/rpc/\(Self.rpcID)/get",
-            method: "POST",
-            locationDirectory: directory
-        )
+        let location = directory.flatMap { $0.isEmpty ? nil : [URLQueryItem(name: "location[directory]", value: $0)] } ?? []
+        var request = connection.authorizedRequest(path: "api/rpc/\(Self.rpcID)/get", method: "POST")
+            .appendingQueryItems(location)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["input": ["sessionID": sessionID]])
         return try await data(for: request)
+    }
+
+    /// The session's goal from `get`, or nil when it has none. A body that isn't
+    /// `{"output": Goal.State | null}` throws `DecodingError`.
+    public func goal(sessionID: String, directory: String?) async throws -> GoalStateV2? {
+        try JSONDecoder().decode(GoalRPCOutputDTO.self, from: try await get(sessionID: sessionID, directory: directory)).output
     }
 
     private func data(for request: URLRequest) async throws -> Data {
@@ -55,5 +60,14 @@ public nonisolated struct GoalAPIClient: Sendable {
             throw GoalAPIError.httpStatus(http.statusCode, String(data: data, encoding: .utf8))
         }
         return data
+    }
+}
+
+/// The `{"output": Goal.State | null}` body of the goal plugin's `get`.
+public nonisolated struct GoalRPCOutputDTO: Decodable, Sendable {
+    public let output: GoalStateV2?
+
+    public init(output: GoalStateV2?) {
+        self.output = output
     }
 }

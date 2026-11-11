@@ -1,21 +1,15 @@
 import Foundation
 
-// OpenCode v2 session data that a phone reads to follow one session live: the session with its
-// location, model and busy time, its pending approvals and questions, and its inbox. Decoding is
-// lenient: unknown fields are ignored and optional ones may be missing.
+// Hex Code's read models of OpenCode v2 session data, for following one session live: the session
+// with its location, model and busy time, its pending approvals and questions, its inbox and goal.
+// `SessionStateAPIClient` reads them through the same routes OpenCode Mobile uses, and Hex Code
+// also decodes some of them from live events. They are kept apart from OpenCode Mobile's DTOs
+// (`V2SessionDTO`, `V2PermissionRequestDTO`, `V2FormInfoDTO`, `V2InboxItemDTO`) on purpose:
+// decoding is lenient (unknown fields are ignored, optional ones may be missing, a bad option or
+// file is skipped), where OpenCode Mobile's DTOs reject a payload its domain adapters can't map.
 
-/// A session's model and reasoning level (`Model.Ref`).
-public nonisolated struct SessionModelRefV2: Codable, Sendable, Equatable {
-    public var providerID: String
-    public var id: String
-    public var variant: String?
-
-    public init(providerID: String, id: String, variant: String? = nil) {
-        self.providerID = providerID
-        self.id = id
-        self.variant = variant
-    }
-}
+/// A session's model and reasoning level (`Model.Ref`): the same wire shape as a prompt's model.
+public typealias SessionModelRefV2 = V2PromptModelRefDTO
 
 /// `Session.Info`, with the fields the live view needs. Times are epoch milliseconds.
 public nonisolated struct SessionInfoV2: Decodable, Sendable, Equatable {
@@ -307,21 +301,22 @@ public nonisolated struct PendingFormV2: Decodable, Sendable, Equatable {
 
 /// One field's answer in `POST /api/session/{id}/form/{form}/reply`: a string for a single choice or
 /// free text, a string array for a multiselect.
-public nonisolated enum FormAnswerV2: Encodable, Sendable, Equatable {
+public nonisolated enum FormAnswerV2: Sendable, Equatable {
     case text(String)
     case choices([String])
 
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
+    /// The answer as it goes in the reply's `answer` object.
+    public var jsonValue: JSONValueDTO {
         switch self {
-        case let .text(text): try container.encode(text)
-        case let .choices(choices): try container.encode(choices)
+        case let .text(text): .string(text)
+        case let .choices(choices): .array(choices.map(JSONValueDTO.string))
         }
     }
 }
 
-/// A shell the agent started (`GET /api/shell`, `shell.created`).
-public nonisolated struct ShellInfoV2: Decodable, Sendable, Equatable {
+/// A shell the agent started (`GET /api/shell`, `shell.created`), from OpenCode Mobile's
+/// `ShellInfoDTO`.
+public nonisolated struct ShellInfoV2: Sendable, Equatable {
     public var id: String
     /// `running`, `exited`, `killed`, …
     public var status: String?
@@ -339,17 +334,16 @@ public nonisolated struct ShellInfoV2: Decodable, Sendable, Equatable {
         self.startedMs = startedMs
     }
 
-    private enum CodingKeys: String, CodingKey { case id, status, command, metadata, time }
-    private nonisolated struct Metadata: Decodable { let sessionID: String? }
-    private nonisolated struct Time: Decodable { let started: Double? }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(String.self, forKey: .id)
-        status = try? container.decodeIfPresent(String.self, forKey: .status)
-        command = try? container.decodeIfPresent(String.self, forKey: .command)
-        sessionID = (try? container.decodeIfPresent(Metadata.self, forKey: .metadata))?.sessionID
-        startedMs = (try? container.decodeIfPresent(Time.self, forKey: .time))?.started.map { Int64($0) }
+    public init(_ dto: ShellInfoDTO) {
+        id = dto.id
+        status = dto.status
+        command = dto.command
+        if case let .string(sessionID)? = dto.metadata?["sessionID"] {
+            self.sessionID = sessionID
+        } else {
+            sessionID = nil
+        }
+        startedMs = dto.time?.started.map { Int64($0) }
     }
 }
 
@@ -431,7 +425,7 @@ public nonisolated struct InboxMetadataV2: Decodable, Sendable, Equatable {
     }
 }
 
-/// A session's goal (`/goal`), as `POST /api/rpc/opencode.goal/get` and the
+/// A session's goal (`/goal`), as `POST /api/rpc/opencode.goal/get` (`GoalAPIClient`) and the
 /// `rpc.opencode.goal.changed` event give it. See `m5-proposal.md`.
 public nonisolated struct GoalStateV2: Decodable, Sendable, Equatable {
     public var id: String
@@ -491,8 +485,9 @@ public nonisolated struct InboxFileV2: Decodable, Sendable, Equatable {
     }
 }
 
-/// An uploaded file named in a prompt's `metadata.attachments`: `{name, mime, path}`, as OpenCode's
-/// own app and OpenCode Mobile write it. `path` is where the server holds the bytes.
+/// An uploaded file named in a prompt's `metadata.attachments` (`V2PromptMetadataDTO`): `{name,
+/// mime, path}`, as OpenCode's own app and OpenCode Mobile write it. `path` is where the server
+/// holds the bytes.
 public nonisolated struct PromptAttachment: Codable, Sendable, Equatable {
     public var name: String
     public var mime: String

@@ -102,14 +102,15 @@ public nonisolated struct V2RunCommandRequestDTO: Encodable, Sendable {
     public let text: String
     public let files: [V2PromptFileDTO]?
     public let skills: [V2PromptSkillDTO]?
-    public let delivery: String
+    /// Nil leaves it out, so the command's own default applies.
+    public let delivery: String?
 
     public init(
         name: String,
         text: String,
         files: [V2PromptFileDTO]? = nil,
         skills: [V2PromptSkillDTO]? = nil,
-        delivery: String = "steer"
+        delivery: String? = "steer"
     ) {
         self.name = name
         self.text = text
@@ -132,6 +133,6 @@ public nonisolated struct V2RunCommandRequestDTO: Encodable, Sendable {
         try container.encode(text, forKey: .text)
         try container.encodeIfPresent(files, forKey: .files)
         try container.encodeIfPresent(skills, forKey: .skills)
-        try container.encode(delivery, forKey: .delivery)
+        try container.encodeIfPresent(delivery, forKey: .delivery)
     }
 }

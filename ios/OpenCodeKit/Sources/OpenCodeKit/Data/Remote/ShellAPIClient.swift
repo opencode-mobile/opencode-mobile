@@ -26,9 +26,13 @@ public nonisolated struct ShellAPIClient: Sendable {
         self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
-    /// Running shells of `directory` (exited ones are not listed).
+    /// Running shells of `directory` (exited ones are not listed). The server compares the folder
+    /// as an exact string, so a `+` in it is sent as `%2B`.
     public func list(directory: String) async throws -> [ShellInfoDTO] {
-        let data = try await data(for: try request(path: "api/shell", directory: directory))
+        guard let connection = connectionProvider() else { throw ShellAPIError.noActiveConnection }
+        let request = connection.authorizedRequest(path: "api/shell")
+            .appendingQueryItems(directory.isEmpty ? [] : [URLQueryItem(name: "location[directory]", value: directory)])
+        let data = try await data(for: request)
         return try decoder.decode(APIListEnvelope<ShellInfoDTO>.self, from: data).data
     }
 

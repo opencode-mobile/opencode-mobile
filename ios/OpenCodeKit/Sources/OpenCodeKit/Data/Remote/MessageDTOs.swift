@@ -516,27 +516,19 @@ public nonisolated struct AgentPartSourceDTO: Codable, Sendable, Equatable {
     }
 }
 
+/// A prompt's `metadata`, kept with the message for clients to read back. Uploaded files are
+/// named in `attachments` (their paths are also in the text, for the agent); OpenCode's desktop
+/// app shows them as chips when `displayText` and `comments` are both present. A file-backed body
+/// (`PromptJSONBodyWriter`) carries `attachments` only.
 public nonisolated struct V2PromptMetadataDTO: Codable, Sendable, Equatable {
-    public let attachments: [V2PromptUploadedAttachmentDTO]
+    public let displayText: String?
+    public let comments: [JSONValueDTO]?
+    public let attachments: [PromptAttachment]
 
-    public init(attachments: [V2PromptUploadedAttachmentDTO]) {
+    public init(displayText: String? = nil, comments: [JSONValueDTO]? = nil, attachments: [PromptAttachment]) {
+        self.displayText = displayText
+        self.comments = comments
         self.attachments = attachments
-    }
-}
-
-public nonisolated struct V2PromptUploadedAttachmentDTO: Codable, Sendable, Equatable {
-    public let name: String
-    public let mime: String
-    public let path: String
-
-    public init(
-        name: String,
-        mime: String,
-        path: String
-    ) {
-        self.name = name
-        self.mime = mime
-        self.path = path
     }
 }
 
@@ -626,7 +618,7 @@ public nonisolated struct V2PromptSkillDTO: Codable, Sendable, Equatable {
     }
 }
 
-public nonisolated struct V2PromptFileDTO: Codable, Sendable {
+public nonisolated struct V2PromptFileDTO: Codable, Sendable, Equatable {
     public let uri: String
     public let name: String?
     /// Used to build a data URL from a local file. Not a wire field.
@@ -713,7 +705,7 @@ public nonisolated struct V2SwitchModelRequestDTO: Codable, Sendable {
     }
 }
 
-public nonisolated struct V2PromptModelRefDTO: Codable, Sendable {
+public nonisolated struct V2PromptModelRefDTO: Codable, Sendable, Equatable {
     public let id: String
     public let providerID: String
     public let variant: String?
@@ -726,6 +718,10 @@ public nonisolated struct V2PromptModelRefDTO: Codable, Sendable {
         self.id = id
         self.providerID = providerID
         self.variant = variant
+    }
+
+    public init(providerID: String, id: String, variant: String? = nil) {
+        self.init(id: id, providerID: providerID, variant: variant)
     }
 }
 

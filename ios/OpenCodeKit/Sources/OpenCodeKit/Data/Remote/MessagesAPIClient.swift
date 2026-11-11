@@ -129,19 +129,7 @@ public nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         var cursor: String?
         var pages = 0
         repeat {
-            // Cursor tokens already encode order. Sending `order` with `cursor`
-            // returns InvalidCursorError 400 on live v2.
-            var query: [String: String] = [:]
-            if let cursor {
-                query["cursor"] = cursor
-            } else {
-                query["order"] = "asc"
-            }
-            let envelope: APIListEnvelope<V2SessionMessageDTO> = try await get(
-                path: "api/session/\(sessionID)/message",
-                directory: nil,
-                query: query
-            )
+            let envelope = try await messagePageV2(V2SessionMessageDTO.self, sessionID: sessionID, order: "asc", cursor: cursor)
             messages.append(contentsOf: envelope.data)
             let next = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
             if next == cursor { break }
@@ -158,23 +146,43 @@ public nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         order: String?,
         cursor: String?
     ) async throws -> (messages: [V2SessionMessageDTO], nextCursor: String?) {
-        var query: [String: String] = ["limit": String(limit)]
-        if let cursor, !cursor.isEmpty {
-            query["cursor"] = cursor
-        } else if let order, !order.isEmpty {
-            query["order"] = order
-        }
-        let envelope: APIListEnvelope<V2SessionMessageDTO> = try await get(
-            path: "api/session/\(sessionID)/message",
-            directory: nil,
-            query: query
-        )
+        let envelope = try await messagePageV2(V2SessionMessageDTO.self, sessionID: sessionID, limit: limit, order: order, cursor: cursor)
         let next = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
         return (envelope.data, next)
     }
 
+    /// One page of `GET /api/session/{id}/message`, read as `Message`. Cursor tokens already encode
+    /// the order, so `order` is sent only without a cursor: both together return InvalidCursorError
+    /// 400 on live v2. `type` keeps one kind of message, such as `assistant`.
+    public func messagePageV2<Message: Decodable & Sendable>(
+        _: Message.Type,
+        sessionID: String,
+        type: String? = nil,
+        limit: Int? = nil,
+        order: String? = nil,
+        cursor: String? = nil
+    ) async throws -> APIListEnvelope<Message> {
+        var query: [URLQueryItem] = []
+        if let type { query.append(URLQueryItem(name: "type", value: type)) }
+        if let cursor, !cursor.isEmpty {
+            query.append(URLQueryItem(name: "cursor", value: cursor))
+        } else if let order, !order.isEmpty {
+            query.append(URLQueryItem(name: "order", value: order))
+        }
+        if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
+        let request = try requireConnection()
+            .authorizedRequest(path: "api/session/\(sessionID)/message")
+            .appendingQueryItems(query)
+        return try decoder.decode(APIListEnvelope<Message>.self, from: try await data(for: request))
+    }
+
     public func listInboxV2(sessionID: String) async throws -> [V2InboxItemDTO] {
-        let envelope: APIListEnvelope<V2InboxItemDTO> = try await get(
+        try await listInboxV2(sessionID: sessionID, as: V2InboxItemDTO.self)
+    }
+
+    /// `GET /api/session/{id}/inbox`: messages not delivered yet, in order, read as `Item`.
+    public func listInboxV2<Item: Decodable & Sendable>(sessionID: String, as _: Item.Type) async throws -> [Item] {
+        let envelope: APIListEnvelope<Item> = try await get(
             path: "api/session/\(sessionID)/inbox",
             directory: nil
         )
@@ -212,7 +220,19 @@ public nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         attachments: [Attachment],
         directory: String? = nil
     ) async throws {
-        try await postPrompt(path: "api/session/\(sessionID)/prompt", body: body, attachments: attachments, directory: nil)
+        _ = try await postPrompt(path: "api/session/\(sessionID)/prompt", body: body, attachments: attachments, directory: nil)
+    }
+
+    /// `POST /api/session/{id}/prompt`, with the answer's `data` read as `Reply`: the inbox item
+    /// the prompt became.
+    public func sendPromptV2<Reply: Decodable & Sendable>(
+        sessionID: String,
+        body: V2PromptRequestDTO,
+        attachments: [Attachment] = [],
+        as _: Reply.Type
+    ) async throws -> Reply {
+        let data = try await postPrompt(path: "api/session/\(sessionID)/prompt", body: body, attachments: attachments, directory: nil)
+        return try decoder.decode(APIDataEnvelope<Reply>.self, from: data).data
     }
 
     public func switchSessionAgent(sessionID: String, agent: String, directory: String? = nil) async throws {
@@ -244,10 +264,10 @@ public nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         _ = try await sendBody(request, body: try encoder.encode(body))
     }
 
-    private func postPrompt(path: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws {
+    private func postPrompt(path: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws -> Data {
         var request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        _ = try await sendPromptBody(request, encoded: {
+        return try await sendPromptBody(request, encoded: {
             if attachments.contains(where: \.usesFileBackedBody) || body.fileMentions?.isEmpty == false {
                 try PromptJSONBodyWriter.writeV2Prompt(body, attachments: attachments)
             } else {

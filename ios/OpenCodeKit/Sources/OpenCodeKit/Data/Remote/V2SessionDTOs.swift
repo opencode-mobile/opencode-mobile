@@ -102,6 +102,25 @@ public nonisolated struct V2SessionGenerateRequestDTO: Encodable, Sendable {
     }
 }
 
+/// Body of `PUT /api/experimental/session/{id}/instructions/entries/{key}`.
+public nonisolated struct V2InstructionEntryRequestDTO: Encodable, Sendable {
+    public let value: String
+
+    public init(value: String) {
+        self.value = value
+    }
+}
+
+/// `data` of `POST /api/session/{id}/interrupt`.
+public nonisolated struct V2InterruptResultDTO: Decodable, Sendable {
+    /// True when a run was stopped, false when the session was already idle.
+    public let interrupted: Bool?
+
+    public init(interrupted: Bool?) {
+        self.interrupted = interrupted
+    }
+}
+
 public nonisolated struct V2SessionGenerateResponseDTO: Decodable, Sendable {
     public let text: String
 
@@ -114,17 +133,21 @@ public nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
     public let parentID: String?
     public let title: String?
     public let location: V2LocationDTO?
+    /// The new session's model and reasoning level.
+    public let model: V2PromptModelRefDTO?
 
-    public init(parentID: String? = nil, title: String? = nil, location: V2LocationDTO? = nil) {
+    public init(parentID: String? = nil, title: String? = nil, location: V2LocationDTO? = nil, model: V2PromptModelRefDTO? = nil) {
         self.parentID = parentID
         self.title = title
         self.location = location
+        self.model = model
     }
 
     private enum CodingKeys: String, CodingKey {
         case parentID
         case title
         case location
+        case model
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -132,6 +155,7 @@ public nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
         try container.encodeIfPresent(parentID, forKey: .parentID)
         try container.encodeIfPresent(title, forKey: .title)
         try container.encodeIfPresent(location, forKey: .location)
+        try container.encodeIfPresent(model, forKey: .model)
     }
 }
 

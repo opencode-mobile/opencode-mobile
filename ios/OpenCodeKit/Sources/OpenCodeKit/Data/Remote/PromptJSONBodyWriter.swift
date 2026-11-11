@@ -296,8 +296,10 @@ public nonisolated enum PromptJSONBodyWriter {
                 }
                 try writer.endArray()
             }
-            try writer.key("delivery")
-            try writer.writeString(body.delivery)
+            if let delivery = body.delivery {
+                try writer.key("delivery")
+                try writer.writeString(delivery)
+            }
             try writer.endObject()
         }
     }

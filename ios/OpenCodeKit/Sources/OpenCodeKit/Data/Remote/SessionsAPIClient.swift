@@ -141,7 +141,19 @@ public nonisolated struct SessionsAPIClient: Sendable {
     }
 
     public func interruptSessionV2(id: String) async throws -> Bool {
-        try await postWithoutBody(path: "api/session/\(id)/interrupt")
+        Self.boolOrTrue(try await interruptV2(id: id), decoder: decoder)
+    }
+
+    /// The interrupt's answer: true when a run was stopped, false when the session was already
+    /// idle. It answers at once; `session.execution.interrupted` follows.
+    public func interruptSessionResultV2(id: String) async throws -> Bool {
+        let data = try await interruptV2(id: id)
+        return try decoder.decode(APIDataEnvelope<V2InterruptResultDTO>.self, from: data).data.interrupted ?? false
+    }
+
+    /// `POST /api/session/{id}/interrupt`: stops the session's run.
+    private func interruptV2(id: String) async throws -> Data {
+        try await data(for: try requireConnection().authorizedRequest(path: "api/session/\(id)/interrupt", method: "POST"))
     }
 
     /// `POST /api/session/{id}/view` → 204. Moves the server-wide viewed watermark to `idle`.
@@ -271,8 +283,47 @@ public nonisolated struct SessionsAPIClient: Sendable {
         try await postEmpty(path: "api/session/\(sessionID)/form/\(formID)/reply", body: body)
     }
 
-    public func cancelFormV2(sessionID: String, formID: String) async throws -> Bool {
-        try await delete(path: "api/session/\(sessionID)/form/\(formID)")
+    /// `DELETE /api/session/{id}/form/{form}`, with `?message=` when there is one. With a message
+    /// the agent reads it and carries on; without one the run ends.
+    public func cancelFormV2(sessionID: String, formID: String, message: String? = nil) async throws -> Bool {
+        let request = try requireConnection()
+            .authorizedRequest(path: "api/session/\(sessionID)/form/\(formID)", method: "DELETE")
+            .appendingQueryItems(message.map { [URLQueryItem(name: "message", value: $0)] } ?? [])
+        return Self.boolOrTrue(try await data(for: request), decoder: decoder)
+    }
+
+    /// `GET /api/session/{id}/permission`: the session's own pending approvals (not its children's).
+    public func listSessionPermissionsV2(id: String) async throws -> [V2PermissionRequestDTO] {
+        try await listSessionPermissionsV2(id: id, as: V2PermissionRequestDTO.self)
+    }
+
+    /// The session's own pending approvals, read as `Request`.
+    public func listSessionPermissionsV2<Request: Decodable & Sendable>(id: String, as _: Request.Type) async throws -> [Request] {
+        let envelope: APIListEnvelope<Request> = try await get(path: "api/session/\(id)/permission")
+        return envelope.data
+    }
+
+    /// `GET /api/session/{id}/form`: the session's own pending questions.
+    public func listSessionFormsV2(id: String) async throws -> [V2FormInfoDTO] {
+        try await listSessionFormsV2(id: id, as: V2FormInfoDTO.self)
+    }
+
+    /// The session's own pending questions, read as `Form`.
+    public func listSessionFormsV2<Form: Decodable & Sendable>(id: String, as _: Form.Type) async throws -> [Form] {
+        let envelope: APIListEnvelope<Form> = try await get(path: "api/session/\(id)/form")
+        return envelope.data
+    }
+
+    /// `PUT /api/experimental/session/{id}/instructions/entries/{key}` with `{"value": text}`.
+    /// A repeat with the same value changes nothing on the server.
+    public func putInstructionEntryV2(sessionID: String, key: String, value: String) async throws {
+        var request = try requireConnection().authorizedRequest(
+            path: "api/experimental/session/\(sessionID)/instructions/entries/\(key)",
+            method: "PUT"
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(V2InstructionEntryRequestDTO(value: value))
+        _ = try await data(for: request)
     }
 
     // MARK: - V2 home / session CRUD
@@ -296,26 +347,14 @@ public nonisolated struct SessionsAPIClient: Sendable {
         var cursor: String?
         var pages = 0
         repeat {
-            var query: [String: String] = [:]
-            if let parentID {
-                query["parentID"] = parentID
-            }
-            if let projectID {
-                query["project"] = projectID
-            }
-            if let archived {
-                query["archived"] = archived ? "true" : "false"
-            }
-            if let search {
-                query["search"] = search
-            }
-            if let cursor {
-                query["cursor"] = cursor
-            }
-            let envelope: APIListEnvelope<V2SessionDTO> = try await get(
-                path: "api/session",
+            let envelope = try await sessionPageV2(
+                V2SessionDTO.self,
                 directory: projectID == nil ? directory : nil,
-                query: query
+                search: search,
+                parentID: parentID,
+                projectID: projectID,
+                archived: archived,
+                cursor: cursor
             )
             sessions.append(contentsOf: envelope.data)
             let next = envelope.cursor?.next.flatMap { $0.isEmpty ? nil : $0 }
@@ -335,32 +374,70 @@ public nonisolated struct SessionsAPIClient: Sendable {
         archived: Bool? = nil,
         limit: Int
     ) async throws -> [V2SessionDTO] {
-        var query = ["order": "desc", "limit": String(limit)]
-        if let parentID {
-            query["parentID"] = parentID
-        }
-        if let projectID {
-            query["project"] = projectID
-        }
-        if let archived {
-            query["archived"] = archived ? "true" : "false"
-        }
-        let envelope: APIListEnvelope<V2SessionDTO> = try await get(
-            path: "api/session",
+        try await sessionPageV2(
+            V2SessionDTO.self,
             directory: projectID == nil ? directory : nil,
-            query: query
-        )
-        return envelope.data
+            parentID: parentID,
+            projectID: projectID,
+            archived: archived,
+            order: "desc",
+            limit: limit
+        ).data
+    }
+
+    /// One page of `GET /api/session`, read as `Session`, with exactly the filters given (nil ones
+    /// are left out). `parentID` is a session id or `v2RootSessionsParentID`; `project` is sent
+    /// for `projectID`. The server sends a `next` cursor even on the last page.
+    public func sessionPageV2<Session: Decodable & Sendable>(
+        _: Session.Type,
+        directory: String? = nil,
+        search: String? = nil,
+        parentID: String? = nil,
+        projectID: String? = nil,
+        archived: Bool? = nil,
+        order: String? = nil,
+        limit: Int? = nil,
+        cursor: String? = nil
+    ) async throws -> APIListEnvelope<Session> {
+        var query: [URLQueryItem] = []
+        if let search { query.append(URLQueryItem(name: "search", value: search)) }
+        if let parentID { query.append(URLQueryItem(name: "parentID", value: parentID)) }
+        if let projectID { query.append(URLQueryItem(name: "project", value: projectID)) }
+        if let archived { query.append(URLQueryItem(name: "archived", value: archived ? "true" : "false")) }
+        if let order { query.append(URLQueryItem(name: "order", value: order)) }
+        if let limit { query.append(URLQueryItem(name: "limit", value: String(limit))) }
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        let request = try requireConnection()
+            .authorizedRequest(path: "api/session", directory: directory)
+            .appendingQueryItems(query)
+        return try await send(request)
     }
 
     /// A `parentID` creates a linked child at the parent's location, so no location is sent with it.
-    public func createSessionV2(directory: String? = nil, title: String? = nil, parentID: String? = nil) async throws -> V2SessionDTO {
-        let envelope: APIDataEnvelope<V2SessionDTO> = try await post(
+    public func createSessionV2(
+        directory: String? = nil,
+        title: String? = nil,
+        parentID: String? = nil,
+        model: V2PromptModelRefDTO? = nil
+    ) async throws -> V2SessionDTO {
+        try await createSessionV2(V2SessionDTO.self, directory: directory, title: title, parentID: parentID, model: model)
+    }
+
+    /// `POST /api/session`, with the new session read as `Session`. An empty title is left out.
+    public func createSessionV2<Session: Decodable & Sendable>(
+        _: Session.Type,
+        directory: String? = nil,
+        title: String? = nil,
+        parentID: String? = nil,
+        model: V2PromptModelRefDTO? = nil
+    ) async throws -> Session {
+        let envelope: APIDataEnvelope<Session> = try await post(
             path: "api/session",
             body: V2CreateSessionRequestDTO(
                 parentID: parentID,
                 title: title.flatMap { $0.isEmpty ? nil : $0 },
-                location: parentID == nil ? directory.map { V2LocationDTO(directory: $0) } : nil
+                location: parentID == nil ? directory.map { V2LocationDTO(directory: $0) } : nil,
+                model: model
             )
         )
         return envelope.data
@@ -372,7 +449,12 @@ public nonisolated struct SessionsAPIClient: Sendable {
     }
 
     public func getSessionV2(id: String) async throws -> V2SessionDTO {
-        let envelope: APIDataEnvelope<V2SessionDTO> = try await get(path: "api/session/\(id)")
+        try await getSessionV2(id: id, as: V2SessionDTO.self)
+    }
+
+    /// `GET /api/session/{id}`, read as `Session`.
+    public func getSessionV2<Session: Decodable & Sendable>(id: String, as _: Session.Type) async throws -> Session {
+        let envelope: APIDataEnvelope<Session> = try await get(path: "api/session/\(id)")
         return envelope.data
     }
 
@@ -402,12 +484,12 @@ public nonisolated struct SessionsAPIClient: Sendable {
 
     /// `POST /api/session/{id}/generate` → `{ data: { text } }`. Answers `prompt` from the session's
     /// context and model without adding a message; nothing streams. One model call can outlast the
-    /// default REST timeout, so this waits up to `sideQuestionTimeout`.
-    public func generateSessionTextV2(id: String, prompt: String) async throws -> String {
+    /// default REST timeout, so this waits up to `timeout` (`sideQuestionTimeout` unless given).
+    public func generateSessionTextV2(id: String, prompt: String, timeout: TimeInterval = Self.sideQuestionTimeout) async throws -> String {
         var request = try requireConnection().authorizedRequest(path: "api/session/\(id)/generate", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(V2SessionGenerateRequestDTO(prompt: prompt))
-        request.timeoutInterval = Self.sideQuestionTimeout
+        request.timeoutInterval = timeout
         let data = try await data(for: request)
         return try decoder.decode(APIDataEnvelope<V2SessionGenerateResponseDTO>.self, from: data).data.text
     }
@@ -476,6 +558,11 @@ public nonisolated struct SessionsAPIClient: Sendable {
     }
 
     private struct EmptyBody: Codable {}
+
+    /// A body that is a JSON boolean, else true (the call succeeded with no such body).
+    private static func boolOrTrue(_ data: Data, decoder: JSONDecoder) -> Bool {
+        (try? decoder.decode(Bool.self, from: data)) ?? true
+    }
     private static let maxV2SessionListPages = 500
 
     private func get<T: Decodable>(
