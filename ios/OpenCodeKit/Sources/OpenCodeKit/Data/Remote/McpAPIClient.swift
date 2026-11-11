@@ -1,17 +1,17 @@
 import Foundation
 
-nonisolated enum McpAPIError: Error {
+public nonisolated enum McpAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
 }
 
-nonisolated struct McpAPIClient: Sendable {
+public nonisolated struct McpAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
 
-    init(
+    public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         urlSession: URLSession? = nil
     ) {
@@ -19,11 +19,11 @@ nonisolated struct McpAPIClient: Sendable {
         self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
-    func listServers(directory: String? = nil) async throws -> [String: McpStatusDTO] {
+    public func listServers(directory: String? = nil) async throws -> [String: McpStatusDTO] {
         try await get(path: "mcp", directory: directory)
     }
 
-    func listServersV2(directory: String? = nil) async throws -> [V2McpServerDTO] {
+    public func listServersV2(directory: String? = nil) async throws -> [V2McpServerDTO] {
         let envelope: APIListEnvelope<V2McpServerDTO> = try await get(
             path: "api/mcp",
             locationDirectory: directory

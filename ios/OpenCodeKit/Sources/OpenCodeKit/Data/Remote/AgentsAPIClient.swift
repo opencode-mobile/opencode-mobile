@@ -1,17 +1,17 @@
 import Foundation
 
-nonisolated enum AgentsAPIError: Error {
+public nonisolated enum AgentsAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
 }
 
-nonisolated struct AgentsAPIClient: Sendable {
+public nonisolated struct AgentsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
 
-    init(
+    public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         urlSession: URLSession? = nil
     ) {
@@ -19,15 +19,15 @@ nonisolated struct AgentsAPIClient: Sendable {
         self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
-    func resolvedURLSession() -> URLSession {
+    public func resolvedURLSession() -> URLSession {
         resolveURLSession()
     }
 
-    func listAgents(directory: String? = nil) async throws -> [AgentDTO] {
+    public func listAgents(directory: String? = nil) async throws -> [AgentDTO] {
         try await get(path: "agent", directory: directory)
     }
 
-    func listAgentsV2(directory: String? = nil) async throws -> [V2AgentDTO] {
+    public func listAgentsV2(directory: String? = nil) async throws -> [V2AgentDTO] {
         let envelope: APIListEnvelope<V2AgentDTO> = try await get(
             path: "api/agent",
             locationDirectory: directory

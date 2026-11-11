@@ -1,18 +1,18 @@
 import Foundation
 
-nonisolated enum PtyAPIError: Error {
+public nonisolated enum PtyAPIError: Error {
     case invalidResponse
     case httpStatus(Int, String?)
     case noActiveConnection
 }
 
-nonisolated struct PtyAPIClient: Sendable {
+public nonisolated struct PtyAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(
+    public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         urlSession: URLSession? = nil
     ) {
@@ -20,11 +20,11 @@ nonisolated struct PtyAPIClient: Sendable {
         self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
-    func list(directory: String?) async throws -> [PtyDTO] {
+    public func list(directory: String?) async throws -> [PtyDTO] {
         try await get(path: "pty", directory: directory)
     }
 
-    func listV2(directory: String?) async throws -> [PtyDTO] {
+    public func listV2(directory: String?) async throws -> [PtyDTO] {
         let data = try await data(
             for: try requireConnection().authorizedRequest(
                 path: "api/pty",
@@ -34,11 +34,11 @@ nonisolated struct PtyAPIClient: Sendable {
         return try decodePtyList(data)
     }
 
-    func create(body: CreatePtyRequestDTO, directory: String) async throws -> PtyDTO {
+    public func create(body: CreatePtyRequestDTO, directory: String) async throws -> PtyDTO {
         try await send(path: "pty", method: "POST", body: body, directory: directory)
     }
 
-    func createV2(body: CreatePtyRequestDTO, directory: String) async throws -> PtyDTO {
+    public func createV2(body: CreatePtyRequestDTO, directory: String) async throws -> PtyDTO {
         let envelope: APIDataEnvelope<PtyDTO> = try await send(
             path: "api/pty",
             method: "POST",
@@ -48,11 +48,11 @@ nonisolated struct PtyAPIClient: Sendable {
         return envelope.data
     }
 
-    func get(id: String, directory: String) async throws -> PtyDTO {
+    public func get(id: String, directory: String) async throws -> PtyDTO {
         try await get(path: "pty/\(id)", directory: directory)
     }
 
-    func getV2(id: String, directory: String) async throws -> PtyDTO {
+    public func getV2(id: String, directory: String) async throws -> PtyDTO {
         let envelope: APIDataEnvelope<PtyDTO> = try await get(
             path: "api/pty/\(id)",
             locationDirectory: directory
@@ -60,11 +60,11 @@ nonisolated struct PtyAPIClient: Sendable {
         return envelope.data
     }
 
-    func update(id: String, body: UpdatePtyRequestDTO, directory: String) async throws -> PtyDTO {
+    public func update(id: String, body: UpdatePtyRequestDTO, directory: String) async throws -> PtyDTO {
         try await send(path: "pty/\(id)", method: "PUT", body: body, directory: directory)
     }
 
-    func updateV2(id: String, body: UpdatePtyRequestDTO, directory: String) async throws -> PtyDTO {
+    public func updateV2(id: String, body: UpdatePtyRequestDTO, directory: String) async throws -> PtyDTO {
         let envelope: APIDataEnvelope<PtyDTO> = try await send(
             path: "api/pty/\(id)",
             method: "PUT",
@@ -74,7 +74,7 @@ nonisolated struct PtyAPIClient: Sendable {
         return envelope.data
     }
 
-    func delete(id: String, directory: String) async throws {
+    public func delete(id: String, directory: String) async throws {
         _ = try await data(
             for: try requireConnection().authorizedRequest(
                 path: "pty/\(id)",
@@ -84,7 +84,7 @@ nonisolated struct PtyAPIClient: Sendable {
         )
     }
 
-    func deleteV2(id: String, directory: String) async throws {
+    public func deleteV2(id: String, directory: String) async throws {
         _ = try await data(
             for: try requireConnection().authorizedRequest(
                 path: "api/pty/\(id)",

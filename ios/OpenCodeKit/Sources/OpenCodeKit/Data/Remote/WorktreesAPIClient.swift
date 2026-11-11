@@ -1,12 +1,12 @@
 import Foundation
 
-nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
+public nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    init(
+    public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         urlSession: URLSession? = nil
     ) {
@@ -14,11 +14,11 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
-    func resolvedURLSession() -> URLSession {
+    public func resolvedURLSession() -> URLSession {
         resolveURLSession()
     }
 
-    func listV2(projectID: String) async throws -> [String] {
+    public func listV2(projectID: String) async throws -> [String] {
         guard let connection = connectionProvider() else { throw WorktreesAPIError.noActiveConnection }
         var request = connection.authorizedRequest(path: "api/worktree")
         if let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
@@ -34,7 +34,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         return listed.filter { $0.strategy?.isEmpty == false }.map(\.directory)
     }
 
-    func refreshV2(projectID: String) async throws {
+    public func refreshV2(projectID: String) async throws {
         guard let connection = connectionProvider() else { throw WorktreesAPIError.noActiveConnection }
         var request = connection.authorizedRequest(path: "api/worktree/refresh", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -42,7 +42,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         _ = try await data(for: request)
     }
 
-    func listV1(directory: String) async -> V1WorktreeHTTP {
+    public func listV1(directory: String) async -> V1WorktreeHTTP {
         guard let connection = connectionProvider() else { return .failed(-1) }
         let request = connection.authorizedRequest(path: "experimental/worktree", directory: directory)
         do {
@@ -56,7 +56,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         }
     }
 
-    func createV2(projectID: String, from: String, name: String?, branch: String?) async throws -> String {
+    public func createV2(projectID: String, from: String, name: String?, branch: String?) async throws -> String {
         guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
         var request = connection.authorizedRequest(path: "api/worktree", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -71,7 +71,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         }
     }
 
-    func createV1(directory: String, name: String?) async throws -> CreatedWorktree {
+    public func createV1(directory: String, name: String?) async throws -> CreatedWorktree {
         guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
         var request = connection.authorizedRequest(path: "experimental/worktree", method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -83,7 +83,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         return CreatedWorktree(directory: created.directory, name: created.name ?? "", branch: created.branch)
     }
 
-    func branchesV2(directory: String) async throws -> [String] {
+    public func branchesV2(directory: String) async throws -> [String] {
         guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
         let request = connection.authorizedRequest(path: "api/vcs/branch", locationDirectory: directory)
         let data = try await bodyData(for: request)
@@ -96,7 +96,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         throw WorktreeRemoteError.invalidResponse
     }
 
-    func removeV2(projectID: String, directory: String, force: Bool) async throws {
+    public func removeV2(projectID: String, directory: String, force: Bool) async throws {
         guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
         var request = connection.authorizedRequest(path: "api/worktree", method: "DELETE")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -104,7 +104,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         _ = try await bodyData(for: request)
     }
 
-    func removeV1(projectDirectory: String, directory: String) async throws {
+    public func removeV1(projectDirectory: String, directory: String) async throws {
         guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
         var request = connection.authorizedRequest(
             path: "experimental/worktree",

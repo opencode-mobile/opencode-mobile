@@ -1,13 +1,13 @@
 import Foundation
 
-final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLSessionWebSocketDelegate, @unchecked Sendable {
+public final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLSessionWebSocketDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var generation = 0
     private var session: URLSession?
     private var task: URLSessionWebSocketTask?
     private weak var listener: TerminalSocketListener?
 
-    func open(url: String, listener: TerminalSocketListener, authorization: String?) {
+    public func open(url: String, listener: TerminalSocketListener, authorization: String?) {
         let id: Int
         let previousTask: URLSessionWebSocketTask?
         let previousSession: URLSession?
@@ -48,14 +48,14 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
         receive(id: id, task: task)
     }
 
-    func sendText(_ text: String) {
+    public func sendText(_ text: String) {
         lock.lock()
         let current = task
         lock.unlock()
         current?.send(.string(text)) { _ in }
     }
 
-    func close() {
+    public func close() {
         lock.lock()
         generation += 1
         let current = task
@@ -67,7 +67,7 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
         currentSession?.invalidateAndCancel()
     }
 
-    func urlSession(
+    public func urlSession(
         _ session: URLSession,
         webSocketTask: URLSessionWebSocketTask,
         didOpenWithProtocol protocol: String?
@@ -80,7 +80,7 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
         notifyOpen(id: id)
     }
 
-    func urlSession(
+    public func urlSession(
         _ session: URLSession,
         webSocketTask: URLSessionWebSocketTask,
         didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
