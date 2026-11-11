@@ -2,10 +2,7 @@ package dev.opencode.mobile.ui.sessionchat.view
 
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -73,9 +70,6 @@ internal object SessionChatCornerSlotsLayout {
 
 private const val PillRevealMs = 260
 
-/** Animation label for tooling; not shown to users. */
-private const val PILL_MORPH_ANIMATION_LABEL = "sessionChatPillMorph"
-
 /**
  * Enters and leaves a bottom-row pill by animating its width (grow from zero, shrink to zero)
  * on top of the fade and scale, so the pills beside it move in step. Ease-out, no overshoot.
@@ -96,36 +90,6 @@ internal fun SessionChatPillReveal(
         content()
     }
 }
-
-/**
- * Switches a pill between forms by animating its width, so the pills beside it move in step.
- * The forms cross-fade inside the changing box; the shadow is not clipped. [state] is everything
- * that decides what [content] draws, so the outgoing form keeps its own look while it fades.
- */
-@Composable
-internal fun <T> SessionChatPillMorph(
-    state: T,
-    modifier: Modifier = Modifier,
-    content: @Composable (state: T) -> Unit,
-) {
-    AnimatedContent(
-        targetState = state,
-        modifier = modifier,
-        transitionSpec = {
-            (fadeIn(tween(PillRevealMs)) togetherWith fadeOut(tween(PillRevealMs / 2)))
-                .using(SizeTransform(clip = false) { _, _ -> tween(PillRevealMs, easing = FastOutSlowInEasing) })
-        },
-        label = PILL_MORPH_ANIMATION_LABEL,
-    ) { form ->
-        content(form)
-    }
-}
-
-/** The shape the primary activity pill is drawn in; the morph animates between these. */
-private data class ActivityPillForm(
-    val collapsed: Boolean,
-    val compact: Boolean,
-)
 
 /**
  * Bottom-left live activity slot: one pill, a "+N" button, and the stack "+N" springs up.
@@ -179,30 +143,29 @@ internal fun SessionChatActivitySlotView(
             horizontalArrangement = Arrangement.spacedBy(SessionChatCornerSlotsLayout.Spacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SessionChatPillMorph(
-                state = ActivityPillForm(collapsed = slot.collapsed, compact = slot.collapsed || slot.primaryCompact),
-            ) { form ->
-                if (form.collapsed) {
-                    SessionChatActivityPill(
-                        item = primary,
-                        compact = form.compact,
-                        badgeCount = slot.itemCount,
-                        accessibilityLabel = SessionChatActivityPillCopy.collapsedAccessibilityLabel(primary, slot.itemCount, stackOpen).resolve(),
-                        onClick = { onStackOpenChange(!stackOpen) },
-                        onClose = {},
-                    )
-                } else {
-                    SessionChatActivityPill(
-                        item = primary,
-                        compact = form.compact,
-                        onClick = {
-                            onStackOpenChange(false)
-                            onClick(primary)
-                        },
-                        onClose = { onClose(primary) },
-                    )
-                }
-            }
+            // One call site for both forms, so collapsing folds this pill's width instead of
+            // swapping in a second pill.
+            val collapsed = slot.collapsed
+            SessionChatActivityPill(
+                item = primary,
+                compact = collapsed || slot.primaryCompact,
+                badgeCount = if (collapsed) slot.itemCount else 0,
+                accessibilityLabel =
+                    if (collapsed) {
+                        SessionChatActivityPillCopy.collapsedAccessibilityLabel(primary, slot.itemCount, stackOpen)
+                    } else {
+                        SessionChatActivityPillCopy.accessibilityLabel(primary)
+                    }.resolve(),
+                onClick = {
+                    if (collapsed) {
+                        onStackOpenChange(!stackOpen)
+                    } else {
+                        onStackOpenChange(false)
+                        onClick(primary)
+                    }
+                },
+                onClose = { if (!collapsed) onClose(primary) },
+            )
             SessionChatPillReveal(visible = slot.showsOverflowButton) {
                 val more = slot.overflow.size
                 OpenCodeFloatingPill(
@@ -472,12 +435,11 @@ internal fun SessionChatSyncingSlotView(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    SessionChatPillMorph(state = compact, modifier = modifier) { compactNow ->
-        OpenCodeFloatingPill(
-            layout = OpenCodeFloatingPillLayout.Counter(label),
-            state = OpenCodeFloatingPillState.Live,
-            compact = compactNow,
-            accessibilityLabel = label,
-        )
-    }
+    OpenCodeFloatingPill(
+        layout = OpenCodeFloatingPillLayout.Counter(label),
+        state = OpenCodeFloatingPillState.Live,
+        compact = compact,
+        accessibilityLabel = label,
+        modifier = modifier,
+    )
 }
