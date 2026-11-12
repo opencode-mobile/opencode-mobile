@@ -14,6 +14,8 @@ on:
       - "shared/theme-presets/**"
       - "shared/syntax-presets/**"
       - "icons/**"
+      - "release-notes/**"
+      - "scripts/release-notes.mjs"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/string-checks.yml"
@@ -39,6 +41,10 @@ jobs:
       # Fails when a key exists on one platform but not the other (#886).
       - name: String key parity
         run: node scripts/check-string-keys.mjs
+
+      # The in-app What's new sheet reads this file on both platforms.
+      - name: Release notes
+        run: node scripts/release-notes.mjs validate
 
       # Warning only while existing text is extracted; becomes --strict once done (#886).
       - name: Hardcoded text (warning only)

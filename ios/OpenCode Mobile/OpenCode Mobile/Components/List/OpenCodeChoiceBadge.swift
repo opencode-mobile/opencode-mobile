@@ -3,7 +3,8 @@ import SwiftUI
 enum OpenCodeChoiceBadgeVariant: Hashable {
     /// Surface pill with rounded-rectangle stroke (gallery / dense controls).
     case standard
-    /// Capsule glass chrome aligned with home dock Filter Chip.
+    /// Capsule well for chips on floating glass chrome (composer), matching the
+    /// home dock controls.
     case glass
 }
 
@@ -103,26 +104,16 @@ struct OpenCodeChoiceBadge: View {
 private struct OpenCodeChoiceBadgeGlassChrome: ViewModifier {
     let selected: Bool
 
+    /// A well on the floating chrome, like the dock controls. Not its own
+    /// `.glassEffect`: glass on glass doubles the rims and turns into a heavy
+    /// slab with Tinted Liquid Glass.
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            if selected {
-                content
-                    .background(OpenCodeColors.textStrong.opacity(0.12), in: Capsule())
-                    // Non-interactive glass: `.interactive()` adds a loud lens press;
-                    // press feedback stays on OpenCodeSubtleControlPressStyle.
-                    .glassEffect(.regular, in: .capsule)
-            } else {
-                content
-                    .glassEffect(.clear, in: .capsule)
-            }
-        } else {
-            // Fill-only stand-in: outline-only pills read as low-contrast without glass.
-            content
-                .background(
-                    OpenCodeColors.textStrong.opacity(selected ? 0.14 : 0.08),
-                    in: Capsule()
-                )
-        }
+        content.background(
+            OpenCodeColors.textStrong.opacity(
+                selected ? OpenCodeSubtleWell.selectedOpacity : OpenCodeSubtleWell.opacity
+            ),
+            in: Capsule()
+        )
     }
 }
 

@@ -13,6 +13,9 @@ enum OpenCodeButtonVariant {
 enum OpenCodeButtonContrast {
     case high
     case low
+    /// Soft ink well with no hairline, for controls on floating glass chrome
+    /// (composer, docks). Matches `openCodeSubtleControlChrome`.
+    case subtle
     case accent
     case destructive
 }
@@ -330,7 +333,7 @@ private struct OpenCodeButtonStyle: ButtonStyle {
 
     @ViewBuilder
     private func lowContrastPressWash<S: Shape>(isPressed: Bool, in shape: S) -> some View {
-        if contrast == .low {
+        if contrast.isQuiet {
             shape
                 .fill(
                     OpenCodeColors.textStrong.opacity(
@@ -344,12 +347,12 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     private func pressOpacity(isPressed: Bool) -> CGFloat {
         // Low contrast is a near-match for the page. Fading it hides the press
         // in dark mode; the ink wash is the cue instead.
-        if contrast == .low { return 1 }
+        if contrast.isQuiet { return 1 }
         return isPressed ? 0.92 : 1
     }
 
     private func pressScale(isPressed: Bool) -> CGFloat {
-        if isPressed { return contrast == .low ? OpenCodeSubtlePress.scale : 0.98 }
+        if isPressed { return contrast.isQuiet ? OpenCodeSubtlePress.scale : 0.98 }
         if contrast == .accent, !enabled { return 0.96 }
         return 1
     }
@@ -359,7 +362,7 @@ private struct OpenCodeButtonStyle: ButtonStyle {
             return contrast == .accent ? OpenCodeColors.textWeak : OpenCodeColors.textBase
         }
         switch contrast {
-        case .low: return OpenCodeColors.textStrong
+        case .low, .subtle: return OpenCodeColors.textStrong
         case .accent: return OpenCodeColors.textOnBrandBase
         case .destructive: return OpenCodeColors.surfaceBase
         case .high: return OpenCodeColors.surfaceBase
@@ -367,11 +370,17 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     }
 
     private func backgroundColor(isPressed: Bool) -> Color {
+        if contrast == .subtle {
+            // Pressed state comes from the press wash overlay.
+            return OpenCodeColors.textStrong.opacity(
+                enabled ? OpenCodeSubtleWell.opacity : OpenCodeSubtleWell.opacity / 2
+            )
+        }
         if !enabled {
             return OpenCodeColors.surfaceRaisedBase
         }
         switch contrast {
-        case .low:
+        case .low, .subtle:
             // Hover emphasis only — a solid textBase flash is too high-contrast.
             return isPressed ? OpenCodeColors.surfaceRaisedBaseHover : OpenCodeColors.surfaceRaisedBase
         case .accent:
@@ -384,13 +393,14 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     }
 
     private func borderColor(isPressed: Bool) -> Color {
+        if contrast == .subtle { return .clear }
         if !enabled {
             return contrast == .accent
                 ? OpenCodeColors.interactive.opacity(0.10)
                 : OpenCodeColors.borderWeakerBase
         }
         switch contrast {
-        case .low:
+        case .low, .subtle:
             return isPressed ? OpenCodeColors.borderWeakBase : OpenCodeColors.borderWeakerBase
         case .accent:
             return OpenCodeColors.interactive
@@ -400,6 +410,11 @@ private struct OpenCodeButtonStyle: ButtonStyle {
             return OpenCodeColors.textStrong
         }
     }
+}
+
+private extension OpenCodeButtonContrast {
+    /// Low and subtle buttons press with an ink wash instead of a fade.
+    var isQuiet: Bool { self == .low || self == .subtle }
 }
 
 private extension OpenCodeButtonVariant {

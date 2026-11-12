@@ -183,18 +183,19 @@ enum OpenCodeBottomSheetLayoutMath {
 
     /// Body height to keep after a measure of a `.fitContent` card. A compact
     /// card follows its body both ways; once locked to the scrollable detent
-    /// it stops measuring. A measure taken before the overlay has a size
-    /// (`containerHeight` 0) wraps text at no width, so it is ignored rather
-    /// than locking a short body to the scrollable detent. `nil` keeps the
-    /// current value.
+    /// it stops measuring. A measure taken at no width (the pass before the
+    /// overlay has a size) wraps text far too tall, so it is ignored rather
+    /// than locking a short body to the scrollable detent; the body measures
+    /// again once it has a width. `nil` keeps the current value.
     static func nextContentHeight(
         current: CGFloat,
-        measured: CGFloat,
-        lockedScrollable: Bool,
-        containerHeight: CGFloat
+        measured: CGSize,
+        lockedScrollable: Bool
     ) -> CGFloat? {
-        guard containerHeight > 0, !lockedScrollable, measured > 0, measured != current else { return nil }
-        return measured
+        guard measured.width > 0, !lockedScrollable, measured.height > 0, measured.height != current else {
+            return nil
+        }
+        return measured.height
     }
     /// Tight bottom inset shared with Android, so a short picker (Model,
     /// Commands) does not grow a second empty band.
@@ -486,11 +487,15 @@ enum BottomSheetPresentationMode: Equatable {
     case compact
 }
 
-private struct BottomSheetContentHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+/// The body's measured size. The width is part of the value so a body that
+/// first measured at no width reports again once it has one, even when its
+/// height stays the same (single-line rows).
+private struct BottomSheetContentSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        if next.height > value.height { value = next }
     }
 }
 
@@ -705,14 +710,13 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             pinnedTop: pinnedTop,
             content: sheetContent,
             pinnedBottom: pinnedBottom,
-            onContentHeightChange: { newHeight in
+            onContentSizeChange: { size in
                 // The body measures at its intrinsic height, so a compact card
                 // shrinks with it too (Commands to the shorter MCP page).
                 if let next = OpenCodeBottomSheetLayoutMath.nextContentHeight(
                     current: contentHeight,
-                    measured: newHeight,
-                    lockedScrollable: hasLockedScrollable,
-                    containerHeight: availableHeight
+                    measured: size,
+                    lockedScrollable: hasLockedScrollable
                 ) {
                     contentHeight = next
                 }
@@ -767,7 +771,8 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             mode = .scrollable
             return
         }
-        guard contentHeight > 0 else { return }
+        // The limits need a sized container; a change of `availableHeight` reruns this.
+        guard contentHeight > 0, availableHeight > 0 else { return }
 
         // Keep the fixed scrollable fraction once a long list has been shown so
         // filtering or other body changes do not collapse the sheet.
@@ -1473,7 +1478,7 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
     @ViewBuilder let pinnedTop: () -> PinnedTop
     @ViewBuilder let content: () -> SheetContent
     @ViewBuilder let pinnedBottom: () -> PinnedBottom
-    let onContentHeightChange: (CGFloat) -> Void
+    let onContentSizeChange: (CGSize) -> Void
     let onHeaderHeightChange: (CGFloat) -> Void
     let onPinnedTopHeightChange: (CGFloat) -> Void
     let onPinnedBottomContentHeightChange: (CGFloat) -> Void
@@ -1595,12 +1600,12 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
         .fixedSize(horizontal: false, vertical: true)
         .background(
             GeometryReader { geo in
-                Color.clear.preference(key: BottomSheetContentHeightKey.self, value: geo.size.height)
+                Color.clear.preference(key: BottomSheetContentSizeKey.self, value: geo.size)
             }
         )
-        .onPreferenceChange(BottomSheetContentHeightKey.self) { height in
-            guard height > 0 else { return }
-            onContentHeightChange(height)
+        .onPreferenceChange(BottomSheetContentSizeKey.self) { size in
+            guard size.height > 0 else { return }
+            onContentSizeChange(size)
         }
         // Body drags move the card first and scroll the body once it is full.
         .background(BottomSheetBodyDragHost(drag: drag))
