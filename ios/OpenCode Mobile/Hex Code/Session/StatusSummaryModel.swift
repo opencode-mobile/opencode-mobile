@@ -240,6 +240,7 @@ final class StatusSummaryModel {
         let timeout = timeout
         let busy = isWorking()
         HexLog.summary.info("summary: request (busy: \(busy))")
+        StartupClock.mark("summary: requested")
         let reader = artifactReader
         let task = Task {
             let updated = try? await generator.sessionUpdated()
@@ -264,6 +265,7 @@ final class StatusSummaryModel {
             // No text while the agent works keeps the last card as it is (or, with none yet, says
             // the agent is working); anything else failed.
             let working = reply != nil && isWorking()
+            StartupClock.mark(working ? "summary: empty reply while working" : "summary: failed")
             failed = !working
             if working, summary == nil {
                 summary = .card(.working(on: now(), timeZone: timeZone))
@@ -288,6 +290,8 @@ final class StatusSummaryModel {
             parsed = .card(card)
         }
         summary = parsed
+        StartupClock.mark("summary: reply")
+        NextFrame.after { StartupClock.mark("summary: drawn") }
         showsEmpty = false
         updatedAt = now()
         self.basis = basis

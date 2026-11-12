@@ -283,7 +283,7 @@ struct HexMainView: View {
         // Nothing needs the network before home's first frame is on screen.
         .task {
             await NextFrame.wait()
-            StartupClock.mark("home shown")
+            StartupClock.mark(main.session.summary.summary == nil ? "home shown (no saved card)" : "home shown (saved card)")
             await main.start()
         }
         .onChange(of: main.session.sessionKnown, initial: true) { _, known in

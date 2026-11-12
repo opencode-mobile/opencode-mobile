@@ -86,11 +86,20 @@ enum StartupClock {
         guard marked.insert(what).inserted else { return }
         let ms = elapsed
         logger.info("startup: \(what, privacy: .public) at \(ms) ms")
-        #if DEBUG
+        guard printsMarks else { return }
         print("HEXPROBE startup: \(what) at \(ms) ms")
         fflush(stdout)
-        #endif
     }
+
+    /// Debug builds print every mark; `-HexCodeStartupProbe YES` prints them in a release build too,
+    /// for the cold-start probe.
+    private static let printsMarks: Bool = {
+        #if DEBUG
+        return true
+        #else
+        return UserDefaults.standard.bool(forKey: "HexCodeStartupProbe")
+        #endif
+    }()
 }
 
 /// Runs once, on the next screen refresh: by then the frame being built now is on screen.

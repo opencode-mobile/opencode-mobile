@@ -233,11 +233,13 @@ final class TodaySession {
         let directory = directory()
         // Today's saved card for this project shows at once, while setup finds the session.
         preopen(day: today, directory: directory)
+        StartupClock.mark("session: opening")
         if let serverCheck, await serverCheck() == .signedOut {
             summary.clear()
             setup = .signedOut
             return
         }
+        StartupClock.mark("session: server checked")
         switch await dailySetup.open(today: today, directory: directory, model: model()) {
         case .failed:
             setup = .failed(retrying: false)
@@ -246,6 +248,7 @@ final class TodaySession {
             setup = .signedOut
         case let .opened(session, _, showsNewDayNotice):
             // A goal still running on yesterday's session is left as it is; the notice says so.
+            StartupClock.mark("session: today's session found")
             let yesterdaysGoalRuns = showsNewDayNotice ? await yesterdaysGoalIsActive() : false
             await follow(session, day: today)
             if showsNewDayNotice { toasts.show(Self.newDayNotice(goalRunning: yesterdaysGoalRuns)) }
@@ -438,6 +441,7 @@ final class TodaySession {
 
     private func connected() async {
         streamUp = true
+        StartupClock.mark("stream: connected")
         guard let api, let rootID = live?.rootID else { return }
         // Today's goal is read on every (re)connect, beside the rest of the state.
         Task { await readGoal() }
@@ -447,6 +451,7 @@ final class TodaySession {
             await refreshSummary()
             return
         }
+        StartupClock.mark("stream: state read")
         live?.apply(snapshot)
         waitingThumbnails = waitingThumbnails.filter { id, _ in snapshot.inbox.contains { $0.id == id } }
         waitingFiles = waitingFiles.filter { id, _ in snapshot.inbox.contains { $0.id == id } }
@@ -464,15 +469,19 @@ final class TodaySession {
     /// `time.updated` as it is now.
     private func summaryOnReconnect(updated: Int64?) async {
         if isEmptySession {
+            StartupClock.mark("summary: empty session, empty card")
             summary.showEmpty(timeZone: timeZone)
         } else if live?.hasRun == false, busySince == nil {
             // Sent to, but its run hasn't started: nothing to summarise yet.
+            StartupClock.mark("summary: not run yet, working card")
             summary.showWorkingOnMessage()
         } else if busySince != nil {
             HexLog.summary.info("summary: busy, no request")
+            StartupClock.mark("summary: busy, no request")
             summary.showWorkingIfEmpty()
         } else if let updated, summary.isCurrent(updated: updated) {
             HexLog.summary.info("summary: nothing new, no request")
+            StartupClock.mark("summary: nothing new, saved card stays")
         } else {
             await summary.refresh()
         }
