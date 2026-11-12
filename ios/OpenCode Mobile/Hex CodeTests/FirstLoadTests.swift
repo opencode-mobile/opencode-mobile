@@ -4,36 +4,39 @@ import Testing
 @testable import Hex_Code
 
 // App plan, home "Cold start" and Details "Size and first load": the home shows in the first
-// frame, its card area from what's saved on the phone, and Details opens with Recent and Running
-// now already read.
+// frame, its card area from what's saved on the phone or else the date card, and Details opens with
+// Recent and Running now already read.
 
 // MARK: Cold start
 
 @MainActor
-struct ColdStartTests {
-    @Test func aSavedCardForTodaysSessionShowsInTheFirstFrame() {
-        var start = ColdStart(savedCard: true)
-        #expect(start.showsCard)
-        // Today's session found: nothing to fade in, it was already there.
-        let fades = start.sessionKnown()
-        #expect(!fades)
-        #expect(start.showsCard)
+struct CatchingUpTests {
+    @Test func whileSetupFindsTodaysSessionItSaysConnecting() {
+        #expect(CatchingUp.step(setup: .opening, isUpdating: false, failed: false) == .connecting)
     }
 
-    @Test func withoutOneTheCardAreaIsEmptyUntilTodaysSessionIsKnownThenFadesIn() {
-        var start = ColdStart(savedCard: false)
-        #expect(!start.showsCard)
-        let fades = start.sessionKnown()
-        #expect(fades)
-        #expect(start.showsCard)
+    @Test func onceFoundItSaysOpeningUntilTheSummaryIsAskedFor() {
+        #expect(CatchingUp.step(setup: .ready(sessionID: "ses_1"), isUpdating: false, failed: false) == .opening)
+        #expect(CatchingUp.step(setup: .ready(sessionID: "ses_1"), isUpdating: true, failed: false) == .summarising)
     }
 
-    @Test func onceShownItStaysShown() {
-        var start = ColdStart(savedCard: false)
-        _ = start.sessionKnown()
-        let fades = start.sessionKnown()
-        #expect(!fades)
-        #expect(start.showsCard)
+    @Test func aFailedFirstSummarySaysSoAndARetrySummarisesAgain() {
+        #expect(CatchingUp.step(setup: .ready(sessionID: "ses_1"), isUpdating: false, failed: true) == .failed)
+        #expect(CatchingUp.step(setup: .ready(sessionID: "ses_1"), isUpdating: true, failed: true) == .summarising)
+    }
+
+    @Test func setupFailuresShowTheirOwnViewsInstead() {
+        #expect(CatchingUp.step(setup: .failed(retrying: false), isUpdating: false, failed: false) == nil)
+        #expect(CatchingUp.step(setup: .signedOut, isUpdating: false, failed: false) == nil)
+    }
+
+    @Test func theDateCardIsTitledWithTodaysLongDate() {
+        let utc = TimeZone(identifier: "UTC")!
+        let date = Date(timeIntervalSince1970: 1_794_441_600) // Thursday 12 November 2026, 00:00 UTC
+        let card = StatusCard.catchingUp(.connecting, on: date, timeZone: utc)
+        #expect(card.title == "Thursday 12 November")
+        #expect(card.now == "Reaching your computer…")
+        #expect(card.next == nil)
     }
 }
 

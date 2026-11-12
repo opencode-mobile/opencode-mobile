@@ -44,7 +44,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -94,7 +93,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.hexcode.R
-import dev.opencode.hexcode.app.ColdStart
 import dev.opencode.hexcode.designsystem.FullSpeed
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexMotion
@@ -273,7 +271,7 @@ fun HomeScreen(
                         ) { empty ->
                             Column(Modifier.fillMaxSize().padding(horizontal = edge)) {
                                 if (empty) {
-                                    // The card fades in when it arrives after the splash went (Cold start).
+                                    // The date card until there's a card, which cross-fades in (Cold start).
                                     StatusArea(
                                         today,
                                         now,
@@ -286,7 +284,6 @@ fun HomeScreen(
                                         artifactsShown =
                                             artifacts.state != ArtifactsState.Off && artifacts.state != ArtifactsState.Unavailable,
                                         onOpenArtifact = { artifactPage = ArtifactPage(it.id, it.title) },
-                                        modifier = Modifier.fadeInOnArrival(ColdStart.cardStage(today)),
                                     )
                                 } else {
                                     // The whole draft block is centred between the top bar and the dock (Long drafts).
@@ -1515,27 +1512,4 @@ private fun Modifier.bleed(each: Dp): Modifier =
 private fun clock(ms: Long): String {
     val seconds = (ms.coerceAtLeast(0) / 1000).toInt()
     return "%d:%02d".format(seconds / 60, seconds % 60)
-}
-
-/**
- * Fades the content in over 0.2 s each time [stage] steps up after the first composition (instant with Reduce Motion);
- * what's there at the first composition, as when the splash goes, is just there.
- */
-@Composable
-private fun Modifier.fadeInOnArrival(stage: Int): Modifier {
-    val reduced = HexMotion.reduced
-    val fade = HexTheme.motion.fade<Float>()
-    val alpha = remember { Animatable(1f) }
-    var last by remember { mutableIntStateOf(stage) }
-    LaunchedEffect(stage) {
-        val up = stage > last
-        last = stage
-        if (up && !reduced) {
-            alpha.snapTo(0f)
-            alpha.animateTo(1f, fade)
-        } else {
-            alpha.snapTo(1f)
-        }
-    }
-    return graphicsLayer { this.alpha = alpha.value }
 }

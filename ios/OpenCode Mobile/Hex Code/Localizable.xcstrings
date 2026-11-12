@@ -3748,6 +3748,50 @@
         }
       }
     },
+    "home.summary.catching_up.connecting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reaching your computer…"
+          }
+        }
+      }
+    },
+    "home.summary.catching_up.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t summarise the last run."
+          }
+        }
+      }
+    },
+    "home.summary.catching_up.opening": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opening today’s session…"
+          }
+        }
+      }
+    },
+    "home.summary.catching_up.summarising": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Summarising the last run…"
+          }
+        }
+      }
+    },
     "home.summary.empty.next": {
       "extractionState": "manual",
       "localizations": {

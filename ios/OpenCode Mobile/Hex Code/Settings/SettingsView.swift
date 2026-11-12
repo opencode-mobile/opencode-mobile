@@ -224,8 +224,6 @@ struct HexMainView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Cold start: home in the first frame, its card area from what's saved on the phone.
-    @State private var coldStart: ColdStart
     /// Home has faded in over the launch logo.
     @State private var shown = false
 
@@ -234,7 +232,6 @@ struct HexMainView: View {
         self.voice = voice
         _appearance = appearance
         self.onForgetServer = onForgetServer
-        _coldStart = State(initialValue: ColdStart(savedCard: main.session.summary.summary != nil))
     }
 
     var body: some View {
@@ -246,8 +243,7 @@ struct HexMainView: View {
                 artifacts: main.samplePreset == nil ? main.artifacts : nil,
                 artifactBrowser: { main.artifactBrowser($0) },
                 onSettings: { main.openSettings() },
-                onPairAgain: { main.startPairAgain() },
-                cardShown: coldStart.showsCard
+                onPairAgain: { main.startPairAgain() }
             )
                 .hexPage()
                 .navigationDestination(for: HexMainModel.Route.self) { route in
@@ -285,15 +281,6 @@ struct HexMainView: View {
             await NextFrame.wait()
             StartupClock.mark(main.session.summary.summary == nil ? "home shown (no saved card)" : "home shown (saved card)")
             await main.start()
-        }
-        .onChange(of: main.session.sessionKnown, initial: true) { _, known in
-            guard known, !coldStart.showsCard else { return }
-            // No saved card for today's session: the card fades in once the session is known.
-            var next = coldStart
-            let fades = next.sessionKnown()
-            withAnimation(fades ? HexMotion.animation(HexMotion.fade, reduced: reduceMotion) : nil) {
-                coldStart = next
-            }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {

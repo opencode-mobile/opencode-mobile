@@ -16,7 +16,8 @@ import UIKit
 @Observable
 final class TodaySession {
     enum Setup: Equatable {
-        /// Finding or creating today's session. Silent: the status area and top bar state are empty.
+        /// Finding or creating today's session: the top bar says Connecting…, and the card area shows
+        /// a card saved for it, else the date card (`CatchingUp`).
         case opening
         /// "Couldn't open today's session" with Try again; `retrying` while Try again runs.
         case failed(retrying: Bool)

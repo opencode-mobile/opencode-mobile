@@ -11,12 +11,14 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * app-plan.md, Home › Cold start: the splash stays only while the app reads what's saved on the phone, never for the
- * network; the speech model loads about 1 s after the first frame, or at once on the first talk press.
+ * network; until there's a card, the date card says what the app is doing; the speech model loads about 1 s after the
+ * first frame, or at once on the first talk press.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ColdStartTest {
@@ -96,20 +98,44 @@ class ColdStartTest {
     }
 
     @Test
-    fun theStatusAreaShowsNothingWhileSetupRunsWithNoSavedCard() {
-        assertEquals(0, ColdStart.cardStage(TodayState(setup = SessionSetup.Opening, restored = true)))
+    fun theDateCardSaysItIsConnectingFromTheFirstFrame() {
+        assertEquals(CatchingUp.Connecting, ColdStart.catchingUp(TodayState()))
+        assertEquals(CatchingUp.Connecting, ColdStart.catchingUp(TodayState(setup = SessionSetup.Opening, restored = true)))
     }
 
     @Test
-    fun theStatusAreaStepsUpAsTheCardArrives() {
-        val opening = ColdStart.cardStage(TodayState(setup = SessionSetup.Opening))
-        val meta = ColdStart.cardStage(TodayState(setup = SessionSetup.Ready("ses_1"), summary = SummaryState(loading = true)))
-        val shown = ColdStart.cardStage(TodayState(setup = SessionSetup.Ready("ses_1"), summary = SummaryState(card)))
-        assertTrue(opening < meta)
-        assertTrue(meta < shown)
-        assertEquals(shown, ColdStart.cardStage(TodayState(setup = SessionSetup.Opening, summary = SummaryState(card))))
-        assertEquals(shown, ColdStart.cardStage(TodayState(setup = SessionSetup.Failed())))
-        assertEquals(shown, ColdStart.cardStage(TodayState(setup = SessionSetup.SignedOut)))
+    fun onceTodaysSessionIsFoundItSaysItIsOpeningIt() {
+        assertEquals(CatchingUp.Opening, ColdStart.catchingUp(TodayState(setup = SessionSetup.Ready("ses_1"))))
+    }
+
+    @Test
+    fun whileTheFirstSummaryIsOnItsWayItSaysSo() {
+        val today = TodayState(setup = SessionSetup.Ready("ses_1"), summary = SummaryState(loading = true))
+        assertEquals(CatchingUp.Summarising, ColdStart.catchingUp(today))
+        // A retry after a failure is running again.
+        assertEquals(CatchingUp.Summarising, ColdStart.catchingUp(today.copy(summary = SummaryState(loading = true, failed = true))))
+    }
+
+    @Test
+    fun aFailedFirstSummarySaysItCouldNotSummarise() {
+        val today = TodayState(setup = SessionSetup.Ready("ses_1"), summary = SummaryState(failed = true))
+        assertEquals(CatchingUp.Failed, ColdStart.catchingUp(today))
+    }
+
+    @Test
+    fun anyCardTakesTheDateCardsPlace() {
+        assertNull(ColdStart.catchingUp(TodayState(setup = SessionSetup.Opening, summary = SummaryState(card), restored = true)))
+        assertNull(ColdStart.catchingUp(TodayState(setup = SessionSetup.Ready("ses_1"), summary = SummaryState(card, loading = true))))
+        assertNull(ColdStart.catchingUp(TodayState(setup = SessionSetup.Ready("ses_1"), summary = SummaryState(card, failed = true))))
+        val working = StatusSummary.Working("Thursday 6 November")
+        assertNull(ColdStart.catchingUp(TodayState(setup = SessionSetup.Ready("ses_1"), summary = SummaryState(working))))
+    }
+
+    @Test
+    fun failuresKeepTheirOwnViews() {
+        assertNull(ColdStart.catchingUp(TodayState(setup = SessionSetup.Failed())))
+        assertNull(ColdStart.catchingUp(TodayState(setup = SessionSetup.Failed(retrying = true))))
+        assertNull(ColdStart.catchingUp(TodayState(setup = SessionSetup.SignedOut)))
     }
 
     @Test

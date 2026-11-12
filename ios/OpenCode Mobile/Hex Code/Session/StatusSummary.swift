@@ -91,6 +91,12 @@ struct StatusCard: Equatable, Sendable, Codable {
         )
     }
 
+    /// No card yet (app plan, "Cold start"): today's date over what the app is doing, so the card
+    /// area is never empty while today's session opens and its first summary is written.
+    static func catchingUp(_ step: CatchingUp, on date: Date, timeZone: TimeZone = .current) -> StatusCard {
+        StatusCard(title: longDate(date, timeZone: timeZone), now: step.text)
+    }
+
     /// "Thursday 5 November": weekday, day and month in English, in that order, on every phone.
     static func longDate(_ date: Date, timeZone: TimeZone) -> String {
         let formatter = DateFormatter()
@@ -99,6 +105,35 @@ struct StatusCard: Equatable, Sendable, Codable {
         formatter.timeZone = timeZone
         formatter.dateFormat = "EEEE d MMMM"
         return formatter.string(from: date)
+    }
+}
+
+/// What the date card says while there is no card yet: connecting, opening today's session, or
+/// writing (or failing to write) its first summary.
+enum CatchingUp: Equatable, Sendable {
+    case connecting
+    case opening
+    case summarising
+    case failed
+
+    /// Setup still finding today's session is Connecting; once found, the summary request on its way
+    /// is Summarising and a failed one Failed; in between (the state not read yet) it is Opening.
+    /// Nil where the card area shows something else: Couldn't open today's session, Signed out.
+    static func step(setup: TodaySession.Setup, isUpdating: Bool, failed: Bool) -> CatchingUp? {
+        switch setup {
+        case .opening: .connecting
+        case .ready: isUpdating ? .summarising : failed ? .failed : .opening
+        case .failed, .signedOut: nil
+        }
+    }
+
+    var text: String {
+        switch self {
+        case .connecting: String(localized: "home.summary.catching_up.connecting", defaultValue: "Reaching your computer…")
+        case .opening: String(localized: "home.summary.catching_up.opening", defaultValue: "Opening today’s session…")
+        case .summarising: String(localized: "home.summary.catching_up.summarising", defaultValue: "Summarising the last run…")
+        case .failed: String(localized: "home.summary.catching_up.failed", defaultValue: "Couldn’t summarise the last run.")
+        }
     }
 }
 

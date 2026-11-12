@@ -88,15 +88,33 @@ object ColdStart {
     fun settled(today: TodayState): Boolean = today.restored || today.setup != SessionSetup.Opening
 
     /**
-     * How much of the status area shows, for its fade: 0 nothing (setup runs with no saved card), 1 only the card's ↻
-     * line (today's session is open, its first summary on its way), 2 the card, its fallback, or a failure. Each step
-     * up fades in, so a card that arrives once today's session is known doesn't pop in.
+     * What the date card says while there's no card yet (app-plan.md, Home › Cold start): from the first frame, the
+     * status area shows today's date with a dimmed line of what the app is doing, until a card (saved, made or the
+     * screen's own) takes its place. Null once there's a card, or while setup failed or is signed out, which have their
+     * own views.
      */
-    fun cardStage(today: TodayState): Int =
+    fun catchingUp(today: TodayState): CatchingUp? =
         when {
-            today.summary.summary != null -> 2
-            today.setup is SessionSetup.Failed || today.setup == SessionSetup.SignedOut -> 2
-            today.setup is SessionSetup.Ready -> 1
-            else -> 0
+            today.summary.summary != null -> null
+            today.setup == SessionSetup.Opening -> CatchingUp.Connecting
+            today.setup !is SessionSetup.Ready -> null
+            today.summary.loading -> CatchingUp.Summarising
+            today.summary.failed -> CatchingUp.Failed
+            else -> CatchingUp.Opening
         }
+}
+
+/** The date card's Now, before the first card ([ColdStart.catchingUp]). */
+enum class CatchingUp {
+    /** Setup runs: "Reaching your computer…". */
+    Connecting,
+
+    /** Today's session is found, its state not read yet: "Opening today’s session…". */
+    Opening,
+
+    /** The first summary is on its way: "Summarising the last run…". */
+    Summarising,
+
+    /** The first summary request failed: "Couldn’t summarise the last run." (↻ says "Couldn't update" and retries). */
+    Failed,
 }

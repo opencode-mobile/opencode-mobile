@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.home
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -69,6 +70,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.R
+import dev.opencode.hexcode.app.CatchingUp
+import dev.opencode.hexcode.app.ColdStart
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexMotion
 import dev.opencode.hexcode.designsystem.HexTheme
@@ -101,6 +104,8 @@ import dev.opencode.hexcode.session.TodoItem
 import dev.opencode.hexcode.session.TodoLabel
 import dev.opencode.hexcode.session.TodoList
 import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.ZoneId
 
 /** The wall clock, read again every [periodMs]: for the turn's timer and ↻'s age. */
 @Composable
@@ -160,8 +165,10 @@ internal fun HomeTopBar(
 /**
  * The status area (`.fx-body.centred`): the status card, the fallback, or "Couldn't open today's session" with Try
  * again, and the Needs-you hint under the card, centred between the top bar and the dock whatever their length. While
- * setup runs it shows only the card saved for today's session, if there is one. Now's size steps down with its
- * effective length, and on down while the card doesn't fit ([NowSize]); then whole lines go from the end.
+ * setup runs it shows the card saved for today's session, if there is one; until there's a card, the date card
+ * ([DateCard]) says what the app is doing, from the first frame. A card that takes its place cross-fades in. Now's size
+ * steps down with its effective length, and on down while the card doesn't fit ([NowSize]); then whole lines go from the
+ * end.
  */
 @Composable
 internal fun StatusArea(
@@ -210,16 +217,46 @@ internal fun StatusArea(
         }
     val start = nowLines?.let { NowSize.forLines(it) } ?: NowSize.Display
     val count = nowLines?.size ?: 1
+    val catchingUp = ColdStart.catchingUp(today)
+    // What the date card said last, so it still says it while it fades out under the card that took its place.
+    val said = remember { mutableStateOf(catchingUp ?: CatchingUp.Connecting) }
+    if (catchingUp != null) said.value = catchingUp
+    Crossfade(catchingUp != null, modifier, HexTheme.motion.fade(), label = "date-card") { dateCard ->
+        if (dateCard) {
+            CentredFit(NowSize.Display, 1, Modifier) { size, lines ->
+                DateCard(said.value, now, work.phase, summary.label(now), vm::refreshSummary, size, lines)
+                today.pendingInput?.let { NeedsHint(it, onClick = { vm.openNeeds() }) }
+            }
+        } else {
+            Status(today, now, vm, start, count, links, work, serverName, onPairAgain)
+        }
+    }
+}
+
+/** [StatusArea] once there's a card, or setup failed or is signed out. */
+@Composable
+private fun Status(
+    today: TodayState,
+    now: Long,
+    vm: HomeViewModel,
+    start: NowSize,
+    count: Int,
+    links: Links,
+    work: Work,
+    serverName: String?,
+    onPairAgain: () -> Unit,
+) {
+    val summary = today.summary
     when (today.setup) {
         // The card saved for today's session shows while setup runs.
         SessionSetup.Opening ->
             if (summary.summary != null) {
-                CentredFit(start, count, modifier) { size, lines -> Summary(summary, now, vm, size, lines, links, work) }
+                CentredFit(start, count, Modifier) { size, lines -> Summary(summary, now, vm, size, lines, links, work) }
             }
-        is SessionSetup.Failed -> CentredFit(NowSize.Display, 1, modifier) { _, _ -> SetupFailed(today.setup.retrying, vm::retrySetup) }
+        is SessionSetup.Failed -> CentredFit(NowSize.Display, 1, Modifier) { _, _ -> SetupFailed(today.setup.retrying, vm::retrySetup) }
         // The sign-in expired or the password changed (app-plan.md, Settings and finish (M6) › Signed out).
         SessionSetup.SignedOut ->
-            CentredFit(NowSize.Display, 1, modifier) { _, _ ->
+            CentredFit(NowSize.Display, 1, Modifier) { _, _ ->
                 HexStatusFailure(
                     title = stringResource(R.string.server_signed_out, serverName ?: stringResource(R.string.server_this_computer)),
                     detail = summaryText(stringResource(R.string.server_signed_out_sub)),
@@ -229,7 +266,7 @@ internal fun StatusArea(
                 )
             }
         is SessionSetup.Ready ->
-            CentredFit(start, count, modifier) { size, lines ->
+            CentredFit(start, count, Modifier) { size, lines ->
                 Summary(summary, now, vm, size, lines, links, work)
                 today.pendingInput?.let { NeedsHint(it, onClick = { vm.openNeeds() }) }
             }
@@ -286,7 +323,7 @@ private fun CentredFit(
     }
 }
 
-/** The status card, its fallback or just ↻, with the card's age. */
+/** The status card or its fallback, with the card's age. */
 @Composable
 private fun Summary(
     summary: SummaryState,
@@ -347,8 +384,40 @@ private fun Summary(
                 links,
                 nextTappable = true,
             )
-        null -> Meta(label, vm::refreshSummary) {}
+        // No card: the date card shows instead ([DateCard]).
+        null -> Unit
     }
+}
+
+/**
+ * The date card (app-plan.md, Home › Cold start): the empty-session card's look while there's no card yet, today's
+ * long date over a one-line Now of what the app is doing ([catchingUp]), in `text2`. No Next, tiles, to-do row or
+ * Details (there may be no session to show yet); ↻ keeps its place, so the card is as tall as the real one's bottom
+ * line, and says "updating…" while the first summary is on its way. A new Now fades in over the last.
+ */
+@Composable
+private fun DateCard(
+    catchingUp: CatchingUp,
+    now: Long,
+    phase: CardPhase?,
+    label: RefreshLabel?,
+    onRefresh: () -> Unit,
+    size: NowSize,
+    nowLines: NowLines,
+) {
+    val date = Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate()
+    Label { Box(Modifier.semantics { heading() }) { CardLabel(StatusSummary.longDate(date), phase) } }
+    Crossfade(catchingUp, animationSpec = HexTheme.motion.fade(), label = "date-card-now") { said ->
+        val text =
+            when (said) {
+                CatchingUp.Connecting -> R.string.home_summary_catching_up_connecting
+                CatchingUp.Opening -> R.string.home_summary_catching_up_opening
+                CatchingUp.Summarising -> R.string.home_summary_catching_up_summarising
+                CatchingUp.Failed -> R.string.home_summary_catching_up_failed
+            }
+        NowText(listOf(NowLine(stringResource(text))), size, nowLines, color = HexTheme.colors.text2)
+    }
+    Meta(label, onRefresh) {}
 }
 
 /** The small label over the card, in an 18 dp line like the draft's, taller only when the user's text size needs it. */
@@ -442,13 +511,13 @@ private fun Card(
                 work.onReadYou,
                 youWith(work.youWith),
             )
+        // Next is what the user might say: a tap puts it into the draft, never sends it.
         next != null ->
             HexCodeText(
                 summaryTextIn(stringResource(R.string.home_summary_next, SUMMARY_MARK), next),
                 style = HexTheme.type.body,
                 color = colors.text2,
                 modifier =
-                    // Next is what the user might say: a tap puts it into the draft, never sends it.
                     if (nextTappable) {
                         Modifier
                             .clickable(role = Role.Button) { work.onNext(SummaryText.shown(next)) }
@@ -637,6 +706,8 @@ private fun NowText(
     size: NowSize,
     kept: NowLines,
     modifier: Modifier = Modifier,
+    /** The date card's Now is `text2`; a card's is `text1`. */
+    color: Color = HexTheme.colors.text1,
 ) {
     val type = HexTheme.type
     val style =
@@ -668,10 +739,10 @@ private fun NowText(
             if (line.bullet) {
                 Row {
                     Text("•", style = style, color = HexTheme.colors.text3, modifier = Modifier.width(em * 0.9f))
-                    HexCodeText(text, style = style, color = HexTheme.colors.text1, modifier = Modifier.weight(1f))
+                    HexCodeText(text, style = style, color = color, modifier = Modifier.weight(1f))
                 }
             } else {
-                HexCodeText(text, style = style, color = HexTheme.colors.text1, maxLines = rows, overflow = TextOverflow.Ellipsis)
+                HexCodeText(text, style = style, color = color, maxLines = rows, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -832,7 +903,12 @@ private fun Refresh(
             } else {
                 0f
             }
-        Icon(HexIcons.refresh, null, tint = if (pressed) colors.text1 else iconColor, modifier = Modifier.size(HexTheme.size.iconSmall).rotate(turn))
+        Icon(
+            HexIcons.refresh,
+            null,
+            tint = if (pressed) colors.text1 else iconColor,
+            modifier = Modifier.size(HexTheme.size.iconSmall).rotate(turn),
+        )
         if (pressed || band == 0f) {
             Text(text, style = HexTheme.type.mono, color = if (pressed) colors.text1 else wordColor, maxLines = 1)
         } else {

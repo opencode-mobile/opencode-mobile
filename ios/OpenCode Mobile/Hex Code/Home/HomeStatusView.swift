@@ -21,7 +21,7 @@ struct HomeStatusView: View {
         Group {
             switch session.setup {
             case .opening:
-                // Setup is still finding today's session: only a card saved for it shows.
+                // Setup is still finding today's session: a card saved for it, else the date card.
                 summary(hint: nil)
             case let .failed(retrying):
                 SetupFailedView(retrying: retrying) { Task { await session.retry() } }
@@ -38,10 +38,12 @@ struct HomeStatusView: View {
 
     @ViewBuilder
     private func summary(hint: PendingItem?) -> some View {
-        switch session.summary.summary {
-        case let summary?:
-            // Every reply is a card; an old saved fallback shows as a "Status" card.
-            let card = summary.asCard
+        // Every reply is a card; an old saved fallback shows as a "Status" card. With no card yet,
+        // the date card says what the app is doing. It is the same view, so the first card only
+        // changes its words, without the area going empty in between.
+        let saved = session.summary.summary?.asCard
+        if let card = saved ?? catchingUpStep.map({ StatusCard.catchingUp($0, on: .now) }) {
+            let catchingUp = saved == nil
             // Now steps down in size until the whole card (and the hint under it), as drawn, fits
             // between the top bar and the dock; then whole lines go from the end.
             ViewThatFits(in: .vertical) {
@@ -50,16 +52,17 @@ struct HomeStatusView: View {
                         StatusCardView(
                             card: card,
                             layout: layout,
-                            labelState: session.pendingInput != nil ? .waiting : session.busySince != nil ? .working : .plain,
-                            sentMessage: session.sentMessage,
+                            labelState: catchingUp ? .plain : session.pendingInput != nil ? .waiting : session.busySince != nil ? .working : .plain,
+                            catchingUp: catchingUp,
+                            sentMessage: catchingUp ? nil : session.sentMessage,
                             sentAttachments: session.sentAttachments,
                             sentIsGoal: session.sentIsGoal,
                             summary: session.summary,
                             computerHost: session.computerHost,
                             showsArtifact: artifactsShown,
                             onOpenArtifact: onOpenArtifact,
-                            hint: artifactHint,
-                            todo: TodoProgress(session.todos),
+                            hint: catchingUp ? nil : artifactHint,
+                            todo: catchingUp ? nil : TodoProgress(session.todos),
                             runningCount: session.runningCount,
                             onDetails: { session.openDetails() },
                             onOpenLink: onOpenLink,
@@ -70,18 +73,14 @@ struct HomeStatusView: View {
                     }
                 }
             }
-        case nil:
-            VStack(alignment: .leading, spacing: 14) {
-                // The first summary of a session that ran before: only ↻ "updating…".
-                if session.summary.isUpdating {
-                    HStack {
-                        Spacer(minLength: 0)
-                        SummaryRefreshButton(summary: session.summary)
-                    }
-                }
-                hintCard(hint)
-            }
+            .hexAnimation(HexMotion.ease(HexMotion.fade), value: catchingUpStep)
+        } else {
+            hintCard(hint)
         }
+    }
+
+    private var catchingUpStep: CatchingUp? {
+        CatchingUp.step(setup: session.setup, isUpdating: session.summary.isUpdating, failed: session.summary.failed)
     }
 
     /// The card's artifact shows unless artifacts are known to be off or not available.
@@ -120,6 +119,9 @@ struct StatusCardView: View {
     var layout = NowLayout(size: .display, lineCount: .max)
     /// The small label above Now: the title, or "Still working · …" / "Waiting for you · …".
     var labelState: CardLabelState = .plain
+    /// The date card before the first card (`StatusCard.catchingUp`): Now in `text2`, and no Details,
+    /// as there may be no session to show yet.
+    var catchingUp = false
     /// The message in flight: "You: “…”" in place of Next.
     var sentMessage: String?
     /// What went with it, by name.
@@ -145,7 +147,7 @@ struct StatusCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             CardLabel(title: card.title, state: labelState)
-            NowText(lines: layout.shown(card.lines), style: layout.size.style, rowLimit: layout.rowLimit)
+            NowText(lines: layout.shown(card.lines), style: layout.size.style, rowLimit: layout.rowLimit, color: catchingUp ? HexColor.text2 : HexColor.text1)
                 // Now is one element, its text as written (code without backticks).
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(verbatim: layout.shown(card.lines).map { InlineMarkdown.plain($0.text) }.joined(separator: "\n")))
@@ -191,7 +193,9 @@ struct StatusCardView: View {
             }
             // Details and ↻, at least 10 pt apart (the prototype's `.fx-meta`).
             HStack(spacing: 0) {
-                DetailsLink(runningCount: runningCount, action: onDetails)
+                if !catchingUp {
+                    DetailsLink(runningCount: runningCount, action: onDetails)
+                }
                 Spacer(minLength: 10)
                 SummaryRefreshButton(summary: summary)
             }
@@ -477,6 +481,7 @@ struct NowText: View {
     let style: HexTextStyle
     /// Rows of text each line may take (the last resort at very large text sizes).
     var rowLimit: Int?
+    var color: Color = HexColor.text1
 
     @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 100
 
@@ -490,7 +495,7 @@ struct NowText: View {
                     .padding(.top, gap(before: index) * em)
             }
         }
-        .foregroundStyle(HexColor.text1)
+        .foregroundStyle(color)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

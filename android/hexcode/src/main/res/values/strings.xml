@@ -137,6 +137,10 @@
     <string name="home_summary_you">You: “%1$s”</string>
     <string name="home_summary_next">Next: %1$s</string>
     <string name="home_summary_fallback_title">Status</string>
+    <string name="home_summary_catching_up_connecting">Reaching your computer…</string>
+    <string name="home_summary_catching_up_opening">Opening today’s session…</string>
+    <string name="home_summary_catching_up_summarising">Summarising the last run…</string>
+    <string name="home_summary_catching_up_failed">Couldn’t summarise the last run.</string>
     <string name="home_summary_updating">updating…</string>
     <string name="home_summary_updated_now">now</string>
     <string name="home_summary_updated_ago">%1$dm ago</string>

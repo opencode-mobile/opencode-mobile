@@ -15,9 +15,6 @@ struct HomeView: View {
     let onSettings: () -> Void
     /// Signed out's Pair again.
     var onPairAgain: () -> Void = {}
-    /// Cold start: today's session is known, or its saved card was on the phone (app plan, "Cold
-    /// start"); until then the card area stays empty.
-    var cardShown = true
 
     @State private var showsAttach = false
     /// The stop button's 3 s hold.
@@ -83,8 +80,6 @@ struct HomeView: View {
                         onPairAgain: onPairAgain,
                         onReadSent: { youSaid = home.sentReader(for: $0, attachments: session.sentAttachments) }
                     )
-                    .opacity(cardShown ? 1 : 0)
-                    .accessibilityHidden(!cardShown)
                     .transition(.opacity)
                 }
             }
