@@ -117,7 +117,7 @@ class ComputerTest {
 
     @Test
     fun theSameHostnameIsTheSameComputerWhateverItsAddresses() {
-        assertTrue(PairAgain.isSameComputer("Ivans-MacBook-Pro.local", "ivans-macbook-pro", listOf("http://a:1"), listOf("http://b:1")))
+        assertTrue(PairAgain.isSameComputer("Studio-Mac.local", "studio-mac", listOf("http://a:1"), listOf("http://b:1")))
         assertFalse(PairAgain.isSameComputer("mbp", "opencode-dev", listOf("http://a:1"), listOf("http://a:1")))
     }
 
