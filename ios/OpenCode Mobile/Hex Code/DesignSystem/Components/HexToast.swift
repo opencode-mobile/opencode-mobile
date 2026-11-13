@@ -117,22 +117,31 @@ final class HexToaster {
 
     @ObservationIgnored private var onAction: (() -> Void)?
     @ObservationIgnored private var timer: Task<Void, Never>?
+    /// Waits out a notice's duration; a test passes its own.
+    @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
 
-    init() {}
+    init(sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
+        self.sleep = sleep
+    }
 
     /// Shows `item`; `onAction` runs when its action button is tapped.
-    func show(_ item: HexToastItem, onAction: (() -> Void)? = nil) {
+    /// Returns the wait that hides it, for a test to await.
+    @discardableResult
+    func show(_ item: HexToastItem, onAction: (() -> Void)? = nil) -> Task<Void, Never> {
         current = item
         self.onAction = onAction
         timer?.cancel()
         let id = item.id
         let duration = item.shownDuration(screenReader: UIAccessibility.isVoiceOverRunning)
         AccessibilityNotification.Announcement(item.announcement).post()
-        timer = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(duration))
+        let sleep = sleep
+        let hide = Task { [weak self] in
+            try? await sleep(.seconds(duration))
             guard !Task.isCancelled, self?.current?.id == id else { return }
             self?.dismiss()
         }
+        timer = hide
+        return hide
     }
 
     /// The action button was tapped: hide the notice, then run its action.

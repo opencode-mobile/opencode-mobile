@@ -23,10 +23,20 @@ struct HexToasterTests {
         #expect(toasts.current == nil)
     }
 
-    @Test func itHidesAfterItsDuration() async throws {
-        let toasts = HexToaster()
-        toasts.show(HexToastItem(tone: .info, title: "Brief", duration: 0.05))
-        try await Task.sleep(for: .milliseconds(300))
+    @Test func itHidesAfterItsDuration() async {
+        let asked = Asked()
+        let toasts = HexToaster(sleep: { await asked.append($0) })
+        await toasts.show(HexToastItem(tone: .info, title: "Brief", duration: 0.05)).value
+        #expect(await asked.durations == [.seconds(0.05)])
         #expect(toasts.current == nil)
+    }
+}
+
+/// The waits the toaster asked for.
+private actor Asked {
+    private(set) var durations: [Duration] = []
+
+    func append(_ duration: Duration) {
+        durations.append(duration)
     }
 }
