@@ -8,8 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		OCK000000000000000000003 /* OpenCodeKit in Frameworks */ = {isa = PBXBuildFile; productRef = OCK000000000000000000002 /* OpenCodeKit */; };
-		OCK000000000000000000004 /* OpenCodeKit in Frameworks */ = {isa = PBXBuildFile; productRef = OCK000000000000000000005 /* OpenCodeKit */; };
-		HXC000000000000000000013 /* VoiceEngineKit in Frameworks */ = {isa = PBXBuildFile; productRef = HXC000000000000000000012 /* VoiceEngineKit */; };
 		638DA94C2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		638DA94D2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		63OCFIREBF00100002BDFFC /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD001002BDFFC /* FirebaseAnalyticsCore */; };
@@ -34,18 +32,9 @@
 			remoteGlobalIDString = 63369C0E2FA933AE002BDFFC;
 			remoteInfo = "OpenCode Mobile";
 		};
-		HXT000000000000000000003 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 63369C072FA933AE002BDFFC /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = HXC000000000000000000006;
-			remoteInfo = "Hex Code";
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		HXT000000000000000000001 /* Hex CodeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Hex CodeTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		HXC000000000000000000001 /* Hex Code.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Hex Code.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		63369C0F2FA933AE002BDFFC /* OpenCode Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "OpenCode Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		63369C1E2FA933AF002BDFFC /* OpenCode MobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "OpenCode MobileTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		63369C282FA933AF002BDFFC /* OpenCode MobileUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "OpenCode MobileUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -53,11 +42,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		HXC000000000000000000002 /* Hex Code */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Hex Code";
-			sourceTree = "<group>";
-		};
 		63369C112FA933AE002BDFFC /* OpenCode Mobile */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "OpenCode Mobile";
@@ -73,23 +57,9 @@
 			path = "OpenCode MobileUITests";
 			sourceTree = "<group>";
 		};
-		HXT000000000000000000002 /* Hex CodeTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "Hex CodeTests";
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		HXC000000000000000000003 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				HXC000000000000000000013 /* VoiceEngineKit in Frameworks */,
-				OCK000000000000000000004 /* OpenCodeKit in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		63369C0C2FA933AE002BDFFC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -118,13 +88,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		HXT000000000000000000005 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -134,8 +97,6 @@
 				63369C112FA933AE002BDFFC /* OpenCode Mobile */,
 				63369C212FA933AF002BDFFC /* OpenCode MobileTests */,
 				63369C2B2FA933AF002BDFFC /* OpenCode MobileUITests */,
-				HXC000000000000000000002 /* Hex Code */,
-				HXT000000000000000000002 /* Hex CodeTests */,
 				63OCRELNOTES002002BDFFC0 /* release-notes.json */,
 				63369C102FA933AE002BDFFC /* Products */,
 			);
@@ -147,8 +108,6 @@
 				63369C0F2FA933AE002BDFFC /* OpenCode Mobile.app */,
 				63369C1E2FA933AF002BDFFC /* OpenCode MobileTests.xctest */,
 				63369C282FA933AF002BDFFC /* OpenCode MobileUITests.xctest */,
-				HXC000000000000000000001 /* Hex Code.app */,
-				HXT000000000000000000001 /* Hex CodeTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -156,31 +115,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		HXC000000000000000000006 /* Hex Code */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = HXC000000000000000000007 /* Build configuration list for PBXNativeTarget "Hex Code" */;
-			buildPhases = (
-				HXC000000000000000000005 /* Sources */,
-				HXC000000000000000000003 /* Frameworks */,
-				HXC000000000000000000004 /* Resources */,
-				HXC000000000000000000020 /* Stamp git commit */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				HXC000000000000000000002 /* Hex Code */,
-			);
-			name = "Hex Code";
-			packageProductDependencies = (
-				HXC000000000000000000012 /* VoiceEngineKit */,
-				OCK000000000000000000005 /* OpenCodeKit */,
-			);
-			productName = "Hex Code";
-			productReference = HXC000000000000000000001 /* Hex Code.app */;
-			productType = "com.apple.product-type.application";
-		};
 		63369C0E2FA933AE002BDFFC /* OpenCode Mobile */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 63369C322FA933AF002BDFFC /* Build configuration list for PBXNativeTarget "OpenCode Mobile" */;
@@ -260,29 +194,6 @@
 			productReference = 63369C282FA933AF002BDFFC /* OpenCode MobileUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		HXT000000000000000000008 /* Hex CodeTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = HXT000000000000000000009 /* Build configuration list for PBXNativeTarget "Hex CodeTests" */;
-			buildPhases = (
-				HXT000000000000000000007 /* Sources */,
-				HXT000000000000000000005 /* Frameworks */,
-				HXT000000000000000000006 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				HXT000000000000000000004 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				HXT000000000000000000002 /* Hex CodeTests */,
-			);
-			name = "Hex CodeTests";
-			packageProductDependencies = (
-			);
-			productName = "Hex CodeTests";
-			productReference = HXT000000000000000000001 /* Hex CodeTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -304,13 +215,6 @@
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = 63369C0E2FA933AE002BDFFC;
 					};
-					HXC000000000000000000006 = {
-						CreatedOnToolsVersion = 26.2;
-					};
-					HXT000000000000000000008 = {
-						CreatedOnToolsVersion = 26.2;
-						TestTargetID = HXC000000000000000000006;
-					};
 				};
 			};
 			buildConfigurationList = 63369C0A2FA933AE002BDFFC /* Build configuration list for PBXProject "OpenCode Mobile" */;
@@ -325,7 +229,6 @@
 			packageReferences = (
 				63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */,
 				63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
-				HXC000000000000000000011 /* XCLocalSwiftPackageReference "../../shared/voice-engine" */,
 				OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -336,20 +239,11 @@
 				63369C0E2FA933AE002BDFFC /* OpenCode Mobile */,
 				63369C1D2FA933AF002BDFFC /* OpenCode MobileTests */,
 				63369C272FA933AF002BDFFC /* OpenCode MobileUITests */,
-				HXC000000000000000000006 /* Hex Code */,
-				HXT000000000000000000008 /* Hex CodeTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		HXC000000000000000000004 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		63369C0D2FA933AE002BDFFC /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -372,35 +266,9 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		HXT000000000000000000006 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		HXC000000000000000000020 /* Stamp git commit */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Stamp git commit";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "INFO=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\nCOMMIT=\"$(git -C \"${SRCROOT}\" rev-parse --short=12 HEAD 2>/dev/null || true)\"\n[ -f \"$INFO\" ] || exit 0\n/usr/libexec/PlistBuddy -c \"Delete :HexGitCommit\" \"$INFO\" >/dev/null 2>&1 || true\n[ -n \"$COMMIT\" ] || exit 0\n/usr/libexec/PlistBuddy -c \"Add :HexGitCommit string ${COMMIT}\" \"$INFO\"\n";
-		};
 		63OCVER001FCB5000002BDFFC /* Set marketing version from VERSION */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -486,13 +354,6 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		HXC000000000000000000005 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		63369C0B2FA933AE002BDFFC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -514,13 +375,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		HXT000000000000000000007 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -534,130 +388,9 @@
 			target = 63369C0E2FA933AE002BDFFC /* OpenCode Mobile */;
 			targetProxy = 63369C292FA933AF002BDFFC /* PBXContainerItemProxy */;
 		};
-		HXT000000000000000000004 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = HXC000000000000000000006 /* Hex Code */;
-			targetProxy = HXT000000000000000000003 /* PBXContainerItemProxy */;
-		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		HXC000000000000000000008 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 677MTXPXZZ;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Hex Code";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hex Code turns what you say into text on this phone. Audio never leaves it.";
-				INFOPLIST_FILE = "Hex Code Info.plist";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Hex Code uses the camera to scan the pairing code your computer shows, and to take photos you send with a message.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Hex Code connects to OpenCode on your computer over your network.";
-				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.hexcode;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
-		HXC000000000000000000009 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 677MTXPXZZ;
-				ENABLE_PREVIEWS = YES;
-				EXCLUDED_SOURCE_FILE_NAMES = "sample-artifact.html";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Hex Code";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hex Code turns what you say into text on this phone. Audio never leaves it.";
-				INFOPLIST_FILE = "Hex Code Info.plist";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Hex Code uses the camera to scan the pairing code your computer shows, and to take photos you send with a message.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Hex Code connects to OpenCode on your computer over your network.";
-				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.hexcode;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Release;
-		};
-		HXC000000000000000000010 /* Lab */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 677MTXPXZZ;
-				ENABLE_PREVIEWS = YES;
-				EXCLUDED_SOURCE_FILE_NAMES = "sample-artifact.html";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Hex Code";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hex Code turns what you say into text on this phone. Audio never leaves it.";
-				INFOPLIST_FILE = "Hex Code Info.plist";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Hex Code uses the camera to scan the pairing code your computer shows, and to take photos you send with a message.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Hex Code connects to OpenCode on your computer over your network.";
-				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.hexcode;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Lab;
-		};
 		63369C302FA933AF002BDFFC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1099,85 +832,9 @@
 			};
 			name = Lab;
 		};
-		HXT000000000000000000010 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 677MTXPXZZ;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.hexcode.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Hex Code.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Hex Code";
-			};
-			name = Debug;
-		};
-		HXT000000000000000000011 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 677MTXPXZZ;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.hexcode.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Hex Code.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Hex Code";
-			};
-			name = Release;
-		};
-		HXT000000000000000000012 /* Lab */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 677MTXPXZZ;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.opencode.hexcode.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Hex Code.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Hex Code";
-			};
-			name = Lab;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		HXC000000000000000000007 /* Build configuration list for PBXNativeTarget "Hex Code" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				HXC000000000000000000008 /* Debug */,
-				HXC000000000000000000009 /* Release */,
-				HXC000000000000000000010 /* Lab */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		63369C0A2FA933AE002BDFFC /* Build configuration list for PBXProject "OpenCode Mobile" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1218,23 +875,9 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		HXT000000000000000000009 /* Build configuration list for PBXNativeTarget "Hex CodeTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				HXT000000000000000000010 /* Debug */,
-				HXT000000000000000000011 /* Release */,
-				HXT000000000000000000012 /* Lab */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		HXC000000000000000000011 /* XCLocalSwiftPackageReference "../../shared/voice-engine" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../shared/voice-engine;
-		};
 		OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../OpenCodeKit;
@@ -1261,10 +904,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		HXC000000000000000000012 /* VoiceEngineKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = VoiceEngineKit;
-		};
 		63OC00022FA93400002BDFFC /* FactoryKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */;
@@ -1291,11 +930,6 @@
 			productName = FirebaseAppCheck;
 		};
 		OCK000000000000000000002 /* OpenCodeKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */;
-			productName = OpenCodeKit;
-		};
-		OCK000000000000000000005 /* OpenCodeKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */;
 			productName = OpenCodeKit;

@@ -17,7 +17,7 @@
                BlueprintIdentifier = "HXC000000000000000000006"
                BuildableName = "Hex Code.app"
                BlueprintName = "Hex Code"
-               ReferencedContainer = "container:OpenCode Mobile.xcodeproj">
+               ReferencedContainer = "container:Hex Code.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -35,7 +35,7 @@
                BlueprintIdentifier = "HXT000000000000000000008"
                BuildableName = "Hex CodeTests.xctest"
                BlueprintName = "Hex CodeTests"
-               ReferencedContainer = "container:OpenCode Mobile.xcodeproj">
+               ReferencedContainer = "container:Hex Code.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -57,7 +57,7 @@
             BlueprintIdentifier = "HXC000000000000000000006"
             BuildableName = "Hex Code.app"
             BlueprintName = "Hex Code"
-            ReferencedContainer = "container:OpenCode Mobile.xcodeproj">
+            ReferencedContainer = "container:Hex Code.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -74,7 +74,7 @@
             BlueprintIdentifier = "HXC000000000000000000006"
             BuildableName = "Hex Code.app"
             BlueprintName = "Hex Code"
-            ReferencedContainer = "container:OpenCode Mobile.xcodeproj">
+            ReferencedContainer = "container:Hex Code.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

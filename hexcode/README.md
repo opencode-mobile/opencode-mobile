@@ -150,10 +150,20 @@ The first build downloads the speech engine, so it takes a little longer.
 
 ### iPhone
 
-You need a Mac with Xcode. Open
-`ios/OpenCode Mobile/OpenCode Mobile.xcodeproj`, choose the **Hex Code**
-scheme and your iPhone, set your own team under Signing & Capabilities, and
-press Run.
+You need a Mac with Xcode. Open `ios/OpenCode Mobile/Hex Code.xcodeproj`,
+choose the **Hex Code** scheme and your iPhone, set your own team under
+Signing & Capabilities, and press Run.
+
+To build and test from the command line:
+
+```bash
+cd "ios/OpenCode Mobile"
+xcodebuild test \
+  -project "Hex Code.xcodeproj" \
+  -scheme "Hex Code" \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  CODE_SIGNING_ALLOWED=NO
+```
 
 ## For developers
 
@@ -163,6 +173,7 @@ network and data code with OpenCode Mobile and has its own screens and design.
 | Path | What is there |
 |---|---|
 | `ios/OpenCode Mobile/Hex Code/` | The iPhone app (SwiftUI) |
+| `ios/OpenCode Mobile/Hex Code.xcodeproj` | Its Xcode project, apart from OpenCode Mobile's so that neither resolves the other's packages |
 | `android/hexcode/` | The Android app (Kotlin, Jetpack Compose) |
 | `ios/OpenCodeKit/`, `android/opencode-kit/` | Network and data code shared with OpenCode Mobile |
 | `shared/voice-engine/` | On-device dictation for both platforms; see its [README](../shared/voice-engine/README.md) |
