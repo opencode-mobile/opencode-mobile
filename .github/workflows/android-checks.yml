@@ -7,8 +7,8 @@ on:
     paths:
       - "android/**"
       - "shared/**"
-      # Hex Code has its own workflow (hexcode-checks.yml). Its build scripts
-      # stay in: Gradle configures them on every Android build.
+      # Hex Code has its own workflow (hexcode-android-checks.yml). Its build
+      # scripts stay in: Gradle configures them on every Android build.
       - "!android/hexcode/**"
       - "!shared/voice-engine/**"
       - "android/hexcode/**/*.gradle.kts"
@@ -56,7 +56,7 @@ jobs:
         run: ./scripts/ensure-android-platform.sh 37
 
       # Pre-existing style/lint debt; keep visible but do not block PR merge yet.
-      # Hex Code's modules run in hexcode-checks.yml, not here.
+      # Hex Code's modules run in hexcode-android-checks.yml, not here.
       - name: Run ktlint and Android Lint
         continue-on-error: true
         run: >-

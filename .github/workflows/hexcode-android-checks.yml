@@ -1,8 +1,8 @@
-name: Hex Code Checks
+name: Hex Code Android Checks
 
 # Hex Code (android/hexcode, shared/voice-engine) is an experiment that shares
 # :opencode-kit with OpenCode Mobile. Its checks live here so they never gate
-# OpenCode Mobile's android-checks.yml.
+# OpenCode Mobile's android-checks.yml. Hex Code iOS: hexcode-ios-checks.yml.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -10,9 +10,20 @@ on:
       - "android/hexcode/**"
       - "android/opencode-kit/**"
       - "shared/voice-engine/**"
-      - "android/gradle/**"
+      # The iOS speech engine (VoiceEngineKit) is not part of the Gradle build.
+      - "!shared/voice-engine/adapter/ios/**"
+      - "!shared/voice-engine/Package.swift"
+      - "!shared/voice-engine/Package.resolved"
+      # Gradle root files, and every module's build script: Gradle configures
+      # all of them on every build.
       - "android/*.gradle.kts"
-      - ".github/workflows/hexcode-checks.yml"
+      - "android/gradle.properties"
+      - "android/gradlew"
+      - "android/gradle/**"
+      - "android/**/*.gradle.kts"
+      - "shared/**/*.gradle.kts"
+      - "scripts/ensure-android-platform.sh"
+      - ".github/workflows/hexcode-android-checks.yml"
   workflow_dispatch:
 
 permissions:
@@ -23,7 +34,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  hexcode-checks:
+  hexcode-android-checks:
     # Self-hosted runner: never run pull requests from forks.
     if: github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: [self-hosted, Linux, X64, android]
