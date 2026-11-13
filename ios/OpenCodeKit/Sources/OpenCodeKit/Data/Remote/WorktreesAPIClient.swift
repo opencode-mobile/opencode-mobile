@@ -20,13 +20,8 @@ public nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
 
     public func listV2(projectID: String) async throws -> [String] {
         guard let connection = connectionProvider() else { throw WorktreesAPIError.noActiveConnection }
-        var request = connection.authorizedRequest(path: "api/worktree")
-        if let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            var items = components.queryItems ?? []
-            items.append(URLQueryItem(name: "projectID", value: projectID))
-            components.queryItems = items
-            request.url = components.url
-        }
+        let request = connection.authorizedRequest(path: "api/worktree")
+            .appendingQueryItems([URLQueryItem(name: "projectID", value: projectID)])
         let data = try await data(for: request)
         let listed = try decoder.decode([WorktreeDirectoryDTO].self, from: data)
         // The project's own directory comes without a strategy; the server cannot remove it,

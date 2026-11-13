@@ -12,10 +12,6 @@ extension URL {
 
     private nonisolated func appendingQueryItem(name: String, value: String?) -> URL {
         guard let value, !value.isEmpty else { return self }
-        guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else { return self }
-        var items = components.queryItems ?? []
-        items.append(URLQueryItem(name: name, value: value))
-        components.queryItems = items
-        return components.url ?? self
+        return appendingQueryItems([URLQueryItem(name: name, value: value)])
     }
 }

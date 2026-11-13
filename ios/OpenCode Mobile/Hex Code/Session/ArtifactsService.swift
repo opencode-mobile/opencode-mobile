@@ -68,12 +68,7 @@ struct OpenCodeArtifactsService: ArtifactsAPI {
 
     private func get(_ path: String, query: [URLQueryItem] = [], location: String? = nil) async -> HTTPAnswer {
         guard let connection = connection() else { return HTTPAnswer(status: nil) }
-        var request = connection.authorizedRequest(path: path, locationDirectory: location)
-        if !query.isEmpty, let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            components.queryItems = (components.queryItems ?? []) + query
-            components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
-            request.url = components.url
-        }
+        var request = connection.authorizedRequest(path: path, locationDirectory: location).appendingQueryItems(query)
         request.timeoutInterval = Self.timeout
         return await Self.perform(request)
     }

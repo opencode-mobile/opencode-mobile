@@ -181,16 +181,12 @@ public nonisolated struct ProjectsAPIClient: Sendable {
         guard let connection = connectionProvider() else {
             throw ProjectsAPIError.noActiveConnection
         }
-        var request = connection.authorizedRequest(
+        let request = connection.authorizedRequest(
             path: path,
             directory: directory,
             locationDirectory: locationDirectory
         )
-        if !query.isEmpty, let url = request.url,
-           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            components.queryItems = (components.queryItems ?? []) + query
-            request.url = components.url
-        }
+            .appendingQueryItems(query)
         let data = try await data(for: request)
         return try decoder.decode(T.self, from: data)
     }

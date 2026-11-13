@@ -372,16 +372,8 @@ public nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         directory: String? = nil,
         query: [String: String] = [:]
     ) async throws -> (T, [AnyHashable: Any]) {
-        var request = try requireConnection().authorizedRequest(path: path, directory: directory)
-        if !query.isEmpty, let url = request.url,
-           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            var items = components.queryItems ?? []
-            query.forEach { name, value in
-                items.append(URLQueryItem(name: name, value: value))
-            }
-            components.queryItems = items
-            request.url = components.url
-        }
+        let request = try requireConnection().authorizedRequest(path: path, directory: directory)
+            .appendingQueryItems(query.map { URLQueryItem(name: $0.key, value: $0.value) })
         let (data, headers) = try await dataAndHeaders(for: request)
         return (try decoder.decode(T.self, from: data), headers)
     }

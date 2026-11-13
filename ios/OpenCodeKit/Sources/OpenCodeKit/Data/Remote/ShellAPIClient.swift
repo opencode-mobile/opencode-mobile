@@ -44,11 +44,8 @@ public nonisolated struct ShellAPIClient: Sendable {
 
     /// The page of output from byte `cursor`; a cursor past the end answers an empty page with the size.
     public func output(id: String, directory: String, cursor: Int64) async throws -> ShellOutputPageDTO {
-        var request = try request(path: "api/shell/\(id)/output", directory: directory)
-        if let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            components.queryItems = (components.queryItems ?? []) + [URLQueryItem(name: "cursor", value: String(cursor))]
-            request.url = components.url ?? url
-        }
+        let request = try request(path: "api/shell/\(id)/output", directory: directory)
+            .appendingQueryItems([URLQueryItem(name: "cursor", value: String(cursor))])
         let data = try await data(for: request)
         return try decoder.decode(APIDataEnvelope<ShellOutputPageDTO>.self, from: data).data
     }

@@ -155,11 +155,7 @@ public nonisolated struct FilesystemAPIClient: Sendable {
     }
 
     private static func appendingQuery(_ url: URL, _ query: [String: String]) -> URL {
-        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
-        var items = components.queryItems ?? []
-        query.sorted { $0.key < $1.key }.forEach { items.append(URLQueryItem(name: $0.key, value: $0.value)) }
-        components.queryItems = items
-        return components.url ?? url
+        url.appendingQueryItems(query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) })
     }
 
     /// Collects the body in the chunks URLSession delivers and stops after `limit + 1` bytes, so
@@ -200,20 +196,12 @@ public nonisolated struct FilesystemAPIClient: Sendable {
         guard let connection = connectionProvider() else {
             throw ProjectsAPIError.noActiveConnection
         }
-        var request = connection.authorizedRequest(
+        let request = connection.authorizedRequest(
             path: path,
             directory: directory,
             locationDirectory: locationDirectory
         )
-        if !query.isEmpty, let url = request.url,
-           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            var items = components.queryItems ?? []
-            query.forEach { name, value in
-                items.append(URLQueryItem(name: name, value: value))
-            }
-            components.queryItems = items
-            request.url = components.url
-        }
+            .appendingQueryItems(query.map { URLQueryItem(name: $0.key, value: $0.value) })
         let data = try await data(for: request)
         return try decoder.decode(T.self, from: data)
     }

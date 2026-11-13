@@ -161,25 +161,10 @@ public nonisolated final class EventsAPIClient: @unchecked Sendable {
         onActivity: (@Sendable () async -> Void)?,
         onDataLine: @escaping @Sendable (String) async -> Void
     ) async throws -> SseAttemptOutcome {
-        var url = connection.apiBaseURL.appendingPathComponent(path)
-        if let directory, !directory.isEmpty {
-            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            var items = components?.queryItems ?? []
-            items.append(URLQueryItem(name: "directory", value: directory))
-            components?.queryItems = items
-            if let withQuery = components?.url {
-                url = withQuery
-            }
-        }
-        if !types.isEmpty {
+        let url = connection.apiBaseURL.appendingPathComponent(path)
+            .appendingDirectoryQuery(directory)
             // v2 takes each event type as its own `types=` parameter; no wildcards or lists.
-            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            let items = components?.queryItems ?? []
-            components?.queryItems = items + types.map { URLQueryItem(name: "types", value: $0) }
-            if let withQuery = components?.url {
-                url = withQuery
-            }
-        }
+            .appendingQueryItems(types.map { URLQueryItem(name: "types", value: $0) })
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.cachePolicy = .reloadIgnoringLocalCacheData

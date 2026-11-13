@@ -195,14 +195,8 @@ public nonisolated struct SessionsAPIClient: Sendable {
     }
 
     public func getSessionDiff(id: String, messageID: String?, directory: String? = nil) async throws -> [FileDiffDTO] {
-        var request = try requireConnection().authorizedRequest(path: "session/\(id)/diff", directory: directory)
-        if let messageID, let url = request.url,
-           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            var items = components.queryItems ?? []
-            items.append(URLQueryItem(name: "messageID", value: messageID))
-            components.queryItems = items
-            request.url = components.url
-        }
+        let request = try requireConnection().authorizedRequest(path: "session/\(id)/diff", directory: directory)
+            .appendingQueryItems(messageID.map { [URLQueryItem(name: "messageID", value: $0)] } ?? [])
         return try decoder.decode([FileDiffDTO].self, from: try await data(for: request))
     }
 
@@ -215,14 +209,11 @@ public nonisolated struct SessionsAPIClient: Sendable {
     }
 
     public func getVcsDiff(mode: VcsDiffMode, directory: String? = nil, context: Int = 12) async throws -> [FileDiffDTO] {
-        var request = try requireConnection().authorizedRequest(path: "vcs/diff", directory: directory)
-        if let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            var items = components.queryItems ?? []
-            items.append(URLQueryItem(name: "mode", value: mode.rawValue))
-            items.append(URLQueryItem(name: "context", value: String(context)))
-            components.queryItems = items
-            request.url = components.url
-        }
+        let request = try requireConnection().authorizedRequest(path: "vcs/diff", directory: directory)
+            .appendingQueryItems([
+                URLQueryItem(name: "mode", value: mode.rawValue),
+                URLQueryItem(name: "context", value: String(context)),
+            ])
         return try decoder.decode([FileDiffDTO].self, from: try await data(for: request))
     }
 
@@ -571,20 +562,12 @@ public nonisolated struct SessionsAPIClient: Sendable {
         locationDirectory: String? = nil,
         query: [String: String] = [:]
     ) async throws -> T {
-        var request = try requireConnection().authorizedRequest(
+        let request = try requireConnection().authorizedRequest(
             path: path,
             directory: directory,
             locationDirectory: locationDirectory
         )
-        if !query.isEmpty, let url = request.url,
-           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            var items = components.queryItems ?? []
-            query.forEach { name, value in
-                items.append(URLQueryItem(name: name, value: value))
-            }
-            components.queryItems = items
-            request.url = components.url
-        }
+            .appendingQueryItems(query.map { URLQueryItem(name: $0.key, value: $0.value) })
         let data = try await data(for: request)
         return try decoder.decode(T.self, from: data)
     }
