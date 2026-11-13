@@ -10,6 +10,45 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
+// App Distribution (.github/workflows/hexcode-app-distribution.yml) signs release builds with OpenCode Mobile's
+// upload key and stamps the version, both from the environment as in :app. Without them, release stays unsigned and
+// keeps the version below.
+val releaseEnvironmentNames =
+    listOf(
+        "ANDROID_UPLOAD_KEYSTORE_PATH",
+        "ANDROID_UPLOAD_STORE_PASSWORD",
+        "ANDROID_UPLOAD_KEY_ALIAS",
+        "ANDROID_UPLOAD_KEY_PASSWORD",
+        "ANDROID_VERSION_CODE",
+        "ANDROID_VERSION_NAME",
+    )
+val releaseEnvironment =
+    releaseEnvironmentNames.associateWith { name ->
+        providers.environmentVariable(name).orNull?.takeIf(String::isNotBlank)
+    }
+val uploadEnvironment = releaseEnvironment.filterKeys { it.startsWith("ANDROID_UPLOAD_") }
+val missingUploadEnvironment = uploadEnvironment.filterValues { it == null }.keys.sorted()
+val uploadSigningAvailable = missingUploadEnvironment.isEmpty()
+val releaseArtifactTaskRequested =
+    gradle.startParameter.taskNames.any { it.contains("assembleRelease", ignoreCase = true) }
+// Half a signing setup would quietly ship an unsigned APK, so a release build stops instead.
+if (releaseArtifactTaskRequested && !uploadSigningAvailable && missingUploadEnvironment.size < uploadEnvironment.size) {
+    throw GradleException("Hex Code release signing is missing ${missingUploadEnvironment.joinToString(", ")}.")
+}
+val releaseVersionCodeValue = releaseEnvironment.getValue("ANDROID_VERSION_CODE")
+val releaseVersionCode = releaseVersionCodeValue?.toIntOrNull()
+if (releaseVersionCodeValue != null && (releaseVersionCode == null || releaseVersionCode <= 0)) {
+    throw GradleException("ANDROID_VERSION_CODE must be a positive integer (got: '$releaseVersionCodeValue').")
+}
+val releaseVersionName = releaseEnvironment.getValue("ANDROID_VERSION_NAME")
+val semanticVersionPattern = Regex("^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$")
+if (releaseVersionName != null && !semanticVersionPattern.matches(releaseVersionName)) {
+    throw GradleException(
+        "ANDROID_VERSION_NAME must match MAJOR.MINOR.PATCH[-PRERELEASE], for example 0.1.0-hex.1 " +
+            "(got: '$releaseVersionName').",
+    )
+}
+
 // Hex Code: the voice-first OpenCode app. It shares OpenCode Mobile's data and domain code through :opencode-kit, and
 // has its own UI kit (designsystem/).
 android {
@@ -26,8 +65,27 @@ android {
         // 26 so the adaptive launcher icon needs no bitmap fallbacks
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // App Distribution reads the marketing version from versionName; keep it MAJOR.MINOR.PATCH.
+        versionCode = releaseVersionCode ?: 1
+        versionName = releaseVersionName ?: "0.1.0"
+    }
+
+    signingConfigs {
+        if (uploadSigningAvailable) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_KEYSTORE_PATH")))
+                storePassword = requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_STORE_PASSWORD"))
+                keyAlias = requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_KEY_ALIAS"))
+                keyPassword = requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_KEY_PASSWORD"))
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
+        }
     }
 
     compileOptions {
