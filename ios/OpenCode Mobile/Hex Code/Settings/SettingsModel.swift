@@ -382,6 +382,12 @@ final class HexMainModel {
 
     /// The in-app browser for the card's artifact: every file through the app's signed-in client.
     func artifactBrowser(_ artifact: CardArtifact) -> BrowserModel {
+        #if DEBUG
+        // A sample session's artifact: the bundled page, with no server.
+        if samplePreset != nil, let page = TodaySessionDemo.samplePage {
+            return BrowserModel(sampleArtifact: artifact, serverName: setup.serverName, page: page)
+        }
+        #endif
         let live = liveConnection
         return BrowserModel(
             artifact: artifact,

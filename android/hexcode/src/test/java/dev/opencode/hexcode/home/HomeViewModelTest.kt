@@ -1,6 +1,8 @@
 package dev.opencode.hexcode.home
 
 import androidx.lifecycle.viewModelScope
+import dev.opencode.hexcode.session.ArtifactTile
+import dev.opencode.hexcode.session.ArtifactsState
 import dev.opencode.hexcode.session.SessionSetup
 import dev.opencode.hexcode.session.StatusSummary
 import dev.opencode.hexcode.session.TodaySessionDemo
@@ -246,6 +248,41 @@ class HomeViewModelTest {
             runCurrent()
             assertEquals(SessionSetup.Failed(retrying = true), vm.uiState.value.today.setup)
             vm.viewModelScope.cancel()
+        }
+
+    @Test
+    fun theArtifactSampleShowsItsTileWithArtifactsOn() =
+        runTest(dispatcher) {
+            val vm = HomeViewModel(FakeDictation(), makeSession = { TodaySessionDemo.Artifact.start(it) }) { now }
+            advanceTimeBy(2_000)
+            runCurrent()
+            assertEquals(ArtifactsState.On, vm.artifacts.value.state)
+            assertEquals(
+                ArtifactTile(TodaySessionDemo.ARTIFACT_ID, TodaySessionDemo.ARTIFACT_TITLE),
+                vm.uiState.value.today.summary.artifact,
+            )
+            vm.viewModelScope.cancel()
+        }
+
+    @Test
+    fun theDemoLockedTakeListensWithItsTextSoFarAndLeavesQuietly() =
+        runTest(dispatcher) {
+            val dictation = FakeDictation()
+            val vm = HomeViewModel(dictation) { now }
+            vm.demoLockedTake("Use option B", elapsedMs = 9_000)
+            val state = vm.uiState.value
+            assertEquals(TalkMode.Locked, state.talk)
+            assertEquals(ChunkState.Listening, state.draft.live?.state)
+            assertEquals("Use option B", state.draft.live?.soFar)
+            assertEquals(now - 9_000, state.takeStartedAt)
+            assertFalse(dictation.recording)
+            assertTrue(vm.level != null && vm.level != dictation.level)
+            // Nothing recorded, so Done leaves the draft empty.
+            vm.tapLocked()
+            advanceUntilIdle()
+            assertEquals(TalkMode.Idle, vm.uiState.value.talk)
+            assertTrue(vm.uiState.value.draft.isEmpty)
+            assertEquals(dictation.level, vm.level)
         }
 
     @Test

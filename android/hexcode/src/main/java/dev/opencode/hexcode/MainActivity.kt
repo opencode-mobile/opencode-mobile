@@ -49,6 +49,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.ColdStart
 import dev.opencode.hexcode.app.ColdStartGate
+import dev.opencode.hexcode.app.DemoSetup
 import dev.opencode.hexcode.app.HexFirstRunEnvironment
 import dev.opencode.hexcode.app.HexPrefs
 import dev.opencode.hexcode.app.HexServices
@@ -79,6 +80,7 @@ import dev.opencode.hexcode.home.FileTakeStore
 import dev.opencode.hexcode.home.HomeScreen
 import dev.opencode.hexcode.home.HomeViewModel
 import dev.opencode.hexcode.home.MicRecorder
+import dev.opencode.hexcode.home.SampleArtifactFetcher
 import dev.opencode.hexcode.home.VoiceEngineDictation
 import dev.opencode.hexcode.session.SessionSetup
 import dev.opencode.hexcode.session.TodaySessionDemo
@@ -182,11 +184,21 @@ class MainActivity : ComponentActivity() {
             services.takeAudio = intent.getStringExtra("HexCodeTakeAudio")
             services.takeProbe = intent.getBooleanExtra("HexCodeTakeProbe", false)
         }
-        // debug builds: `--es HexCodeSampleSession long` opens home on that sample session (Settings › Developer)
+        // debug builds: `--es HexCodeSampleSession long` opens home on that sample session (Settings › Developer). It
+        // replaces today's session only: first run must be done, or skipped with `--ez HexCodeDemoSetup true`, which
+        // lays placeholder choices over what's saved without writing them (iOS's `-HexCodeDemoSetup YES`)
         if (BuildConfig.DEBUG) {
             intent.getStringExtra("HexCodeSampleSession")?.let { label ->
                 services.sampleSession.value = TodaySessionDemo.entries.firstOrNull { it.label == label }
             }
+            services.demoSetup = intent.getBooleanExtra("HexCodeDemoSetup", false)
+        }
+        // debug builds, for screenshots: `--ez HexCodeDemoOpenArtifact true` opens the card's artifact in the artifact
+        // viewer once its tile shows (with `--es HexCodeSampleSession artifact`), and `--es HexCodeDemoTake locked` starts
+        // home in a locked take still listening, with its text so far, from made-up values (no microphone)
+        if (BuildConfig.DEBUG) {
+            services.demoOpenArtifact = intent.getBooleanExtra("HexCodeDemoOpenArtifact", false)
+            services.demoTake = intent.getStringExtra("HexCodeDemoTake")
         }
         // debug builds: `--es HexCodeLastDate 2026-11-04` saves that as the last date a session was opened, before home
         // opens, to try the new-day notice
@@ -243,7 +255,11 @@ class MainActivity : ComponentActivity() {
                         SystemBarIcons(darkScreen = true)
                         DictationScreen(services.voice, sampleFile = sample, onOpenLab = { tool = Tool.Lab })
                     }
-                    null -> prefs?.let { HexCodeRoot(services, lab, it, pairLink, clips, draftText, coldStart, drawn) }
+                    null ->
+                        prefs?.let {
+                            val shown = if (services.demoSetup) DemoSetup.prefs(it) else it
+                            HexCodeRoot(services, lab, shown, pairLink, clips, draftText, coldStart, drawn)
+                        }
                 }
             }
         }
@@ -379,6 +395,10 @@ private fun AfterFirstRun(
     // Where artifact tiles open: the address in use, each file fetched by the signed-in client.
     val serverAddress by produceState<String?>(null, serverRead) { value = services.serverAddress() }
     val artifactFetcher = remember(prefs.project?.path) { services.artifactsApi.fetcher(prefs.project?.path.orEmpty()) }
+    // Debug builds: the `artifact` sample's tile opens its bundled page, with no computer behind it.
+    val sampleArtifact = BuildConfig.DEBUG && sample == TodaySessionDemo.Artifact
+    val sampleFetcher = remember { SampleArtifactFetcher(context.assets, TodaySessionDemo.ARTIFACT_ID) }
+    var openArtifact by remember { mutableStateOf(services.demoOpenArtifact) }
     // Today's session reads the latest choices when it opens, so a change made in Settings reaches the next open.
     val latest by rememberUpdatedState(prefs)
     // A new sample (or Off) is a new home: the session starts again from opening.
@@ -430,6 +450,11 @@ private fun AfterFirstRun(
         val cycles = services.pressProbe
         services.pressProbe = 0
         if (cycles > 0) homeModel.pressProbe(cycles)
+    }
+    LaunchedEffect(homeModel) {
+        val take = services.demoTake
+        services.demoTake = null
+        if (take == "locked") homeModel.demoLockedTake(TodaySessionDemo.LOCKED_TAKE_TEXT, TodaySessionDemo.LOCKED_TAKE_MS)
     }
     LaunchedEffect(homeModel) {
         val probe = services.takeProbe
@@ -527,9 +552,11 @@ private fun AfterFirstRun(
                         computer = computer,
                         serverName = server?.name,
                         onPairAgain = { pairingAgain = true },
-                        artifactAddress = serverAddress,
-                        artifactFetcher = artifactFetcher,
+                        artifactAddress = if (sampleArtifact) SampleArtifactFetcher.ADDRESS else serverAddress,
+                        artifactFetcher = if (sampleArtifact) sampleFetcher else artifactFetcher,
                         serverHome = home,
+                        openArtifactOnTile = openArtifact,
+                        onArtifactOpened = { openArtifact = false },
                     )
                 }
                 Page.Settings ->
@@ -560,9 +587,9 @@ private fun AfterFirstRun(
                         sampleSession = sample?.label ?: "Off",
                         onSampleSession = {
                             // Off, then each preset in turn, then Off again. Not saved: the app always starts on the real session.
-                            val presets = TodaySessionDemo.entries
+                            val presets = TodaySessionDemo.presets
                             services.sampleSession.value =
-                                sample.let { if (it == null) presets.first() else presets.getOrNull(it.ordinal + 1) }
+                                sample.let { if (it == null) presets.first() else presets.getOrNull(presets.indexOf(it) + 1) }
                         },
                         onDropStream = if (BuildConfig.DEBUG) homeModel::dropStream else null,
                         onBack = { page = Page.Home },

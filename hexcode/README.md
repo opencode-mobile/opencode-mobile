@@ -175,7 +175,10 @@ clone; on GitHub, use the paths in the table.
 To retake the screenshots, run a debug build on the simulator with
 `-HexCodeDemoSetup YES -HexCodeDemoSession <preset>` (presets are in
 `TodaySessionDemo.swift`): `card`, `approval` and `needs` with their sheet
-open, and `bullets`.
+open, and `bullets`. Two more arguments need no taps: `-HexCodeDemoSession
+artifact -HexCodeDemoOpenArtifact YES` opens the sample artifact in the
+artifact viewer, and `-HexCodeDemoTake locked`, with any preset, shows a
+locked take still listening with its text so far.
 
 Settings › Developer in the app has a component gallery, a speech model lab
 and a sample session that needs no server.

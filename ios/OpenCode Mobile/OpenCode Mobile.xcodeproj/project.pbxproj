@@ -589,6 +589,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 677MTXPXZZ;
 				ENABLE_PREVIEWS = YES;
+				EXCLUDED_SOURCE_FILE_NAMES = "sample-artifact.html";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Hex Code";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hex Code turns what you say into text on this phone. Audio never leaves it.";
@@ -627,6 +628,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 677MTXPXZZ;
 				ENABLE_PREVIEWS = YES;
+				EXCLUDED_SOURCE_FILE_NAMES = "sample-artifact.html";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Hex Code";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hex Code turns what you say into text on this phone. Audio never leaves it.";

@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.session
 
+import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.mobile.data.remote.SseAttemptOutcome
 import kotlinx.coroutines.CoroutineScope
@@ -66,6 +67,12 @@ enum class TodaySessionDemo(
 
     /** The last summary request failed. */
     UpdateFailed("updatefailed"),
+
+    /**
+     * Debug builds: idle, with an artifact from the latest run, so the card shows its artifact tile. Its page is the
+     * bundled `sample-artifact.html` (`SampleArtifactFetcher`); `--ez HexCodeDemoOpenArtifact true` opens it at launch.
+     */
+    Artifact("artifact"),
     ;
 
     /** A session in this state; home opens it. */
@@ -90,6 +97,13 @@ enum class TodaySessionDemo(
                     SavedSummary(SESSION, StatusSummary.parse(reply()), now - 120_000, today.toString(), DIRECTORY)
                 else -> null
             }
+        // The real artifacts feature and pick, over a fake server with artifacts on and one artifact.
+        val artifacts =
+            if (this == Artifact) {
+                ArtifactsFeature(scope, DemoArtifactsApi(now), NoArtifactsStore, { DIRECTORY }, { null })
+            } else {
+                null
+            }
         val session =
             TodaySession(
                 scope,
@@ -101,6 +115,7 @@ enum class TodaySessionDemo(
                 { today },
                 clock,
                 summaryStore = DemoSummaryStore(saved),
+                artifacts = artifacts,
             )
         // The card first, then a second request that hangs or fails.
         if (this == Updating || this == UpdateFailed) {
@@ -163,6 +178,7 @@ enum class TodaySessionDemo(
                     todos = todos(DONE, DONE, DONE, TODO),
                 )
             Reconnecting -> busy.copy(todos = todos(DONE, NOW, TODO, TODO))
+            Artifact -> idle.copy(todos = todos(DONE, NOW, DONE, TODO))
             Updating, UpdateFailed -> busy.copy(busySince = now - 95_000, todos = todos(DONE, DONE, NOW, TODO))
             Empty, NewDay -> idle.copy(hasRun = false)
             // Every item done.
@@ -201,10 +217,27 @@ enum class TodaySessionDemo(
             Approval ->
                 "## Login screen rewrite\nNow: The auth tests need a clean database. Waiting for your approval.\n" +
                     "Next: Then run the auth tests."
+            Artifact -> ARTIFACT_REPLY
             else -> REPLY
         }
 
     companion object {
+        /** The presets Settings › Developer cycles through: [Artifact] only in debug builds, whose assets carry its page. */
+        val presets: List<TodaySessionDemo> get() = entries.filter { BuildConfig.DEBUG || it != Artifact }
+
+        /** The [Artifact] preset's artifact: its id, and its title (the page's own `<title>` too). */
+        const val ARTIFACT_ID = "art_demo"
+        const val ARTIFACT_TITLE = "Sign-in speed"
+
+        /** Debug builds (`--es HexCodeDemoTake locked`): a locked take's text so far, and how long it has recorded. */
+        const val LOCKED_TAKE_TEXT =
+            "Looks good. Open a pull request, and put the speed numbers in its description."
+        const val LOCKED_TAKE_MS = 9_000L
+
+        const val ARTIFACT_REPLY =
+            "## Login screen rewrite\nNow: Sign-in is 2.6 times faster with the new token refresh, and all 48 auth " +
+                "tests pass.\nNext: Say if the report looks right, then I'll open a PR."
+
         const val REPLY =
             "## Login screen rewrite\nNow: Wiring the new token refresh into the API client.\n" +
                 "Next: Run the auth tests, then fix whatever breaks."
@@ -385,6 +418,74 @@ private class DemoLive(
             RecentStep(RecentStep.Kind.Command, "bun test auth", RecentOutcome.Failed(1), now - 180_000),
             RecentStep(RecentStep.Kind.Subagent, "Check the auth tests", RecentOutcome.Subagent("general"), now - 240_000),
         )
+}
+
+/**
+ * A server with artifacts on and one artifact, [TodaySessionDemo.ARTIFACT_ID], updated 4 minutes ago in today's
+ * session, whose run started 10 minutes ago. The enable flow's calls are never made.
+ */
+private class DemoArtifactsApi(
+    private val now: Long,
+) : ArtifactsApi {
+    override suspend fun declared() = true
+
+    override suspend fun list(directory: String) =
+        ArtifactListAnswer.On(
+            listOf(
+                ArtifactInfo(
+                    id = TodaySessionDemo.ARTIFACT_ID,
+                    provider = "local",
+                    sessionId = SESSION_ID,
+                    title = TodaySessionDemo.ARTIFACT_TITLE,
+                    entry = "index.html",
+                    url = "${ArtifactInfo.ARTIFACT_PATH}${TodaySessionDemo.ARTIFACT_ID}/view/",
+                    created = now - 360_000,
+                    updated = now - 240_000,
+                ),
+            ),
+        )
+
+    override suspend fun config(directory: String): ConfigDocuments? = null
+
+    override suspend fun readFile(path: String) = FileRead.Unknown
+
+    override suspend fun writeFile(
+        path: String,
+        bytes: ByteArray,
+        directory: String,
+    ) = false
+
+    override suspend fun putRules(sessionId: String) = Unit
+
+    override suspend fun deleteRules(sessionId: String) = Unit
+
+    override suspend fun runStart(sessionId: String) = now - 600_000
+
+    override suspend fun sessionExists(sessionId: String) = true
+
+    override suspend fun createSetupSession(
+        directory: String,
+        model: ModelChoice?,
+        rules: List<ArtifactPrompts.Rule>,
+    ): String = error("Demo: no setup session.")
+
+    override suspend fun prompt(
+        sessionId: String,
+        text: String,
+    ) = error("Demo: no setup session.")
+
+    override suspend fun approvals(sessionId: String) = emptyList<PendingItem>()
+
+    override suspend fun reply(
+        sessionId: String,
+        requestId: String,
+        allow: Boolean,
+    ) = Unit
+
+    private companion object {
+        /** The same as [TodaySessionDemo]'s session. */
+        const val SESSION_ID = "ses_demo"
+    }
 }
 
 /** Says it connected and then stays open; or, when not [up], fails every attempt. */

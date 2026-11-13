@@ -158,6 +158,12 @@ final class HexAppModel {
             store: store
         )
         main.onSwitchServer = { [weak self] server in self?.switchServer(to: server) }
+        #if DEBUG
+        // `-HexCodeDemoTake locked`: home starts in a locked take with its text so far (`DemoTake`).
+        if DemoTake.launch == .locked {
+            main.home.showSampleLockedTake(DemoTake.lockedText, elapsed: DemoTake.lockedElapsed)
+        }
+        #endif
         self.main = main
         phase = .main
     }

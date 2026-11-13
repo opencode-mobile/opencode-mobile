@@ -163,11 +163,26 @@ fun HomeScreen(
     artifactFetcher: ArtifactFetcher? = null,
     /** The computer's home folder, for shorter paths in the artifacts sheet. */
     serverHome: String? = null,
+    /**
+     * Debug builds (`--ez HexCodeDemoOpenArtifact true`): the card's artifact opens in the viewer as soon as its tile
+     * shows, and [onArtifactOpened] says it did, so it opens only once.
+     */
+    openArtifactOnTile: Boolean = false,
+    onArtifactOpened: () -> Unit = {},
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val artifacts by vm.artifacts.collectAsStateWithLifecycle()
     // An artifact tile's page, in the in-app browser over home.
     var artifactPage by remember { mutableStateOf<ArtifactPage?>(null) }
+    val shownTile =
+        state.today.summary.artifact
+            ?.takeIf { artifacts.state != ArtifactsState.Off && artifacts.state != ArtifactsState.Unavailable }
+    LaunchedEffect(openArtifactOnTile, shownTile) {
+        if (openArtifactOnTile && shownTile != null) {
+            artifactPage = ArtifactPage(shownTile.id, shownTile.title)
+            onArtifactOpened()
+        }
+    }
     val context = LocalContext.current
     var micAllowed by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)

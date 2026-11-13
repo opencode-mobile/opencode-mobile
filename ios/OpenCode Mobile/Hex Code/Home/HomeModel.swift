@@ -113,10 +113,35 @@ final class HomeModel {
     var isRecording: Bool { draft.isListening }
     var isPressing: Bool { pressStartedAt != nil }
     var isArmed: Bool { arm != nil }
-    var level: Float? { recorder.level }
+    var level: Float? {
+        #if DEBUG
+        if let sampleLevel { return sampleLevel() }
+        #endif
+        return recorder.level
+    }
     #if DEBUG
     /// The recorder, for the locked-take probe.
     var probeRecorder: any TakeRecording { recorder }
+    /// The sample take's made-up meter level (`showSampleLockedTake`).
+    @ObservationIgnored private var sampleLevel: (() -> Float)?
+
+    /// `-HexCodeDemoTake locked` (`DemoTake`): a locked take still listening, begun `elapsed` seconds
+    /// ago, with `text` as its text so far, as after a few parts. No microphone runs: the meter
+    /// follows a made-up voice; ✓ keeps the text, ✕ drops the take.
+    func showSampleLockedTake(_ text: String, elapsed: TimeInterval) {
+        guard let id = draft.beginTake() else { return }
+        locked = true
+        takeStartedAt = now().addingTimeInterval(-elapsed)
+        draft.updatePartial(id, text: text)
+        let start = Date()
+        sampleLevel = {
+            // Syllables about 4 a second under a slower phrase swell, in dBFS like the microphone's.
+            let t = Date().timeIntervalSince(start)
+            let syllables = abs(sin(t * 2 * .pi * 2.1) * sin(t * 2 * .pi * 0.7 + 1))
+            let phrase = 0.6 + 0.4 * sin(t * 2 * .pi * 0.23)
+            return Float(HexMeterLevel.height(dBFS: -46 + 30 * syllables * phrase))
+        }
+    }
     #endif
 
     /// Home is on screen: the recorder gets ready, so a press starts the microphone fast.
@@ -291,6 +316,17 @@ final class HomeModel {
 
     private func endTake(locked: Bool) async {
         guard let id = draft.recordingIndex.map({ draft.chunks[$0].id }) else { return }
+        #if DEBUG
+        if sampleLevel != nil {
+            // The sample take: its text so far becomes its text.
+            sampleLevel = nil
+            let text = draft.chunks.first { $0.id == id }?.partial ?? ""
+            draft.endTake(duration: takeStartedAt.map { now().timeIntervalSince($0) } ?? 0)
+            takeStartedAt = nil
+            draft.finishTranscription(id, text: text)
+            return
+        }
+        #endif
         guard await startTask?.value == true else { return }
         releasedAt[id] = ProcessInfo.processInfo.systemUptime
         draft.endTake(duration: takeStartedAt.map { now().timeIntervalSince($0) } ?? 0)
@@ -518,6 +554,9 @@ final class HomeModel {
     }
 
     private func dropTake() async {
+        #if DEBUG
+        sampleLevel = nil
+        #endif
         _ = await startTask?.value
         recorder.cancelRecording()
         // Its parts go too: one being transcribed now has its text thrown away.

@@ -143,7 +143,33 @@ final class ArtifactSchemeHandler: NSObject, WKURLSchemeHandler {
         self.session = session
     }
 
+    #if DEBUG
+    /// A sample session's page: the entry answers with it, every other file `404`.
+    private var samplePage: Data?
+
+    /// Serves `page` as the artifact's entry instead of fetching from a server.
+    convenience init(id: String, samplePage page: Data) {
+        self.init(id: id, directory: "", connection: { nil })
+        samplePage = page
+    }
+
+    private func serveSample(_ page: Data, task: any WKURLSchemeTask) {
+        guard let url = task.request.url else { return task.didFailWithError(URLError(.badURL)) }
+        let path = URLComponents(url: url, resolvingAgainstBaseURL: false)?.path ?? ""
+        let isEntry = path.isEmpty || path == "/" || path == "/index.html"
+        let status = isEntry ? 200 : 404
+        statuses[url] = status
+        let headers = isEntry ? ["Content-Type": "text/html; charset=utf-8"] : ["Content-Type": "text/plain; charset=utf-8"]
+        task.didReceive(HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!)
+        task.didReceive(isEntry ? page : Data())
+        task.didFinish()
+    }
+    #endif
+
     func webView(_ webView: WKWebView, start task: any WKURLSchemeTask) {
+        #if DEBUG
+        if let samplePage { return serveSample(samplePage, task: task) }
+        #endif
         let key = ObjectIdentifier(task)
         let url = task.request.url
         guard let url, let connection = connection(),

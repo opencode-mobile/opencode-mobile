@@ -208,6 +208,11 @@ struct HomeView: View {
         #if DEBUG
         .task { await PressProbe.run(home) }
         .task { await LockedProbe.run(home) }
+        // `-HexCodeDemoOpenArtifact YES`: a sample card's artifact opens once, when its tile shows.
+        .onChange(of: session.summary.summary?.asCard.artifact, initial: true) { _, artifact in
+            guard let artifact, DemoArtifactLaunch.take() else { return }
+            openArtifact(artifact)
+        }
         .task {
             try? await Task.sleep(for: .seconds(2))
             EdgeDeferral.report()
@@ -939,6 +944,19 @@ enum LockedProbe {
             try? await Task.sleep(for: .seconds(1))
         }
         print("HEXPROBE done")
+    }
+}
+
+/// `-HexCodeDemoOpenArtifact YES` (`TodaySessionDemo`): the sample artifact opens once per launch.
+@MainActor
+enum DemoArtifactLaunch {
+    private static var opened = false
+
+    /// True the first time, with the launch argument and a sample session.
+    static func take() -> Bool {
+        guard !opened, TodaySessionDemo.opensArtifactAtLaunch else { return false }
+        opened = true
+        return true
     }
 }
 

@@ -4,6 +4,12 @@ import OpenCodeKit
 /// Fake sessions for looking at home without a server: Settings › Developer › Sample session, or
 /// `-HexCodeDemoSession <preset>` at launch (debug builds). Nothing here talks to OpenCode. The
 /// presets are the same on both platforms.
+///
+/// Two more launch arguments, for screenshots (debug builds, with `-HexCodeDemoSetup YES`):
+/// - `-HexCodeDemoOpenArtifact YES` with the `artifact` preset: its artifact opens in the artifact
+///   viewer as soon as the tile shows. The page is the bundled `sample-artifact.html`.
+/// - `-HexCodeDemoTake locked`: home starts in a locked take still listening, with its text so far
+///   (`DemoTake`). No microphone runs, so it works on a simulator; it goes with any preset.
 enum TodaySessionDemo: String, CaseIterable {
     /// Working, with a subagent running, a message waiting and the agent's list half done.
     case card
@@ -40,6 +46,11 @@ enum TodaySessionDemo: String, CaseIterable {
     /// waiting and a to-do row: the card steps down in size by what is drawn, not by its character
     /// count.
     case branches
+    #if DEBUG
+    /// Idle, with an artifact from the latest run: the card's artifact tile. With
+    /// `-HexCodeDemoOpenArtifact YES` it opens in the artifact viewer at launch. Debug builds only.
+    case artifact
+    #endif
 
     static var launchPreset: TodaySessionDemo? {
         #if DEBUG
@@ -90,7 +101,12 @@ enum TodaySessionDemo: String, CaseIterable {
         + "`packages/mobile-voice` (iOS `Info.plist`) and Capacitor-style Android/iOS icon sets under "
         + "`packages/desktop/icons`. No mobile app source in…\n"
         + "Next: Finish sweeping branches, then publish the findings page.\n"
-        + "Link: Prototype | http://Ivans-MacBook-Pro.local:8787/2026-11-06/mobile-apps/"
+        + "Link: Prototype | http://Studio-Mac.local:8787/2026-11-06/mobile-apps/"
+
+    #if DEBUG
+    static let artifactReply = "## Login screen rewrite\nNow: Sign-in is 2.6 times faster with the new token refresh, "
+        + "and all 48 auth tests pass.\nNext: Say if the report looks right, then I'll open a PR."
+    #endif
 
     static let fallbackReply = """
     Okay, I finished the token refresh and now I am going through the auth tests one at a time. Two of them \
@@ -118,8 +134,44 @@ enum TodaySessionDemo: String, CaseIterable {
             toasts: toasts,
             control: DemoControl(running: sampleRunning(now: now), recent: Self.sampleTools(now: now))
         )
+        #if DEBUG
+        if self == .artifact {
+            // The real artifacts model and pick, over a fake server that has one artifact on.
+            let artifacts = ArtifactsModel(
+                api: DemoArtifacts(artifact: Self.sampleArtifact(now: now), busyStart: now.addingTimeInterval(-600)),
+                directory: { Self.directory },
+                model: { ModelChoice(providerID: "opencode", modelID: "big-pickle", variant: nil) },
+                todaySessionID: { "ses_demo" },
+                toasts: toasts
+            )
+            session.artifactSource = { rootID, sessions in await artifacts.cardArtifact(rootID: rootID, sessions: sessions) }
+        }
+        #endif
         return session
     }
+
+    #if DEBUG
+    /// The `artifact` preset's artifact, updated a few minutes ago in today's session.
+    static func sampleArtifact(now: Date) -> ArtifactInfo {
+        ArtifactInfo(
+            id: "art_demo",
+            sessionID: "ses_demo",
+            title: "Sign-in speed",
+            updated: Int64(now.addingTimeInterval(-240).timeIntervalSince1970 * 1000)
+        )
+    }
+
+    /// `-HexCodeDemoOpenArtifact YES`, with a sample session: the card's artifact opens in the
+    /// viewer once, when its tile first shows.
+    static var opensArtifactAtLaunch: Bool {
+        launchPreset != nil && UserDefaults.standard.bool(forKey: "HexCodeDemoOpenArtifact")
+    }
+
+    /// The page every sample artifact shows: the bundled copy of `hexcode/store-listing/sample-artifact.html`.
+    static var samplePage: Data? {
+        Bundle.main.url(forResource: "sample-artifact", withExtension: "html").flatMap { try? Data(contentsOf: $0) }
+    }
+    #endif
 
     /// Opens the session and puts it in this state; `updating` then starts a refresh that never
     /// ends, and `updatefailed` one that fails.
@@ -177,6 +229,9 @@ enum TodaySessionDemo: String, CaseIterable {
         case .branches: Self.branchesReply
         case .needs: "## Login screen rewrite\nNow: Token refresh is done. Paused before changing login length.\nNext: Your answers, then the auth tests."
         case .approval: "## Login screen rewrite\nNow: The auth tests need a clean database. Waiting for your approval.\nNext: Then run the auth tests."
+        #if DEBUG
+        case .artifact: Self.artifactReply
+        #endif
         default: Self.reply
         }
     }
@@ -236,6 +291,9 @@ enum TodaySessionDemo: String, CaseIterable {
         switch self {
         case .card: Self.loginTodos(.completed, .completed, .inProgress, .pending)
         case .needs, .approval: Self.loginTodos(.completed, .completed, .completed, .pending)
+        #if DEBUG
+        case .artifact: Self.loginTodos(.completed, .inProgress, .completed, .pending)
+        #endif
         case .reconnecting: Self.loginTodos(.completed, .inProgress, .pending, .pending)
         case .updating, .updatefailed: Self.loginTodos(.completed, .completed, .inProgress, .pending)
         case .long: Self.loginTodos(.completed, .completed, .completed, .completed)
@@ -262,6 +320,23 @@ enum TodaySessionDemo: String, CaseIterable {
 
     private static let directory = "/Users/example/Projects/hexcode"
 }
+
+#if DEBUG
+/// `-HexCodeDemoTake <state>` (debug builds): the talk control starts in this state, from fake
+/// values instead of the microphone, for screenshots on a simulator.
+enum DemoTake: String {
+    /// A locked take still listening, its text so far showing, as after a few parts.
+    case locked
+
+    static var launch: DemoTake? {
+        UserDefaults.standard.string(forKey: "HexCodeDemoTake").flatMap(DemoTake.init(rawValue:))
+    }
+
+    static let lockedText = "Looks good. Open a pull request, and put the speed numbers in its description."
+    /// How long the take has been recording, for its clock.
+    static let lockedElapsed: TimeInterval = 9
+}
+#endif
 
 @MainActor
 private final class DemoMemory: DailySessionMemory {
@@ -332,3 +407,41 @@ private struct DemoGenerator: SummaryGenerating {
         return reply
     }
 }
+
+#if DEBUG
+/// A server with artifacts on and one artifact; the setup session is never used.
+private struct DemoArtifacts: ArtifactsAPI {
+    let artifact: ArtifactInfo
+    let busyStart: Date
+
+    func declared() async -> Bool? { true }
+
+    func list(directory: String) async -> HTTPAnswer {
+        let item: [String: Any] = [
+            "id": artifact.id,
+            "provider": artifact.provider,
+            "sessionID": artifact.sessionID ?? "",
+            "title": artifact.title,
+            "entry": artifact.entry,
+            "url": artifact.url,
+            "time": ["updated": artifact.updated],
+        ]
+        let body = (try? JSONSerialization.data(withJSONObject: ["data": [item]])) ?? Data()
+        return HTTPAnswer(status: 200, body: body)
+    }
+
+    func config(directory: String) async -> OpenCodeConfig? { nil }
+    func files(in folder: String, directory: String) async -> [String]? { nil }
+    func read(name: String, folder: String) async -> Data? { nil }
+    func write(_ data: Data, to path: String, directory: String) async -> Bool { false }
+    func putRules(sessionID: String) async -> Bool { true }
+    func deleteRules(sessionID: String) async {}
+    func busyStart(sessionID: String) async -> Int64? { Int64(busyStart.timeIntervalSince1970 * 1000) }
+    func findSetupSession(directory: String) async throws -> String? { nil }
+    func createSetupSession(directory: String, model: ModelChoice, rules: [PermissionRule]) async throws -> String { throw DemoFailure() }
+    func send(_ text: String, sessionID: String) async throws { throw DemoFailure() }
+    func pendingApprovals(sessionID: String) async -> [PendingPermissionV2] { [] }
+    func reply(sessionID: String, requestID: String, allow: Bool) async throws { throw DemoFailure() }
+    func transcript(sessionID: String) async -> [SetupMessage] { [] }
+}
+#endif

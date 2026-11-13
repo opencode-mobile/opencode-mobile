@@ -119,6 +119,18 @@ class HexServices(
     var takeProbe = false
 
     /**
+     * Debug builds (`--ez HexCodeDemoSetup true`): first run counts as done with placeholder values that are never
+     * saved ([DemoSetup]), and the computer's label is the placeholder one, for screenshots of the sample sessions.
+     */
+    var demoSetup = false
+
+    /** Debug builds: the card's artifact opens in the viewer once its tile shows (`--ez HexCodeDemoOpenArtifact`). */
+    var demoOpenArtifact = false
+
+    /** Debug builds: home starts in this made-up take (`--es HexCodeDemoTake locked`). */
+    var demoTake: String? = null
+
+    /**
      * The speech model's first load in this process (app-plan.md, Dictation › Load): about 1 s after the first frame
      * ([DeferredLoad.afterFirstFrame], from the activity), or at once when the talk button is pressed before then
      * ([DeferredLoad.now]), so it doesn't compete with start-up.
@@ -283,6 +295,7 @@ class HexServices(
 
     /** The paired computer's name and OpenCode version, for Settings. */
     suspend fun serverLabel(): ServerLabel? {
+        if (demoSetup) return DemoSetup.server
         connectionLoaded.await()
         val profile = profiles.activeProfile() ?: return null
         // The profile keeps the computer's hostname; its friendly name is worked out from it each time.
@@ -300,6 +313,7 @@ class HexServices(
      * it; null before pairing.
      */
     suspend fun computerAddress(): String? {
+        if (demoSetup) return DemoSetup.HOST
         connectionLoaded.await()
         val url = connection.current()?.baseUrl ?: return null
         return runCatching { java.net.URI(url).host }.getOrNull()?.removeSurrounding("[", "]")

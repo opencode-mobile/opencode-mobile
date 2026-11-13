@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.hexcode.firstrun.ProjectChoice
+import dev.opencode.hexcode.firstrun.ServerLabel
+import dev.opencode.hexcode.firstrun.ServerName
 import dev.opencode.hexcode.session.ArtifactsStore
 import dev.opencode.hexcode.session.AskStore
 import dev.opencode.hexcode.session.DailySessionMemory
@@ -215,4 +217,29 @@ class HexSettings(
         val ARTIFACTS_SETUP_DIRECTORY = stringPreferencesKey("artifacts_setup_directory")
         val ARTIFACTS_HINT_SEEN = booleanPreferencesKey("artifacts_hint_seen")
     }
+}
+
+/**
+ * Debug builds (`--ez HexCodeDemoSetup true`, as iOS's `-HexCodeDemoSetup YES`): first run done, with the same
+ * placeholder project, model and computer as iOS, laid over what's saved and never written. With a sample session,
+ * home then needs no computer at all.
+ */
+object DemoSetup {
+    /** The computer as the phone reaches it, for `localhost` link tiles, and its address and name. */
+    const val HOST = "192.168.1.2"
+    private const val ADDRESS = "http://$HOST:4096/"
+    private const val HOSTNAME = "mbp.local"
+
+    val server = ServerLabel(ServerName.of(HOSTNAME, ADDRESS), HOSTNAME.removeSuffix(".local"), "2.2.5")
+
+    /** [saved] with first run done and the placeholder choices; Appearance stays the saved one. */
+    fun prefs(saved: HexPrefs) =
+        saved.copy(
+            project = ProjectChoice("hexcode", "/Users/example/Projects/hexcode"),
+            model = ModelChoice("anthropic", "claude-sonnet-5-5", "high"),
+            firstRunDone = true,
+            modelName = "Claude Sonnet 5.5",
+            serverHome = "/Users/example",
+            serverVersion = "2.2.5",
+        )
 }

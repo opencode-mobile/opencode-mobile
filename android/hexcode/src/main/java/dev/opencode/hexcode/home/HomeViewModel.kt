@@ -58,6 +58,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /** The phone's side of dictation: record a take, end it, turn its samples into text. [VoiceEngine] in the app. */
@@ -1642,7 +1643,38 @@ class HomeViewModel(
         session?.close()
     }
 
-    val level: Float? get() = dictation.level
+    val level: Float?
+        get() {
+            val take = state.value.draft.live
+            return if (demoTake != null && demoTake == take?.id) demoLevel() else dictation.level
+        }
+
+    /** Debug builds (`--es HexCodeDemoTake locked`): the made-up take, while it's the one recording. */
+    private var demoTake: Long? = null
+
+    /**
+     * Debug builds (`--es HexCodeDemoTake locked`): home as during a locked take still listening, [elapsedMs] in, with
+     * [text] as its text so far, for screenshots on an emulator with no microphone. Only the state is set: nothing
+     * records, the meter follows a made-up level, and ending the take leaves no audio, so it leaves the draft quietly.
+     */
+    fun demoLockedTake(
+        text: String,
+        elapsedMs: Long,
+    ) {
+        if (state.value.talk != TalkMode.Idle || state.value.draft.isListening) return
+        state.update {
+            val draft = it.draft.startTake()
+            val take = draft.live ?: return@update it
+            demoTake = take.id
+            it.copy(draft = draft.withSoFar(take.id, text), talk = TalkMode.Locked, takeStartedAt = clock() - elapsedMs)
+        }
+    }
+
+    /** A level that rises and falls as a voice does, for the made-up take's meter. */
+    private fun demoLevel(): Float {
+        val t = SystemClock.uptimeMillis() / 1000.0
+        return (0.5 + 0.2 * sin(t * 9.1) + 0.12 * sin(t * 3.7 + 1.3)).toFloat().coerceIn(0.15f, 0.9f)
+    }
 
     /** Home is on screen (and the app in front): the microphone gets ready for a press. */
     fun homeShown() = dictation.warmUp()
