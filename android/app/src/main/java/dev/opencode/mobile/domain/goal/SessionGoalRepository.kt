@@ -66,7 +66,7 @@ class DefaultSessionGoalRepository
             directory: String?,
         ): SessionGoal? {
             check(isAvailable()) { "Goals need a v2 server" }
-            return SessionGoalDomainAdapter.fromState(api.goalV2(sessionId, directory))
+            return SessionGoalDomainAdapter.fromRpc(sessionId, api.goalV2(sessionId, directory))
         }
 
         override suspend fun send(

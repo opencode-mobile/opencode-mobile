@@ -2,7 +2,12 @@ package dev.opencode.mobile.data.remote.dto
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 
 @Serializable
 data class V2LocationDto(
@@ -196,26 +201,57 @@ data class V2GoalSessionInputDto(
     @SerialName("sessionID") val sessionId: String,
 )
 
-/** `{"output": State | null}`: null when the session has no goal. */
-@Serializable
-data class V2GoalGetResponseDto(
-    val output: V2GoalStateDto? = null,
-)
-
 /**
  * OpenCode's `/goal` state (`schema/src/goal.ts`, v2.2.5): [status] `active`, `paused` or `complete`; [reason] why it
  * last changed (absent on a new goal); [rounds] the continuations sent since it was set or last resumed (0 after
- * setting, 1 after resuming); [maxRounds] the limit per set or resume (50).
+ * setting, 1 after resuming); [maxRounds] the limit per set or resume (50). Read with [fromJson], not a serializer.
  */
-@Serializable
 data class V2GoalStateDto(
     val id: String,
     val objective: String = "",
     val status: String = "",
     val reason: String? = null,
     val rounds: Int = 0,
-    val maxRounds: Int = 50,
+    val maxRounds: Int = DEFAULT_MAX_ROUNDS,
     /** Null when the state leaves it out. */
     val stalls: Int? = null,
     val updatedAt: Long? = null,
-)
+) {
+    companion object {
+        const val DEFAULT_MAX_ROUNDS = 50
+
+        /**
+         * A `Goal.State` read leniently: numbers may be fractional (`1.0`) or `null`, and a field of the wrong type
+         * or left out takes its default. Null for no goal (`null`, or no value at all) and for a value that is not a
+         * goal: not an object, or without a string `id` or `objective`. [onUnreadable] then gets why — never the
+         * goal's content.
+         */
+        fun fromJson(
+            element: JsonElement?,
+            onUnreadable: (reason: String) -> Unit = {},
+        ): V2GoalStateDto? {
+            fun unreadable(reason: String): V2GoalStateDto? {
+                onUnreadable(reason)
+                return null
+            }
+            if (element == null || element is JsonNull) return null
+            val state = element as? JsonObject ?: return unreadable("not an object")
+            val id = state.string("id")?.takeIf { it.isNotBlank() } ?: return unreadable("no id")
+            val objective = state.string("objective") ?: return unreadable("no objective")
+            return V2GoalStateDto(
+                id = id,
+                objective = objective,
+                status = state.string("status").orEmpty(),
+                reason = state.string("reason"),
+                rounds = state.number("rounds")?.toInt() ?: 0,
+                maxRounds = state.number("maxRounds")?.toInt() ?: DEFAULT_MAX_ROUNDS,
+                stalls = state.number("stalls")?.toInt(),
+                updatedAt = state.number("updatedAt")?.toLong(),
+            )
+        }
+
+        private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+
+        private fun JsonObject.number(key: String): Double? = (this[key] as? JsonPrimitive)?.takeIf { !it.isString }?.doubleOrNull
+    }
+}

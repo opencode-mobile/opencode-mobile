@@ -1,6 +1,8 @@
 package dev.opencode.mobile.data.remote
 
+import dev.opencode.mobile.data.remote.dto.V2GoalStateDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandler
@@ -20,6 +22,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -82,6 +85,91 @@ class SessionsApiGoalTest {
             val goal = api.goalV2("ses_1", null)!!
             assertNull(goal.reason)
             assertEquals(0, goal.rounds)
+        }
+
+    @Test
+    fun numbersMayBeNullOrFractionalAndLeftOutFieldsTakeTheirDefaults() =
+        runTest {
+            var reply = """{"output":{"id":"g1","objective":"Ship it","status":"active","rounds":null,"maxRounds":50.0}}"""
+            val api = api { respond(reply, HttpStatusCode.OK, jsonHeaders) }
+
+            assertEquals(V2GoalStateDto(id = "g1", objective = "Ship it", status = "active"), api.goalV2("ses_1", null))
+
+            reply = """{"output":{"id":"g1","objective":"Ship it","status":"paused","rounds":1.0,"stalls":2.0,"updatedAt":5.0}}"""
+            assertEquals(
+                V2GoalStateDto(id = "g1", objective = "Ship it", status = "paused", rounds = 1, stalls = 2, updatedAt = 5),
+                api.goalV2("ses_1", null),
+            )
+        }
+
+    @Test
+    fun aJsonBodyWithoutAJsonContentTypeIsStillRead() =
+        runTest {
+            val api =
+                api {
+                    respond(
+                        """{"output":{"id":"g1","objective":"Ship it","status":"active","rounds":0,"maxRounds":50}}""",
+                        HttpStatusCode.OK,
+                        headersOf(HttpHeaders.ContentType, "text/plain"),
+                    )
+                }
+
+            assertEquals("g1", api.goalV2("ses_1", null)?.id)
+        }
+
+    @Test
+    fun aSuccessThatIsNotAGoalIsNoGoalAndLogsWhyWithoutTheObjective() =
+        runTest {
+            var reply = ""
+            val api = api { respond(reply, HttpStatusCode.OK) }
+            val cases =
+                listOf(
+                    "<html>Bad gateway</html>" to "body is not JSON",
+                    "" to "empty body",
+                    """["Secret plan"]""" to "body is not an object",
+                    """{"result":{"id":"g1","objective":"Secret plan"}}""" to "no output",
+                    """{"output":"Secret plan"}""" to "output not an object",
+                    """{"output":{"objective":"Secret plan","status":"active"}}""" to "output no id",
+                    """{"output":{"id":" ","objective":"Secret plan","status":"active"}}""" to "output no id",
+                    """{"output":{"id":"g1","status":"active"}}""" to "output no objective",
+                    """{"output":{"id":"g1","objective":7,"status":"active"}}""" to "output no objective",
+                )
+            for ((body, reason) in cases) {
+                DiagnosticLogBuffer.resetSharedForTests()
+                try {
+                    reply = body
+                    assertNull(body, api.goalV2("ses_1", null))
+                    val message =
+                        DiagnosticLogBuffer.shared
+                            .snapshot()
+                            .entries
+                            .single()
+                            .message
+                    assertEquals(body, "goal read unreadable session=ses_1 reason=$reason", message)
+                    assertFalse(message.contains("Secret"))
+                } finally {
+                    DiagnosticLogBuffer.resetSharedForTests()
+                }
+            }
+        }
+
+    @Test
+    fun noGoalIsNotLogged() =
+        runTest {
+            DiagnosticLogBuffer.resetSharedForTests()
+            try {
+                val api = api { respond("""{"output":null}""", HttpStatusCode.OK, jsonHeaders) }
+
+                assertNull(api.goalV2("ses_1", null))
+                assertTrue(
+                    DiagnosticLogBuffer.shared
+                        .snapshot()
+                        .entries
+                        .isEmpty(),
+                )
+            } finally {
+                DiagnosticLogBuffer.resetSharedForTests()
+            }
         }
 
     @Test

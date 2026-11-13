@@ -25,7 +25,6 @@ import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2GoalGetRequestDto
-import dev.opencode.mobile.data.remote.dto.V2GoalGetResponseDto
 import dev.opencode.mobile.data.remote.dto.V2GoalSessionInputDto
 import dev.opencode.mobile.data.remote.dto.V2GoalStateDto
 import dev.opencode.mobile.data.remote.dto.V2InboxDeliveryRequestDto
@@ -52,6 +51,8 @@ import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsFileStatusDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.decodeDataEnvelope
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.applyLocationDirectory
@@ -663,20 +664,38 @@ class SessionsApi private constructor(
             }.ensureSuccess()
 
     /**
-     * `POST /api/rpc/opencode.goal/get` with `{"input": {"sessionID": …}}`: the session's `/goal` state, or null when it
-     * has none. It answers the same with or without [directory] (`location[directory]`).
+     * `POST /api/rpc/opencode.goal/get` with `{"input": {"sessionID": …}}` → `{"output": Goal.State | null}`: the
+     * session's `/goal` state, or null when it has none. It answers the same with or without [directory]
+     * (`location[directory]`). A server without the goal plugin answers with an error, which throws. A success whose
+     * body is not that (any Content-Type is read) is no goal too, logged with why ([V2GoalStateDto.fromJson]).
      */
     suspend fun goalV2(
         sessionId: String,
         directory: String?,
-    ): V2GoalStateDto? =
-        httpClient
-            .get()
-            .post("api/rpc/opencode.goal/get") {
-                applyLocationDirectory(directory)
-                setJsonBody(json, V2GoalGetRequestDto(V2GoalSessionInputDto(sessionId)))
-            }.bodyOnSuccess<V2GoalGetResponseDto>()
-            .output
+    ): V2GoalStateDto? {
+        val response =
+            httpClient
+                .get()
+                .post("api/rpc/opencode.goal/get") {
+                    applyLocationDirectory(directory)
+                    setJsonBody(json, V2GoalGetRequestDto(V2GoalSessionInputDto(sessionId)))
+                }
+        if (!response.status.isSuccess()) throw response.failure()
+        val text = response.bodyAsText()
+
+        fun unreadable(reason: String): V2GoalStateDto? {
+            // The reason only: the body holds the goal's objective.
+            DiagnosticLog.warning(DiagnosticLogArea.Session, "goal read unreadable session=$sessionId reason=$reason")
+            return null
+        }
+
+        val root =
+            runCatching { json.parseToJsonElement(text) }.getOrNull()
+                ?: return unreadable(if (text.isBlank()) "empty body" else "body is not JSON")
+        if (root !is JsonObject) return unreadable("body is not an object")
+        if ("output" !in root) return unreadable("no output")
+        return V2GoalStateDto.fromJson(root["output"]) { unreadable("output $it") }
+    }
 
     /** `POST /api/session/{id}/model`: the model and level the session's prompts and generate use from now on. */
     suspend fun switchSessionModelV2(

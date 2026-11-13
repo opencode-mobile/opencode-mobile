@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.goal
 
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
@@ -68,6 +69,8 @@ class SessionGoalTest {
         assertNull(SessionGoalDomainAdapter.goal(null))
         assertNull(goalJson("""{"id":"g","objective":"o","status":"exploded","rounds":0,"maxRounds":50,"updatedAt":5}"""))
         assertNull(goalJson("""{"objective":"o","status":"active","rounds":0,"maxRounds":50,"updatedAt":5}"""))
+        assertNull(goalJson("""{"id":"g","status":"active","rounds":0,"maxRounds":50,"updatedAt":5}"""))
+        assertNull(goalJson("""["g"]"""))
     }
 
     // MARK: rpc.opencode.goal.changed
@@ -98,6 +101,44 @@ class SessionGoalTest {
             )
 
         assertEquals(SessionGoalChange("ses_1", null), parsed.firstNotNullOf(SessionGoalDomainAdapter::change))
+    }
+
+    @Test
+    fun change_toleratesNullAndFractionalNumbers() {
+        val parsed =
+            events.parseEvents(
+                """{"id":"evt_3","created":10,"type":"rpc.opencode.goal.changed","location":{"directory":"/Users/example/project"},""" +
+                    """"data":{"sessionID":"ses_1","goal":{"id":"goal_1","objective":"Ship it","status":"active",""" +
+                    """"rounds":null,"maxRounds":50.0,"stalls":1.0,"updatedAt":11}}}""",
+            )
+
+        val goal = parsed.firstNotNullOf(SessionGoalDomainAdapter::change).goal
+
+        assertEquals(SessionGoal("goal_1", "Ship it", SessionGoalStatus.Active, null, 0, 50, 1, 11), goal)
+    }
+
+    @Test
+    fun change_aGoalThatCannotBeReadIsAClearAndIsLogged() {
+        DiagnosticLogBuffer.resetSharedForTests()
+        try {
+            val parsed =
+                events.parseEvents(
+                    """{"id":"evt_4","created":10,"type":"rpc.opencode.goal.changed","location":{"directory":"/Users/example/project"},""" +
+                        """"data":{"sessionID":"ses_1","goal":{"id":"goal_1","status":"active","rounds":0}}}""",
+                )
+
+            assertEquals(SessionGoalChange("ses_1", null), parsed.firstNotNullOf(SessionGoalDomainAdapter::change))
+            assertEquals(
+                "goal change unreadable session=ses_1 reason=no objective",
+                DiagnosticLogBuffer.shared
+                    .snapshot()
+                    .entries
+                    .single()
+                    .message,
+            )
+        } finally {
+            DiagnosticLogBuffer.resetSharedForTests()
+        }
     }
 
     @Test
