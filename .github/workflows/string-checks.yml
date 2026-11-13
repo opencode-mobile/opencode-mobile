@@ -6,6 +6,11 @@ on:
     paths:
       - "android/app/src/main/**"
       - "ios/OpenCode Mobile/OpenCode Mobile/**"
+      # Shared with Hex Code; its text and keys come from OpenCode Mobile's catalog.
+      - "ios/OpenCodeKit/**"
+      # Hex Code's key pair, reported (not failing) by check-string-keys.mjs.
+      - "android/hexcode/src/main/res/**"
+      - "ios/OpenCode Mobile/Hex Code/**"
       - "scripts/check-string-keys.mjs"
       - "scripts/check-hardcoded-text.mjs"
       - "scripts/check-theme-presets.mjs"

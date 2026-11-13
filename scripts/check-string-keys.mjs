@@ -22,6 +22,9 @@
 //   - both English values have the same number of placeholders
 //     (Android %s %d %1$s …; iOS %@ %lld %d %1$@ …; %% is not a placeholder)
 //   - every iOS structured key has an English value, so the UI never shows the raw key
+//   - every key OpenCodeKit (ios/OpenCodeKit, shared with Hex Code) writes in code with
+//     String(localized: "key", defaultValue: …) or LocalizedStringResource("key", …) is in
+//     OpenCode Mobile's catalog: the package looks its text up in the app's main bundle
 //
 // Hex Code (reported, not failing, while its keys settle):
 //   Android  android/hexcode/src/main/res/values/strings.xml
@@ -43,6 +46,7 @@ const IOS_CATALOG = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Localiz
 const HEX_ANDROID_STRINGS = [join(REPO_ROOT, "android/hexcode/src/main/res/values/strings.xml")];
 const HEX_IOS_SOURCES = join(REPO_ROOT, "ios/OpenCode Mobile/Hex Code");
 const HEX_IOS_CATALOG = join(HEX_IOS_SOURCES, "Localizable.xcstrings");
+const KIT_IOS_SOURCES = join(REPO_ROOT, "ios/OpenCodeKit/Sources");
 
 /** Hex Code's Android-only resources. */
 const HEX_ANDROID_ONLY = new Set([
@@ -127,6 +131,10 @@ function main() {
     iosByAndroidName.set(name, key);
   }
 
+  for (const key of readIosSourceKeys(KIT_IOS_SOURCES).keys()) {
+    if (!ios.has(key)) errors.push(`OpenCodeKit uses "${key}", which OpenCode Mobile's Localizable.xcstrings lacks`);
+  }
+
   for (const name of android.keys()) {
     if (ANDROID_ONLY.has(name)) continue;
     if (!iosByAndroidName.has(name)) {
@@ -178,12 +186,12 @@ function swiftFiles(dir) {
   });
 }
 
-/** Keys Hex Code iOS writes in code, with their default English text; `\(…)` interpolations count as placeholders. */
-function readHexIosSources() {
+/** Keys Swift code under [dir] writes in code, with their default English text; `\(…)` interpolations count as placeholders. */
+function readIosSourceKeys(dir) {
   const entries = new Map();
   const pattern =
     /(?:LocalizedStringResource\(|String\(\s*localized:)\s*"([a-z][a-z0-9_.]*)"\s*,\s*defaultValue:\s*"((?:[^"\\]|\\\([^)]*\)|\\.)*)"/g;
-  for (const file of swiftFiles(HEX_IOS_SOURCES)) {
+  for (const file of swiftFiles(dir)) {
     for (const m of readFileSync(file, "utf8").matchAll(pattern)) {
       if (!STRUCTURED_KEY.test(m[1])) continue;
       const interpolations = (m[2].match(/\\\(/g) ?? []).length;
@@ -197,7 +205,7 @@ function readHexIosSources() {
 function checkHexCode(strict) {
   if (!existsSync(HEX_ANDROID_STRINGS[0])) return;
   const android = readAndroid(HEX_ANDROID_STRINGS);
-  const ios = readHexIosSources();
+  const ios = readIosSourceKeys(HEX_IOS_SOURCES);
   if (existsSync(HEX_IOS_CATALOG)) {
     for (const [key, entry] of readIos(HEX_IOS_CATALOG)) if (!ios.has(key)) ios.set(key, entry);
   }

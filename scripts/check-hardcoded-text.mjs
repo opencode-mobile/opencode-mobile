@@ -7,6 +7,7 @@
 //            (feature UI and the design-system components in ui/components)
 //   iOS      ios/OpenCode Mobile/OpenCode Mobile/UI/**/*.swift
 //            ios/OpenCode Mobile/OpenCode Mobile/Components/**/*.swift
+//            ios/OpenCodeKit/Sources/OpenCodeKit/**/*.swift (shared with Hex Code)
 // Skipped: the component gallery, developer tools (playground, highlighting
 // lab, diagnostics overlay, snapshot hosts), @Preview / #Preview blocks,
 // top-level preview and gallery sample declarations (a name containing
@@ -61,7 +62,12 @@ const PLATFORMS = [
   },
   {
     name: "iOS",
-    roots: ["ios/OpenCode Mobile/OpenCode Mobile/UI", "ios/OpenCode Mobile/OpenCode Mobile/Components"],
+    roots: [
+      "ios/OpenCode Mobile/OpenCode Mobile/UI",
+      "ios/OpenCode Mobile/OpenCode Mobile/Components",
+      // Shared with Hex Code; text here reaches OpenCode Mobile's screens too.
+      "ios/OpenCodeKit/Sources/OpenCodeKit",
+    ],
     extension: ".swift",
     skipDirs: ["Playground", "HighlightLab", "Diagnostic"],
     preview: /^\s*#Preview\b/,
