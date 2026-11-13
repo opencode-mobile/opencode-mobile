@@ -94,8 +94,10 @@ struct GoalHarness {
         try? await Task.sleep(for: .milliseconds(30))
     }
 
+    /// Plays `line`, returns once the session has handled it, then leaves a moment for the work it
+    /// starts.
     func send(_ line: String) async {
-        transport.send(line)
+        await transport.deliver(line)
         try? await Task.sleep(for: .milliseconds(30))
     }
 
@@ -300,10 +302,13 @@ struct GoalSessionTests {
     @Test func anEventAfterTheCommandMeansNoRead() async {
         let h = GoalHarness()
         await h.open()
-        h.session.sleep = { _ in try await Task.sleep(for: .milliseconds(100)) }
+        // The wait for an event ends only once the event is in.
+        let gate = Gate()
+        h.session.sleep = { _ in await gate.wait() }
         _ = await h.session.setGoal("Ship it")
         await h.send(EventLines.goal("ses_a"))
-        try? await Task.sleep(for: .milliseconds(200))
+        gate.open()
+        try? await Task.sleep(for: .milliseconds(100))
         #expect(h.goals.reads.count == 1)
     }
 

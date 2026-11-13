@@ -250,6 +250,10 @@ final class FakeTransport: EventStreamTransport, @unchecked Sendable {
     private(set) var connections = 0
     private(set) var types: [String] = []
     private var continuation: AsyncStream<String>.Continuation?
+    /// Lines played so far, and lines the stream has finished handling.
+    private var played = 0
+    private var handled = 0
+    private var handledWaiters: [(line: Int, continuation: CheckedContinuation<Void, Never>)] = []
 
     func stream(
         types: [String],
@@ -260,14 +264,35 @@ final class FakeTransport: EventStreamTransport, @unchecked Sendable {
         connections += 1
         self.types = types
         self.continuation = continuation
+        // Lines of the old connection that were never handled are gone with it.
+        played = 0
+        handled = 0
+        handledWaiters.forEach { $0.continuation.resume() }
+        handledWaiters = []
         for await line in lines {
             await onActivity()
             await onLine(line)
+            handled += 1
+            let done = handledWaiters.filter { $0.line <= handled }
+            handledWaiters.removeAll { $0.line <= handled }
+            done.forEach { $0.continuation.resume() }
         }
         return .ended
     }
 
-    func send(_ line: String) { continuation?.yield(line) }
+    func send(_ line: String) {
+        guard case .enqueued = continuation?.yield(line) else { return }
+        played += 1
+    }
+
+    /// Sends `line` and returns once the stream has handled it (at once when nothing is connected).
+    func deliver(_ line: String) async {
+        guard case .enqueued = continuation?.yield(line) else { return }
+        played += 1
+        let line = played
+        if handled >= line { return }
+        await withCheckedContinuation { handledWaiters.append((line, $0)) }
+    }
 
     /// The connection drops.
     func drop() { continuation?.finish() }
