@@ -1,0 +1,58 @@
+name: Hex Code Checks
+
+# Hex Code (android/hexcode, shared/voice-engine) is an experiment that shares
+# :opencode-kit with OpenCode Mobile. Its checks live here so they never gate
+# OpenCode Mobile's android-checks.yml.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "android/hexcode/**"
+      - "android/opencode-kit/**"
+      - "shared/voice-engine/**"
+      - "android/gradle/**"
+      - "android/*.gradle.kts"
+      - ".github/workflows/hexcode-checks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hexcode-checks:
+    # Self-hosted runner: never run pull requests from forks.
+    if: github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: [self-hosted, Linux, X64, android]
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Install Android compile SDK 37
+        working-directory: .
+        run: ./scripts/ensure-android-platform.sh 37
+
+      - name: Run ktlint and Android Lint
+        continue-on-error: true
+        run: >-
+          ./gradlew --stacktrace
+          :hexcode:ktlintCheck :hexcode:lintDebug
+          :voice-engine:ktlintCheck :voice-engine:lintDebug
+
+      - name: Run unit tests
+        run: ./gradlew :hexcode:testDebugUnitTest :voice-engine:testDebugUnitTest --stacktrace
