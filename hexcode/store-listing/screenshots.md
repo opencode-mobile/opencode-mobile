@@ -27,8 +27,9 @@ The sample artifact itself (`sample-artifact.html`) loads with no server, so
 tapping the tile in a sample session still opens it.
 
 The graphics use only the app's own look: its dark colour tokens, white
-Inter Tight, the artifact tile and goal box as the app draws them, and
-green only where the app uses it (an active goal). The goal in frame 8 is in
+Inter Tight, and the artifact tile and goal box as the app draws them. They
+stay in white and greys, with no accent colour, so the four read as one
+set. The goal in frame 8 is in
 quotes inside the goal box, so it reads as an example of what you might say,
 not as a promise about the app.
 

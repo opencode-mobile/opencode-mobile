@@ -58,10 +58,10 @@ const f = q.get("f") || "voice";
 const H = p === "ios" ? 100 * 2868 / 1320 : 200;   // frame height in cqw
 const y = (frac) => (frac * H).toFixed(2) + "cqw";  // vertical position as a fraction of the frame
 
-const GREEN = "#4cb782";
+const INK = "#f7f8f8";
 const mic = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
 const compass = `<svg viewBox="0 0 24 24" fill="none" stroke="#8a8f98" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>`;
-const target = `<svg viewBox="0 0 24 24" fill="none" stroke="${GREEN}" stroke-width="1.4"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="${GREEN}"/></svg>`;
+const target = `<svg viewBox="0 0 24 24" fill="none" stroke="${INK}" stroke-width="1.4"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="${INK}"/></svg>`;
 
 // A row of voice bars, loud in the middle: n bars across the full width, centred on cy.
 function bars(cy, maxH, n, seed) {
@@ -113,7 +113,7 @@ function goal() {
   const cy = .38, d = 56;
   const ring = (dd, c) => `<div class="abs" style="left:${50 - dd / 2}cqw;width:${dd}cqw;height:${dd}cqw;top:calc(${y(cy)} - ${dd / 2}cqw);border-radius:50%;border:.5cqw solid ${c}"></div>`;
   return `<div class="abs cap" style="top:${y(.045)}">Give it a goal, and it keeps going</div>` +
-    ring(d * 1.9, "rgba(76,183,130,.06)") + ring(d * 1.45, "rgba(76,183,130,.12)") +
+    ring(d * 1.9, "rgba(233,234,235,.05)") + ring(d * 1.45, "rgba(233,234,235,.1)") +
     `<div class="abs" style="left:${50 - d / 2}cqw;width:${d}cqw;top:calc(${y(cy)} - ${d / 2}cqw)">${target}</div>` +
     `<div class="abs goalbox" style="top:${y(p === "ios" ? .65 : .66)}"><div class="row mono"><span>today’s goal</span><span>active · round 7 of 50</span></div>` +
       `<p>“Get sign‑in under 400&nbsp;ms on every platform”</p></div>`;
