@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -187,7 +188,8 @@ fun HexToastHost(
                 visible = false
                 dismissed()
             },
-            modifier = Modifier.padding(horizontal = 12.dp),
+            // As wide as home's column at most, centred over it on a wide screen.
+            modifier = Modifier.widthIn(max = HexTheme.space.column).padding(horizontal = 12.dp),
         )
     }
 }

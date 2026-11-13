@@ -22,6 +22,11 @@ class HexSpacing(
     val screen: Dp = 18.dp,
     /** Home. */
     val screenHome: Dp = 22.dp,
+    /**
+     * The widest home gets, [screenHome] included: on a wider screen (an unfolded foldable, a phone in landscape) home,
+     * its sheets, toasts and the stop countdown are a centred column this wide.
+     */
+    val column: Dp = 600.dp,
 )
 
 /** Fixed sizes: rows, touch targets and icons. */

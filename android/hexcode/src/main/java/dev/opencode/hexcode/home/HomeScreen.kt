@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,6 +36,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -229,9 +231,13 @@ fun HomeScreen(
                     reader != null ||
                     artifactPage != null ||
                     artifacts.setup?.hidden == false
+            // On a wide screen (an unfolded foldable, landscape) home is a centred column (hex-design-system.md, Column).
             Column(
                 Modifier
-                    .fillMaxSize()
+                    .align(Alignment.TopCenter)
+                    .fillMaxHeight()
+                    .widthIn(max = HexTheme.space.column)
+                    .fillMaxWidth()
                     .then(if (covered) Modifier.clearAndSetSemantics {} else Modifier)
                     // TalkBack lands on the top bar, then the talk button, then the rest (Accessibility › Focus order).
                     .semantics { isTraversalGroup = true }
@@ -595,7 +601,11 @@ fun HomeScreen(
                 state.stopHolding,
                 enter = fadeIn(HexTheme.motion.fade()),
                 exit = fadeOut(HexTheme.motion.fade()),
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 58.dp, start = 12.dp, end = 12.dp),
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .widthIn(max = HexTheme.space.column)
+                        .padding(top = 58.dp, start = 12.dp, end = 12.dp),
             ) {
                 StopCountdown(state.stopHeldAt, still)
             }

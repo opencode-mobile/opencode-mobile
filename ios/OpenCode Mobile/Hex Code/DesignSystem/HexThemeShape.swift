@@ -22,6 +22,10 @@ enum HexSpacing {
     static let screen: CGFloat = 18
     /// Home.
     static let screenHome: CGFloat = 22
+    /// The widest home gets, `screenHome` included: on a wider screen (an unfolded foldable, the
+    /// iPhone Duo's inner screen) home, its toasts and the stop countdown are a centred column
+    /// this wide.
+    static let column: CGFloat = 600
 }
 
 /// Fixed sizes.

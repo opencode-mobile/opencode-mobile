@@ -144,7 +144,7 @@ enum class HexSheetSize {
 
 /**
  * A bottom sheet (`.sheet`) over [scrim]-dimmed content: a floating `panel` card 8 dp in from the screen's sides and
- * foot (above three-button navigation's bar), radius 24 at the top and the phone's own screen corners at the foot
+ * foot (above three-button navigation's bar), and no wider than home's column, centred, on a wide screen, radius 24 at the top and the phone's own screen corners at the foot
  * ([sheetBottomRadius]); the grab bar, and a head with the [title] and one action each side, or with a [request] the
  * request head. [amberEdge] marks an approval (`.perm-sh`): a 1 pt `amber` 60 % top edge with an `amber` 25 % line
  * above it. The content scrolls when it's taller than the screen; a [footer] (the sheet's buttons) stays under it.
@@ -212,8 +212,10 @@ fun BoxScope.HexSheet(
         // navigation's bar; gesture navigation's handle sits over the card's foot, as OpenCode Mobile's sheet. A Medium
         // sheet's height counts from its box's foot, so the card's top rests where the detent says.
         val foot = with(density) { if (usesThreeButtonNavigation() && bleed.atFoot) navigationBar.toDp() else 0.dp }
+        // On a wide screen the card is as wide as home's column, centred (hex-design-system.md, Column).
         Box(
             Modifier
+                .widthIn(max = HexTheme.space.column)
                 .fillMaxWidth()
                 .then(if (detents != null) Modifier.height(with(density) { (detents.height + bleed.bottom).toDp() }) else Modifier)
                 .padding(start = SheetInset, end = SheetInset, bottom = SheetInset + foot),

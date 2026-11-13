@@ -171,6 +171,8 @@ private struct HexToastHost: ViewModifier {
                 if let item = toaster.current, !toaster.isHeld, toaster.inSheet == sheet {
                     HexToast(item: item, onAction: { toaster.performAction() })
                         .padding(.horizontal, 12)
+                        // As wide as home's column at most, centred over it on a wide screen.
+                        .frame(maxWidth: HexSpacing.column)
                         .padding(.top, top)
                         .id(item.id)
                         // With Reduce Motion it fades only.

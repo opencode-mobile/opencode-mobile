@@ -135,6 +135,10 @@ struct HomeView: View {
                 .transition(HexMotion.transition(.offset(y: 4).combined(with: .opacity), reduced: reduceMotion))
             }
         }
+        // On a wide screen (the iPhone Duo's inner screen) home is a centred column; the stop edge
+        // and the background below stay full width (hex-design-system.md, Column).
+        .frame(maxWidth: HexSpacing.column)
+        .frame(maxWidth: .infinity)
         .background {
             if stopHold?.heldSince != nil {
                 HexStopEdge()
@@ -174,6 +178,9 @@ struct HomeView: View {
             if home.draftMenuOpen, drafting, let anchor {
                 GeometryReader { proxy in
                     let button = proxy[anchor]
+                    // Home's column's right content edge (centred on a wide screen).
+                    let column = min(proxy.size.width, HexSpacing.column)
+                    let right = (proxy.size.width + column) / 2 - HexSpacing.screenHome
                     ZStack(alignment: .topLeading) {
                         Color.clear
                             .contentShape(Rectangle())
@@ -183,9 +190,9 @@ struct HomeView: View {
                             // VoiceOver stays in the menu; the two-finger scrub closes it.
                             .accessibilityAddTraits(.isModal)
                             .accessibilityAction(.escape) { home.draftMenuOpen = false }
-                            .frame(width: min(320, proxy.size.width - 2 * HexSpacing.screenHome))
+                            .frame(width: min(320, column - 2 * HexSpacing.screenHome))
                             .fixedSize(horizontal: false, vertical: true)
-                            .alignmentGuide(.leading) { $0[.trailing] - (proxy.size.width - HexSpacing.screenHome) }
+                            .alignmentGuide(.leading) { $0[.trailing] - right }
                             .alignmentGuide(.top) { $0[.bottom] - (button.minY - 8) }
                     }
                     .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
