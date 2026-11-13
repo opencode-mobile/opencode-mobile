@@ -194,6 +194,25 @@ locked take still listening with its text so far.
 Settings › Developer in the app has a component gallery, a speech model lab
 and a sample session that needs no server.
 
+### Test builds
+
+`.github/workflows/hexcode-app-distribution.yml` builds signed release builds
+and sends them to the `hexcode-android` and `hexcode-ios` tester groups in
+Firebase App Distribution. It runs every night at 02:00 UTC, alongside
+OpenCode Mobile's, when main has Hex Code changes from the last 26 hours, and
+on demand:
+
+```bash
+gh workflow run hexcode-app-distribution.yml --ref <branch> -f platform=all
+```
+
+`platform` is `all`, `android` or `ios`; `-f source_ref=<sha>` builds the
+head of an open pull request instead. GitHub dispatches a workflow only once
+its file is on main (the `--ref` branch then supplies the copy that runs), and
+runs nightlies from main's copy, so neither works until it is merged there.
+The release environments it signs in allow `main`, `feature/*` and `fix/*`
+branches.
+
 Progress, what was tested and what is still open are tracked in the draft pull
 request [#980](https://github.com/opencode-mobile/opencode-mobile/pull/980).
 For the repository's rules, read [CONTRIBUTING.md](../CONTRIBUTING.md) and
