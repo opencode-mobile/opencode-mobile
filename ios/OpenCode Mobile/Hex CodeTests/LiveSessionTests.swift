@@ -509,13 +509,17 @@ struct LiveSessionTimingTests {
         await session.open()
         await eventually { transport.connections == 1 }
         let gate = Gate()
+        let waiting = Gate()
         var asked: [Duration] = []
         session.sleep = { duration in
-            await MainActor.run { asked.append(duration) }
+            await MainActor.run {
+                asked.append(duration)
+                waiting.open()
+            }
             await gate.wait()
         }
         session.enteredBackground()
-        await settle()
+        await waiting.wait()
         #expect(asked == [.seconds(5)])
         #expect(stream.isRunning)
         gate.open()
