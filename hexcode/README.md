@@ -207,9 +207,12 @@ gh workflow run hexcode-app-distribution.yml --ref <branch> -f platform=all
 ```
 
 `platform` is `all`, `android` or `ios`; `-f source_ref=<sha>` builds the
-head of an open pull request instead. GitHub dispatches a workflow only once
-its file is on main (the `--ref` branch then supplies the copy that runs), and
-runs nightlies from main's copy, so neither works until it is merged there.
+head of an open pull request instead. On a pull request, the maintainer can
+comment `/distribute hex`, `/distribute hex android` or `/distribute hex ios`
+to send its head commit (`distribute-comment.yml`). GitHub dispatches a
+workflow only once its file is on main (the `--ref` branch then supplies the
+copy that runs), and runs nightlies and comment dispatches from main's copy,
+so none of these work until it is merged there.
 The release environments it signs in allow `main`, `feature/*` and `fix/*`
 branches.
 
