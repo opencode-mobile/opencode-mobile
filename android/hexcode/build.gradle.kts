@@ -107,8 +107,6 @@ dependencies {
     implementation(libs.androidx.camera.view)
 
     testImplementation(libs.junit)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.androidx.test.core)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.ktor.client.mock)
     testImplementation(libs.ktor.client.content.negotiation)

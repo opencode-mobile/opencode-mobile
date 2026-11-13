@@ -97,8 +97,6 @@ object ImageFit {
 class AndroidImagePreparer(
     context: Context,
     private val dir: File = attachDir(context),
-    /** Tests: `ImageDecoder` reads the bytes from memory, since Robolectric's can't read a file descriptor. */
-    private val decodeFromMemory: Boolean = false,
 ) : ImagePreparer {
     private val resolver: ContentResolver = context.contentResolver
     private val cameraDir = cameraDir(context)
@@ -132,12 +130,7 @@ class AndroidImagePreparer(
 
     /** The image upright and scaled, with the type found in its own bytes (`image/png`, `image/heif`). */
     private fun decodeWithImageDecoder(uri: Uri): Pair<Bitmap, String?> {
-        val source =
-            if (decodeFromMemory) {
-                ImageDecoder.createSource(java.nio.ByteBuffer.wrap(open(uri).use { it.readBytes() }))
-            } else {
-                ImageDecoder.createSource(resolver, uri)
-            }
+        val source = ImageDecoder.createSource(resolver, uri)
         var mime: String? = null
         val bitmap =
             ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
