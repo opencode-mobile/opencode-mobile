@@ -38,7 +38,7 @@ final class FakeServerChecks: ServerChecking, @unchecked Sendable {
 struct ServerUpkeepTests {
     private let now = Date(timeIntervalSince1970: 1_793_966_400)
     private let lan = "http://192.168.0.47:4196/"
-    private let tailnet = "http://100.76.89.86:4196/"
+    private let tailnet = "http://100.64.0.1:4196/"
 
     private func setup(signedDaysAgo: Double?, version: String? = "2.2.4") -> HexSetup {
         HexSetup(
@@ -255,7 +255,7 @@ struct ForgetComputerTests {
         let store = HexSetupStore(defaults: defaults, profiles: UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: credentials))
         try await store.save(setup)
         let paired = PairedServer(
-            profile: ConnectionProfile(baseURL: "http://100.76.89.86:4196/", serverURLs: ["http://100.76.89.86:4196/"], username: "opencode", password: "tok_fresh", serverProtocol: .v2),
+            profile: ConnectionProfile(baseURL: "http://100.64.0.1:4196/", serverURLs: ["http://100.64.0.1:4196/"], username: "opencode", password: "tok_fresh", serverProtocol: .v2),
             version: "2.2.5",
             hostname: "MBP.local"
         )
@@ -280,7 +280,7 @@ struct PairAgainTests {
         model: ModelChoice(providerID: "opencode", modelID: "big-pickle", variant: nil)
     )
 
-    private func paired(_ hostname: String?, address: String = "http://100.76.89.86:4196/") -> PairedServer {
+    private func paired(_ hostname: String?, address: String = "http://100.64.0.1:4196/") -> PairedServer {
         PairedServer(
             profile: ConnectionProfile(baseURL: address, serverURLs: [address], username: "opencode", password: "tok_new", serverProtocol: .v2),
             version: "2.2.5",
@@ -298,7 +298,7 @@ struct PairAgainTests {
         let now = Date(timeIntervalSince1970: 1_793_966_400)
         let next = PairAgain.replacing(setup, with: paired("Studio-Mac.local"), now: now)
         #expect(next.profile.password == "tok_new")
-        #expect(next.profile.serverURLs == ["http://100.76.89.86:4196/"])
+        #expect(next.profile.serverURLs == ["http://100.64.0.1:4196/"])
         #expect(next.project == setup.project && next.model == setup.model)
         #expect(next.serverVersion == "2.2.5")
         #expect(next.signedInAt == now)

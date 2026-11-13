@@ -16,9 +16,9 @@ struct BrowserTests {
 
     @Test func zeroAndLoopbackOpenInAppToo() {
         for host in ["127.0.0.1", "0.0.0.0", "LOCALHOST"] {
-            let destination = CardLinks.destination(for: CardLink(label: "x", url: "http://\(host):3000/"), computerHost: "100.76.89.86")
+            let destination = CardLinks.destination(for: CardLink(label: "x", url: "http://\(host):3000/"), computerHost: "100.64.0.1")
             #expect(destination?.inApp == true)
-            #expect(destination?.url.host == "100.76.89.86")
+            #expect(destination?.url.host == "100.64.0.1")
         }
     }
 
