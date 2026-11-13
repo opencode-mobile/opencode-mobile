@@ -17,6 +17,23 @@ did, what it's doing now, and whether it needs you.
 It is made for the moments when you are away from the keyboard: on a walk, on
 the sofa, making coffee while a long task runs.
 
+<table>
+  <tr>
+    <td align="center"><img src="screenshots/home.jpg" width="200" alt="Home: one status card showing what the agent is working on, its to-do progress and the Hold to talk button"></td>
+    <td align="center"><img src="screenshots/permission.jpg" width="200" alt="A permission sheet asking to run two commands, with Deny, Always and Allow once"></td>
+    <td align="center"><img src="screenshots/question.jpg" width="200" alt="A question from the agent with answer options and Say your own answer"></td>
+    <td align="center"><img src="screenshots/summary.jpg" width="200" alt="An idle card with a short bulleted summary of the agent's last reply"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>What it's doing now</sub></td>
+    <td align="center"><sub>Asking permission</sub></td>
+    <td align="center"><sub>Asking you a question</sub></td>
+    <td align="center"><sub>What it did</sub></td>
+  </tr>
+</table>
+
+<sub>iPhone screenshots from the app's built-in sample sessions.</sub>
+
 ## What you can do with it
 
 - **Speak, don't type.** Hold the talk button and speak; slide up to lock it
@@ -148,20 +165,30 @@ network and data code with OpenCode Mobile and has its own screens and design.
 | `ios/OpenCode Mobile/Hex Code/` | The iPhone app (SwiftUI) |
 | `android/hexcode/` | The Android app (Kotlin, Jetpack Compose) |
 | `ios/OpenCodeKit/`, `android/opencode-kit/` | Network and data code shared with OpenCode Mobile |
-| `shared/voice-engine/` | On-device dictation for both platforms; see its [README](../../shared/voice-engine/README.md) |
+| `shared/voice-engine/` | On-device dictation for both platforms; see its [README](../shared/voice-engine/README.md) |
+
+This `hexcode/` folder gathers it all in one place. Besides this README and
+its screenshots, it has symlinks to the code above: `ios`, `android`,
+`opencode-kit-ios`, `opencode-kit-android` and `voice-engine`. They work in a
+clone; on GitHub, use the paths in the table.
+
+To retake the screenshots, run a debug build on the simulator with
+`-HexCodeDemoSetup YES -HexCodeDemoSession <preset>` (presets are in
+`TodaySessionDemo.swift`): `card`, `approval` and `needs` with their sheet
+open, and `bullets`.
 
 Settings › Developer in the app has a component gallery, a speech model lab
 and a sample session that needs no server.
 
 Progress, what was tested and what is still open are tracked in the draft pull
 request [#980](https://github.com/opencode-mobile/opencode-mobile/pull/980).
-For the repository's rules, read [CONTRIBUTING.md](../../CONTRIBUTING.md) and
-[AGENTS.md](../../AGENTS.md).
+For the repository's rules, read [CONTRIBUTING.md](../CONTRIBUTING.md) and
+[AGENTS.md](../AGENTS.md).
 
 ## License
 
-GPL v3, the same as the rest of the repository; see [LICENSE](../../LICENSE),
-[NOTICE](../../NOTICE) and
-[THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md). The opencode name
+GPL v3, the same as the rest of the repository; see [LICENSE](../LICENSE),
+[NOTICE](../NOTICE) and
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). The opencode name
 belongs to the opencode project and is used here only to say what this app
 connects to.
