@@ -53,6 +53,10 @@ nonisolated final class SessionMessageEngine: @unchecked Sendable {
         )
     }
 
+    func hydrateMedia(sessionID: String, from messages: [Message]) -> Bool {
+        store.hydrateMedia(sessionID: sessionID, from: messages)
+    }
+
     func messages(sessionID: String) -> [Message] {
         store.messages(sessionID: sessionID)
     }

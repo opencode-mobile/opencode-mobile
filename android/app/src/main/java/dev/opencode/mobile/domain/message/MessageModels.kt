@@ -189,7 +189,9 @@ sealed class MessagePart {
         val isMalformed: Boolean = false,
         /**
          * Images the tool returned (v1 `attachments`, v2 `content[type=file]`), in order. Only
-         * images the app can show; other returned files are dropped. Each carries its data URL.
+         * images the app can show; other returned files are dropped. A server copy carries the
+         * data URL; a copy restored from the session cache carries only metadata and, when one
+         * was saved, a [File.thumbnailPath].
          */
         val images: List<File> = emptyList(),
     ) : MessagePart()
@@ -202,7 +204,16 @@ sealed class MessagePart {
         val dataUrl: String,
         /** Absolute server path of an uploaded file (`metadata.attachments`); [dataUrl] is empty then. */
         val serverPath: String? = null,
-    ) : MessagePart()
+        /**
+         * On-device JPEG thumbnail of a tool image ([ToolImageThumbnails]); null when none was
+         * saved. Lets a cached timeline draw the image without its data URL.
+         */
+        val thumbnailPath: String? = null,
+    ) : MessagePart() {
+        /** The full picture is in memory (a server copy), not just metadata from the cache. */
+        val hasFullData: Boolean
+            get() = dataUrl.isNotEmpty()
+    }
 
     /**
      * Server compaction marker. Drives live Compacting… detection; on an

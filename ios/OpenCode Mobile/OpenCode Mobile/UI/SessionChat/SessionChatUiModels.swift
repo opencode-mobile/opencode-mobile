@@ -676,10 +676,54 @@ struct ChildSessionNavigationTarget: Hashable {
     }
 }
 
+/// The full picture of one viewer page. A page opens on its thumbnail; one without the full
+/// picture loads it (`loading`) and then shows it (`full`) or stays on the thumbnail (`failed`).
+enum SessionChatFullImageState: Equatable {
+    case thumbnail
+    case loading
+    case full
+    case failed
+}
+
 /// The image viewer over one gallery: every image of the group and the page shown.
 struct SessionChatImageViewerState: Equatable {
-    let images: [FilePart]
+    /// In gallery order. An image is replaced by its full copy once that arrives.
+    private(set) var images: [FilePart]
     var index: Int
+    /// The message each image came from, when the gallery knows it.
+    let messageID: String?
+    private(set) var fullImages: [String: SessionChatFullImageState]
+
+    init(images: [FilePart], index: Int, messageID: String? = nil) {
+        self.images = images
+        self.index = index
+        self.messageID = messageID
+        self.fullImages = Dictionary(
+            images.map { ($0.id, MessageImageLoader.isFull($0) ? SessionChatFullImageState.full : .thumbnail) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    var currentImage: FilePart? { images.indices.contains(index) ? images[index] : nil }
+
+    func fullState(of imageID: String) -> SessionChatFullImageState {
+        fullImages[imageID] ?? .thumbnail
+    }
+
+    mutating func setLoading(_ imageID: String) {
+        fullImages[imageID] = .loading
+    }
+
+    mutating func setFailed(_ imageID: String) {
+        fullImages[imageID] = .failed
+    }
+
+    /// Swaps in the full copy; keeps the thumbnail the gallery already had.
+    mutating func setFull(_ image: FilePart) {
+        guard let position = images.firstIndex(where: { $0.id == image.id }) else { return }
+        images[position] = MessageMedia.merge(prior: images[position], next: image)
+        fullImages[image.id] = .full
+    }
 }
 
 struct SessionChatTimelineRegionState: Equatable {

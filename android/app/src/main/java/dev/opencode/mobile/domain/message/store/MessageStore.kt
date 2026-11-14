@@ -60,6 +60,16 @@ interface MessageStore {
         expectedRevision: Long,
     ): Boolean
 
+    /**
+     * Copies media the session cache does not keep (tool images, file data URLs) from a fetched
+     * page into the parts already stored, matched by message and part id. Nothing else changes,
+     * and a full data URL is never replaced by an empty one. True when any part changed.
+     */
+    fun hydrateMedia(
+        sessionId: String,
+        messages: List<Message>,
+    ): Boolean
+
     /** Ends cached streaming state after an idle reload failure so polling can recover. */
     fun finishStreamingText(sessionId: String)
 

@@ -247,6 +247,42 @@ class InMemoryMessageStore
         }
 
         @Synchronized
+        override fun hydrateMedia(
+            sessionId: String,
+            messages: List<Message>,
+        ): Boolean {
+            val sessionParts = partsCaches[sessionId] ?: return false
+            var changed = false
+            for (message in messages) {
+                val stored = sessionParts[message.id] ?: continue
+                for (part in message.parts) {
+                    val partId = part.stablePartId() ?: continue
+                    val existing = stored[partId] ?: continue
+                    val hydrated =
+                        when {
+                            existing is MessagePart.Tool && part is MessagePart.Tool -> {
+                                val images = ToolResultImages.merge(existing.images, part.images)
+                                if (images == existing.images) existing else existing.copy(images = images)
+                            }
+                            existing is MessagePart.File && part is MessagePart.File ->
+                                if (existing.dataUrl.isEmpty() && part.dataUrl.isNotEmpty()) {
+                                    existing.copy(dataUrl = part.dataUrl)
+                                } else {
+                                    existing
+                                }
+                            else -> existing
+                        }
+                    if (hydrated !== existing) {
+                        stored[partId] = hydrated
+                        changed = true
+                    }
+                }
+            }
+            if (changed) bumpRevision(sessionId)
+            return changed
+        }
+
+        @Synchronized
         override fun finishStreamingText(sessionId: String) {
             var changed = false
             for ((messageId, messageParts) in partsCaches[sessionId].orEmpty()) {
@@ -1067,6 +1103,7 @@ class InMemoryMessageStore
                                 metadata = mergeJson(existing.metadata, incoming.metadata),
                                 timeStartEpochMs = existing.timeStartEpochMs ?: incoming.timeStartEpochMs,
                                 timeEndEpochMs = existing.timeEndEpochMs ?: incoming.timeEndEpochMs,
+                                images = ToolResultImages.merge(existing.images, incoming.images),
                             )
                         }
                         existing.copy(
@@ -1086,8 +1123,9 @@ class InMemoryMessageStore
                             timeEndEpochMs = incoming.timeEndEpochMs ?: existing.timeEndEpochMs,
                             isInterrupted = incoming.isInterrupted,
                             isMalformed = incoming.isMalformed || existing.isMalformed,
-                            // Only the terminal update carries files; a later bare update keeps them.
-                            images = incoming.images.ifEmpty { existing.images },
+                            // Only the terminal update carries files; a later bare update keeps them,
+                            // and a cached thumbnail-only copy never replaces a full data URL.
+                            images = ToolResultImages.merge(existing.images, incoming.images),
                         )
                     }
                     existing is MessagePart.Text && incoming is MessagePart.Text -> {
@@ -1121,6 +1159,7 @@ class InMemoryMessageStore
                             mime = incoming.mime.ifBlank { existing.mime },
                             kind = incoming.kind,
                             dataUrl = incoming.dataUrl.ifBlank { existing.dataUrl },
+                            thumbnailPath = incoming.thumbnailPath ?: existing.thumbnailPath,
                         )
                     existing is MessagePart.Compaction && incoming is MessagePart.Compaction ->
                         existing.copy(

@@ -78,6 +78,10 @@ actor InMemorySessionCacheStore: SessionCacheStore {
         return SessionCacheReport(totalBytes: bytes, entryCount: Int64(selected.count))
     }
 
+    func messageTimelineKeys() async -> [SessionCacheKey]? {
+        rows.values.map(\.key).filter { $0.kind == .messageTimeline }
+    }
+
     private func matchesConnection(_ key: SessionCacheKey, prefix: String, matchByUrlPrefix: Bool) -> Bool {
         if matchByUrlPrefix {
             return key.connectionId.lowercased().hasPrefix(prefix.lowercased())

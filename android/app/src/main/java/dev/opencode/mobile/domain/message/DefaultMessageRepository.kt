@@ -59,6 +59,13 @@ class DefaultMessageRepository
             messageSync.clearCache()
         }
 
+        override suspend fun fullImage(
+            sessionId: String,
+            directory: String?,
+            messageId: String,
+            imageId: String,
+        ): MessagePart.File = messageSync.fullImage(sessionId, directory, messageId, imageId)
+
         override suspend fun loadOlderMessages(
             sessionId: String,
             directory: String?,

@@ -24,6 +24,9 @@ nonisolated protocol SessionCache: AnyObject, Sendable {
     func purgeConnection(profileID: String, serverBaseURL: String) async
     func clearAll() async
     func estimatedSizeBytes() async -> Int64
+    /// Launch upkeep of tool-image thumbnails: drop folders with no cached timeline, then evict
+    /// least recently viewed files over the size cap.
+    func maintainThumbnails() async
 }
 
 extension SessionCache {
@@ -35,6 +38,7 @@ extension SessionCache {
     func seedWorktreeLayout(worktree: String, connectionID: String?) async -> HomeWorktreeLayout? { nil }
     func rememberWorktreeLayout(worktree: String, layout: HomeWorktreeLayout) {}
     func purgeConnection(profileID: String, serverBaseURL: String) async {}
+    func maintainThumbnails() async {}
 }
 
 nonisolated protocol SessionMessageCacheHandle: AnyObject, Sendable {

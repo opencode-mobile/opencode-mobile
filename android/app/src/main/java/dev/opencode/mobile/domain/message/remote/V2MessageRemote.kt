@@ -40,6 +40,16 @@ internal class V2MessageRemote(
         )
     }
 
+    override suspend fun getMessage(
+        sessionId: String,
+        messageId: String,
+        directory: String?,
+    ): Message {
+        val projected = adapter.projectV2(listOf(api.getMessageV2(sessionId, messageId)))
+        return projected.firstOrNull { it.id == messageId }
+            ?: throw MessageError.Decoding(IllegalStateException("message did not project"))
+    }
+
     override suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,

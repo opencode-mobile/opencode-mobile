@@ -225,6 +225,50 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         return true
     }
 
+    func hydrateMedia(sessionID: String, from messages: [Message]) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !messages.isEmpty else { return false }
+        let sourceByID = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        var changed = false
+        if var sessionParts = partsCache[sessionID] {
+            for (messageID, source) in sourceByID {
+                guard var parts = sessionParts[messageID] else { continue }
+                var partsChanged = false
+                for part in source.parts {
+                    guard let partID = part.mediaPartID,
+                          let existing = parts[partID],
+                          let next = MessageMedia.hydrated(existing, from: part)
+                    else { continue }
+                    parts[partID] = next
+                    partsChanged = true
+                }
+                if partsChanged {
+                    sessionParts[messageID] = parts
+                    changed = true
+                }
+            }
+            if changed { partsCache[sessionID] = sessionParts }
+        }
+        if var base = baseMessages[sessionID] {
+            var baseChanged = false
+            for index in base.indices {
+                guard let source = sourceByID[base[index].id],
+                      let next = MessageMedia.hydrated(base[index], from: source)
+                else { continue }
+                base[index] = next
+                baseChanged = true
+            }
+            if baseChanged {
+                baseMessages[sessionID] = base
+                changed = true
+            }
+        }
+        // No revision bump: hydration only fills media the copies already agree on, so a REST
+        // apply guarded by `expectedRevision` (in flight while a viewer fetch lands) stays valid.
+        return changed
+    }
+
     func prependOlderIfRevision(
         sessionID: String,
         older: [Message],
@@ -1225,8 +1269,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     timeEndEpochMs: next.timeEndEpochMs ?? prior.timeEndEpochMs,
                     isInterrupted: next.isInterrupted,
                     isMalformed: next.isMalformed || prior.isMalformed,
-                    // Images arrive once, with the settled call; a later update without them keeps them.
-                    images: next.images.isEmpty ? prior.images : next.images
+                    // Images arrive once, with the settled call; a later update without them keeps them,
+                    // and a thumbnail-only copy never replaces a full picture (see `MessageMedia`).
+                    images: MessageMedia.mergeImages(prior: prior.images, next: next.images)
                 )
             )
         case (.text(let prior), .text(let next)):
@@ -1260,13 +1305,16 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                 )
             )
         case (.file(let prior), .file(let next)):
+            let file = MessageMedia.merge(prior: prior, next: next)
             merged = .file(
                 FilePart(
                     id: prior.id,
-                    filename: next.filename.isEmpty ? prior.filename : next.filename,
-                    mime: next.mime.isEmpty ? prior.mime : next.mime,
-                    kind: next.kind,
-                    dataURL: next.dataURL.isEmpty ? prior.dataURL : next.dataURL
+                    filename: file.filename,
+                    mime: file.mime,
+                    kind: file.kind,
+                    dataURL: file.dataURL,
+                    previewData: file.previewData,
+                    serverPath: file.serverPath
                 )
             )
         case (.compaction(let prior), .compaction(let next)):

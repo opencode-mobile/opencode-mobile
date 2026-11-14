@@ -47,11 +47,13 @@ nonisolated enum SessionCacheCodec {
         }
     }
 
-    static func encodeMessages(_ messages: [Message]) throws -> String {
+    /// `thumbnailImageIDs` names the tool images with a thumbnail file on disk; each tool image
+    /// is stored as metadata only (no data URL, no thumbnail bytes).
+    static func encodeMessages(_ messages: [Message], thumbnailImageIDs: Set<String> = []) throws -> String {
         let envelope = CachedEnvelope(
             schemaVersion: schemaVersion,
             sessions: nil,
-            messages: CachedMessageListPayload(messages: messages.map { $0.toCachePayload() }),
+            messages: CachedMessageListPayload(messages: messages.map { $0.toCachePayload(thumbnailImageIDs: thumbnailImageIDs) }),
             activity: nil
         )
         let data = try encoder.encode(envelope)
@@ -62,6 +64,11 @@ nonisolated enum SessionCacheCodec {
     }
 
     static func decodeMessages(_ raw: String) -> [Message]? {
+        decodeMessageTimeline(raw)?.messages
+    }
+
+    /// The cached messages and the ids of tool images whose cache entry says a thumbnail file exists.
+    static func decodeMessageTimeline(_ raw: String) -> CachedMessageTimeline? {
         guard let data = raw.data(using: .utf8) else { return nil }
         do {
             let envelope = try decoder.decode(CachedEnvelope.self, from: data)
@@ -73,7 +80,14 @@ nonisolated enum SessionCacheCodec {
                 DiagnosticLog.warning(.session, "message decode failed: missing messages payload")
                 return nil
             }
-            return messages.map { $0.toDomain() }
+            let thumbnailImageIDs = messages.reduce(into: Set<String>()) { ids, message in
+                for part in message.parts {
+                    for image in part.images ?? [] where image.thumb == true {
+                        ids.insert(image.id)
+                    }
+                }
+            }
+            return CachedMessageTimeline(messages: messages.map { $0.toDomain() }, thumbnailImageIDs: thumbnailImageIDs)
         } catch {
             DiagnosticLog.warning(.session, "message decode failed: \(error.localizedDescription)")
             return nil
@@ -167,6 +181,11 @@ nonisolated enum SessionCacheCodec {
         }
         return HomeWorktreeLayout(directories: payload.directories, branches: payload.branches)
     }
+}
+
+nonisolated struct CachedMessageTimeline: Sendable, Equatable {
+    let messages: [Message]
+    let thumbnailImageIDs: Set<String>
 }
 
 nonisolated enum SessionCacheCodecError: Error {
@@ -367,6 +386,9 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
     let auto: Bool?
     let isInterrupted: Bool
     let isMalformed: Bool
+    /// Tool-returned images: metadata only. The picture is never stored; a thumbnail lives as a
+    /// file under `tool-thumbs` when `thumb` is set.
+    let images: [CachedToolImagePayload]?
 
     init(
         kind: String,
@@ -392,7 +414,8 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         timeEndEpochMs: Int64? = nil,
         auto: Bool? = nil,
         isInterrupted: Bool = false,
-        isMalformed: Bool = false
+        isMalformed: Bool = false,
+        images: [CachedToolImagePayload]? = nil
     ) {
         self.kind = kind
         self.id = id
@@ -418,6 +441,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         self.auto = auto
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
+        self.images = images
     }
 
     init(from decoder: Decoder) throws {
@@ -446,7 +470,17 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         auto = try container.decodeIfPresent(Bool.self, forKey: .auto)
         isInterrupted = try container.decodeIfPresent(Bool.self, forKey: .isInterrupted) ?? false
         isMalformed = try container.decodeIfPresent(Bool.self, forKey: .isMalformed) ?? false
+        images = try container.decodeIfPresent([CachedToolImagePayload].self, forKey: .images)
     }
+}
+
+nonisolated private struct CachedToolImagePayload: Codable, Sendable {
+    let id: String
+    let filename: String
+    let mime: String
+    let kind: String
+    /// A thumbnail file was written for this image.
+    let thumb: Bool?
 }
 
 nonisolated private struct CachedMessageTokenUsagePayload: Codable, Sendable {
@@ -603,12 +637,12 @@ private extension CachedActivityEntryPayload {
 }
 
 private extension Message {
-    func toCachePayload() -> CachedMessagePayload {
+    func toCachePayload(thumbnailImageIDs: Set<String>) -> CachedMessagePayload {
         CachedMessagePayload(
             id: id,
             role: role.rawValue,
             text: text,
-            parts: parts.compactMap { $0.toCachePayload() },
+            parts: parts.compactMap { $0.toCachePayload(thumbnailImageIDs: thumbnailImageIDs) },
             cost: cost,
             tokens: tokens?.toCachePayload(),
             model: model,
@@ -711,7 +745,7 @@ private extension CachedMessageContextEstimatePayload {
 }
 
 private extension MessagePart {
-    func toCachePayload() -> CachedMessagePartPayload? {
+    func toCachePayload(thumbnailImageIDs: Set<String>) -> CachedMessagePartPayload? {
         switch self {
         case let .text(part):
             return CachedMessagePartPayload(
@@ -737,7 +771,16 @@ private extension MessagePart {
                 timeStartEpochMs: part.timeStartEpochMs,
                 timeEndEpochMs: part.timeEndEpochMs,
                 isInterrupted: part.isInterrupted,
-                isMalformed: part.isMalformed
+                isMalformed: part.isMalformed,
+                images: part.images.isEmpty ? nil : part.images.map { image in
+                    CachedToolImagePayload(
+                        id: image.id,
+                        filename: image.filename,
+                        mime: image.mime,
+                        kind: image.kind.rawValue,
+                        thumb: thumbnailImageIDs.contains(image.id) ? true : nil
+                    )
+                }
             )
         case let .file(part):
             return CachedMessagePartPayload(
@@ -876,7 +919,16 @@ private extension CachedMessagePartPayload {
                     timeStartEpochMs: timeStartEpochMs,
                     timeEndEpochMs: timeEndEpochMs,
                     isInterrupted: isInterrupted,
-                    isMalformed: isMalformed
+                    isMalformed: isMalformed,
+                    images: (images ?? []).map { image in
+                        FilePart(
+                            id: image.id,
+                            filename: image.filename,
+                            mime: image.mime,
+                            kind: AttachmentKind(rawValue: image.kind.lowercased()) ?? .image,
+                            dataURL: ""
+                        )
+                    }
                 )
             )
         case "file":

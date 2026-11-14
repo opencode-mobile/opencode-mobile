@@ -2390,6 +2390,17 @@
         }
       }
     },
+    "component.image_viewer.could_not_load_full" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load full image"
+          }
+        }
+      }
+    },
     "component.image_viewer.could_not_load_named" : {
       "comment" : "%1$s is the image file name.",
       "extractionState" : "manual",
@@ -2413,6 +2424,17 @@
         }
       }
     },
+    "component.image_viewer.loading_full" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading full image"
+          }
+        }
+      }
+    },
     "component.image_viewer.position" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2420,6 +2442,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "component.image_viewer.retry" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry"
           }
         }
       }

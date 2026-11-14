@@ -34,6 +34,7 @@ import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.AttachmentIngestionResult
 import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.FollowUpDelivery
@@ -1115,6 +1116,21 @@ class SessionChatViewModel
         suspend fun loadAttachmentPreview(serverPath: String): ByteArray? {
             val directory = boundWorktree ?: return null
             return serverFilePreviews.read(serverPath, directory, ATTACHMENT_PREVIEW_MAX_BYTES)
+        }
+
+        /**
+         * The full picture of timeline image [imageId] in [messageId], fetched from the server
+         * when the timeline only holds its cached thumbnail. Throws when it cannot be loaded.
+         */
+        suspend fun loadFullImage(
+            messageId: String,
+            imageId: String,
+        ): ByteArray {
+            val sessionId = boundSessionId ?: error("no session bound")
+            val directory = transcriptWorktree ?: boundWorktree
+            val file = activityMessageRepository.fullImage(sessionId, directory, messageId, imageId)
+            return withContext(Dispatchers.Default) { AttachmentDataUrl.decode(file.dataUrl, file.mime) }
+                ?: error("image data did not decode")
         }
 
         fun addAttachments(attachments: List<Attachment>) {

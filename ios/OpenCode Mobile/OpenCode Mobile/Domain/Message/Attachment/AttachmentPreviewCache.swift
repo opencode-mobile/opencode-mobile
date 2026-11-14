@@ -51,11 +51,23 @@ nonisolated final class AttachmentPreviewCache: @unchecked Sendable {
     /// Decodes missing previews. Call off the main actor.
     func warm(_ messages: [Message]) {
         for message in messages {
-            for case .file(let file) in message.parts {
-                guard file.previewData == nil, let key = key(for: file), !contains(key) else { continue }
-                let preview = AttachmentDataURL.decodedData(from: file.dataURL, expectedMime: file.mime)
-                    .flatMap(AttachmentPreview.make(data:))
-                store(preview.map(Entry.preview) ?? .unavailable, for: key)
+            for part in message.parts {
+                switch part {
+                case .file(let file):
+                    guard file.previewData == nil, let key = key(for: file), !contains(key) else { continue }
+                    let preview = AttachmentDataURL.decodedData(from: file.dataURL, expectedMime: file.mime)
+                        .flatMap(AttachmentPreview.make(data:))
+                    store(preview.map(Entry.preview) ?? .unavailable, for: key)
+                case .tool(let tool):
+                    // Tool images get the same thumbnail the session cache writes to disk.
+                    for image in tool.images {
+                        guard image.previewData == nil, let key = key(for: image), !contains(key) else { continue }
+                        let preview = ToolThumbnail.make(dataURL: image.dataURL, mime: image.mime)
+                        store(preview.map(Entry.preview) ?? .unavailable, for: key)
+                    }
+                default:
+                    continue
+                }
             }
         }
     }

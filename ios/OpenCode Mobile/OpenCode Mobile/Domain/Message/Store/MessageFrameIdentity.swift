@@ -27,6 +27,12 @@ nonisolated struct MessageTailIdentityItem: Sendable, Equatable {
     let messageId: String
     let timestampMs: Int64?
     let partCount: Int
+    /// Tool images the message names. Caches written before tool images were persisted hold
+    /// none, so without this an image-less cached copy "matched" a server copy with images and
+    /// the confirm kept the cache. Counting names, not inline data, keeps a current cache
+    /// (metadata + thumbnail, data blanked on disk) confirmable; the confirm then hydrates the
+    /// full data from the fetched page by part id.
+    let toolImageCount: Int
 }
 
 nonisolated enum MessageTailIdentity {
@@ -35,7 +41,8 @@ nonisolated enum MessageTailIdentity {
             MessageTailIdentityItem(
                 messageId: message.id,
                 timestampMs: message.tailTimestampMs,
-                partCount: message.parts.count
+                partCount: message.parts.count,
+                toolImageCount: message.parts.reduce(0) { $0 + $1.toolImages.count }
             )
         }
     }

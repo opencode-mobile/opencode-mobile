@@ -1030,10 +1030,12 @@ data class SessionChatAttachmentItem(
     val signature: String,
     val imageBytes: ByteArray? = null,
     val imageSource: OpenCodeAttachmentImageSource? = null,
+    /** On-device thumbnail of a tool image restored from the session cache (no data URL in memory). */
+    val thumbnailPath: String? = null,
 ) {
-    /** An image the timeline can draw (it has a preview or a source), so it can join a gallery. */
+    /** An image the timeline can draw (a preview, a source, or a saved thumbnail), so it can join a gallery. */
     val isGalleryImage: Boolean
-        get() = variant == OpenCodeAttachmentVariant.Image && (imageBytes != null || imageSource != null)
+        get() = variant == OpenCodeAttachmentVariant.Image && (imageBytes != null || imageSource != null || thumbnailPath != null)
 
     override fun equals(other: Any?): Boolean =
         other is SessionChatAttachmentItem &&
@@ -1042,13 +1044,16 @@ data class SessionChatAttachmentItem(
             variant == other.variant &&
             signature == other.signature &&
             imageBytes.contentEquals(other.imageBytes) &&
-            imageSource == other.imageSource
+            imageSource == other.imageSource &&
+            thumbnailPath == other.thumbnailPath
 
     override fun hashCode(): Int =
         31 * (
-            31 * (31 * (31 * (31 * id.hashCode() + filename.hashCode()) + variant.hashCode()) + signature.hashCode()) +
-                imageBytes.contentHashCode()
-        ) + imageSource.hashCode()
+            31 * (
+                31 * (31 * (31 * (31 * id.hashCode() + filename.hashCode()) + variant.hashCode()) + signature.hashCode()) +
+                    imageBytes.contentHashCode()
+            ) + imageSource.hashCode()
+        ) + thumbnailPath.hashCode()
 }
 
 fun MessageRole.displayLabel(): String =

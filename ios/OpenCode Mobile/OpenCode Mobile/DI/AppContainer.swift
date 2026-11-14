@@ -237,7 +237,7 @@ extension Container {
     var sessionCache: Factory<any SessionCache> {
         onMainActor {
             let manager = self.activeConnectionManager()
-            return DefaultSessionCache(
+            let cache = DefaultSessionCache(
                 store: self.sessionCacheStore(),
                 connectionIdProvider: {
                     if let id = manager.currentProfile()?.id, !id.isEmpty {
@@ -248,8 +248,15 @@ extension Container {
                         baseURL: connection.baseURL.absoluteString,
                         username: connection.username
                     )
-                }
+                },
+                thumbnails: ToolThumbnailStore.defaultRoot().map { ToolThumbnailStore(root: $0) }
             )
+            // Once per launch, after first paint: orphan sweep and size cap of tool thumbnails.
+            Task.detached(priority: .utility) {
+                try? await Task.sleep(for: .seconds(5))
+                await cache.maintainThumbnails()
+            }
+            return cache
         }.singleton
     }
 

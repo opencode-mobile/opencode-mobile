@@ -142,6 +142,58 @@ struct MessageProtocolRepositoryTests {
         #expect(inboxURL.path.hasSuffix("/inbox"))
     }
 
+    @Test func v1GetMessageFetchesOneMessageWithToolImages() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            .json(#"""
+            {"info":{"id":"msg_1","role":"assistant","time":{"created":1,"completed":2}},
+             "parts":[{"id":"prt_read","type":"tool","tool":"read","callID":"call_1","state":{
+               "status":"completed","input":{},"output":"Image read successfully",
+               "attachments":[{"id":"prt_file_1","type":"file","mime":"image/png","filename":"shot.png","url":"\#(ToolImageMappingTests.pngDataURL)"}]}}]}
+            """#)
+        ])
+        let router = makeRouter(serverProtocol: .v1)
+
+        let message = try await router.getMessage(sessionID: "ses_1", messageID: "msg_1", directory: "/repo")
+
+        #expect(message.id == "msg_1")
+        #expect(message.toolImages.map(\.id) == ["prt_file_1"])
+        #expect(message.toolImages.first?.dataURL == ToolImageMappingTests.pngDataURL)
+        let url = try #require(MessageProtocolURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/session/ses_1/message/msg_1"))
+        #expect(queryValue(url, "directory") == "/repo")
+    }
+
+    @Test func v2GetMessageReadsTheDataEnvelope() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            .json(#"""
+            {"data":{"id":"msg_asst","type":"assistant","content":[
+              {"type":"tool","id":"call_read","name":"read","state":{"status":"completed","input":{},"content":[
+                {"type":"text","text":"Image read successfully"},
+                {"type":"file","uri":"\#(ToolImageMappingTests.pngDataURL)","mime":"image/png","name":"shot.png"}
+              ]}}
+            ],"time":{"created":3,"completed":4}}}
+            """#)
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        let message = try await router.getMessage(sessionID: "ses_2", messageID: "msg_asst", directory: "/repo")
+
+        #expect(message.id == "msg_asst")
+        #expect(message.toolImages.map(\.id) == ["call_read:file:0"])
+        #expect(message.toolImages.first?.dataURL == ToolImageMappingTests.pngDataURL)
+        let url = try #require(MessageProtocolURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/api/session/ses_2/message/msg_asst"))
+    }
+
+    @Test func v2GetMessageFailureThrows() async {
+        MessageProtocolURLProtocol.reset(responses: [MessageStubResponse(statusCode: 404, body: "missing")])
+        let router = makeRouter(serverProtocol: .v2)
+
+        await #expect(throws: (any Error).self) {
+            _ = try await router.getMessage(sessionID: "ses_2", messageID: "msg_gone", directory: nil)
+        }
+    }
+
     @Test func v2ListMessagesMergesInboxQueueDelivery() async throws {
         MessageProtocolURLProtocol.reset(responses: [
             .json(#"""

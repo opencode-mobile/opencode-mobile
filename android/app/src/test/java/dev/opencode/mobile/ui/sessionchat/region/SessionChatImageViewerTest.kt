@@ -4,21 +4,30 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeImageGalleryLayout
+import dev.opencode.mobile.ui.components.OpenCodeImageViewerPageStatus
 import dev.opencode.mobile.ui.components.openCodeGalleryImageLabel
 import dev.opencode.mobile.ui.sessionchat.SessionChatAttachmentItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatByteLru
 import dev.opencode.mobile.ui.sessionchat.SessionChatGalleryImageLoader
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageGalleries
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageViewerState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatImageShare
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Viewer state actions, gallery lookup, the gallery loader, and layout selection (#898). */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SessionChatImageViewerTest {
     private val gallery =
         SessionChatTimelineBlock.ImageGallery(blockID = "img:p:t1", images = listOf(item("a"), item("b"), item("c")), fromTool = true)
@@ -91,6 +100,111 @@ class SessionChatImageViewerTest {
             loader.update(listOf(message(SessionChatTimelineBlock.Attachment("p:u", uploaded))))
 
             assertArrayEquals(byteArrayOf(7), loader.load("u"))
+        }
+
+    @Test
+    fun loader_thumbnailOnlyImage_readsThumbnailAndFetchesFullThroughItsMessage() =
+        runBlocking {
+            val cached = item("t").copy(imageSource = null, thumbnailPath = "/cache/tool-thumbs/c/s/t.jpg")
+            val fetched = mutableListOf<Pair<String, String>>()
+            val memory = SessionChatByteLru(maxBytes = 1_024)
+            val loader =
+                SessionChatGalleryImageLoader(
+                    fullImageLoader = { messageId, imageId ->
+                        fetched += messageId to imageId
+                        byteArrayOf(9, 9)
+                    },
+                    thumbnailReader = { path -> if (path.endsWith("t.jpg")) byteArrayOf(4) else null },
+                    memory = memory,
+                ) { null }
+            val gallery = SessionChatTimelineBlock.ImageGallery("img:p:t", listOf(cached), fromTool = true)
+            loader.update(listOf(message(gallery, id = "msg_tool")))
+
+            assertTrue(cached.isGalleryImage)
+            assertArrayEquals(byteArrayOf(4), loader.thumbnail("t"))
+            assertArrayEquals(byteArrayOf(9, 9), loader.loadFull("t"))
+            // A second load is a memory hit: no second fetch.
+            assertArrayEquals(byteArrayOf(9, 9), loader.loadFull("t"))
+            assertEquals(listOf("msg_tool" to "t"), fetched)
+        }
+
+    @Test
+    fun loader_fullFetchFailureThrowsAndLoadReturnsNull() =
+        runBlocking {
+            val cached = item("t").copy(imageSource = null, thumbnailPath = "/cache/tool-thumbs/c/s/t.jpg")
+            val loader =
+                SessionChatGalleryImageLoader(
+                    fullImageLoader = { _, _ -> error("offline") },
+                    memory = SessionChatByteLru(maxBytes = 1_024),
+                ) { null }
+            loader.update(listOf(message(SessionChatTimelineBlock.ImageGallery("img:p:t", listOf(cached), fromTool = true))))
+
+            assertNull(loader.load("t"))
+            assertTrue(runCatching { loader.loadFull("t") }.isFailure)
+        }
+
+    @Test
+    fun galleryImage_loadKeyChangesWhenFullDataArrives() {
+        val thumbOnly = item("t").copy(imageSource = null, thumbnailPath = "/cache/tool-thumbs/c/s/t.jpg")
+        val hydrated = thumbOnly.copy(imageSource = OpenCodeAttachmentImageSource.DataUrl(PNG_URL, "image/png"))
+        assertNotEquals(
+            SessionChatImageGalleries.galleryImage(thumbOnly).loadKey,
+            SessionChatImageGalleries.galleryImage(hydrated).loadKey,
+        )
+    }
+
+    @Test
+    fun byteLru_evictsLeastRecentlyUsedUnderTheCap() {
+        val lru = SessionChatByteLru(maxBytes = 10)
+        lru.put("a", ByteArray(4))
+        lru.put("b", ByteArray(4))
+        lru.get("a")
+        lru.put("c", ByteArray(4))
+        assertNull(lru.get("b"))
+        assertEquals(8L, lru.totalBytes)
+        lru.put("huge", ByteArray(11))
+        assertNull(lru.get("huge"))
+        lru.clear()
+        assertNull(lru.get("a"))
+    }
+
+    @Test
+    fun fullImageModel_movesThumbnailLoadingFull() =
+        runTest {
+            val gate = CompletableDeferred<ByteArray>()
+            val model = SessionChatFullImageModel(backgroundScope) { gate.await() }
+            assertEquals(OpenCodeImageViewerPageStatus.Thumbnail, model.state.value.status("a"))
+
+            model.show("a")
+            runCurrent()
+            assertEquals(OpenCodeImageViewerPageStatus.Loading, model.state.value.status("a"))
+
+            gate.complete(byteArrayOf(1))
+            runCurrent()
+            assertEquals(OpenCodeImageViewerPageStatus.Full, model.state.value.status("a"))
+        }
+
+    @Test
+    fun fullImageModel_failureStaysUntilRetry() =
+        runTest {
+            var attempts = 0
+            val model =
+                SessionChatFullImageModel(backgroundScope) {
+                    attempts += 1
+                    if (attempts == 1) error("offline") else byteArrayOf(1)
+                }
+
+            model.show("a")
+            runCurrent()
+            assertEquals(OpenCodeImageViewerPageStatus.Failed, model.state.value.status("a"))
+            model.show("a")
+            runCurrent()
+            assertEquals(1, attempts)
+
+            model.retry("a")
+            runCurrent()
+            assertEquals(OpenCodeImageViewerPageStatus.Full, model.state.value.status("a"))
+            assertEquals(2, attempts)
         }
 
     @Test

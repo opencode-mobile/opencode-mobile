@@ -12,12 +12,14 @@ import dev.opencode.mobile.data.local.sessioncache.OpenCodeMobileDatabase
 import dev.opencode.mobile.data.local.sessioncache.RoomSessionCacheStore
 import dev.opencode.mobile.data.local.sessioncache.SessionCacheDao
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.message.ToolImageThumbnails
 import dev.opencode.mobile.domain.sessioncache.CacheUrlNormalizer
 import dev.opencode.mobile.domain.sessioncache.DefaultSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCacheStore
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.serialization.json.Json
+import java.io.File
 import javax.inject.Singleton
 
 @Module
@@ -45,11 +47,18 @@ abstract class SessionCacheModule {
 
         @Provides
         @Singleton
+        fun provideToolImageThumbnails(
+            @ApplicationContext context: Context,
+        ): ToolImageThumbnails = ToolImageThumbnails(root = File(context.cacheDir, ToolImageThumbnails.DIRECTORY_NAME))
+
+        @Provides
+        @Singleton
         fun provideSessionCache(
             store: SessionCacheStore,
             liveStoreScope: LiveStoreScope,
             json: Json,
             activeConnectionManager: ActiveConnectionManager,
+            thumbnails: ToolImageThumbnails,
         ): SessionCache =
             DefaultSessionCache(
                 store = store,
@@ -64,6 +73,11 @@ abstract class SessionCacheModule {
                 },
                 scope = liveStoreScope.coroutineScope,
                 json = json,
-            )
+                thumbnails = thumbnails,
+            ).also { cache ->
+                // The cache is built once, early in the app's life: the launch-time sweep and
+                // eviction of tool thumbnails run from here, off the main thread.
+                cache.startThumbnailMaintenance()
+            }
     }
 }

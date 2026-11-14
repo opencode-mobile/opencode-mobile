@@ -671,6 +671,25 @@ nonisolated struct ToolPart: Equatable, Sendable {
         )
     }
 
+    func withImages(_ images: [FilePart]) -> ToolPart {
+        ToolPart(
+            id: id,
+            toolName: toolName,
+            status: status,
+            title: title,
+            error: error,
+            callID: callID,
+            input: input,
+            output: output,
+            metadata: metadata,
+            timeStartEpochMs: timeStartEpochMs,
+            timeEndEpochMs: timeEndEpochMs,
+            isInterrupted: isInterrupted,
+            isMalformed: isMalformed,
+            images: images
+        )
+    }
+
     func withMetadataValue(_ value: AnyCodable, forKey key: String) -> ToolPart {
         var metadata = metadata ?? [:]
         metadata[key] = value

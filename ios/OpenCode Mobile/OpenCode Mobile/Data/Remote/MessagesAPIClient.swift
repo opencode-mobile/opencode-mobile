@@ -23,6 +23,8 @@ protocol MessagesAPI: Sendable {
         cursor: String?
     ) async throws -> (messages: [V2SessionMessageDTO], nextCursor: String?)
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> MessageDTO
+    /// v2 `GET /api/session/{sessionID}/message/{messageID}` (`session.message.get`): `{ "data": <message> }`.
+    func getMessageV2(sessionID: String, messageID: String) async throws -> V2SessionMessageDTO
     func sendMessage(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws -> MessageDTO
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, attachments: [Attachment], directory: String?) async throws
@@ -74,6 +76,10 @@ extension MessagesAPI {
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws {}
 
     func listInboxV2(sessionID _: String) async throws -> [V2InboxItemDTO] { [] }
+
+    func getMessageV2(sessionID _: String, messageID _: String) async throws -> V2SessionMessageDTO {
+        throw MessagesAPIError.invalidResponse
+    }
 
     func runShell(sessionID _: String, body _: V1ShellRequestDTO, directory _: String?) async throws {}
 
@@ -185,6 +191,14 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
 
     func getMessage(sessionID: String, messageID: String, directory: String? = nil) async throws -> MessageDTO {
         try await get(path: "session/\(sessionID)/message/\(messageID)", directory: directory)
+    }
+
+    func getMessageV2(sessionID: String, messageID: String) async throws -> V2SessionMessageDTO {
+        let envelope: APIDataEnvelope<V2SessionMessageDTO> = try await get(
+            path: "api/session/\(sessionID)/message/\(messageID)",
+            directory: nil
+        )
+        return envelope.data
     }
 
     func sendMessage(sessionID: String, body: SendMessageRequestDTO, directory: String? = nil) async throws -> MessageDTO {

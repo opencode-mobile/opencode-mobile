@@ -1,5 +1,6 @@
 package dev.opencode.mobile.data.remote
 
+import dev.opencode.mobile.data.remote.dto.ApiDataEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
@@ -112,6 +113,32 @@ class MessagesApi private constructor(
                     parameter("cursor", cursor)
                 }
             }.body()
+
+    /** v1 `GET /session/{id}/message/{messageID}`: one message with all its parts. */
+    suspend fun getMessage(
+        sessionId: String,
+        messageId: String,
+        directory: String? = null,
+    ): MessageDto {
+        val path = "session/$sessionId/message/$messageId"
+        val response =
+            httpClient.get().get(path) {
+                applyDirectory(directory)
+            }
+        if (!response.status.isSuccess()) response.fail(path)
+        return response.body()
+    }
+
+    /** v2 `GET /api/session/{id}/message/{messageID}` (`session.message.get`): `{ "data": <message> }`. */
+    suspend fun getMessageV2(
+        sessionId: String,
+        messageId: String,
+    ): V2SessionMessageDto {
+        val path = "api/session/$sessionId/message/$messageId"
+        val response = httpClient.get().get(path)
+        if (!response.status.isSuccess()) response.fail(path)
+        return response.body<ApiDataEnvelope<V2SessionMessageDto>>().data
+    }
 
     suspend fun listInboxV2(sessionId: String): List<V2InboxItemDto> =
         httpClient

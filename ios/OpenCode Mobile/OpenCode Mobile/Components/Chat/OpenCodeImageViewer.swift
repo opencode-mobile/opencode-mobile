@@ -4,7 +4,9 @@ import UIKit
 /// Full-screen viewer over a group of images on black: pages left and right, pinch or
 /// double-tap to zoom, swipe down or the close control to dismiss, share through the system
 /// share sheet (which also saves to Photos). The caller owns the shown page: `index` in,
-/// `onIndexChange` out.
+/// `onIndexChange` out. A page whose item has a `fullState` shows its preview with a small
+/// progress indicator while the full picture loads, or a failure note with Retry
+/// (`onRetry`); Share waits for the full picture.
 struct OpenCodeImageViewer: View {
     /// Dragging the picture down this far (or flicking it) dismisses the viewer.
     static let dismissDistance: CGFloat = 120
@@ -14,8 +16,10 @@ struct OpenCodeImageViewer: View {
     let index: Int
     let onIndexChange: (Int) -> Void
     let onDismiss: () -> Void
+    let onRetry: ((String) -> Void)?
 
     @State private var dragOffset: CGFloat = 0
+    /// Full pictures loaded from each item's source, by item id.
     @State private var pictures: [String: UIImage] = [:]
     @State private var sharing: UIImage?
 
@@ -23,17 +27,25 @@ struct OpenCodeImageViewer: View {
         items: [OpenCodeImageGalleryItem],
         index: Int,
         onIndexChange: @escaping (Int) -> Void,
-        onDismiss: @escaping () -> Void
+        onDismiss: @escaping () -> Void,
+        onRetry: ((String) -> Void)? = nil
     ) {
         self.items = items
         self.index = index
         self.onIndexChange = onIndexChange
         self.onDismiss = onDismiss
+        self.onRetry = onRetry
     }
 
     private var current: Int { min(max(index, 0), max(items.count - 1, 0)) }
     private var currentItem: OpenCodeImageGalleryItem? { items.indices.contains(current) ? items[current] : nil }
-    private var currentPicture: UIImage? { currentItem.flatMap { pictures[$0.id] ?? $0.preview } }
+    /// What Share sends: the full picture only. A preview counts when it is all there is (no
+    /// source and no separate full fetch).
+    private var currentPicture: UIImage? {
+        guard let item = currentItem else { return nil }
+        if let loaded = pictures[item.id] { return loaded }
+        return item.source == nil && item.fullState == nil ? item.preview : nil
+    }
 
     /// The black backdrop fades as the picture is dragged toward dismissal.
     private var backdropOpacity: Double {
@@ -55,6 +67,7 @@ struct OpenCodeImageViewer: View {
                             filename: item.filename
                         ),
                         onLoaded: { pictures[item.id] = $0 },
+                        onRetry: onRetry.map { retry in { retry(item.id) } },
                         onDismissDrag: { dragOffset = max(0, $0) },
                         onDismissDragEnd: { translation, velocity in
                             if translation > Self.dismissDistance || velocity > Self.dismissVelocity {
@@ -162,6 +175,7 @@ private struct OpenCodeImageViewerPage: View {
     let item: OpenCodeImageGalleryItem
     let accessibilityLabel: String
     let onLoaded: (UIImage) -> Void
+    let onRetry: (() -> Void)?
     let onDismissDrag: (CGFloat) -> Void
     let onDismissDragEnd: (_ translation: CGFloat, _ velocity: CGFloat) -> Void
 
@@ -181,7 +195,7 @@ private struct OpenCodeImageViewerPage: View {
                 .accessibilityElement()
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityAddTraits(.isImage)
-            } else if failed {
+            } else if failed || item.fullState == .failed {
                 VStack(spacing: 6) {
                     Text("component.image_viewer.could_not_load_this")
                         .font(OpenCodeTypography.body)
@@ -191,9 +205,11 @@ private struct OpenCodeImageViewerPage: View {
                             .font(OpenCodeTypography.caption)
                             .foregroundStyle(Color.white.opacity(0.7))
                     }
+                    if item.fullState == .failed, let onRetry {
+                        retryButton(onRetry)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityElement(children: .combine)
             } else {
                 ProgressView()
                     .tint(.white)
@@ -204,10 +220,14 @@ private struct OpenCodeImageViewerPage: View {
                     )))
             }
         }
-        .task(id: item.id) {
-            if let preview = item.preview { onLoaded(preview) }
-            guard loaded == nil, let source = item.source else {
-                failed = item.preview == nil
+        .overlay(alignment: .bottom) {
+            if displayed != nil { fullStateBadge.padding(.bottom, 76) }
+        }
+        .task(id: item.loadKey) {
+            guard loaded == nil else { return }
+            failed = false
+            guard let source = item.source else {
+                failed = item.preview == nil && item.fullState == nil
                 return
             }
             if let image = await source.load() {
@@ -217,6 +237,43 @@ private struct OpenCodeImageViewerPage: View {
                 failed = item.preview == nil
             }
         }
+    }
+
+    /// Over the preview: a small spinner while the full picture loads, or the failure note and Retry.
+    @ViewBuilder
+    private var fullStateBadge: some View {
+        switch item.fullState {
+        case .loading where loaded == nil:
+            ProgressView()
+                .tint(.white)
+                .padding(10)
+                .background(Color.black.opacity(0.45), in: Capsule())
+                .accessibilityLabel(Text("component.image_viewer.loading_full"))
+        case .failed where loaded == nil:
+            HStack(spacing: 12) {
+                Text("component.image_viewer.could_not_load_full")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(Color.white)
+                if let onRetry { retryButton(onRetry) }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.55), in: Capsule())
+        default:
+            EmptyView()
+        }
+    }
+
+    private func retryButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text("component.image_viewer.retry")
+                .font(OpenCodeTypography.caption.weight(.semibold))
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.18), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

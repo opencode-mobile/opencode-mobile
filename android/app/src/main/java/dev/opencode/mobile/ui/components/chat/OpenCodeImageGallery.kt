@@ -64,17 +64,26 @@ import kotlin.math.min
  * image content (the same id always means the same picture); [name] is the file name shown in
  * captions, the failure tile, the viewer title and accessibility labels. The component loads
  * the picture through [LocalOpenCodeGalleryImageLoader]; it never receives bytes or URLs.
+ * [loadKey] changes when the owner can load more of the same picture (a thumbnail or the full
+ * data arrived), so a tile that already settled loads again.
  */
 @Immutable
 data class OpenCodeGalleryImage(
     val id: String,
     val name: String? = null,
+    val loadKey: String? = null,
 )
 
 /** Loads gallery pictures by [OpenCodeGalleryImage.id]. The feature that owns the images provides it. */
 interface OpenCodeGalleryImageLoader {
     /** A small preview already in memory (no I/O), painted while [load] runs. */
     fun preview(id: String): ByteArray? = null
+
+    /**
+     * A saved small thumbnail; may do I/O. When there is one, gallery tiles draw only it and
+     * never load the full picture; the viewer shows it while the full picture loads.
+     */
+    suspend fun thumbnail(id: String): ByteArray? = null
 
     /** The full picture, or null when it cannot be loaded. May do I/O. */
     suspend fun load(id: String): ByteArray?
@@ -197,7 +206,7 @@ private fun SingleImage(
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
-    val state by rememberGalleryBitmap(image.id, INLINE_DECODE_MAX_DIMENSION)
+    val state by rememberGalleryBitmap(image.id, INLINE_DECODE_MAX_DIMENSION, image.loadKey, preferThumbnail = true)
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         when (val current = state) {
             is GalleryBitmap.Ready -> {
@@ -238,7 +247,7 @@ private fun GalleryTile(
     onClick: () -> Unit,
     modifier: Modifier,
 ) {
-    val state by rememberGalleryBitmap(image.id, INLINE_DECODE_MAX_DIMENSION)
+    val state by rememberGalleryBitmap(image.id, INLINE_DECODE_MAX_DIMENSION, image.loadKey, preferThumbnail = true)
     val current = state
     // The overflow tile opens the viewer even before its own picture loads.
     val clickable = current is GalleryBitmap.Ready || overflow > 0
@@ -419,28 +428,53 @@ internal sealed interface GalleryBitmap {
 }
 
 /**
- * The picture for [id] at [maxDimension]: the decoded cache first, then the loader's preview,
- * then the full image decoded off the main thread. Only composed tiles call this, so a long
+ * The picture for [id] at [maxDimension]: the decoded cache first, then the loader's saved
+ * thumbnail or in-memory preview, then the full image decoded off the main thread. With
+ * [preferThumbnail] (gallery tiles) a saved thumbnail is the end: the full picture is never
+ * decoded for a tile that has one. [loadFull] false stops at the preview (the viewer waits for
+ * its screen model to fetch the full picture). Only composed tiles call this, so a long
  * gallery decodes what is on screen.
  */
 @Composable
 internal fun rememberGalleryBitmap(
     id: String,
     maxDimension: Int,
+    loadKey: Any? = null,
+    preferThumbnail: Boolean = false,
+    loadFull: Boolean = true,
 ): State<GalleryBitmap> {
     val loader = LocalOpenCodeGalleryImageLoader.current
-    val cached = remember(id, maxDimension) { OpenCodeImageBitmapCache.get(id, maxDimension) }
+    val cached = remember(id, maxDimension, loadKey) { OpenCodeImageBitmapCache.get(id, maxDimension) }
     return produceState(
         initialValue = cached?.let { GalleryBitmap.Ready(it, isFull = true) } ?: GalleryBitmap.Loading,
         id,
         maxDimension,
         loader,
+        loadKey,
+        loadFull,
     ) {
         if (cached != null) return@produceState
         val sharpest = OpenCodeImageBitmapCache.best(id)
+        val thumbnail =
+            if (sharpest == null) {
+                OpenCodeImageBitmapCache.get(id, THUMBNAIL_DECODE_MAX_DIMENSION)
+                    ?: loadThumbnail(loader, id)?.also { OpenCodeImageBitmapCache.put(id, THUMBNAIL_DECODE_MAX_DIMENSION, it) }
+            } else {
+                null
+            }
+        if (thumbnail != null && preferThumbnail) {
+            value = GalleryBitmap.Ready(thumbnail, isFull = false)
+            return@produceState
+        }
         val preview =
-            sharpest ?: loader.preview(id)?.let { bytes -> withContext(Dispatchers.Default) { decodeScaledBitmap(bytes, maxDimension) } }
+            sharpest
+                ?: thumbnail
+                ?: loader.preview(id)?.let { bytes -> withContext(Dispatchers.Default) { decodeScaledBitmap(bytes, maxDimension) } }
         if (preview != null) value = GalleryBitmap.Ready(preview, isFull = false)
+        if (!loadFull) {
+            if (preview == null) value = GalleryBitmap.Loading
+            return@produceState
+        }
         val full =
             try {
                 loader.load(id)?.let { bytes -> withContext(Dispatchers.Default) { decodeScaledBitmap(bytes, maxDimension) } }
@@ -457,3 +491,16 @@ internal fun rememberGalleryBitmap(
         }
     }
 }
+
+private suspend fun loadThumbnail(
+    loader: OpenCodeGalleryImageLoader,
+    id: String,
+): Bitmap? =
+    try {
+        val bytes = loader.thumbnail(id)
+        bytes?.let { withContext(Dispatchers.Default) { decodeScaledBitmap(it, THUMBNAIL_DECODE_MAX_DIMENSION) } }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Throwable) {
+        null
+    }

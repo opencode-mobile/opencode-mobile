@@ -12,6 +12,13 @@ interface MessageRemote {
         query: MessageHistoryQuery,
     ): MessagePage
 
+    /** One message with all its parts (tool images included), mapped to the product type. */
+    suspend fun getMessage(
+        sessionId: String,
+        messageId: String,
+        directory: String?,
+    ): Message
+
     suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,

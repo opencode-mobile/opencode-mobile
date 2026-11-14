@@ -16,6 +16,9 @@ protocol MessageRepository: Sendable {
     func loadOlderDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage]
     func hasOlderMessages(sessionID: String, directory: String?) -> Bool
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message
+    /// The full picture of a timeline image (`imageID` is a tool image or file part id), from
+    /// memory or from the server's copy of message `messageID` (looked up when nil).
+    func fullImage(sessionID: String, directory: String?, messageID: String?, imageID: String) async throws -> FilePart
     func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws
     func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws
@@ -54,6 +57,10 @@ extension MessageRepository {
     }
 
     func hasOlderMessages(sessionID _: String, directory _: String?) -> Bool { false }
+
+    func fullImage(sessionID _: String, directory _: String?, messageID _: String?, imageID _: String) async throws -> FilePart {
+        throw MessageImageError.notFound
+    }
 
     func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
         try await sendPromptAsync(sessionID: sessionID, options: PromptSendOptions(text: text, model: nil, variant: nil, mode: nil), directory: directory)
@@ -152,6 +159,21 @@ final class DefaultMessageRepository: MessageRepository {
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
         try await run {
             adapter.message(from: try await api.getMessage(sessionID: sessionID, messageID: messageID, directory: directory))
+        }
+    }
+
+    func fullImage(sessionID: String, directory: String?, messageID: String?, imageID: String) async throws -> FilePart {
+        let remote = messageRemote
+        return try await run {
+            try await messageSync.fullImage(
+                sessionID: sessionID,
+                directory: directory,
+                messageID: messageID,
+                imageID: imageID,
+                fetch: { messageID in
+                    try await remote.getMessage(sessionID: sessionID, messageID: messageID, directory: directory)
+                }
+            )
         }
     }
 

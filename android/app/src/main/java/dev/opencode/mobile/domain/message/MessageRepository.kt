@@ -48,6 +48,17 @@ interface MessageRepository {
         directory: String? = null,
     ): List<Message>
 
+    /**
+     * The full picture of one timeline image, loaded from the server when only its cached
+     * thumbnail is on the device. Throws when it cannot be loaded.
+     */
+    suspend fun fullImage(
+        sessionId: String,
+        directory: String?,
+        messageId: String,
+        imageId: String,
+    ): MessagePart.File = throw UnsupportedOperationException("full image loading unavailable")
+
     suspend fun loadOlderMessages(
         sessionId: String,
         directory: String? = null,

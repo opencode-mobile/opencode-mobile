@@ -8,6 +8,13 @@ nonisolated protocol SessionCacheStore: Sendable {
     func retain(key: SessionCacheKey, reason: SessionCacheRetainReason, atEpochMs: Int64) async
     func evict(_ selector: SessionCacheEvictSelector) async
     func report(_ selector: SessionCacheEvictSelector) async -> SessionCacheReport
+    /// Keys of every message timeline row, payload or not (an opened session retains an empty
+    /// row). Nil when the store cannot list them; the thumbnail sweep then skips.
+    func messageTimelineKeys() async -> [SessionCacheKey]?
+}
+
+extension SessionCacheStore {
+    func messageTimelineKeys() async -> [SessionCacheKey]? { nil }
 }
 
 nonisolated enum SessionCacheKind: String, Sendable {

@@ -47,6 +47,7 @@ import kotlin.system.measureTimeMillis
 typealias MessageListFetcher = suspend (sessionId: String, directory: String?) -> List<Message>
 typealias MessageTailFetcher = suspend (sessionId: String, directory: String?) -> MessagePage
 typealias MessageOlderFetcher = suspend (sessionId: String, directory: String?, cursor: String) -> MessagePage
+typealias MessageFetcher = suspend (sessionId: String, directory: String?, messageId: String) -> Message
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class MessageSync(
@@ -54,6 +55,7 @@ class MessageSync(
     listMessageTail: MessageTailFetcher? = null,
     listOlderMessages: MessageOlderFetcher? = null,
     listSplitTurnMessages: MessageOlderFetcher? = null,
+    private val getMessage: MessageFetcher? = null,
     private val engine: SessionMessageEngine,
     private val eventStream: ForegroundEventStream,
     private val liveStoreScope: LiveStoreScope,
@@ -190,6 +192,52 @@ class MessageSync(
         } finally {
             olderLoadsInFlight.remove(storeSlot)
         }
+    }
+
+    /**
+     * The full picture of image [imageId] (a tool image or an image file part) in message
+     * [messageId]: from the store when it already holds the data URL, otherwise by fetching
+     * that one message, which also hydrates the store and republishes the timeline. Throws
+     * when the image cannot be loaded.
+     */
+    suspend fun fullImage(
+        sessionId: String,
+        directory: String?,
+        messageId: String,
+        imageId: String,
+    ): MessagePart.File {
+        val key = sessionKey(sessionId, directory)
+        val storeSlot = key.storeSlot
+        engine.message(storeSlot, messageId)?.imageWithData(imageId)?.let { return it }
+        val fetch = getMessage ?: throw IllegalStateException("single-message fetch unavailable")
+        restAttempts += "full-image"
+        val message = fetch(key.sessionId, key.directory.ifEmpty { null }, messageId)
+        val image = message.imageWithData(imageId) ?: throw NoSuchElementException("image not in message")
+        if (engine.hydrateMedia(storeSlot, listOf(message))) {
+            val merged = engine.messages(storeSlot)
+            rememberPublishedFrame(storeSlot, merged)
+            messageCacheHandles[key]?.note(merged)
+            extraPublishFlow(storeSlot).tryEmit(
+                MessageListUpdate.Messages(
+                    messages = merged,
+                    isFromCache = storeSlot in awaitingCacheSyncConfirm,
+                    hasOlder = historyWindow(storeSlot).hasOlder,
+                ),
+            )
+        }
+        return image
+    }
+
+    private fun Message.imageWithData(imageId: String): MessagePart.File? {
+        val image =
+            parts.firstNotNullOfOrNull { part ->
+                when (part) {
+                    is MessagePart.Tool -> part.images.firstOrNull { it.id == imageId }
+                    is MessagePart.File -> part.takeIf { it.id == imageId }
+                    else -> null
+                }
+            }
+        return image?.takeIf { it.hasFullData }
     }
 
     fun invalidate(
@@ -828,10 +876,19 @@ class MessageSync(
             awaitingCacheSyncConfirm.contains(storeSlot) &&
             local.matchesTailIdentity(loaded.messages)
         ) {
+            // The cached copy stays, but the cache never keeps tool images or file data URLs:
+            // fill them in from the page just fetched, and publish only when that changed a part.
+            val hydrated = engine.hydrateMedia(storeSlot, loaded.messages)
             logI(
-                "fullReload session=${key.sessionId} reason=$reason count=${local.size} ms=$elapsedMs tailIdentity=match",
+                "fullReload session=${key.sessionId} reason=$reason count=${local.size} ms=$elapsedMs " +
+                    "tailIdentity=match hydrated=$hydrated",
             )
             MessagePipelineProbe.emit(MessagePipelineProbe.Marker.ReducerCommitted)
+            if (hydrated) {
+                val merged = engine.messages(storeSlot)
+                rememberPublishedFrame(storeSlot, merged)
+                return ReloadResult.Accepted(merged)
+            }
             return ReloadResult.Accepted(local, confirmedWithoutPublish = true)
         }
         val acceptRemote =

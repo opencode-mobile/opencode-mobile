@@ -175,8 +175,8 @@ internal fun SessionChatToolGroupScreen(
     // This route has no screen model; the viewer is local to it (a card's gallery and page).
     var imageViewer by remember { mutableStateOf<SessionChatImageViewerState?>(null) }
     val serverImageLoader = LocalOpenCodeAttachmentImageLoader.current
-    val galleryLoader = remember(serverImageLoader) { SessionChatGalleryImageLoader(serverImageLoader) }
-    galleryLoader.update(messages = emptyList(), extra = target.members.flatMap { it.images })
+    val galleryLoader = remember(serverImageLoader) { SessionChatGalleryImageLoader(serverLoader = serverImageLoader) }
+    galleryLoader.update(messages = emptyList(), extra = target.members.flatMap { it.images }, extraMessageId = target.messageId)
 
     Column(
         modifier =

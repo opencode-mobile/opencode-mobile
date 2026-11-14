@@ -53,6 +53,11 @@ class SessionMessageEngine
             expectedRevision: Long,
         ): Boolean = store.prependOlderIfRevision(sessionId, older, expectedRevision)
 
+        fun hydrateMedia(
+            sessionId: String,
+            messages: List<Message>,
+        ): Boolean = store.hydrateMedia(sessionId, messages)
+
         fun messages(sessionId: String): List<Message> = store.messages(sessionId)
 
         fun message(

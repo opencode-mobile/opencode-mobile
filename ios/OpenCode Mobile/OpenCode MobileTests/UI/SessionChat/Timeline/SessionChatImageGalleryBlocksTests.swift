@@ -253,6 +253,56 @@ struct SessionChatImageViewerStateTests {
         #expect(timeline.state.imageViewer?.index == 0)
     }
 
+    @Test func imagesWithTheirPictureOpenAsFullWithoutAFetch() {
+        let repository = ViewerMessageRepository()
+        let timeline = makeTimeline(repository)
+        timeline.openImageViewer(images: images, index: 0, messageID: "msg_asst")
+        #expect(timeline.state.imageViewer?.fullState(of: "f0") == .full)
+        #expect(repository.fullImageRequests.isEmpty)
+    }
+
+    @Test func thumbnailOnlyImageLoadsTheFullPictureOnOpen() async {
+        let thumb = thumbnailOnly("call_read:file:0")
+        let repository = ViewerMessageRepository()
+        repository.fullImageResult = .success(
+            FilePart(id: thumb.id, filename: "shot.png", mime: "image/png", kind: .image, dataURL: ToolImageMappingTests.pngDataURL)
+        )
+        let timeline = makeTimeline(repository)
+
+        timeline.openImageViewer(images: [thumb], index: 0, messageID: "msg_asst")
+        #expect(timeline.state.imageViewer?.fullState(of: thumb.id) == .loading)
+        let loaded = await waitUntil { timeline.state.imageViewer?.fullState(of: thumb.id) == .full }
+
+        #expect(loaded)
+        #expect(repository.fullImageRequests.first?.messageID == "msg_asst")
+        #expect(repository.fullImageRequests.first?.imageID == thumb.id)
+        let image = timeline.state.imageViewer?.currentImage
+        #expect(image?.dataURL == ToolImageMappingTests.pngDataURL)
+        // The enlarged thumbnail stays until the full picture is drawn.
+        #expect(image?.previewData == thumb.previewData)
+    }
+
+    @Test func failedFullPictureStaysOnTheThumbnailAndRetries() async {
+        let thumb = thumbnailOnly("call_read:file:0")
+        let repository = ViewerMessageRepository()
+        repository.fullImageResult = .failure(MessageImageError.unavailable)
+        let timeline = makeTimeline(repository)
+
+        timeline.openImageViewer(images: [thumb], index: 0, messageID: "msg_asst")
+        let failed = await waitUntil { timeline.state.imageViewer?.fullState(of: thumb.id) == .failed }
+        #expect(failed)
+        #expect(timeline.state.imageViewer?.currentImage == thumb)
+
+        repository.fullImageResult = .success(
+            FilePart(id: thumb.id, filename: "shot.png", mime: "image/png", kind: .image, dataURL: ToolImageMappingTests.pngDataURL)
+        )
+        timeline.retryFullImage()
+        #expect(timeline.state.imageViewer?.fullState(of: thumb.id) == .loading)
+        let loaded = await waitUntil { timeline.state.imageViewer?.fullState(of: thumb.id) == .full }
+        #expect(loaded)
+        #expect(repository.fullImageRequests.count == 2)
+    }
+
     @Test func pagingWithoutAnOpenViewerDoesNothing() {
         let timeline = makeTimeline()
         timeline.showImageViewerPage(1)
@@ -260,12 +310,32 @@ struct SessionChatImageViewerStateTests {
         #expect(timeline.state.imageViewer == nil)
     }
 
-    private func makeTimeline() -> SessionChatTimeline {
-        SessionChatTimeline(sessionID: "ses-1", worktree: "/Users/example/project", messageRepository: ViewerMessageRepository())
+    private func makeTimeline(_ repository: ViewerMessageRepository = ViewerMessageRepository()) -> SessionChatTimeline {
+        SessionChatTimeline(sessionID: "ses-1", worktree: "/Users/example/project", messageRepository: repository)
+    }
+
+    private func thumbnailOnly(_ id: String) -> FilePart {
+        FilePart(id: id, filename: "shot.png", mime: "image/png", kind: .image, dataURL: "", previewData: Data([0xFF, 0xD8, 0xFF, 0xD9]))
+    }
+
+    private func waitUntil(_ condition: @MainActor () -> Bool) async -> Bool {
+        for _ in 0..<200 {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return condition()
     }
 }
 
 private final class ViewerMessageRepository: MessageRepository, @unchecked Sendable {
+    var fullImageResult: Result<FilePart, Error> = .failure(MessageImageError.notFound)
+    private(set) var fullImageRequests: [(messageID: String?, imageID: String)] = []
+
+    func fullImage(sessionID: String, directory: String?, messageID: String?, imageID: String) async throws -> FilePart {
+        fullImageRequests.append((messageID, imageID))
+        return try fullImageResult.get()
+    }
+
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
         AsyncStream { $0.finish() }
     }
