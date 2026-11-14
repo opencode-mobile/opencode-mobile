@@ -3,17 +3,29 @@ name: iOS Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    # Skip when the change cannot affect the iOS app. The iOS build compiles
-    # shared/markdown-core through the android/ Gradle build, so Gradle config
-    # counts; the Android app and screenshot modules do not.
+    # Skip when the change cannot affect the iOS app.
     paths:
       - "ios/**"
+      # Hex Code has its own project and workflow (hexcode-ios-checks.yml).
+      - "!ios/OpenCode Mobile/Hex Code.xcodeproj/**"
+      - "!ios/OpenCode Mobile/Hex Code/**"
+      - "!ios/OpenCode Mobile/Hex CodeTests/**"
+      - "!ios/OpenCode Mobile/Hex Code Info.plist"
       - "shared/**"
-      - "android/**"
-      - "!android/app/**"
-      - "!android/screenshot/**"
+      - "!shared/voice-engine/**"
+      # The iOS build compiles shared/markdown-core (and the highlight modules
+      # it exports) through the android/ Gradle build. Gradle configures every
+      # module on every build, so the root files and every build script count;
+      # Android module sources do not.
+      - "android/*.gradle.kts"
+      - "android/gradle.properties"
+      - "android/gradlew"
+      - "android/gradle/**"
+      - "android/**/*.gradle.kts"
+      - "shared/**/*.gradle.kts"
       - "VERSION"
       - "scripts/read-app-version.sh"
+      - "scripts/set-ios-info-marketing-version.sh"
       - "scripts/ensure-android-platform.sh"
       - ".github/scripts/**"
       - ".github/workflows/ios-checks.yml"

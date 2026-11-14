@@ -250,7 +250,7 @@ struct UploadedAttachmentPromptTests {
         #expect(
             request.metadata
                 == V2PromptMetadataDTO(
-                    attachments: [V2PromptUploadedAttachmentDTO(name: "a.zip", mime: "application/zip", path: "/tmp/uploads/1/a.zip")]
+                    attachments: [PromptAttachment(name: "a.zip", mime: "application/zip", path: "/tmp/uploads/1/a.zip")]
                 )
         )
         let encoder = JSONEncoder()

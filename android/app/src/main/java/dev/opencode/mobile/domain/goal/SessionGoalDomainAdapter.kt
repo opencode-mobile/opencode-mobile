@@ -1,13 +1,15 @@
 package dev.opencode.mobile.domain.goal
 
 import dev.opencode.mobile.data.remote.HttpBodyResponseException
+import dev.opencode.mobile.data.remote.dto.V2GoalStateDto
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.session.ServerErrorMessage
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
 
 /** A goal change for one session: [goal] null means it was cleared. */
 data class SessionGoalChange(
@@ -15,32 +17,56 @@ data class SessionGoalChange(
     val goal: SessionGoal?,
 )
 
-/** Wire `Goal.State` (RPC output and `rpc.opencode.goal.changed` data) to [SessionGoal]. */
+/** Wire `Goal.State` ([V2GoalStateDto]: RPC output and `rpc.opencode.goal.changed` data) to [SessionGoal]. */
 object SessionGoalDomainAdapter {
     /** v2 `/api/event` type of a goal change: `rpc.<rpcID>.<event>`. */
     const val CHANGED_EVENT = "rpc.opencode.goal.changed"
 
-    /** A `Goal.State` object, or null for `null` or a value that is not one. */
-    fun goal(element: JsonElement?): SessionGoal? {
-        val json = element as? JsonObject ?: return null
-        val id = json.string("id")?.takeIf { it.isNotBlank() } ?: return null
-        val objective = json.string("objective") ?: return null
+    /**
+     * A `Goal.State` value, or null for `null` or a value that is not one ([V2GoalStateDto.fromJson]);
+     * [onUnreadable] gets why it is not.
+     */
+    fun goal(
+        element: JsonElement?,
+        onUnreadable: (reason: String) -> Unit = {},
+    ): SessionGoal? = fromState(V2GoalStateDto.fromJson(element, onUnreadable), onUnreadable)
+
+    /** The RPC's state for [sessionId], logging one it cannot show. */
+    fun fromRpc(
+        sessionId: String,
+        state: V2GoalStateDto?,
+    ): SessionGoal? = fromState(state) { logUnreadable("goal read", sessionId, it) }
+
+    /** The RPC's state, or null for no goal, a blank id or an unknown status; [onUnreadable] gets why. */
+    fun fromState(
+        state: V2GoalStateDto?,
+        onUnreadable: (reason: String) -> Unit = {},
+    ): SessionGoal? {
+        if (state == null) return null
+        val id =
+            state.id.takeIf { it.isNotBlank() } ?: run {
+                onUnreadable("no id")
+                return null
+            }
         val status =
-            when (json.string("status")) {
+            when (state.status) {
                 "active" -> SessionGoalStatus.Active
                 "paused" -> SessionGoalStatus.Paused
                 "complete" -> SessionGoalStatus.Complete
-                else -> return null
+                else -> {
+                    onUnreadable("unknown status=${state.status.take(MAX_LOGGED_STATUS)}")
+                    return null
+                }
             }
         return SessionGoal(
             id = id,
-            objective = objective,
+            objective = state.objective,
             status = status,
-            reason = json.string("reason")?.takeIf { it.isNotBlank() },
-            rounds = json.number("rounds")?.toInt() ?: 0,
-            maxRounds = json.number("maxRounds")?.toInt()?.takeIf { it > 0 } ?: DEFAULT_MAX_ROUNDS,
-            stalls = json.number("stalls")?.toInt(),
-            updatedAtEpochMs = json.number("updatedAt")?.toLong() ?: 0L,
+            reason = state.reason?.takeIf { it.isNotBlank() },
+            rounds = state.rounds,
+            maxRounds = state.maxRounds.takeIf { it > 0 } ?: V2GoalStateDto.DEFAULT_MAX_ROUNDS,
+            stalls = state.stalls,
+            updatedAtEpochMs = state.updatedAt ?: 0L,
         )
     }
 
@@ -52,7 +78,8 @@ object SessionGoalDomainAdapter {
             properties.string("sessionID")?.takeIf { it.isNotBlank() }
                 ?: event.sessionId
                 ?: return null
-        return SessionGoalChange(sessionId = sessionId, goal = goal(properties["goal"]))
+        val goal = goal(properties["goal"]) { logUnreadable("goal change", sessionId, it) }
+        return SessionGoalChange(sessionId = sessionId, goal = goal)
     }
 
     /** The command's own error ("No active goal to pause."), when the server sent one. */
@@ -65,7 +92,14 @@ object SessionGoalDomainAdapter {
 
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
-    private fun JsonObject.number(key: String): Double? = (this[key] as? JsonPrimitive)?.takeIf { !it.isString }?.doubleOrNull
+    /** The reason only: the state holds the goal's objective. */
+    private fun logUnreadable(
+        what: String,
+        sessionId: String,
+        reason: String,
+    ) {
+        DiagnosticLog.warning(DiagnosticLogArea.Session, "$what unreadable session=$sessionId reason=$reason")
+    }
 
-    private const val DEFAULT_MAX_ROUNDS = 50
+    private const val MAX_LOGGED_STATUS = 40
 }

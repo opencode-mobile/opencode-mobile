@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		OCK000000000000000000003 /* OpenCodeKit in Frameworks */ = {isa = PBXBuildFile; productRef = OCK000000000000000000002 /* OpenCodeKit */; };
 		638DA94C2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		638DA94D2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		63OCFIREBF00100002BDFFC /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD001002BDFFC /* FirebaseAnalyticsCore */; };
@@ -64,6 +65,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				638DA94C2FCB348E0055985D /* Factory in Frameworks */,
+				OCK000000000000000000003 /* OpenCodeKit in Frameworks */,
 				63OCFIREBF00100002BDFFC /* FirebaseAnalyticsCore in Frameworks */,
 				63OCFIREBF00200002BDFFC /* FirebaseCrashlytics in Frameworks */,
 				63OCFIREBF00300002BDFFC /* FirebaseRemoteConfig in Frameworks */,
@@ -139,6 +141,7 @@
 				63OCFIREPROD002002BDFFC /* FirebaseCrashlytics */,
 				63OCFIREPROD003002BDFFC /* FirebaseRemoteConfig */,
 				63OCFIREPROD004002BDFFC /* FirebaseAppCheck */,
+				OCK000000000000000000002 /* OpenCodeKit */,
 			);
 			productName = "OpenCode Mobile";
 			productReference = 63369C0F2FA933AE002BDFFC /* OpenCode Mobile.app */;
@@ -226,6 +229,7 @@
 			packageReferences = (
 				63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */,
 				63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 63369C102FA933AE002BDFFC /* Products */;
@@ -873,6 +877,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../OpenCodeKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -917,6 +928,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAppCheck;
+		};
+		OCK000000000000000000002 /* OpenCodeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */;
+			productName = OpenCodeKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

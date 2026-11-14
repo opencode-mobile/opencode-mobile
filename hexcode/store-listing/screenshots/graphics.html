@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hex Code store graphic</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=block">
+<style>
+  /* One graphic frame of the store strip, filling the viewport. ?p=ios|android&f=voice|chat|artifacts|goal
+     Colours are Hex Code's dark tokens (HexThemeColors). */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #08090a; }
+  .shot { container-type: inline-size; position: relative; width: 100vw; height: 100vh; overflow: hidden; background: #08090a;
+    font-family: "Inter Tight", -apple-system, "SF Pro Display", sans-serif; color: #f7f8f8; }
+  .abs { position: absolute; }
+  .cap { left: 10cqw; right: 10cqw; text-align: center; text-wrap: balance;
+    font-size: 7.8cqw; line-height: 1.18; font-weight: 600; letter-spacing: -0.025em; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 500; }
+
+  /* voice */
+  .quote { left: 9cqw; right: 9cqw; font-size: 10.4cqw; line-height: 1.08; font-weight: 600; letter-spacing: -0.035em; text-wrap: balance; }
+  .quote .q { color: #5b5f66; }
+  .quote .soft { opacity: .32; }
+  .quote .caret { display: inline-block; width: 0.9cqw; height: 9cqw; background: #f7f8f8; vertical-align: -1.4cqw; margin-left: 1cqw; border-radius: .4cqw; }
+  .pill { left: 14cqw; right: 14cqw; height: 17cqw; border-radius: 9cqw; background: #e9eaeb; color: #0b0c0d;
+    display: flex; align-items: center; justify-content: center; gap: 2.6cqw; font-size: 5.6cqw; font-weight: 600; letter-spacing: -0.02em;
+    box-shadow: 0 0 0 3cqw rgba(233,234,235,.06), 0 0 0 7cqw rgba(233,234,235,.03), 0 4cqw 14cqw rgba(0,0,0,.6); }
+  .pill svg { width: 5.4cqw; height: 5.4cqw; }
+
+  /* chat */
+  .bubble { border-radius: 5cqw; background: #1a1b1d; padding: 3.6cqw 4.4cqw; display: grid; gap: 2cqw; }
+  .bubble.me { background: #26282b; }
+  .bubble i { display: block; height: 2.2cqw; border-radius: 1.1cqw; background: #3a3d42; }
+  .card { left: 7cqw; right: 7cqw; border-radius: 6cqw; background: #121315; border: .35cqw solid #2a2c2f; padding: 6cqw 6cqw 6.4cqw;
+    box-shadow: 0 6cqw 20cqw rgba(0,0,0,.8), 0 -10cqw 24cqw rgba(8,9,10,.9); }
+  .card small { display: block; font-size: 3.5cqw; font-weight: 500; color: #8a8f98; margin-bottom: 2.6cqw; }
+  .card p { margin: 0; font-size: 7cqw; line-height: 1.16; font-weight: 600; letter-spacing: -0.03em; }
+
+  /* artifact tile, as on the summary card */
+  .tile { width: 50cqw; display: flex; align-items: center; gap: 3cqw; padding: 2.4cqw 4.4cqw 2.4cqw 2.4cqw; border-radius: 4cqw;
+    background: #121315; border: .35cqw solid rgba(255,255,255,.13); box-shadow: 0 4cqw 14cqw rgba(0,0,0,.7); }
+  .tile .ic { width: 11cqw; height: 11cqw; border-radius: 2.6cqw; background: #1c1d20; display: grid; place-items: center; }
+  .tile .ic svg { width: 5cqw; height: 5cqw; }
+  .tile b { display: block; font-size: 4.6cqw; font-weight: 600; letter-spacing: -0.02em; }
+  .tile span { display: block; font-size: 3.6cqw; color: #8a8f98; }
+
+  /* goal box, as in the goal sheet */
+  .goalbox { left: 7cqw; right: 7cqw; border-radius: 6cqw; background: #121315; border: .35cqw solid rgba(255,255,255,.13); padding: 5.4cqw 6cqw 6cqw; }
+  .goalbox .row { display: flex; justify-content: space-between; gap: 3cqw; font-size: 3.4cqw; color: #62666d; margin-bottom: 3cqw; }
+  .goalbox p { margin: 0; font-size: 7cqw; line-height: 1.16; font-weight: 600; letter-spacing: -0.03em; }
+</style>
+</head>
+<body>
+<div class="shot" id="shot"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const p = q.get("p") || "ios";
+const f = q.get("f") || "voice";
+const H = p === "ios" ? 100 * 2868 / 1320 : 200;   // frame height in cqw
+const y = (frac) => (frac * H).toFixed(2) + "cqw";  // vertical position as a fraction of the frame
+
+const INK = "#f7f8f8";
+const mic = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>`;
+const compass = `<svg viewBox="0 0 24 24" fill="none" stroke="#8a8f98" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>`;
+const target = `<svg viewBox="0 0 24 24" fill="none" stroke="${INK}" stroke-width="1.4"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="${INK}"/></svg>`;
+
+// A row of voice bars, loud in the middle: n bars across the full width, centred on cy.
+function bars(cy, maxH, n, seed) {
+  const step = 100 / n; let out = "";
+  for (let k = 0; k < n; k++) {
+    const t = (k + .5) / n, mid = Math.exp(-Math.pow((t - .5) / .26, 2));
+    const jit = .55 + .45 * Math.abs(Math.sin(k * 1.7 + seed) * .7 + Math.sin(k * 3.1 + seed) * .3);
+    const h = Math.max(6, maxH * (.16 + .84 * mid) * jit);
+    const c = mid * jit > .62 ? "#f7f8f8" : mid * jit > .4 ? "#8a8f98" : mid * jit > .22 ? "#34373b" : "#1f2023";
+    out += `<div class="abs" style="left:${(k * step + step * .3).toFixed(2)}cqw;width:${(step * .4).toFixed(2)}cqw;top:calc(${(cy * H).toFixed(2)}cqw - ${(h / 2).toFixed(2)}cqw);height:${h.toFixed(2)}cqw;border-radius:${(step * .2).toFixed(2)}cqw;background:${c}"></div>`;
+  }
+  return out;
+}
+
+// After "Tell OpenCode what you want": the request as you say it, over the talk button.
+function voice() {
+  return bars(.66, 92, 15, 0.4) +
+    `<div class="abs quote" style="top:${y(.075)}"><span class="q">“</span>Make sign‑in faster, and show me the <span class="soft">numbers</span><span class="caret"></span></div>` +
+    `<div class="abs pill" style="top:calc(${y(.66)} - 8.5cqw)">${mic}Listening…</div>`;
+}
+
+// After "One short summary instead of a long chat": a long chat receding behind the one card.
+function chat() {
+  let bub = "";
+  for (let k = 0; k < 22; k++) {
+    const me = k % 3 === 1, w = 40 + ((k * 37) % 30);
+    bub += `<div class="bubble${me ? " me" : ""}" style="width:${w}%;margin-${me ? "left" : "right"}:auto;margin-bottom:3cqw"><i></i><i style="width:${50 + (k * 13) % 40}%"></i></div>`;
+  }
+  return `<div class="abs cap" style="top:${y(.045)}">No chat to scroll back through</div>` +
+    `<div class="abs" style="left:-10cqw;right:-10cqw;top:${y(.17)};height:${y(.58)};perspective:90cqw;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom, transparent 0%, #000 55%);mask-image:linear-gradient(to bottom, transparent 0%, #000 55%)">` +
+      `<div style="position:absolute;left:14cqw;right:14cqw;bottom:-20cqw;transform:rotateX(40deg);transform-origin:50% 100%;opacity:.75">${bub}</div></div>` +
+    `<div class="abs card" style="top:${y(.69)}"><small>Login screen rewrite</small><p>Sign‑in is 2.6 times faster, and all 48 auth tests pass.</p></div>`;
+}
+
+// After "Its charts and reports come attached": the artifact tiles, big, in a straight column.
+function artifacts() {
+  const items = ["Sign‑in speed", "Onboarding", "Bundle size", "Release notes"];
+  const gap = p === "ios" ? 34 : 31, mid = p === "ios" ? .55 : .56;
+  let out = `<div class="abs cap" style="top:${y(.045)}">Charts, mock‑ups and reports, one tap away</div>`;
+  items.forEach((t, k) => {
+    out += `<div class="abs tile" style="left:25cqw;top:calc(${y(mid)} + ${(k - 1.5) * gap - 7.9}cqw);transform:scale(1.5)">` +
+      `<div class="ic">${compass}</div><div><b>${t}</b><span>Artifact</span></div></div>`;
+  });
+  return out;
+}
+
+// After "Know what it's working on": today's goal, shown as the goal box with an example goal.
+function goal() {
+  const cy = .38, d = 56;
+  const ring = (dd, c) => `<div class="abs" style="left:${50 - dd / 2}cqw;width:${dd}cqw;height:${dd}cqw;top:calc(${y(cy)} - ${dd / 2}cqw);border-radius:50%;border:.5cqw solid ${c}"></div>`;
+  return `<div class="abs cap" style="top:${y(.045)}">Give it a goal, and it keeps going</div>` +
+    ring(d * 1.9, "rgba(233,234,235,.05)") + ring(d * 1.45, "rgba(233,234,235,.1)") +
+    `<div class="abs" style="left:${50 - d / 2}cqw;width:${d}cqw;top:calc(${y(cy)} - ${d / 2}cqw)">${target}</div>` +
+    `<div class="abs goalbox" style="top:${y(p === "ios" ? .65 : .66)}"><div class="row mono"><span>today’s goal</span><span>active · round 7 of 50</span></div>` +
+      `<p>“Get sign‑in under 400&nbsp;ms on every platform”</p></div>`;
+}
+
+document.getElementById("shot").innerHTML = ({ voice, chat, artifacts, goal })[f]();
+</script>
+</body>
+</html>

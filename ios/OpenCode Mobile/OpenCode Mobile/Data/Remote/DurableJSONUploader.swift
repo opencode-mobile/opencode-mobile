@@ -14,7 +14,7 @@ import UIKit
 /// Every attempt uploads the same body, so the prompt's message id lets the server ignore a
 /// repeat. The diagnostic log gets one line per attempt, a pending line every 10 s, and the
 /// task metrics, so a stuck send shows where it stopped.
-nonisolated final class DurableJSONUploader: NSObject, URLSessionTaskDelegate, URLSessionDataDelegate, URLSessionDownloadDelegate, @unchecked Sendable {
+nonisolated final class DurableJSONUploader: NSObject, URLSessionTaskDelegate, URLSessionDataDelegate, URLSessionDownloadDelegate, DurableJSONUploading, @unchecked Sendable {
     static let sessionIdentifier = "dev.opencode.mobile.prompt-send"
     /// A background upload the app no longer tracks is cancelled at launch once it is older than this.
     static let orphanMaxAgeMs: Int64 = 2 * 60 * 1_000

@@ -18,10 +18,6 @@ enum PromptSendProgress {
     }
 }
 
-enum PromptSendProgressReporting {
-    @TaskLocal static var handler: (@Sendable (Int64, Int64) -> Void)?
-}
-
 /// Lets the screen that started a prompt send ask for a fresh attempt while it is stuck (#1002).
 /// Install it with `PromptSendControl.$current.withValue(_:)` around the send; the uploader binds
 /// `retry` while it runs a send that can be retried.

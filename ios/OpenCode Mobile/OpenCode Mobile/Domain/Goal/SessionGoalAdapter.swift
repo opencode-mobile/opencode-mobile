@@ -2,7 +2,7 @@ import Foundation
 
 /// v2 goal plugin wire shapes (`Goal.State`, `rpc.opencode.goal.changed`) to product types.
 nonisolated enum SessionGoalAdapter {
-    static let rpcID = "opencode.goal"
+    static let rpcID = GoalAPIClient.rpcID
     static let changedEvent = "rpc.opencode.goal.changed"
 
     enum DecodeError: Error, Equatable {

@@ -120,6 +120,46 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Hex Code's voice engine
+
+- `shared/voice-engine/adapter/ios/ParakeetTranscriber.swift` and
+  `TakeRecorder.swift` are adapted from `ParakeetTranscriber.swift` and
+  `AudioBackend.swift` in [Hex](https://github.com/anomalyco/hex):
+
+  ```text
+  MIT License
+
+  Copyright (c) 2026 Christopher Langton
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+  ```
+
+- `shared/voice-engine/adapter/android/src/main/java/dev/opencode/voiceengine/LiteRtEngine.kt`
+  is adapted from `BucketedTdtRunner.kt` in
+  [google-ai-edge/litert-samples](https://github.com/google-ai-edge/litert-samples),
+  Copyright 2026 Google LLC, Apache License 2.0
+  (<https://www.apache.org/licenses/LICENSE-2.0>).
+- sherpa-onnx (Apache License 2.0, with ONNX Runtime, MIT License) is
+  downloaded at build time from its GitHub release and checked against a
+  pinned checksum. Speech models are downloaded by the app under their own
+  licenses, listed in `shared/voice-engine/adapter/android/src/main/assets/lab/models.json`.
+
 ## Libraries resolved by Gradle and Swift Package Manager
 
 Android and iOS dependencies, including the Firebase SDKs, are fetched at
