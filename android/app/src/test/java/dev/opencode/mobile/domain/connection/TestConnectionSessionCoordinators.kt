@@ -9,6 +9,8 @@ import dev.opencode.mobile.domain.feedback.FeedbackIdentityStore
 import dev.opencode.mobile.domain.live.NoOpProjectionCaches
 import dev.opencode.mobile.domain.live.ProjectionCaches
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.serverhealth.InMemoryServerHealthStore
+import dev.opencode.mobile.domain.serverhealth.ServerHealthStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
@@ -31,6 +33,7 @@ fun testConnectionSessionCoordinator(
     syncCoordinator: SyncCoordinator = NoOpSyncCoordinator,
     worldSignals: WorldSignals = FakeWorldSignals(),
     projectionCaches: ProjectionCaches = NoOpProjectionCaches,
+    serverHealthStore: ServerHealthStore = InMemoryServerHealthStore(),
 ): ConnectionSessionCoordinator =
     ConnectionSessionCoordinator(
         activeConnectionManager = activeConnectionManager,
@@ -46,6 +49,7 @@ fun testConnectionSessionCoordinator(
         syncCoordinator = syncCoordinator,
         worldSignals = worldSignals,
         projectionCaches = projectionCaches,
+        serverHealthStore = serverHealthStore,
     )
 
 class InMemoryFeedbackIdentityStore : FeedbackIdentityStore {

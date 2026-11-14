@@ -67,6 +67,9 @@ extension Container {
                 hasActiveConnection: {
                     let manager = Container.shared.activeConnectionManager()
                     return manager.connection != nil || manager.currentProfile() != nil
+                },
+                purgeServerHealth: { profileID in
+                    await Container.purgeServerHealth(profileID: profileID)
                 }
             )
         }.singleton
@@ -533,7 +536,59 @@ extension Container {
                 protocolHint: { manager.protocolHint() },
                 cachedProtocol: { manager.serverProtocol },
                 protocolProbe: { await manager.currentProtocolOrProbe() },
-                protocolRedetect: { await manager.redetectProtocol() }
+                protocolRedetect: { await manager.redetectProtocol() },
+                healthObserver: self.serverHealthStreamFailures()
+            )
+        }.singleton
+    }
+
+    /// Stream failures for Server Health; the event stream reports into it, the monitor reads it.
+    var serverHealthStreamFailures: Factory<ServerHealthStreamFailureRelay> {
+        onMainActor { ServerHealthStreamFailureRelay() }.singleton
+    }
+
+    var serverHealthStore: Factory<any ServerHealthStore> {
+        onMainActor {
+            do {
+                let container = try SwiftDataServerHealthStore.makePersistentContainer()
+                return SwiftDataServerHealthStore(container: container)
+            } catch {
+                DiagnosticLog.warning(.connection, "ServerHealth: persistent SwiftData store failed; using in-memory fallback", error: error)
+                do {
+                    let container = try SwiftDataServerHealthStore.makeInMemoryContainer()
+                    return SwiftDataServerHealthStore(container: container)
+                } catch {
+                    DiagnosticLog.error(.connection, "ServerHealth: in-memory SwiftData store failed; using InMemoryServerHealthStore", error: error)
+                    return InMemoryServerHealthStore()
+                }
+            }
+        }.singleton
+    }
+
+    var serverHealthMonitor: Factory<ServerHealthMonitor> {
+        onMainActor {
+            let manager = self.activeConnectionManager()
+            let failures = self.serverHealthStreamFailures()
+            return ServerHealthMonitor(
+                liveConnection: self.foregroundEventStream(),
+                worldSignals: self.worldSignals(),
+                streamFailures: { failures.failures() },
+                store: self.serverHealthStore(),
+                pinger: URLSessionServerHealthPinger(),
+                pingTarget: {
+                    guard let connection = manager.connection else { return nil }
+                    let profileID: String
+                    if let id = manager.currentProfile()?.id, !id.isEmpty {
+                        profileID = id
+                    } else {
+                        profileID = "\(ConnectionProfileIdentity.normalizeBaseURL(connection.baseURL.absoluteString))|\(ConnectionProfileIdentity.normalizeUsername(connection.username))"
+                    }
+                    return ServerHealthPingTarget(
+                        profileID: profileID,
+                        connection: connection,
+                        serverProtocol: manager.serverProtocol ?? manager.protocolHint()
+                    )
+                }
             )
         }.singleton
     }
@@ -914,6 +969,7 @@ extension Container {
         Task { @MainActor in
             await shared.connectionSessionCoordinator().clearConnectionData()
             await shared.sessionCache().clearAll()
+            await purgeServerHealth(profileID: nil)
             shared.newSessionDraftStore().clearAll()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
@@ -935,6 +991,28 @@ extension Container {
             BlockDecorationCache.shared.clear()
             DiagnosticLogBuffer.shared.clear()
         }
+    }
+
+    /// Deletes Server Health records for one profile, or for all when `profileID` is nil, and
+    /// drops what the monitor cached for them.
+    @MainActor
+    static func purgeServerHealth(profileID: String?) async {
+        let store = shared.serverHealthStore()
+        if let profileID {
+            await store.purge(profileID: profileID)
+        } else {
+            await store.purgeAll()
+        }
+        shared.serverHealthMonitor().forget(profileID: profileID)
+    }
+
+    @MainActor
+    static func makeServerHealthViewModel(route: ServerHealthRoute) -> ServerHealthViewModel {
+        ServerHealthViewModel(
+            route: route,
+            monitor: shared.serverHealthMonitor(),
+            store: shared.serverHealthStore()
+        )
     }
 
     @MainActor

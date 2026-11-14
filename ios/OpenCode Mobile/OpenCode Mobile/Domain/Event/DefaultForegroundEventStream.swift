@@ -71,6 +71,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
 
     private let idleTimeout: Duration
     private let firstFrameTimeout: Duration
+    /// Hears why attempts failed, for Server Health. Never changes how the stream retries.
+    private let healthObserver: any ServerHealthStreamObserver
 
     init(
         api: EventsAPIClient,
@@ -88,8 +90,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         cachedProtocol: (@Sendable () -> ServerProtocol?)? = nil,
         protocolProbe: (@Sendable () async -> ServerProtocol)? = nil,
         protocolRedetect: (@Sendable () async -> ProtocolRedetection)? = nil,
-        protocolRecheckInterval: Duration = ProtocolRecheckPolicy.minInterval
+        protocolRecheckInterval: Duration = ProtocolRecheckPolicy.minInterval,
+        healthObserver: any ServerHealthStreamObserver = NoOpServerHealthStreamObserver()
     ) {
+        self.healthObserver = healthObserver
         self.api = api
         self.eventIngress = SseEventIngress(adapter: adapter)
         self.deviceNetworkPath = deviceNetworkPath
@@ -600,11 +604,15 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                     }
                 }
                 lease.attachStream(streamTask)
+                let healthReport = ServerHealthAttemptReport()
                 let watchTask = Task {
                     while !Task.isCancelled, generation == self.currentGeneration(), !streamTask.isCancelled {
                         let remaining = self.idleTimeout - lease.activity.elapsed()
                         if remaining <= .zero {
                             DiagnosticLog.warning(.sse, "foreground SSE idle timeout target=\(target.key); reconnecting")
+                            if healthReport.claim() {
+                                self.healthObserver.onStreamFailure(.heartbeat)
+                            }
                             streamTask.cancel()
                             return
                         }
@@ -656,6 +664,9 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 }
                 guard generation == self.currentGeneration(), self.isRequired(target.key) else { return }
                 self.logAttemptOutcome(target.key, outcome)
+                if let category = ServerHealthFailureCategory.streamOutcome(outcome), healthReport.claim() {
+                    self.healthObserver.onStreamFailure(category)
+                }
                 if ProtocolRecheckPolicy.suggestsProtocolChange(
                     outcome: outcome,
                     httpOpened: handshake.wasOpened,

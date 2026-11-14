@@ -447,6 +447,8 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let occupancy: @Sendable () -> StreamOccupancy
     private let emitProfileSwitched: @Sendable () -> Void
     private let hasActiveConnection: @Sendable () -> Bool
+    /// Deletes Server Health records for a profile; nil deletes every profile's.
+    private let purgeServerHealth: @Sendable (String?) async -> Void
     private let profileChangeGate = ProfileChangeGate()
     private let lock = NSLock()
     private var profileSwitchingHandlers: [(String) -> Void] = []
@@ -483,8 +485,10 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         bindReadyProfile: @escaping @Sendable (String?) async -> Void = { _ in },
         occupancy: @escaping @Sendable () -> StreamOccupancy = { .active },
         emitProfileSwitched: @escaping @Sendable () -> Void = {},
-        hasActiveConnection: @escaping @Sendable () -> Bool = { false }
+        hasActiveConnection: @escaping @Sendable () -> Bool = { false },
+        purgeServerHealth: @escaping @Sendable (String?) async -> Void = { _ in }
     ) {
+        self.purgeServerHealth = purgeServerHealth
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
         self.sessionCache = sessionCache
@@ -572,6 +576,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
                     username: removed.username
                 )
                 await self.sessionCache()?.purgeConnection(profileID: removed.id, serverBaseURL: removed.baseURL)
+                await self.purgeServerHealth(removed.id)
                 await self.sessionModelSelectionStore.clearConnection(connectionIdentity: identity)
                 self.composerDraftStore.clearConnection(connectionIdentity: identity)
             }
@@ -590,6 +595,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
             await self.sessionModelSelectionStore.clearAll()
             self.composerDraftStore.clearAll()
             self.feedbackRefreshTokenStore?.delete()
+            await self.purgeServerHealth(nil)
             await self.applyActiveProfileChange(notify: .cleared)
         }
     }

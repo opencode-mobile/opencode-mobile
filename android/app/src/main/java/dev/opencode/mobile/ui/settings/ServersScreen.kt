@@ -33,6 +33,7 @@ import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.connection.listCaption
 import dev.opencode.mobile.ui.connection.listStatus
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.serverhealth.ServerHealthQuickViewFooter
 import dev.opencode.mobile.ui.text.resolve
 
 @Composable
@@ -46,6 +47,7 @@ fun ServersScreen(
     onConfirmRemove: () -> Unit,
     onDismissRemove: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenHealth: (String) -> Unit = {},
 ) {
     val activeLabel = stringResource(R.string.servers_status_active)
     Box(modifier = modifier.fillMaxSize()) {
@@ -93,6 +95,10 @@ fun ServersScreen(
                                     )
                                 },
                                 modifier = Modifier.padding(horizontal = 16.dp),
+                                footer =
+                                    uiState.healthQuickView?.takeIf { isActive }?.let { quickView ->
+                                        { ServerHealthQuickViewFooter(quickView, onClick = { onOpenHealth(profile.id) }) }
+                                    },
                             )
                         }
                     }

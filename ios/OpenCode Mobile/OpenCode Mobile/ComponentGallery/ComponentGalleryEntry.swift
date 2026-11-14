@@ -21,6 +21,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case actionBar
     case tag
     case keyValueRow
+    case charts
     case featureItem
     case attachment
     case imageGallery
@@ -149,6 +150,12 @@ let componentGalleryEntries = [
         id: .keyValueRow,
         title: "Key Value Row",
         description: "Label and value for detail lines and stat cells.",
+        category: .lists
+    ),
+    ComponentGalleryEntry(
+        id: .charts,
+        title: "Charts",
+        description: "Sparkline, band chart, status strip, bar chart, chart card, stat tile, and proportion row.",
         category: .lists
     ),
     ComponentGalleryEntry(

@@ -27,6 +27,7 @@ import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.security.AppLockAvailability
 import dev.opencode.mobile.domain.security.AppLockPolicy
+import dev.opencode.mobile.domain.serverhealth.ServerHealthMonitor
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.LocalOpenCodeInputFocusRegistry
 import dev.opencode.mobile.ui.diagnostic.PerformanceOverlayHost
@@ -43,6 +44,8 @@ import javax.inject.Inject
 class MainActivity : FragmentActivity() {
     @Inject lateinit var worldSignals: WorldSignals
 
+    @Inject lateinit var serverHealthMonitor: ServerHealthMonitor
+
     private val keyboardShortcuts = KeyboardShortcutHost()
 
     // Privacy cover and optional app lock (#755). The cover goes up in onPause when App Lock
@@ -58,6 +61,7 @@ class MainActivity : FragmentActivity() {
         // Rotation, theme, or locale recreation is not a return from the background.
         wasInBackground = savedInstanceState?.getBoolean(STATE_UNLOCKED_ACROSS_RECREATE) != true
         worldSignals.register()
+        serverHealthMonitor.start()
         // `--es labRun <plan>` in Lab builds: run the benchmark unattended, then finish.
         if (HighlightingLabSeam.startHeadlessRun(this, intent)) return
 

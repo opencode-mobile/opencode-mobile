@@ -115,6 +115,7 @@ object ProductAnalytics {
         const val SETTINGS_RECENT_WINDOW_PICKER = "settings_recent_window_picker"
         const val SETTINGS_CLEAR_CACHE_CONFIRM = "settings_clear_cache_confirm"
         const val SETTINGS_CLEAR_ALL_DATA_CONFIRM = "settings_clear_all_data_confirm"
+        const val SERVER_HEALTH = "server_health"
     }
 
     object Action {

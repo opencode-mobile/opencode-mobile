@@ -20,6 +20,10 @@ import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.recovery.RecordingForegroundEventStream
+import dev.opencode.mobile.domain.serverhealth.InMemoryServerHealthStore
+import dev.opencode.mobile.domain.serverhealth.ServerHealthConnectionState
+import dev.opencode.mobile.domain.serverhealth.ServerHealthEvent
+import dev.opencode.mobile.domain.serverhealth.ServerHealthPing
 import dev.opencode.mobile.domain.sessioncache.DefaultSessionCache
 import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
 import dev.opencode.mobile.domain.sessioncache.SessionCacheCommitMeta
@@ -171,6 +175,44 @@ class ConnectionSessionCoordinatorTest {
             assertEquals(0L, cacheStore.report(SessionCacheEvictSelector.Connection(a.id)).entryCount)
             assertEquals(1L, cacheStore.report(SessionCacheEvictSelector.Connection(b.id)).entryCount)
             assertEquals(listOf("B"), connectionProfileStore.listProfiles().map { it.name })
+        }
+
+    @Test
+    fun removeProfileAndClear_purgeServerHealthHistory() =
+        runTest {
+            val json = Json { ignoreUnknownKeys = true }
+            val connectionProfileStore = CatalogConnectionProfileStore()
+            val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+            val healthStore = InMemoryServerHealthStore()
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    serverHealthStore = healthStore,
+                )
+            coordinator.saveProfile(ConnectionProfile(baseUrl = "http://10.0.0.1:4096/", username = "opencode", password = "a", name = "A"))
+            coordinator.saveProfile(ConnectionProfile(baseUrl = "http://10.0.0.2:4096/", username = "opencode", password = "b", name = "B"))
+            val a = connectionProfileStore.listProfiles().first { it.name == "A" }
+            val b = connectionProfileStore.listProfiles().first { it.name == "B" }
+            listOf(a.id, b.id).forEach { id ->
+                healthStore.appendPing(ServerHealthPing(id, 1_000, 20, null))
+                healthStore.appendEvent(ServerHealthEvent.state(id, 1_000, ServerHealthConnectionState.Live))
+            }
+
+            coordinator.removeProfile(a.id)
+
+            assertEquals(listOf(b.id), healthStore.allPings.map { it.profileId })
+            assertEquals(listOf(b.id), healthStore.allEvents.map { it.profileId })
+
+            coordinator.clearConnectionData()
+
+            assertTrue(healthStore.allPings.isEmpty())
+            assertTrue(healthStore.allEvents.isEmpty())
         }
 
     @Test
