@@ -124,7 +124,6 @@ final class BrowserModel {
         )
     }
 
-    #if DEBUG
     /// A sample session's artifact: `page` answers its entry, with no server.
     convenience init(sampleArtifact artifact: CardArtifact, serverName: String, page: Data) {
         self.init(
@@ -136,7 +135,6 @@ final class BrowserModel {
             handler: ArtifactSchemeHandler(id: artifact.id, samplePage: page)
         )
     }
-    #endif
 
     private init(start: URL, label: String, host: String, serverName: String, artifact: CardArtifact?, handler: ArtifactSchemeHandler?) {
         self.start = start

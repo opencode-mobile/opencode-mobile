@@ -399,10 +399,12 @@ final class TodaySession {
         }
     }
 
-    /// This session is no longer shown (Forget, or another computer): its stream closes.
+    /// This session is no longer shown (Forget, another computer, or a sample left): its stream
+    /// closes.
     func close() {
         backgroundStop?.cancel()
         stream?.stop()
+        onClosed?()
     }
 
     /// The stream closes after the background grace; events missed meanwhile are read back on
@@ -1172,6 +1174,14 @@ final class TodaySession {
     func setSampleRecent(_ steps: [RecentStep]) {
         recentSteps = steps
     }
+
+    /// The playground's script (`PlaygroundScript`): its events take the stream's path.
+    func receiveSample(_ event: SessionEvent) {
+        received(event)
+    }
+
+    /// The playground's script ends its run when the sample is left.
+    @ObservationIgnored var onClosed: (() -> Void)?
 
     /// "New day, new session"; when yesterday's goal was still active, the detail says it keeps
     /// running there.

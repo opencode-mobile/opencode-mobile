@@ -1,6 +1,5 @@
 package dev.opencode.hexcode.session
 
-import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.firstrun.ModelChoice
 import dev.opencode.mobile.data.remote.SseAttemptOutcome
 import kotlinx.coroutines.CoroutineScope
@@ -14,7 +13,7 @@ import java.time.LocalDate
 /**
  * Fake sessions for looking at home without a server, the same presets as iOS's `TodaySessionDemo`. Settings ›
  * Developer › Sample session picks one; they run the real [TodaySession] with fakes behind it. Nothing here talks to
- * OpenCode.
+ * OpenCode. [Playground] is the one that answers, for Try a sample session.
  */
 enum class TodaySessionDemo(
     /** For the developer settings row: the preset's name on both platforms. */
@@ -69,10 +68,17 @@ enum class TodaySessionDemo(
     UpdateFailed("updatefailed"),
 
     /**
-     * Debug builds: idle, with an artifact from the latest run, so the card shows its artifact tile. Its page is the
-     * bundled `sample-artifact.html` (`SampleArtifactFetcher`); `--ez HexCodeDemoOpenArtifact true` opens it at launch.
+     * Idle, with an artifact from the latest run, so the card shows its artifact tile. Its page is the bundled
+     * `sample-artifact.html` (`SampleArtifactFetcher`); in debug builds `--ez HexCodeDemoOpenArtifact true` opens it at
+     * launch.
      */
     Artifact("artifact"),
+
+    /**
+     * Try a sample session, in every build (Welcome, and Settings › Sample session): idle until a take is sent, then a
+     * scripted run that waits for an approval and an answer ([PlaygroundScript]). Its artifact is [Artifact]'s page.
+     */
+    Playground("playground"),
     ;
 
     /** A session in this state; home opens it. */
@@ -81,6 +87,7 @@ enum class TodaySessionDemo(
         clock: () -> Long = System::currentTimeMillis,
     ): TodaySession {
         val today = LocalDate.now()
+        if (this == Playground) return PlaygroundScript(scope, clock).session(today)
         val now = clock()
         val fresh = this == Empty || this == NewDay
         val existing = SessionListing(SESSION, DailySession.title(today), DIRECTORY, now, busySince = now - 600_000)
@@ -222,8 +229,8 @@ enum class TodaySessionDemo(
         }
 
     companion object {
-        /** The presets Settings › Developer cycles through: [Artifact] only in debug builds, whose assets carry its page. */
-        val presets: List<TodaySessionDemo> get() = entries.filter { BuildConfig.DEBUG || it != Artifact }
+        /** The presets Settings › Developer cycles through; [Playground] has its own row and its Leave. */
+        val presets: List<TodaySessionDemo> get() = entries.filter { it != Playground }
 
         /** The [Artifact] preset's artifact: its id, and its title (the page's own `<title>` too). */
         const val ARTIFACT_ID = "art_demo"
@@ -308,7 +315,7 @@ enum class TodaySessionDemo(
     }
 }
 
-private class DemoApi(
+internal class DemoApi(
     private val listed: List<SessionListing>,
     private val fails: Boolean,
 ) : DailySessionApi {
@@ -332,7 +339,7 @@ private class DemoApi(
     override suspend fun putMessageRules(sessionId: String) = Unit
 }
 
-private class DemoMemory(
+internal class DemoMemory(
     private var last: LocalDate?,
 ) : DailySessionMemory {
     override suspend fun lastOpenedOn() = last
@@ -489,7 +496,7 @@ private class DemoArtifactsApi(
 }
 
 /** Says it connected and then stays open; or, when not [up], fails every attempt. */
-private class DemoSummaryStore(
+internal class DemoSummaryStore(
     private var saved: SavedSummary?,
 ) : SummaryStore {
     override suspend fun loadSummary(): SavedSummary? = saved

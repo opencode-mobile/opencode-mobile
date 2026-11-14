@@ -15,6 +15,8 @@ struct HomeView: View {
     let onSettings: () -> Void
     /// Signed out's Pair again.
     var onPairAgain: () -> Void = {}
+    /// The playground: the sample strip's Leave. Nil on a real session and the Developer presets.
+    var onLeaveSample: (() -> Void)?
 
     @State private var showsAttach = false
     /// The stop button's 3 s hold.
@@ -42,10 +44,14 @@ struct HomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             HomeTopBar(session: session, onSettings: onSettings)
-            // Today's goal, under the top bar; hidden while you talk, with a draft, and while an
-            // Ask message shows. With no line (before today's session is open, or no goal while the
-            // agent works) its height stays, so nothing moves when it fills in.
-            if !drafting, session.ask.shown == nil {
+            if let onLeaveSample {
+                // The playground says what it is, always, where the goal line goes.
+                SampleStrip(onLeave: onLeaveSample)
+                    .padding(.top, 2)
+            } else if !drafting, session.ask.shown == nil {
+                // Today's goal, under the top bar; hidden while you talk, with a draft, and while an
+                // Ask message shows. With no line (before today's session is open, or no goal while
+                // the agent works) its height stays, so nothing moves when it fills in.
                 Group {
                     if let line = session.goalLine {
                         HexGoalLine(
@@ -96,6 +102,10 @@ struct HomeView: View {
                 Group {
                     if session.waitingCount > 0 {
                         WaitingLine(count: session.waitingCount, idle: session.agentState == .idle) { session.openDetails() }
+                            .transition(.opacity)
+                    } else if onLeaveSample != nil, session.agentState == .idle {
+                        // The playground's take with no speech model or microphone.
+                        SampleSuggestion(take: PlaygroundScript.suggestion) { home.sendSuggestion(PlaygroundScript.suggestion) }
                             .transition(.opacity)
                     } else {
                         WaitingLine(count: 1) {}

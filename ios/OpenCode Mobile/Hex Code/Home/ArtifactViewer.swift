@@ -143,7 +143,6 @@ final class ArtifactSchemeHandler: NSObject, WKURLSchemeHandler {
         self.session = session
     }
 
-    #if DEBUG
     /// A sample session's page: the entry answers with it, every other file `404`.
     private var samplePage: Data?
 
@@ -164,12 +163,9 @@ final class ArtifactSchemeHandler: NSObject, WKURLSchemeHandler {
         task.didReceive(isEntry ? page : Data())
         task.didFinish()
     }
-    #endif
 
     func webView(_ webView: WKWebView, start task: any WKURLSchemeTask) {
-        #if DEBUG
         if let samplePage { return serveSample(samplePage, task: task) }
-        #endif
         let key = ObjectIdentifier(task)
         let url = task.request.url
         guard let url, let connection = connection(),

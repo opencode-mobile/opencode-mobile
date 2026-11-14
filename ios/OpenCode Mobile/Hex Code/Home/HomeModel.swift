@@ -912,6 +912,14 @@ final class HomeModel {
         draft.addText(text)
     }
 
+    /// The sample session's suggestion was tapped: it goes as a take would, with no speech model or
+    /// microphone. Only with no draft.
+    func sendSuggestion(_ text: String) {
+        guard draft.isEmpty, !isRecording else { return }
+        draft.addText(text)
+        send()
+    }
+
     func clearDraft() {
         guard !draft.isEmpty, !isRecording else { return }
         draft.clear()

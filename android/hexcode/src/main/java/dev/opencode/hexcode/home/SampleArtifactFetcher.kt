@@ -3,10 +3,10 @@ package dev.opencode.hexcode.home
 import android.content.res.AssetManager
 
 /**
- * Debug builds: the `artifact` sample session's artifact (`TodaySessionDemo.Artifact`), answered from the app's own
- * assets instead of a server, so the artifact viewer opens with no computer. The page is a copy of
- * `hexcode/store-listing/sample-artifact.html` in the debug source set's assets; the artifact has no other files, so
- * anything else under it is a `404`. Real artifacts never come here.
+ * The sample sessions' artifact (`TodaySessionDemo.Artifact` and `Playground`), answered from the app's own assets
+ * instead of a server, so the artifact viewer opens with no computer, in release builds too (Try a sample session).
+ * The page is a copy of `hexcode/store-listing/sample-artifact.html` in the main assets; the artifact has no other
+ * files, so anything else under it is a `404`. Real artifacts never come here.
  */
 class SampleArtifactFetcher(
     private val assets: AssetManager,
