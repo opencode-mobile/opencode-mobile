@@ -59,14 +59,7 @@ final class HexAppModel {
         }
         // `-HexCodeDemoSetup YES` skips first run with placeholder values, for simulator checks of home.
         if UserDefaults.standard.bool(forKey: "HexCodeDemoSetup") {
-            showMain(HexSetup(
-                profile: ConnectionProfile(baseURL: "http://192.168.1.2:4096/", username: "opencode", password: "test-password", serverProtocol: .v2),
-                serverVersion: "2.2.5",
-                serverHostname: "mbp.local",
-                project: ChosenProject(name: "hexcode", path: "/Users/example/Projects/hexcode"),
-                model: ModelChoice(providerID: "anthropic", modelID: "claude-sonnet-5-5", variant: "high"),
-                modelName: "Claude Sonnet 5.5"
-            ))
+            showMain(DemoSetup.setup)
             return
         }
         #endif
@@ -126,6 +119,33 @@ final class HexAppModel {
     /// The speech model downloads once, in the background; later calls only load it.
     func prepareSpeech() {
         speech.start()
+    }
+
+    /// Welcome's "Try a sample session": home on the playground, with `DemoSetup`'s made-up
+    /// computer, project and model. Nothing is paired, saved or sent. Leave comes back to Welcome.
+    func startSample() {
+        guard phase == .firstRun, main == nil else { return }
+        let home = HomeModel(recorder: TakeCapture(pauses: { [voice] in voice.makePauseFinder() }), speech: speech)
+        let main = HexMainModel(
+            setup: DemoSetup.setup,
+            home: home,
+            // Never opened: home shows the sample over it, and Leave ends both.
+            session: TodaySessionDemo.empty.make(toasts: home.toasts),
+            samplePreset: .playground,
+            sampleOnly: true,
+            store: NoSetupStore()
+        )
+        main.onLeaveSample = { [weak self] in self?.leaveSample() }
+        self.main = main
+        phase = .main
+    }
+
+    /// Leave, in the sample from Welcome: it goes, and first run shows where it was.
+    private func leaveSample() {
+        guard let main, main.sampleOnly else { return }
+        main.close()
+        self.main = nil
+        if firstRun == nil { beginFirstRun() } else { phase = .firstRun }
     }
 
     private func beginFirstRun() {

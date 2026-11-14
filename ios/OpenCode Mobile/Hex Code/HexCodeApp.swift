@@ -59,7 +59,7 @@ struct HexRootView: View {
                 HexColor.background.ignoresSafeArea().overlay { LaunchLogo() }
             case .firstRun:
                 if let firstRun = app.firstRun {
-                    FirstRunView(model: firstRun)
+                    FirstRunView(model: firstRun, onSample: { app.startSample() })
                 }
             case .main:
                 if let main = app.main {
