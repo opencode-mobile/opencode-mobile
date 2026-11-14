@@ -37,7 +37,7 @@ final class FakeServerChecks: ServerChecking, @unchecked Sendable {
 @MainActor
 struct ServerUpkeepTests {
     private let now = Date(timeIntervalSince1970: 1_793_966_400)
-    private let lan = "http://192.168.0.47:4196/"
+    private let lan = "http://192.168.1.47:4196/"
     private let tailnet = "http://100.64.0.1:4196/"
 
     private func setup(signedDaysAgo: Double?, version: String? = "2.2.4") -> HexSetup {
@@ -212,7 +212,7 @@ struct ForgetComputerTests {
     }
 
     private let setup = HexSetup(
-        profile: ConnectionProfile(baseURL: "http://192.168.0.47:4196/", serverURLs: ["http://192.168.0.47:4196/"], username: "opencode", password: "tok_secret", serverProtocol: .v2),
+        profile: ConnectionProfile(baseURL: "http://192.168.1.47:4196/", serverURLs: ["http://192.168.1.47:4196/"], username: "opencode", password: "tok_secret", serverProtocol: .v2),
         serverVersion: "2.2.5",
         serverHostname: "mbp.local",
         project: ChosenProject(name: "hexcode", path: "/p"),
@@ -273,7 +273,7 @@ struct ForgetComputerTests {
 /// Pair again: the same computer replaces the sign-in; another asks first.
 struct PairAgainTests {
     private let setup = HexSetup(
-        profile: ConnectionProfile(baseURL: "http://192.168.0.47:4196/", serverURLs: ["http://192.168.0.47:4196/"], username: "opencode", password: "tok_old", serverProtocol: .v2),
+        profile: ConnectionProfile(baseURL: "http://192.168.1.47:4196/", serverURLs: ["http://192.168.1.47:4196/"], username: "opencode", password: "tok_old", serverProtocol: .v2),
         serverVersion: "2.2.4",
         serverHostname: "Studio-Mac.local",
         project: ChosenProject(name: "hexcode", path: "/p"),

@@ -60,7 +60,7 @@ enum class BrowserNavigation {
             return if (from == to) Stay else System
         }
 
-        /** `http://192.168.0.47:5173`: the scheme, host and port, with the scheme's default port filled in. */
+        /** `http://192.168.1.47:5173`: the scheme, host and port, with the scheme's default port filled in. */
         private fun origin(url: String): Triple<String, String, Int>? {
             val uri = runCatching { URI(url) }.getOrNull() ?: return null
             val scheme = uri.scheme?.lowercase() ?: return null

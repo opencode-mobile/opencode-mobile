@@ -1329,7 +1329,7 @@ private fun BrowserSample() {
             ) {
                 HexBrowser(
                     title = "Birthday quiz",
-                    host = "192.168.0.47:5173",
+                    host = "192.168.1.47:5173",
                     progress = progress,
                     canGoBack = progress != null,
                     canGoForward = false,

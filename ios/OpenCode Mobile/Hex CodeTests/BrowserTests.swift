@@ -6,11 +6,11 @@ import Testing
 struct BrowserTests {
     @Test func aLocalhostLinkKeepsItsPortPathQueryAndFragmentAndCarriesNoCredentials() throws {
         let link = CardLink(label: "Login preview", url: "http://localhost:5173/login/form?next=%2Fhome&x=1#top")
-        let destination = try #require(CardLinks.destination(for: link, computerHost: "192.168.0.47"))
+        let destination = try #require(CardLinks.destination(for: link, computerHost: "192.168.1.47"))
         #expect(destination.inApp)
-        #expect(destination.url.absoluteString == "http://192.168.0.47:5173/login/form?next=%2Fhome&x=1#top")
+        #expect(destination.url.absoluteString == "http://192.168.1.47:5173/login/form?next=%2Fhome&x=1#top")
         #expect(destination.url.user == nil && destination.url.password == nil)
-        #expect(destination.shownHost == "192.168.0.47:5173")
+        #expect(destination.shownHost == "192.168.1.47:5173")
         #expect(destination.label == "Login preview")
     }
 
@@ -23,21 +23,21 @@ struct BrowserTests {
     }
 
     @Test func anExternalLinkOpensTheSystemBrowser() {
-        let destination = CardLinks.destination(for: CardLink(label: "PR", url: "https://github.com/o/r/pull/1"), computerHost: "192.168.0.47")
+        let destination = CardLinks.destination(for: CardLink(label: "PR", url: "https://github.com/o/r/pull/1"), computerHost: "192.168.1.47")
         #expect(destination?.inApp == false)
     }
 
-    private let home = URL(string: "http://192.168.0.47:5173/")!
+    private let home = URL(string: "http://192.168.1.47:5173/")!
 
     @Test func theSameOriginStaysInTheBrowser() {
-        #expect(BrowserPolicy.decide(URL(string: "http://192.168.0.47:5173/settings?a=1")!, home: home, mainFrame: true) == .allow)
+        #expect(BrowserPolicy.decide(URL(string: "http://192.168.1.47:5173/settings?a=1")!, home: home, mainFrame: true) == .allow)
         #expect(BrowserPolicy.decide(URL(string: "about:blank")!, home: home, mainFrame: true) == .allow)
     }
 
     @Test func anotherOriginOpensTheSystemBrowser() {
         #expect(BrowserPolicy.decide(URL(string: "https://vitejs.dev/guide")!, home: home, mainFrame: true) == .system)
         // Another port on the computer is another origin.
-        #expect(BrowserPolicy.decide(URL(string: "http://192.168.0.47:4196/")!, home: home, mainFrame: true) == .system)
+        #expect(BrowserPolicy.decide(URL(string: "http://192.168.1.47:4196/")!, home: home, mainFrame: true) == .system)
         // A frame inside the page may come from anywhere.
         #expect(BrowserPolicy.decide(URL(string: "https://www.youtube.com/embed/x")!, home: home, mainFrame: false) == .allow)
     }
