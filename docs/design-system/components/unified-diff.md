@@ -76,21 +76,3 @@ markers twice.
 Row meaning, line numbering, context behavior, syntax roles, and accessibility
 meaning are shared. Native scrolling mechanics may differ
 internally but should not create observable behavior differences.
-
-## Completion Ledger
-
-- Shared public API and semantic states: complete.
-- Token and typography usage: complete; the component uses the documented
-  semantic diff, syntax, surface, border, caption, and code roles.
-- iOS implementation: complete, including typed hunks and rows, selected-hunk
-  focus, explicit single-line intrinsic sizing, full-width surface layout,
-  horizontal source scrolling, and context variants.
-- Android implementation: complete with the equivalent behavior and native
-  no-wrap row sizing plus bring-into-view handling for selected hunks.
-- Component Galleries: complete on both platforms with interactive modified,
-  added, deleted, unavailable, collapsed/expanded context, Unicode,
-  no-newline, multi-hunk, and long-line fixtures under gallery light/dark theme
-  controls.
-- Parity and divergences: complete; no observable divergence is known.
-- Automated checks: complete for focused parser and Changes Screen Model tests,
-  Android debug assembly, and the iOS simulator build and tests.

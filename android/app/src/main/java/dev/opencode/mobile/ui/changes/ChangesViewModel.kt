@@ -10,19 +10,20 @@ import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.isSessionRunEnd
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.VcsDiffMode
 import dev.opencode.mobile.domain.session.VcsInfo
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.components.UnifiedDiffDocument
 import dev.opencode.mobile.ui.components.UnifiedDiffParser
 import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -239,7 +240,7 @@ class ChangesViewModel(
         foregroundEventStream?.let { stream ->
             viewModelScope.launch {
                 stream.events.collect { event ->
-                    if (event.type == SESSION_IDLE_EVENT) onSessionIdle(event.sessionId)
+                    if (event.isSessionRunEnd) onSessionIdle(event.sessionId)
                 }
             }
         }
@@ -561,8 +562,6 @@ class ChangesViewModel(
     )
 
     private companion object {
-        const val SESSION_IDLE_EVENT = "session.idle"
-
         /** A cold project settles in well under a second; give it about 1.2 s. */
         const val VCS_SETTLE_RETRIES = 4
         const val VCS_SETTLE_DELAY_MS = 300L

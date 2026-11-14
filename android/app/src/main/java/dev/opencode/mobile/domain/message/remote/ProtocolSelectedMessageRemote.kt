@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.data.remote.MessagesApi
+import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.ActiveConnectionManager
 import javax.inject.Inject
@@ -11,11 +12,12 @@ class ProtocolSelectedMessageRemote
     @Inject
     constructor(
         api: MessagesApi,
+        sessionsApi: SessionsApi,
         adapter: MessageDomainAdapter,
         activeConnectionManager: ActiveConnectionManager? = null,
     ) : MessageRemote {
         private val v1 = V1MessageRemote(api, adapter)
-        private val v2 = V2MessageRemote(api, adapter)
+        private val v2 = V2MessageRemote(api, sessionsApi, adapter)
         private val activeConnectionManager = activeConnectionManager
 
         private suspend fun selected(): MessageRemote =

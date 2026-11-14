@@ -55,18 +55,6 @@ struct InteractivePopBeginPolicyTests {
     }
 }
 
-struct OpenCodeTopBarLeadingInteractivePopTests {
-    @Test func back_defaultDoesNotConsumeInteractivePop() {
-        #expect(OpenCodeTopBarLeading.back(action: {}).consumesInteractivePop == false)
-    }
-
-    @Test func back_canConsumeInteractivePopForOverlayPages() {
-        #expect(
-            OpenCodeTopBarLeading.back(consumesInteractivePop: true, action: {}).consumesInteractivePop
-        )
-    }
-}
-
 @MainActor
 struct InteractivePopGestureReaderOwnershipTests {
     @Test func overlayOnTopViewController_isOwnedByThatController() {

@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPill
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
@@ -60,6 +61,31 @@ fun FloatingPillGalleryScreen(modifier: Modifier = Modifier) {
                         )
                     }
                 }
+            }
+        }
+        var folded by remember { mutableStateOf(false) }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(text = "Fold to compact", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "One pill folds its width to the round mark and back; the label and ✕ fold away, nothing cross-fades.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OpenCodeChoiceBadge(label = "Compact", selected = folded, onClick = { folded = !folded })
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OpenCodeFloatingPill(
+                    layout = OpenCodeFloatingPillLayout.Closable("Request failed"),
+                    state = OpenCodeFloatingPillState.Error,
+                    compact = folded,
+                    badgeCount = if (folded) 3 else 0,
+                    onClick = { log = "Tapped Request failed" },
+                    onClose = { log = "Dismissed Request failed" },
+                )
+                OpenCodeFloatingPill(
+                    layout = OpenCodeFloatingPillLayout.Counter("Syncing"),
+                    state = OpenCodeFloatingPillState.Live,
+                    compact = folded,
+                )
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

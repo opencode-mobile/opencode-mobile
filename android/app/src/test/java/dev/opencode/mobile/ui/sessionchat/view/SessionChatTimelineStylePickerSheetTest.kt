@@ -1,10 +1,10 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.components.OpenCodeSkeletonIllustrationTopic
 import dev.opencode.mobile.ui.components.OpenCodeTagTone
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineStyleOption
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Test

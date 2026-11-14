@@ -3,17 +3,29 @@ name: iOS Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    # Skip when the change cannot affect the iOS app. The iOS build compiles
-    # shared/markdown-core through the android/ Gradle build, so Gradle config
-    # counts; the Android app and screenshot modules do not.
+    # Skip when the change cannot affect the iOS app.
     paths:
       - "ios/**"
+      # Hex Code has its own project and workflow (hexcode-ios-checks.yml).
+      - "!ios/OpenCode Mobile/Hex Code.xcodeproj/**"
+      - "!ios/OpenCode Mobile/Hex Code/**"
+      - "!ios/OpenCode Mobile/Hex CodeTests/**"
+      - "!ios/OpenCode Mobile/Hex Code Info.plist"
       - "shared/**"
-      - "android/**"
-      - "!android/app/**"
-      - "!android/screenshot/**"
+      - "!shared/voice-engine/**"
+      # The iOS build compiles shared/markdown-core (and the highlight modules
+      # it exports) through the android/ Gradle build. Gradle configures every
+      # module on every build, so the root files and every build script count;
+      # Android module sources do not.
+      - "android/*.gradle.kts"
+      - "android/gradle.properties"
+      - "android/gradlew"
+      - "android/gradle/**"
+      - "android/**/*.gradle.kts"
+      - "shared/**/*.gradle.kts"
       - "VERSION"
       - "scripts/read-app-version.sh"
+      - "scripts/set-ios-info-marketing-version.sh"
       - "scripts/ensure-android-platform.sh"
       - ".github/scripts/**"
       - ".github/workflows/ios-checks.yml"
@@ -48,7 +60,7 @@ jobs:
         run: ./scripts/read-app-version.sh ios
 
       - name: Set up JDK 17
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: 17
@@ -75,16 +87,15 @@ jobs:
         id: simulator
         run: bash ../../.github/scripts/select-ios-simulator.sh
 
-      - name: Build for iOS Simulator
-        run: |
-          xcodebuild build \
-            -project "OpenCode Mobile.xcodeproj" \
-            -scheme "OpenCode Mobile" \
-            -configuration Debug \
-            -destination "${{ steps.simulator.outputs.destination }}" \
-            CODE_SIGNING_ALLOWED=NO
+      # xcodebuild shuts down a simulator it had to boot itself, so every run
+      # would start cold. Boot it now so that overlaps with the build instead of
+      # holding up the test step. Already booted is fine.
+      - name: Boot iOS Simulator in the background
+        run: xcrun simctl boot "${{ steps.simulator.outputs.udid }}" || true
 
-      - name: Run static analyzer
+      # analyze builds the app first, so a separate build step would only repeat
+      # the package and markdown-core phases.
+      - name: Build and run static analyzer
         run: |
           xcodebuild analyze \
             -project "OpenCode Mobile.xcodeproj" \

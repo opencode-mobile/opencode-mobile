@@ -13,6 +13,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private let worldSignals: any WorldSignals
     private let eventStagingCapacity: Int
     private let eventStagingByteCapacity: Int
+    private let subscriberStopTimeoutMs: Int
     private let connectionProfileIDProvider: @Sendable () -> String
     private let nowMs: @Sendable () -> Int64
     private let sessionCache: any SessionCache
@@ -53,6 +54,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         pollIntervalMs _: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
         eventStagingCapacity: Int = messageEventStagingCapacity,
         eventStagingByteCapacity: Int = messageEventStagingByteCapacity,
+        subscriberStopTimeoutMs: Int = LiveStoreRefreshPolicy.subscriberStopTimeoutMs,
         connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
         recoveryDelay _: @escaping @Sendable (Int) async -> Void = { ms in
             try? await Task.sleep(for: .milliseconds(ms))
@@ -77,6 +79,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         self.worldSignals = worldSignals
         self.eventStagingCapacity = eventStagingCapacity
         self.eventStagingByteCapacity = eventStagingByteCapacity
+        self.subscriberStopTimeoutMs = subscriberStopTimeoutMs
         self.connectionProfileIDProvider = connectionProfileIDProvider
         self.nowMs = nowMs
         self.sessionCache = sessionCache
@@ -97,6 +100,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         pollIntervalMs: Int = LiveStoreRefreshPolicy.workingPollIntervalMs,
         eventStagingCapacity: Int = messageEventStagingCapacity,
         eventStagingByteCapacity: Int = messageEventStagingByteCapacity,
+        subscriberStopTimeoutMs: Int = LiveStoreRefreshPolicy.subscriberStopTimeoutMs,
         connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
         recoveryDelay: @escaping @Sendable (Int) async -> Void = { ms in
             try? await Task.sleep(for: .milliseconds(ms))
@@ -116,6 +120,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             pollIntervalMs: pollIntervalMs,
             eventStagingCapacity: eventStagingCapacity,
             eventStagingByteCapacity: eventStagingByteCapacity,
+            subscriberStopTimeoutMs: subscriberStopTimeoutMs,
             connectionProfileIDProvider: connectionProfileIDProvider,
             recoveryDelay: recoveryDelay,
             nowMs: nowMs,
@@ -128,7 +133,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         let key = sessionKey(sessionID: sessionID, directory: directory)
         lock.lock()
         if observationCache[key] == nil {
-            observationCache[key] = SharedLiveObservation { yield in
+            observationCache[key] = SharedLiveObservation(stopTimeoutMs: subscriberStopTimeoutMs) { yield in
                 // Detach from caller isolation (often MainActor via DisplayMessagePipeline).
                 // Ingress/reduction must not run on the main thread — matches Android
                 // MessageSync.assertOffMainThread and avoids send-path MainActor deadlock.

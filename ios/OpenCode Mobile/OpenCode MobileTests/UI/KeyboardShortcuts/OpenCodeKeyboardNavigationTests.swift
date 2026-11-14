@@ -213,10 +213,6 @@ import Testing
         // A clock that went backwards does not count as armed.
         #expect(!OpenCodeEscapeResolver.isArmed(armedAt: start, now: start.addingTimeInterval(-1), interruptAvailable: true))
     }
-
-    @Test func hintText_matchesTheSpec() {
-        #expect(OpenCodeInterruptKeyboardHint.text == "Esc again to interrupt")
-    }
 }
 
 @Suite struct OpenCodePromptKeyboardTests {
@@ -225,10 +221,6 @@ import Testing
         #expect(!OpenCodePromptKeyboardHint.isVisible(hardwareKeyboardConnected: true, focusInsidePrompt: true))
         #expect(!OpenCodePromptKeyboardHint.isVisible(hardwareKeyboardConnected: false, focusInsidePrompt: false))
         #expect(!OpenCodePromptKeyboardHint.isVisible(hardwareKeyboardConnected: false, focusInsidePrompt: true))
-    }
-
-    @Test func hintText_matchesTheSpec() {
-        #expect(OpenCodePromptKeyboardHint.text == "Press Tab to answer with the keyboard")
     }
 
     @Test func question_entersAtTheFirstOption() {
@@ -394,6 +386,24 @@ import Testing
         #expect(OpenCodePromptChordRule.outcome(.promptReject, state: permission) == .deny)
     }
 
+    @Test func permission_optionCommandDeleteOpensDenyWithNote_onlyWhileActionsAreEnabled() {
+        #expect(OpenCodePromptChordRule.outcome(.promptRejectWithNote, state: permission) == .denyWithNote)
+        let busy = OpenCodePromptChordState.permission(requestID: "per_1", actionsEnabled: false, alwaysOffered: true)
+        #expect(OpenCodePromptChordRule.outcome(.promptRejectWithNote, state: busy) == nil)
+        let question = OpenCodePromptChordState.question(requestID: "q", isLastStep: true, nextEnabled: false, submitEnabled: true, dismissEnabled: true)
+        #expect(OpenCodePromptChordRule.outcome(.promptRejectWithNote, state: question) == nil)
+    }
+
+    @Test func noteStep_onlyCommandReturnSends_andOnlyWithANote() {
+        let ready = OpenCodePromptChordState.permissionNote(requestID: "per_1", sendEnabled: true)
+        let blank = OpenCodePromptChordState.permissionNote(requestID: "per_1", sendEnabled: false)
+        #expect(OpenCodePromptChordRule.outcome(.promptPrimary, state: ready) == .sendNote)
+        #expect(OpenCodePromptChordRule.outcome(.promptPrimary, state: blank) == nil)
+        for chord in [OpenCodeKeyboardShortcut.promptAlwaysAllow, .promptReject, .promptRejectWithNote] {
+            #expect(OpenCodePromptChordRule.outcome(chord, state: ready) == nil)
+        }
+    }
+
     @Test func alwaysAllow_onlyWhenOffered() {
         let noAlways = OpenCodePromptChordState.permission(requestID: "per_1", actionsEnabled: true, alwaysOffered: false)
         #expect(OpenCodePromptChordRule.outcome(.promptAlwaysAllow, state: noAlways) == nil)
@@ -434,6 +444,8 @@ import Testing
         #expect(String(localized: OpenCodePromptChordOutcome.next.title) == "Next Question")
         #expect(String(localized: OpenCodePromptChordOutcome.submit.title) == "Submit Answers")
         #expect(String(localized: OpenCodePromptChordOutcome.dismiss.title) == "Dismiss Question")
+        #expect(String(localized: OpenCodePromptChordOutcome.denyWithNote.title) == "Deny with a Note")
+        #expect(String(localized: OpenCodePromptChordOutcome.sendNote.title) == "Send Note")
     }
 }
 
@@ -457,6 +469,37 @@ import Testing
             requestID: "per_1", sessionID: "ses_1", permission: "bash", patterns: [], submitting: true
         ))
         #expect(state.promptChordState == .permission(requestID: "per_1", actionsEnabled: false, alwaysOffered: false))
+    }
+
+    @Test func permissionState_denyWithNoteOpensTheNoteStep() {
+        let state = OpenCodeSessionComposerState.permission(.init(
+            requestID: "per_1", sessionID: "ses_1", permission: "bash", patterns: ["rm"]
+        ))
+        guard case let .openPermissionNote(requestID, sessionID)? = state.action(for: .denyWithNote) else {
+            Issue.record("expected open permission note")
+            return
+        }
+        #expect(requestID == "per_1" && sessionID == "ses_1")
+    }
+
+    @Test func noteStep_mapsToSendOnly() {
+        let blank = OpenCodeSessionComposerState.permission(.init(
+            requestID: "per_1", sessionID: "ses_1", permission: "bash", patterns: ["rm"], note: "  "
+        ))
+        #expect(blank.promptChordState == .permissionNote(requestID: "per_1", sendEnabled: false))
+        let typed = OpenCodeSessionComposerState.permission(.init(
+            requestID: "per_1", sessionID: "ses_1", permission: "bash", patterns: ["rm"], note: "Use pnpm"
+        ))
+        #expect(typed.promptChordState == .permissionNote(requestID: "per_1", sendEnabled: true))
+        guard case let .sendPermissionNote(requestID, sessionID)? = typed.action(for: .sendNote) else {
+            Issue.record("expected send permission note")
+            return
+        }
+        #expect(requestID == "per_1" && sessionID == "ses_1")
+        let sending = OpenCodeSessionComposerState.permission(.init(
+            requestID: "per_1", sessionID: "ses_1", permission: "bash", patterns: ["rm"], submitting: true, note: "Use pnpm"
+        ))
+        #expect(sending.promptChordState == .permissionNote(requestID: "per_1", sendEnabled: false))
     }
 
     @Test func questionState_knowsTheLastStep() {

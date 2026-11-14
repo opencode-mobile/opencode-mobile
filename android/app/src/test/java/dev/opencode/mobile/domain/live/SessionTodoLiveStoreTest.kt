@@ -539,6 +539,7 @@ private class FakeTodoSessionRepository(
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
+        message: String?,
     ): Boolean = error("unused")
 
     override suspend fun replyToQuestion(

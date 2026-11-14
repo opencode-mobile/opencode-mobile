@@ -7,6 +7,9 @@ nonisolated struct EventDomainAdapter: Sendable {
     /// v2 shell item id per shell id, remembered from `shell.started`: `ended`
     /// carries only the shell while the server updates the item it started.
     private let runningShellMessageIDs = RunningCompactionIDs()
+    /// Inbox ids of `/goal` kickoffs seen enqueued: their bare `delivered` ref must not turn
+    /// the Goal set notice back into an (empty) user message.
+    private let goalKickoffInboxIDs = RunningCompactionIDs()
 
     func parseEvent(dataLine: String) -> OpencodeEvent? {
         parseEvents(dataLine: dataLine).first
@@ -170,9 +173,11 @@ nonisolated struct EventDomainAdapter: Sendable {
              "session.inbox.delivery.changed":
             // A `synthetic` item is server-injected context (a finished shell command's
             // output, Plan mode's reminder), not a prompt the user queued: no pending chrome.
-            userPromptEvents(properties, waiting: !isSyntheticInboxItem(properties))
+            // A `/goal` kickoff is the exception: it draws a Goal set notice.
+            goalKickoffNoticeEvents(properties)
+                ?? userPromptEvents(properties, waiting: !isSyntheticInboxItem(properties))
         case "session.next.prompted", "session.inbox.delivered":
-            userPromptEvents(properties, waiting: false)
+            isKnownGoalKickoff(properties) ? [] : userPromptEvents(properties, waiting: false)
         case "session.inbox.cancelled":
             [inboxCancelled(properties)]
         case "session.next.step.started", "session.step.started":
@@ -626,7 +631,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         let errorObject = properties["error"] as? [String: Any]
         let unwrapped = SessionFailure.unwrap(errorObject?["message"] as? String)
         let error = unwrapped.isEmpty ? nil : unwrapped
-        let interrupted = status == "error" && ToolInterruption.isAbortedType(errorObject?["type"] as? String)
+        let errorType = errorObject?["type"] as? String
+        let interrupted = status == "error" && ToolInterruption.isUserInterruptionType(errorType)
+        let decline = status == "error"
+            ? ToolInterruption.v2Decline(type: errorType, message: errorObject?["message"] as? String)
+            : nil
         let malformed = SessionFailure.isMalformedTool(
             type: errorObject?["type"] as? String,
             executed: boolValue(properties["executed"])
@@ -648,6 +657,7 @@ nonisolated struct EventDomainAdapter: Sendable {
             title: title,
             interrupted: interrupted,
             malformed: malformed,
+            decline: decline,
             attachments: attachments
         )
     }
@@ -843,14 +853,19 @@ nonisolated struct EventDomainAdapter: Sendable {
                 "metadata": ["notice": "instructions", "instructionSources": sources],
             ]
         case .synthetic:
-            // Only the restart synthetic is a notice; other synthetic items stay as they are.
+            // Only the restart synthetic and a `/goal` kickoff are notices; other synthetic
+            // items stay as they are.
             let metadata = properties["metadata"] as? [String: Any]
             let description = string(in: properties, key: "description")
-            guard string(in: metadata, key: "notice") == "restart"
-                || description == MessageDomainAdapter.restartDescription
-            else { return [] }
-            notice = ["type": "synthetic", "metadata": ["notice": "restart"]]
-            if let description { notice["description"] = description }
+            if let goalNotice = goalSetNotice(metadata: metadata, description: description) {
+                notice = goalNotice
+            } else {
+                guard string(in: metadata, key: "notice") == "restart"
+                    || description == MessageDomainAdapter.restartDescription
+                else { return [] }
+                notice = ["type": "synthetic", "metadata": ["notice": "restart"]]
+                if let description { notice["description"] = description }
+            }
         }
         var info: [String: Any] = ["id": messageID, "role": "notice", "sessionID": sessionID]
         if let created = int64(in: properties, key: "created") {
@@ -867,6 +882,54 @@ nonisolated struct EventDomainAdapter: Sendable {
             event(type: "message.updated", properties: ["info": info]),
             event(type: "message.part.updated", properties: ["part": part]),
         ]
+    }
+
+    /// The notice for a `/goal` kickoff (`metadata {source: "goal", goalID}` with a description);
+    /// nil for any other synthetic item, including the undescribed continuations.
+    private func goalSetNotice(metadata: [String: Any]?, description: String?) -> [String: Any]? {
+        guard SessionGoalKickoff.goalID(
+            source: string(in: metadata, key: "source"),
+            goalID: string(in: metadata, key: "goalID")
+        ) != nil,
+            let description, !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            let metadata
+        else { return nil }
+        return ["type": "synthetic", "description": description, "metadata": metadata]
+    }
+
+    /// A `/goal` kickoff arrives as a synthetic inbox item; its message id is the inbox id,
+    /// so the REST copy replaces this notice in place. Nil for any other item.
+    private func goalKickoffNoticeEvents(_ properties: [String: Any]) -> [OpencodeEvent]? {
+        guard isSyntheticInboxItem(properties),
+              let payload = promptObject(in: properties),
+              let notice = goalSetNotice(
+                  metadata: payload["metadata"] as? [String: Any],
+                  description: string(in: payload, key: "description")
+              ),
+              let messageID = userMessageID(in: properties),
+              let sessionID = sessionID(from: properties)
+        else { return nil }
+        goalKickoffInboxIDs.set(SessionGoalKickoff.metadataSource, for: messageID)
+        var info: [String: Any] = ["id": messageID, "role": "notice", "sessionID": sessionID]
+        if let created = int64(in: properties, key: "created") {
+            info["time"] = ["created": created, "completed": created]
+        }
+        let part: [String: Any] = [
+            "id": messageID,
+            "messageID": messageID,
+            "sessionID": sessionID,
+            "type": "notice",
+            "notice": notice,
+        ]
+        return [
+            event(type: "message.updated", properties: ["info": info]),
+            event(type: "message.part.updated", properties: ["part": part]),
+        ]
+    }
+
+    private func isKnownGoalKickoff(_ properties: [String: Any]) -> Bool {
+        guard let messageID = userMessageID(in: properties) else { return false }
+        return goalKickoffInboxIDs.id(for: messageID) != nil
     }
 
     /// v2 compaction is its own transcript item (`type: compaction`). Its id is
@@ -954,9 +1017,14 @@ nonisolated struct EventDomainAdapter: Sendable {
         title: String? = nil,
         interrupted: Bool = false,
         malformed: Bool = false,
+        decline: ToolDecline? = nil,
         attachments: [[String: Any]] = []
     ) -> OpencodeEvent {
         var state: [String: Any] = ["status": status]
+        if let decline {
+            state["declined"] = true
+            if let note = decline.note { state["declineNote"] = note }
+        }
         if !attachments.isEmpty { state["attachments"] = attachments }
         if interrupted { state["interrupted"] = true }
         if malformed { state["malformed"] = true }
@@ -1318,68 +1386,24 @@ nonisolated struct EventDomainAdapter: Sendable {
         }
     }
 
-    /// Title change carried by a `session.updated` event for a concrete session id.
-    /// Returns nil when the event is not a usable title update.
+    /// See `OpencodeEvent.sessionTitleUpdate`.
     func sessionTitleUpdate(from event: OpencodeEvent) -> SessionTitleUpdate? {
-        guard event.type == "session.updated" else { return nil }
-        let info = event.rawProperties?["info"]?.dictionaryValue
-        let sessionID =
-            event.sessionID
-            ?? info?["id"]?.stringValue
-            ?? info?["sessionID"]?.stringValue
-            ?? info?["sessionId"]?.stringValue
-        guard let sessionID else { return nil }
-        guard let title = info?["title"]?.stringValue else { return nil }
-        return SessionTitleUpdate(sessionID: sessionID, title: title)
+        event.sessionTitleUpdate
     }
 
-    /// Pending-revert change. v1 `session.updated` carries the whole session, so an absent
-    /// `info.revert` means none; v2 stages, clears and commits with dedicated events. A partial
-    /// `info` (the v2 `session.renamed` projection) says nothing about the revert and is ignored.
+    /// See `OpencodeEvent.sessionRevertUpdate`.
     func sessionRevertUpdate(from event: OpencodeEvent) -> SessionRevertUpdate? {
-        switch event.type {
-        case "session.updated":
-            guard let info = event.rawProperties?["info"]?.dictionaryValue, info["time"] != nil else { return nil }
-            guard let sessionID = event.sessionID ?? info["id"]?.stringValue else { return nil }
-            let messageID = info["revert"]?.dictionaryValue?["messageID"]?.stringValue
-            return SessionRevertUpdate(sessionID: sessionID, messageID: messageID)
-        case "session.revert.staged":
-            guard let sessionID = event.sessionID,
-                  let messageID = event.rawProperties?["revert"]?.dictionaryValue?["messageID"]?.stringValue
-            else { return nil }
-            return SessionRevertUpdate(sessionID: sessionID, messageID: messageID)
-        case "session.revert.cleared", "session.revert.committed":
-            guard let sessionID = event.sessionID else { return nil }
-            return SessionRevertUpdate(sessionID: sessionID, messageID: nil)
-        default:
-            return nil
-        }
+        event.sessionRevertUpdate
     }
 
-    /// New directory of a session the server moved (v2 `session.moved`, projected onto
-    /// `session.updated` with the move's `location`). Nil for any other event, including a v1
-    /// `session.updated` that carries the whole session under `info`.
+    /// See `OpencodeEvent.sessionMoved`.
     func sessionMoved(from event: OpencodeEvent) -> SessionMovedUpdate? {
-        guard event.type == "session.updated", event.rawProperties?["info"] == nil else { return nil }
-        guard let sessionID = event.sessionID, !sessionID.isEmpty else { return nil }
-        let directory = event.rawProperties?["location"]?.dictionaryValue?["directory"]?.stringValue?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let directory, !directory.isEmpty else { return nil }
-        return SessionMovedUpdate(
-            sessionID: sessionID,
-            directory: directory,
-            projectID: event.namedProjectID
-        )
+        event.sessionMoved
     }
 
-    /// Session removed on the server. v1 carries the id only in `info.id`; v2 sends `sessionID`.
+    /// See `OpencodeEvent.sessionDeletedID`.
     func sessionDeletedID(from event: OpencodeEvent) -> String? {
-        guard event.type == "session.deleted" else { return nil }
-        let info = event.rawProperties?["info"]?.dictionaryValue
-        return event.sessionID
-            ?? info?["id"]?.stringValue
-            ?? info?["sessionID"]?.stringValue
-            ?? info?["sessionId"]?.stringValue
+        event.sessionDeletedID
     }
 
     /// Viewed watermark carried by a v2 `session.viewed` event (`{ sessionID, idle }`).

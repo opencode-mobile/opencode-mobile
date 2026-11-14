@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Resolve Swift packages for the OpenCode Mobile Xcode project.
+# Resolve Swift packages for an Xcode project in ios/OpenCode Mobile.
 # Run from ios/OpenCode Mobile.
+#
+# Usage: resolve-ios-packages.sh [project] [scheme]
+#   defaults: "OpenCode Mobile.xcodeproj" "OpenCode Mobile"
 #
 # A cancelled job on the shared macOS runner can leave DerivedData claiming
 # Firebase binary artifacts (absl.zip, openssl_grpc.zip) that are no longer
@@ -9,17 +12,22 @@
 # shared cache.
 set -euo pipefail
 
+project="${1:-OpenCode Mobile.xcodeproj}"
+scheme="${2:-OpenCode Mobile}"
+# Xcode names a project's DerivedData folder after it, spaces as underscores.
+derived_data_name="$(basename "${project}" .xcodeproj | tr ' ' '_')"
+
 resolve() {
   xcodebuild -resolvePackageDependencies \
-    -project "OpenCode Mobile.xcodeproj" \
-    -scheme "OpenCode Mobile" \
+    -project "${project}" \
+    -scheme "${scheme}" \
     "$@"
 }
 
 clear_source_packages() {
   shopt -s nullglob
   local dir
-  for dir in "${HOME}/Library/Developer/Xcode/DerivedData"/OpenCode_Mobile-*/SourcePackages; do
+  for dir in "${HOME}/Library/Developer/Xcode/DerivedData"/"${derived_data_name}"-*/SourcePackages; do
     echo "Removing stale SourcePackages cache: ${dir}"
     rm -rf "${dir}"
   done

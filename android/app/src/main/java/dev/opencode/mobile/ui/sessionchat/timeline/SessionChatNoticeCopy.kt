@@ -4,7 +4,7 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.model.ModelSelectionOption
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 
 /**
  * One notice row's copy: [label] in the weak tone, then [value] in the info tint.
@@ -100,5 +100,11 @@ object SessionChatNoticeCopy {
                 )
             is TimelineNotice.SystemNote -> SessionChatNoticeLine(label = UiText.verbatim(notice.description))
             TimelineNotice.Restart -> SessionChatNoticeLine(label = RESTART)
+            // Session Chat draws its own Goal set row; this is the plain-text fallback.
+            is TimelineNotice.GoalSet ->
+                SessionChatNoticeLine(
+                    label = UiText.resource(R.string.session_chat_goal_set),
+                    value = UiText.verbatim(SessionChatGoalCopy.goalSetValue(notice.description)),
+                )
         }
 }

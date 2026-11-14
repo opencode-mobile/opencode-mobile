@@ -1,0 +1,592 @@
+name: Hex Code App Distribution
+
+# Hex Code (hexcode/README.md) to its own Firebase App Distribution tester groups, apart
+# from OpenCode Mobile's android-app-distribution.yml and ios-app-distribution.yml. Same
+# runners, release environments, upload key and signing as those; Hex Code has no Firebase
+# SDK, so no google-services.json or GoogleService-Info.plist.
+on:
+  schedule:
+    # Nightly at 02:00 UTC, with OpenCode Mobile's; skipped when main has no Hex Code
+    # changes in the last 26 hours (see the changes job).
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Which app to distribute."
+        required: false
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+        default: all
+      source_ref:
+        description: "Optional main or full pull request head SHA to check out. Leave empty to distribute the selected workflow branch."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+# Manual dispatches and nightly runs queue in separate groups; a running build is never cancelled, but GitHub keeps only the newest queued run per group.
+concurrency:
+  group: hexcode-app-distribution-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    if: github.repository == 'opencode-mobile/opencode-mobile'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Checkout main history
+        if: github.event_name == 'schedule'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Check for new Hex Code changes on main
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" != "schedule" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The union of the paths hexcode-android-checks.yml and hexcode-ios-checks.yml
+          # trigger on, plus this workflow.
+          paths=(
+            ":(glob)android/hexcode/**"
+            ":(glob)android/opencode-kit/**"
+            ":(glob)shared/voice-engine/**"
+            ":(glob)android/gradle.properties"
+            ":(glob)android/gradlew"
+            ":(glob)android/gradle/**"
+            ":(glob)android/**/*.gradle.kts"
+            ":(glob)shared/**/*.gradle.kts"
+            ":(glob)scripts/ensure-android-platform.sh"
+            ":(glob)ios/OpenCode Mobile/Hex Code.xcodeproj/**"
+            ":(glob)ios/OpenCode Mobile/Hex Code/**"
+            ":(glob)ios/OpenCode Mobile/Hex CodeTests/**"
+            ":(glob)ios/OpenCode Mobile/Hex Code Info.plist"
+            ":(glob)ios/OpenCodeKit/**"
+            ":(glob).github/scripts/resolve-ios-packages.sh"
+            ":(glob).github/scripts/select-ios-simulator.sh"
+            ":(glob).github/workflows/hexcode-android-checks.yml"
+            ":(glob).github/workflows/hexcode-ios-checks.yml"
+            ":(glob).github/workflows/hexcode-app-distribution.yml"
+          )
+          # Compare main now with main as it was 26 hours ago, whatever the merge style.
+          base="$(git rev-list -1 --first-parent --before="26 hours ago" HEAD)"
+          if [[ -z "$base" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --quiet "$base" HEAD -- "${paths[@]}"; then
+            echo "No Hex Code changes on main since $base; skipping nightly distribution."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            git diff --stat "$base" HEAD -- "${paths[@]}" | tail -n 1
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  android:
+    needs: changes
+    # Nightly runs have no inputs and build both platforms.
+    if: needs.changes.outputs.should_run == 'true' && github.event.inputs.platform != 'ios'
+    runs-on: [self-hosted, Linux, X64, android]
+    environment: android-release
+    defaults:
+      run:
+        working-directory: android
+    env:
+      FIREBASE_APP_ID: 1:569439646238:android:e7e619c3921faeb78df40f
+      FIREBASE_TESTER_GROUP: hexcode-android
+      FIREBASE_TOOLS_VERSION: 15.24.0
+      # OpenCode Mobile's upload key signs Hex Code too.
+      EXPECTED_UPLOAD_CERT_SHA256: 9E:FB:99:19:6B:2D:F6:56:FD:FA:1D:88:3D:33:00:7E:0F:E0:DA:28:AB:FF:A6:F8:BC:C3:3D:42:0F:CA:E1:37
+      ANDROID_APK_PATH: hexcode/build/outputs/apk/release/hexcode-release.apk
+      SOURCE_REF: ${{ github.event.inputs.source_ref }}
+
+    steps:
+      - name: Validate source ref
+        working-directory: .
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SOURCE_REF:-}" ]]; then
+            exit 0
+          fi
+          # Release secrets are attached to this job, so only main or the head commit of an
+          # open same-repository pull request may be built (#755).
+          case "$SOURCE_REF" in
+            main|refs/heads/main) exit 0 ;;
+          esac
+          if [[ ! "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source_ref must be main or a full pull request head SHA. Got: $SOURCE_REF" >&2
+            exit 1
+          fi
+          open_same_repo_prs="$(
+            gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_REF/pulls" \
+              --jq "[.[] | select(.state == \"open\" and .head.sha == \"$SOURCE_REF\" and .head.repo.full_name == \"$GITHUB_REPOSITORY\")] | length"
+          )"
+          if [[ "$open_same_repo_prs" -lt 1 ]]; then
+            echo "$SOURCE_REF is not the head of an open pull request from this repository." >&2
+            exit 1
+          fi
+
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.inputs.source_ref || github.sha }}
+
+      - name: Set distribution version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_code=$((1000000000 + GITHUB_RUN_NUMBER))
+          if (( version_code > 2100000000 )); then
+            echo "App Distribution versionCode exceeds the Android limit." >&2
+            exit 1
+          fi
+          # Hex Code's own marketing version, not the repo VERSION file.
+          marketing_version="$(
+            sed -nE 's/^[[:space:]]*versionName = .*"([0-9]+\.[0-9]+\.[0-9]+)"[[:space:]]*$/\1/p' hexcode/build.gradle.kts
+          )"
+          if [[ ! "$marketing_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Could not read one MAJOR.MINOR.PATCH versionName from android/hexcode/build.gradle.kts. Got: '$marketing_version'" >&2
+            exit 1
+          fi
+          {
+            echo "ANDROID_VERSION_CODE=$version_code"
+            echo "ANDROID_VERSION_NAME=${marketing_version}-hex.$GITHUB_RUN_NUMBER"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Install Android compile SDK 37
+        working-directory: .
+        run: ./scripts/ensure-android-platform.sh 37
+
+      - name: Ensure Android NDK and CMake for voice-engine
+        # :voice-engine builds a small native library (shared/voice-engine/adapter/android).
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_version="27.2.12479018"
+          cmake_version="3.31.6"
+          packages=()
+          if [[ ! -d "${ANDROID_HOME:-}/ndk/${ndk_version}" ]]; then
+            packages+=("ndk;${ndk_version}")
+          fi
+          if [[ ! -d "${ANDROID_HOME:-}/cmake/${cmake_version}" ]]; then
+            packages+=("cmake;${cmake_version}")
+          fi
+          if [[ ${#packages[@]} -eq 0 ]]; then
+            echo "NDK ${ndk_version} and CMake ${cmake_version} already installed."
+            exit 0
+          fi
+          sdkmanager_bin=""
+          if [[ -x "${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager" ]]; then
+            sdkmanager_bin="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          elif command -v sdkmanager >/dev/null 2>&1; then
+            sdkmanager_bin="$(command -v sdkmanager)"
+          else
+            echo "sdkmanager not found; cannot install ${packages[*]}." >&2
+            exit 1
+          fi
+          yes | "$sdkmanager_bin" "${packages[@]}"
+
+      - name: Prepare protected credentials
+        shell: bash
+        env:
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ANDROID_UPLOAD_KEYSTORE_BASE64:-}" || -z "${FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON:-}" ]]; then
+            echo "ANDROID_UPLOAD_KEYSTORE_BASE64 and FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON are required in the android-release environment." >&2
+            exit 1
+          fi
+          keystore_path="$RUNNER_TEMP/hexcode-upload.jks"
+          firebase_credentials_path="$RUNNER_TEMP/hexcode-firebase-app-distribution.json"
+          printf '%s' "$ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          printf '%s' "$FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON" > "$firebase_credentials_path"
+          chmod 600 "$keystore_path" "$firebase_credentials_path"
+          echo "ANDROID_UPLOAD_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$firebase_credentials_path" >> "$GITHUB_ENV"
+
+      - name: Build signed APK
+        # The ANDROID_* environment also satisfies :app's release guard, which every
+        # assembleRelease task name trips (android/app/build.gradle.kts).
+        env:
+          ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: ./gradlew :hexcode:assembleRelease --stacktrace
+
+      - name: Verify APK signature
+        working-directory: .
+        run: |
+          .github/scripts/verify-android-apk-signature.sh \
+            "android/$ANDROID_APK_PATH" \
+            "$EXPECTED_UPLOAD_CERT_SHA256"
+
+      - name: Distribute to Firebase tester group
+        shell: bash
+        run: |
+          set -euo pipefail
+          distributed_sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          subject="$(git log -1 --pretty=%s)"
+          distributed_ref="${SOURCE_REF:-${GITHUB_REF_NAME:-}}"
+          distributed_ref="${distributed_ref#refs/heads/}"
+          distributed_ref="${distributed_ref#refs/tags/}"
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            release_notes="Hex Code nightly $short_sha: $subject"
+          else
+            release_notes="Hex Code $short_sha: $subject"
+          fi
+          if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
+            release_notes="Not from main: $distributed_ref"$'\n'"$release_notes"
+          fi
+          if ! distribution_output="$(
+            npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \
+              appdistribution:distribute \
+              "$ANDROID_APK_PATH" \
+              --app "$FIREBASE_APP_ID" \
+              --groups "$FIREBASE_TESTER_GROUP" \
+              --release-notes "$release_notes" \
+              2>&1
+          )"; then
+            printf '%s\n' "$distribution_output"
+            exit 1
+          fi
+          firebase_console_uri="$(
+            sed -n 's/^.*View this release in the Firebase console: //p' <<<"$distribution_output" | tail -n 1
+          )"
+          testing_uri="$(
+            sed -n 's/^.*Share this release with testers who have access: //p' <<<"$distribution_output" | tail -n 1
+          )"
+          if [[ -z "$firebase_console_uri" || -z "$testing_uri" ]]; then
+            echo "Firebase CLI did not return the expected stable release links." >&2
+            printf '%s\n' "$distribution_output" >&2
+            exit 1
+          fi
+          {
+            echo "## Hex Code Android App Distribution"
+            echo
+            if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
+              echo "- **Not from main:** \`$distributed_ref\`"
+            fi
+            echo "- Commit: \`$distributed_sha\`"
+            if [[ -n "${SOURCE_REF:-}" ]]; then
+              echo "- Source ref: \`$SOURCE_REF\`"
+            fi
+            echo "- Version: \`$ANDROID_VERSION_NAME\` (\`$ANDROID_VERSION_CODE\`)"
+            echo "- Tester group: \`$FIREBASE_TESTER_GROUP\`"
+            echo "- [Firebase release]($firebase_console_uri)"
+            echo "- [Open in the tester experience]($testing_uri)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary credentials
+        if: always()
+        shell: bash
+        run: |
+          rm -f \
+            "$RUNNER_TEMP/hexcode-upload.jks" \
+            "$RUNNER_TEMP/hexcode-firebase-app-distribution.json"
+
+  ios:
+    needs: changes
+    # Nightly runs have no inputs and build both platforms.
+    if: needs.changes.outputs.should_run == 'true' && github.event.inputs.platform != 'android'
+    runs-on: [self-hosted, macOS, mac-mini]
+    environment: ios-release
+    defaults:
+      run:
+        working-directory: ios/OpenCode Mobile
+    env:
+      # The same Xcode as OpenCode Mobile's iOS App Distribution.
+      DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+      EXPECTED_TEAM_ID: 677MTXPXZZ
+      EXPECTED_BUNDLE_ID: dev.opencode.hexcode
+      FIREBASE_APP_ID: 1:569439646238:ios:a37c5c423e3c45cb8df40f
+      FIREBASE_TESTER_GROUP: hexcode-ios
+      FIREBASE_TOOLS_VERSION: 15.24.0
+      SOURCE_REF: ${{ github.event.inputs.source_ref }}
+
+    steps:
+      - name: Validate source ref
+        working-directory: .
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${SOURCE_REF:-}" ]]; then
+            exit 0
+          fi
+          # Release secrets are attached to this job, so only main or the head commit of an
+          # open same-repository pull request may be built (#755).
+          case "$SOURCE_REF" in
+            main|refs/heads/main) exit 0 ;;
+          esac
+          if [[ ! "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source_ref must be main or a full pull request head SHA. Got: $SOURCE_REF" >&2
+            exit 1
+          fi
+          open_same_repo_prs="$(
+            gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_REF/pulls" \
+              --jq "[.[] | select(.state == \"open\" and .head.sha == \"$SOURCE_REF\" and .head.repo.full_name == \"$GITHUB_REPOSITORY\")] | length"
+          )"
+          if [[ "$open_same_repo_prs" -lt 1 ]]; then
+            echo "$SOURCE_REF is not the head of an open pull request from this repository." >&2
+            exit 1
+          fi
+
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.inputs.source_ref || github.sha }}
+
+      - name: Set distribution version
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_number=$((1000000000 + GITHUB_RUN_NUMBER))
+          # Hex Code's own marketing version, not the repo VERSION file.
+          marketing_version="$(
+            sed -nE 's/^[[:space:]]*MARKETING_VERSION = "?([0-9.]+)"?;$/\1/p' "Hex Code.xcodeproj/project.pbxproj" | sort -u
+          )"
+          if [[ ! "$marketing_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Could not read one MAJOR.MINOR.PATCH MARKETING_VERSION from Hex Code.xcodeproj. Got: '$marketing_version'" >&2
+            exit 1
+          fi
+          echo "IOS_BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
+          echo "IOS_MARKETING_VERSION=$marketing_version" >> "$GITHUB_ENV"
+
+      # Hex Code does not embed markdown-core, so no JDK, Gradle or Android SDK here.
+      - name: Prepare App Store Connect API key
+        shell: bash
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ASC_API_KEY_P8:-}" || -z "${ASC_KEY_ID:-}" || -z "${ASC_ISSUER_ID:-}" ]]; then
+            echo "ASC_API_KEY_P8, ASC_KEY_ID, and ASC_ISSUER_ID are required in the ios-release environment." >&2
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s\n' "$ASC_API_KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+          {
+            echo "ASC_API_KEY_PATH=$key_path"
+            echo "ASC_KEY_ID=$ASC_KEY_ID"
+            echo "ASC_ISSUER_ID=$ASC_ISSUER_ID"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare Firebase App Distribution credentials
+        shell: bash
+        env:
+          FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON:-}" ]]; then
+            echo "FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON is required in the ios-release environment." >&2
+            exit 1
+          fi
+          firebase_credentials_path="$RUNNER_TEMP/hexcode-firebase-app-distribution.json"
+          printf '%s' "$FIREBASE_APP_DISTRIBUTION_SERVICE_ACCOUNT_JSON" > "$firebase_credentials_path"
+          chmod 600 "$firebase_credentials_path"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$firebase_credentials_path" >> "$GITHUB_ENV"
+
+      - name: Prepare persistent signing keychain
+        shell: bash
+        run: |
+          set -euo pipefail
+          keychain_dir="${HOME}/.opencode-mobile"
+          keychain_path="${keychain_dir}/ios-release.keychain-db"
+          password_path="${keychain_dir}/ios-release.keychain.password"
+          mkdir -p "$keychain_dir"
+          chmod 700 "$keychain_dir"
+          if [[ ! -f "$password_path" ]]; then
+            openssl rand -base64 32 | tr -d '\n/=+' > "$password_path"
+            chmod 600 "$password_path"
+          fi
+          keychain_password="$(tr -d '\n' < "$password_path")"
+          if [[ ! -f "$keychain_path" ]]; then
+            security create-keychain -p "$keychain_password" "$keychain_path"
+          fi
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          existing_keychains=()
+          while IFS= read -r line; do
+            keychain="${line#\"}"
+            keychain="${keychain%\"}"
+            keychain="$(printf '%s' "$keychain" | sed -E 's/^[[:space:]]+//;s/[[:space:]]+$//')"
+            [[ -z "$keychain" || "$keychain" == "$keychain_path" ]] && continue
+            existing_keychains+=("$keychain")
+          done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain_path" "${existing_keychains[@]+"${existing_keychains[@]}"}"
+          security default-keychain -s "$keychain_path"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_password" \
+            "$keychain_path" >/dev/null 2>&1 || true
+          {
+            echo "IOS_RELEASE_KEYCHAIN_PATH=$keychain_path"
+            echo "IOS_RELEASE_KEYCHAIN_PASSWORD_PATH=$password_path"
+          } >> "$GITHUB_ENV"
+
+      - name: Resolve Swift Package dependencies
+        run: bash ../../.github/scripts/resolve-ios-packages.sh "Hex Code.xcodeproj" "Hex Code"
+
+      - name: Archive for iOS device
+        # Unlike OpenCode Mobile's archive, no -Onone workaround: Hex Code's Release
+        # (whole-module, optimized) builds with this Xcode.
+        run: |
+          set -euo pipefail
+          archive_path="$RUNNER_TEMP/Hex-Code-AppDistribution.xcarchive"
+          keychain_password="$(tr -d '\n' < "$IOS_RELEASE_KEYCHAIN_PASSWORD_PATH")"
+          security unlock-keychain -p "$keychain_password" "$IOS_RELEASE_KEYCHAIN_PATH"
+          xcodebuild archive \
+            -project "Hex Code.xcodeproj" \
+            -scheme "Hex Code" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$archive_path" \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath "$ASC_API_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            MARKETING_VERSION="$IOS_MARKETING_VERSION" \
+            CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER" \
+            DEVELOPMENT_TEAM="$EXPECTED_TEAM_ID"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_password" \
+            "$IOS_RELEASE_KEYCHAIN_PATH" >/dev/null 2>&1 || true
+          echo "IOS_ARCHIVE_PATH=$archive_path" >> "$GITHUB_ENV"
+
+      - name: Export signed Ad Hoc IPA
+        run: |
+          set -euo pipefail
+          keychain_password="$(tr -d '\n' < "$IOS_RELEASE_KEYCHAIN_PASSWORD_PATH")"
+          security unlock-keychain -p "$keychain_password" "$IOS_RELEASE_KEYCHAIN_PATH"
+          export_dir="$RUNNER_TEMP/hexcode-adhoc-ipa-export"
+          mkdir -p "$export_dir"
+          xcodebuild -exportArchive \
+            -archivePath "$IOS_ARCHIVE_PATH" \
+            -exportPath "$export_dir" \
+            -exportOptionsPlist "$GITHUB_WORKSPACE/.github/ios/ExportOptions-AdHoc.plist" \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath "$ASC_API_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          ipa_path="$(find "$export_dir" -maxdepth 1 -name '*.ipa' -type f | head -n 1)"
+          if [[ -z "$ipa_path" ]]; then
+            echo "No IPA produced by Ad Hoc exportArchive." >&2
+            ls -la "$export_dir" >&2 || true
+            exit 1
+          fi
+          echo "IOS_IPA_PATH=$ipa_path" >> "$GITHUB_ENV"
+
+      - name: Verify IPA signature
+        working-directory: .
+        run: |
+          .github/scripts/verify-ios-release-ipa.sh \
+            "$IOS_IPA_PATH" \
+            "$EXPECTED_TEAM_ID" \
+            "$EXPECTED_BUNDLE_ID"
+
+      - name: Distribute to Firebase tester group
+        shell: bash
+        run: |
+          set -euo pipefail
+          distributed_sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          subject="$(git log -1 --pretty=%s)"
+          distributed_ref="${SOURCE_REF:-${GITHUB_REF_NAME:-}}"
+          distributed_ref="${distributed_ref#refs/heads/}"
+          distributed_ref="${distributed_ref#refs/tags/}"
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            release_notes="Hex Code nightly $short_sha: $subject"
+          else
+            release_notes="Hex Code $short_sha: $subject"
+          fi
+          if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
+            release_notes="Not from main: $distributed_ref"$'\n'"$release_notes"
+          fi
+          if ! distribution_output="$(
+            npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \
+              appdistribution:distribute \
+              "$IOS_IPA_PATH" \
+              --app "$FIREBASE_APP_ID" \
+              --groups "$FIREBASE_TESTER_GROUP" \
+              --release-notes "$release_notes" \
+              2>&1
+          )"; then
+            printf '%s\n' "$distribution_output"
+            exit 1
+          fi
+          firebase_console_uri="$(
+            sed -n 's/^.*View this release in the Firebase console: //p' <<<"$distribution_output" | tail -n 1
+          )"
+          testing_uri="$(
+            sed -n 's/^.*Share this release with testers who have access: //p' <<<"$distribution_output" | tail -n 1
+          )"
+          if [[ -z "$firebase_console_uri" || -z "$testing_uri" ]]; then
+            echo "Firebase CLI did not return the expected stable release links." >&2
+            printf '%s\n' "$distribution_output" >&2
+            exit 1
+          fi
+          {
+            echo "## Hex Code iOS App Distribution"
+            echo
+            if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
+              echo "- **Not from main:** \`$distributed_ref\`"
+            fi
+            echo "- Commit: \`$distributed_sha\`"
+            if [[ -n "${SOURCE_REF:-}" ]]; then
+              echo "- Source ref: \`$SOURCE_REF\`"
+            fi
+            echo "- Marketing version: \`$IOS_MARKETING_VERSION\`"
+            echo "- Build number: \`$IOS_BUILD_NUMBER\`"
+            echo "- Tester group: \`$FIREBASE_TESTER_GROUP\`"
+            echo "- [Firebase release]($firebase_console_uri)"
+            echo "- [Open in the tester experience]($testing_uri)"
+            echo "- Does **not** upload to TestFlight or submit for App Review."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary credentials and restore keychain search list
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "${ASC_API_KEY_PATH:-}" "$RUNNER_TEMP/hexcode-firebase-app-distribution.json"
+          if [[ -f "$HOME/Library/Keychains/login.keychain-db" ]]; then
+            security list-keychains -d user -s "$HOME/Library/Keychains/login.keychain-db"
+            security default-keychain -s "$HOME/Library/Keychains/login.keychain-db" || true
+          fi
+          if [[ -n "${IOS_RELEASE_KEYCHAIN_PATH:-}" ]]; then
+            security lock-keychain "$IOS_RELEASE_KEYCHAIN_PATH" >/dev/null 2>&1 || true
+          fi

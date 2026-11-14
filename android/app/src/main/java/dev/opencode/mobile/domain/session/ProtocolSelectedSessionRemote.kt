@@ -163,7 +163,8 @@ internal class ProtocolSelectedSessionRemote(
         permissionId: String,
         decision: PermissionDecision,
         directory: String?,
-    ): Boolean = selected().respondToPermission(sessionId, permissionId, decision, directory)
+        message: String?,
+    ): Boolean = selected().respondToPermission(sessionId, permissionId, decision, directory, message)
 
     override suspend fun replyToQuestion(
         requestId: String,

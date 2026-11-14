@@ -18,11 +18,6 @@ class OpenCodeAssistantMessageTest {
     }
 
     @Test
-    fun fillThresholdIsEightyPercent() {
-        assertEquals(0.8f, ASSISTANT_MESSAGE_FILL_ROW_THRESHOLD)
-    }
-
-    @Test
     fun narrowContentHugs() {
         assertFalse(assistantMessageFillsRow(contentWidth = 60f, availableWidth = 358f))
         assertFalse(assistantMessageFillsRow(contentWidth = 250f, availableWidth = 358f))

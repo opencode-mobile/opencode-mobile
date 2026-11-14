@@ -75,7 +75,7 @@ Options:
   --no-gallery          Skip writing store-screenshots/index.html
   --push-store-shots [url]
                         After a successful capture, upload PNGs to store-shots
-                        (default: $STORE_SHOTS_URL or http://ivans-mac-mini-1:8790)
+                        (default: $STORE_SHOTS_URL; one of the two is required)
   --force-copy          Overwrite store-shots headlines/subtitles from copy.json
   --avd-only            Create, boot, and configure Android AVDs; report wm size/density
   --sim-only            Boot the iPhone 16 Pro Max simulator and apply status-bar overrides
@@ -151,6 +151,9 @@ function parseArgs(argv) {
           i += 1;
         } else {
           args.pushStoreShots = defaultStoreShotsUrl();
+          if (!args.pushStoreShots) {
+            fail("No store-shots URL: set STORE_SHOTS_URL or pass --push-store-shots <url>.");
+          }
         }
         break;
       case "--force-copy":

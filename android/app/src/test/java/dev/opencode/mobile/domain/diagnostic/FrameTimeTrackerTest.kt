@@ -11,14 +11,6 @@ class FrameTimeTrackerTest {
     private val frame120 = 1.0 / 120.0
 
     @Test
-    fun visibleOnlyWhenUnlockedAndEnabled() {
-        assertTrue(PerformanceOverlayGate.isVisible(developerToolsUnlocked = true, enabled = true))
-        assertFalse(PerformanceOverlayGate.isVisible(developerToolsUnlocked = true, enabled = false))
-        assertFalse(PerformanceOverlayGate.isVisible(developerToolsUnlocked = false, enabled = true))
-        assertFalse(PerformanceOverlayGate.isVisible(developerToolsUnlocked = false, enabled = false))
-    }
-
-    @Test
     fun firstSample_isIdle() {
         val snapshot = FrameTimeTracker().record(timestampSeconds = 1.0, expectedIntervalSeconds = frame60)
 

@@ -5,7 +5,7 @@ import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.session.ArchivedSessionList
 import dev.opencode.mobile.domain.session.SessionRepository
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -34,6 +34,8 @@ class HomeArchivedMenu(
     private val projects: StateFlow<List<HomeProject>>,
     private val scope: CoroutineScope,
     private val supported: () -> Boolean,
+    /** Reports every entry change synchronously, in the same call as the write. */
+    private val onChange: (HomeArchivedMenuEntry?) -> Unit = {},
 ) {
     private val _state = MutableStateFlow<HomeArchivedMenuEntry?>(null)
     val state: StateFlow<HomeArchivedMenuEntry?> = _state.asStateFlow()
@@ -50,14 +52,14 @@ class HomeArchivedMenu(
         lastRequest = scopeId to worktreesEnabled
         job?.cancel()
         if (!supported()) {
-            _state.value = null
+            setState(null)
             return
         }
         val homeProjects = projects.value
         val resolved = HomeScope.resolve(scopeId, homeProjects, worktreesEnabled) ?: HomeScope.All
         val title = archivedScopeTitle(resolved, homeProjects)
         val previous = _state.value?.takeIf { it.scopeId == scopeId }
-        _state.value = HomeArchivedMenuEntry(scopeId, title, previous?.count)
+        setState(HomeArchivedMenuEntry(scopeId, title, previous?.count))
         job =
             scope.launch {
                 val count =
@@ -68,7 +70,7 @@ class HomeArchivedMenu(
                     } catch (_: Throwable) {
                         null
                     }
-                _state.value = HomeArchivedMenuEntry(scopeId, title, count)
+                setState(HomeArchivedMenuEntry(scopeId, title, count))
             }
     }
 
@@ -80,6 +82,11 @@ class HomeArchivedMenu(
         val (scopeId, worktreesEnabled) = lastRequest ?: return
         if (supported() == (_state.value != null)) return
         refresh(scopeId, worktreesEnabled)
+    }
+
+    private fun setState(next: HomeArchivedMenuEntry?) {
+        _state.value = next
+        onChange(next)
     }
 
     private suspend fun count(

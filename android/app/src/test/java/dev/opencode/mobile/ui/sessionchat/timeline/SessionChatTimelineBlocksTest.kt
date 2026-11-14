@@ -4,8 +4,10 @@ import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.PresentationBlockId
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -20,7 +22,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import dev.opencode.mobile.ui.text.english
-import dev.opencode.mobile.ui.text.UiText
 
 class SessionChatTimelineBlocksTest {
     @Test

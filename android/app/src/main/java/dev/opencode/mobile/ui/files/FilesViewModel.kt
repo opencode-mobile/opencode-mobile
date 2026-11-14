@@ -14,12 +14,12 @@ import dev.opencode.mobile.domain.filesystem.ProjectFileLineSpans
 import dev.opencode.mobile.domain.filesystem.ProjectFileListingPolicy
 import dev.opencode.mobile.domain.filesystem.ProjectFilesException
 import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.ui.components.OpenCodeCodeLine
 import dev.opencode.mobile.ui.components.OpenCodeCodeLines
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers

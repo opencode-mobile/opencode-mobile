@@ -2,9 +2,9 @@ package dev.opencode.mobile.ui.files
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.filesystem.ProjectEntry
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.components.OpenCodeCodeLine
-import dev.opencode.mobile.ui.text.UiText
 import java.util.Locale
 import kotlin.math.roundToLong
 

@@ -5,9 +5,12 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,6 +26,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -72,6 +76,12 @@ sealed interface OpenCodeOutgoingMessageSteering {
     }
 }
 
+/** A caption above the bubble that says what kind of prompt it is, e.g. a `/goal` kickoff. */
+data class OpenCodeOutgoingMessageLabel(
+    val text: String,
+    val icon: ImageVector? = null,
+)
+
 sealed interface OpenCodeOutgoingMessageContent {
     data class Text(
         val text: String,
@@ -112,6 +122,8 @@ fun OpenCodeOutgoingMessage(
      * or an image [OpenCodeOutgoingMessageContent.Attachment]). Null: single images open their own viewer.
      */
     onImageClick: ((contentId: String, index: Int) -> Unit)? = null,
+    /** Drawn above the bubble in the caption style, like the Steering label. */
+    label: OpenCodeOutgoingMessageLabel? = null,
 ) {
     BoxWithConstraints(
         modifier = modifier.fillMaxWidth(),
@@ -137,6 +149,18 @@ fun OpenCodeOutgoingMessage(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (label != null) {
+                    Row(
+                        modifier = Modifier.semantics(mergeDescendants = true) { heading() },
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        label.icon?.let { icon ->
+                            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = captionColor)
+                        }
+                        Text(text = label.text, style = MaterialTheme.typography.labelMedium, color = captionColor)
+                    }
+                }
                 if (steering?.showsLabel == true) {
                     Text(
                         text = OpenCodeOutgoingMessageSteering.LABEL,

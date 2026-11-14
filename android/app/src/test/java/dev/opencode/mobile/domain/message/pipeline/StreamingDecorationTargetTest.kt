@@ -1,7 +1,6 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.markdown.MarkdownDocument
-import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue

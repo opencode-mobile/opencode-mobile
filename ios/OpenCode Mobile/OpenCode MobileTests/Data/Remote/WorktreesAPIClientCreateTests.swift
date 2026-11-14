@@ -108,6 +108,27 @@ struct WorktreesAPIClientCreateTests {
         #expect(try bodyJSON()["name"] as? String == "probe-one")
     }
 
+    /// #1004: a draft's New worktree sends no name, so the server picks one (v2 and v1).
+    @Test func repositoryOmitsTheNameWhenNoneIsGiven() async throws {
+        CreateURLProtocol.reset(status: 200, body: #"{"directory":"/data/worktree/abc123/quiet-falcon"}"#)
+        let v2 = DefaultWorktreeRepository(remote: makeClient(), protocolProvider: { .v2 })
+
+        _ = try await v2.create(CreateWorktreeRequest(projectID: "prj", sourceDirectory: "/src/repo", name: nil, baseRef: "main"))
+
+        #expect(Set(try bodyJSON().keys) == ["projectID", "from", "branch"])
+
+        CreateURLProtocol.reset(
+            status: 200,
+            body: #"{"name":"quiet-falcon","branch":"opencode/quiet-falcon","directory":"/data/wt/quiet-falcon"}"#
+        )
+        let v1 = DefaultWorktreeRepository(remote: makeClient(), protocolProvider: { .v1 })
+
+        let created = try await v1.create(CreateWorktreeRequest(projectID: nil, sourceDirectory: "/src/repo", name: " ", baseRef: nil))
+
+        #expect(created.directory == "/data/wt/quiet-falcon")
+        #expect(try bodyJSON().isEmpty)
+    }
+
     @Test func repositoryV2WithoutAProjectThrowsBeforeAnyRequest() async {
         CreateURLProtocol.reset(status: 200, body: #"{"directory":"/x"}"#)
         let repository = DefaultWorktreeRepository(remote: makeClient(), protocolProvider: { .v2 })

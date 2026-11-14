@@ -16,9 +16,8 @@ struct ProjectListHomeView: View {
     @State private var stackedChatViewModels: [String: SessionChatViewModel] = [:]
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
     @State private var serversRefreshToken = 0
-    @State private var showNewSessionProjectPicker = false
-    /// What the New session sheet lists: the projects, or one project's Run in list.
-    @State private var newSessionSheetMode = SessionListHomeChrome.NewSessionSheetMode.projects(holdPick: false)
+    /// A New session draft's Project sheet opened Add project; it takes the added path.
+    @State private var draftAddProjectCallback: (@MainActor (String) -> Void)?
     @State private var showProjectPicker = false
     /// Expanded project, Show all and Edit in the project picker; reset on every open.
     @State private var projectPickerState = HomeProjectPickerState()
@@ -35,6 +34,9 @@ struct ProjectListHomeView: View {
     @State private var revealSelectedSessionToken = 0
     /// The split's sidebar control, so ⌘F can reopen a collapsed sidebar to show search.
     @State private var splitSidebar = HomeSplitSidebarHandle()
+    /// What's new sheet (#1027): shown once over an idle Home after an update.
+    @State private var whatsNew = WhatsNewSheetModel()
+    @State private var appLockState = AppLockState.shared
     @Environment(\.scenePhase) private var scenePhase
     var splitGate = OpenCodeSplitLayoutGate()
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -83,7 +85,7 @@ struct ProjectListHomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .overlay(alignment: .bottom) {
                 OpenCodeSnackbarHost(
-                    message: viewModel.removalSnackbar,
+                    message: viewModel.uiState.snackbar,
                     onDismissed: {
                         viewModel.consumeProjectRemovalSnackbar()
                     }
@@ -141,8 +143,8 @@ struct ProjectListHomeView: View {
                 }
                 await viewModel.refresh()
             }
-            .onChange(of: viewModel.pendingSessionOpen) { _, _ in
-                if let session = viewModel.pendingSessionOpen {
+            .onChange(of: viewModel.uiState.pendingSessionOpen) { _, _ in
+                if let session = viewModel.uiState.pendingSessionOpen {
                     openSession(session)
                     viewModel.consumePendingSessionOpen()
                 }
@@ -155,7 +157,7 @@ struct ProjectListHomeView: View {
                 let open = Set(routes.compactMap { $0.session?.navigationID })
                 stackedChatViewModels = stackedChatViewModels.filter { open.contains($0.key) }
             }
-            .onChange(of: viewModel.serversChrome.active?.id) { _, _ in
+            .onChange(of: viewModel.uiState.servers.active?.id) { _, _ in
                 // Clear All Data (active profile becomes nil) and profile switches
                 // drop every session the trailing pane could be showing.
                 selectedSession = nil
@@ -182,9 +184,9 @@ struct ProjectListHomeView: View {
             .onChange(of: homeWorktreesSnapshot, initial: true) { _, snapshot in
                 viewModel.homeWorktreesFeed.publish(snapshot)
             }
-            .onChange(of: viewModel.pendingSelectedFilterId) { _, worktree in
+            .onChange(of: viewModel.uiState.pendingScopeRequest?.filterID) { _, worktree in
                 if let worktree {
-                    if viewModel.pendingSelectedFilterOverridesAll
+                    if viewModel.uiState.pendingScopeRequest?.overridesAll == true
                         || selectedSessionFilterId != SessionListFilterTab.allId
                     {
                         selectedSessionFilterId = worktree
@@ -210,7 +212,7 @@ struct ProjectListHomeView: View {
                 height: .fitContent
             ) {
                 AddProjectSuggestions(
-                    sheet: viewModel.addProjectSheet,
+                    sheet: viewModel.uiState.addProject.sheet,
                     onSelectSuggestion: { path in Task { await viewModel.selectAddProjectSuggestion(path: path) } },
                     onBrowse: viewModel.browseAddProjectFolders,
                     onRetry: { Task { await viewModel.retryAddProjectListing() } }
@@ -218,7 +220,7 @@ struct ProjectListHomeView: View {
             }
             .fullScreenCover(isPresented: addProjectBrowsingBinding) {
                 AddProjectBrowser(
-                    sheet: viewModel.addProjectSheet,
+                    sheet: viewModel.uiState.addProject.sheet,
                     onBack: viewModel.closeAddProjectBrowser,
                     onFieldChange: viewModel.updateAddProjectField,
                     onSubmitField: { Task { await viewModel.submitAddProjectField() } },
@@ -266,7 +268,7 @@ struct ProjectListHomeView: View {
                     },
                     onReorderProjects: { projectKeys in
                         let byKey: [String: [String]] = Dictionary(
-                            viewModel.homeProjects.map { ($0.key, $0.memberPaths) },
+                            viewModel.uiState.projects.map { ($0.key, $0.memberPaths) },
                             uniquingKeysWith: { first, _ in first }
                         )
                         viewModel.reorderProjects(worktrees: projectKeys.flatMap { byKey[$0] ?? [] })
@@ -274,19 +276,11 @@ struct ProjectListHomeView: View {
                 )
             }
             .openCodeBottomSheet(
-                isPresented: newSessionPickerBinding,
-                title: newSessionSheetTitle,
-                leadingAction: WorktreeCreateSheetChrome.backAction(viewModel.worktreeCreate),
-                keyboard: WorktreeCreateSheetChrome.keyboard(viewModel.worktreeCreate)
-            ) {
-                newSessionSheetContent
-            }
-            .openCodeBottomSheet(
                 isPresented: serversSheetBinding,
                 title: "servers.title"
             ) {
                 VStack(alignment: .leading, spacing: 0) {
-                    if let active = viewModel.serversChrome.active {
+                    if let active = viewModel.uiState.servers.active {
                         OpenCodeSectionHeader(title: "home.servers_sheet.using_now")
                         OpenCodeListItem(
                             title: .verbatim(active.displayName),
@@ -301,9 +295,9 @@ struct ProjectListHomeView: View {
                             action: { viewModel.dismissServersSheet() }
                         )
                     }
-                    if !viewModel.serversChrome.others.isEmpty {
+                    if !viewModel.uiState.servers.others.isEmpty {
                         OpenCodeSectionHeader(title: "home.servers_sheet.switch_to")
-                        ForEach(viewModel.serversChrome.others, id: \.id) { profile in
+                        ForEach(viewModel.uiState.servers.others, id: \.id) { profile in
                             OpenCodeListItem(
                                 title: .verbatim(profile.displayName),
                                 subtitle: .verbatim(ConnectionProfileIdentity.hostLabel(profile.baseURL)),
@@ -351,17 +345,17 @@ struct ProjectListHomeView: View {
                     startDecorator: .icon(.contentCopy),
                     action: { viewModel.openSessionFork() }
                 )
-                if viewModel.sessionActionsCanArchive {
+                if viewModel.uiState.sessionActions.canArchive {
                     OpenCodeBottomSheetEntry(
                         title: "home.session_actions.archive",
-                        enabled: !viewModel.sessionActionInFlight,
+                        enabled: !viewModel.uiState.sessionActions.actionInFlight,
                         startDecorator: .icon(.archive),
                         action: { Task { await viewModel.archiveSessionAction() } }
                     )
                 }
                 OpenCodeBottomSheetEntry(
                     title: "common.delete",
-                    enabled: !viewModel.sessionActionInFlight,
+                    enabled: !viewModel.uiState.sessionActions.actionInFlight,
                     destructive: true,
                     startDecorator: .icon(.close),
                     action: { viewModel.requestDeleteSessionAction() }
@@ -398,23 +392,23 @@ struct ProjectListHomeView: View {
                 title: "home.rename.title",
                 primaryOption: OpenCodeDialogOption(
                     title: "common.save",
-                    enabled: !viewModel.sessionRenameDialog.isSubmitting
+                    enabled: !viewModel.uiState.sessionActions.renameDialog.isSubmitting
                 ) {
                     Task { await viewModel.confirmSessionRename() }
                 },
                 secondaryOption: OpenCodeDialogOption(
                     title: "common.cancel",
-                    enabled: !viewModel.sessionRenameDialog.isSubmitting,
+                    enabled: !viewModel.uiState.sessionActions.renameDialog.isSubmitting,
                     action: viewModel.cancelSessionRename
                 ),
                 textField: OpenCodeDialogTextField(
                     text: Binding(
-                        get: { viewModel.sessionRenameDialog.draftTitle },
+                        get: { viewModel.uiState.sessionActions.renameDialog.draftTitle },
                         set: viewModel.updateSessionRenameDraft
                     ),
                     hint: "home.session_title_hint",
-                    enabled: !viewModel.sessionRenameDialog.isSubmitting,
-                    errorMessage: viewModel.sessionRenameDialog.errorMessage
+                    enabled: !viewModel.uiState.sessionActions.renameDialog.isSubmitting,
+                    errorMessage: viewModel.uiState.sessionActions.renameDialog.errorMessage
                 )
             )
             .openCodeDialog(
@@ -422,30 +416,30 @@ struct ProjectListHomeView: View {
                 title: "home.fork.title",
                 primaryOption: OpenCodeDialogOption(
                     title: "home.fork.confirm",
-                    enabled: !viewModel.sessionForkDialog.isSubmitting
-                        && viewModel.sessionForkDialog.blockedMessage == nil
+                    enabled: !viewModel.uiState.sessionActions.forkDialog.isSubmitting
+                        && viewModel.uiState.sessionActions.forkDialog.blockedMessage == nil
                 ) {
                     Task { await viewModel.confirmSessionFork() }
                 },
                 secondaryOption: OpenCodeDialogOption(
                     title: "common.cancel",
-                    enabled: !viewModel.sessionForkDialog.isSubmitting,
+                    enabled: !viewModel.uiState.sessionActions.forkDialog.isSubmitting,
                     action: viewModel.cancelSessionFork
                 ),
                 textField: OpenCodeDialogTextField(
                     text: Binding(
-                        get: { viewModel.sessionForkDialog.draftTitle },
+                        get: { viewModel.uiState.sessionActions.forkDialog.draftTitle },
                         set: viewModel.updateSessionForkDraft
                     ),
                     hint: "home.session_title_hint",
-                    enabled: !viewModel.sessionForkDialog.isSubmitting,
+                    enabled: !viewModel.uiState.sessionActions.forkDialog.isSubmitting,
                     errorMessage: forkDialogError
                 )
             )
             .openCodeDialog(
                 isPresented: sessionForkResultBinding,
                 title: "home.fork_result.title",
-                subtitle: Self.forkResultMessage(viewModel.sessionForkResult.forkedTitle),
+                subtitle: Self.forkResultMessage(viewModel.uiState.sessionActions.forkResult.forkedTitle),
                 primaryOption: OpenCodeDialogOption(title: "common.open") {
                     viewModel.chooseSessionForkOpen()
                 },
@@ -456,32 +450,59 @@ struct ProjectListHomeView: View {
             .openCodeDialog(
                 isPresented: sessionDeleteConfirmBinding,
                 title: "home.delete.title",
-                subtitle: viewModel.sessionActionsTarget.map { target in Self.deleteSessionMessage(target.title) },
+                subtitle: viewModel.uiState.sessionActions.target.map { target in Self.deleteSessionMessage(target.title) },
                 primaryOption: OpenCodeDialogOption(
                     title: "common.delete",
-                    enabled: !viewModel.sessionActionInFlight,
+                    enabled: !viewModel.uiState.sessionActions.actionInFlight,
                     destructive: true
                 ) {
                     Task { await viewModel.confirmDeleteSessionAction() }
                 },
                 secondaryOption: OpenCodeDialogOption(
                     title: "common.cancel",
-                    enabled: !viewModel.sessionActionInFlight,
+                    enabled: !viewModel.uiState.sessionActions.actionInFlight,
                     action: viewModel.cancelDeleteSessionAction
                 )
             )
+            .whatsNewSheet(whatsNew)
+            .task(id: isIdleForWhatsNew) {
+                guard isIdleForWhatsNew else { return }
+                // Let Home settle first; anything that opens meanwhile cancels this.
+                try? await Task.sleep(for: .milliseconds(600))
+                guard !Task.isCancelled, isIdleForWhatsNew else { return }
+                whatsNew.homeIsIdle()
+            }
         }
         // Session Chat's "Move to worktree…" lists the session's project worktrees from Home.
-        .environment(\.homeProjects, viewModel.homeProjects)
+        .environment(\.homeProjects, viewModel.uiState.projects)
         // and refreshes them after it creates one.
         .environment(\.refreshHomeWorktrees, { [viewModel] directory in
             await viewModel.refreshWorktreeInventory(containing: directory)
         })
+        // A New session draft's Project sheet adds projects through Home (#1004)…
+        .environment(\.homeAddProject, HomeAddProjectAction { onAdded in
+            draftAddProjectCallback = onAdded
+            Task { await viewModel.showAddProjectSheet() }
+        })
+        // …and its Worktree sheet shows the running count per checkout.
+        .environment(\.homeRunningCounts, homeRunningCounts)
+        .onChange(of: viewModel.uiState.lastAddedProject) { _, added in
+            guard let added, let callback = draftAddProjectCallback else { return }
+            draftAddProjectCallback = nil
+            callback(added.path)
+        }
+    }
+
+    /// Running sessions per canonical checkout.
+    private var homeRunningCounts: [String: Int] {
+        homeWorktreesSnapshot.sessions
+            .filter(\.isRunning)
+            .reduce(into: [:]) { counts, session in counts[session.directory, default: 0] += 1 }
     }
 
     private var serversSheetBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.serversChrome.sheetVisible },
+            get: { viewModel.uiState.servers.sheetVisible },
             set: { visible in
                 if !visible { viewModel.dismissServersSheet() }
             }
@@ -490,7 +511,7 @@ struct ProjectListHomeView: View {
 
     private var sessionActionsSheetBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.sessionActionsSheetVisible },
+            get: { viewModel.uiState.sessionActions.sheetVisible },
             set: { visible in
                 if !visible { viewModel.dismissSessionActions() }
             }
@@ -499,7 +520,7 @@ struct ProjectListHomeView: View {
 
     private var sessionRenameDialogBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.sessionRenameDialog.isVisible },
+            get: { viewModel.uiState.sessionActions.renameDialog.isVisible },
             set: { visible in
                 if !visible { viewModel.cancelSessionRename() }
             }
@@ -508,7 +529,7 @@ struct ProjectListHomeView: View {
 
     private var sessionForkDialogBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.sessionForkDialog.isVisible },
+            get: { viewModel.uiState.sessionActions.forkDialog.isVisible },
             set: { visible in
                 if !visible { viewModel.cancelSessionFork() }
             }
@@ -517,7 +538,7 @@ struct ProjectListHomeView: View {
 
     private var sessionForkResultBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.sessionForkResult.isVisible },
+            get: { viewModel.uiState.sessionActions.forkResult.isVisible },
             set: { visible in
                 if !visible { viewModel.chooseSessionForkStay() }
             }
@@ -526,7 +547,7 @@ struct ProjectListHomeView: View {
 
     private var sessionDeleteConfirmBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.sessionDeleteConfirmVisible },
+            get: { viewModel.uiState.sessionActions.deleteConfirmVisible },
             set: { visible in
                 if !visible { viewModel.cancelDeleteSessionAction() }
             }
@@ -535,7 +556,7 @@ struct ProjectListHomeView: View {
 
     private var projectRemovalBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.pendingProjectRemoval != nil },
+            get: { viewModel.uiState.pendingProjectRemoval != nil },
             set: { visible in
                 if !visible {
                     viewModel.dismissProjectRemoval()
@@ -545,31 +566,58 @@ struct ProjectListHomeView: View {
     }
 
     private var pendingProjectRemoval: ProjectRemovalItem? {
-        viewModel.pendingProjectRemoval
+        viewModel.uiState.pendingProjectRemoval
     }
 
     private var isHomeVisible: Bool {
         homeRoutes.isEmpty && !showSettings && scenePhase == .active
     }
 
+    /// Home is the visible screen with nothing over it: no connection setup or
+    /// onboarding, sheet, dialog, menu, search or App Lock, and no pushed screen
+    /// (so not a Session Chat the app opened into).
+    private var isIdleForWhatsNew: Bool {
+        guard isHomeVisible,
+              !appLockState.isLocked,
+              connectionSetupPresentation == nil,
+              !presentConnectionSetupOnAppear,
+              !homeMenuPresented,
+              !showProjectPicker,
+              !sessionSearch.isPresented,
+              !viewModel.uiState.addProject.isPresented,
+              !viewModel.uiState.servers.sheetVisible,
+              !viewModel.uiState.sessionActions.sheetVisible,
+              !viewModel.uiState.sessionActions.renameDialog.isVisible,
+              !viewModel.uiState.sessionActions.forkDialog.isVisible,
+              !viewModel.uiState.sessionActions.forkResult.isVisible,
+              !viewModel.uiState.sessionActions.deleteConfirmVisible,
+              viewModel.uiState.pendingProjectRemoval == nil,
+              viewModel.uiState.pendingSessionOpen == nil
+        else { return false }
+        switch viewModel.uiState.content {
+        case .loaded, .empty, .probeFailed: return true
+        case .disconnected, .probing, .loading: return false
+        }
+    }
+
     private var homeSections: [ProjectSectionItem] {
-        if case let .loaded(sections, _, _, _) = viewModel.state { return sections }
+        if case let .loaded(sections, _, _, _) = viewModel.uiState.content { return sections }
         return []
     }
 
     /// Home rows, filed under their Home project.
     private var homeSessions: [SessionListSession] {
         homeSections.crossProjectSessionListSessions(
-            projects: viewModel.homeProjects,
+            projects: viewModel.uiState.projects,
             worktreesEnabled: homeDisplayPreferences.showsWorktrees,
-            removedDirectories: viewModel.removedWorktreeDirectories
+            removedDirectories: viewModel.uiState.worktrees.removedDirectories
         )
     }
 
     /// Home's projects and sessions for the Worktrees screen.
     private var homeWorktreesSnapshot: HomeWorktreesSnapshot {
         HomeWorktreesSnapshot(
-            projects: homeSections.isEmpty ? [] : viewModel.homeProjects,
+            projects: homeSections.isEmpty ? [] : viewModel.uiState.projects,
             sessions: homeSessions.map { session in
                 let isRunning: Bool
                 switch session.status {
@@ -583,15 +631,15 @@ struct ProjectListHomeView: View {
                     isRunning: isRunning
                 )
             },
-            removableDirectories: viewModel.removableWorktreeDirectories,
-            worktreesLoaded: viewModel.hasListedWorktrees
+            removableDirectories: viewModel.uiState.worktrees.removableDirectories,
+            worktreesLoaded: viewModel.uiState.worktrees.hasListedWorktrees
         )
     }
 
     private func homeFilterTabs(projects: [HomeProject]) -> [SessionListFilterTab] {
         var loads: [String: SessionListScopeLoad] = [:]
         for project in projects {
-            loads[project.key] = SessionListHomeChrome.projectLoad(project, loadStates: viewModel.projectLoadStates)
+            loads[project.key] = SessionListHomeChrome.projectLoad(project, loadStates: viewModel.uiState.projectLoadStates)
         }
         return SessionListHomeChrome.filterTabs(
             projects: projects,
@@ -620,7 +668,7 @@ struct ProjectListHomeView: View {
     /// Every session in a fully loaded Home list; nil while loading, disconnected,
     /// or when a project failed to load, so partial lists never clear the selection.
     private var loadedSessions: HomeLoadedSessions? {
-        switch viewModel.state {
+        switch viewModel.uiState.content {
         case .empty:
             return HomeLoadedSessions()
         case let .loaded(sections, _, _, _):
@@ -721,18 +769,18 @@ struct ProjectListHomeView: View {
         VStack(spacing: 0) {
             OpenCodeTopBarOverflowHost(isPresented: $homeMenuPresented, entries: homeMenuEntries) {
                 OpenCodeTopBar(
-                    title: viewModel.serversChrome.title,
+                    title: viewModel.uiState.servers.title,
                     subtitleAccessory: showsLiveUpdatesStatus
-                        ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
+                        ? .statusDot(viewModel.uiState.liveConnectionStatus.openCodeStatus)
                         : nil,
                     actions: homeTopBarActions,
-                    onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
-                    titleMenuExpanded: viewModel.serversChrome.sheetVisible
+                    onTitleClick: viewModel.uiState.servers.isSwitcher ? { viewModel.showServersSheet() } : nil,
+                    titleMenuExpanded: viewModel.uiState.servers.sheetVisible
                 )
             }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .id(viewModel.serversChrome.active?.id ?? "")
+                .id(viewModel.uiState.servers.active?.id ?? "")
                 .transition(.opacity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -809,7 +857,7 @@ struct ProjectListHomeView: View {
     /// Home's filter state as it is now, for shortcuts that fire later than the render.
     private var liveHomeFilter: (projects: [HomeProject], tabs: [SessionListFilterTab], selectedId: String, worktreesEnabled: Bool) {
         let worktreesEnabled = homeDisplayPreferences.showsWorktrees
-        let projects = homeSections.isEmpty ? [] : viewModel.homeProjects
+        let projects = homeSections.isEmpty ? [] : viewModel.uiState.projects
         let tabs = homeFilterTabs(projects: projects)
         let selectedId = SessionListHomeChrome.resolvedFilterId(
             selectedId: selectedSessionFilterId,
@@ -824,8 +872,8 @@ struct ProjectListHomeView: View {
         HomeKeyboardShortcutContext.projectTabs(liveHomeFilter.tabs)
     }
 
-    /// ⌘N: a new session in the open chat's project, else the dock's selection,
-    /// exactly as the New session button.
+    /// ⌘N: the New session draft in the open chat's checkout, else where the dock's New
+    /// session starts. A kept draft wins either way.
     private func newSessionFromKeyboard() {
         // A subagent chat pushed over the open chat would hide the new session.
         NotificationCenter.default.post(name: .openCodeNewSessionFromKeyboard, object: nil)
@@ -833,26 +881,45 @@ struct ProjectListHomeView: View {
             topRoute: homeRoutes.last?.session,
             splitSelection: isSplitLayout ? selectedSession : nil
         )
+        let openChatModel = openChat.flatMap { chat in
+            isSplitLayout ? splitSelection?.viewModel : stackedChatViewModels[chat.navigationID]
+        }
+        // The open chat is the draft already.
+        if openChatModel?.isDraft == true { return }
+        let filter = liveHomeFilter
         if let directory = HomeKeyboardShortcutContext.newSessionDirectory(
-            openChatDirectory: openChat?.directory,
+            // A promoted draft may run in a worktree its first send created.
+            openChatDirectory: openChatModel?.uiState.directory ?? openChat?.directory,
             openChatWorktree: openChat?.worktree
         ) {
-            Task { await viewModel.createSession(in: directory) }
+            viewModel.openNewSessionDraft(
+                NewSessionDraftStart.fromDirectory(
+                    directory,
+                    projects: filter.projects,
+                    worktreesEnabled: filter.worktreesEnabled
+                )
+            )
             return
         }
-        let filter = liveHomeFilter
-        switch SessionListHomeChrome.newSessionAction(
-            projects: filter.projects,
-            selectedFilterId: filter.selectedId,
-            worktreesEnabled: filter.worktreesEnabled
-        ) {
-        case .none:
-            break
-        case .presentPicker:
-            presentNewSessionProjectPicker()
-        case let .create(directory):
-            Task { await viewModel.createSession(in: directory) }
-        }
+        openNewSessionDraft(projects: filter.projects, selectedFilterId: filter.selectedId, worktreesEnabled: filter.worktreesEnabled)
+    }
+
+    /// The dock's New session (and ⌘N on Home): the filter's project or worktree; in All, the
+    /// place of the most recent session.
+    private func openNewSessionDraft(projects: [HomeProject], selectedFilterId: String, worktreesEnabled: Bool) {
+        guard let start = NewSessionDraftStart.fromHome(
+            projects: projects,
+            selectedFilterId: selectedFilterId,
+            worktreesEnabled: worktreesEnabled,
+            recentSessions: homeSessions.map { session in
+                NewSessionRecentSession(
+                    projectKey: session.worktree,
+                    directory: session.directory,
+                    updatedAtEpochMs: session.updatedAtEpochMs
+                )
+            }
+        ) else { return }
+        viewModel.openNewSessionDraft(start)
     }
 
     private var sessionSearch: SessionSearchModel {
@@ -865,7 +932,7 @@ struct ProjectListHomeView: View {
     }
 
     private var homeLoaded: Bool {
-        if case .loaded = viewModel.state { return true }
+        if case .loaded = viewModel.uiState.content { return true }
         return false
     }
 
@@ -884,7 +951,7 @@ struct ProjectListHomeView: View {
             projects: filter.projects,
             sections: homeSections,
             worktreesEnabled: filter.worktreesEnabled,
-            extraDirectories: viewModel.homeExtraDirectories
+            extraDirectories: viewModel.uiState.worktrees.extraDirectories
         )
     }
 
@@ -959,14 +1026,8 @@ struct ProjectListHomeView: View {
         selectedSession?.navigationID ?? "none"
     }
 
-    /// The New worktree form's title while it shows, else "New session".
-    private var newSessionSheetTitle: OpenCodeText {
-        guard let formTitle = viewModel.worktreeCreate.state?.title else { return "home.new_session" }
-        return formTitle
-    }
-
     private var forkDialogError: OpenCodeText? {
-        viewModel.sessionForkDialog.errorMessage ?? viewModel.sessionForkDialog.blockedMessage
+        viewModel.uiState.sessionActions.forkDialog.errorMessage ?? viewModel.uiState.sessionActions.forkDialog.blockedMessage
     }
 
     /// Project and session names stay arguments, never looked up.
@@ -986,7 +1047,7 @@ struct ProjectListHomeView: View {
     }
 
     private var showsTerminalAction: Bool {
-        SessionListHomeChrome.terminalAction(projects: viewModel.homeProjects) == .openCatalog
+        SessionListHomeChrome.terminalAction(projects: viewModel.uiState.projects) == .openCatalog
     }
 
     private var homeTopBarActions: [OpenCodeTopBarAction] {
@@ -1003,9 +1064,8 @@ struct ProjectListHomeView: View {
                     actionId: ProductAnalytics.Action.homeOpenMenu
                 )
                 // Before presenting, so the Archived sessions entry is in the menu from its first frame.
-                viewModel.archivedMenu.refresh(
+                viewModel.refreshArchivedMenu(
                     scopeID: selectedSessionFilterId,
-                    projects: viewModel.homeProjects,
                     worktreesEnabled: homeDisplayPreferences.showsWorktrees
                 )
                 homeMenuPresented = true
@@ -1055,7 +1115,7 @@ struct ProjectListHomeView: View {
     }
 
     private var archivedMenuEntry: OpenCodeOverflowMenuEntry? {
-        guard let entry = viewModel.archivedMenu.entry else { return nil }
+        guard let entry = viewModel.uiState.archivedMenu else { return nil }
         return OpenCodeOverflowMenuEntry(
             id: HomeMenu.archivedSessionsID,
             title: "archived_sessions.title",
@@ -1079,108 +1139,14 @@ struct ProjectListHomeView: View {
             screenId: ProductAnalytics.Screen.home,
             actionId: ProductAnalytics.Action.homeOpenTerminal
         )
-        if case .openCatalog = SessionListHomeChrome.terminalAction(projects: viewModel.homeProjects) {
+        if case .openCatalog = SessionListHomeChrome.terminalAction(projects: viewModel.uiState.projects) {
             homeRoutes.append(.terminalsCatalog)
         }
     }
 
-    @ViewBuilder
-    private var newSessionSheetContent: some View {
-        let projects = viewModel.homeProjects
-        let worktreesEnabled = homeDisplayPreferences.showsWorktrees
-        if viewModel.worktreeCreate.isPresented {
-            WorktreeCreateForm(model: viewModel.worktreeCreate) {
-                Task {
-                    if await viewModel.submitNewWorktree() {
-                        showNewSessionProjectPicker = false
-                    }
-                }
-            }
-        } else if case let .runIn(projectKey, _) = newSessionSheetMode,
-           let runIn = projects.first(where: { $0.key == projectKey })
-        {
-            OpenCodeSectionHeader(title: "home.run_in")
-            ForEach(HomeRunInOption.options(for: runIn, sessions: homeSessions)) { option in
-                OpenCodeListItem(
-                    title: .verbatim(option.title),
-                    subtitle: option.subtitle,
-                    caption: option.trailing,
-                    startDecorator: .icon(.callSplit),
-                    action: {
-                        ProductAnalytics.logUserAction(
-                            screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-                            actionId: ProductAnalytics.Action.newSessionPickerSelectProject
-                        )
-                        showNewSessionProjectPicker = false
-                        Task { await viewModel.createSession(in: option.directory) }
-                    }
-                )
-                .accessibilityIdentifier("newSessionRunInRow")
-            }
-            NewWorktreeRow(
-                availability: viewModel.newWorktreeAvailability(for: runIn, worktreesEnabled: worktreesEnabled),
-                accessibilityIdentifier: "newWorktreeRow",
-                action: { viewModel.openNewWorktree(projectKey: runIn.key) }
-            )
-            let others = SessionListHomeChrome.otherProjects(projects, mode: newSessionSheetMode)
-            if !others.isEmpty {
-                OpenCodeSectionHeader(title: "home.other_projects")
-                newSessionProjectEntries(others, holdPick: true, worktreesEnabled: worktreesEnabled)
-            }
-        } else if projects.isEmpty {
-            OpenCodeBottomSheetEntry(title: "home.no_projects", enabled: false, action: {})
-        } else {
-            newSessionProjectEntries(projects, holdPick: newSessionSheetMode.isHoldPick, worktreesEnabled: worktreesEnabled)
-        }
-    }
-
-    private func newSessionProjectEntries(
-        _ projects: [HomeProject],
-        holdPick: Bool,
-        worktreesEnabled: Bool
-    ) -> some View {
-        ForEach(projects) { project in
-            OpenCodeBottomSheetEntry(
-                title: .verbatim(project.displayName),
-                startDecorator: .icon(.folder),
-                action: {
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-                        actionId: ProductAnalytics.Action.newSessionPickerSelectProject
-                    )
-                    switch SessionListHomeChrome.pick(project, holdPick: holdPick, worktreesEnabled: worktreesEnabled) {
-                    case let .show(mode):
-                        newSessionSheetMode = mode
-                    case let .create(directory):
-                        showNewSessionProjectPicker = false
-                        Task { await viewModel.createSession(in: directory) }
-                    }
-                }
-            )
-            .accessibilityIdentifier("newSessionProjectRow")
-        }
-    }
-
-    private func presentNewSessionProjectPicker(
-        _ mode: SessionListHomeChrome.NewSessionSheetMode = .projects(holdPick: false)
-    ) {
-        newSessionSheetMode = mode
-        viewModel.worktreeCreate.dismiss()
-        ProductAnalytics.logUserAction(
-            screenId: ProductAnalytics.Screen.home,
-            actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
-        )
-        ProductAnalytics.logScreenView(
-            screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-            presentation: ProductAnalytics.Presentation.sheet,
-            trigger: ProductAnalytics.Trigger.present
-        )
-        showNewSessionProjectPicker = true
-    }
-
     private var addProjectBrowsingBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.isAddProjectPresented && viewModel.addProjectSheet.isBrowsing },
+            get: { viewModel.uiState.addProject.isPresented && viewModel.uiState.addProject.sheet.isBrowsing },
             set: { presented in
                 if !presented {
                     viewModel.closeAddProjectBrowser()
@@ -1191,7 +1157,7 @@ struct ProjectListHomeView: View {
 
     private var addProjectPresentedBinding: Binding<Bool> {
         Binding(
-            get: { viewModel.isAddProjectPresented },
+            get: { viewModel.uiState.addProject.isPresented },
             set: { presented in
                 if !presented {
                     ProductAnalytics.logUserAction(
@@ -1205,7 +1171,7 @@ struct ProjectListHomeView: View {
     }
 
     private var projectPickerRows: [HomeProjectPickerRow] {
-        let projects = viewModel.homeProjects
+        let projects = viewModel.uiState.projects
         return HomeProjectPickerRow.rows(
             tabs: homeFilterTabs(projects: projects),
             projects: projects,
@@ -1220,7 +1186,7 @@ struct ProjectListHomeView: View {
         let editing = projectPickerState.isEditing
         return OpenCodeBottomSheetHeaderAction(
             text: editing ? "common.done" : "common.edit",
-            enabled: editing || viewModel.homeProjects.count >= 2,
+            enabled: editing || viewModel.uiState.projects.count >= 2,
             accessibilityIdentifier: "projectPickerEditButton",
             action: {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -1248,22 +1214,6 @@ struct ProjectListHomeView: View {
         )
     }
 
-    private var newSessionPickerBinding: Binding<Bool> {
-        Binding(
-            get: { showNewSessionProjectPicker },
-            set: { presented in
-                if !presented {
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
-                        actionId: ProductAnalytics.Action.newSessionPickerDismiss
-                    )
-                    viewModel.worktreeCreate.dismiss()
-                }
-                showNewSessionProjectPicker = presented
-            }
-        )
-    }
-
     @ViewBuilder
 
     private func presentConnectionSetup(mode: ConnectionSetupMode = .first) {
@@ -1283,7 +1233,7 @@ struct ProjectListHomeView: View {
     }
 
     private var showsLiveUpdatesStatus: Bool {
-        switch viewModel.state {
+        switch viewModel.uiState.content {
         case .disconnected, .probing, .loading:
             false
         default:
@@ -1293,7 +1243,7 @@ struct ProjectListHomeView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch viewModel.state {
+        switch viewModel.uiState.content {
         case .probing, .loading:
             // A cold start with cached projects paints them within the grace: no loader flash.
             OpenCodeStatusStack(
@@ -1352,7 +1302,7 @@ struct ProjectListHomeView: View {
     private func resetProjectPickerState() {
         projectPickerState = HomeProjectPickerState.initial(
             selectedScopeId: selectedSessionFilterId,
-            projects: viewModel.homeProjects,
+            projects: viewModel.uiState.projects,
             worktreesEnabled: homeDisplayPreferences.showsWorktrees
         )
     }
@@ -1363,22 +1313,17 @@ struct ProjectListHomeView: View {
         createError: String?
     ) -> some View {
         let worktreesEnabled = homeDisplayPreferences.showsWorktrees
-        let projects = sections.isEmpty ? [] : viewModel.homeProjects
+        let projects = sections.isEmpty ? [] : viewModel.uiState.projects
         let sessions = sections.crossProjectSessionListSessions(
             projects: projects,
             worktreesEnabled: worktreesEnabled,
-            removedDirectories: viewModel.removedWorktreeDirectories
+            removedDirectories: viewModel.uiState.worktrees.removedDirectories
         )
         let filterTabs = homeFilterTabs(projects: projects)
         let selectedFilterId = SessionListHomeChrome.resolvedFilterId(
             selectedId: selectedSessionFilterId,
             tabs: filterTabs,
             projects: projects,
-            worktreesEnabled: worktreesEnabled
-        )
-        let holdMode = SessionListHomeChrome.newSessionLongPressAction(
-            projects: projects,
-            selectedFilterId: selectedFilterId,
             worktreesEnabled: worktreesEnabled
         )
         SessionList(
@@ -1425,30 +1370,16 @@ struct ProjectListHomeView: View {
             },
             onAddProject: { Task { await viewModel.showAddProjectSheet() } },
             onNewSession: {
-                switch SessionListHomeChrome.newSessionAction(
-                    projects: projects,
-                    selectedFilterId: selectedFilterId,
-                    worktreesEnabled: worktreesEnabled
-                ) {
-                case .none:
-                    break
-                case .presentPicker:
-                    presentNewSessionProjectPicker()
-                case let .create(directory):
-                    Task { await viewModel.createSession(in: directory) }
-                }
-            },
-            onNewSessionLongPress: holdMode.map { mode in
-                { presentNewSessionProjectPicker(mode) }
+                openNewSessionDraft(projects: projects, selectedFilterId: selectedFilterId, worktreesEnabled: worktreesEnabled)
             },
             onRetryScopeLoad: { scopeID in
                 let paths = projects.first { $0.key == scopeID }?.memberPaths ?? [scopeID]
-                for path in paths where viewModel.projectLoadStates[path] != nil {
+                for path in paths where viewModel.uiState.projectLoadStates[path] != nil {
                     Task { await viewModel.retryProjectLoad(worktree: path) }
                 }
             },
             onRefresh: { await viewModel.pullToRefresh() },
-            revealNewestToken: viewModel.revealNewestToken,
+            revealNewestToken: viewModel.uiState.revealNewestToken,
             revealSelectedSessionToken: revealSelectedSessionToken,
             onDisplayedSessionsChange: { rendered in
                 if rendered != displayedSessions {
@@ -1698,6 +1629,7 @@ private extension EventStreamConnectionState {
     }
 }
 
+#if DEBUG
 #Preview {
     ProjectListHomeView(viewModel: previewProjectListHomeViewModel())
         .openCodeTheme()
@@ -1799,7 +1731,8 @@ private struct PreviewSessionRepository: SessionRepository {
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool { fatalError() }
 }
 
@@ -1817,8 +1750,6 @@ private struct PreviewMessageRepository: MessageRepository {
     func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage { fatalError() }
     func clearMessageCache() {}
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] { [] }
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message { fatalError() }
-    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message { fatalError() }
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
 
     func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}
@@ -1837,6 +1768,7 @@ nonisolated private final class PreviewForegroundEventStream: ForegroundEventStr
     func start() {}
     func stop() async {}
 }
+#endif
 
 /// Holds the split's sidebar control for handlers that run outside the trailing pane.
 /// Written from `onChange`, never read during a render.

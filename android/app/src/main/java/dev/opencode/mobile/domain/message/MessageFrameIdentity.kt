@@ -8,12 +8,14 @@ data class MessageFrameIdentity(
     val lastUpdatedMs: Long?,
 )
 
-/** Cheap tail confirm: id + timestamp + part count for the fetched page. */
+/** Cheap tail confirm: id + role + timestamp + part count for the fetched page. */
 data class MessageTailIdentity(
     val items: List<Item>,
 ) {
     data class Item(
         val messageId: String,
+        /** A row REST now records differently (a hidden kickoff that became a notice) is not unchanged. */
+        val role: MessageRole,
         val updatedMs: Long?,
         val partCount: Int,
     )
@@ -51,6 +53,7 @@ fun List<Message>.tailIdentity(): MessageTailIdentity =
             map { message ->
                 MessageTailIdentity.Item(
                     messageId = message.id,
+                    role = message.role,
                     updatedMs = message.tailTimestampMs(),
                     partCount = message.parts.size,
                 )

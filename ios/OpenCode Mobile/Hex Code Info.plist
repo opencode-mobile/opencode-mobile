@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- As in OpenCode Mobile: the server is on the user's own machine, most often plain http
+		     at a LAN or Tailscale address, which ATS cannot scope by IP range. -->
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<!-- The launch screen is the logo (the app icon as a rounded tile, 96 pt) centred on the home's
+	     background (app plan, "Cold start"). The colour matches `HexColor.background`; the home's
+	     wait state draws the same image at the same place until its first state is ready. -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+		<key>UIImageName</key>
+		<string>LaunchLogo</string>
+	</dict>
+</dict>
+</plist>

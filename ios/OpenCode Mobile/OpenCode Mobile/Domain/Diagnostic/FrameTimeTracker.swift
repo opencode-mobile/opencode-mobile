@@ -1,12 +1,5 @@
 import Foundation
 
-/// Whether the performance HUD should be on screen.
-enum PerformanceOverlayGate {
-    static func isVisible(developerToolsUnlocked: Bool, enabled: Bool) -> Bool {
-        developerToolsUnlocked && enabled
-    }
-}
-
 /// One sample of the live frame-time HUD.
 struct FrameTimeSnapshot: Equatable {
     var framesPerSecond: Int?

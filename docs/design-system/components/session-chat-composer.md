@@ -219,29 +219,6 @@ and Dismiss actions can be reviewed. The live composer is anchored to the bottom
 of the available gallery page below its controls so screen-edge geometry and
 resize motion can be reviewed in a realistic Session Chat placement.
 
-## Completion Ledger
-
-- Public API and applicable states: complete (`prompt`, `permission`,
-  `question`, `childLockout`), including the `openCommands` prompt action
-  (OPE-58) and `backToMainSession` (OPE-170).
-- Token and typography mapping: complete. Shell materials use Floating Chrome
-  (`floating-chrome.md`) with no default outline so the card matches Session
-  List Dock; question selection hints use `text-base`. Permission still uses
-  warning / error outlines. The Commands action uses `iconCircle` with the
-  `slash` catalog icon; no new tokens for OPE-99 shell materials.
-- iOS and Android implementations: complete for shared question-request composer
-  state and for Floating Chrome shell materials (OPE-99). Control-level glass on
-  IconCircles remains out of scope for this slice.
-- Gallery entries and previews: complete for question / permission / prompt
-  scenarios; materials are reviewable on the existing Session Composer gallery
-  entry (edge-to-edge).
-- Parity and divergences: intentional glass vs raised Surface via Floating
-  Chrome; see `../divergences.md`.
-- Automated checks: compile on iOS simulator and Android `compileDebugKotlin`
-  for OPE-99 materials; Android `compileDebugKotlin` for OPE-127 prompt
-  `maxLines`; iOS `OpenCodeMentionTextViewLayoutTests` for OPE-213 prompt
-  height cap and scroll gating.
-
 ## Parity And Divergence
 
 Intentional Floating Chrome material difference (iOS Liquid Glass vs Android

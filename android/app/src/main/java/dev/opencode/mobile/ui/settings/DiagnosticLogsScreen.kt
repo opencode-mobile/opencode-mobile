@@ -36,6 +36,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogExportWindow
 import dev.opencode.mobile.domain.feedback.FeedbackLogRedactor
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -59,7 +60,6 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

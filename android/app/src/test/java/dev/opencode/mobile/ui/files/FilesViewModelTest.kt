@@ -8,10 +8,10 @@ import dev.opencode.mobile.domain.filesystem.ProjectFileHighlighter
 import dev.opencode.mobile.domain.filesystem.ProjectFileLineSpans
 import dev.opencode.mobile.domain.filesystem.ProjectFilesException
 import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.CodeTokenRole
 import dev.opencode.mobile.ui.components.OpenCodeCodeLine
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

@@ -1,19 +1,27 @@
 import Foundation
-import Observation
 
 /// Long-press session actions on home: sheet, rename / fork dialogs, archive, delete.
-@MainActor
-@Observable
-final class HomeSessionActions {
-    private(set) var target: HomeSessionActionTarget?
-    private(set) var sheetVisible = false
-    private(set) var canArchive = true
-    private(set) var renameDialog = HomeSessionTitleDialogState()
-    private(set) var forkDialog = HomeSessionTitleDialogState()
-    private(set) var forkResult = HomeSessionForkResultState()
-    private(set) var deleteConfirmVisible = false
-    private(set) var actionInFlight = false
+struct HomeSessionActionsState: Equatable {
+    var target: HomeSessionActionTarget?
+    var sheetVisible = false
+    var canArchive = true
+    var renameDialog = HomeSessionTitleDialogState()
+    var forkDialog = HomeSessionTitleDialogState()
+    var forkResult = HomeSessionForkResultState()
+    var deleteConfirmVisible = false
+    var actionInFlight = false
+}
 
+@MainActor
+final class HomeSessionActions {
+    /// Every change reports through `onChange`, so the facade republishes Home's state.
+    private(set) var state = HomeSessionActionsState() {
+        didSet {
+            if state != oldValue { onChange?() }
+        }
+    }
+
+    var onChange: (() -> Void)?
     var onLifecycleError: ((String) -> Void)?
 
     private let sessionRepository: any SessionRepository
@@ -32,50 +40,50 @@ final class HomeSessionActions {
 
     func begin(sessionId: String, title: String, worktree: String, canArchive: Bool) {
         let next = HomeSessionActionTarget(sessionId: sessionId, title: title, worktree: worktree)
-        target = next
-        sheetVisible = true
-        self.canArchive = canArchive
+        state.target = next
+        state.sheetVisible = true
+        state.canArchive = canArchive
         forkCheckTask?.cancel()
         forkCheckTask = nil
     }
 
     func dismissSheet() {
-        sheetVisible = false
+        state.sheetVisible = false
         guard !hasOpenDialog else { return }
         clear()
     }
 
     func chooseRename() {
-        guard let target else { return }
-        sheetVisible = false
-        renameDialog = HomeSessionTitleDialogState(isVisible: true, draftTitle: target.title)
+        guard let target = state.target else { return }
+        state.sheetVisible = false
+        state.renameDialog = HomeSessionTitleDialogState(isVisible: true, draftTitle: target.title)
     }
 
     func updateRenameDraft(_ text: String) {
-        renameDialog.draftTitle = text
-        renameDialog.errorMessage = nil
+        state.renameDialog.draftTitle = text
+        state.renameDialog.errorMessage = nil
     }
 
     func cancelRename() {
-        guard !renameDialog.isSubmitting else { return }
-        renameDialog = HomeSessionTitleDialogState()
+        guard !state.renameDialog.isSubmitting else { return }
+        state.renameDialog = HomeSessionTitleDialogState()
         clear()
     }
 
     func confirmRename() async -> String? {
-        guard let target, !renameDialog.isSubmitting else { return nil }
-        let trimmed = renameDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let target = state.target, !state.renameDialog.isSubmitting else { return nil }
+        let trimmed = state.renameDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            renameDialog.errorMessage = Self.emptyTitleError
+            state.renameDialog.errorMessage = Self.emptyTitleError
             return ProductAnalytics.Outcome.blocked
         }
         if trimmed == target.title {
-            renameDialog = HomeSessionTitleDialogState()
+            state.renameDialog = HomeSessionTitleDialogState()
             clear()
             return ProductAnalytics.Outcome.blocked
         }
-        renameDialog.isSubmitting = true
-        renameDialog.errorMessage = nil
+        state.renameDialog.isSubmitting = true
+        state.renameDialog.errorMessage = nil
         OpenCodeLog.sessionChat.info("home rename submit session=\(target.sessionId)")
         do {
             _ = try await sessionRepository.updateSession(
@@ -83,26 +91,26 @@ final class HomeSessionActions {
                 title: trimmed,
                 directory: target.worktree
             )
-            guard self.target == target else { return nil }
+            guard state.target == target else { return nil }
             OpenCodeLog.sessionChat.info("home rename success session=\(target.sessionId)")
-            renameDialog = HomeSessionTitleDialogState()
+            state.renameDialog = HomeSessionTitleDialogState()
             clear()
             return ProductAnalytics.Outcome.success
         } catch {
-            guard self.target == target else { return nil }
+            guard state.target == target else { return nil }
             OpenCodeLog.sessionChat.warning(
                 "home rename failed session=\(target.sessionId) error=\(error.localizedDescription)"
             )
-            renameDialog.isSubmitting = false
-            renameDialog.errorMessage = mutationErrorMessage(error)
+            state.renameDialog.isSubmitting = false
+            state.renameDialog.errorMessage = mutationErrorMessage(error)
             return ProductAnalytics.Outcome.failure
         }
     }
 
     func chooseFork() {
-        guard let target else { return }
-        sheetVisible = false
-        forkDialog = HomeSessionTitleDialogState(
+        guard let target = state.target else { return }
+        state.sheetVisible = false
+        state.forkDialog = HomeSessionTitleDialogState(
             isVisible: true,
             draftTitle: ProjectListHomeViewModel.suggestedForkTitle(for: target.title)
         )
@@ -111,31 +119,31 @@ final class HomeSessionActions {
     }
 
     func updateForkDraft(_ text: String) {
-        forkDialog.draftTitle = text
-        forkDialog.errorMessage = nil
+        state.forkDialog.draftTitle = text
+        state.forkDialog.errorMessage = nil
     }
 
     func cancelFork() {
-        guard !forkDialog.isSubmitting else { return }
-        forkDialog = HomeSessionTitleDialogState()
+        guard !state.forkDialog.isSubmitting else { return }
+        state.forkDialog = HomeSessionTitleDialogState()
         clear()
     }
 
     func confirmFork() async -> String? {
-        guard let target, !forkDialog.isSubmitting else { return nil }
-        if forkDialog.blockedMessage != nil { return ProductAnalytics.Outcome.blocked }
-        let trimmed = forkDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let target = state.target, !state.forkDialog.isSubmitting else { return nil }
+        if state.forkDialog.blockedMessage != nil { return ProductAnalytics.Outcome.blocked }
+        let trimmed = state.forkDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            forkDialog.errorMessage = Self.emptyTitleError
+            state.forkDialog.errorMessage = Self.emptyTitleError
             return ProductAnalytics.Outcome.blocked
         }
-        forkDialog.isSubmitting = true
-        forkDialog.errorMessage = nil
+        state.forkDialog.isSubmitting = true
+        state.forkDialog.errorMessage = nil
         // A quick confirm can beat the check started when the dialog opened.
         await forkCheckTask?.value
-        guard self.target == target else { return nil }
-        if forkDialog.blockedMessage != nil {
-            forkDialog.isSubmitting = false
+        guard state.target == target else { return nil }
+        if state.forkDialog.blockedMessage != nil {
+            state.forkDialog.isSubmitting = false
             return ProductAnalytics.Outcome.blocked
         }
         do {
@@ -145,7 +153,7 @@ final class HomeSessionActions {
                 title: trimmed,
                 directory: target.worktree
             )
-            guard self.target == target else { return nil }
+            guard state.target == target else { return nil }
             OpenCodeLog.sessionChat.info(
                 "home fork success sourceSession=\(target.sessionId) forkedSession=\(updated.id)"
             )
@@ -154,16 +162,16 @@ final class HomeSessionActions {
                 title: updated.title,
                 worktree: target.worktree
             )
-            forkDialog = HomeSessionTitleDialogState()
-            forkResult = HomeSessionForkResultState(isVisible: true, forkedTitle: updated.title)
+            state.forkDialog = HomeSessionTitleDialogState()
+            state.forkResult = HomeSessionForkResultState(isVisible: true, forkedTitle: updated.title)
             return ProductAnalytics.Outcome.success
         } catch {
-            guard self.target == target else { return nil }
+            guard state.target == target else { return nil }
             OpenCodeLog.sessionChat.warning(
                 "home fork failed session=\(target.sessionId) error=\(error.localizedDescription)"
             )
-            forkDialog.isSubmitting = false
-            forkDialog.errorMessage = mutationErrorMessage(error)
+            state.forkDialog.isSubmitting = false
+            state.forkDialog.errorMessage = mutationErrorMessage(error)
             return ProductAnalytics.Outcome.failure
         }
     }
@@ -171,57 +179,57 @@ final class HomeSessionActions {
     func takeForkedOpenTarget() -> SessionListItem? {
         let next = forkedOpenTarget
         forkedOpenTarget = nil
-        forkResult = HomeSessionForkResultState()
+        state.forkResult = HomeSessionForkResultState()
         clear()
         return next
     }
 
     func clearForkedOpenTarget() {
         forkedOpenTarget = nil
-        forkResult = HomeSessionForkResultState()
+        state.forkResult = HomeSessionForkResultState()
         clear()
     }
 
     func chooseArchive() async {
-        guard let target, canArchive, !actionInFlight else { return }
-        sheetVisible = false
-        actionInFlight = true
+        guard let target = state.target, state.canArchive, !state.actionInFlight else { return }
+        state.sheetVisible = false
+        state.actionInFlight = true
         OpenCodeLog.sessionChat.info("home archive start session=\(target.sessionId)")
         do {
             _ = try await sessionRepository.archiveSession(id: target.sessionId, directory: target.worktree)
             OpenCodeLog.sessionChat.info("home archive success session=\(target.sessionId)")
-            actionInFlight = false
+            state.actionInFlight = false
             clear()
         } catch {
             OpenCodeLog.sessionChat.warning(
                 "home archive failed session=\(target.sessionId) error=\(error.localizedDescription)"
             )
-            actionInFlight = false
+            state.actionInFlight = false
             clear()
             onLifecycleError?(Self.archiveError)
         }
     }
 
     func chooseDelete() {
-        guard target != nil else { return }
-        sheetVisible = false
-        deleteConfirmVisible = true
+        guard state.target != nil else { return }
+        state.sheetVisible = false
+        state.deleteConfirmVisible = true
     }
 
     func dismissDeleteConfirm() {
-        guard !actionInFlight else { return }
-        deleteConfirmVisible = false
+        guard !state.actionInFlight else { return }
+        state.deleteConfirmVisible = false
         clear()
     }
 
     func confirmDelete() async {
-        guard let target, !actionInFlight else { return }
-        deleteConfirmVisible = false
-        actionInFlight = true
+        guard let target = state.target, !state.actionInFlight else { return }
+        state.deleteConfirmVisible = false
+        state.actionInFlight = true
         OpenCodeLog.sessionChat.info("home delete start session=\(target.sessionId)")
         do {
             let deleted = try await sessionRepository.deleteSession(id: target.sessionId, directory: target.worktree)
-            actionInFlight = false
+            state.actionInFlight = false
             clear()
             if deleted {
                 OpenCodeLog.sessionChat.info("home delete success session=\(target.sessionId)")
@@ -233,7 +241,7 @@ final class HomeSessionActions {
             OpenCodeLog.sessionChat.warning(
                 "home delete failed session=\(target.sessionId) error=\(error.localizedDescription)"
             )
-            actionInFlight = false
+            state.actionInFlight = false
             clear()
             onLifecycleError?(Self.deleteError)
         }
@@ -247,7 +255,7 @@ final class HomeSessionActions {
             sessionID: target.sessionId,
             directory: target.worktree
         ) else { return }
-        guard !Task.isCancelled, self.target == target, forkDialog.isVisible else { return }
+        guard !Task.isCancelled, state.target == target, state.forkDialog.isVisible else { return }
         let refs = messages.map { message in
             ClientSlashMessageRef(
                 id: message.id,
@@ -263,24 +271,24 @@ final class HomeSessionActions {
             hasSelectedComposerModel: false
         )
         if !ClientSlashActionCatalog.visibleActions(input).contains(.fork) {
-            forkDialog.blockedMessage = Self.nothingToForkError
+            state.forkDialog.blockedMessage = Self.nothingToForkError
         }
     }
 
     private var hasOpenDialog: Bool {
-        renameDialog.isVisible
-            || forkDialog.isVisible
-            || forkResult.isVisible
-            || deleteConfirmVisible
-            || actionInFlight
+        state.renameDialog.isVisible
+            || state.forkDialog.isVisible
+            || state.forkResult.isVisible
+            || state.deleteConfirmVisible
+            || state.actionInFlight
     }
 
     private func clear() {
         forkCheckTask?.cancel()
         forkCheckTask = nil
-        target = nil
-        sheetVisible = false
-        canArchive = true
+        state.target = nil
+        state.sheetVisible = false
+        state.canArchive = true
     }
 
     /// Server and system text stays verbatim; the app's own fallbacks are keyed.

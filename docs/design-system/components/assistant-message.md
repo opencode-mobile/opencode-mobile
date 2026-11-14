@@ -81,15 +81,3 @@ to the card.
 
 Shared semantics for layout, placeholder, and markdown hosting are aligned
 across iOS and Android. No intentional divergences for this component.
-
-## Completion Ledger
-
-- Public API and applicable states: complete (one layout; empty placeholder).
-- Token and typography mapping: complete; uses `assistantMessage.*` geometry
-  including `assistantMessage.maxWidth`, plus `surface-raised-base` and
-  `text-strong` with `type.body`.
-- iOS and Android implementations: complete.
-- Gallery and previews: complete with interactive short/long/empty controls
-  plus light/dark gallery theme support.
-- Parity and divergences: complete; none known.
-- Automated checks: Android unit test for blank-text placeholder.

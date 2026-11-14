@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.data.remote.MessagesApi
+import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
@@ -526,6 +527,7 @@ class MessageProtocolRepositoryTest {
             val router =
                 ProtocolSelectedMessageRemote(
                     api = MessagesApi(client, json),
+                    sessionsApi = SessionsApi(client, json),
                     adapter = MessageDomainAdapter(),
                     activeConnectionManager = manager,
                 )
@@ -548,6 +550,7 @@ class MessageProtocolRepositoryTest {
     ): ProtocolSelectedMessageRemote =
         ProtocolSelectedMessageRemote(
             api = MessagesApi(client, json),
+            sessionsApi = SessionsApi(client, json),
             adapter = MessageDomainAdapter(),
             activeConnectionManager = manager(protocol),
         )

@@ -43,7 +43,7 @@ are optional; if used they stay behind the adapter.
 ## Domain
 
 Adapter maps wire → `ConnectionProfile`, `Session`, `Message`,
-`PermissionRequest`, `Diff`, `ForegroundEventStream`. Reasoning is a
+`PermissionRequest`, `FileDiff`, `ForegroundEventStream`. Reasoning is a
 distinct message part.
 
 Repositories speak product operations: list sessions, send a prompt, abort,
@@ -89,7 +89,9 @@ layout is fine when it is not a reusable concept.
 iOS: `UI/<Feature>/` (filesystem-synchronized Xcode groups).
 
 ```text
-UI/SessionChat  UI/Main  UI/Connection  UI/Settings  UI/Root
+UI/{Archived,Changes,Connection,Diagnostic,Feedback,Files,HighlightLab,
+   KeyboardShortcuts,Main,Markdown,Onboarding,Playground,Root,Scroll,
+   SessionChat,SessionContext,Settings,Shared,Terminal,Worktree}
 Components/{Chrome,List,Chat,Input,Feedback}
 Domain/  Data/  DI/  Theme/  Network/
 ```

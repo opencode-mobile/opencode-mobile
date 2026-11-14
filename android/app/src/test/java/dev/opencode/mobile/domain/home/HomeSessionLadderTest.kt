@@ -1,7 +1,7 @@
 package dev.opencode.mobile.domain.home
 
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.text.EnglishStrings
-import dev.opencode.mobile.ui.text.resolve
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

@@ -1,0 +1,86 @@
+import Foundation
+
+public nonisolated enum ModelsAPIError: Error {
+    case invalidResponse
+    case httpStatus(Int, String?)
+    case noActiveConnection
+}
+
+public nonisolated struct ModelsAPIClient: Sendable {
+    private let connectionProvider: @Sendable () -> ServerConnection?
+    private let resolveURLSession: @Sendable () -> URLSession
+    private let decoder = JSONDecoder()
+
+    public init(
+        connectionProvider: @escaping @Sendable () -> ServerConnection?,
+        urlSession: URLSession? = nil
+    ) {
+        self.connectionProvider = connectionProvider
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
+    }
+
+    public func listProviders(directory: String? = nil) async throws -> ConfigProvidersResponseDTO {
+        try await get(path: "config/providers", directory: directory)
+    }
+
+    public func listProvidersV2(directory: String? = nil) async throws -> [V2ProviderInfoDTO] {
+        let envelope: APIListEnvelope<V2ProviderInfoDTO> = try await get(
+            path: "api/provider",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
+    public func listModelsV2(directory: String? = nil) async throws -> [V2ModelInfoDTO] {
+        let envelope: APIListEnvelope<V2ModelInfoDTO> = try await get(
+            path: "api/model",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
+    public func getDefaultModelV2(directory: String? = nil) async throws -> V2ModelInfoDTO {
+        let envelope: APILocatedEnvelope<V2ModelInfoDTO> = try await get(
+            path: "api/model/default",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
+    private func requireConnection() throws -> ServerConnection {
+        guard let connection = connectionProvider() else {
+            throw ModelsAPIError.noActiveConnection
+        }
+        return connection
+    }
+
+    private func get<T: Decodable>(
+        path: String,
+        directory: String? = nil,
+        locationDirectory: String? = nil
+    ) async throws -> T {
+        let request = try requireConnection().authorizedRequest(
+            path: path,
+            directory: directory,
+            locationDirectory: locationDirectory
+        )
+        let startedAt = OpenCodeAPITrace.start(request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await resolveURLSession().data(for: request)
+        } catch {
+            OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
+            throw error
+        }
+        guard let http = response as? HTTPURLResponse else {
+            OpenCodeAPITrace.invalidResponse(request, startedAt: startedAt)
+            throw ModelsAPIError.invalidResponse
+        }
+        OpenCodeAPITrace.finish(request, statusCode: http.statusCode, startedAt: startedAt)
+        guard (200 ..< 300).contains(http.statusCode) else {
+            throw ModelsAPIError.httpStatus(http.statusCode, String(data: data, encoding: .utf8))
+        }
+        return try decoder.decode(T.self, from: data)
+    }
+}

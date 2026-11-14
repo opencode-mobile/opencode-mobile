@@ -65,18 +65,6 @@ Both Component Galleries provide one live field with controls for input kind,
 enabled state, error state, and empty vs populated value so the in-field hint
 can be reviewed. The shared theme control covers light and dark.
 
-## Completion Ledger
-
-- Public API and applicable states: complete.
-- Token and typography mapping: complete; `textInput.labelSpacing` removed with
-  the external label.
-- iOS and Android implementations: complete. Both enforce a non-blank hint or
-  accessibility label, and neither renders an external label.
-- Gallery entries and previews: complete.
-- Parity and divergences: complete; none known.
-- Automated checks: complete. Both platforms cover accessibility-label
-  precedence, hint fallback, and rejection of empty unlabeled configurations.
-
 ## Parity And Divergence
 
 Native caret, selection, autofill, keyboard, and focus animations intentionally

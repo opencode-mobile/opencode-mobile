@@ -341,6 +341,15 @@ enum class PermissionDecision {
     Deny,
 }
 
+/**
+ * The note sent with a permission reply: only a [PermissionDecision.Deny] carries one, trimmed;
+ * blank means none, so the wire body leaves `message` out.
+ */
+internal fun permissionReplyNote(
+    decision: PermissionDecision,
+    message: String?,
+): String? = message?.trim()?.takeIf { decision == PermissionDecision.Deny && it.isNotEmpty() }
+
 /** One file an edit/write permission would change, from the request metadata. */
 data class PermissionFileChange(
     val path: String,

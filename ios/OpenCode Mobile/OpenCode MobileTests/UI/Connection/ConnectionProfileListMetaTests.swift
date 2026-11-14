@@ -2,20 +2,6 @@ import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
-struct ServerProtocolDisplayTests {
-    @Test func v1Labels() {
-        #expect(ServerProtocol.v1.shortLabel == "v1")
-        #expect(ServerProtocol.v1.apiCaption == "API v1")
-        #expect(ServerProtocol.v1.reachableMessage == "Server reachable · API v1")
-    }
-
-    @Test func v2Labels() {
-        #expect(ServerProtocol.v2.shortLabel == "v2")
-        #expect(ServerProtocol.v2.apiCaption == "API v2")
-        #expect(ServerProtocol.v2.reachableMessage == "Server reachable · API v2")
-    }
-}
-
 struct ConnectionProfileListMetaTests {
     @Test func activeWithProtocol_captionAndActivePill() {
         let profile = profile(api: .v2)

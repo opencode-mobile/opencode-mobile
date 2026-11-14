@@ -198,7 +198,7 @@ struct SessionChatPillSlotsTests {
 
     // MARK: Context
 
-    @Test func contextShowsBranchInTheCornerThenTodosAtMostTwo() {
+    @Test func contextShowsBranchInTheCornerThenTodosAtMostThree() {
         let branch = SessionChatBranchPillUiState(summary: OpenCodeSessionBranchSummary(
             branch: "main",
             files: [OpenCodeSessionBranchChangedFile(path: "a.kt", additions: 1, deletions: 2)]
@@ -210,7 +210,8 @@ struct SessionChatPillSlotsTests {
         ])
         #expect(SessionChatPillSlots.context(todos: (0, 0), branch: branch) == [.branch(branch)])
         #expect(SessionChatPillSlots.context(todos: nil, branch: nil).isEmpty)
-        #expect(SessionChatPillSlots.maxContextPills == 2)
+        // Goal (#1007) joins branch and todos, first in the row.
+        #expect(SessionChatPillSlots.maxContextPills == 3)
     }
 
     // MARK: Navigation

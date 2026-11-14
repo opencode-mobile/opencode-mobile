@@ -15,20 +15,20 @@ import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
-import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
-import dev.opencode.mobile.domain.preferences.SplitPanePreferences
+import dev.opencode.mobile.domain.releasenotes.WhatsNew
 import dev.opencode.mobile.domain.sessioncache.SessionCache
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.components.SplitPanePreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,7 +45,11 @@ class SettingsViewModel
         private val messageContentPreparer: MessageContentPreparer,
         private val diagnosticLogBuffer: DiagnosticLogBuffer,
         private val sessionCache: SessionCache,
+        whatsNew: WhatsNew,
     ) : ViewModel() {
+        /** Settings → What's new carries the New tag while true. */
+        val whatsNewBadgePending: StateFlow<Boolean> = whatsNew.badgePending
+
         private val _sessionCacheSizeLabel = MutableStateFlow(SessionCacheSizeFormatter.format(0L))
         val sessionCacheSizeLabel: StateFlow<UiText> = _sessionCacheSizeLabel.asStateFlow()
         private val _serversSummary = MutableStateFlow(ServersSummary())
@@ -93,7 +97,6 @@ class SettingsViewModel
                 )
                 AppLockPreferences.clear()
                 AppOnboardingPreferences.clear()
-                DeveloperToolsPreferences.clear()
                 PerformanceOverlayPreferences.clear()
                 SessionChatDisplayPreferences.clear()
                 // A wipe is a fresh install: settle the timeline now so the update-only picker never shows.

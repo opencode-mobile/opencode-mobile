@@ -1,0 +1,151 @@
+{
+  "models": [
+    {
+      "id": "parakeet-v2-onnx-int8",
+      "title": "Parakeet V2 \u00b7 ONNX int8",
+      "engine": "sherpa-onnx",
+      "kind": "nemo_transducer",
+      "params": 617869958,
+      "license": "CC-BY-4.0",
+      "source": "huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
+      "note": "The default. The model the iPhone runs, on ONNX Runtime with XNNPACK.",
+      "files": [
+        {
+          "name": "encoder.int8.onnx",
+          "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/resolve/1ab9323565ddb038682214b292f588070a538ce2/encoder.int8.onnx",
+          "bytes": 652184296,
+          "sha256": "a32b12d17bbbc309d0686fbbcc2987b5e9b8333a7da83fa6b089f0a2acd651ab"
+        },
+        {
+          "name": "decoder.int8.onnx",
+          "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/resolve/1ab9323565ddb038682214b292f588070a538ce2/decoder.int8.onnx",
+          "bytes": 7257753,
+          "sha256": "b6bb64963457237b900e496ee9994b59294526439fbcc1fecf705b31a15c6b4e"
+        },
+        {
+          "name": "joiner.int8.onnx",
+          "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/resolve/1ab9323565ddb038682214b292f588070a538ce2/joiner.int8.onnx",
+          "bytes": 1739080,
+          "sha256": "7946164367946e7f9f29a122407c3252b680dbae9a51343eb2488d057c3c43d2"
+        },
+        {
+          "name": "tokens.txt",
+          "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/resolve/1ab9323565ddb038682214b292f588070a538ce2/tokens.txt",
+          "bytes": 9384,
+          "sha256": "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d"
+        }
+      ]
+    },
+    {
+      "id": "parakeet-ultra-litert-cpu",
+      "title": "Parakeet Ultra \u00b7 LiteRT CPU",
+      "engine": "litert",
+      "kind": "tdt_cpu",
+      "params": 627265543,
+      "license": "CC-BY-4.0",
+      "source": "huggingface.co/litert-community/parakeet-ultra",
+      "librispeechWer": 1.8,
+      "fleursWer": 4.26,
+      "note": "Google's LiteRT runtime, int8, on the CPU through XNNPACK. Separate graphs for 10, 20 and 30 s windows.",
+      "files": [
+        {
+          "name": "parakeet_ultra_mel_10s.tflite",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/parakeet_ultra_mel_10s.tflite",
+          "bytes": 1608068,
+          "sha256": "89cdd51d80f1fb829584b6d8d24e188a8f0c880b1aefae070245b71dc8977ccd"
+        },
+        {
+          "name": "parakeet_ultra_mel_20s.tflite",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/parakeet_ultra_mel_20s.tflite",
+          "bytes": 2252068,
+          "sha256": "7684c1444fd4d1dfd6bf51c33d9548312fd2322ead7bcfd269ee3218f45ba28a"
+        },
+        {
+          "name": "parakeet_ultra_mel_30s.tflite",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/parakeet_ultra_mel_30s.tflite",
+          "bytes": 2896076,
+          "sha256": "7deaca292363096375bcf1a64904dd1891ca9409ddba2e067a88e121803f10cc"
+        },
+        {
+          "name": "parakeet_ultra_encoder_10s_i8.tflite",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/parakeet_ultra_encoder_10s_i8.tflite",
+          "bytes": 616306528,
+          "sha256": "fe302fdcdaf17717953eaf29dee452b49e26d4ba89efc6f17bfd00d177775e33"
+        },
+        {
+          "name": "parakeet_ultra_encoder_20s_i8.tflite",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/parakeet_ultra_encoder_20s_i8.tflite",
+          "bytes": 640882528,
+          "sha256": "cf74fe4ca8606eb24631e77e7250a007b290b8d444cc51e4f8c26d490f8c207a"
+        },
+        {
+          "name": "parakeet_ultra_encoder_30s_i8.tflite",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/parakeet_ultra_encoder_30s_i8.tflite",
+          "bytes": 665458528,
+          "sha256": "706675fdf2a128c62072f2db02bb70dec5c4ca1c48298e808f0b58fff2a2e5cd"
+        },
+        {
+          "name": "parakeet_ultra_decoder_i8.tflite",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/parakeet_ultra_decoder_i8.tflite",
+          "bytes": 17866768,
+          "sha256": "0b54e2c39831519f81b3cc323c443fcd88f358d61f7c7285005f85371c18d1a0"
+        },
+        {
+          "name": "tokenizer.json",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/tokenizer.json",
+          "bytes": 1159960,
+          "sha256": "bd321b096832a3f270bd3b2a88823957920f1a5c5ada71114a26ea729d0cbe91"
+        }
+      ]
+    },
+    {
+      "id": "parakeet-ultra-litert-gpu",
+      "title": "Parakeet Ultra \u00b7 LiteRT GPU",
+      "engine": "litert",
+      "kind": "tdt_gpu",
+      "params": 627265543,
+      "license": "CC-BY-4.0",
+      "source": "huggingface.co/litert-community/parakeet-ultra",
+      "librispeechWer": 1.8,
+      "fleursWer": 4.26,
+      "note": "Google's LiteRT runtime, float16, on the graphics chip. One 20 s window graph; longer takes run in 20 s pieces.",
+      "files": [
+        {
+          "name": "parakeet_ultra_mel_20s.tflite",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/parakeet_ultra_mel_20s.tflite",
+          "bytes": 2252068,
+          "sha256": "7684c1444fd4d1dfd6bf51c33d9548312fd2322ead7bcfd269ee3218f45ba28a"
+        },
+        {
+          "name": "parakeet_ultra_encoder_20s_f16.tflite",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/parakeet_ultra_encoder_20s_f16.tflite",
+          "bytes": 1219256704,
+          "sha256": "ff1d2c2f22c69aa560e99b74332fbc9848ba76f0b53cbb358f43fa30d2a080bb"
+        },
+        {
+          "name": "parakeet_ultra_decoder_i8.tflite",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/parakeet_ultra_decoder_i8.tflite",
+          "bytes": 17866768,
+          "sha256": "0b54e2c39831519f81b3cc323c443fcd88f358d61f7c7285005f85371c18d1a0"
+        },
+        {
+          "name": "tokenizer.json",
+          "url": "https://huggingface.co/litert-community/parakeet-ultra/resolve/36d0fe9b069a7f205b6f08d4d9639ba67481abea/tokenizer.json",
+          "bytes": 1159960,
+          "sha256": "bd321b096832a3f270bd3b2a88823957920f1a5c5ada71114a26ea729d0cbe91"
+        }
+      ]
+    },
+    {
+      "id": "android-on-device",
+      "title": "Android on-device speech",
+      "engine": "android",
+      "kind": "system",
+      "params": 0,
+      "license": "Part of the phone",
+      "source": "android.speech.SpeechRecognizer.createOnDeviceSpeechRecognizer",
+      "note": "The phone's own recognizer. Works while you talk, so only the end is left when you let go.",
+      "files": []
+    }
+  ]
+}

@@ -9,7 +9,9 @@ import {
   SCENES,
   TARGET_MAP,
   buildScreens,
+  MISSING_STORE_SHOTS_URL_MESSAGE,
   loadCopy,
+  parsePushArgs,
   pushAll,
   pushSet,
   setNameFor,
@@ -539,4 +541,18 @@ test("pushAll continues after one failure and throws AggregateError", async () =
     assert.equal(mock.state.shotPuts, 5);
     assert.equal([...mock.state.sets.values()][0].name, setNameFor("ios-6.9", "dark"));
   });
+});
+
+test("parsePushArgs requires a store-shots URL from STORE_SHOTS_URL or --url", () => {
+  const saved = process.env.STORE_SHOTS_URL;
+  try {
+    delete process.env.STORE_SHOTS_URL;
+    assert.throws(() => parsePushArgs([]), { message: MISSING_STORE_SHOTS_URL_MESSAGE });
+    assert.equal(parsePushArgs(["--url", "http://store-shots.example.com"]).url, "http://store-shots.example.com");
+    process.env.STORE_SHOTS_URL = "http://store-shots.example.com/";
+    assert.equal(parsePushArgs([]).url, "http://store-shots.example.com");
+  } finally {
+    if (saved === undefined) delete process.env.STORE_SHOTS_URL;
+    else process.env.STORE_SHOTS_URL = saved;
+  }
 });

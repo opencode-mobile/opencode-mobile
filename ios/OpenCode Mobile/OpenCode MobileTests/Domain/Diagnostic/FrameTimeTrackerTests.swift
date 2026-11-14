@@ -2,15 +2,6 @@ import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
-@Suite struct PerformanceOverlayGateTests {
-    @Test func visibleOnlyWhenUnlockedAndEnabled() {
-        #expect(PerformanceOverlayGate.isVisible(developerToolsUnlocked: true, enabled: true))
-        #expect(!PerformanceOverlayGate.isVisible(developerToolsUnlocked: true, enabled: false))
-        #expect(!PerformanceOverlayGate.isVisible(developerToolsUnlocked: false, enabled: true))
-        #expect(!PerformanceOverlayGate.isVisible(developerToolsUnlocked: false, enabled: false))
-    }
-}
-
 @Suite struct FrameTimeTrackerTests {
     private let frame60 = 1.0 / 60.0
     private let frame120 = 1.0 / 120.0

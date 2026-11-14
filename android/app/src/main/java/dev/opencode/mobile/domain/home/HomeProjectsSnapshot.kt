@@ -10,6 +10,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** A path saved to the Connection Profile outside Home; [resolution] is null when it was already there. */
+data class HomeProjectAdded(
+    val worktree: String,
+    val resolution: ResolvedHomePath?,
+)
+
 /**
  * The Home projects (with their worktrees in Home order) as Home last grouped them, so other
  * screens can name a session's project and worktrees without regrouping. Home publishes;
@@ -27,6 +33,11 @@ class HomeProjectsSnapshot
         /** Directories whose project's worktrees changed elsewhere (a checkout created in Session Chat). */
         val worktreeRefreshRequests: SharedFlow<String> = _worktreeRefreshRequests.asSharedFlow()
 
+        private val _projectAddedRequests = MutableSharedFlow<HomeProjectAdded>(extraBufferCapacity = 8)
+
+        /** Paths the New session draft's Add project sheet saved (#1021); Home lists them. */
+        val projectAddedRequests: SharedFlow<HomeProjectAdded> = _projectAddedRequests.asSharedFlow()
+
         fun publish(projects: List<HomeProject>) {
             _projects.value = projects
         }
@@ -34,6 +45,11 @@ class HomeProjectsSnapshot
         /** Asks Home to list the worktrees of [directory]'s project again. */
         fun requestWorktreeRefresh(directory: String) {
             _worktreeRefreshRequests.tryEmit(directory)
+        }
+
+        /** Asks Home to list [added], which another screen saved to the Connection Profile. */
+        fun requestProjectAdded(added: HomeProjectAdded) {
+            _projectAddedRequests.tryEmit(added)
         }
 
         /** The project whose worktrees (or added paths) include [directory]. */

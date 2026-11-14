@@ -21,6 +21,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case actionBar
     case tag
     case keyValueRow
+    case featureItem
     case attachment
     case imageGallery
     case imageViewer
@@ -48,6 +49,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case selectableCard
     case optionCard
     case listGroup
+    case runSessionInCard
     case sectionHeader
     case reorderableList
     case choiceBadge
@@ -65,6 +67,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case treeRow
     case fileTabs
     case button
+    case splitButton
     case textInput
     case serverAddressInput
     case emptyState
@@ -149,6 +152,12 @@ let componentGalleryEntries = [
         category: .lists
     ),
     ComponentGalleryEntry(
+        id: .featureItem,
+        title: "Feature Item",
+        description: "Icon tile, title and body for one feature or fix, as in What's new.",
+        category: .lists
+    ),
+    ComponentGalleryEntry(
         id: .typography,
         title: "Typography",
         description: "Review shared type roles and platform mappings.",
@@ -182,6 +191,12 @@ let componentGalleryEntries = [
         id: .button,
         title: "Button",
         description: "Reusable action component with text and icon variants.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .splitButton,
+        title: "Split Button",
+        description: "Compact button with a ▾ half that opens a menu of related actions; long-press opens it too.",
         category: .controls
     ),
     ComponentGalleryEntry(
@@ -254,6 +269,12 @@ let componentGalleryEntries = [
         id: .listGroup,
         title: "List Group",
         description: "Bordered and separated container for related List Item rows.",
+        category: .lists
+    ),
+    ComponentGalleryEntry(
+        id: .runSessionInCard,
+        title: "Run Session In Card",
+        description: "Where a New session draft runs: project, worktree and base rows with icon tiles.",
         category: .lists
     ),
     ComponentGalleryEntry(

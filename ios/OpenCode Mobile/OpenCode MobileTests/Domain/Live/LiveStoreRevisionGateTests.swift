@@ -257,7 +257,8 @@ private final class GatedStatusRepository: SessionRepository, @unchecked Sendabl
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool { fatalError() }
 }
 
@@ -316,6 +317,7 @@ private final class GatedPermissionRepository: SessionRepository, @unchecked Sen
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool { fatalError() }
 }

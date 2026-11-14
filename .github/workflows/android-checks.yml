@@ -7,6 +7,12 @@ on:
     paths:
       - "android/**"
       - "shared/**"
+      # Hex Code has its own workflow (hexcode-android-checks.yml). Its build
+      # scripts stay in: Gradle configures them on every Android build.
+      - "!android/hexcode/**"
+      - "!shared/voice-engine/**"
+      - "android/hexcode/**/*.gradle.kts"
+      - "shared/voice-engine/**/*.gradle.kts"
       - "VERSION"
       - "scripts/read-app-version.sh"
       - "scripts/ensure-android-platform.sh"
@@ -38,7 +44,7 @@ jobs:
         run: ./scripts/read-app-version.sh
 
       - name: Set up JDK 17
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: 17
@@ -50,9 +56,29 @@ jobs:
         run: ./scripts/ensure-android-platform.sh 37
 
       # Pre-existing style/lint debt; keep visible but do not block PR merge yet.
+      # Hex Code's modules run in hexcode-android-checks.yml, not here.
       - name: Run ktlint and Android Lint
         continue-on-error: true
-        run: ./gradlew ktlintCheck lintDebug --stacktrace
+        run: >-
+          ./gradlew ktlintCheck lintDebug --stacktrace
+          -x :hexcode:ktlintCheck -x :hexcode:lintDebug
+          -x :voice-engine:ktlintCheck -x :voice-engine:lintDebug
 
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --stacktrace
+        run: >-
+          ./gradlew testDebugUnitTest --stacktrace
+          -x :hexcode:testDebugUnitTest -x :voice-engine:testDebugUnitTest
+
+      # Paparazzi 2 needs a Java 21 Gradle JVM; compile :screenshot so the
+      # throwaway snapshot module cannot silently fall behind the app again.
+      - name: Set up JDK 21 for the screenshot module
+        id: jdk21
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Compile screenshot module
+        env:
+          JAVA_HOME: ${{ steps.jdk21.outputs.path }}
+        run: ./gradlew :screenshot:compileDebugKotlin --stacktrace

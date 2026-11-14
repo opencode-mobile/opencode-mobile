@@ -1,8 +1,8 @@
 package dev.opencode.mobile.ui.components
 
 import dev.opencode.mobile.domain.message.FollowUpDelivery
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.text.EnglishStrings
-import dev.opencode.mobile.ui.text.resolve
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

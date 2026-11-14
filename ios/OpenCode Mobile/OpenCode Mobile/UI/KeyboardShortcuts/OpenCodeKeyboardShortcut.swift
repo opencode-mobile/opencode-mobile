@@ -30,12 +30,14 @@ nonisolated enum OpenCodeKeyboardShortcut: Hashable, CaseIterable, Sendable {
     case promptAlwaysAllow
     /// Deny a permission prompt; Dismiss a question prompt.
     case promptReject
+    /// Open "Deny with a note" on a permission prompt.
+    case promptRejectWithNote
 
     static var allCases: [Self] {
         [
             .toggleSidebar, .nextSession, .previousSession, .focusComposer,
             .newSession, .commandPalette, .modelPicker, .settings, .searchSessions,
-        ] + (1...9).map { .switchProject($0) } + [.promptPrimary, .promptAlwaysAllow, .promptReject]
+        ] + (1...9).map { .switchProject($0) } + [.promptPrimary, .promptAlwaysAllow, .promptReject, .promptRejectWithNote]
     }
 
     var title: LocalizedStringResource {
@@ -53,6 +55,8 @@ nonisolated enum OpenCodeKeyboardShortcut: Hashable, CaseIterable, Sendable {
         case .promptPrimary: LocalizedStringResource("keyboard_shortcuts.allow_once", defaultValue: "Allow Once")
         case .promptAlwaysAllow: LocalizedStringResource("keyboard_shortcuts.always_allow", defaultValue: "Always Allow")
         case .promptReject: LocalizedStringResource("keyboard_shortcuts.deny", defaultValue: "Deny")
+        case .promptRejectWithNote:
+            LocalizedStringResource("keyboard_shortcuts.deny_with_note", defaultValue: "Deny with a Note")
         }
     }
 
@@ -73,7 +77,7 @@ nonisolated enum OpenCodeKeyboardShortcut: Hashable, CaseIterable, Sendable {
         case .searchSessions: "f"
         case let .switchProject(number): KeyEquivalent(Character(String(number)))
         case .promptPrimary, .promptAlwaysAllow: .return
-        case .promptReject: .delete
+        case .promptReject, .promptRejectWithNote: .delete
         }
     }
 
@@ -86,14 +90,14 @@ nonisolated enum OpenCodeKeyboardShortcut: Hashable, CaseIterable, Sendable {
              .promptReject:
             .command
         case .modelPicker: [.command, .shift]
-        case .promptAlwaysAllow: [.option, .command]
+        case .promptAlwaysAllow, .promptRejectWithNote: [.option, .command]
         }
     }
 
     /// Answers the visible permission or question prompt.
     var isPromptChord: Bool {
         switch self {
-        case .promptPrimary, .promptAlwaysAllow, .promptReject: true
+        case .promptPrimary, .promptAlwaysAllow, .promptReject, .promptRejectWithNote: true
         default: false
         }
     }

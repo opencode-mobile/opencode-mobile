@@ -77,6 +77,7 @@ import dev.opencode.mobile.domain.feedback.FeedbackKind
 import dev.opencode.mobile.domain.feedback.FeedbackReport
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.feedback.FeedbackSharePayload
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor

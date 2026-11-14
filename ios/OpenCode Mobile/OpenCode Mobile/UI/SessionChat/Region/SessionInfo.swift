@@ -6,12 +6,11 @@ final class SessionInfo {
 
     private(set) var state = SessionInfoRegionState()
 
-    private let worktree: String
+    private var worktree: String
     private let sessionRepository: any SessionRepository
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let foregroundEventStream: any ForegroundEventStream
     private let liveUpdates: any LiveUpdates
-    private let eventAdapter = EventDomainAdapter()
     private var observationTask: Task<Void, Never>?
     private var eventFanoutTask: Task<Void, Never>?
     private var renameTask: Task<Void, Never>?
@@ -47,6 +46,19 @@ final class SessionInfo {
         notifyChange()
     }
 
+    /// A draft moved, or its first send created the session in another checkout.
+    func retarget(worktree: String) {
+        self.worktree = worktree
+    }
+
+    /// A draft (#1004) has no session to watch, only the connection that gates its composer.
+    func startObservingConnection() {
+        stopObserving()
+        observationTask = Task { [weak self] in
+            await self?.observeConnectionState()
+        }
+    }
+
     func requestLeaveSession() {
         state.shouldLeaveSession = true
         notifyChange()
@@ -57,7 +69,6 @@ final class SessionInfo {
         OpenCodeLog.sessionChat.info("session info observing session=\(self.state.sessionID)")
         let boundSessionID = state.sessionID
         let eventStream = foregroundEventStream
-        let eventAdapter = eventAdapter
         let info = self
         eventFanoutTask = Task.detached { [weak info] in
             for await event in eventStream.events() {
@@ -70,7 +81,7 @@ final class SessionInfo {
                     } else {
                         "other"
                     }
-                if event.type != "message.part.delta" {
+                if !event.isMessagePartDelta {
                     OpenCodeLog.sessionChat.debug(
                         "SSE event observed session=\(boundSessionID) type=\(event.type) eventSession=\(event.sessionID ?? "-") scope=\(scope)"
                     )
@@ -79,16 +90,16 @@ final class SessionInfo {
                     event.sessionID == boundSessionID && !event.isUserAbortSessionError
                         ? event.sessionErrorMessage
                         : nil
-                let hasTitleUpdate = eventAdapter.sessionTitleUpdate(from: event) != nil
+                let hasTitleUpdate = event.sessionTitleUpdate != nil
                 // Another client deleted the open session: leave instead of showing a dead chat.
-                let boundDeleted = eventAdapter.sessionDeletedID(from: event) == boundSessionID
+                let boundDeleted = event.sessionDeletedID == boundSessionID
                 // Archived or restored anywhere: the event decides; a read right after it can lag.
-                let archiveStateChanged = event.sessionID == boundSessionID && Self.archiveStateEvents.contains(event.type)
-                guard boundError != nil || hasTitleUpdate || boundDeleted || archiveStateChanged else { continue }
+                let archiveChange = event.sessionID == boundSessionID ? event.sessionArchiveChange : nil
+                guard boundError != nil || hasTitleUpdate || boundDeleted || archiveChange != nil else { continue }
                 await MainActor.run {
                     guard !Task.isCancelled, let sessionInfo = info else { return }
-                    if archiveStateChanged {
-                        sessionInfo.applyArchiveEvent(event.type)
+                    if let archiveChange {
+                        sessionInfo.applyArchiveChange(archiveChange)
                     }
                     if boundDeleted {
                         OpenCodeLog.sessionChat.info("session deleted elsewhere session=\(boundSessionID); leaving")
@@ -243,9 +254,9 @@ final class SessionInfo {
     }
 
     /// `session.archived` / `session.unarchived` for the bound session.
-    func applyArchiveEvent(_ type: String) {
+    func applyArchiveChange(_ change: SessionArchiveChange) {
         archiveStateGeneration += 1
-        if type == "session.unarchived" {
+        if change == .unarchived {
             state.archivedAtEpochMs = nil
             notifyChange()
             return
@@ -405,7 +416,7 @@ final class SessionInfo {
     }
 
     private func applySessionUpdatedTitle(_ event: OpencodeEvent) {
-        guard let update = eventAdapter.sessionTitleUpdate(from: event),
+        guard let update = event.sessionTitleUpdate,
               update.sessionID == state.sessionID,
               update.title != state.sessionTitle
         else { return }
@@ -442,7 +453,6 @@ final class SessionInfo {
     }
 
     private static let emptyTitleError = "Enter a session title"
-    nonisolated private static let archiveStateEvents: Set<String> = ["session.archived", "session.unarchived"]
     private static let archiveError = "Couldn't archive session."
     private static let deleteError = "Couldn't delete session."
 }

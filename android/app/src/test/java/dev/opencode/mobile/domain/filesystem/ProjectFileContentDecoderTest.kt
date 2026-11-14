@@ -79,11 +79,6 @@ class ProjectFileContentDecoderTest {
         assertTrue(content is ProjectFileContent.Binary)
     }
 
-    @Test
-    fun v1TooLarge_isTooLargeWithUnknownSize() {
-        assertEquals(ProjectFileContent.TooLarge(byteCount = null), ProjectFileContentDecoder.v1TooLarge())
-    }
-
     /** Exactly [limit] bytes: ASCII padding, then [character]s, ending with [keptOfLast] bytes of one more. */
     private fun rangeBody(
         character: String,

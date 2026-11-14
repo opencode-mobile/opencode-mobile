@@ -1,8 +1,8 @@
 package dev.opencode.mobile.ui.components
 
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.text.EnglishStrings
-import dev.opencode.mobile.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

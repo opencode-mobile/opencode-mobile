@@ -9,6 +9,7 @@ lucide/chevron-right/chevron_right:lucide_chevron_right
 lucide/chevron-down/keyboard_arrow_down:lucide_keyboard_arrow_down
 lucide/x/close:lucide_close
 lucide/copy/content_copy:lucide_content_copy
+lucide/text-select/text_select:lucide_text_select
 lucide/minimize-2/collapse_content:lucide_collapse_content
 lucide/trash-2/delete:lucide_delete
 lucide/file-text/description:lucide_description
@@ -51,3 +52,17 @@ lucide/skip-forward/skip_next:lucide_skip_next
 lucide/rotate-ccw/restart:lucide_restart
 lucide/minimize-2/minimize:lucide_minimize
 lucide/grip-vertical/drag_handle:lucide_drag_handle
+lucide/star/star:lucide_star
+lucide/message-square-heart/rate_review:lucide_rate_review
+lucide/at-sign/at_sign:lucide_at_sign
+lucide/sparkles/sparkles:lucide_sparkles
+lucide/image/image:lucide_image
+lucide/keyboard/keyboard:lucide_keyboard
+lucide/paperclip/paperclip:lucide_paperclip
+lucide/qr-code/qr_code:lucide_qr_code
+lucide/clock/clock:lucide_clock
+lucide/target/target:lucide_target
+lucide/git-fork/git_fork:lucide_git_fork
+lucide/wrench/wrench:lucide_wrench
+lucide/smartphone/smartphone:lucide_smartphone
+lucide/message-square/message_square:lucide_message_square

@@ -21,6 +21,10 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object DiagnosticLogsHome : NavKey
 
+@Serializable data object DeveloperToolsHome : NavKey
+
+@Serializable data object WhatsNewHome : NavKey
+
 @Serializable data object FeatureFlagsHome : NavKey
 
 @Serializable data object ComponentGalleryHome : NavKey
@@ -81,8 +85,8 @@ import kotlinx.serialization.Serializable
     val parentId: String? = null,
     val blockID: String,
     /** App text or server content, resolved when the route is shown so it follows the app language. */
-    val title: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.ui.text.UiText,
-    val subtitle: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.ui.text.UiText? = null,
+    val title: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.domain.text.UiText,
+    val subtitle: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.domain.text.UiText? = null,
     val messageId: String,
     val owningTurnMessageId: String? = null,
     val supportsSessionMessageDiff: Boolean,
@@ -94,9 +98,9 @@ import kotlinx.serialization.Serializable
     val blockID: String,
     val toolName: String,
     val status: String,
-    val title: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.ui.text.UiText,
-    val subtitle: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.ui.text.UiText? = null,
-    val errorText: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.ui.text.UiText? = null,
+    val title: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.domain.text.UiText,
+    val subtitle: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.domain.text.UiText? = null,
+    val errorText: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.domain.text.UiText? = null,
     val additions: Int? = null,
     val deletions: Int? = null,
     val detailText: String? = null,

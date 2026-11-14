@@ -2,7 +2,7 @@ package dev.opencode.mobile.ui.settings
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfile
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

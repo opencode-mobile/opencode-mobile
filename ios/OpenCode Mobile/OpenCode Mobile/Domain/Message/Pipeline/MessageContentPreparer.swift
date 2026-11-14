@@ -1,4 +1,3 @@
-import FactoryKit
 import Foundation
 
 nonisolated func stableMarkdownSourceHash(_ markdown: String) -> Int {
@@ -82,8 +81,6 @@ nonisolated private final class MessageMarkdownDocumentCache: @unchecked Sendabl
 }
 
 nonisolated final class MessageContentPreparer: @unchecked Sendable {
-    static let shared = MessageContentPreparer(textMateEngine: Container.codeHighlighter)
-
     /// Size used by characterization fixtures. Streaming no longer skips markdown
     /// or highlighting on length.
     nonisolated static let streamingPlainTextCharacterThreshold = 8_000

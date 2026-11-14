@@ -1,0 +1,204 @@
+package dev.opencode.mobile.domain.goal
+
+import dev.opencode.mobile.data.remote.HttpBodyResponseException
+import dev.opencode.mobile.data.remote.SessionsApi
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandler
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.HttpRequestData
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
+import io.ktor.http.content.TextContent
+import io.ktor.http.headersOf
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Test
+
+/** The goal's RPC read and its `/goal` controls, through the kit's [SessionsApi] into [SessionGoal]. */
+class SessionGoalRpcTest {
+    @Test
+    fun getCallsTheGoalRpcAtTheSessionLocation() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            val api =
+                api { request ->
+                    captured += request
+                    respondJson(
+                        """{"output":{"id":"goal_1","objective":"Ship it","status":"complete","reason":"Done",""" +
+                            """"rounds":4,"maxRounds":50,"boot":"b","updatedAt":9}}""",
+                    )
+                }
+
+            val goal = SessionGoalDomainAdapter.fromState(api.goalV2("ses_1", "/Users/example/project"))
+
+            val request = captured.single()
+            assertEquals("POST", request.method.value)
+            assertTrue(request.url.encodedPath.endsWith("/api/rpc/opencode.goal/get"))
+            assertEquals("/Users/example/project", request.url.parameters["location[directory]"])
+            assertEquals("""{"input":{"sessionID":"ses_1"}}""", request.body.bodyText())
+            assertEquals(SessionGoalStatus.Complete, goal?.status)
+            assertEquals("Done", goal?.reason)
+        }
+
+    @Test
+    fun getReadsNoGoalAsNull() =
+        runTest {
+            val api = api { respondJson("""{"output":null}""") }
+
+            assertNull(api.goalV2("ses_1", null))
+        }
+
+    @Test
+    fun getReadsTheGoalAsBeforeTheKit() =
+        runTest {
+            val api =
+                api {
+                    respondJson(
+                        """{"output":{"id":"goal_1","objective":"Ship it","status":"paused","reason":"Stopped by the user",""" +
+                            """"rounds":3,"maxRounds":40,"stalls":1,"boot":"b","updatedAt":1790000000000}}""",
+                    )
+                }
+
+            assertEquals(
+                SessionGoal(
+                    id = "goal_1",
+                    objective = "Ship it",
+                    status = SessionGoalStatus.Paused,
+                    reason = "Stopped by the user",
+                    rounds = 3,
+                    maxRounds = 40,
+                    stalls = 1,
+                    updatedAtEpochMs = 1790000000000,
+                ),
+                read(api),
+            )
+        }
+
+    @Test
+    fun getToleratesNullAndFractionalNumbersAndAnyContentType() =
+        runTest {
+            var reply = """{"output":{"id":"g1","objective":"Ship it","status":"active","rounds":null,"maxRounds":null}}"""
+            var contentType = "application/json"
+            val activeShipIt = SessionGoal("g1", "Ship it", SessionGoalStatus.Active, rounds = 0, maxRounds = 50, updatedAtEpochMs = 0)
+            val api = api { respond(reply, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, contentType)) }
+
+            assertEquals(activeShipIt.copy(rounds = 0, updatedAtEpochMs = 0), read(api))
+
+            reply = """{"output":{"id":"g1","objective":"Ship it","status":"active","rounds":1.0,"maxRounds":50.0,"updatedAt":9.0}}"""
+            contentType = "text/plain"
+            assertEquals(activeShipIt.copy(rounds = 1, updatedAtEpochMs = 9), read(api))
+        }
+
+    @Test
+    fun getReadsAnythingElseAsNoGoalAndLogsWhy() =
+        runTest {
+            var reply = ""
+            val api = api { respond(reply, HttpStatusCode.OK) }
+            val cases =
+                listOf(
+                    "upstream timed out" to "body is not JSON",
+                    """{"output":{"objective":"Secret plan","status":"active","rounds":0}}""" to "output no id",
+                    """{"output":{"id":"g1","status":"active","rounds":0}}""" to "output no objective",
+                    """{"output":{"id":"g1","objective":"Secret plan","status":"blocked"}}""" to "unknown status=blocked",
+                )
+            for ((body, reason) in cases) {
+                DiagnosticLogBuffer.resetSharedForTests()
+                try {
+                    reply = body
+                    assertNull(body, read(api))
+                    val message =
+                        DiagnosticLogBuffer.shared
+                            .snapshot()
+                            .entries
+                            .single()
+                            .message
+                    assertEquals(body, "goal read unreadable session=ses_1 reason=$reason", message)
+                    assertFalse(message.contains("Secret"))
+                } finally {
+                    DiagnosticLogBuffer.resetSharedForTests()
+                }
+            }
+        }
+
+    @Test
+    fun getFailsWithoutTheGoalPlugin() =
+        runTest {
+            val api = api { respond("""{"_tag":"RpcError","message":"Unknown RPC"}""", HttpStatusCode.NotFound) }
+
+            try {
+                api.goalV2("ses_1", null)
+                fail("expected failure")
+            } catch (error: HttpBodyResponseException) {
+                assertEquals(404, error.response.status.value)
+            }
+        }
+
+    @Test
+    fun commandSendsTheGoalControlAndKeepsTheServerMessage() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            var fail = false
+            val api =
+                api { request ->
+                    captured += request
+                    if (fail) {
+                        respond(
+                            """{"_tag":"CommandError","message":"No active goal to pause."}""",
+                            HttpStatusCode.BadRequest,
+                            headersOf(HttpHeaders.ContentType, "application/json"),
+                        )
+                    } else {
+                        respond("", HttpStatusCode.NoContent)
+                    }
+                }
+
+            api.runSessionCommandV2("ses_1", SessionGoalLimits.COMMAND, SessionGoalAction.Pause.commandText)
+            assertTrue(
+                captured
+                    .single()
+                    .url.encodedPath
+                    .endsWith("/api/session/ses_1/command"),
+            )
+            assertEquals("""{"name":"goal","text":"pause"}""", captured.single().body.bodyText())
+
+            fail = true
+            try {
+                api.runSessionCommandV2("ses_1", SessionGoalLimits.COMMAND, SessionGoalAction.Pause.commandText)
+                fail("expected failure")
+            } catch (error: HttpBodyResponseException) {
+                assertEquals("No active goal to pause", SessionGoalDomainAdapter.errorMessage(error))
+            }
+        }
+
+    /** What [DefaultSessionGoalRepository.goal] returns. */
+    private suspend fun read(api: SessionsApi): SessionGoal? = SessionGoalDomainAdapter.fromRpc("ses_1", api.goalV2("ses_1", null))
+
+    private fun api(handler: MockRequestHandler): SessionsApi {
+        val json = Json { ignoreUnknownKeys = true }
+        val client =
+            HttpClient(MockEngine(handler)) {
+                install(ContentNegotiation) { json(json) }
+            }
+        return SessionsApi(client, json)
+    }
+
+    private fun io.ktor.client.engine.mock.MockRequestHandleScope.respondJson(body: String) =
+        respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+
+    private fun OutgoingContent.bodyText(): String =
+        when (this) {
+            is TextContent -> text
+            is OutgoingContent.ByteArrayContent -> String(bytes())
+            else -> ""
+        }
+}

@@ -30,6 +30,21 @@ struct TimelineNoticeGalleryView: View {
                     onToggle: { toggle(sample.id) }
                 )
             }
+            Text("Goal set")
+                .font(OpenCodeTypography.heading)
+                .foregroundStyle(OpenCodeColors.textStrong)
+            OpenCodeTimelineNotice(
+                variant: .goal,
+                label: "Goal set",
+                value: "Make the unit tests pass on the session list refactor",
+                onActivate: {}
+            )
+            OpenCodeTimelineNotice(
+                variant: .goalEnded,
+                label: "Goal set",
+                value: "Get lint to zero warnings in the session list package",
+                tag: "ended"
+            )
             Text("States")
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)

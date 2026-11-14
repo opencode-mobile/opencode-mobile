@@ -2,7 +2,7 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.Message
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 
 /**
  * What a child session is doing, read from its own messages while an activity

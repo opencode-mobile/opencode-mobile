@@ -1,0 +1,76 @@
+package dev.opencode.mobile.data.remote.dto
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
+
+@Serializable
+data class ApiDataEnvelope<T>(
+    val data: T,
+)
+
+inline fun <reified T> Json.decodeDataEnvelope(element: JsonElement): T {
+    val payload = (element as? JsonObject)?.get("data") ?: element
+    return decodeFromJsonElement(payload)
+}
+
+@Serializable
+data class ApiListEnvelope<T>(
+    val data: List<T> = emptyList(),
+    val cursor: ApiCursorDto? = null,
+)
+
+@Serializable
+data class ApiCursorDto(
+    val previous: String? = null,
+    val next: String? = null,
+)
+
+@Serializable
+data class ApiActiveSessionsEnvelope(
+    val data: Map<String, ApiSessionActiveDto> = emptyMap(),
+)
+
+@Serializable
+data class ApiSessionActiveDto(
+    val type: String? = null,
+    val attempt: Int? = null,
+    val message: String? = null,
+    val next: Long? = null,
+    val error: ApiSessionRetryErrorDto? = null,
+    val action: ApiSessionRetryActionDto? = null,
+)
+
+@Serializable
+data class ApiSessionRetryErrorDto(
+    val type: String? = null,
+)
+
+@Serializable
+data class ApiSessionRetryActionDto(
+    val label: String? = null,
+    val link: String? = null,
+)
+
+@Serializable
+data class ApiLocatedEnvelope<T>(
+    val location: V2LocationInfoDto? = null,
+    val data: T,
+)
+
+@Serializable
+data class V2LocationInfoDto(
+    val directory: String,
+    @SerialName("workspaceID") val workspaceId: String? = null,
+    val project: V2LocationProjectDto? = null,
+)
+
+@Serializable
+data class V2LocationProjectDto(
+    val id: String? = null,
+    val directory: String? = null,
+    val canonical: String? = null,
+)

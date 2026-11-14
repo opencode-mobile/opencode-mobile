@@ -2,7 +2,7 @@ package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.home.HomeWorktree
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 
 /**
  * Home app text (scope picker, dock, Run in, snackbars) as [UiText]. Project, branch and folder

@@ -32,6 +32,9 @@ icons:
   - name: content_copy
     lucide: copy
     notes: Copy action
+  - name: text_select
+    lucide: text-select
+    notes: Message sheet Select text
   - name: collapse_content
     lucide: minimize-2
     notes: Outgoing message expanded state
@@ -152,3 +155,45 @@ icons:
   - name: drag_handle
     lucide: grip-vertical
     notes: Drag grip of a floating capsule
+  - name: star
+    lucide: star
+    notes: Star the repository on GitHub, Settings About
+  - name: rate_review
+    lucide: message-square-heart
+    notes: Rate the app in the App Store or Google Play, Settings About
+  - name: at_sign
+    lucide: at-sign
+    notes: Follow the developer on X, Settings About
+  - name: sparkles
+    lucide: sparkles
+    notes: What's new sheet eyebrow and the default release-note icon
+  - name: image
+    lucide: image
+    notes: Release note about images
+  - name: keyboard
+    lucide: keyboard
+    notes: Release note about keyboard support
+  - name: paperclip
+    lucide: paperclip
+    notes: Release note about attachments
+  - name: qr_code
+    lucide: qr-code
+    notes: Release note about pairing QR codes
+  - name: clock
+    lucide: clock
+    notes: Release note about times and rate limits
+  - name: target
+    lucide: target
+    notes: Release note about session goals
+  - name: git_fork
+    lucide: git-fork
+    notes: Release note about forking a session
+  - name: wrench
+    lucide: wrench
+    notes: Release note fixes
+  - name: smartphone
+    lucide: smartphone
+    notes: Release note about device support
+  - name: message_square
+    lucide: message-square
+    notes: Release note about chat messages

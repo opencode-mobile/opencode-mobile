@@ -38,6 +38,24 @@ struct SseDiagnosticLoggingTests {
         )
     }
 
+    @Test func bufferMessage_recordsUserMessageEchoOnly() {
+        let user = OpencodeEvent(
+            type: "message.updated",
+            sessionID: "ses-1",
+            rawProperties: ["info": .dictionary(["role": .string("user"), "id": .string("msg_1")])]
+        )
+        #expect(
+            SseDiagnosticLogging.bufferMessage(for: user)
+                == "SSE event type=message.updated role=user session=ses-1 message=msg_1"
+        )
+        let assistant = OpencodeEvent(
+            type: "message.updated",
+            sessionID: "ses-1",
+            rawProperties: ["info": .dictionary(["role": .string("assistant"), "id": .string("msg_2")])]
+        )
+        #expect(SseDiagnosticLogging.bufferMessage(for: assistant) == nil)
+    }
+
     @Test func bufferMessage_recordsStatusMetadata() {
         let event = OpencodeEvent(
             type: "session.status",

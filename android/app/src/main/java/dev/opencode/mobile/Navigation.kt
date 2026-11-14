@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
@@ -55,7 +56,6 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
-import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.security.AppLockAvailability
@@ -75,6 +75,7 @@ import dev.opencode.mobile.ui.componentgallery.components.BackgroundWorkPillGall
 import dev.opencode.mobile.ui.componentgallery.components.BottomFadeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SplitButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ShellRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TaskRowGalleryScreen
@@ -104,6 +105,7 @@ import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDeta
 import dev.opencode.mobile.ui.componentgallery.components.MessageNoteGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ModalGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OptionCardGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.PickerCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.PageIndicatorGalleryScreen
@@ -111,6 +113,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ReasoningRowGalleryScr
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.FeatureItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SectionHeaderGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SelectableCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
@@ -162,6 +165,7 @@ import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.archived.ArchivedSessionsScreen
 import dev.opencode.mobile.ui.settings.AppearanceSettingsScreen
+import dev.opencode.mobile.ui.settings.DeveloperToolsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
 import dev.opencode.mobile.ui.settings.FeatureFlagsRoute
@@ -173,6 +177,10 @@ import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.SyntaxHighlightPickerScreen
 import dev.opencode.mobile.ui.settings.ThemePickerScreen
 import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
+import dev.opencode.mobile.ui.whatsnew.WhatsNewHistoryViewModel
+import dev.opencode.mobile.ui.whatsnew.WhatsNewScreen
+import dev.opencode.mobile.ui.whatsnew.WhatsNewSheet
+import dev.opencode.mobile.ui.whatsnew.WhatsNewSheetViewModel
 import dev.opencode.mobile.ui.worktrees.WorktreesScreen
 
 /**
@@ -186,6 +194,13 @@ internal fun <T> MutableList<T>.popRouteUnlessRoot() {
     }
 }
 
+/** Pushes [route] unless it is already on top, so a double tap does not stack it twice. */
+private fun <T> MutableList<T>.addRouteUnlessTop(route: T) {
+    if (lastOrNull() != route) {
+        add(route)
+    }
+}
+
 @Composable
 internal fun <T : Any> rememberMainNavEntryDecorators(): List<NavEntryDecorator<T>> =
     listOf(
@@ -193,8 +208,9 @@ internal fun <T : Any> rememberMainNavEntryDecorators(): List<NavEntryDecorator<
         rememberViewModelStoreNavEntryDecorator(),
     )
 
+/** [appCovered]: the privacy cover or App Lock hides the app, so Home is not idle. */
 @Composable
-fun MainNavigation() {
+fun MainNavigation(appCovered: Boolean = false) {
     val rootViewModel: AppRootViewModel = hiltViewModel()
     val rootState by rootViewModel.state.collectAsStateWithLifecycle()
     val presentConnectionSetupAfterOnboarding by
@@ -204,6 +220,7 @@ fun MainNavigation() {
     val setupUiState by setupViewModel.uiState.collectAsStateWithLifecycle()
     val sessionCacheSizeLabel by settingsViewModel.sessionCacheSizeLabel.collectAsStateWithLifecycle()
     val serversSummary by settingsViewModel.serversSummary.collectAsStateWithLifecycle()
+    val whatsNewBadgePending by settingsViewModel.whatsNewBadgePending.collectAsStateWithLifecycle()
     val serversViewModel: ServersViewModel = hiltViewModel()
     val serversUiState by serversViewModel.uiState.collectAsStateWithLifecycle()
 
@@ -297,17 +314,6 @@ fun MainNavigation() {
                         },
                     )
                 }
-                SettingsDetail.ComponentGallery ->
-                    ComponentGalleryScreen(
-                        onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) },
-                        onNavigateBack = onNavigateBack,
-                        detailControl = detailControl,
-                    )
-                SettingsDetail.FeatureFlags ->
-                    FeatureFlagsRoute(
-                        onNavigateBack = onNavigateBack,
-                        detailControl = detailControl,
-                    )
                 SettingsDetail.DiagnosticLogs -> {
                     val diagnosticLogsViewModel: DiagnosticLogsViewModel = hiltViewModel()
                     val diagnosticLogsState by diagnosticLogsViewModel.state.collectAsStateWithLifecycle()
@@ -329,6 +335,27 @@ fun MainNavigation() {
                         onExportWindowChange = diagnosticLogsViewModel::setExportWindow,
                     )
                 }
+                SettingsDetail.WhatsNew -> {
+                    val whatsNewHistoryViewModel: WhatsNewHistoryViewModel = hiltViewModel()
+                    val whatsNewHistoryState by whatsNewHistoryViewModel.state.collectAsStateWithLifecycle()
+                    WhatsNewScreen(
+                        state = whatsNewHistoryState,
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                    )
+                }
+                // Each tool opens as a full-screen route, also on wide windows.
+                SettingsDetail.DeveloperTools ->
+                    DeveloperToolsScreen(
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                        onComponentGalleryClick = { backStack.addRouteUnlessTop(ComponentGalleryHome) },
+                        onSessionChatPlaygroundClick = { backStack.addRouteUnlessTop(SessionChatPlaygroundHome) },
+                        onFeatureFlagsClick = { backStack.addRouteUnlessTop(FeatureFlagsHome) },
+                        // Null in release builds.
+                        onHighlightingLabClick =
+                            HighlightingLabSeam.homeRoute?.let { route -> { backStack.addRouteUnlessTop(route) } },
+                    )
             }
         }
     var themeMode by rememberSaveable { mutableStateOf(ComponentGalleryThemeMode.System) }
@@ -424,6 +451,21 @@ fun MainNavigation() {
                                                 rememberHomeSessionPaneHandoff(useSplitLayout, paneStack) { routes ->
                                                     backStack.addAll(routes)
                                                 }
+                                            // What's new waits for Home to be the idle, visible screen: nothing pushed
+                                            // over it and nothing over its list.
+                                            val whatsNewViewModel: WhatsNewSheetViewModel = hiltViewModel()
+                                            val whatsNewState by whatsNewViewModel.state.collectAsStateWithLifecycle()
+                                            var homeContentIdle by remember { mutableStateOf(false) }
+                                            val homeLifecycleState by
+                                                LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+                                            val homeIdle =
+                                                homeContentIdle &&
+                                                    !appCovered &&
+                                                    homeLifecycleState.isAtLeast(Lifecycle.State.RESUMED) &&
+                                                    // A session open in the tablet pane still leaves Home visible.
+                                                    backStack.lastOrNull() == ProjectListHome
+                                            LaunchedEffect(homeIdle) { whatsNewViewModel.onHomeIdleChange(homeIdle) }
+                                            WhatsNewSheet(state = whatsNewState, onDismiss = whatsNewViewModel::dismiss)
                                             // Screens pushed in the pane pop through its own NavDisplay first.
                                             BackHandler(
                                                 enabled = useSplitLayout && paneSelection != null && paneStack.size == 1,
@@ -455,6 +497,7 @@ fun MainNavigation() {
                                                     onManageServersClick = { backStack.add(SettingsHome) },
                                                     selectedSessionId = if (useSplitLayout) paneSelection?.sessionId else null,
                                                     sessionKeyboardNavigationEnabled = useSplitLayout,
+                                                    onHomeIdleChange = { homeContentIdle = it },
                                                 )
                                             }
                                             if (showsSplit) {
@@ -490,8 +533,7 @@ fun MainNavigation() {
                                             val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
                                             val useSplitLayout = currentOpenCodeUsesSplitLayout()
                                             var settingsDetail by rememberSaveable { mutableStateOf(SettingsDetail.Servers) }
-                                            val visibleSettingsDetail =
-                                                settingsDetail.resolved(DeveloperToolsPreferences.unlocked)
+                                            val visibleSettingsDetail = settingsDetail
                                             // Last layout this entry rendered, so only a split -> compact
                                             // transition (not first composition) hands off the detail.
                                             var settingsRenderedSplit by rememberSaveable { mutableStateOf(useSplitLayout) }
@@ -523,20 +565,8 @@ fun MainNavigation() {
                                             val settings: @Composable () -> Unit = {
                                                 SettingsScreen(
                                                     onSendFeedbackClick = feedbackSheet::open,
-                                                    onComponentGalleryClick = {
-                                                        openSettingsDetail(SettingsDetail.ComponentGallery)
-                                                    },
-                                                    onFeatureFlagsClick = {
-                                                        openSettingsDetail(SettingsDetail.FeatureFlags)
-                                                    },
-                                                    // A full-screen route, also on wide windows; null in release builds.
-                                                    onHighlightingLabClick =
-                                                        HighlightingLabSeam.homeRoute?.let { route -> { backStack.add(route) } },
-                                                    // A full-screen route, also on wide windows.
-                                                    onSessionChatPlaygroundClick = {
-                                                        if (backStack.lastOrNull() != SessionChatPlaygroundHome) {
-                                                            backStack.add(SessionChatPlaygroundHome)
-                                                        }
+                                                    onDeveloperToolsClick = {
+                                                        openSettingsDetail(SettingsDetail.DeveloperTools)
                                                     },
                                                     onDiagnosticLogsClick = {
                                                         openSettingsDetail(SettingsDetail.DiagnosticLogs)
@@ -549,6 +579,10 @@ fun MainNavigation() {
                                                     onAppearanceClick = {
                                                         openSettingsDetail(SettingsDetail.Appearance)
                                                     },
+                                                    onWhatsNewClick = {
+                                                        openSettingsDetail(SettingsDetail.WhatsNew)
+                                                    },
+                                                    whatsNewBadgePending = whatsNewBadgePending,
                                                     selectedDetail = if (useSplitLayout) visibleSettingsDetail else null,
                                                     serversSummary = serversSummary,
                                                     onClearData = settingsViewModel::clearAllData,
@@ -693,9 +727,21 @@ fun MainNavigation() {
                                             )
                                         }
                                     }
+                                    entry<DeveloperToolsHome> {
+                                        RouteSurface {
+                                            settingsDetailContent(SettingsDetail.DeveloperTools, null) {
+                                                backStack.popRouteUnlessRoot()
+                                            }
+                                        }
+                                    }
                                     entry<FeatureFlagsHome> {
                                         RouteSurface {
-                                            settingsDetailContent(SettingsDetail.FeatureFlags, null) {
+                                            FeatureFlagsRoute(onNavigateBack = { backStack.popRouteUnlessRoot() })
+                                        }
+                                    }
+                                    entry<WhatsNewHome> {
+                                        RouteSurface {
+                                            settingsDetailContent(SettingsDetail.WhatsNew, null) {
                                                 backStack.popRouteUnlessRoot()
                                             }
                                         }
@@ -714,9 +760,10 @@ fun MainNavigation() {
                                     }
                                     entry<ComponentGalleryHome> {
                                         RouteSurface {
-                                            settingsDetailContent(SettingsDetail.ComponentGallery, null) {
-                                                backStack.popRouteUnlessRoot()
-                                            }
+                                            ComponentGalleryScreen(
+                                                onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
+                                            )
                                         }
                                     }
                                     entry<ComponentGalleryDetail> { key ->
@@ -772,8 +819,10 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.SelectableCard ->
                                                             SelectableCardGalleryScreen()
                                                         ComponentGalleryEntryId.OptionCard -> OptionCardGalleryScreen()
+                                                        ComponentGalleryEntryId.PickerCard -> PickerCardGalleryScreen()
                                                         ComponentGalleryEntryId.ListGroup -> ListGroupGalleryScreen()
                                                         ComponentGalleryEntryId.SectionHeader -> SectionHeaderGalleryScreen()
+                                                        ComponentGalleryEntryId.FeatureItem -> FeatureItemGalleryScreen()
                                                         ComponentGalleryEntryId.ReorderableList -> ReorderableListGalleryScreen()
                                                         ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                                                         ComponentGalleryEntryId.FilterTabs -> FilterTabsGalleryScreen()
@@ -794,6 +843,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.TreeRow -> TreeRowGalleryScreen()
                                                         ComponentGalleryEntryId.FileTabs -> FileTabsGalleryScreen()
                                                         ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
+                                                        ComponentGalleryEntryId.SplitButton -> SplitButtonGalleryScreen()
                                                         ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
                                                         ComponentGalleryEntryId.ServerAddressInput ->
                                                             ServerAddressInputGalleryScreen()
@@ -952,9 +1002,9 @@ private val SettingsDetail.route: NavKey
         when (this) {
             SettingsDetail.Servers -> ServersHome
             SettingsDetail.Appearance -> AppearanceHome
-            SettingsDetail.ComponentGallery -> ComponentGalleryHome
-            SettingsDetail.FeatureFlags -> FeatureFlagsHome
             SettingsDetail.DiagnosticLogs -> DiagnosticLogsHome
+            SettingsDetail.DeveloperTools -> DeveloperToolsHome
+            SettingsDetail.WhatsNew -> WhatsNewHome
         }
 
 /**

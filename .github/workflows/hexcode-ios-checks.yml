@@ -1,0 +1,75 @@
+name: Hex Code iOS Checks
+
+# Hex Code's iOS app (its own Hex Code.xcodeproj) shares OpenCodeKit with
+# OpenCode Mobile and adds VoiceEngineKit (shared/voice-engine). Its checks
+# live here so they never gate OpenCode Mobile's ios-checks.yml. Hex Code
+# Android: hexcode-android-checks.yml.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "ios/OpenCode Mobile/Hex Code.xcodeproj/**"
+      - "ios/OpenCode Mobile/Hex Code/**"
+      - "ios/OpenCode Mobile/Hex CodeTests/**"
+      - "ios/OpenCode Mobile/Hex Code Info.plist"
+      - "ios/OpenCodeKit/**"
+      - "shared/voice-engine/Package.swift"
+      - "shared/voice-engine/Package.resolved"
+      - "shared/voice-engine/adapter/ios/**"
+      - ".github/scripts/resolve-ios-packages.sh"
+      - ".github/scripts/select-ios-simulator.sh"
+      - ".github/workflows/hexcode-ios-checks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hexcode-ios-checks:
+    # Self-hosted runner: never run pull requests from forks.
+    if: github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: [self-hosted, macOS, mac-mini]
+    defaults:
+      run:
+        working-directory: ios/OpenCode Mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Hex Code does not embed markdown-core, so no JDK or Gradle here.
+      - name: Resolve Swift Package dependencies
+        run: bash ../../.github/scripts/resolve-ios-packages.sh "Hex Code.xcodeproj" "Hex Code"
+
+      - name: Select iOS Simulator
+        id: simulator
+        run: bash ../../.github/scripts/select-ios-simulator.sh
+
+      # xcodebuild shuts down a simulator it had to boot itself, so every run
+      # would start cold. Boot it now so that overlaps with the build instead of
+      # holding up the test step. Already booted is fine.
+      - name: Boot iOS Simulator in the background
+        run: xcrun simctl boot "${{ steps.simulator.outputs.udid }}" || true
+
+      - name: Build app and tests
+        run: |
+          xcodebuild build-for-testing \
+            -project "Hex Code.xcodeproj" \
+            -scheme "Hex Code" \
+            -configuration Debug \
+            -destination "${{ steps.simulator.outputs.destination }}" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run unit tests
+        run: |
+          xcodebuild test-without-building \
+            -project "Hex Code.xcodeproj" \
+            -scheme "Hex Code" \
+            -configuration Debug \
+            -destination "${{ steps.simulator.outputs.destination }}" \
+            -only-testing:"Hex CodeTests" \
+            CODE_SIGNING_ALLOWED=NO

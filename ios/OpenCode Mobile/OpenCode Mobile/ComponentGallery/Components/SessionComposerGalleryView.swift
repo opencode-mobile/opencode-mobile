@@ -12,6 +12,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case childLockout
     case permission
     case permissionEdit
+    case permissionNote
     case queued
     case subagentPermission
     case submitting
@@ -40,6 +41,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .childLockout: "Child"
         case .permission: "Permission"
         case .permissionEdit: "Edit"
+        case .permissionNote: "Deny note"
         case .queued: "Queued"
         case .subagentPermission: "Subagent"
         case .submitting: "Submitting"
@@ -80,6 +82,8 @@ struct SessionComposerGalleryView: View {
     @State private var questionIndex = 0
     @State private var focusRequest = 0
     @State private var inputFocused = false
+    /// "Deny with a note" draft of the permission scenarios; nil shows the prompt.
+    @State private var permissionNote: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -179,6 +183,8 @@ struct SessionComposerGalleryView: View {
             permissionState()
         case .permissionEdit:
             permissionState(edit: true)
+        case .permissionNote:
+            permissionState(queueCount: 2, otherPendingInSessionCount: 1)
         case .queued:
             permissionState(queueCount: 3)
         case .subagentPermission:
@@ -313,7 +319,8 @@ struct SessionComposerGalleryView: View {
         attribution: OpenCodeSessionComposerState.RequestAttribution? = nil,
         submitting: Bool = false,
         errorMessage: String? = nil,
-        edit: Bool = false
+        edit: Bool = false,
+        otherPendingInSessionCount: Int = 0
     ) -> OpenCodeSessionComposerState {
         .permission(
             .init(
@@ -332,7 +339,9 @@ struct SessionComposerGalleryView: View {
                 queueCount: queueCount,
                 attribution: attribution,
                 submitting: submitting,
-                errorMessage: errorMessage
+                errorMessage: errorMessage,
+                note: permissionNote,
+                otherPendingInSessionCount: otherPendingInSessionCount
             )
         )
     }
@@ -385,6 +394,7 @@ struct SessionComposerGalleryView: View {
     }
 
     private func applyScenarioDefaults(_ option: SessionComposerGalleryScenario) {
+        permissionNote = option == .permissionNote ? "Run the tests with --watch=false instead" : nil
         switch option {
         case .multiSelect, .multiSelectBounded:
             selectedLabels = ["Minimal patch", "Investigate first"]
@@ -448,6 +458,12 @@ struct SessionComposerGalleryView: View {
             questionIndex = max(questionIndex - 1, 0)
         case .questionNext:
             questionIndex = min(questionIndex + 1, 1)
+        case .openPermissionNote:
+            permissionNote = ""
+        case let .permissionNoteChanged(_, text):
+            permissionNote = text
+        case .cancelPermissionNote, .sendPermissionNote:
+            permissionNote = nil
         default:
             break
         }
@@ -475,6 +491,10 @@ private extension OpenCodeSessionComposerAction {
         case .allowPermissionOnce: "Allow once"
         case .denyPermission: "Deny"
         case .alwaysAllowPermission: "Always"
+        case .openPermissionNote: "Deny with a note"
+        case .permissionNoteChanged: "Note changed"
+        case .cancelPermissionNote: "Cancel note"
+        case .sendPermissionNote: "Send note"
         case .hidePermission: "Hide permission"
         case .hideQuestion: "Hide question"
         case let .pageRequest(delta): delta < 0 ? "Previous request" : "Next request"

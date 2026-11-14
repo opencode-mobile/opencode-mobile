@@ -86,21 +86,6 @@ class LiveOverallPolicyTest {
     }
 
     @Test
-    fun incumbentLeaseLost_isReconnectingWithoutReconnectEvent() {
-        val decision =
-            LiveOverallPolicy.decide(
-                LiveOverallFlags(wasFullyConnected = true),
-                LiveOverallInput(
-                    required = listOf("global/event", "event:/tmp/a"),
-                    live = setOf("global/event"),
-                ),
-                currentlyConnected = true,
-            )
-        assertEquals(EventStreamConnectionState.Reconnecting, decision.connectionState)
-        assertFalse(decision.publishReconnect)
-    }
-
-    @Test
     fun notYetConnected_staysConnecting() {
         val decision =
             LiveOverallPolicy.decide(

@@ -35,47 +35,6 @@ nonisolated struct OpencodeEvent: Sendable, Equatable {
     /// v2: the server-wide viewed watermark moved (`{ sessionID, idle }`).
     static let sessionViewedType = "session.viewed"
 
-    /// A run ended (v1 native `session.idle`; v2 projects `session.execution.*` onto it).
-    var isSessionRunEnd: Bool {
-        type == "session.idle"
-    }
-
-    var triggersMessagePartUpdate: Bool {
-        type == "message.part.updated"
-    }
-
-    var triggersMessageSlotUpdate: Bool {
-        type == "message.updated"
-    }
-
-    /// The user's own Stop/Deny (`error.type: "aborted"` / `MessageAbortedError`): the
-    /// timeline shows it neutrally, so it is not an error toast.
-    var isUserAbortSessionError: Bool {
-        guard type == "session.error" else { return false }
-        let error = rawProperties?["error"]?.dictionaryValue
-        return ToolInterruption.isUserAbortError(
-            type: error?["type"]?.stringValue,
-            name: error?["name"]?.stringValue
-        )
-    }
-
-    var sessionErrorMessage: String? {
-        guard type == "session.error" else { return nil }
-        let error = rawProperties?["error"]?.dictionaryValue
-        let data = error?["data"]?.dictionaryValue
-        let candidates = [
-            data?["message"]?.stringValue,
-            error?["message"]?.stringValue,
-            rawProperties?["message"]?.stringValue,
-            error?["name"]?.stringValue,
-            error?["type"]?.stringValue,
-        ]
-        if let message = candidates.compactMap({ $0 }).first(where: { !$0.isEmpty }) {
-            return message
-        }
-        return "Session work failed"
-    }
-
     private static let messageRefreshTypes: Set<String> = [
         "message.updated",
         "message.part.updated",

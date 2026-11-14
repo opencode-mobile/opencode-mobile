@@ -101,7 +101,7 @@ struct SessionChatRepoStripTests {
         #expect(region.state.branch == "fix/probe")
 
         repository.info = VcsInfo(currentBranch: "main", defaultBranch: "main")
-        events.emit(OpencodeEvent(type: SessionChatRepoStrip.branchUpdatedEvent, sessionID: nil))
+        events.emit(OpencodeEvent(type: OpencodeEventTypes.branchUpdated, sessionID: nil))
         await settle { region.state.branch == "main" }
         #expect(region.state.branch == "main")
         region.stop()
@@ -176,5 +176,5 @@ private final class RepoStripSessionRepository: SessionRepository, @unchecked Se
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool { false }
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { false }
     func unrevertSession(id: String) async throws -> Bool { false }
-    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool { false }
+    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?, message: String?) async throws -> Bool { false }
 }

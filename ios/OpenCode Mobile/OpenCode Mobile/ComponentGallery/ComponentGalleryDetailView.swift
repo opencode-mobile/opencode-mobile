@@ -96,6 +96,8 @@ struct ComponentGalleryDetailView: View {
             TagGalleryView()
         case .keyValueRow:
             KeyValueRowGalleryView()
+        case .featureItem:
+            FeatureItemGalleryView()
         case .attachment:
             AttachmentGalleryView()
         case .imageGallery:
@@ -152,6 +154,8 @@ struct ComponentGalleryDetailView: View {
             OptionCardGalleryView()
         case .listGroup:
             ListGroupGalleryView()
+        case .runSessionInCard:
+            RunSessionInCardGalleryView()
         case .sectionHeader:
             SectionHeaderGalleryView()
         case .reorderableList:
@@ -186,6 +190,8 @@ struct ComponentGalleryDetailView: View {
             FileTabsGalleryView()
         case .button:
             ButtonGalleryView()
+        case .splitButton:
+            SplitButtonGalleryView()
         case .textInput:
             TextInputGalleryView()
         case .serverAddressInput:

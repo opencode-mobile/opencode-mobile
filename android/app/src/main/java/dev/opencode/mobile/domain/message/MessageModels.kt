@@ -99,63 +99,6 @@ enum class ToolStatus {
     Error,
 }
 
-enum class AttachmentKind {
-    Image,
-    Pdf,
-    Text,
-
-    /** Any other file. Only streamed uploads carry it; the data-URL path never sends one. */
-    File,
-}
-
-/** Where an attachment's bytes go: inline in the prompt, or streamed to the server first. */
-sealed interface AttachmentUpload {
-    /** Sent inline as a `data:` URL, as before uploads existed. */
-    data object Inline : AttachmentUpload
-
-    /** Streaming to the server; [percent] is null until the first progress report. */
-    data class Uploading(
-        val percent: Int? = null,
-    ) : AttachmentUpload
-
-    /** On the server at [serverPath]; the prompt names the path instead of carrying the bytes. */
-    data class Uploaded(
-        val serverPath: String,
-    ) : AttachmentUpload
-}
-
-data class Attachment(
-    val id: String,
-    val filename: String,
-    val mime: String,
-    val kind: AttachmentKind,
-    val dataUrl: String,
-    val byteCount: Long,
-    val previewBytes: ByteArray? = null,
-    val localPath: String? = null,
-    val upload: AttachmentUpload = AttachmentUpload.Inline,
-) {
-    val usesFileBackedBody: Boolean
-        get() = localPath != null && upload is AttachmentUpload.Inline
-
-    val isUploading: Boolean
-        get() = upload is AttachmentUpload.Uploading
-
-    val isUploaded: Boolean
-        get() = upload is AttachmentUpload.Uploaded
-
-    /** The attachment travels in the prompt body (not already on the server, not still uploading). */
-    val isInline: Boolean
-        get() = upload is AttachmentUpload.Inline
-
-    /** Where the file lives on the server once it is uploaded; null while inline or uploading. */
-    val uploadedServerPath: String?
-        get() = (upload as? AttachmentUpload.Uploaded)?.serverPath
-}
-
-/** The attachments that travel in the prompt body; uploaded ones are named in the text instead. */
-fun List<Attachment>.inlineAttachments(): List<Attachment> = filter { it.isInline }
-
 sealed class MessagePart {
     data class Text(
         val text: String,
@@ -165,6 +108,11 @@ sealed class MessagePart {
         val isSynthetic: Boolean = false,
         /** Server-marked non-display text. Hidden in UI. */
         val isIgnored: Boolean = false,
+        /**
+         * Set on a `/goal` kickoff sent as the user's prompt (it had attachments): [text] is then
+         * the objective, never the server's instruction text, and the bubble is labelled Goal.
+         */
+        val goalKickoffId: String? = null,
     ) : MessagePart() {
         val isDisplayable: Boolean
             get() = !isSynthetic && !isIgnored
@@ -187,6 +135,10 @@ sealed class MessagePart {
         val isInterrupted: Boolean = false,
         /** The model emitted a tool call the server could not run (`executed: false`). */
         val isMalformed: Boolean = false,
+        /** The user denied this call's permission (implies [isInterrupted]). */
+        val isDeclined: Boolean = false,
+        /** The note the user denied it with ("Deny with a note"); null for a plain deny. */
+        val userNote: String? = null,
         /**
          * Images the tool returned (v1 `attachments`, v2 `content[type=file]`), in order. Only
          * images the app can show; other returned files are dropped. Each carries its data URL.

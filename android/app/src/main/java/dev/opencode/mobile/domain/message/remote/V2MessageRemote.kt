@@ -1,11 +1,13 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.data.remote.MessagesApi
+import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 
 internal class V2MessageRemote(
     private val api: MessagesApi,
+    private val sessionsApi: SessionsApi,
     private val adapter: MessageDomainAdapter,
 ) : MessageRemote {
     override suspend fun listMessages(
@@ -70,7 +72,7 @@ internal class V2MessageRemote(
         sessionId: String,
         messages: List<Message>,
     ): List<Message> =
-        runCatching { adapter.mergeInbox(messages, api.listInboxV2(sessionId)) }
+        runCatching { adapter.mergeInbox(messages, sessionsApi.listInboxV2(sessionId)) }
             .onFailure { error ->
                 DiagnosticLog.warning(DiagnosticLogArea.Chat, "inbox merge failed session=$sessionId", error)
             }.getOrDefault(messages)

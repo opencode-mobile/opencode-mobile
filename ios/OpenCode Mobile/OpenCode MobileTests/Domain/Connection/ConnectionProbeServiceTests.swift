@@ -58,27 +58,6 @@ struct ConnectionProbeServiceTests {
         }
     }
 
-    @Test func probe_prefersAuthFailureOverLaterNotFound() async {
-        ProtocolHealthURLProtocol.reset(responsesByPath: [
-            "/global/health": (401, #"{"error":"unauthorized"}"#),
-            "/api/info": (404, #"{}"#),
-        ])
-        let service = makeService()
-
-        do {
-            _ = try await service.probe(connection: sampleConnection)
-            Issue.record("expected auth failure")
-        } catch let error as ServerProbeError {
-            guard case let .http(statusCode, _) = error else {
-                Issue.record("expected http probe error, got \(error)")
-                return
-            }
-            #expect(statusCode == 401)
-        } catch {
-            Issue.record("unexpected error \(error)")
-        }
-    }
-
     @Test func probe_reportsUnhealthyWhenBodiesArePresentButUnusable() async {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, #"{"healthy":false,"version":"1.0.0"}"#),
@@ -103,7 +82,7 @@ struct ConnectionProbeServiceTests {
     @Test func probe_detectsV2FromOpenCode207ApiInfoWhenHealthPathsMiss() async throws {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, "<!doctype html><html><head><title>OpenCode</title></head><body></body></html>"),
-            "/api/info": (200, #"{"version":"2.0.7","pid":1481731,"urls":["http://192.168.1.60:4096"]}"#),
+            "/api/info": (200, #"{"version":"2.0.7","pid":1481731,"urls":["http://192.168.1.3:4096"]}"#),
         ])
         let service = makeService()
 

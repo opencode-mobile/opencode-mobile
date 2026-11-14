@@ -17,9 +17,9 @@ import dev.opencode.mobile.domain.feedback.FeedbackScreenshot
 import dev.opencode.mobile.domain.feedback.FeedbackSharePayload
 import dev.opencode.mobile.domain.feedback.FeedbackSubmitResult
 import dev.opencode.mobile.domain.feedback.FeedbackSubmitter
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationUiState
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

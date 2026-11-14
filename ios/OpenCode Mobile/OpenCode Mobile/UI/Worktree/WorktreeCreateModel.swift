@@ -1,10 +1,9 @@
 import Foundation
 import Observation
 
-/// Where the New worktree form was opened from.
+/// Where the New worktree form was opened from. A New session draft (#1004) creates its
+/// worktree on the first send instead, without this form.
 enum WorktreeCreateOrigin: Equatable, Sendable {
-    /// Home New session Run in sheet: start a session in the new checkout.
-    case runIn(projectKey: String)
     /// Session Chat Move sheet: move the session into the new checkout.
     case move(sessionID: String)
 }
@@ -31,7 +30,7 @@ struct WorktreeCreateFormState: Equatable, Sendable {
     let origin: WorktreeCreateOrigin
     let serverProtocol: ServerProtocol
     let projectID: String?
-    /// Run in: the project's main checkout. Move: the session's current checkout.
+    /// The session's current checkout.
     let sourceDirectory: String
     /// Branch of `sourceDirectory`; nil when unknown or detached.
     let sourceBranch: String?
@@ -93,17 +92,23 @@ struct WorktreeCreateFormState: Equatable, Sendable {
     var submitTitle: OpenCodeText {
         if submitting { return OpenCodeText(WorktreeCreateCopy.submitting) }
         switch origin {
-        case .runIn: return OpenCodeText(WorktreeCreateCopy.submitRunIn)
         case .move: return OpenCodeText(WorktreeCreateCopy.submitMove)
         }
     }
 
     /// Default (the source checkout) first, then the other refs the server listed.
     var baseRows: [WorktreeCreateBaseOption] {
-        var rows = [WorktreeCreateBaseOption(ref: nil, title: defaultBaseLabel, isSelected: selectedBaseRef == nil)]
+        Self.baseRows(sourceBranch: sourceBranch, options: baseOptions, selectedRef: selectedBaseRef)
+    }
+
+    /// Also the New session draft's Starts from list (#1004).
+    static func baseRows(sourceBranch: String?, options: [String], selectedRef: String?) -> [WorktreeCreateBaseOption] {
+        let defaultLabel = sourceBranch.map { OpenCodeText(WorktreeCreateCopy.currentBranch($0)) }
+            ?? OpenCodeText(WorktreeCreateCopy.currentCheckout)
+        var rows = [WorktreeCreateBaseOption(ref: nil, title: defaultLabel, isSelected: selectedRef == nil)]
         var seen: Set<String> = []
-        for ref in baseOptions where ref != sourceBranch && seen.insert(ref).inserted {
-            rows.append(WorktreeCreateBaseOption(ref: ref, title: .verbatim(ref), isSelected: selectedBaseRef == ref))
+        for ref in options where ref != sourceBranch && seen.insert(ref).inserted {
+            rows.append(WorktreeCreateBaseOption(ref: ref, title: .verbatim(ref), isSelected: selectedRef == ref))
         }
         return rows
     }
@@ -118,8 +123,8 @@ struct WorktreeCreateFormState: Equatable, Sendable {
     }
 }
 
-/// Screen Model of the New worktree form, shared by Home's Run in sheet and Session Chat's
-/// Move sheet. The owner decides what a created worktree leads to.
+/// Screen Model of the New worktree form of Session Chat's Move sheet. The owner decides what a
+/// created worktree leads to.
 @MainActor
 @Observable
 final class WorktreeCreateModel {

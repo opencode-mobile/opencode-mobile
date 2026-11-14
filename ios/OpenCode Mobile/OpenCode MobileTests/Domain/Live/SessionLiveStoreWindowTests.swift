@@ -266,6 +266,7 @@ private final class WindowFakeSessionRepository: SessionRepository, @unchecked S
         sessionID _: String,
         permissionID _: String,
         decision _: PermissionDecision,
-        directory _: String?
+        directory _: String?,
+        message _: String?
     ) async throws -> Bool { fatalError() }
 }

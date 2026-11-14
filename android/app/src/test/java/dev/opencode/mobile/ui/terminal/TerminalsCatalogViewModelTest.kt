@@ -9,8 +9,8 @@ import dev.opencode.mobile.domain.terminal.TerminalConnectRequest
 import dev.opencode.mobile.domain.terminal.TerminalRepository
 import dev.opencode.mobile.domain.terminal.TerminalSession
 import dev.opencode.mobile.domain.terminal.TerminalSessionStatus
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.network.ActiveConnectionManager
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers

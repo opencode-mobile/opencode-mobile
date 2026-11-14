@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.main
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 
@@ -65,13 +66,17 @@ internal class HomeBranchLookups(
         requested.clear()
     }
 
-    /** Disconnect or profile switch: forgets everything. */
+    /**
+     * Disconnect or profile switch: forgets everything. State resets before the jobs cancel,
+     * because on an immediate dispatcher a cancelled job can resume inside [Job.cancel].
+     */
     fun clear() {
-        jobs.values.forEach { it.cancel() }
+        val pending = jobs.values.toList()
         jobs.clear()
         requested.clear()
         generations.clear()
         answered.clear()
+        pending.forEach { it.cancel() }
         if (branches.isNotEmpty()) {
             branches = emptyMap()
             onChange(branches)
@@ -82,13 +87,13 @@ internal class HomeBranchLookups(
         requested += directory
         val generation = (generations[directory] ?: 0) + 1
         generations[directory] = generation
-        jobs.remove(directory)?.cancel()
+        val previous = jobs.remove(directory)
         jobs[directory] =
             scope.launch {
                 var attempt = 0
                 while (true) {
                     val outcome = fetch(directory)
-                    if (generations[directory] != generation) return@launch
+                    if (!isActive || generations[directory] != generation) return@launch
                     if (outcome is Outcome.Branch) {
                         store(directory, outcome.name)
                         jobs.remove(directory)
@@ -105,6 +110,7 @@ internal class HomeBranchLookups(
                     if (wait > 0) delay(wait) else yield()
                 }
             }
+        previous?.cancel()
     }
 
     private fun store(

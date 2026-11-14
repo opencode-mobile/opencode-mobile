@@ -21,6 +21,7 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.SessionToolGroupMember
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.components.LocalOpenCodeAttachmentImageLoader
 import dev.opencode.mobile.ui.components.LocalOpenCodeGalleryImageLoader
 import dev.opencode.mobile.ui.components.OpenCodeImageGallery
@@ -34,7 +35,6 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatGalleryImageLoader
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageGalleries
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageViewerState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 
 internal data class SessionChatToolGroupTarget(
@@ -213,6 +213,7 @@ internal fun SessionChatToolGroupScreen(
                         additions = card.additions,
                         deletions = card.deletions,
                         errorText = card.errorText?.resolve(),
+                        noteText = card.noteText?.resolve(),
                         onClick =
                             toolGroupMemberOnClick(
                                 card = card,

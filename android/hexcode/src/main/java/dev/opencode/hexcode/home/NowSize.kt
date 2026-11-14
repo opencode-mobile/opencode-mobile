@@ -1,0 +1,79 @@
+package dev.opencode.hexcode.home
+
+import dev.opencode.hexcode.session.NowLine
+import dev.opencode.hexcode.session.StatusSummary
+import dev.opencode.hexcode.session.SummaryText
+
+/**
+ * The Now sentence's type size (app-plan.md, Now size; the prototype's `nowTier` and `fitNow`): it steps down with
+ * the sentence's length, then on down while the card doesn't fit between the top bar and the dock, to [Fit].
+ */
+enum class NowSize {
+    /** Up to 90 characters: `display`. */
+    Display,
+
+    /** Up to 150: `nowLarge`. */
+    Large,
+
+    /** Up to 220: `nowMedium`. */
+    Medium,
+
+    /** Longer: `nowSmall`. */
+    Small,
+
+    /** Only when the card doesn't fit otherwise: `nowFit`. */
+    Fit,
+    ;
+
+    /** The next size down, or null at [Fit]. */
+    val smaller: NowSize? get() = entries.getOrNull(ordinal + 1)
+
+    companion object {
+        /** The size for a Now sentence of [characters] characters, before fitting. */
+        fun forLength(characters: Int): NowSize =
+            when {
+                characters <= 90 -> Display
+                characters <= 150 -> Large
+                characters <= 220 -> Medium
+                else -> Small
+            }
+
+        /** Each line of Now after the first counts as this many characters more. */
+        const val LINE_WEIGHT = 20
+
+        /**
+         * The size for Now's [lines]: by their effective length, the characters shown plus [LINE_WEIGHT] for each line
+         * after the first; a Now with bullets is at most [Medium].
+         */
+        fun forLines(lines: List<NowLine>): NowSize {
+            val effective =
+                lines.sumOf { StatusSummary.length(SummaryText.shown(it.text)) } + LINE_WEIGHT * (lines.size - 1).coerceAtLeast(0)
+            val size = forLength(effective)
+            return if (lines.any { it.bullet } && size < Medium) Medium else size
+        }
+
+        /** The size for [text], counted in characters shown (without Markdown symbols), as clipping counts. */
+        fun forText(text: String): NowSize = forLength(StatusSummary.length(SummaryText.shown(text)))
+
+        /**
+         * The first size from [start] down to [Fit] at which the card [fits], and whether it does; at [Fit] when none
+         * does, and then the sentence ends in "…".
+         */
+        fun fit(
+            start: NowSize,
+            fits: (NowSize) -> Boolean,
+        ): Fitted {
+            var size = start
+            while (true) {
+                if (fits(size)) return Fitted(size, fits = true)
+                size = size.smaller ?: return Fitted(Fit, fits = false)
+            }
+        }
+    }
+
+    /** What [fit] chose. */
+    data class Fitted(
+        val size: NowSize,
+        val fits: Boolean,
+    )
+}

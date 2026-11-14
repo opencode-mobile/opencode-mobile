@@ -64,10 +64,8 @@ fun OpenCodeSessionTodoItem(
     content: String,
     status: OpenCodeSessionTodoItemStatus,
     modifier: Modifier = Modifier,
-    variant: OpenCodeSessionTodoItemVariant = OpenCodeSessionTodoItemVariant.StatusRow,
+    @Suppress("UNUSED_PARAMETER") variant: OpenCodeSessionTodoItemVariant = OpenCodeSessionTodoItemVariant.StatusRow,
 ) {
-    @Suppress("UNUSED_VARIABLE")
-    val unusedVariant = variant
     val finished =
         status == OpenCodeSessionTodoItemStatus.Completed ||
             status == OpenCodeSessionTodoItemStatus.Cancelled

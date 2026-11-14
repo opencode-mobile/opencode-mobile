@@ -36,6 +36,10 @@ enum ToolPartIdentity {
         return ""
     }
 
+    static func isQuestion(_ tool: ToolPart) -> Bool {
+        isQuestion(name: tool.toolName, input: tool.input)
+    }
+
     static func isQuestion(name: String, input: [String: AnyCodable]?) -> Bool {
         if name.lowercased() == "question" { return true }
         guard case let .array(array)? = input?["questions"] else { return false }

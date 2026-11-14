@@ -1,20 +1,30 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
+import androidx.compose.runtime.snapshotFlow
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.event.SessionMovedUpdate
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProject
+import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.home.HomeWorktreeCopy
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.ServerErrorMessage
+import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
+import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
 import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
+import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -127,35 +137,165 @@ data class SessionChatWorktreeMoveRegionState(
 )
 
 /**
- * Session Chat region for "Move to worktree…": the sheet, the v2 move request, and the
- * `session.moved` signal that the session runs somewhere else now.
+ * Session Chat region for "Move to worktree…": availability, the sheet and its rows from the
+ * session's Home project, the New worktree form, the v2 move request, and the `session.moved`
+ * signal that the session runs somewhere else now.
  */
 class SessionChatWorktreeMove(
     /** The session repository's `moveSession`. */
     private val moveSession: suspend (sessionId: String, directory: String) -> Unit,
     private val scope: CoroutineScope,
+    private val worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
+    private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
+    private val supportsSessionMove: () -> Boolean = { false },
+    private val protocolHint: () -> ServerProtocol = { ServerProtocol.V1 },
+    /** The session Session Chat shows; a form create for another one does not move it. */
+    private val boundSessionId: () -> String? = { null },
+    private val isSessionBusy: () -> Boolean = { false },
 ) {
+    /** Also where the New worktree form's requests run, once set. */
     var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+        set(value) {
+            field = value
+            form.ioDispatcher = value
+        }
 
     private val _state = MutableStateFlow(SessionChatWorktreeMoveRegionState())
     val state: StateFlow<SessionChatWorktreeMoveRegionState> = _state.asStateFlow()
 
     private var moveJob: Job? = null
 
-    /** A new session or directory starts with nothing pending. */
+    /** The Move sheet's New worktree form: create a checkout from this one, then move there. */
+    private val form =
+        WorktreeCreateForm(
+            repository = worktreeRepository,
+            scope = scope,
+            onCreated = { origin, created ->
+                val sessionId = (origin as? WorktreeCreateOrigin.Move)?.sessionId
+                if (sessionId != null && sessionId == boundSessionId()) {
+                    move(
+                        sessionId = sessionId,
+                        destination = SessionChatWorktreeMoveRow.created(created.directory, created.branch ?: created.name),
+                        isBusy = isSessionBusy(),
+                    )
+                }
+            },
+            onInventoryChanged = { _, request -> homeProjectsSnapshot.requestWorktreeRefresh(request.sourceDirectory) },
+        )
+
+    /** Anything [uiState] reads changed: the region, Home's projects, the Worktrees setting, the form, or create support. */
+    val changes: Flow<Unit> =
+        combine(
+            state,
+            homeProjectsSnapshot.projects,
+            snapshotFlow { HomeDisplayPreferences.showsWorktrees },
+            form.state,
+            worktreeRepository.canCreate,
+        ) { _, _, _, _, _ -> }
+
+    /** What Session Chat shows for Move to worktree while bound to [boundWorktree]. */
+    fun uiState(
+        boundWorktree: String?,
+        sessionCreated: Boolean,
+    ): SessionChatWorktreeMoveUiState {
+        val project = homeProjectsSnapshot.projectContaining(boundWorktree)
+        val regionState = _state.value
+        val supportsMove = supportsSessionMove()
+        val worktreesEnabled = HomeDisplayPreferences.showsWorktrees
+        val newWorktree =
+            NewWorktreeAvailability.move(
+                supportsMove = supportsMove,
+                worktreesEnabled = worktreesEnabled,
+                sessionCreated = sessionCreated,
+                isRepository = project?.hasVcs == true,
+                projectId = project?.projectId,
+                serverCanCreate = worktreeRepository.canCreate.value,
+            )
+        return SessionChatWorktreeMoveUiState(
+            availability =
+                SessionChatWorktreeMoveAvailability.resolve(
+                    supportsSessionMove = supportsMove,
+                    worktreesEnabled = worktreesEnabled,
+                    sessionCreated = sessionCreated,
+                    worktreeCount = project?.worktrees?.size ?: 0,
+                    canCreateWorktree = newWorktree.enabled,
+                ),
+            sheetVisible = regionState.sheetVisible,
+            rows = SessionChatWorktreeMoveRow.rows(project, boundWorktree),
+            submittingDirectory = regionState.submittingDirectory,
+            newWorktree = newWorktree,
+            form = form.state.value?.takeIf { it.origin is WorktreeCreateOrigin.Move },
+        )
+    }
+
+    /** A new session or directory starts with nothing pending and no form. */
     fun reset() {
         moveJob?.cancel()
         moveJob = null
         _state.value = SessionChatWorktreeMoveRegionState()
+        form.dismiss()
     }
 
     fun openSheet() {
         _state.update { it.copy(sheetVisible = true) }
     }
 
+    /** Closes the sheet and the form inside it. */
     fun dismissSheet() {
+        form.dismiss()
         _state.update { it.copy(sheetVisible = false) }
     }
+
+    /**
+     * Move sheet → "New worktree…": the form, made from the session's current checkout.
+     * [sessionId] is null while Session Chat shows no created session.
+     */
+    fun openNewWorktreeForm(
+        sessionId: String?,
+        boundWorktree: String?,
+    ) {
+        if (!uiState(boundWorktree, sessionCreated = sessionId != null).newWorktree.enabled) return
+        sessionId ?: return
+        val directory = boundWorktree?.trim()?.takeIf { it.isNotEmpty() }?.let(ServerPathPolicy::canonical) ?: return
+        val project = homeProjectsSnapshot.projectContaining(directory)
+        form.open(
+            origin = WorktreeCreateOrigin.Move(sessionId),
+            protocol = protocolHint(),
+            projectId = project?.projectId,
+            sourceDirectory = directory,
+            sourceBranch = project?.worktree(directory)?.branch,
+        )
+    }
+
+    fun updateName(name: String) = form.updateName(name)
+
+    fun showBasePicker() = form.showBasePicker()
+
+    fun hideBasePicker() = form.hideBasePicker()
+
+    fun selectBase(ref: String?) = form.selectBase(ref)
+
+    fun submit() = form.submit()
+
+    /** Form → Back: the Move sheet's list again. */
+    fun closeForm() = form.dismiss()
+
+    /** A row of the sheet: moves the created session [sessionId] to [directory]. */
+    fun moveToDirectory(
+        sessionId: String,
+        directory: String,
+        boundWorktree: String?,
+    ) {
+        val destination = uiState(boundWorktree, sessionCreated = true).rows.firstOrNull { it.directory == directory } ?: return
+        move(sessionId, destination, isBusy = isSessionBusy())
+    }
+
+    /** The branch Home knows for the checkout at [directory], if any. */
+    fun knownBranch(directory: String): String? =
+        homeProjectsSnapshot
+            .projectContaining(directory)
+            ?.worktree(ServerPathPolicy.canonical(directory))
+            ?.branch
 
     /**
      * Asks the server to move [sessionId] to [destination]. A busy session moves when its turn

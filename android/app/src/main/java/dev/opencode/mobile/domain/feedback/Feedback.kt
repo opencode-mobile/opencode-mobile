@@ -2,7 +2,7 @@ package dev.opencode.mobile.domain.feedback
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogExportWindow
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import java.util.UUID
 
 /** What the user is reporting. Shown as Bug / Idea; [wireValue] is the report's `kind`. */

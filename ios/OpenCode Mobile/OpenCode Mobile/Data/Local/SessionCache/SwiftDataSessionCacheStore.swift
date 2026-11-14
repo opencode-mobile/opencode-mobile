@@ -47,13 +47,17 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
         let schema = Schema([SessionCacheSnapshotRecord.self])
         // Transcripts live in a backup-excluded, file-protected directory. The store used to sit
         // at SwiftData's default location; move it once so nothing is lost.
-        let directory = try ProtectedStorage.directory("SessionCache")
+        // SQLite reopens its -wal/-shm files on background saves. Under `completeUnlessOpen`
+        // that fails once the device locks, and SwiftData raises it as an uncatchable
+        // NSException (#1024), so this store uses the after-first-unlock class instead.
+        let protection = ProtectedStorage.backgroundProtection
+        let directory = try ProtectedStorage.directory("SessionCache", protection: protection)
         let url = directory.appendingPathComponent("session_cache.store", isDirectory: false)
         migrateLegacyStore(to: url)
         let configuration = ModelConfiguration("session_cache", schema: schema, url: url)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         for suffix in ["", "-wal", "-shm"] {
-            ProtectedStorage.protect(file: URL(fileURLWithPath: url.path + suffix))
+            ProtectedStorage.protect(file: URL(fileURLWithPath: url.path + suffix), protection: protection)
         }
         return container
     }

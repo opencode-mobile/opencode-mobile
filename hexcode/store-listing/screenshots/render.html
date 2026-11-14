@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hex Code store shot</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600&display=block">
+<style>
+  /* One store shot filling the viewport. ?p=ios|android&i=1..5 */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #08090a; }
+  .shot { container-type: inline-size; position: relative; width: 100vw; height: 100vh; overflow: hidden; background: #08090a; }
+  .cap {
+    position: absolute; z-index: 2; left: 10cqw; right: 10cqw; text-align: center; text-wrap: balance;
+    font-family: "Inter Tight", -apple-system, "SF Pro Display", sans-serif;
+    font-size: 7.8cqw; line-height: 1.18; font-weight: 600; letter-spacing: -0.025em; color: #f7f8f8;
+  }
+  .wave { position: absolute; z-index: 0; left: 0; right: 0; }
+  .phone { position: absolute; z-index: 1; overflow: hidden; border: 2cqw solid #1c1d1f;
+    box-shadow: 0 0 0 0.35cqw #2a2c2f, 0 6cqw 20cqw rgba(0,0,0,.75); }
+  .phone img { display: block; width: 100%; height: 100%; object-fit: cover; }
+</style>
+</head>
+<body>
+<div class="shot" id="shot"></div>
+<script>
+const CAPS = [
+  "Tell OpenCode what you want",
+  "One short summary instead of a long chat",
+  "Its charts and reports come attached",
+  "Know what it’s working on",
+  "Approve commands",
+];
+const FILES = ["1-talk", "2-summary", "3-artifact", "4-progress", "5-approve"];
+const q = new URLSearchParams(location.search);
+const p = q.get("p") || "ios";
+const i = Math.max(1, Math.min(5, +q.get("i") || 1)) - 1;
+
+// Layout per store, in cqw (percent of the shot's width).
+const L = p === "ios"
+  ? { capTop: 12, phoneTop: 46, phoneW: 70, aspect: 1320 / 2868, radius: 10, waveTop: 56, waveH: 150 }
+  : { capTop: 10, phoneTop: 40, phoneW: 67, aspect: 1080 / 2424, radius: 7, waveTop: 50, waveH: 140 };
+
+function waveSvg(index) {
+  const perShot = 16, total = perShot * 5, w = 1320, h = 1500, step = w / perShot;
+  let bars = "";
+  for (let k = 0; k < perShot; k++) {
+    const g = index * perShot + k, t = g / total;
+    const amp = 0.18 + 0.82 * Math.abs(Math.sin(t * Math.PI * 3.1) * 0.6 + Math.sin(g * 0.9) * 0.25 + Math.sin(g * 2.3) * 0.15);
+    const bh = Math.max(90, Math.min(h, amp * h));
+    const x = k * step + step * 0.32, bw = step * 0.36;
+    const fill = amp > 0.62 ? "#34373b" : amp > 0.38 ? "#25272a" : "#1a1b1d";
+    bars += `<rect x="${x.toFixed(1)}" y="${((h - bh) / 2).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="${(bw / 2).toFixed(1)}" fill="${fill}"/>`;
+  }
+  return `<svg class="wave" style="top:${L.waveTop}cqw;height:${L.waveH}cqw" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>`;
+}
+
+const side = (100 - L.phoneW) / 2;
+document.getElementById("shot").innerHTML =
+  waveSvg(i) +
+  `<div class="cap" style="top:${L.capTop}cqw"></div>` +
+  `<div class="phone" style="left:${side}cqw;right:${side}cqw;top:${L.phoneTop}cqw;aspect-ratio:${L.aspect};border-radius:${L.radius}cqw">` +
+  `<img src="raw/${p}/${FILES[i]}.png" alt=""></div>`;
+document.querySelector(".cap").textContent = CAPS[i];
+</script>
+</body>
+</html>

@@ -45,8 +45,6 @@ private final class RecordingMessagesAPI: MessagesAPI {
     var sentBody: SendMessageRequestDTO?
 
     func listMessages(sessionID: String, directory: String?) async throws -> [MessageDTO] { [] }
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> MessageDTO { fatalError() }
-    func sendMessage(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws -> MessageDTO { fatalError() }
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws {
         sentSessionID = sessionID
         sentDirectory = directory
