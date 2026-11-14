@@ -2663,7 +2663,7 @@ nonisolated enum SessionChatTimelineBlocks {
         _ tools: [ToolPart],
         under owner: SessionChatTimelineBlock
     ) -> [SessionChatTimelineBlock] {
-        let images = tools.flatMap(\.images)
+        let images = tools.flatMap(\.images).map(AttachmentPreviewCache.shared.resolved)
         guard !images.isEmpty else { return [] }
         return [
             .imageGallery(
@@ -2887,7 +2887,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 isMalformed: tool.isMalformed,
                 isReceivingArguments: receivingArguments,
                 presentation: toolResultPresentation(tool, fallbackTitle: chrome.title),
-                images: tool.images
+                images: tool.images.map(AttachmentPreviewCache.shared.resolved)
             )
         )
     }

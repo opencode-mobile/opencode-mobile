@@ -266,6 +266,28 @@ nonisolated final class MessageSync: @unchecked Sendable {
         return hasOlderBySlot[key.storeSlot] ?? false
     }
 
+    /// The full picture of a timeline image; see ``MessageImageLoader``. `fetch` gets one message
+    /// from the server through the protocol-selected remote.
+    func fullImage(
+        sessionID: String,
+        directory: String?,
+        messageID: String?,
+        imageID: String,
+        fetch: @escaping @Sendable (_ messageID: String) async throws -> Message
+    ) async throws -> FilePart {
+        let slot = sessionKey(sessionID: sessionID, directory: directory).storeSlot
+        let store = self.store
+        let loader = MessageImageLoader(
+            cachedMessages: { messageID in
+                if let messageID { return store.message(sessionID: slot, messageID: messageID).map { [$0] } ?? [] }
+                return store.messages(sessionID: slot)
+            },
+            fetchMessage: fetch,
+            hydrate: { message in _ = store.hydrateMedia(sessionID: slot, from: [message]) }
+        )
+        return try await loader.fullImage(messageID: messageID, imageID: imageID)
+    }
+
     func loadOlderMessages(sessionID: String, directory: String?) async throws -> [Message] {
         let key = sessionKey(sessionID: sessionID, directory: directory)
         lock.lock()
@@ -618,6 +640,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     let cached = store.messages(sessionID: key.storeSlot)
                     let cachedTail = Array(cached.suffix(page.messages.count))
                     if MessageTailIdentity.matches(cached: cachedTail, fetched: page.messages) {
+                        // The cache keeps tool images as metadata + thumbnail only; take the
+                        // full pictures (and blanked file data URLs) from the fetched page.
+                        if store.hydrateMedia(sessionID: key.storeSlot, from: page.messages) {
+                            publishMessages(store.messages(sessionID: key.storeSlot), false)
+                        }
                         await applyQueuedIncrementalEvents(
                             staging.takeQueuedIncrementalEvents(),
                             key: key,

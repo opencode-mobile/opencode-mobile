@@ -544,6 +544,67 @@ class MessageProtocolRepositoryTest {
             )
         }
 
+    @Test
+    fun v1GetMessage_readsOneMessageWithToolImages() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {"info":{"id":"msg_1","role":"assistant"},
+                         "parts":[{"id":"prt_tool","type":"tool","tool":"read","callID":"call_1",
+                           "state":{"status":"completed","input":{"filePath":"/Users/example/project/a.png"},"output":"ok",
+                             "attachments":[{"id":"prt_file","type":"file","mime":"image/png","filename":"a.png","url":"$PNG_URL"}]}}]}
+                        """.trimIndent(),
+                    )
+                }
+
+            val message = router(client, ServerProtocol.V1).getMessage("ses_1", "msg_1", "/repo")
+
+            val image = (message.parts.single() as MessagePart.Tool).images.single()
+            assertEquals(PNG_URL, image.dataUrl)
+            val path = requests.single().url.encodedPath
+            assertTrue(path.endsWith("/session/ses_1/message/msg_1"))
+            assertEquals("/repo", requests.single().url.parameters["directory"])
+        }
+
+    @Test
+    fun v2GetMessage_unwrapsDataEnvelope() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {"data":{"id":"msg_2","type":"assistant","time":{"created":1},
+                          "content":[{"type":"tool","id":"call_1","name":"read",
+                            "state":{"status":"completed","input":{"filePath":"/Users/example/project/a.png"},
+                              "content":[{"type":"file","mime":"image/png","uri":"$PNG_URL","name":"/Users/example/project/a.png"}]}}]}}
+                        """.trimIndent(),
+                    )
+                }
+
+            val message = router(client, ServerProtocol.V2).getMessage("ses_2", "msg_2", "/repo")
+
+            assertEquals("msg_2", message.id)
+            val image = (message.parts.single() as MessagePart.Tool).images.single()
+            assertEquals(ToolResultImages.id("call_1", 0), image.id)
+            assertEquals(PNG_URL, image.dataUrl)
+            val path = requests.single().url.encodedPath
+            assertTrue(path.endsWith("/api/session/ses_2/message/msg_2"))
+        }
+
+    @Test
+    fun getMessage_httpFailureThrows() =
+        runTest {
+            val client = testClient { respond("""{"name":"NotFoundError"}""", HttpStatusCode.NotFound) }
+            assertTrue(runCatching { router(client, ServerProtocol.V2).getMessage("ses_2", "msg_x", null) }.isFailure)
+            assertTrue(runCatching { router(client, ServerProtocol.V1).getMessage("ses_1", "msg_x", null) }.isFailure)
+        }
+
     private suspend fun router(
         client: HttpClient,
         protocol: ServerProtocol,
@@ -575,6 +636,12 @@ class MessageProtocolRepositoryTest {
         }
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    private companion object {
+        const val PNG_URL =
+            "data:image/png;base64," +
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    }
 }
 
 private fun MockRequestHandleScope.respondJson(content: String) =

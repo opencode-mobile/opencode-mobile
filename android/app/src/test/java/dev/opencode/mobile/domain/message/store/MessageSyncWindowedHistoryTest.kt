@@ -766,6 +766,169 @@ class MessageSyncWindowedHistoryTest {
             assertTrue(tailCalls >= 2)
         }
 
+    @Test
+    fun cachedTailWithoutToolImages_publishesServerImages() =
+        runTest(testDispatcher) {
+            val cached = toolAssistant(dataUrl = "")
+            val fetched = toolAssistant(dataUrl = PNG_URL)
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ -> MessagePage(listOf(user("u1"), fetched), olderCursor = null, hasOlder = false) },
+                    sessionCache = SeededSessionCache(listOf(user("u1"), cached)),
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { updates += it } }
+            advanceUntilIdle()
+            job.cancel()
+
+            val live = updates.filterIsInstance<MessageListUpdate.Messages>().last { !it.isFromCache }
+            val lastMessage = live.messages.last()
+            val tool = lastMessage.parts.single() as MessagePart.Tool
+            val image = tool.images.single()
+            assertEquals(PNG_URL, image.dataUrl)
+        }
+
+    @Test
+    fun matchingCachedTail_hydratesBlankedFileDataAndPublishes() =
+        runTest(testDispatcher) {
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ -> MessagePage(listOf(userWithFile(PNG_URL)), olderCursor = null, hasOlder = false) },
+                    sessionCache = SeededSessionCache(listOf(userWithFile(""))),
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { updates += it } }
+            advanceUntilIdle()
+            job.cancel()
+
+            val messages = updates.filterIsInstance<MessageListUpdate.Messages>()
+            assertEquals(2, messages.size)
+            assertTrue(messages.first().isFromCache)
+            val lastFrame = messages.last().messages
+            val file = lastFrame.single().parts.single() as MessagePart.File
+            assertFalse(messages.last().isFromCache)
+            assertEquals(PNG_URL, file.dataUrl)
+        }
+
+    @Test
+    fun fullImage_returnsStoredDataWithoutFetching() =
+        runTest(testDispatcher) {
+            var fetches = 0
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ -> MessagePage(listOf(toolAssistant(PNG_URL)), olderCursor = null, hasOlder = false) },
+                    getMessage = { _, _, _ ->
+                        fetches += 1
+                        toolAssistant(PNG_URL)
+                    },
+                )
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { } }
+            advanceUntilIdle()
+
+            val image = sync.fullImage("ses-1", "/repo", "a1", ToolResultImages.id("prt-tool", 0))
+            job.cancel()
+
+            assertEquals(PNG_URL, image.dataUrl)
+            assertEquals(0, fetches)
+        }
+
+    @Test
+    fun fullImage_fetchesTheMessageAndHydratesTheStore() =
+        runTest(testDispatcher) {
+            val fetched = mutableListOf<Triple<String, String?, String>>()
+            // The cached copy and the server copy carry the same tail identity only when the
+            // server copy has no full image either; the viewer fetch then fills it in.
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ -> MessagePage(listOf(toolAssistant("")), olderCursor = null, hasOlder = false) },
+                    sessionCache = SeededSessionCache(listOf(toolAssistant(""))),
+                    getMessage = { sessionId, directory, messageId ->
+                        fetched += Triple(sessionId, directory, messageId)
+                        toolAssistant(PNG_URL)
+                    },
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { updates += it } }
+            advanceUntilIdle()
+
+            val image = sync.fullImage("ses-1", "/repo", "a1", ToolResultImages.id("prt-tool", 0))
+            advanceUntilIdle()
+            job.cancel()
+
+            assertEquals(PNG_URL, image.dataUrl)
+            assertEquals(listOf(Triple("ses-1", "/repo", "a1")), fetched)
+            val published = updates.filterIsInstance<MessageListUpdate.Messages>().last()
+            val publishedMessage = published.messages.single()
+            val publishedTool = publishedMessage.parts.single() as MessagePart.Tool
+            assertEquals(PNG_URL, publishedTool.images.single().dataUrl)
+            // A second open is a store hit.
+            sync.fullImage("ses-1", "/repo", "a1", ToolResultImages.id("prt-tool", 0))
+            assertEquals(1, fetched.size)
+        }
+
+    @Test
+    fun fullImage_throwsWhenTheFetchFailsOrLacksTheImage() =
+        runTest(testDispatcher) {
+            val failing =
+                createSync(
+                    listMessageTail = { _, _ -> MessagePage(emptyList(), olderCursor = null, hasOlder = false) },
+                    getMessage = { _, _, _ -> throw MessageError.Http(statusCode = 404, message = "not found") },
+                )
+            assertTrue(runCatching { failing.fullImage("ses-1", "/repo", "a1", "missing") }.exceptionOrNull() is MessageError.Http)
+
+            val withoutImage =
+                createSync(
+                    listMessageTail = { _, _ -> MessagePage(emptyList(), olderCursor = null, hasOlder = false) },
+                    getMessage = { _, _, _ -> toolAssistant("") },
+                )
+            assertTrue(runCatching { withoutImage.fullImage("ses-1", "/repo", "a1", ToolResultImages.id("prt-tool", 0)) }.isFailure)
+        }
+
+    private fun toolAssistant(dataUrl: String) =
+        Message(
+            id = "a1",
+            role = MessageRole.Assistant,
+            text = "",
+            parts =
+                listOf(
+                    MessagePart.Tool(
+                        toolName = "read",
+                        status = ToolStatus.Completed,
+                        id = "prt-tool",
+                        images =
+                            listOf(
+                                MessagePart.File(
+                                    id = ToolResultImages.id("prt-tool", 0),
+                                    filename = "shot.png",
+                                    mime = "image/png",
+                                    kind = AttachmentKind.Image,
+                                    dataUrl = dataUrl,
+                                ),
+                            ),
+                    ),
+                ),
+            sentAtEpochMs = 1_000L,
+            completedAtEpochMs = 2_000L,
+        )
+
+    private fun userWithFile(dataUrl: String) =
+        Message(
+            id = "u1",
+            role = MessageRole.User,
+            text = "",
+            parts =
+                listOf(
+                    MessagePart.File(
+                        id = "prt-file",
+                        filename = "photo.png",
+                        mime = "image/png",
+                        kind = AttachmentKind.Image,
+                        dataUrl = dataUrl,
+                    ),
+                ),
+            sentAtEpochMs = 500L,
+        )
+
     private fun createSync(
         listMessageTail: MessageTailFetcher,
         listOlderMessages: MessageOlderFetcher = { _, _, _ ->
@@ -773,6 +936,7 @@ class MessageSyncWindowedHistoryTest {
         },
         sessionCache: dev.opencode.mobile.domain.sessioncache.SessionCache =
             dev.opencode.mobile.domain.sessioncache.NoOpSessionCache,
+        getMessage: MessageFetcher? = null,
     ): MessageSync {
         val eventStream = FakeForegroundEventStream()
         eventStream.setConnectionState(dev.opencode.mobile.domain.event.EventStreamConnectionState.Connected)
@@ -780,6 +944,7 @@ class MessageSyncWindowedHistoryTest {
         return MessageSync(
             listMessageTail = listMessageTail,
             listOlderMessages = listOlderMessages,
+            getMessage = getMessage,
             engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
             eventStream = eventStream,
             liveStoreScope = scope,
@@ -798,6 +963,10 @@ class MessageSyncWindowedHistoryTest {
     private fun user(id: String) = Message(id = id, role = MessageRole.User, text = id)
 
     private fun assistant(id: String) = Message(id = id, role = MessageRole.Assistant, text = id)
+
+    private companion object {
+        const val PNG_URL = "data:image/png;base64,iVBORw0KGgo="
+    }
 }
 
 private class SeededSessionCache(

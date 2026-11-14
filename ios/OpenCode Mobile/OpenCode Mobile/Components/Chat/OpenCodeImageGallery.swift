@@ -11,6 +11,14 @@ struct OpenCodeImageSource: Sendable {
     }
 }
 
+/// Where a viewer page's full picture stands when the caller fetches it separately from the
+/// preview: the page shows the preview meanwhile, and Share waits for the full picture.
+enum OpenCodeImageFullState: Equatable {
+    case loading
+    case ready
+    case failed
+}
+
 /// One picture in an `OpenCodeImageGallery` or `OpenCodeImageViewer`.
 struct OpenCodeImageGalleryItem: Identifiable {
     let id: String
@@ -18,14 +26,32 @@ struct OpenCodeImageGalleryItem: Identifiable {
     let filename: String?
     /// A picture already in memory (a small preview or the full image), shown at once.
     let preview: UIImage?
-    /// Loads the full picture. With neither a preview nor a source the tile shows as failed.
+    /// Loads the full picture. With neither a preview nor a source the tile shows as failed,
+    /// unless `isPending`.
     let source: OpenCodeImageSource?
+    /// A picture is on its way (no preview or source yet): the tile shows the loading placeholder.
+    let isPending: Bool
+    /// The viewer's full-picture state, when the caller fetches it; nil when `source` is the whole story.
+    let fullState: OpenCodeImageFullState?
+    /// Changes when the item's picture changes under the same `id`, so a tile or page reloads.
+    let loadKey: String
 
-    init(id: String, filename: String? = nil, preview: UIImage? = nil, source: OpenCodeImageSource? = nil) {
+    init(
+        id: String,
+        filename: String? = nil,
+        preview: UIImage? = nil,
+        source: OpenCodeImageSource? = nil,
+        isPending: Bool = false,
+        fullState: OpenCodeImageFullState? = nil,
+        loadKey: String? = nil
+    ) {
         self.id = id
         self.filename = filename?.isEmpty == true ? nil : filename
         self.preview = preview
         self.source = source
+        self.isPending = isPending
+        self.fullState = fullState
+        self.loadKey = loadKey ?? id
     }
 
     /// "Image 2 of 5, login.png": the tile and viewer page label.
@@ -221,13 +247,14 @@ private struct OpenCodeImageTile: View {
 
     var body: some View {
         content
-            .task(id: item.id) { await load() }
+            .task(id: item.loadKey) { await load() }
     }
 
     private func load() async {
         guard loaded == nil else { return }
+        failed = false
         guard let source = item.source else {
-            failed = item.preview == nil
+            failed = item.preview == nil && !item.isPending
             return
         }
         if let image = await source.load() {
@@ -274,14 +301,26 @@ private struct OpenCodeImageTile: View {
                     defaultValue: "\(accessibilityLabel), could not load"
                 )))
         } else {
-            framed(aspect: 4 / 3) { OpenCodeImageLoadingFill() }
+            let placeholder = framed(aspect: 4 / 3) { OpenCodeImageLoadingFill() }
                 .clipShape(RoundedRectangle(cornerRadius: OpenCodeRadius.small))
                 .overlay(RoundedRectangle(cornerRadius: OpenCodeRadius.small).stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1))
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text(LocalizedStringResource(
-                    "component.image.loading_label",
-                    defaultValue: "\(accessibilityLabel), loading"
-                )))
+                .contentShape(Rectangle())
+            let label = Text(LocalizedStringResource(
+                "component.image.loading_label",
+                defaultValue: "\(accessibilityLabel), loading"
+            ))
+            // A pending picture still opens the viewer, which fetches it.
+            if item.isPending, let action {
+                Button(action: action) { placeholder }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(label)
+                    .accessibilityAddTraits(.isButton)
+            } else {
+                placeholder
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(label)
+            }
         }
     }
 

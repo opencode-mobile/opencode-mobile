@@ -45,6 +45,7 @@ import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.AttachmentIngestionResult
 import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.FollowUpDelivery
@@ -117,6 +118,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
@@ -124,7 +126,7 @@ import javax.inject.Inject
 class SessionChatViewModel
     @Inject
     constructor(
-        messageRepository: MessageRepository,
+        private val messageRepository: MessageRepository,
         modelCatalogStore: ModelCatalogStore,
         commandRepository: CommandRepository,
         agentRepository: AgentRepository,
@@ -1085,6 +1087,21 @@ class SessionChatViewModel
 
         /** Bytes of an image that lives on the server, for a timeline preview; null on any failure. */
         suspend fun loadAttachmentPreview(serverPath: String): ByteArray? = timeline.loadAttachmentPreview(serverPath)
+
+        /**
+         * The full picture of timeline image [imageId] in [messageId], fetched from the server
+         * when the timeline only holds its cached thumbnail. Throws when it cannot be loaded.
+         */
+        suspend fun loadFullImage(
+            messageId: String,
+            imageId: String,
+        ): ByteArray {
+            val sessionId = boundSessionId ?: error("no session bound")
+            val directory = transcriptWorktree ?: boundWorktree
+            val file = messageRepository.fullImage(sessionId, directory, messageId, imageId)
+            return withContext(Dispatchers.Default) { AttachmentDataUrl.decode(file.dataUrl, file.mime) }
+                ?: error("image data did not decode")
+        }
 
         fun addAttachments(attachments: List<Attachment>) {
             composer.addAttachments(attachments)

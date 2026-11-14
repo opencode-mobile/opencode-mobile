@@ -98,6 +98,7 @@ import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeImageGallery
 import dev.opencode.mobile.ui.components.LocalOpenCodeAttachmentImageLoader
 import dev.opencode.mobile.ui.components.LocalOpenCodeGalleryImageLoader
+import dev.opencode.mobile.ui.sessionchat.LocalSessionChatFullImageLoader
 import dev.opencode.mobile.ui.sessionchat.SessionChatGalleryImageLoader
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageGalleries
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageViewerState
@@ -346,7 +347,11 @@ private fun SessionChatTimelineStateContent(
                     if (props.hideRetryCountdown) null else SessionChatTimelineBlocks.retryCountdownBlockId(props.messages)
                 }
             val serverImageLoader = LocalOpenCodeAttachmentImageLoader.current
-            val galleryLoader = remember(serverImageLoader) { SessionChatGalleryImageLoader(serverImageLoader) }
+            val fullImageLoader = LocalSessionChatFullImageLoader.current
+            val galleryLoader =
+                remember(serverImageLoader, fullImageLoader) {
+                    SessionChatGalleryImageLoader(fullImageLoader = fullImageLoader, serverLoader = serverImageLoader)
+                }
             // Swaps what the loader can resolve without recomposing the timeline for it.
             galleryLoader.update(props.messages)
             val timelineMessages =

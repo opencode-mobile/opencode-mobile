@@ -13,12 +13,31 @@ nonisolated final class AttachmentImageLoader: AttachmentImageLoading, @unchecke
     static let maxPixelSize = 1600
     static let maxServerBytes = 64 * 1024 * 1024
 
+    /// Decoded full pictures for the viewer and tiles, by decoded bytes.
+    static let cacheCostLimit = 32 * 1024 * 1024
+
     private let fetch: @Sendable (_ path: String, _ directory: String?) async throws -> Data
     private let cache = NSCache<NSString, UIImage>()
+    private var memoryWarningObserver: NSObjectProtocol?
 
     init(fetch: @escaping @Sendable (_ path: String, _ directory: String?) async throws -> Data) {
         self.fetch = fetch
-        cache.totalCostLimit = 96 * 1024 * 1024
+        cache.totalCostLimit = Self.cacheCostLimit
+        let cache = cache
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil
+        ) { _ in cache.removeAllObjects() }
+    }
+
+    deinit {
+        if let memoryWarningObserver { NotificationCenter.default.removeObserver(memoryWarningObserver) }
+    }
+
+    /// Drops every decoded picture (memory warning, trim).
+    func removeAll() {
+        cache.removeAllObjects()
     }
 
     convenience init(filesystem: FilesystemAPIClient) {

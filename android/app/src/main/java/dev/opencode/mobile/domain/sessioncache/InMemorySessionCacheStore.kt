@@ -107,6 +107,13 @@ class InMemorySessionCacheStore : SessionCacheStore {
             )
         }
 
+    override suspend fun messageTimelineEntries(): List<Pair<String, String>> =
+        mutex.withLock {
+            rows.values
+                .filter { it.key.kind == SessionCacheKind.MessageTimeline }
+                .map { it.key.connectionId to it.key.entryId }
+        }
+
     private fun matchesConnection(
         key: SessionCacheKey,
         selector: SessionCacheEvictSelector.Connection,

@@ -107,6 +107,10 @@ abstract class MessageModule {
                         )
                     }.getOrElse { throw adapter.mapError(it) }
                 },
+                getMessage = { sessionId, directory, messageId ->
+                    runCatching { messageRemote.getMessage(sessionId, messageId, directory) }
+                        .getOrElse { throw adapter.mapError(it) }
+                },
                 engine = engine,
                 eventStream = eventStream,
                 liveStoreScope = liveStoreScope,

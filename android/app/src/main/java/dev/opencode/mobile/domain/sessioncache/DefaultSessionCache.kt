@@ -5,16 +5,21 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.home.WorktreeLayout
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.ToolImageThumbnails
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 class DefaultSessionCache(
     private val store: SessionCacheStore,
@@ -24,7 +29,13 @@ class DefaultSessionCache(
     private val clock: () -> Long = { System.currentTimeMillis() },
     private val debounceMs: Long = DEFAULT_DEBOUNCE_MS,
     private val activityDebounceMs: Long = DEFAULT_ACTIVITY_DEBOUNCE_MS,
+    /** Tool-image thumbnails saved next to message timelines; null keeps none. */
+    private val thumbnails: ToolImageThumbnails? = null,
+    private val thumbnailDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val thumbnailEvictionDebounceMs: Long = DEFAULT_THUMBNAIL_EVICTION_DEBOUNCE_MS,
 ) : SessionCache {
+    private val thumbnailEvictionJob = AtomicReference<Job?>(null)
+
     private val activityMutex = Mutex()
     private val pendingActivity = mutableMapOf<String, List<SessionActivityCacheEntry>>()
     private val lastCommittedActivity = ConcurrentHashMap<String, List<SessionActivityCacheEntry>>()
@@ -151,7 +162,45 @@ class DefaultSessionCache(
             json = json,
             clock = clock,
             debounceMs = debounceMs,
+            thumbnails = thumbnails,
+            thumbnailDispatcher = thumbnailDispatcher,
+            onThumbnailsWritten = ::scheduleThumbnailEviction,
         )
+
+    /**
+     * Once per launch: drops thumbnail folders whose timeline row is gone, then trims the
+     * thumbnail cache to its budget. Runs off the main thread.
+     */
+    fun startThumbnailMaintenance() {
+        val thumbnails = thumbnails ?: return
+        scope.launch(thumbnailDispatcher) {
+            sweepThumbnails()
+            runCatching { thumbnails.evictIfNeeded() }.onFailure { logSessionCacheIo("evict thumbnails", it) }
+        }
+    }
+
+    /** Debounced global eviction after thumbnail writes. */
+    private fun scheduleThumbnailEviction() {
+        val thumbnails = thumbnails ?: return
+        val job =
+            scope.launch(thumbnailDispatcher) {
+                delay(thumbnailEvictionDebounceMs)
+                runCatching { thumbnails.evictIfNeeded() }.onFailure { logSessionCacheIo("evict thumbnails", it) }
+            }
+        thumbnailEvictionJob.getAndSet(job)?.cancel()
+    }
+
+    /** Thumbnail folders follow the timeline rows: any session folder without a row goes. */
+    private suspend fun sweepThumbnails() {
+        val thumbnails = thumbnails ?: return
+        val entries =
+            runCatching { store.messageTimelineEntries() }
+                .onFailure { logSessionCacheIo("list timelines", it) }
+                .getOrNull() ?: return
+        withContext(thumbnailDispatcher) {
+            runCatching { thumbnails.sweepOrphans(entries) }.onFailure { logSessionCacheIo("sweep thumbnails", it) }
+        }
+    }
 
     override suspend fun purgeWorktree(
         serverBaseUrl: String,
@@ -180,6 +229,7 @@ class DefaultSessionCache(
                 ),
             )
         }.onFailure { logSessionCacheIo("purge worktree", it) }
+        sweepThumbnails()
     }
 
     override suspend fun purgeConnection(
@@ -200,6 +250,7 @@ class DefaultSessionCache(
                 ),
             )
         }.onFailure { logSessionCacheIo("purge connection", it) }
+        sweepThumbnails()
     }
 
     override suspend fun clearAll() {
@@ -207,6 +258,11 @@ class DefaultSessionCache(
         dropPendingHomeRecords(null)
         runCatching { store.evict(SessionCacheEvictSelector.All) }
             .onFailure { logSessionCacheIo("clear all", it) }
+        thumbnails?.let { store ->
+            withContext(thumbnailDispatcher) {
+                runCatching { store.deleteAll() }.onFailure { logSessionCacheIo("clear thumbnails", it) }
+            }
+        }
     }
 
     override suspend fun seedProjectResolution(
@@ -356,6 +412,7 @@ class DefaultSessionCache(
         const val DEFAULT_DEBOUNCE_MS = 3_000L
         const val DEFAULT_ACTIVITY_DEBOUNCE_MS = 1_000L
         const val ACTIVITY_TTL_MS = 6L * 60L * 60L * 1_000L
+        const val DEFAULT_THUMBNAIL_EVICTION_DEBOUNCE_MS = 5_000L
     }
 }
 
@@ -383,6 +440,9 @@ private class DefaultSessionMessageCacheHandle(
     private val json: Json,
     private val clock: () -> Long,
     private val debounceMs: Long,
+    private val thumbnails: ToolImageThumbnails?,
+    private val thumbnailDispatcher: CoroutineDispatcher,
+    private val onThumbnailsWritten: () -> Unit,
 ) : SessionMessageCacheHandle {
     private val mutex = Mutex()
     private var pending: List<Message>? = null
@@ -410,7 +470,12 @@ private class DefaultSessionMessageCacheHandle(
                 .getOrNull()
                 ?: return null
         if (record.value.payloadJson.isBlank()) return null
-        return SessionCacheCodec.decodeMessages(record.value.payloadJson, json)
+        val connectionId = key.connectionId
+        return SessionCacheCodec.decodeMessages(
+            record.value.payloadJson,
+            json,
+            thumbnailPath = { imageId -> thumbnails?.existingPath(connectionId, sessionId, imageId) },
+        )
     }
 
     override fun note(messages: List<Message>) {
@@ -453,8 +518,20 @@ private class DefaultSessionMessageCacheHandle(
         val messages = pending ?: return
         pending = null
         val key = keyOrNull() ?: return
+        // Thumbnails first (newest tool images, off the main thread), so the row marks only
+        // the images whose file is really there.
+        val saved =
+            thumbnails?.let { store ->
+                withContext(thumbnailDispatcher) {
+                    runCatching { store.sync(key.connectionId, sessionId, messages) }
+                        .onFailure { logSessionCacheIo("save thumbnails", it) }
+                        .getOrNull()
+                }
+            }
+        if (saved?.wrote == true) onThumbnailsWritten()
+        val savedIds = saved?.paths?.keys.orEmpty()
         val payload =
-            runCatching { SessionCacheCodec.encodeMessages(messages, json) }
+            runCatching { SessionCacheCodec.encodeMessages(messages, json, hasThumbnail = { it.id in savedIds }) }
                 .onFailure { logSessionCacheIo("encode messages", it) }
                 .getOrNull() ?: return
         runCatching {

@@ -6,6 +6,8 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
     private let clock: @Sendable () -> Int64
     private let debounceNanoseconds: UInt64
     private let activityDebounceNanoseconds: UInt64
+    /// Tool-image thumbnails on disk, kept in step with the cached message timelines.
+    private let thumbnails: ToolThumbnailStore?
     private let activityLock = NSLock()
     private var pendingActivity: [String: [SessionActivityCacheEntry]] = [:]
     private var lastActivity: [String: [SessionActivityCacheEntry]] = [:]
@@ -23,8 +25,10 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
             Int64(Date().timeIntervalSince1970 * 1000)
         },
         debounceMilliseconds: UInt64 = 3_000,
-        activityDebounceMilliseconds: UInt64 = SessionActivityPolicy.activityRememberDebounceMs
+        activityDebounceMilliseconds: UInt64 = SessionActivityPolicy.activityRememberDebounceMs,
+        thumbnails: ToolThumbnailStore? = nil
     ) {
+        self.thumbnails = thumbnails
         self.store = store
         self.connectionIdProvider = connectionIdProvider
         self.clock = clock
@@ -213,7 +217,8 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
             store: store,
             connectionIdProvider: connectionIdProvider,
             clock: clock,
-            debounceNanoseconds: debounceNanoseconds
+            debounceNanoseconds: debounceNanoseconds,
+            thumbnails: thumbnails
         )
     }
 
@@ -236,6 +241,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
                 matchByUrlPrefix: true
             )
         )
+        await sweepThumbnails()
     }
 
     func purgeConnection(profileID: String, serverBaseURL: String) async {
@@ -245,6 +251,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
         await dropPendingHomeRecords(worktree: nil)
         if !profileID.isEmpty {
             await store.evict(.connection(connectionIdOrUrlPrefix: profileID, matchByUrlPrefix: false))
+            await thumbnails?.removeConnection(profileID)
         }
         await store.evict(
             .connection(
@@ -252,12 +259,31 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
                 matchByUrlPrefix: true
             )
         )
+        // Rows matched by URL prefix have connection ids we cannot hash back; the sweep drops
+        // every thumbnail folder whose timeline row is gone.
+        await sweepThumbnails()
     }
 
     func clearAll() async {
         dropActivityMemory(directory: nil)
         await dropPendingHomeRecords(worktree: nil)
         await store.evict(.all)
+        await thumbnails?.removeAll()
+    }
+
+    func maintainThumbnails() async {
+        guard let thumbnails else { return }
+        await thumbnails.maintain(keeping: await cachedTimelineSessions())
+    }
+
+    private func sweepThumbnails() async {
+        guard let thumbnails, let sessions = await cachedTimelineSessions() else { return }
+        await thumbnails.sweepOrphans(keeping: sessions)
+    }
+
+    /// Every cached message timeline (opened sessions included), or nil when the store cannot list them.
+    private func cachedTimelineSessions() async -> [(connectionID: String, sessionID: String)]? {
+        await store.messageTimelineKeys()?.map { ($0.connectionId, $0.entryId) }
     }
 
     /// Cancels pending activity flushes and forgets committed activity for `directory`, or for
@@ -286,6 +312,7 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
     private let connectionIdProvider: @Sendable () -> String?
     private let clock: @Sendable () -> Int64
     private let debounceNanoseconds: UInt64
+    private let thumbnails: ToolThumbnailStore?
 
     private let lock = NSLock()
     private var pending: [Message]?
@@ -298,8 +325,10 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
         store: any SessionCacheStore,
         connectionIdProvider: @escaping @Sendable () -> String?,
         clock: @escaping @Sendable () -> Int64,
-        debounceNanoseconds: UInt64
+        debounceNanoseconds: UInt64,
+        thumbnails: ToolThumbnailStore?
     ) {
+        self.thumbnails = thumbnails
         self.sessionID = sessionID
         self.worktree = worktree
         self.store = store
@@ -324,7 +353,14 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
         guard let record = await store.load(key: key), !record.value.payloadJSON.isEmpty else {
             return nil
         }
-        return SessionCacheCodec.decodeMessages(record.value.payloadJSON)
+        guard let timeline = SessionCacheCodec.decodeMessageTimeline(record.value.payloadJSON) else { return nil }
+        guard let thumbnails, !timeline.thumbnailImageIDs.isEmpty else { return timeline.messages }
+        return await thumbnails.attach(
+            connectionID: key.connectionId,
+            sessionID: sessionID,
+            messages: timeline.messages,
+            imageIDs: timeline.thumbnailImageIDs
+        )
     }
 
     func note(messages: [Message]) {
@@ -375,7 +411,15 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
 
         guard let messages, let key = keyOrNil() else { return }
         do {
-            let payload = try SessionCacheCodec.encodeMessages(messages)
+            var thumbnailImageIDs = Set<String>()
+            if let thumbnails {
+                thumbnailImageIDs = await thumbnails.persist(
+                    connectionID: key.connectionId,
+                    sessionID: sessionID,
+                    messages: messages
+                )
+            }
+            let payload = try SessionCacheCodec.encodeMessages(messages, thumbnailImageIDs: thumbnailImageIDs)
             await store.retain(key: key, reason: .opened, atEpochMs: clock())
             await store.commit(
                 key: key,
