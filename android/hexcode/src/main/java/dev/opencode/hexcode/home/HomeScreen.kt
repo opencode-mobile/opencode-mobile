@@ -364,7 +364,7 @@ fun HomeScreen(
                             ) {
                                 HexButton(
                                     onClick = { if (shown) vm.sendText(sample.suggestion) },
-                                    text = stringResource(R.string.sample_suggestion, sample.suggestion),
+                                    text = stringResource(R.string.sample_try, sample.suggestion),
                                     icon = HexIcons.spark,
                                     enabled = shown,
                                 )

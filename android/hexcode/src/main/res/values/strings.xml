@@ -515,7 +515,7 @@
     <!-- Try a sample session: home on a made-up session, with no computer. -->
     <string name="sample_banner">Sample session — not connected to a computer</string>
     <string name="sample_leave">Leave</string>
-    <string name="sample_suggestion">Try: “%1$s”</string>
+    <string name="sample_try">Try: “%1$s”</string>
 
     <!-- Artifacts (M8): the tile, the browser's artifact errors, Settings, the enable sheet, its approval and notices. -->
     <string name="home_tile_artifact">Artifact</string>
