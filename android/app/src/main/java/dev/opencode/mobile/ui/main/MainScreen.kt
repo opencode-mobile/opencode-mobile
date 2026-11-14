@@ -80,6 +80,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeStatusStackReveal
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
@@ -600,6 +601,8 @@ internal fun MainScreen(
                         title = stringResource(R.string.common_loading_sessions),
                         subtitle = stringResource(R.string.common_checking_server),
                         testTag = "homeLoading",
+                        // Cold launch paints the Session Cache first; skip the loader frame when it lands in time.
+                        reveal = OpenCodeStatusStackReveal.AfterGrace,
                         modifier = Modifier.fillMaxSize().navigationBarsPadding(),
                     )
                 }

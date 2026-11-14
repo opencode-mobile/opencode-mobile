@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.sessioncache
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.home.ResolvedHomePath
+import dev.opencode.mobile.domain.home.WorktreeLayout
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -34,8 +35,10 @@ class DefaultSessionCache(
     private var activityGeneration = 0
 
     /** Commits hold this, so a purge waits for one in flight and then evicts its row. */
-    private val projectResolutionMutex = Mutex()
-    private val pendingProjectResolutions = LinkedHashMap<SessionCacheKey, ResolvedHomePath>()
+    private val homeRecordMutex = Mutex()
+
+    /** Small Home records (project resolution, worktree layout), encoded, newest per key. */
+    private val pendingHomeRecords = LinkedHashMap<SessionCacheKey, String>()
 
     override suspend fun seedSessions(worktree: String): List<Session>? {
         val connectionId = connectionIdProvider() ?: return null
@@ -155,7 +158,7 @@ class DefaultSessionCache(
         worktree: String,
     ) {
         dropActivityMemory(worktree)
-        dropPendingProjectResolutions(worktree)
+        dropPendingHomeRecords(worktree)
         val connectionId = connectionIdProvider()
         if (connectionId != null) {
             runCatching {
@@ -184,7 +187,7 @@ class DefaultSessionCache(
         serverBaseUrl: String,
     ) {
         dropActivityMemory(null)
-        dropPendingProjectResolutions(null)
+        dropPendingHomeRecords(null)
         if (profileId.isNotBlank()) {
             runCatching { store.evict(SessionCacheEvictSelector.Connection(connectionIdOrUrlPrefix = profileId)) }
                 .onFailure { logSessionCacheIo("purge connection by profile", it) }
@@ -201,7 +204,7 @@ class DefaultSessionCache(
 
     override suspend fun clearAll() {
         dropActivityMemory(null)
-        dropPendingProjectResolutions(null)
+        dropPendingHomeRecords(null)
         runCatching { store.evict(SessionCacheEvictSelector.All) }
             .onFailure { logSessionCacheIo("clear all", it) }
     }
@@ -210,53 +213,90 @@ class DefaultSessionCache(
         worktree: String,
         connectionId: String?,
     ): ResolvedHomePath? {
-        val id = connectionId ?: connectionIdProvider() ?: return null
-        val key = SessionCacheKey(connectionId = id, worktree = worktree, kind = SessionCacheKind.ProjectResolution)
-        val record =
-            runCatching { store.load(key) }
-                .onFailure { logSessionCacheIo("load project resolution", it) }
-                .getOrNull() ?: return null
-        return SessionCacheCodec.decodeProjectResolution(record.value.payloadJson, json)
+        val payload = loadHomeRecord(worktree, connectionId, SessionCacheKind.ProjectResolution) ?: return null
+        return SessionCacheCodec.decodeProjectResolution(payload, json)
     }
 
     override fun rememberProjectResolution(
         worktree: String,
         resolution: ResolvedHomePath,
     ) {
-        val connectionId = connectionIdProvider() ?: return
-        val key = SessionCacheKey(connectionId = connectionId, worktree = worktree, kind = SessionCacheKind.ProjectResolution)
-        synchronized(pendingProjectResolutions) { pendingProjectResolutions[key] = resolution }
-        scope.launch { flushProjectResolutions() }
+        val payload =
+            runCatching { SessionCacheCodec.encodeProjectResolution(resolution, json) }
+                .onFailure { logSessionCacheIo("encode project resolution", it) }
+                .getOrNull() ?: return
+        queueHomeRecord(worktree, SessionCacheKind.ProjectResolution, payload)
     }
 
-    /** Commits the newest queued resolution of each key; a flush that finds the queue empty does nothing. */
-    private suspend fun flushProjectResolutions() {
-        projectResolutionMutex.withLock {
+    override suspend fun seedWorktreeLayout(
+        worktree: String,
+        connectionId: String?,
+    ): WorktreeLayout? {
+        val payload = loadHomeRecord(worktree, connectionId, SessionCacheKind.WorktreeLayout) ?: return null
+        return SessionCacheCodec.decodeWorktreeLayout(payload, json)
+    }
+
+    override fun rememberWorktreeLayout(
+        worktree: String,
+        layout: WorktreeLayout,
+    ) {
+        val payload =
+            runCatching { SessionCacheCodec.encodeWorktreeLayout(layout, json) }
+                .onFailure { logSessionCacheIo("encode worktree layout", it) }
+                .getOrNull() ?: return
+        queueHomeRecord(worktree, SessionCacheKind.WorktreeLayout, payload)
+    }
+
+    private suspend fun loadHomeRecord(
+        worktree: String,
+        connectionId: String?,
+        kind: SessionCacheKind,
+    ): String? {
+        val id = connectionId ?: connectionIdProvider() ?: return null
+        val key = SessionCacheKey(connectionId = id, worktree = worktree, kind = kind)
+        val record =
+            runCatching { store.load(key) }
+                .onFailure { logSessionCacheIo("load ${kind.name}", it) }
+                .getOrNull() ?: return null
+        return record.value.payloadJson
+    }
+
+    /** Queues one small encoded Home record under the connection active now. */
+    private fun queueHomeRecord(
+        worktree: String,
+        kind: SessionCacheKind,
+        payload: String,
+    ) {
+        val connectionId = connectionIdProvider() ?: return
+        val key = SessionCacheKey(connectionId = connectionId, worktree = worktree, kind = kind)
+        synchronized(pendingHomeRecords) { pendingHomeRecords[key] = payload }
+        scope.launch { flushHomeRecords() }
+    }
+
+    /** Commits the newest queued record of each key; a flush that finds the queue empty does nothing. */
+    private suspend fun flushHomeRecords() {
+        homeRecordMutex.withLock {
             val queued =
-                synchronized(pendingProjectResolutions) {
-                    pendingProjectResolutions.toMap().also { pendingProjectResolutions.clear() }
+                synchronized(pendingHomeRecords) {
+                    pendingHomeRecords.toMap().also { pendingHomeRecords.clear() }
                 }
-            queued.forEach { (key, resolution) ->
-                val payload =
-                    runCatching { SessionCacheCodec.encodeProjectResolution(resolution, json) }
-                        .onFailure { logSessionCacheIo("encode project resolution", it) }
-                        .getOrNull() ?: return@forEach
+            queued.forEach { (key, payload) ->
                 runCatching {
                     store.commit(
                         key = key,
                         value = SessionCacheValue(payloadJson = payload, schemaVersion = SessionCacheCodec.SCHEMA_VERSION),
                         meta = SessionCacheCommitMeta(syncedAtEpochMs = clock()),
                     )
-                }.onFailure { logSessionCacheIo("commit project resolution", it) }
+                }.onFailure { logSessionCacheIo("commit ${key.kind.name}", it) }
             }
         }
     }
 
-    /** Drops queued resolutions for [worktree], or all when `null`, after any commit in flight. */
-    private suspend fun dropPendingProjectResolutions(worktree: String?) {
-        projectResolutionMutex.withLock {
-            synchronized(pendingProjectResolutions) {
-                pendingProjectResolutions.keys.removeAll { worktree == null || it.worktree == worktree }
+    /** Drops queued Home records for [worktree], or all when `null`, after any commit in flight. */
+    private suspend fun dropPendingHomeRecords(worktree: String?) {
+        homeRecordMutex.withLock {
+            synchronized(pendingHomeRecords) {
+                pendingHomeRecords.keys.removeAll { worktree == null || it.worktree == worktree }
             }
         }
     }

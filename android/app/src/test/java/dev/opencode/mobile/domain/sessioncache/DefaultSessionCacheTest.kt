@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.sessioncache
 
 import dev.opencode.mobile.domain.home.ResolvedHomePath
+import dev.opencode.mobile.domain.home.WorktreeLayout
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
@@ -90,6 +91,59 @@ class DefaultSessionCacheTest {
             runCurrent()
 
             assertNull(cache.seedProjectResolution("/repo"))
+        }
+
+    @Test
+    fun worktreeLayoutRoundTripsPerConnection() =
+        runTest {
+            val connectionId = "http://localhost:4096/|opencode"
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { connectionId },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            val layout =
+                WorktreeLayout(
+                    directories = listOf("/repo", "/wt/tax"),
+                    branches = mapOf("/repo" to "main", "/wt/tax" to "feature/tax-rounding"),
+                )
+            cache.rememberWorktreeLayout("/repo", layout)
+            runCurrent()
+
+            assertEquals(layout, cache.seedWorktreeLayout("/repo"))
+            assertEquals(layout, cache.seedWorktreeLayout("/repo", connectionId))
+            assertNull(cache.seedWorktreeLayout("/repo", "other"))
+            // Its own record: the project resolution of the same path is untouched.
+            assertNull(cache.seedProjectResolution("/repo"))
+
+            cache.purgeWorktree("http://localhost:4096/", "/repo")
+            assertNull(cache.seedWorktreeLayout("/repo"))
+        }
+
+    @Test
+    fun purgeDropsAWorktreeLayoutStillQueued() =
+        runTest {
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { "profile-a" },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            cache.rememberWorktreeLayout("/repo", WorktreeLayout(directories = listOf("/repo")))
+            cache.rememberWorktreeLayout("/other", WorktreeLayout(directories = listOf("/other")))
+            cache.purgeWorktree("http://localhost:4096/", "/repo")
+            runCurrent()
+
+            assertNull(cache.seedWorktreeLayout("/repo"))
+            assertEquals(WorktreeLayout(directories = listOf("/other")), cache.seedWorktreeLayout("/other"))
+
+            cache.rememberWorktreeLayout("/other", WorktreeLayout(directories = listOf("/other", "/wt/x")))
+            cache.clearAll()
+            runCurrent()
+            assertNull(cache.seedWorktreeLayout("/other"))
         }
 
     @Test

@@ -130,6 +130,41 @@ class HomeBranchLookupsTest {
             assertEquals(2, calls)
         }
 
+    @Test
+    fun seedFillsOnlyUnansweredDirectoriesAndALiveAnswerReplacesIt() =
+        runTest {
+            val changes = mutableListOf<Map<String, String>>()
+            val answers = mutableMapOf<String, Outcome>("/repo" to Outcome.Branch("main"), "/wt/gone" to Outcome.Branch(null))
+            val lookups =
+                HomeBranchLookups(
+                    scope = this,
+                    fetch = { answers[it] ?: Outcome.Unknown },
+                    onChange = { changes += it },
+                    retryDelaysMs = emptyList(),
+                )
+            lookups.lookUp(listOf("/repo", "/wt/gone"))
+            advanceUntilIdle()
+            changes.clear()
+
+            lookups.seed(mapOf("/repo" to "stale", "/wt/gone" to "stale", "/wt/tax" to "feature/tax-rounding"))
+            assertEquals(mapOf("/repo" to "main", "/wt/tax" to "feature/tax-rounding"), lookups.branches)
+            assertEquals(listOf(lookups.branches), changes)
+
+            // Nothing new to fill: no change published.
+            lookups.seed(mapOf("/wt/tax" to "other"))
+            assertEquals(1, changes.size)
+
+            // An unknown live answer keeps the cached branch; a settled one replaces it.
+            lookups.lookUp(listOf("/wt/tax"))
+            advanceUntilIdle()
+            assertEquals("feature/tax-rounding", lookups.branches["/wt/tax"])
+            answers["/wt/tax"] = Outcome.Branch("feature/tax-v2")
+            lookups.refresh()
+            lookups.lookUp(listOf("/wt/tax"))
+            advanceUntilIdle()
+            assertEquals("feature/tax-v2", lookups.branches["/wt/tax"])
+        }
+
     private fun TestScope.lookups(fetch: suspend (String) -> Outcome): HomeBranchLookups =
         HomeBranchLookups(scope = this, fetch = fetch, onChange = {})
 }

@@ -3027,16 +3027,54 @@ class SessionLiveStoreTest {
             collectJob.cancel()
         }
 
+    @Test
+    fun window_firstLoadAfterACacheSeedMatchesTheCachedRowCount() =
+        runTest(testDispatcher) {
+            val all = (1..120).map { testSession(id = "ses-$it", title = "Session $it") }
+            val repository = FakeSessionRepository(sessions = all)
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = sessionStore(repository, eventStream, ServerProtocol.V2, GatedSessionCache(seeded = all.take(100)))
+            val sizes = mutableListOf<Int>()
+            val collectJob = launch { store.observeSessions("/repo").collect { sizes += it.sessions.size } }
+            advanceUntilIdle()
+
+            // Cache painted 100 rows; the first server load asks for 100, so the list never shrinks to 50.
+            assertEquals(listOf(100), repository.windowLimits)
+            assertEquals(listOf(100, 100), sizes)
+
+            store.loadMore("/repo")
+            advanceUntilIdle()
+            assertEquals(listOf(100, 150), repository.windowLimits)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun window_cacheSeedIsCappedAtFourPages() =
+        runTest(testDispatcher) {
+            val all = (1..300).map { testSession(id = "ses-$it", title = "Session $it") }
+            val repository = FakeSessionRepository(sessions = all)
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = sessionStore(repository, eventStream, ServerProtocol.V1, GatedSessionCache(seeded = all.take(260)))
+            val collectJob = launch { store.observeSessions("/repo").collect { } }
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(listOf(200), repository.windowLimits)
+        }
+
     private fun sessionStore(
         repository: FakeSessionRepository,
         eventStream: FakeForegroundEventStream,
         protocol: ServerProtocol,
+        sessionCache: SessionCache = NoOpSessionCache,
     ): DefaultSessionLiveStore =
         DefaultSessionLiveStore(
             repository,
             eventStream,
             LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-            sessionCache = NoOpSessionCache,
+            sessionCache = sessionCache,
             syncCoordinator =
                 testSyncCoordinator(
                     eventStream = eventStream,
@@ -3901,10 +3939,12 @@ private fun testQuestionRequest(id: String) =
         toolCallId = null,
     )
 
-private class GatedSessionCache : SessionCache {
+private class GatedSessionCache(
+    private val seeded: List<Session>? = null,
+) : SessionCache {
     var nextRememberGate: CompletableDeferred<Unit>? = null
 
-    override suspend fun seedSessions(worktree: String): List<Session>? = null
+    override suspend fun seedSessions(worktree: String): List<Session>? = seeded
 
     override suspend fun rememberSessions(
         worktree: String,

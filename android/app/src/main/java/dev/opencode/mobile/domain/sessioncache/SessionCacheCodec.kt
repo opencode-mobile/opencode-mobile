@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.sessioncache
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.home.ResolvedHomePath
+import dev.opencode.mobile.domain.home.WorktreeLayout
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.Message
@@ -143,7 +144,39 @@ object SessionCacheCodec {
         }.onFailure { error ->
             DiagnosticLog.warning(DiagnosticLogArea.Session, "project resolution decode failed", error)
         }.getOrNull()
+
+    fun encodeWorktreeLayout(
+        layout: WorktreeLayout,
+        json: Json,
+    ): String =
+        json.encodeToString(
+            CachedWorktreeLayoutPayload(
+                schemaVersion = SCHEMA_VERSION,
+                directories = layout.directories,
+                branches = layout.branches,
+            ),
+        )
+
+    fun decodeWorktreeLayout(
+        raw: String,
+        json: Json,
+    ): WorktreeLayout? =
+        runCatching {
+            val payload = json.decodeFromString<CachedWorktreeLayoutPayload>(raw)
+            if (payload.schemaVersion != SCHEMA_VERSION) return null
+            WorktreeLayout(directories = payload.directories, branches = payload.branches)
+        }.onFailure { error ->
+            DiagnosticLog.warning(DiagnosticLogArea.Session, "worktree layout decode failed", error)
+        }.getOrNull()
 }
+
+@Serializable
+internal data class CachedWorktreeLayoutPayload(
+    val schemaVersion: Int,
+    val directories: List<String> = emptyList(),
+    /** Canonical directory to branch. */
+    val branches: Map<String, String> = emptyMap(),
+)
 
 @Serializable
 internal data class CachedProjectResolutionPayload(

@@ -57,6 +57,7 @@ import dev.opencode.mobile.domain.session.activeSessions
 import dev.opencode.mobile.domain.session.rootSessions
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.home.WorktreeLayout
 import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
@@ -253,6 +254,12 @@ class MainScreenViewModel
         /** V1 added paths whose listed worktrees each need a session list. */
         private val listsSessionsPaths = mutableSetOf<String>()
 
+        /** Added paths whose worktree inventory loaded from the server (not the Session Cache). */
+        private val liveInventoryPaths = mutableSetOf<String>()
+
+        /** Worktree layout last seeded or persisted per added path; a write happens only on change. */
+        private val rememberedLayouts = mutableMapOf<String, WorktreeLayout>()
+
         /** V1 live lists of worktrees that are not added paths, by canonical directory. */
         private var extraObservationJobs: Map<String, Job> = emptyMap()
 
@@ -438,6 +445,8 @@ class MainScreenViewModel
             if (generation != switchPaintGeneration || pendingSwitchId != id) return
             resetHomeIndex()
             seedProjectResolutions(worktrees, connectionId = id)
+            if (generation != switchPaintGeneration || pendingSwitchId != id) return
+            seedWorktreeLayouts(worktrees, server = baseUrl, connectionId = id)
             if (generation != switchPaintGeneration || pendingSwitchId != id) return
             projectFirstLoads.clearAll()
             pendingFirstServerSnapshots.clear()
@@ -1104,8 +1113,11 @@ class MainScreenViewModel
                     reloadWorktreeMarks(worktrees)
                     return
                 }
-                val sections = loadSectionsFromCache(worktrees)
+                // Project, worktrees and branches first, so the cached paint labels rows and the
+                // project pill as the live load will instead of relabeling them a moment later.
                 seedProjectResolutions(worktrees)
+                seedWorktreeLayouts(worktrees, server = serverBaseUrl)
+                val sections = loadSectionsFromCache(worktrees)
                 _uiState.value =
                     MainScreenUiState.Loaded(sections = sections, projectLoads = projectFirstLoads.visible, home = homeIndex)
                 applyPendingFirstServerSnapshots()
@@ -1222,6 +1234,49 @@ class MainScreenViewModel
                     }
             if (cached.isNotEmpty()) {
                 homeIndex = homeIndex.copy(resolutions = cached.toMap() + homeIndex.resolutions)
+            }
+        }
+
+        /**
+         * Cached worktree inventories and branches for mergeable paths with no live inventory
+         * yet, so cached rows carry their branch and worktree labels from the first frame. Run
+         * after [seedProjectResolutions]: only a mergeable project lists worktrees.
+         */
+        private suspend fun seedWorktreeLayouts(
+            worktrees: List<String>,
+            server: String,
+            connectionId: String? = null,
+        ) {
+            val cached =
+                worktrees
+                    .filter { it !in liveInventoryPaths && homeIndex.resolutions[it]?.isMergeable == true }
+                    .mapNotNull { path ->
+                        runCatching { sessionCache.seedWorktreeLayout(path, connectionId) }.getOrNull()?.let { path to it }
+                    }
+            if (cached.isEmpty()) return
+            cached.forEach { (path, layout) ->
+                rememberedLayouts[path] = layout
+                worktreeInventoryCache.record(WorktreeInventory.loaded(layout.directories), path, server)
+            }
+            homeIndex =
+                homeIndex.copy(
+                    inventories = homeIndex.inventories + cached.associate { (path, layout) -> path to layout.directories.toSet() },
+                )
+            // Fills only directories the server has not answered; publishes through onChange.
+            branchLookups.seed(cached.fold(emptyMap()) { branches, (_, layout) -> branches + layout.branches })
+        }
+
+        /**
+         * Persists the worktree layout of each path whose inventory loaded live, when it differs
+         * from the one last remembered (a new inventory, or a branch answer that changed).
+         */
+        private fun rememberWorktreeLayouts(index: HomeWorktreeIndex) {
+            for (path in liveInventoryPaths) {
+                val directories = index.inventories[path] ?: continue
+                val layout = WorktreeLayout.of(path, directories, index.resolutions[path], index.branches)
+                if (rememberedLayouts[path] == layout) continue
+                rememberedLayouts[path] = layout
+                sessionCache.rememberWorktreeLayout(path, layout)
             }
         }
 
@@ -1585,7 +1640,9 @@ class MainScreenViewModel
                     }
                     requestBranches()
                     for ((worktree, resolution) in resolved) {
-                        applyPathLoad(worktreeLoader.load(worktree, resolution))
+                        // A path the server did not resolve yet lists with its cached project, so
+                        // a cold launch keeps its cached worktrees instead of dropping them.
+                        applyPathLoad(worktreeLoader.load(worktree, resolution ?: homeIndex.resolutions[worktree]))
                     }
                 }
         }
@@ -1610,6 +1667,11 @@ class MainScreenViewModel
 
         private fun applyPathLoad(load: HomePathLoad) {
             if (load.listsSessions) listsSessionsPaths += load.addedPath else listsSessionsPaths -= load.addedPath
+            when (load.inventory) {
+                is WorktreeInventory.Loaded -> liveInventoryPaths += load.addedPath
+                WorktreeInventory.Unloaded -> liveInventoryPaths -= load.addedPath
+                WorktreeInventory.Failed -> Unit
+            }
             worktreeInventoryCache.record(load.inventory, load.addedPath, serverBaseUrl)
             updateHomeIndex { index ->
                 val resolutions = load.resolution?.let { index.resolutions + (load.addedPath to it) } ?: index.resolutions
@@ -1641,6 +1703,7 @@ class MainScreenViewModel
             homeIndex = next
             val changed = next.resolutions.filter { (path, resolution) -> previous.resolutions[path] != resolution }
             changed.forEach { (path, resolution) -> sessionCache.rememberProjectResolution(path, resolution) }
+            rememberWorktreeLayouts(next)
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(home = next) else state
             }
@@ -1666,6 +1729,8 @@ class MainScreenViewModel
             worktreeLoader.onDisconnected()
             worktreeInventoryCache.clear()
             listsSessionsPaths.clear()
+            liveInventoryPaths.clear()
+            rememberedLayouts.clear()
             branchLookups.clear()
             homeIndex = HomeWorktreeIndex()
         }

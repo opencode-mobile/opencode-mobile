@@ -142,6 +142,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSplitPane
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneScreen
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeStatusStackReveal
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.currentOpenCodeUsesSplitLayout
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
@@ -368,6 +369,7 @@ fun MainNavigation() {
                             title = stringResource(R.string.common_loading_sessions),
                             subtitle = stringResource(R.string.common_checking_server),
                             testTag = "appRootLoading",
+                            reveal = OpenCodeStatusStackReveal.AfterGrace,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

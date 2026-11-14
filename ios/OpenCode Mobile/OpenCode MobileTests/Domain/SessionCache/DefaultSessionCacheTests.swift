@@ -65,6 +65,37 @@ import Testing
         #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: nil) == nil)
     }
 
+    @Test func worktreeLayoutRoundTripsPerConnectionAndPurges() async {
+        let cache = DefaultSessionCache(store: InMemorySessionCacheStore(), connectionIdProvider: { connectionId })
+        let layout = HomeWorktreeLayout(
+            directories: ["/repo", "/wt/tax"],
+            branches: ["/repo": "main", "/wt/tax": "feature/tax"]
+        )
+        cache.rememberWorktreeLayout(worktree: "/repo", layout: layout)
+
+        var seeded = await cache.seedWorktreeLayout(worktree: "/repo", connectionID: nil)
+        for _ in 0 ..< 200 where seeded == nil {
+            try? await Task.sleep(for: .milliseconds(10))
+            seeded = await cache.seedWorktreeLayout(worktree: "/repo", connectionID: nil)
+        }
+        #expect(seeded == layout)
+        #expect(await cache.seedWorktreeLayout(worktree: "/repo", connectionID: "other") == nil)
+        // The project resolution of the same path is a separate record.
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: nil) == nil)
+
+        await cache.purgeWorktree(serverBaseURL: "http://localhost:4096/", worktree: "/repo")
+        #expect(await cache.seedWorktreeLayout(worktree: "/repo", connectionID: nil) == nil)
+    }
+
+    @Test func purgeDropsAWorktreeLayoutStillQueued() async {
+        let cache = DefaultSessionCache(store: InMemorySessionCacheStore(), connectionIdProvider: { connectionId })
+        cache.rememberWorktreeLayout(worktree: "/repo", layout: HomeWorktreeLayout(directories: ["/repo"], branches: [:]))
+        await cache.purgeWorktree(serverBaseURL: "http://localhost:4096/", worktree: "/repo")
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(await cache.seedWorktreeLayout(worktree: "/repo", connectionID: nil) == nil)
+    }
+
     @Test func projectResolutionsLandInTheOrderTheyWereRemembered() async {
         let store = FirstCommitGatedStore()
         let cache = DefaultSessionCache(store: store, connectionIdProvider: { connectionId })

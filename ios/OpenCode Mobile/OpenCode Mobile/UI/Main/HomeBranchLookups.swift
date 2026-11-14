@@ -47,6 +47,17 @@ final class HomeBranchLookups {
         requested.removeAll()
     }
 
+    /// Branches the Session Cache remembered, for directories with no answer yet. A cold Home
+    /// shows them until the lookups answer, like known branches after `refresh`.
+    func seed(_ cached: [String: String]) {
+        var changed = false
+        for (directory, branch) in cached where branches[directory] == nil {
+            branches[directory] = branch
+            changed = true
+        }
+        if changed { onChange?(branches) }
+    }
+
     /// Disconnect or profile switch: forgets everything.
     func clear() {
         tasks.values.forEach { $0.cancel() }

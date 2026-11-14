@@ -57,6 +57,7 @@ import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.SessionWindow
 import dev.opencode.mobile.domain.session.VcsInfo
+import dev.opencode.mobile.domain.home.WorktreeLayout
 import dev.opencode.mobile.domain.sessioncache.DefaultSessionCache
 import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
@@ -73,6 +74,7 @@ import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.ui.components.SessionListFilterTab
+import dev.opencode.mobile.ui.components.SessionListLocationPart
 import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.text.UiText
@@ -2747,6 +2749,88 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun cachedPaint_labelsWorktreeRowsAsTheLiveLoadDid() =
+        runTest(testDispatcher) {
+            // A cold paint without the worktree inventory and branches relabels every row (and
+            // the project pill) a moment later, once the live answers arrive.
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { "profile-1" },
+                    scope = backgroundScope,
+                    json = json,
+                    debounceMs = 0L,
+                    activityDebounceMs = 0L,
+                )
+            val sessions =
+                listOf(
+                    Session(id = "main", title = "Main", directory = "/repo", updatedAtEpochMs = 1L),
+                    Session(id = "tax", title = "Tax", directory = "/wt/tax", updatedAtEpochMs = 2L),
+                )
+            val listedWorktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun loadRefreshed(
+                        addedPath: String,
+                        projectId: String?,
+                        mainWorktree: String?,
+                    ): WorktreeLoad = WorktreeLoad.Loaded(listOf("/repo", "/wt/tax"), listsSessions = false)
+                }
+            createViewModel(
+                connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                sessionRepository =
+                    FakeSessionRepository(
+                        mutableMapOf("/repo" to sessions),
+                        branches = mapOf("/repo" to "main", "/wt/tax" to "feature/tax-rounding"),
+                    ),
+                sessionCache = cache,
+                worktreeRepository = listedWorktrees,
+                serverProtocol = ServerProtocol.V2,
+            )
+            advanceUntilIdle()
+            assertEquals(
+                WorktreeLayout(
+                    directories = listOf("/repo", "/wt/tax"),
+                    branches = mapOf("/repo" to "main", "/wt/tax" to "feature/tax-rounding"),
+                ),
+                cache.seedWorktreeLayout("/repo"),
+            )
+            cache.rememberSessions("/repo", sessions)
+
+            // Next launch: nothing live answers in time.
+            val coldSessions = FakeSessionRepository(mutableMapOf("/repo" to sessions))
+            coldSessions.vcsError = IllegalStateException("vcs down")
+            val failingWorktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun loadRefreshed(
+                        addedPath: String,
+                        projectId: String?,
+                        mainWorktree: String?,
+                    ): WorktreeLoad = WorktreeLoad.Failed(IllegalStateException("worktrees down"))
+                }
+            val cold =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(currentProjectError = IllegalStateException("not yet")),
+                    sessionRepository = coldSessions,
+                    sessionCache = cache,
+                    worktreeRepository = failingWorktrees,
+                    serverProtocol = ServerProtocol.V2,
+                )
+            advanceUntilIdle()
+
+            val painted = cold.uiState.value as MainScreenUiState.Loaded
+            val project = painted.projects.single()
+            assertEquals(listOf("/repo", "/wt/tax"), project.worktrees.map { it.directory })
+            assertEquals(listOf("main", "feature/tax-rounding"), project.worktrees.map { it.branch })
+            assertEquals(setOf("/repo", "/wt/tax"), painted.home.inventories["/repo"])
+            assertEquals(
+                listOf(SessionListLocationPart("feature/tax-rounding", isBranch = true), SessionListLocationPart("tax")),
+                painted.homeSessions().first { it.id == "tax" }.location,
+            )
+        }
+
+    @Test
     fun worktreesOfOneRepository_groupIntoOneProjectWithBranches() =
         runTest(testDispatcher) {
             val shared =
@@ -3257,8 +3341,12 @@ private class FakeSessionRepository(
     var vcsAnswers: ArrayDeque<VcsInfo>? = null
     var vcsCalls = 0
 
+    /** Thrown by every VCS lookup when set. */
+    var vcsError: Throwable? = null
+
     override suspend fun getVcsInfo(directory: String?): VcsInfo {
         vcsCalls += 1
+        vcsError?.let { throw it }
         vcsAnswers?.let { answers -> return answers.removeFirstOrNull() ?: answers.lastOrNull() ?: VcsInfo(null, null) }
         return VcsInfo(currentBranch = branches[directory], defaultBranch = "main")
     }

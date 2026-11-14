@@ -430,6 +430,68 @@ struct ProjectListHomeViewModelTests {
         #expect(rows.map(\.worktree) == ["prj_repo"])
     }
 
+    @Test func cachedPaintKeepsTheWorktreeLabelsTheLiveLoadShows() async {
+        // Without the remembered worktrees a cold Home paints every row unlabeled, then relabels
+        // every row when the inventory lands: the whole list looks reloaded.
+        let cache = DefaultSessionCache(
+            store: InMemorySessionCacheStore(),
+            connectionIdProvider: { "profile-1" },
+            debounceMilliseconds: 0,
+            activityDebounceMilliseconds: 0
+        )
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let sessions = [
+            Session(id: "s-tax", title: "Tax", slug: nil, projectID: nil, directory: "/wt/tax", parentID: nil, updatedAtEpochMs: 2),
+            Session(id: "s-main", title: "Main", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ]
+        let liveSessions = FakeSessionRepository(sessions: sessions)
+        liveSessions.vcsInfo = { directory in
+            VcsInfo(currentBranch: directory == "/repo" ? "main" : "feature/tax-rounding", defaultBranch: "main")
+        }
+        let live = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            sessionRepository: liveSessions,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            worktreeRepository: ScriptedWorktreeRepository(loads: [.loaded(directories: ["/repo", "/wt/tax"], listsSessions: false)]),
+            branchRetryDelays: [.zero],
+            sessionCache: cache
+        )
+        await live.refresh()
+        let expectedLayout = HomeWorktreeLayout(
+            directories: ["/repo", "/wt/tax"],
+            branches: ["/repo": "main", "/wt/tax": "feature/tax-rounding"]
+        )
+        var remembered: HomeWorktreeLayout?
+        for _ in 0 ..< 200 where remembered != expectedLayout {
+            remembered = await cache.seedWorktreeLayout(worktree: "/repo", connectionID: nil)
+            if remembered != expectedLayout { try? await Task.sleep(for: .milliseconds(10)) }
+        }
+        #expect(remembered == expectedLayout)
+        await cache.rememberSessions(worktree: "/repo", sessions: sessions)
+
+        // Next launch: neither the worktree list nor the branches answer yet.
+        let coldSessions = FakeSessionRepository(sessions: sessions)
+        coldSessions.vcsInfo = { _ in throw SessionError.transport("offline") }
+        let cold = makeViewModel(
+            projectRepository: FakeProjectRepository(failingDirectories: ["/repo"]),
+            sessionRepository: coldSessions,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            worktreeRepository: ScriptedWorktreeRepository(loads: [.failed]),
+            branchRetryDelays: [],
+            sessionCache: cache
+        )
+        await cold.refresh()
+        guard case let .loaded(sections, _, _, _) = cold.state else {
+            Issue.record("Expected the cached paint")
+            return
+        }
+        #expect(cold.homeProjects.first?.worktrees.map(\.directory) == ["/repo", "/wt/tax"])
+        #expect(cold.homeProjects.first?.worktrees.map(\.branch) == ["main", "feature/tax-rounding"])
+        #expect(sections.first?.worktreeInventory == .loaded(["/repo", "/wt/tax"]))
+        let rows = sections.crossProjectSessionListSessions(projects: cold.homeProjects)
+        #expect(rows.first { $0.id == "s-tax" }?.location?.parts == [.branch("feature/tax-rounding"), .text("tax")])
+    }
+
     @Test func branchesOfWorktreesFoundAfterTheRefreshShowWithoutAPullToRefresh() async {
         // v2: the first inventory knows only the main checkout; the next one (after
         // POST /api/worktree/refresh) adds two worktrees while branch loads are still in flight.

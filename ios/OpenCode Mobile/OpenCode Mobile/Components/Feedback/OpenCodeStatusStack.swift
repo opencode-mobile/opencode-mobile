@@ -7,28 +7,57 @@ enum OpenCodeStatusStackStyle {
     case spinner
 }
 
+/// When a status stack becomes visible.
+enum OpenCodeStatusStackReveal: Equatable {
+    /// Shown from the first frame.
+    case immediate
+    /// Blank for ``OpenCodeStatusStack/revealGrace``, then shown. For loads that usually end
+    /// sooner (a cold start painting from disk), so a fast one never flashes a loader.
+    case afterGrace
+}
+
 /// Centered mid-well indeterminate status: neutral ring + title + subtitle, or a ring alone.
 struct OpenCodeStatusStack: View {
+    /// Matches the Home per-project loading grace.
+    static let revealGrace: Duration = .milliseconds(300)
+
     var title: OpenCodeText
     var subtitle: OpenCodeText
     var style: OpenCodeStatusStackStyle
+    var reveal: OpenCodeStatusStackReveal
     var accessibilityIdentifier: String?
+    @State private var graceElapsed = false
 
-    init(title: OpenCodeText, subtitle: OpenCodeText, accessibilityIdentifier: String? = nil) {
+    init(
+        title: OpenCodeText,
+        subtitle: OpenCodeText,
+        reveal: OpenCodeStatusStackReveal = .immediate,
+        accessibilityIdentifier: String? = nil
+    ) {
         precondition(!title.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         precondition(!subtitle.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = title
         self.subtitle = subtitle
         self.style = .labeled
+        self.reveal = reveal
         self.accessibilityIdentifier = accessibilityIdentifier
     }
 
-    init(spinner accessibilityLabel: OpenCodeText = "Loading", accessibilityIdentifier: String? = nil) {
+    init(
+        spinner accessibilityLabel: OpenCodeText = "Loading",
+        reveal: OpenCodeStatusStackReveal = .immediate,
+        accessibilityIdentifier: String? = nil
+    ) {
         precondition(!accessibilityLabel.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = accessibilityLabel
         self.subtitle = .empty
         self.style = .spinner
+        self.reveal = reveal
         self.accessibilityIdentifier = accessibilityIdentifier
+    }
+
+    private var isVisible: Bool {
+        reveal == .immediate || graceElapsed
     }
 
     var body: some View {
@@ -57,6 +86,15 @@ struct OpenCodeStatusStack: View {
         }
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: style == .spinner ? nil : .infinity)
+        .opacity(isVisible ? 1 : 0)
+        .accessibilityHidden(!isVisible)
+        .animation(.easeOut(duration: 0.15), value: isVisible)
+        .task {
+            guard reveal == .afterGrace, !graceElapsed else { return }
+            try? await Task.sleep(for: Self.revealGrace)
+            guard !Task.isCancelled else { return }
+            graceElapsed = true
+        }
     }
 
     private var accessibilityLabel: String {
@@ -89,6 +127,16 @@ private struct OptionalAccessibilityIdentifier: ViewModifier {
     OpenCodeStatusStack(
         title: "Loading sessions",
         subtitle: "Checking server…"
+    )
+    .frame(height: 320)
+    .openCodeTheme()
+}
+
+#Preview("Status Stack — After grace") {
+    OpenCodeStatusStack(
+        title: "Loading sessions",
+        subtitle: "Checking server…",
+        reveal: .afterGrace
     )
     .frame(height: 320)
     .openCodeTheme()

@@ -34,4 +34,6 @@ nonisolated struct SessionWindow: Sendable, Equatable {
 nonisolated enum HomeSessionPaging {
     /// Root sessions Home asks for at first, and how many more each load more adds.
     static let pageSize = 50
+    /// Most pages a cold start asks for at once to match the window the Session Cache painted.
+    static let maxSeededPages = 4
 }

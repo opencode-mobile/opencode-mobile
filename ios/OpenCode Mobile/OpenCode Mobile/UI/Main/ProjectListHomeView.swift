@@ -1295,9 +1295,11 @@ struct ProjectListHomeView: View {
     private var content: some View {
         switch viewModel.state {
         case .probing, .loading:
+            // A cold start with cached projects paints them within the grace: no loader flash.
             OpenCodeStatusStack(
                 title: "common.loading_sessions",
                 subtitle: "common.checking_server",
+                reveal: .afterGrace,
                 accessibilityIdentifier: "homeLoading"
             )
         case .disconnected:

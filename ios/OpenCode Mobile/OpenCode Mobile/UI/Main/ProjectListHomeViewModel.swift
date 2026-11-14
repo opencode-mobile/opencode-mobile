@@ -17,6 +17,14 @@ struct ProjectSectionItem: Identifiable, Equatable {
     var hasMoreSessions = false
     /// Oldest update in the live window; nil before it loads or when it is empty.
     var oldestWindowUpdatedAtEpochMs: Int64? = nil
+
+    /// The section with the project and worktree inventory a cached layout seeded.
+    func withCachedLayout(projectID: String?, inventory: WorktreeInventory?) -> ProjectSectionItem {
+        var copy = self
+        copy.projectID = projectID ?? self.projectID
+        copy.worktreeInventory = inventory ?? worktreeInventory
+        return copy
+    }
 }
 
 /// A subfolder row in the Add project sheet.
@@ -496,6 +504,8 @@ final class ProjectListHomeViewModel {
     private var projectResolutions: [String: HomeProjectResolution] = [:]
     /// Worktree directories the server listed, per added path.
     private var worktreeDirectories: [String: [String]] = [:]
+    /// Worktree layouts last read from or written to the Session Cache, per added path.
+    @ObservationIgnored private var rememberedWorktreeLayouts: [String: HomeWorktreeLayout] = [:]
     /// v1: non-added worktree directories whose sessions each added path's section folds in.
     private(set) var homeExtraDirectories: [String: [String]] = [:]
     /// Current branch by canonical worktree directory.
@@ -699,6 +709,10 @@ final class ProjectListHomeViewModel {
         branchLookups.onChange = { [weak self] branches in
             guard let self, self.worktreeBranches != branches else { return }
             self.worktreeBranches = branches
+            // New branch answers update the remembered layouts (unchanged ones are not rewritten).
+            for path in self.worktreeDirectories.keys {
+                self.rememberWorktreeLayout(path)
+            }
         }
         startObservingConnectionState()
     }
@@ -732,6 +746,7 @@ final class ProjectListHomeViewModel {
         worktreeMarks.retain(removedDirectories: [])
         projectResolutions.removeAll()
         worktreeDirectories.removeAll()
+        rememberedWorktreeLayouts.removeAll()
         homeExtraDirectories.removeAll()
         worktreeBranches.removeAll()
         serverProjectInfo.removeAll()
@@ -826,10 +841,13 @@ final class ProjectListHomeViewModel {
             sections.append(await sectionFromCache(worktree: worktree, connectionID: id))
         }
         let resolutions = await cachedProjectResolutions(worktrees, connectionID: id)
+        let layouts = await cachedWorktreeLayouts(worktrees, connectionID: id)
         guard generation == switchPaintGeneration, pendingSwitchID == id else { return }
         clearProjectLoads()
         clearHomeProjectInputs()
         projectResolutions = resolutions
+        applyWorktreeLayouts(layouts, replacing: true)
+        sections = sections.map { $0.withCachedLayout(projectID: worktreeProjectIDs[$0.worktree], inventory: worktreeInventories[$0.worktree]) }
         probeWaitsOnAddressCheck = false
         if sections.isEmpty {
             state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
@@ -1574,8 +1592,10 @@ final class ProjectListHomeViewModel {
                 reloadWorktreeMarks(worktrees)
                 return
             }
-            let sections = await loadSectionsFromCache(worktrees: worktrees)
+            // Projects and worktrees first: the cached rows are built and labeled from them.
             await seedProjectResolutions(worktrees)
+            await seedWorktreeLayouts(worktrees)
+            let sections = await loadSectionsFromCache(worktrees: worktrees)
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: false,
@@ -1695,6 +1715,64 @@ final class ProjectListHomeViewModel {
         }
     }
 
+    /// Cached worktree lists and branches for paths whose live inventory has not loaded, so a
+    /// cold Home shows the worktree labels and project chip the live load will, not a relabel.
+    private func seedWorktreeLayouts(_ worktrees: [String]) async {
+        let missing = worktrees.filter { worktreeInventories[$0] == nil }
+        applyWorktreeLayouts(await cachedWorktreeLayouts(missing, connectionID: nil))
+    }
+
+    private func cachedWorktreeLayouts(
+        _ worktrees: [String],
+        connectionID: String?
+    ) async -> [String: HomeWorktreeLayout] {
+        var layouts: [String: HomeWorktreeLayout] = [:]
+        for worktree in worktrees {
+            if let layout = await sessionCache.seedWorktreeLayout(worktree: worktree, connectionID: connectionID) {
+                layouts[worktree] = layout
+            }
+        }
+        return layouts
+    }
+
+    /// `replacing` drops what another server left for the same paths (a profile switch paint).
+    private func applyWorktreeLayouts(_ layouts: [String: HomeWorktreeLayout], replacing: Bool = false) {
+        if replacing {
+            for worktree in layouts.keys {
+                worktreeInventories[worktree] = nil
+                worktreeProjectIDs[worktree] = nil
+            }
+        }
+        var branches: [String: String] = [:]
+        for (worktree, layout) in layouts where worktreeInventories[worktree] == nil {
+            worktreeDirectories[worktree] = layout.directories
+            worktreeInventories[worktree] = .loaded(layout.directories)
+            if worktreeProjectIDs[worktree] == nil, let resolution = projectResolutions[worktree], resolution.isMergeable {
+                worktreeProjectIDs[worktree] = resolution.id
+            }
+            rememberedWorktreeLayouts[worktree] = layout
+            branches.merge(layout.branches) { current, _ in current }
+        }
+        if !branches.isEmpty {
+            branchLookups.seed(branches)
+        }
+    }
+
+    /// Remembers what `addedPath` lists now (worktrees and their branches), when it changed.
+    private func rememberWorktreeLayout(_ addedPath: String) {
+        guard let directories = worktreeDirectories[addedPath], !directories.isEmpty else { return }
+        var members = Set(directories.map(ServerPathPolicy.canonical))
+        members.insert(ServerPathPolicy.canonical(addedPath))
+        if let main = projectResolutions[addedPath]?.mainCheckout { members.insert(main) }
+        let layout = HomeWorktreeLayout(
+            directories: directories,
+            branches: worktreeBranches.filter { members.contains($0.key) }
+        )
+        guard rememberedWorktreeLayouts[addedPath] != layout else { return }
+        rememberedWorktreeLayouts[addedPath] = layout
+        sessionCache.rememberWorktreeLayout(worktree: addedPath, layout: layout)
+    }
+
     private func cachedProjectResolutions(
         _ worktrees: [String],
         connectionID: String?
@@ -1778,7 +1856,9 @@ final class ProjectListHomeViewModel {
             letterAccent: letterAccent(for: worktree),
             allSessions: items,
             loadError: nil,
-            sessionsFromCache: seeded != nil
+            sessionsFromCache: seeded != nil,
+            projectID: worktreeProjectIDs[worktree],
+            worktreeInventory: worktreeInventories[worktree] ?? .unloaded
         )
     }
 
@@ -2119,6 +2199,9 @@ final class ProjectListHomeViewModel {
         // A failed reload keeps the worktrees Home already knows.
         if update.inventory != .failed, worktreeDirectories[update.addedPath] != update.directories {
             worktreeDirectories[update.addedPath] = update.directories
+        }
+        if case .loaded = update.inventory {
+            rememberWorktreeLayout(update.addedPath)
         }
         // The inventory may have grown (v2 lists again after its refresh): ask for new worktrees.
         lookUpBranchesForResolvedProjects()

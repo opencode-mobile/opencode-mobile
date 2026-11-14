@@ -90,6 +90,7 @@ struct AppRootView: View {
                 OpenCodeStatusStack(
                     title: "common.loading_sessions",
                     subtitle: "common.checking_server",
+                    reveal: .afterGrace,
                     accessibilityIdentifier: "appRootLoading"
                 )
             case .appOnboarding:

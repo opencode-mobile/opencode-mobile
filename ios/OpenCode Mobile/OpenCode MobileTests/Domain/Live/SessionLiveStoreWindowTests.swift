@@ -88,14 +88,80 @@ struct SessionLiveStoreWindowTests {
         #expect(store.ancestry.rootOf("root-1") == nil)
     }
 
+    @Test func coldStartAsksForTheWindowTheCachePainted() async {
+        let repository = WindowFakeSessionRepository(rootCount: 300)
+        let cache = await cachedWindow(count: 100)
+        let store = makeStore(repository, sessionCache: cache)
+        let latest = observe(store)
+        defer { latest.stop() }
+
+        #expect(await windowWaitUntil { latest.value?.isFromCache == false })
+        #expect(repository.limits == [100])
+        #expect(latest.value?.sessions.count == 100)
+    }
+
+    @Test func coldStartRoundsACachedWindowUpToWholePages() async {
+        let repository = WindowFakeSessionRepository(rootCount: 300)
+        let store = makeStore(repository, sessionCache: await cachedWindow(count: 73))
+        let latest = observe(store)
+        defer { latest.stop() }
+
+        #expect(await windowWaitUntil { latest.value?.isFromCache == false })
+        #expect(repository.limits == [100])
+    }
+
+    @Test func coldStartCapsTheSeededWindow() async {
+        let repository = WindowFakeSessionRepository(rootCount: 600)
+        let store = makeStore(repository, sessionCache: await cachedWindow(count: 450))
+        let latest = observe(store)
+        defer { latest.stop() }
+
+        #expect(await windowWaitUntil { latest.value?.isFromCache == false })
+        #expect(repository.limits == [HomeSessionPaging.pageSize * HomeSessionPaging.maxSeededPages])
+    }
+
+    @Test func aSmallCachedWindowStillAsksForOnePage() async {
+        let repository = WindowFakeSessionRepository(rootCount: 300)
+        let store = makeStore(repository, sessionCache: await cachedWindow(count: 12))
+        let latest = observe(store)
+        defer { latest.stop() }
+
+        #expect(await windowWaitUntil { latest.value?.isFromCache == false })
+        #expect(repository.limits == [HomeSessionPaging.pageSize])
+    }
+
+    @Test func registrySeedIsIgnoredOnceAServerLoadCommitted() {
+        let windows = SessionWindowRegistry()
+        windows.committed(directory: "/repo", limit: 50, hasMore: true)
+        windows.seededFromCache(directory: "/repo", count: 150)
+        #expect(windows.limit(directory: "/repo") == 50)
+
+        let fresh = SessionWindowRegistry()
+        fresh.seededFromCache(directory: "/repo", count: 0)
+        #expect(fresh.limit(directory: "/repo") == HomeSessionPaging.pageSize)
+    }
+
+    private func cachedWindow(count: Int) async -> DefaultSessionCache {
+        let cache = DefaultSessionCache(store: InMemorySessionCacheStore(), connectionIdProvider: { "test-connection" })
+        let sessions = (0 ..< count).map { index in
+            Session(
+                id: "root-\(index)", title: "Root \(index)", slug: nil, projectID: nil,
+                directory: "/repo", parentID: nil, updatedAtEpochMs: Int64(count - index)
+            )
+        }
+        await cache.rememberSessions(worktree: "/repo", sessions: sessions)
+        return cache
+    }
+
     private func makeStore(
         _ repository: WindowFakeSessionRepository,
-        eventStream: FakeForegroundEventStream = FakeForegroundEventStream()
+        eventStream: FakeForegroundEventStream = FakeForegroundEventStream(),
+        sessionCache: any SessionCache = NoOpSessionCache.shared
     ) -> DefaultSessionLiveStore {
         DefaultSessionLiveStore(
             sessionRepository: repository,
             eventStream: eventStream,
-            sessionCache: NoOpSessionCache.shared
+            sessionCache: sessionCache
         )
     }
 

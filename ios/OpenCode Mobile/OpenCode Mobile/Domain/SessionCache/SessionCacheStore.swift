@@ -15,6 +15,7 @@ nonisolated enum SessionCacheKind: String, Sendable {
     case sessionActivity = "SessionActivity"
     case messageTimeline = "MessageTimeline"
     case projectResolution = "ProjectResolution"
+    case worktreeLayout = "WorktreeLayout"
 }
 
 nonisolated struct SessionCacheKey: Sendable, Hashable {
@@ -45,6 +46,8 @@ nonisolated struct SessionCacheKey: Sendable, Hashable {
             "\(connectionId)|\(worktree)|msg|\(entryId)"
         case .projectResolution:
             "\(connectionId)|\(worktree)|project"
+        case .worktreeLayout:
+            "\(connectionId)|\(worktree)|worktrees"
         }
     }
 }

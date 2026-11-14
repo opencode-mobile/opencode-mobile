@@ -38,6 +38,21 @@ internal class HomeBranchLookups(
     private val generations = mutableMapOf<String, Int>()
     private val jobs = mutableMapOf<String, Job>()
 
+    /** Directories the server answered since the last [clear]. */
+    private val answered = mutableSetOf<String>()
+
+    /**
+     * Cached branches (a cold launch's Session Cache) for directories with no server answer yet,
+     * so rows paint the branch the live answer will most likely repeat. Lookups still run; their
+     * answers overwrite these.
+     */
+    fun seed(cached: Map<String, String>) {
+        val filled = cached.filterKeys { it !in answered && it !in branches }
+        if (filled.isEmpty()) return
+        branches = branches + filled
+        onChange(branches)
+    }
+
     /** Asks for every directory not already answered or in flight since the last [refresh]. */
     fun lookUp(directories: Collection<String>) {
         for (directory in directories) {
@@ -56,6 +71,7 @@ internal class HomeBranchLookups(
         jobs.clear()
         requested.clear()
         generations.clear()
+        answered.clear()
         if (branches.isNotEmpty()) {
             branches = emptyMap()
             onChange(branches)
@@ -95,6 +111,7 @@ internal class HomeBranchLookups(
         directory: String,
         branch: String?,
     ) {
+        answered += directory
         if (branches[directory] == branch) return
         branches = if (branch == null) branches - directory else branches + (directory to branch)
         onChange(branches)
