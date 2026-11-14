@@ -118,6 +118,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
@@ -125,7 +126,7 @@ import javax.inject.Inject
 class SessionChatViewModel
     @Inject
     constructor(
-        messageRepository: MessageRepository,
+        private val messageRepository: MessageRepository,
         modelCatalogStore: ModelCatalogStore,
         commandRepository: CommandRepository,
         agentRepository: AgentRepository,
@@ -1097,7 +1098,7 @@ class SessionChatViewModel
         ): ByteArray {
             val sessionId = boundSessionId ?: error("no session bound")
             val directory = transcriptWorktree ?: boundWorktree
-            val file = activityMessageRepository.fullImage(sessionId, directory, messageId, imageId)
+            val file = messageRepository.fullImage(sessionId, directory, messageId, imageId)
             return withContext(Dispatchers.Default) { AttachmentDataUrl.decode(file.dataUrl, file.mime) }
                 ?: error("image data did not decode")
         }
