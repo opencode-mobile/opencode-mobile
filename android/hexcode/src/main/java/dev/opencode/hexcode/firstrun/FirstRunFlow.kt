@@ -14,9 +14,12 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.hexcode.designsystem.HexTheme
 
-/** The first-run steps, one at a time, with a short cross-fade between them. */
+/** The first-run steps, one at a time, with a short cross-fade between them. [onTrySample] is Welcome's Try a sample session. */
 @Composable
-fun FirstRunFlow(vm: FirstRunViewModel) {
+fun FirstRunFlow(
+    vm: FirstRunViewModel,
+    onTrySample: () -> Unit = {},
+) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     Box(
         Modifier
@@ -29,7 +32,7 @@ fun FirstRunFlow(vm: FirstRunViewModel) {
             label = "first-run",
         ) { step ->
             when (step) {
-                FirstRunStep.Welcome -> WelcomeScreen(onScan = vm::openScanner)
+                FirstRunStep.Welcome -> WelcomeScreen(onScan = vm::openScanner, onTrySample = onTrySample)
                 FirstRunStep.Scan ->
                     ScanScreen(
                         scan = state.scan,

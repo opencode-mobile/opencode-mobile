@@ -9,6 +9,7 @@ import android.os.SystemClock
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -79,9 +80,13 @@ import dev.opencode.hexcode.home.FileMicrophone
 import dev.opencode.hexcode.home.FileTakeStore
 import dev.opencode.hexcode.home.HomeScreen
 import dev.opencode.hexcode.home.HomeViewModel
+import dev.opencode.hexcode.home.MemoryTakeStore
 import dev.opencode.hexcode.home.MicRecorder
+import dev.opencode.hexcode.home.NoFileAttacher
 import dev.opencode.hexcode.home.SampleArtifactFetcher
+import dev.opencode.hexcode.home.SampleHome
 import dev.opencode.hexcode.home.VoiceEngineDictation
+import dev.opencode.hexcode.session.PlaygroundScript
 import dev.opencode.hexcode.session.SessionSetup
 import dev.opencode.hexcode.session.TodaySessionDemo
 import dev.opencode.hexcode.settings.NewSessionInfo
@@ -221,6 +226,9 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val prefs by services.settings.prefs.collectAsStateWithLifecycle(initialValue = null)
+            // Try a sample session lays the placeholder computer, project and model over what's saved while it shows.
+            val sampleShown by services.sampleSession.collectAsStateWithLifecycle()
+            val playground = sampleShown == TodaySessionDemo.Playground
             val dark =
                 when (pinnedTheme ?: prefs?.appearance?.name?.lowercase()) {
                     "dark" -> true
@@ -257,7 +265,7 @@ class MainActivity : ComponentActivity() {
                     }
                     null ->
                         prefs?.let {
-                            val shown = if (services.demoSetup) DemoSetup.prefs(it) else it
+                            val shown = if (services.demoSetup || playground) DemoSetup.prefs(it) else it
                             HexCodeRoot(services, lab, shown, pairLink, clips, draftText, coldStart, drawn)
                         }
                 }
@@ -342,7 +350,7 @@ private fun HexCodeRoot(
             SystemBarIcons(darkScreen = HexTheme.isDark || state.step == FirstRunStep.Scan)
             // First run's screens are ready as they come.
             SideEffect { coldStart.ready() }
-            if (state.step != FirstRunStep.Done) FirstRunFlow(vm)
+            if (state.step != FirstRunStep.Done) FirstRunFlow(vm, onTrySample = services::openPlayground)
         }
     }
 }
@@ -359,6 +367,9 @@ private fun AfterFirstRun(
 ) {
     val context = LocalContext.current
     var page by remember { mutableStateOf(Page.Home) }
+    val sample by services.sampleSession.collectAsStateWithLifecycle()
+    // Try a sample session: home on the `playground` sample until Leave (or Back), from Welcome or from Settings.
+    val playground = sample == TodaySessionDemo.Playground
     // Pair again's scan screen, a full-screen cover over Settings or home.
     var pairingAgain by remember { mutableStateOf(false) }
     // Read the server's label again after Pair again.
@@ -388,22 +399,23 @@ private fun AfterFirstRun(
             value = runCatching { services.filesystem.getPaths().home }.getOrNull()
         }
     }
-    val sample by services.sampleSession.collectAsStateWithLifecycle()
     val takeFile = remember { services.takeAudio?.let { File(it).takeIf(File::isAbsolute) ?: File(context.filesDir, it) } }
     // Where link tiles for `localhost` open: the paired computer, as the phone reaches it.
     val computer by produceState<String?>(null) { value = services.computerAddress() }
     // Where artifact tiles open: the address in use, each file fetched by the signed-in client.
     val serverAddress by produceState<String?>(null, serverRead) { value = services.serverAddress() }
     val artifactFetcher = remember(prefs.project?.path) { services.artifactsApi.fetcher(prefs.project?.path.orEmpty()) }
-    // Debug builds: the `artifact` sample's tile opens its bundled page, with no computer behind it.
-    val sampleArtifact = BuildConfig.DEBUG && sample == TodaySessionDemo.Artifact
+    // The `artifact` and `playground` samples' tiles open the bundled page, with no computer behind it.
+    val sampleArtifact = sample == TodaySessionDemo.Artifact || playground
     val sampleFetcher = remember { SampleArtifactFetcher(context.assets, TodaySessionDemo.ARTIFACT_ID) }
     var openArtifact by remember { mutableStateOf(services.demoOpenArtifact) }
     // Today's session reads the latest choices when it opens, so a change made in Settings reaches the next open.
     val latest by rememberUpdatedState(prefs)
-    // A new sample (or Off) is a new home: the session starts again from opening.
+    // A new sample (or Off) is a new home: the session starts again from opening. Each visit to the playground starts
+    // it afresh; today's own home is kept meanwhile, and comes back as it was.
+    val homeKey = if (playground) "playground-${services.playgroundVisit}" else sample?.label ?: "live"
     val homeModel =
-        viewModel(key = "home-${sample?.label ?: "live"}-${services.setupGeneration.value}") {
+        viewModel(key = "home-$homeKey-${services.setupGeneration.value}") {
             HomeViewModel(
                 if (clips) {
                     ClipDictation(
@@ -427,10 +439,18 @@ private fun AfterFirstRun(
                         services.speechLaunch::now,
                     )
                 },
-                takes = FileTakeStore(File(context.filesDir, "takes")),
+                // A sample keeps its takes in memory and uploads nothing: it never touches what the real home keeps.
+                takes = if (sample != null) MemoryTakeStore() else FileTakeStore(File(context.filesDir, "takes")),
                 images = AndroidImagePreparer(context.applicationContext),
-                imageInput = { services.imageInput(latest.project?.path, latest.model, latest.modelName) },
-                files = AndroidFileAttacher(context.applicationContext, services.uploads, directory = { latest.project?.path.orEmpty() }),
+                imageInput = {
+                    if (sample != null) null else services.imageInput(latest.project?.path, latest.model, latest.modelName)
+                },
+                files =
+                    if (sample != null) {
+                        NoFileAttacher
+                    } else {
+                        AndroidFileAttacher(context.applicationContext, services.uploads, directory = { latest.project?.path.orEmpty() })
+                    },
                 makeSession = { scope ->
                     sample?.start(scope)
                         ?: services.todaySession(scope, directory = { latest.project?.path.orEmpty() }, model = { latest.model })
@@ -467,10 +487,12 @@ private fun AfterFirstRun(
             .filter { it == DeviceNetworkPathStatus.Ready }
             .collect { homeModel.networkReturned() }
     }
-    // Settings › Model and Project: the session follows a new model, and a new project opens a session there.
+    // Settings › Model and Project: the session follows a new model, and a new project opens a session there. The
+    // sample's placeholder choices aren't a change: neither home hears of them.
     var seenModel by remember { mutableStateOf(prefs.model) }
     var seenProject by remember { mutableStateOf(prefs.project?.path) }
     LaunchedEffect(prefs.model, prefs.project?.path) {
+        if (playground) return@LaunchedEffect
         val model = prefs.model
         if (model != null && model != seenModel) homeModel.modelChanged(model)
         if (prefs.project?.path != seenProject) homeModel.projectChanged()
@@ -517,6 +539,12 @@ private fun AfterFirstRun(
             page = Page.Settings
         }
     }
+    // Leave, or Back on the sample's home: its session stops, and Welcome or today's home shows again.
+    val leaveSample = {
+        homeModel.shutDown()
+        services.leavePlayground()
+    }
+    BackHandler(enabled = playground && page == Page.Home, onBack = leaveSample)
     val reduced = HexMotion.reduced
     AnimatedContent(
         targetState = shown,
@@ -549,14 +577,15 @@ private fun AfterFirstRun(
                     HomeScreen(
                         homeModel,
                         onSettings = { page = Page.Settings },
-                        computer = computer,
-                        serverName = server?.name,
+                        computer = if (playground) DemoSetup.HOST else computer,
+                        serverName = if (playground) DemoSetup.server.name else server?.name,
                         onPairAgain = { pairingAgain = true },
                         artifactAddress = if (sampleArtifact) SampleArtifactFetcher.ADDRESS else serverAddress,
                         artifactFetcher = if (sampleArtifact) sampleFetcher else artifactFetcher,
-                        serverHome = home,
+                        serverHome = if (playground) prefs.serverHome else home,
                         openArtifactOnTile = openArtifact,
                         onArtifactOpened = { openArtifact = false },
+                        sample = if (playground) SampleHome(PlaygroundScript.SUGGESTION, leaveSample) else null,
                     )
                 }
                 Page.Settings ->
@@ -585,6 +614,10 @@ private fun AfterFirstRun(
                         },
                         onSpeechLab = { page = Page.SettingsSpeechLab },
                         sampleSession = sample?.label ?: "Off",
+                        onTrySample = {
+                            services.openPlayground()
+                            page = Page.Home
+                        },
                         onSampleSession = {
                             // Off, then each preset in turn, then Off again. Not saved: the app always starts on the real session.
                             val presets = TodaySessionDemo.presets

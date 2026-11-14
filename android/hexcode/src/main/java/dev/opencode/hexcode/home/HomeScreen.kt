@@ -18,6 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -171,6 +172,8 @@ fun HomeScreen(
      */
     openArtifactOnTile: Boolean = false,
     onArtifactOpened: () -> Unit = {},
+    /** Try a sample session: the strip that says so, with Leave, and the suggestion's take; null on a real session. */
+    sample: SampleHome? = null,
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val artifacts by vm.artifacts.collectAsStateWithLifecycle()
@@ -245,25 +248,30 @@ fun HomeScreen(
             ) {
                 val today = state.today
                 val now = rememberNow(if (today.agent is AgentStatus.Working) 1_000 else 15_000)
+                if (sample != null) SampleStrip(sample.onLeave, Modifier.padding(start = edge, end = edge, bottom = 8.dp))
                 HomeTopBar(
                     today.agent,
                     now,
                     Modifier.padding(start = edge, end = edge - 6.dp).semantics { traversalIndex = -2f },
                     onNeedsInput = { vm.openNeeds() },
                 ) {
-                    // ◎ is always there: green while the goal is active.
-                    HexRoundButton(
-                        HexIcons.target,
-                        stringResource(R.string.goal_button),
-                        onClick = vm::openGoal,
-                        selected = today.goal?.status == GoalStatus.Active,
-                    )
-                    HexRoundButton(HexIcons.gear, stringResource(R.string.home_settings), onClick = onSettings)
+                    // ◎ is always there, green while the goal is active; neither it nor Settings is in the sample, whose
+                    // Leave is in its strip.
+                    if (sample == null) {
+                        HexRoundButton(
+                            HexIcons.target,
+                            stringResource(R.string.goal_button),
+                            onClick = vm::openGoal,
+                            selected = today.goal?.status == GoalStatus.Active,
+                        )
+                        HexRoundButton(HexIcons.gear, stringResource(R.string.home_settings), onClick = onSettings)
+                    }
                 }
                 // The goal line (`.goalline`): hidden while a take records, while there's a draft, and while an Ask shows.
                 // Its height is always held, also while it's empty or hidden, so nothing under it moves when it fills in
                 // (app-plan.md, Home › Cold start).
-                val goalLine = today.goalLine.takeIf { today.setup is SessionSetup.Ready }
+                // The sample has no goals: no line.
+                val goalLine = today.goalLine.takeIf { today.setup is SessionSetup.Ready && sample == null }
                 Box(Modifier.padding(start = edge, end = edge, top = 2.dp)) {
                     HexGoalLine(
                         HexGoalLineState.Empty,
@@ -337,6 +345,28 @@ fun HomeScreen(
                                     today.waiting.coerceAtLeast(1),
                                     idle = today.busySince == null && today.pendingInput == null,
                                     onClick = vm::openDetails,
+                                )
+                            }
+                        }
+                        // The sample's suggestion, a take with no speech model or microphone, while the agent is idle and
+                        // there's no draft. Its height is held too.
+                        if (sample != null) {
+                            val shown =
+                                today.setup is SessionSetup.Ready &&
+                                    state.draft.isEmpty &&
+                                    !state.recording &&
+                                    !state.busy
+                            Box(
+                                Modifier
+                                    .padding(start = edge, end = edge, top = 10.dp)
+                                    .alpha(if (shown) 1f else 0f)
+                                    .then(if (shown) Modifier else Modifier.clearAndSetSemantics {}),
+                            ) {
+                                HexButton(
+                                    onClick = { if (shown) vm.sendText(sample.suggestion) },
+                                    text = stringResource(R.string.sample_suggestion, sample.suggestion),
+                                    icon = HexIcons.spark,
+                                    enabled = shown,
                                 )
                             }
                         }
@@ -641,6 +671,40 @@ fun HomeScreen(
                 )
             }
         }
+    }
+}
+
+/** Home on the `playground` sample (Try a sample session): [suggestion] is the chip's take, [onLeave] the strip's Leave. */
+data class SampleHome(
+    val suggestion: String,
+    val onLeave: () -> Unit,
+)
+
+/** "Sample session — not connected to a computer", with Leave, over the sample's top bar. */
+@Composable
+private fun SampleStrip(
+    onLeave: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = HexTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(HexTheme.radius.l))
+                .background(colors.panel2)
+                .border(1.dp, colors.line, RoundedCornerShape(HexTheme.radius.l))
+                .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+    ) {
+        Text(
+            stringResource(R.string.sample_banner),
+            style = HexTheme.type.small,
+            color = colors.text2,
+            modifier = Modifier.weight(1f),
+        )
+        HexButton(onClick = onLeave, text = stringResource(R.string.sample_leave))
     }
 }
 
