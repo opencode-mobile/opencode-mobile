@@ -33,19 +33,23 @@ extension EnvironmentValues {
     }
 }
 
-/// Tapping a gallery tile: the whole group and the tapped image, sent to the Timeline region.
+/// Tapping a gallery tile: the whole group, the tapped image, and the message the group came
+/// from (so the viewer can fetch a full picture), sent to the Timeline region.
 struct SessionChatOpenImageViewerAction {
-    let open: ([FilePart], Int) -> Void
+    let open: ([FilePart], Int, String?) -> Void
 
-    func callAsFunction(_ images: [FilePart], index: Int) {
-        open(images, index)
+    func callAsFunction(_ images: [FilePart], index: Int, messageID: String? = nil) {
+        open(images, index, messageID)
     }
 }
 
-/// A timeline image group (one or more images) as an `OpenCodeImageGallery`. Each tile loads
-/// through the screen's attachment image loader; a tap opens the viewer over the group.
+/// A timeline image group (one or more images) as an `OpenCodeImageGallery`. A tile draws the
+/// image's thumbnail when it has one and otherwise loads through the screen's attachment image
+/// loader; a tap opens the viewer over the group.
 struct SessionChatImageGalleryView: View {
     let images: [FilePart]
+    /// The message the images belong to, when the row knows it.
+    var messageID: String?
 
     @Environment(\.attachmentImageLoading) private var loader
     @Environment(\.attachmentImageDirectory) private var directory
@@ -54,25 +58,65 @@ struct SessionChatImageGalleryView: View {
     var body: some View {
         OpenCodeImageGallery(
             items: images.map { $0.galleryItem(loader: loader, directory: directory) },
-            onOpen: openImageViewer.map { open in { index in open(images, index: index) } }
+            onOpen: openImageViewer.map { open in { index in open(images, index: index, messageID: messageID) } }
         )
     }
 }
 
 extension FilePart {
-    /// The presentation of a timeline image: its short name, any preview already decoded, and
-    /// a source that loads the full picture off the main thread through `loader`.
+    /// A gallery tile: its short name, the thumbnail when there is one (the full picture is then
+    /// never decoded for the tile), else a source that loads the picture off the main thread
+    /// through `loader`. With neither, the tile waits on a placeholder.
     func galleryItem(loader: (any AttachmentImageLoading)?, directory: String?) -> OpenCodeImageGalleryItem {
-        let file = self
-        let name = filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preview = previewData.flatMap(UIImage.init(data:))
+        let source = preview == nil && MessageImageLoader.isFull(self) ? imageSource(loader: loader, directory: directory) : nil
         return OpenCodeImageGalleryItem(
             id: id,
-            filename: name.isEmpty ? nil : (name as NSString).lastPathComponent,
-            preview: previewData.flatMap(UIImage.init(data:)),
-            source: loader.map { loader in
-                OpenCodeImageSource { await loader.image(for: file, directory: directory) }
-            }
+            filename: shortFilename,
+            preview: preview,
+            source: source,
+            isPending: preview == nil && source == nil,
+            loadKey: galleryLoadKey
         )
+    }
+
+    /// A viewer page: the thumbnail at once, and the full picture once this copy carries it.
+    func viewerItem(
+        loader: (any AttachmentImageLoading)?,
+        directory: String?,
+        fullState: SessionChatFullImageState
+    ) -> OpenCodeImageGalleryItem {
+        let isFull = MessageImageLoader.isFull(self)
+        let state: OpenCodeImageFullState? = switch fullState {
+        case .thumbnail, .loading: .loading
+        case .failed: .failed
+        case .full: .ready
+        }
+        return OpenCodeImageGalleryItem(
+            id: id,
+            filename: shortFilename,
+            preview: previewData.flatMap(UIImage.init(data:)),
+            source: isFull ? imageSource(loader: loader, directory: directory) : nil,
+            fullState: state,
+            loadKey: galleryLoadKey
+        )
+    }
+
+    private var shortFilename: String? {
+        let name = filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : (name as NSString).lastPathComponent
+    }
+
+    /// Changes when this image gains a thumbnail or its full picture under the same id.
+    private var galleryLoadKey: String {
+        "\(id)|\(dataURL.utf8.count)|\(previewData?.count ?? 0)|\(serverPath ?? "")"
+    }
+
+    private func imageSource(loader: (any AttachmentImageLoading)?, directory: String?) -> OpenCodeImageSource? {
+        let file = self
+        return loader.map { loader in
+            OpenCodeImageSource { await loader.image(for: file, directory: directory) }
+        }
     }
 }
 
@@ -83,6 +127,7 @@ extension View {
         loader: (any AttachmentImageLoading)?,
         directory: String?,
         onIndexChange: @escaping (Int) -> Void,
+        onRetry: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) -> some View {
         fullScreenCover(
@@ -90,10 +135,13 @@ extension View {
         ) {
             if let state {
                 OpenCodeImageViewer(
-                    items: state.images.map { $0.galleryItem(loader: loader, directory: directory) },
+                    items: state.images.map {
+                        $0.viewerItem(loader: loader, directory: directory, fullState: state.fullState(of: $0.id))
+                    },
                     index: state.index,
                     onIndexChange: onIndexChange,
-                    onDismiss: onDismiss
+                    onDismiss: onDismiss,
+                    onRetry: { _ in onRetry() }
                 )
             }
         }

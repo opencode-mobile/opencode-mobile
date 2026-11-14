@@ -15,6 +15,9 @@ internal const val INLINE_DECODE_MAX_DIMENSION = 1280
 /** Longest edge the full-screen viewer decodes to. */
 internal const val VIEWER_DECODE_MAX_DIMENSION = 2560
 
+/** Decode size (and cache key) of saved tool-image thumbnails, which are at most this large. */
+internal const val THUMBNAIL_DECODE_MAX_DIMENSION = 400
+
 /**
  * Decoded timeline and viewer images, bounded by bytes so an image-heavy session cannot
  * exhaust the heap. Keyed by image id and decode size; scrolling back to a gallery paints

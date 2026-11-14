@@ -42,6 +42,15 @@ nonisolated struct HomeProjectResolution: Equatable, Sendable {
     }
 }
 
+/// The worktrees an added path last listed, with their branches, so a cold Home groups and
+/// labels rows the way the live load will instead of relabeling every row when it lands.
+nonisolated struct HomeWorktreeLayout: Equatable, Sendable {
+    /// Worktree directories the server listed for the added path's project.
+    let directories: [String]
+    /// Current branch by canonical worktree directory.
+    let branches: [String: String]
+}
+
 /// One checkout of a Home project.
 nonisolated struct HomeWorktree: Hashable, Sendable {
     /// Canonical absolute path.

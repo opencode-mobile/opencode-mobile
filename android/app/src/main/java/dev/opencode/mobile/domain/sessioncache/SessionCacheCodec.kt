@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.sessioncache
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.home.ResolvedHomePath
+import dev.opencode.mobile.domain.home.WorktreeLayout
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.Message
@@ -55,22 +56,32 @@ object SessionCacheCodec {
             DiagnosticLog.warning(DiagnosticLogArea.Session, "session list decode failed", error)
         }.getOrNull()
 
+    /**
+     * Tool images keep only metadata (data URLs never go to disk); [hasThumbnail] marks the
+     * ones whose thumbnail file was saved, so a decode can point at it again.
+     */
     fun encodeMessages(
         messages: List<Message>,
         json: Json,
+        hasThumbnail: (MessagePart.File) -> Boolean = { it.thumbnailPath != null },
     ): String =
         json.encodeToString(
             CachedEnvelope(
                 schemaVersion = SCHEMA_VERSION,
                 sessions = null,
-                messages = CachedMessageListPayload(messages.map { it.toCachePayload() }),
+                messages = CachedMessageListPayload(messages.map { it.toCachePayload(hasThumbnail) }),
                 activity = null,
             ),
         )
 
+    /**
+     * [thumbnailPath] resolves a tool image id marked as having a thumbnail to its file; a null
+     * result (the file was evicted) leaves the image without one.
+     */
     fun decodeMessages(
         raw: String,
         json: Json,
+        thumbnailPath: (imageId: String) -> String? = { null },
     ): List<Message>? =
         runCatching {
             val envelope = json.decodeFromString<CachedEnvelope>(raw)
@@ -78,7 +89,7 @@ object SessionCacheCodec {
                 DiagnosticLog.warning(DiagnosticLogArea.Session, "message schema mismatch: ${envelope.schemaVersion}")
                 return null
             }
-            envelope.messages?.messages?.map { it.toDomain() }
+            envelope.messages?.messages?.map { it.toDomain(thumbnailPath) }
                 ?: error("missing messages payload")
         }.onFailure { error ->
             DiagnosticLog.warning(DiagnosticLogArea.Session, "message decode failed", error)
@@ -143,7 +154,39 @@ object SessionCacheCodec {
         }.onFailure { error ->
             DiagnosticLog.warning(DiagnosticLogArea.Session, "project resolution decode failed", error)
         }.getOrNull()
+
+    fun encodeWorktreeLayout(
+        layout: WorktreeLayout,
+        json: Json,
+    ): String =
+        json.encodeToString(
+            CachedWorktreeLayoutPayload(
+                schemaVersion = SCHEMA_VERSION,
+                directories = layout.directories,
+                branches = layout.branches,
+            ),
+        )
+
+    fun decodeWorktreeLayout(
+        raw: String,
+        json: Json,
+    ): WorktreeLayout? =
+        runCatching {
+            val payload = json.decodeFromString<CachedWorktreeLayoutPayload>(raw)
+            if (payload.schemaVersion != SCHEMA_VERSION) return null
+            WorktreeLayout(directories = payload.directories, branches = payload.branches)
+        }.onFailure { error ->
+            DiagnosticLog.warning(DiagnosticLogArea.Session, "worktree layout decode failed", error)
+        }.getOrNull()
 }
+
+@Serializable
+internal data class CachedWorktreeLayoutPayload(
+    val schemaVersion: Int,
+    val directories: List<String> = emptyList(),
+    /** Canonical directory to branch. */
+    val branches: Map<String, String> = emptyMap(),
+)
 
 @Serializable
 internal data class CachedProjectResolutionPayload(
@@ -267,6 +310,10 @@ internal data class CachedMessagePartPayload(
     val isMalformed: Boolean = false,
     val isDeclined: Boolean = false,
     val userNote: String? = null,
+    /** A tool part's images: metadata only, the data URL blanked. */
+    val images: List<CachedMessagePartPayload>? = null,
+    /** A tool image whose thumbnail file was saved alongside the cache. */
+    val hasThumbnail: Boolean = false,
 )
 
 @Serializable
@@ -370,12 +417,12 @@ private fun CachedActivityPayload.toDomain(): SessionActivityCacheEntry {
     )
 }
 
-private fun Message.toCachePayload(): CachedMessagePayload =
+private fun Message.toCachePayload(hasThumbnail: (MessagePart.File) -> Boolean): CachedMessagePayload =
     CachedMessagePayload(
         id = id,
         role = role.name.lowercase(),
         text = text,
-        parts = parts.mapNotNull { it.toCachePayload() },
+        parts = parts.mapNotNull { it.toCachePayload(hasThumbnail) },
         cost = cost,
         tokens = tokens?.toCachePayload(),
         model = model,
@@ -396,12 +443,12 @@ private fun Message.toCachePayload(): CachedMessagePayload =
         failureRecordedAtEpochMs = failure?.recordedAtEpochMs,
     )
 
-private fun CachedMessagePayload.toDomain(): Message =
+private fun CachedMessagePayload.toDomain(thumbnailPath: (String) -> String?): Message =
     Message(
         id = id,
         role = MessageRole.entries.firstOrNull { it.name.equals(role, ignoreCase = true) } ?: MessageRole.Unknown,
         text = text,
-        parts = parts.mapNotNull { it.toDomain() },
+        parts = parts.mapNotNull { it.toDomain(thumbnailPath) },
         cost = cost,
         tokens = tokens?.toDomain(),
         model = model,
@@ -463,7 +510,7 @@ private fun CachedMessageContextEstimatePayload.toDomain(): MessageContextEstima
         toolCharacters = toolCharacters,
     )
 
-private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
+private fun MessagePart.toCachePayload(hasThumbnail: (MessagePart.File) -> Boolean): CachedMessagePartPayload? =
     when (this) {
         is MessagePart.Text ->
             CachedMessagePartPayload(
@@ -493,17 +540,9 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 isMalformed = isMalformed,
                 isDeclined = isDeclined,
                 userNote = userNote,
+                images = images.takeIf { it.isNotEmpty() }?.map { it.toCachePayload(hasThumbnail(it)) },
             )
-        is MessagePart.File ->
-            CachedMessagePartPayload(
-                kind = "file",
-                id = id,
-                filename = filename,
-                mime = mime,
-                attachmentKind = kind.name.lowercase(),
-                dataUrl = AttachmentLimits.persistedDataUrl(dataUrl),
-                serverPath = serverPath,
-            )
+        is MessagePart.File -> toCachePayload(hasThumbnail = false)
         is MessagePart.Compaction ->
             CachedMessagePartPayload(
                 kind = "compaction",
@@ -529,7 +568,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
             )
     }
 
-private fun CachedMessagePartPayload.toDomain(): MessagePart? =
+private fun CachedMessagePartPayload.toDomain(thumbnailPath: (String) -> String?): MessagePart? =
     when (kind) {
         "text" ->
             MessagePart.Text(
@@ -559,20 +598,12 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 isMalformed = isMalformed,
                 isDeclined = isDeclined,
                 userNote = userNote,
+                images =
+                    images.orEmpty().mapNotNull { image ->
+                        image.toFileDomain(thumbnailPath = if (image.hasThumbnail) thumbnailPath else { _ -> null })
+                    },
             )
-        "file" -> {
-            val fileId = id ?: return null
-            MessagePart.File(
-                id = fileId,
-                filename = filename.orEmpty(),
-                mime = mime.orEmpty(),
-                kind =
-                    AttachmentKind.entries.firstOrNull { it.name.equals(attachmentKind, ignoreCase = true) }
-                        ?: AttachmentKind.Text,
-                dataUrl = dataUrl.orEmpty(),
-                serverPath = serverPath,
-            )
-        }
+        "file" -> toFileDomain(thumbnailPath = { null })
         "reasoning" ->
             MessagePart.Reasoning(
                 text = text.orEmpty(),
@@ -594,3 +625,31 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
         }
         else -> null
     }
+
+/** File parts and tool images share one shape; only tool images ever carry [hasThumbnail]. */
+private fun MessagePart.File.toCachePayload(hasThumbnail: Boolean): CachedMessagePartPayload =
+    CachedMessagePartPayload(
+        kind = "file",
+        id = id,
+        filename = filename,
+        mime = mime,
+        attachmentKind = kind.name.lowercase(),
+        dataUrl = AttachmentLimits.persistedDataUrl(dataUrl),
+        serverPath = serverPath,
+        hasThumbnail = hasThumbnail,
+    )
+
+private fun CachedMessagePartPayload.toFileDomain(thumbnailPath: (String) -> String?): MessagePart.File? {
+    val fileId = id ?: return null
+    return MessagePart.File(
+        id = fileId,
+        filename = filename.orEmpty(),
+        mime = mime.orEmpty(),
+        kind =
+            AttachmentKind.entries.firstOrNull { it.name.equals(attachmentKind, ignoreCase = true) }
+                ?: AttachmentKind.Text,
+        dataUrl = dataUrl.orEmpty(),
+        serverPath = serverPath,
+        thumbnailPath = thumbnailPath(fileId),
+    )
+}

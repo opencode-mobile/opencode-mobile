@@ -86,7 +86,7 @@ class DefaultSessionLiveStore
         private val knownSessions = MutableStateFlow<Map<String, Session>>(emptyMap())
 
         /** Home's window size per directory (#981); absent means one page. */
-        private val windowSizes = ConcurrentHashMap<String, Int>()
+        private val windows = HomeSessionWindows()
         private val latestByDirectory = ConcurrentHashMap<String, SessionListSnapshot>()
         private val loadingMore = ConcurrentHashMap.newKeySet<String>()
 
@@ -94,19 +94,19 @@ class DefaultSessionLiveStore
             cache.clear()
             viewedWatermarks.clear()
             knownSessions.value = emptyMap()
-            windowSizes.clear()
+            windows.clear()
             latestByDirectory.clear()
             sessionAncestry.clear()
         }
 
-        private fun windowSize(directory: String): Int = windowSizes[directory] ?: HomeSessionPaging.PAGE_SIZE
+        private fun windowSize(directory: String): Int = windows.limit(directory)
 
         override suspend fun loadMore(directory: String) {
             if (!activeDirectories.contains(directory)) return
             if (latestByDirectory[directory]?.hasMore != true) return
             if (!loadingMore.add(directory)) return
             try {
-                windowSizes.compute(directory) { _, size -> (size ?: HomeSessionPaging.PAGE_SIZE) + HomeSessionPaging.PAGE_SIZE }
+                windows.grow(directory)
                 DiagnosticLog.info(
                     DiagnosticLogArea.Session,
                     "sessionLiveStore loadMore directory=$directory limit=${windowSize(directory)}",
@@ -220,6 +220,7 @@ class DefaultSessionLiveStore
                                     }.getOrNull()
                                 },
                                 commit = { window ->
+                                    windows.markCommitted(directory)
                                     val sessions =
                                         publishLock.withLock {
                                             withKnownViewed(window.sessions).also { sessions ->
@@ -262,6 +263,8 @@ class DefaultSessionLiveStore
                 try {
                     activeDirectories.add(directory)
                     sessionCache.seedSessions(directory)?.let { seeded ->
+                        // Match the first live load to the painted rows, not one page (no shrink/grow).
+                        windows.seedFromCache(directory, seeded.size)
                         ResumeTiming.markCachePainted(System.currentTimeMillis())
                         publishLock.withLock {
                             publish(SessionListSnapshot(sessions = withKnownViewed(seeded), isFromCache = true))

@@ -177,8 +177,29 @@ class HexServices(
         Log.i(TalkLog.TAG, "speech model loaded in ${loaded - started} ms, warmed up in ${SystemClock.elapsedRealtime() - loaded} ms")
     }
 
-    /** Home's fake session until it talks to OpenCode (round 2 of M2); Settings › Developer › Sample session picks it. */
+    /**
+     * Home's fake session instead of today's: Settings › Developer › Sample session picks a preset, and Try a sample
+     * session ([openPlayground]) the `playground`. Only in memory, so a new process starts on the real session.
+     */
     val sampleSession = MutableStateFlow<TodaySessionDemo?>(null)
+
+    /** Counts Try a sample session's visits: each one starts the sample afresh. */
+    var playgroundVisit = 0
+        private set
+
+    /**
+     * Try a sample session, from Welcome or Settings: home on the `playground` sample, with [DemoSetup]'s placeholder
+     * computer, project and model laid over what's saved. Nothing of it is written; [leavePlayground] ends it.
+     */
+    fun openPlayground() {
+        playgroundVisit += 1
+        sampleSession.value = TodaySessionDemo.Playground
+    }
+
+    /** The sample's Leave: back to Welcome, or to today's session as it was. */
+    fun leavePlayground() {
+        if (sampleSession.value == TodaySessionDemo.Playground) sampleSession.value = null
+    }
 
     /** The event stream's own client: no read timeout, and its own connection pool. */
     val sseClient = OpencodeSseHttpClient(json, connection)

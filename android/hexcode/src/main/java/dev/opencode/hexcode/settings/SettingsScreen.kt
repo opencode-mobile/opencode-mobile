@@ -95,6 +95,8 @@ fun SettingsScreen(
     onSpeechLab: () -> Unit,
     sampleSession: String,
     onSampleSession: () -> Unit,
+    /** App › Sample session, in every build: home on the `playground` sample, with Leave back to this session. */
+    onTrySample: () -> Unit,
     /** Debug builds only: "Drop event stream". */
     onDropStream: (() -> Unit)?,
     onBack: () -> Unit,
@@ -179,6 +181,13 @@ fun SettingsScreen(
                     appearanceName(prefs.appearance),
                     null,
                     onAppearance,
+                )
+                Row(
+                    HexIcons.play,
+                    stringResource(R.string.settings_sample),
+                    null,
+                    stringResource(R.string.settings_sample_sub),
+                    onTrySample,
                 )
                 Row(
                     HexIcons.server,

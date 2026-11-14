@@ -32,12 +32,17 @@ import dev.opencode.hexcode.R
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.designsystem.components.HexBadge
+import dev.opencode.hexcode.designsystem.components.HexButton
+import dev.opencode.hexcode.designsystem.components.HexButtonSize
 import dev.opencode.hexcode.designsystem.components.HexPrimaryButton
 import dev.opencode.hexcode.designsystem.hexCodeText
 
-/** The one rule, and how to connect. Nothing is asked for here. */
+/** The one rule, and how to connect, or Try a sample session with no computer. Nothing is asked for here. */
 @Composable
-fun WelcomeScreen(onScan: () -> Unit) {
+fun WelcomeScreen(
+    onScan: () -> Unit,
+    onTrySample: () -> Unit = {},
+) {
     val colors = HexTheme.colors
     val type = HexTheme.type
     Column(
@@ -112,6 +117,15 @@ fun WelcomeScreen(onScan: () -> Unit) {
             )
         }
         HexPrimaryButton(stringResource(R.string.welcome_scan), onClick = onScan)
+        HexButton(
+            onClick = onTrySample,
+            text = stringResource(R.string.welcome_sample),
+            size = HexButtonSize.Regular,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+        )
         Text(
             stringResource(R.string.welcome_footer),
             style = type.footnote,

@@ -16,5 +16,13 @@ protocol MessageStore: AnyObject {
     /// `expectedRevision` is stale so a live SSE revision cannot be overwritten.
     func prependOlderIfRevision(sessionID: String, older: [Message], expectedRevision: UInt64) -> Bool
     func finishStreamingText(sessionID: String)
+    /// Fills in tool images and blanked file data URLs from another copy of the same messages
+    /// (a REST page, one fetched message), matched by part id. Leaves text, tool state, and
+    /// order alone and never downgrades a full picture. True when anything changed.
+    func hydrateMedia(sessionID: String, from messages: [Message]) -> Bool
     func clear()
+}
+
+extension MessageStore {
+    func hydrateMedia(sessionID _: String, from _: [Message]) -> Bool { false }
 }

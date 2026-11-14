@@ -30,6 +30,12 @@ internal class V1MessageRemote(
         )
     }
 
+    override suspend fun getMessage(
+        sessionId: String,
+        messageId: String,
+        directory: String?,
+    ): Message = adapter.toMessage(api.getMessage(sessionId, messageId, directory))
+
     override suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,

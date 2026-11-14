@@ -8,6 +8,13 @@ nonisolated protocol SessionCacheStore: Sendable {
     func retain(key: SessionCacheKey, reason: SessionCacheRetainReason, atEpochMs: Int64) async
     func evict(_ selector: SessionCacheEvictSelector) async
     func report(_ selector: SessionCacheEvictSelector) async -> SessionCacheReport
+    /// Keys of every message timeline row, payload or not (an opened session retains an empty
+    /// row). Nil when the store cannot list them; the thumbnail sweep then skips.
+    func messageTimelineKeys() async -> [SessionCacheKey]?
+}
+
+extension SessionCacheStore {
+    func messageTimelineKeys() async -> [SessionCacheKey]? { nil }
 }
 
 nonisolated enum SessionCacheKind: String, Sendable {
@@ -15,6 +22,7 @@ nonisolated enum SessionCacheKind: String, Sendable {
     case sessionActivity = "SessionActivity"
     case messageTimeline = "MessageTimeline"
     case projectResolution = "ProjectResolution"
+    case worktreeLayout = "WorktreeLayout"
 }
 
 nonisolated struct SessionCacheKey: Sendable, Hashable {
@@ -45,6 +53,8 @@ nonisolated struct SessionCacheKey: Sendable, Hashable {
             "\(connectionId)|\(worktree)|msg|\(entryId)"
         case .projectResolution:
             "\(connectionId)|\(worktree)|project"
+        case .worktreeLayout:
+            "\(connectionId)|\(worktree)|worktrees"
         }
     }
 }

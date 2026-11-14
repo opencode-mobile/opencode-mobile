@@ -6,14 +6,17 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
     private let clock: @Sendable () -> Int64
     private let debounceNanoseconds: UInt64
     private let activityDebounceNanoseconds: UInt64
+    /// Tool-image thumbnails on disk, kept in step with the cached message timelines.
+    private let thumbnails: ToolThumbnailStore?
     private let activityLock = NSLock()
     private var pendingActivity: [String: [SessionActivityCacheEntry]] = [:]
     private var lastActivity: [String: [SessionActivityCacheEntry]] = [:]
     private var activityDebounceTasks: [String: Task<Void, Never>] = [:]
-    private let projectResolutionLock = NSLock()
-    private var pendingProjectResolutions: [SessionCacheKey: HomeProjectResolution] = [:]
+    /// Small Home records (project resolutions, worktree layouts), already encoded.
+    private let homeRecordLock = NSLock()
+    private var pendingHomeRecords: [SessionCacheKey: String] = [:]
     /// The last queued write; each one waits for the one before, so writes land in call order.
-    private var projectResolutionWrites: Task<Void, Never>?
+    private var homeRecordWrites: Task<Void, Never>?
 
     init(
         store: any SessionCacheStore,
@@ -22,8 +25,10 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
             Int64(Date().timeIntervalSince1970 * 1000)
         },
         debounceMilliseconds: UInt64 = 3_000,
-        activityDebounceMilliseconds: UInt64 = SessionActivityPolicy.activityRememberDebounceMs
+        activityDebounceMilliseconds: UInt64 = SessionActivityPolicy.activityRememberDebounceMs,
+        thumbnails: ToolThumbnailStore? = nil
     ) {
+        self.thumbnails = thumbnails
         self.store = store
         self.connectionIdProvider = connectionIdProvider
         self.clock = clock
@@ -140,47 +145,68 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
     }
 
     func rememberProjectResolution(worktree: String, resolution: HomeProjectResolution) {
+        do {
+            let payload = try SessionCacheCodec.encodeProjectResolution(resolution)
+            queueHomeRecord(worktree: worktree, kind: .projectResolution, payload: payload)
+        } catch {
+            DiagnosticLog.warning(.session, "encode project resolution failed: \(error.localizedDescription)")
+        }
+    }
+
+    func seedWorktreeLayout(worktree: String, connectionID: String?) async -> HomeWorktreeLayout? {
+        guard let connectionId = connectionID ?? connectionIdProvider() else { return nil }
+        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: .worktreeLayout)
+        guard let record = await store.load(key: key) else { return nil }
+        return SessionCacheCodec.decodeWorktreeLayout(record.value.payloadJSON)
+    }
+
+    func rememberWorktreeLayout(worktree: String, layout: HomeWorktreeLayout) {
+        do {
+            let payload = try SessionCacheCodec.encodeWorktreeLayout(layout)
+            queueHomeRecord(worktree: worktree, kind: .worktreeLayout, payload: payload)
+        } catch {
+            DiagnosticLog.warning(.session, "encode worktree layout failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Queues the write under the connection active now; writes land in call order.
+    private func queueHomeRecord(worktree: String, kind: SessionCacheKind, payload: String) {
         guard let connectionId = connectionIdProvider() else { return }
-        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: .projectResolution)
-        projectResolutionLock.lock()
-        pendingProjectResolutions[key] = resolution
-        let previous = projectResolutionWrites
-        projectResolutionWrites = Task { [weak self] in
+        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: kind)
+        homeRecordLock.lock()
+        pendingHomeRecords[key] = payload
+        let previous = homeRecordWrites
+        homeRecordWrites = Task { [weak self] in
             await previous?.value
-            await self?.flushProjectResolutions()
+            await self?.flushHomeRecords()
         }
-        projectResolutionLock.unlock()
+        homeRecordLock.unlock()
     }
 
-    /// Commits the newest queued resolution of each key; a write that finds the queue empty does nothing.
-    private func flushProjectResolutions() async {
-        projectResolutionLock.lock()
-        let queued = pendingProjectResolutions
-        pendingProjectResolutions = [:]
-        projectResolutionLock.unlock()
-        for (key, resolution) in queued {
-            do {
-                let payload = try SessionCacheCodec.encodeProjectResolution(resolution)
-                await store.commit(
-                    key: key,
-                    value: SessionCacheValue(payloadJSON: payload, schemaVersion: SessionCacheCodec.schemaVersion),
-                    meta: SessionCacheCommitMeta(syncedAtEpochMs: clock())
-                )
-            } catch {
-                DiagnosticLog.warning(.session, "encode/commit project resolution failed: \(error.localizedDescription)")
-            }
+    /// Commits the newest queued record of each key; a write that finds the queue empty does nothing.
+    private func flushHomeRecords() async {
+        homeRecordLock.lock()
+        let queued = pendingHomeRecords
+        pendingHomeRecords = [:]
+        homeRecordLock.unlock()
+        for (key, payload) in queued {
+            await store.commit(
+                key: key,
+                value: SessionCacheValue(payloadJSON: payload, schemaVersion: SessionCacheCodec.schemaVersion),
+                meta: SessionCacheCommitMeta(syncedAtEpochMs: clock())
+            )
         }
     }
 
-    /// Drops queued resolutions for `worktree`, or all when `nil`, then waits for a write in
+    /// Drops queued Home records for `worktree`, or all when `nil`, then waits for a write in
     /// flight so the purge that follows evicts its row.
-    private func dropPendingProjectResolutions(worktree: String?) async {
-        projectResolutionLock.lock()
-        pendingProjectResolutions = pendingProjectResolutions.filter { key, _ in
+    private func dropPendingHomeRecords(worktree: String?) async {
+        homeRecordLock.lock()
+        pendingHomeRecords = pendingHomeRecords.filter { key, _ in
             worktree != nil && key.worktree != worktree
         }
-        let inFlight = projectResolutionWrites
-        projectResolutionLock.unlock()
+        let inFlight = homeRecordWrites
+        homeRecordLock.unlock()
         await inFlight?.value
     }
 
@@ -191,13 +217,14 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
             store: store,
             connectionIdProvider: connectionIdProvider,
             clock: clock,
-            debounceNanoseconds: debounceNanoseconds
+            debounceNanoseconds: debounceNanoseconds,
+            thumbnails: thumbnails
         )
     }
 
     func purgeWorktree(serverBaseURL: String, worktree: String) async {
         dropActivityMemory(directory: worktree)
-        await dropPendingProjectResolutions(worktree: worktree)
+        await dropPendingHomeRecords(worktree: worktree)
         if let connectionId = connectionIdProvider() {
             await store.evict(
                 .worktree(
@@ -214,15 +241,17 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
                 matchByUrlPrefix: true
             )
         )
+        await sweepThumbnails()
     }
 
     func purgeConnection(profileID: String, serverBaseURL: String) async {
         // A pending activity flush would otherwise commit the removed server's activity
         // under whichever profile is active when the debounce fires.
         dropActivityMemory(directory: nil)
-        await dropPendingProjectResolutions(worktree: nil)
+        await dropPendingHomeRecords(worktree: nil)
         if !profileID.isEmpty {
             await store.evict(.connection(connectionIdOrUrlPrefix: profileID, matchByUrlPrefix: false))
+            await thumbnails?.removeConnection(profileID)
         }
         await store.evict(
             .connection(
@@ -230,12 +259,31 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
                 matchByUrlPrefix: true
             )
         )
+        // Rows matched by URL prefix have connection ids we cannot hash back; the sweep drops
+        // every thumbnail folder whose timeline row is gone.
+        await sweepThumbnails()
     }
 
     func clearAll() async {
         dropActivityMemory(directory: nil)
-        await dropPendingProjectResolutions(worktree: nil)
+        await dropPendingHomeRecords(worktree: nil)
         await store.evict(.all)
+        await thumbnails?.removeAll()
+    }
+
+    func maintainThumbnails() async {
+        guard let thumbnails else { return }
+        await thumbnails.maintain(keeping: await cachedTimelineSessions())
+    }
+
+    private func sweepThumbnails() async {
+        guard let thumbnails, let sessions = await cachedTimelineSessions() else { return }
+        await thumbnails.sweepOrphans(keeping: sessions)
+    }
+
+    /// Every cached message timeline (opened sessions included), or nil when the store cannot list them.
+    private func cachedTimelineSessions() async -> [(connectionID: String, sessionID: String)]? {
+        await store.messageTimelineKeys()?.map { ($0.connectionId, $0.entryId) }
     }
 
     /// Cancels pending activity flushes and forgets committed activity for `directory`, or for
@@ -264,6 +312,7 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
     private let connectionIdProvider: @Sendable () -> String?
     private let clock: @Sendable () -> Int64
     private let debounceNanoseconds: UInt64
+    private let thumbnails: ToolThumbnailStore?
 
     private let lock = NSLock()
     private var pending: [Message]?
@@ -276,8 +325,10 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
         store: any SessionCacheStore,
         connectionIdProvider: @escaping @Sendable () -> String?,
         clock: @escaping @Sendable () -> Int64,
-        debounceNanoseconds: UInt64
+        debounceNanoseconds: UInt64,
+        thumbnails: ToolThumbnailStore?
     ) {
+        self.thumbnails = thumbnails
         self.sessionID = sessionID
         self.worktree = worktree
         self.store = store
@@ -302,7 +353,14 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
         guard let record = await store.load(key: key), !record.value.payloadJSON.isEmpty else {
             return nil
         }
-        return SessionCacheCodec.decodeMessages(record.value.payloadJSON)
+        guard let timeline = SessionCacheCodec.decodeMessageTimeline(record.value.payloadJSON) else { return nil }
+        guard let thumbnails, !timeline.thumbnailImageIDs.isEmpty else { return timeline.messages }
+        return await thumbnails.attach(
+            connectionID: key.connectionId,
+            sessionID: sessionID,
+            messages: timeline.messages,
+            imageIDs: timeline.thumbnailImageIDs
+        )
     }
 
     func note(messages: [Message]) {
@@ -353,7 +411,15 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
 
         guard let messages, let key = keyOrNil() else { return }
         do {
-            let payload = try SessionCacheCodec.encodeMessages(messages)
+            var thumbnailImageIDs = Set<String>()
+            if let thumbnails {
+                thumbnailImageIDs = await thumbnails.persist(
+                    connectionID: key.connectionId,
+                    sessionID: sessionID,
+                    messages: messages
+                )
+            }
+            let payload = try SessionCacheCodec.encodeMessages(messages, thumbnailImageIDs: thumbnailImageIDs)
             await store.retain(key: key, reason: .opened, atEpochMs: clock())
             await store.commit(
                 key: key,

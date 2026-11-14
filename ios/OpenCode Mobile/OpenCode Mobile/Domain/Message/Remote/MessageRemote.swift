@@ -5,9 +5,20 @@ protocol MessageRemote: Sendable {
     func listMessagePage(sessionID: String, directory: String?, query: MessageHistoryQuery) async throws -> MessageHistoryPage
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws
     func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws
+    /// One message, mapped like a message of the list (v1 `GET /session/{id}/message/{messageID}`,
+    /// v2 `GET /api/session/{id}/message/{messageID}`).
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message
+}
+
+nonisolated enum MessageRemoteError: Error, Equatable {
+    case messageNotFound
 }
 
 extension MessageRemote {
+    func getMessage(sessionID _: String, messageID _: String, directory _: String?) async throws -> Message {
+        throw MessageRemoteError.messageNotFound
+    }
+
     func listMessagePage(
         sessionID _: String,
         directory _: String?,
@@ -59,6 +70,10 @@ struct V1MessageRemote: MessageRemote, Sendable {
 
     func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {
         try await api.runShell(sessionID: sessionID, body: adapter.v1ShellRequest(options: options), directory: directory)
+    }
+
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
+        adapter.message(from: try await api.getMessage(sessionID: sessionID, messageID: messageID, directory: directory))
     }
 }
 
@@ -136,6 +151,15 @@ struct V2MessageRemote: MessageRemote, Sendable {
     func runShellCommand(sessionID: String, options: ShellCommandOptions, directory _: String?) async throws {
         try await api.runShellV2(sessionID: sessionID, body: adapter.v2ShellRequest(options: options))
     }
+
+    func getMessage(sessionID: String, messageID: String, directory _: String?) async throws -> Message {
+        let dto = try await api.getMessageV2(sessionID: sessionID, messageID: messageID)
+        let messages = adapter.messages(fromV2: [dto])
+        guard let message = messages.first(where: { $0.id == messageID }) ?? messages.first else {
+            throw MessageRemoteError.messageNotFound
+        }
+        return message
+    }
 }
 
 struct ProtocolSelectedMessageRemote: MessageRemote, Sendable {
@@ -178,5 +202,9 @@ struct ProtocolSelectedMessageRemote: MessageRemote, Sendable {
 
     func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {
         try await selected().runShellCommand(sessionID: sessionID, options: options, directory: directory)
+    }
+
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
+        try await selected().getMessage(sessionID: sessionID, messageID: messageID, directory: directory)
     }
 }

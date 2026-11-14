@@ -66,10 +66,16 @@ final class HexMainModel {
     let home: HomeModel
     /// Today's session on the paired server.
     let realSession: TodaySession
-    /// Developer settings' Sample session: a fake session shown on home instead of the real one.
-    /// Not saved, so the app always starts on the real session.
+    /// A fake session shown on home instead of the real one: Settings › Sample session and
+    /// Welcome's "Try a sample session" (`playground`), or a Developer preset. Not saved, so the app
+    /// always starts on the real session.
     private(set) var samplePreset: TodaySessionDemo?
     private(set) var sampleSession: TodaySession?
+    /// Opened from Welcome with nothing paired: the setup is `DemoSetup`'s, nothing reaches the
+    /// network and nothing is saved. Leave goes back to Welcome.
+    let sampleOnly: Bool
+    /// Leave, in a sample opened from Welcome: the app model takes it from here.
+    @ObservationIgnored var onLeaveSample: () -> Void = {}
     let build: HexBuildInfo
     /// Artifacts on this computer and project: Settings' row, the enable sheet, the card's tile.
     let artifacts: ArtifactsModel
@@ -92,6 +98,7 @@ final class HexMainModel {
         home: HomeModel,
         session: TodaySession? = nil,
         samplePreset: TodaySessionDemo? = nil,
+        sampleOnly: Bool = false,
         services: any FirstRunServices = LiveFirstRunServices(),
         store: any HexSetupStoring = HexSetupStore(),
         build: HexBuildInfo? = nil,
@@ -100,6 +107,7 @@ final class HexMainModel {
     ) {
         self.setup = setup
         self.home = home
+        self.sampleOnly = sampleOnly
         let current = CurrentSetup(setup: setup)
         self.current = current
         let liveConnection = LiveConnection(setup.profile)
@@ -142,6 +150,7 @@ final class HexMainModel {
     /// session opens (the sign-in renewal, finding it, its rules, the stream), and the upload route
     /// and today's model's image input are read; each fills its slot when it arrives.
     func start() async {
+        guard !sampleOnly else { return }
         Task { await refreshImageInput() }
         Task { await refreshFileUploads() }
         await realSession.open()
@@ -208,6 +217,7 @@ final class HexMainModel {
     /// Before each setup (`ServerUpkeep`): the version, the address in use and the sign-in's
     /// renewal, saved when they changed.
     func checkServer() async -> UpkeepOutcome {
+        guard !sampleOnly else { return .ready }
         let before = setup
         let (next, outcome) = await ServerUpkeep.run(before, checks: checks, now: now())
         // Settings may have changed the project or model meanwhile: only the server's parts apply.
@@ -221,6 +231,7 @@ final class HexMainModel {
 
     /// Closes today's session's stream before this model goes (Forget, or a switch to another computer).
     func close() {
+        sampleSession?.close()
         realSession.close()
     }
 
@@ -257,12 +268,45 @@ final class HexMainModel {
         await realSession.open()
     }
 
-    /// The Sample session row: the next preset, then Off.
+    /// Developer settings' Sample preset row: the next preset, then Off.
     func cycleSampleSession() {
         showSample(TodaySessionDemo.next(after: samplePreset))
     }
 
+    /// Settings › Sample session: a new playground on home, over the real session, which carries on
+    /// unseen.
+    func openSample() {
+        showSample(.playground)
+        path = []
+    }
+
+    /// The sample banner's Leave: back to the real session as it is now, or to Welcome when
+    /// nothing is paired.
+    func leaveSample() {
+        if sampleOnly {
+            onLeaveSample()
+        } else {
+            showSample(nil)
+            path = []
+        }
+    }
+
+    /// Home says it is a sample, with Leave: the playground. The Developer presets stay as they
+    /// are, for screenshots.
+    var showsSampleBanner: Bool { samplePreset == .playground }
+
+    /// Settings in a sample opened from Welcome: there is no computer to set up.
+    func openSettingsInSample() {
+        toasts.show(HexToastItem(
+            tone: .info,
+            title: String(localized: "sample.settings", defaultValue: "This is a sample"),
+            detail: String(localized: "sample.settings.sub", defaultValue: "Leave it to pair your computer.")
+        ))
+    }
+
     private func showSample(_ preset: TodaySessionDemo?) {
+        // The sample shown until now stops, with any run it was playing.
+        sampleSession?.close()
         samplePreset = preset
         guard let preset else {
             sampleSession = nil
@@ -270,8 +314,14 @@ final class HexMainModel {
             return
         }
         let sample = preset.make(toasts: toasts)
-        sample.computerHost = realSession.computerHost ?? "192.168.1.2"
-        sample.serverName = setup.serverName
+        // The playground keeps to its made-up computer; the screenshot presets borrow the real one's.
+        if preset == .playground {
+            sample.computerHost = URL(string: DemoSetup.setup.profile.baseURL)?.host
+            sample.serverName = DemoSetup.setup.serverName
+        } else {
+            sample.computerHost = realSession.computerHost ?? "192.168.1.2"
+            sample.serverName = setup.serverName
+        }
         sampleSession = sample
         home.sender = sample
         Task { await preset.start(sample) }
@@ -284,7 +334,10 @@ final class HexMainModel {
     /// Notices at the top of the screen, shared by home and every page over it.
     var toasts: HexToaster { home.toasts }
 
-    func openSettings() { path = [.settings] }
+    func openSettings() {
+        guard !sampleOnly else { return openSettingsInSample() }
+        path = [.settings]
+    }
 
     /// Back from the page on top.
     func back() {
@@ -382,12 +435,11 @@ final class HexMainModel {
 
     /// The in-app browser for the card's artifact: every file through the app's signed-in client.
     func artifactBrowser(_ artifact: CardArtifact) -> BrowserModel {
-        #if DEBUG
         // A sample session's artifact: the bundled page, with no server.
         if samplePreset != nil, let page = TodaySessionDemo.samplePage {
-            return BrowserModel(sampleArtifact: artifact, serverName: setup.serverName, page: page)
+            let name = samplePreset == .playground ? DemoSetup.setup.serverName : setup.serverName
+            return BrowserModel(sampleArtifact: artifact, serverName: name, page: page)
         }
-        #endif
         let live = liveConnection
         return BrowserModel(
             artifact: artifact,
@@ -417,6 +469,8 @@ final class HexMainModel {
     }
 
     private func save(_ next: HexSetup) async -> Bool {
+        // A sample from Welcome saves nothing.
+        guard !sampleOnly else { return false }
         isSaving = true
         defer { isSaving = false }
         do {

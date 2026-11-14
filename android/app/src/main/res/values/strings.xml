@@ -1600,6 +1600,9 @@
     <string name="component_composer_select_up_to">Select up to %1$d</string>
     <string name="live_updates_status_live">live</string>
     <string name="component_image_viewer_could_not_load_this">Couldn\'t load this image</string>
+    <string name="component_image_viewer_could_not_load_full">Couldn\'t load full image</string>
+    <string name="component_image_viewer_retry">Retry</string>
+    <string name="component_image_viewer_loading_full">Loading full image</string>
     <string name="session_list_worktree_empty_action">Clear filter</string>
     <string name="dictation_model_download_failed_detail">Check the connection and free storage on this device, then try again.</string>
     <string name="component_composer_send_queue">Send as Queue</string>

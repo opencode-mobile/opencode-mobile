@@ -46,6 +46,7 @@ internal object AttachmentPresentationMapper {
             signature = signature(file.mime, file.serverPath ?: file.id),
             imageBytes = imageBytes,
             imageSource = imageSource(file),
+            thumbnailPath = file.thumbnailPath?.takeIf { file.kind == AttachmentKind.Image },
         )
     }
 

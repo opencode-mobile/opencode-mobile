@@ -4,12 +4,14 @@ import SwiftUI
 /// Routes first run's steps.
 struct FirstRunView: View {
     let model: FirstRunModel
+    /// Welcome's "Try a sample session".
+    var onSample: () -> Void = {}
 
     var body: some View {
         Group {
             switch model.step {
             case .welcome:
-                WelcomeView(onScan: { model.startScan() })
+                WelcomeView(onScan: { model.startScan() }, onSample: onSample)
             case .scan:
                 ScanView(
                     phase: model.scan,

@@ -56,6 +56,8 @@ final class SessionChatTimeline {
     private var footerHolds: [String: SessionChatActivityFooterHold] = [:]
     private var stepEntryDebounce = SessionChatStepEntryDebounce()
     private var stepTimingTask: Task<Void, Never>?
+    /// The viewer's latest full-image load; each load updates only its own image.
+    private var fullImageTask: Task<Void, Never>?
     /// Wall clock in epoch ms for step timing; tests replace it.
     static var stepTimingNowMs: @MainActor () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }
     /// Test-only: runs after a frame revision is taken, before off-main build.
@@ -200,13 +202,16 @@ final class SessionChatTimeline {
         notifyChange()
     }
 
-    /// Gallery: open the viewer over `images` at `index`. Ignored when the index is out of range.
-    func openImageViewer(images: [FilePart], index: Int) {
+    /// Gallery: open the viewer over `images` at `index`, on the tapped image's thumbnail, and
+    /// load its full picture when only the thumbnail is here. Ignored when the index is out of range.
+    func openImageViewer(images: [FilePart], index: Int, messageID: String? = nil) {
         guard images.indices.contains(index) else { return }
-        let viewer = SessionChatImageViewerState(images: images, index: index)
-        guard state.imageViewer != viewer else { return }
-        state.imageViewer = viewer
+        if let open = state.imageViewer, open.images.map(\.id) == images.map(\.id), open.index == index {
+            return
+        }
+        state.imageViewer = SessionChatImageViewerState(images: images, index: index, messageID: messageID)
         notifyChange()
+        loadFullImageForCurrentPage()
     }
 
     /// Viewer: the user paged to `index`.
@@ -215,12 +220,61 @@ final class SessionChatTimeline {
         viewer.index = index
         state.imageViewer = viewer
         notifyChange()
+        loadFullImageForCurrentPage()
+    }
+
+    /// Viewer: try the shown page's full picture again after a failure.
+    func retryFullImage() {
+        loadFullImageForCurrentPage()
     }
 
     func closeImageViewer() {
         guard state.imageViewer != nil else { return }
+        fullImageTask?.cancel()
+        fullImageTask = nil
         state.imageViewer = nil
         notifyChange()
+    }
+
+    private func loadFullImageForCurrentPage() {
+        guard var viewer = state.imageViewer, let image = viewer.currentImage else { return }
+        switch viewer.fullState(of: image.id) {
+        case .thumbnail, .failed:
+            break
+        case .loading, .full:
+            return
+        }
+        viewer.setLoading(image.id)
+        state.imageViewer = viewer
+        notifyChange()
+        let sessionID = sessionID
+        let directory = worktree
+        let messageID = viewer.messageID
+        let repository = messageRepository
+        fullImageTask = Task { [weak self] in
+            let result: FilePart?
+            do {
+                result = try await repository.fullImage(
+                    sessionID: sessionID,
+                    directory: directory,
+                    messageID: messageID,
+                    imageID: image.id
+                )
+            } catch {
+                result = nil
+            }
+            guard let self, !Task.isCancelled, var viewer = self.state.imageViewer,
+                  viewer.images.contains(where: { $0.id == image.id })
+            else { return }
+            if let result {
+                viewer.setFull(result)
+            } else {
+                DiagnosticLog.info(.chat, "fullImage failed session=\(sessionID)")
+                viewer.setFailed(image.id)
+            }
+            self.state.imageViewer = viewer
+            self.notifyChange()
+        }
     }
 
     /// Step rail: show or fold the earlier settled steps of one rail. Fold

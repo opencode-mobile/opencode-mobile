@@ -238,7 +238,15 @@ fun SessionChatScreen(
                 { source -> viewModel.loadAttachmentPreview(source.path) }
             loader
         }
-    CompositionLocalProvider(LocalOpenCodeAttachmentImageLoader provides attachmentImageLoader) {
+    val fullImageLoader =
+        remember(viewModel) {
+            val loader: suspend (String, String) -> ByteArray = { messageId, imageId -> viewModel.loadFullImage(messageId, imageId) }
+            loader
+        }
+    CompositionLocalProvider(
+        LocalOpenCodeAttachmentImageLoader provides attachmentImageLoader,
+        LocalSessionChatFullImageLoader provides fullImageLoader,
+    ) {
         SessionChatScreenBody(
             sessionId = sessionId,
             sessionTitle = sessionTitle,

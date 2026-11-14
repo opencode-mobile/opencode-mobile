@@ -3,7 +3,8 @@ import SwiftUI
 import VoiceEngineKit
 
 /// Settings: a plain list for now. Project, model and appearance work; the rest are placeholders.
-/// Version ends App and does nothing when tapped; the Developer section always follows it.
+/// Version ends App and does nothing when tapped; the Developer section always follows it. Sample
+/// session, in App, opens the playground over today's session in every build.
 struct SettingsView: View {
     @Bindable var main: HexMainModel
     let voice: VoiceEngine
@@ -87,6 +88,11 @@ struct SettingsView: View {
                         value: main.serverLabel
                     ) { showsServer = true }
                     HexRow(
+                        icon: .play,
+                        LocalizedStringResource("settings.sample", defaultValue: "Sample session"),
+                        subtitle: String(localized: "settings.sample.sub", defaultValue: "Try it with a made-up project. Your session waits.")
+                    ) { main.openSample() }
+                    HexRow(
                         icon: .info,
                         LocalizedStringResource("settings.version", defaultValue: "Version"),
                         value: main.build.versionLabel,
@@ -146,7 +152,7 @@ struct SettingsView: View {
         ) { main.copyBuild() }
         HexRow(
             icon: .play,
-            verbatim: "Sample session",
+            verbatim: "Sample preset",
             subtitle: "Home shows a fake session instead of today's",
             value: main.samplePreset?.rawValue ?? "Off",
             trailing: .none
@@ -243,7 +249,8 @@ struct HexMainView: View {
                 artifacts: main.samplePreset == nil ? main.artifacts : nil,
                 artifactBrowser: { main.artifactBrowser($0) },
                 onSettings: { main.openSettings() },
-                onPairAgain: { main.startPairAgain() }
+                onPairAgain: { main.startPairAgain() },
+                onLeaveSample: main.showsSampleBanner ? { main.leaveSample() } : nil
             )
                 .hexPage()
                 .navigationDestination(for: HexMainModel.Route.self) { route in

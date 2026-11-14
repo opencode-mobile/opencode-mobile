@@ -14,12 +14,19 @@ nonisolated protocol SessionCache: AnyObject, Sendable {
     /// Queues the write under the connection active now and returns; writes land in call order,
     /// and a purge of the worktree or connection drops one still queued.
     func rememberProjectResolution(worktree: String, resolution: HomeProjectResolution)
+    /// The worktrees and branches `worktree` last listed, so a cold Home labels rows as the live one will.
+    func seedWorktreeLayout(worktree: String, connectionID: String?) async -> HomeWorktreeLayout?
+    /// Queued like ``rememberProjectResolution(worktree:resolution:)``.
+    func rememberWorktreeLayout(worktree: String, layout: HomeWorktreeLayout)
     func openMessages(sessionID: String, worktree: String) -> SessionMessageCacheHandle
     func purgeWorktree(serverBaseURL: String, worktree: String) async
     /// Everything cached for one removed Connection Profile, under its id and under its URL.
     func purgeConnection(profileID: String, serverBaseURL: String) async
     func clearAll() async
     func estimatedSizeBytes() async -> Int64
+    /// Launch upkeep of tool-image thumbnails: drop folders with no cached timeline, then evict
+    /// least recently viewed files over the size cap.
+    func maintainThumbnails() async
 }
 
 extension SessionCache {
@@ -28,7 +35,10 @@ extension SessionCache {
     func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async {}
     func seedProjectResolution(worktree: String, connectionID: String?) async -> HomeProjectResolution? { nil }
     func rememberProjectResolution(worktree: String, resolution: HomeProjectResolution) {}
+    func seedWorktreeLayout(worktree: String, connectionID: String?) async -> HomeWorktreeLayout? { nil }
+    func rememberWorktreeLayout(worktree: String, layout: HomeWorktreeLayout) {}
     func purgeConnection(profileID: String, serverBaseURL: String) async {}
+    func maintainThumbnails() async {}
 }
 
 nonisolated protocol SessionMessageCacheHandle: AnyObject, Sendable {

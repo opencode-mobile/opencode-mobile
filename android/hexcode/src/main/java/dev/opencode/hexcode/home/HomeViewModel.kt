@@ -2216,6 +2216,16 @@ class HomeViewModel(
         state.update { it.copy(draft = it.draft.withText(text)) }
     }
 
+    /**
+     * The sample's suggestion chip (Try a sample session): [text] goes as a take would, with no speech model and no
+     * microphone. Only from an empty draft, so nothing dictated is sent with it.
+     */
+    fun sendText(text: String) {
+        if (!state.value.draft.isEmpty || state.value.recording) return
+        addToDraft(text)
+        send()
+    }
+
     /** Try again, on takes that couldn't be turned into text: the model loads again if it has to. */
     fun retryTakes() {
         state.update { it.copy(draft = it.draft.retryFailed()) }

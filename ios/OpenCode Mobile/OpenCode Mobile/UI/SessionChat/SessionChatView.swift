@@ -283,12 +283,13 @@ struct SessionChatView: View {
                 loader: viewModel.attachmentImageLoader,
                 directory: boundSession.directory ?? boundSession.worktree,
                 onIndexChange: { viewModel.showImageViewerPage($0) },
+                onRetry: { viewModel.retryFullImage() },
                 onDismiss: { viewModel.closeImageViewer() }
             )
             .environment(\.attachmentImageLoading, viewModel.attachmentImageLoader)
             .environment(\.attachmentImageDirectory, boundSession.directory ?? boundSession.worktree)
-            .environment(\.openImageViewer, SessionChatOpenImageViewerAction { images, index in
-                viewModel.openImageViewer(images: images, index: index)
+            .environment(\.openImageViewer, SessionChatOpenImageViewerAction { images, index, messageID in
+                viewModel.openImageViewer(images: images, index: index, messageID: messageID)
             })
     }
 

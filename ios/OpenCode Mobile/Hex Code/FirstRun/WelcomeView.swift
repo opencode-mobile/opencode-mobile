@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// First run, step 1: the one rule and how to connect.
+/// First run, step 1: the one rule and how to connect, and a sample session to try with no
+/// computer.
 struct WelcomeView: View {
     let onScan: () -> Void
+    var onSample: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -38,6 +40,15 @@ struct WelcomeView: View {
             howToConnect
                 .padding(.bottom, 16)
             HexPrimaryButton(LocalizedStringResource("welcome.scan", defaultValue: "Scan the code"), action: onScan)
+            // No computer at hand (or reviewing the app): home on a scripted sample.
+            HexButton(
+                LocalizedStringResource("welcome.sample", defaultValue: "Try a sample session"),
+                icon: .play,
+                size: .regular,
+                fullWidth: true,
+                action: onSample
+            )
+            .padding(.top, 10)
             Text(LocalizedStringResource("welcome.footer", defaultValue: "Needs OpenCode 2.2.5+"))
                 .hexFont(.footnote)
                 .foregroundStyle(HexColor.text3)

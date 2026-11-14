@@ -247,6 +247,28 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
         }
     }
 
+    func messageTimelineKeys() async -> [SessionCacheKey]? {
+        do {
+            let context = ModelContext(container)
+            let kind = SessionCacheKind.messageTimeline.rawValue
+            var descriptor = FetchDescriptor<SessionCacheSnapshotRecord>(predicate: #Predicate { $0.kind == kind })
+            // Keys only: a timeline payload can be large.
+            descriptor.propertiesToFetch = [\.connectionId, \.worktree, \.entryId]
+            let rows = try context.fetch(descriptor)
+            return rows.map { row in
+                SessionCacheKey(
+                    connectionId: row.connectionId,
+                    worktree: row.worktree,
+                    kind: .messageTimeline,
+                    entryId: row.entryId
+                )
+            }
+        } catch {
+            DiagnosticLog.warning(.session, "SwiftData session cache key list failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     private static func matchesConnection(
         _ connectionId: String,
         connectionIdOrUrlPrefix: String,

@@ -138,4 +138,15 @@ interface SessionCacheDao {
         connectionIdPrefix: String,
         worktree: String,
     ): Long
+
+    @Query("SELECT connection_id, entry_id FROM session_cache_snapshot WHERE kind = :kind")
+    suspend fun entriesOfKind(kind: String): List<SessionCacheEntryRef>
 }
+
+/** One row's connection and entry id, without its payload. */
+data class SessionCacheEntryRef(
+    @androidx.room.ColumnInfo(name = "connection_id")
+    val connectionId: String,
+    @androidx.room.ColumnInfo(name = "entry_id")
+    val entryId: String,
+)

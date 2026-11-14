@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.sessioncache.SessionCacheCodec
 import dev.opencode.mobile.domain.sessioncache.SessionCacheCommitMeta
 import dev.opencode.mobile.domain.sessioncache.SessionCacheEvictSelector
 import dev.opencode.mobile.domain.sessioncache.SessionCacheKey
+import dev.opencode.mobile.domain.sessioncache.SessionCacheKind
 import dev.opencode.mobile.domain.sessioncache.SessionCacheRecord
 import dev.opencode.mobile.domain.sessioncache.SessionCacheReport
 import dev.opencode.mobile.domain.sessioncache.SessionCacheRetainReason
@@ -100,6 +101,9 @@ class RoomSessionCacheStore
                     }
             }
         }
+
+        override suspend fun messageTimelineEntries(): List<Pair<String, String>> =
+            dao.entriesOfKind(SessionCacheKind.MessageTimeline.name).map { it.connectionId to it.entryId }
 
         override suspend fun report(selector: SessionCacheEvictSelector): SessionCacheReport =
             when (selector) {

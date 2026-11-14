@@ -208,8 +208,10 @@ final class HomeProjectList {
                 self.worktrees.reload(worktrees)
                 return
             }
-            let sections = await loadSectionsFromCache(worktrees: worktrees)
+            // Projects and worktrees first: the cached rows are built and labeled from them.
             await self.worktrees.seedResolutions(worktrees)
+            await self.worktrees.seedLayouts(worktrees)
+            let sections = await loadSectionsFromCache(worktrees: worktrees)
             state.content = .loaded(
                 sections: sections,
                 showAddProjectSheet: false,
@@ -329,10 +331,18 @@ final class HomeProjectList {
             sections.append(await sectionFromCache(worktree: worktree, connectionID: id))
         }
         let resolutions = await self.worktrees.cachedResolutions(worktrees, connectionID: id)
+        let layouts = await self.worktrees.cachedLayouts(worktrees, connectionID: id)
         guard isCurrent() else { return }
         clearProjectLoads()
         self.worktrees.reset()
         self.worktrees.replaceResolutions(resolutions)
+        self.worktrees.applyLayouts(layouts, replacing: true)
+        sections = sections.map {
+            $0.withCachedLayout(
+                projectID: self.worktrees.state.projectIDs[$0.worktree],
+                inventory: self.worktrees.state.inventories[$0.worktree]
+            )
+        }
         probeWaitsOnAddressCheck = false
         if sections.isEmpty {
             state.content = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
@@ -419,7 +429,9 @@ final class HomeProjectList {
             letterAccent: letterAccent(for: worktree),
             allSessions: items,
             loadError: nil,
-            sessionsFromCache: seeded != nil
+            sessionsFromCache: seeded != nil,
+            projectID: worktrees.state.projectIDs[worktree],
+            worktreeInventory: worktrees.state.inventories[worktree] ?? .unloaded
         )
     }
 

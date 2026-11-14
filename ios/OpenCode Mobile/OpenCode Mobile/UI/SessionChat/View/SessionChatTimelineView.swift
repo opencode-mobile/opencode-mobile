@@ -943,7 +943,7 @@ private extension SessionChatMessageRow {
         .images(
             id: id,
             items: files.map { $0.galleryItem(loader: imageLoader, directory: imageDirectory) },
-            onOpen: openImageViewer.map { open in { index in open(files, index: index) } }
+            onOpen: openImageViewer.map { open in { index in open(files, index: index, messageID: message.id) } }
         )
     }
 }
@@ -1042,12 +1042,12 @@ private struct AssistantMessageContent: View {
                     )
                 case .attachment(_, let file):
                     if file.isViewableImage {
-                        SessionChatImageGalleryView(images: [file])
+                        SessionChatImageGalleryView(images: [file], messageID: message.id)
                     } else {
                         OpenCodeMessageAttachment(attachment: file.attachmentPresentation)
                     }
                 case .imageGallery(_, let gallery):
-                    SessionChatImageGalleryView(images: gallery.images)
+                    SessionChatImageGalleryView(images: gallery.images, messageID: message.id)
                 case .toolCard(_, let card):
                     // OpenCodeToolCallCard takes String; the timeline resolves its text here.
                     OpenCodeToolCallCard(

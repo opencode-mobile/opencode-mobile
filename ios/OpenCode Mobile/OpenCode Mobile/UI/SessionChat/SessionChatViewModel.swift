@@ -1083,8 +1083,13 @@ final class SessionChatViewModel {
     }
 
     /// Gallery: open the image viewer over a group at the tapped image.
-    func openImageViewer(images: [FilePart], index: Int) {
-        timeline.openImageViewer(images: images, index: index)
+    func openImageViewer(images: [FilePart], index: Int, messageID: String? = nil) {
+        timeline.openImageViewer(images: images, index: index, messageID: messageID)
+    }
+
+    /// Viewer: try the shown image's full picture again.
+    func retryFullImage() {
+        timeline.retryFullImage()
     }
 
     func showImageViewerPage(_ index: Int) {

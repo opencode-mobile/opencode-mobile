@@ -62,7 +62,7 @@ struct SessionChatToolGroupView: View {
                             action: toolCardAction(for: card)
                         )
                         if !card.images.isEmpty {
-                            SessionChatImageGalleryView(images: card.images)
+                            SessionChatImageGalleryView(images: card.images, messageID: target.messageID)
                         }
                     }
                 }

@@ -22,6 +22,9 @@ public protocol MessagesAPI: Sendable {
         order: String?,
         cursor: String?
     ) async throws -> (messages: [V2SessionMessageDTO], nextCursor: String?)
+    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> MessageDTO
+    /// v2 `GET /api/session/{sessionID}/message/{messageID}` (`session.message.get`): `{ "data": <message> }`.
+    func getMessageV2(sessionID: String, messageID: String) async throws -> V2SessionMessageDTO
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, directory: String?) async throws
     func sendPromptAsync(sessionID: String, body: SendMessageRequestDTO, attachments: [Attachment], directory: String?) async throws
     func sendPromptV2(sessionID: String, body: V2PromptRequestDTO, directory: String?) async throws
@@ -72,6 +75,14 @@ extension MessagesAPI {
     public func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws {}
 
     public func listInboxV2(sessionID _: String) async throws -> [V2InboxItemDTO] { [] }
+
+    public func getMessage(sessionID _: String, messageID _: String, directory _: String?) async throws -> MessageDTO {
+        throw MessagesAPIError.invalidResponse
+    }
+
+    public func getMessageV2(sessionID _: String, messageID _: String) async throws -> V2SessionMessageDTO {
+        throw MessagesAPIError.invalidResponse
+    }
 
     public func runShell(sessionID _: String, body _: V1ShellRequestDTO, directory _: String?) async throws {}
 
@@ -184,6 +195,18 @@ public nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     public func listInboxV2<Item: Decodable & Sendable>(sessionID: String, as _: Item.Type) async throws -> [Item] {
         let envelope: APIListEnvelope<Item> = try await get(
             path: "api/session/\(sessionID)/inbox",
+            directory: nil
+        )
+        return envelope.data
+    }
+
+    public func getMessage(sessionID: String, messageID: String, directory: String? = nil) async throws -> MessageDTO {
+        try await get(path: "session/\(sessionID)/message/\(messageID)", directory: directory)
+    }
+
+    public func getMessageV2(sessionID: String, messageID: String) async throws -> V2SessionMessageDTO {
+        let envelope: APIDataEnvelope<V2SessionMessageDTO> = try await get(
+            path: "api/session/\(sessionID)/message/\(messageID)",
             directory: nil
         )
         return envelope.data

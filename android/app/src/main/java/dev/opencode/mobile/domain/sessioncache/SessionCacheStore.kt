@@ -22,6 +22,12 @@ interface SessionCacheStore {
     suspend fun evict(selector: SessionCacheEvictSelector)
 
     suspend fun report(selector: SessionCacheEvictSelector = SessionCacheEvictSelector.All): SessionCacheReport
+
+    /**
+     * Every cached message timeline as (connection id, session id), payloads not loaded. Null
+     * when the store cannot list them; callers then skip work that needs the full set.
+     */
+    suspend fun messageTimelineEntries(): List<Pair<String, String>>? = null
 }
 
 enum class SessionCacheKind {
@@ -29,6 +35,7 @@ enum class SessionCacheKind {
     MessageTimeline,
     Activity,
     ProjectResolution,
+    WorktreeLayout,
 }
 
 data class SessionCacheKey(
@@ -44,6 +51,7 @@ data class SessionCacheKey(
                 SessionCacheKind.MessageTimeline -> "$connectionId|$worktree|msg|$entryId"
                 SessionCacheKind.Activity -> "$connectionId|$worktree|activity"
                 SessionCacheKind.ProjectResolution -> "$connectionId|$worktree|project"
+                SessionCacheKind.WorktreeLayout -> "$connectionId|$worktree|worktrees"
             }
 }
 

@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.opencode.mobile.R
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -64,11 +67,31 @@ private const val MAX_ZOOM = 5f
 private const val DOUBLE_TAP_ZOOM = 2.5f
 private const val DISMISS_DRAG_FRACTION = 0.18f
 
+/** Where a viewer page's full picture is, when its owner loads it (see [OpenCodeImageGalleryViewer]). */
+enum class OpenCodeImageViewerPageStatus {
+    /** Only the thumbnail or preview is showing; nothing is loading yet. */
+    Thumbnail,
+
+    /** The full picture is loading; the thumbnail stays up with a small progress indicator. */
+    Loading,
+
+    /** The full picture is ready and drawn. */
+    Full,
+
+    /** The full picture could not load; the thumbnail stays up with a Retry action. */
+    Failed,
+}
+
 /**
  * Full-screen viewer over a group of images: pages horizontally, pinch and double-tap zoom, swipe
  * down or the close control to dismiss. [index] is the page the owner shows; the viewer reports
  * every settled page through [onIndexChange]. [onShare], when set, adds a Share action for the
  * current page. Chrome is white on the black scrim in both themes, because it sits on pictures.
+ *
+ * Without [pageStatus] each page loads its full picture itself. With it, the owner loads full
+ * pictures (a screen model): a page draws its thumbnail until its status is
+ * [OpenCodeImageViewerPageStatus.Full], shows progress while loading, offers [onRetry] after a
+ * failure, and Share is enabled only on a full picture.
  */
 @Composable
 fun OpenCodeImageGalleryViewer(
@@ -77,6 +100,8 @@ fun OpenCodeImageGalleryViewer(
     onIndexChange: (Int) -> Unit,
     onDismiss: () -> Unit,
     onShare: ((index: Int) -> Unit)? = null,
+    pageStatus: ((imageId: String) -> OpenCodeImageViewerPageStatus)? = null,
+    onRetry: ((index: Int) -> Unit)? = null,
 ) {
     if (images.isEmpty()) return
     val count = images.size
@@ -137,16 +162,28 @@ fun OpenCodeImageGalleryViewer(
                 ZoomableImagePage(
                     image = images[page],
                     label = openCodeGalleryImageLabel(page, count, images[page].name),
+                    status = pageStatus?.invoke(images[page].id),
                     onZoomChange = { zoomed -> if (page == pagerState.currentPage) pageZoomed = zoomed },
                 )
             }
             val chromePage = pagerState.currentPage.coerceIn(0, count - 1)
+            val chromeStatus = pageStatus?.invoke(images[chromePage].id)
             ViewerChrome(
                 title = stringResource(R.string.component_image_viewer_position, chromePage + 1, count),
                 name = images[chromePage].name,
                 onDismiss = onDismiss,
                 onShare = onShare?.let { share -> { share(chromePage) } },
+                shareEnabled = chromeStatus == null || chromeStatus == OpenCodeImageViewerPageStatus.Full,
             )
+            when (chromeStatus) {
+                OpenCodeImageViewerPageStatus.Loading -> FullImageProgress(Modifier.align(Alignment.BottomCenter))
+                OpenCodeImageViewerPageStatus.Failed ->
+                    FullImageFailure(
+                        onRetry = onRetry?.let { retry -> { retry(chromePage) } },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                else -> Unit
+            }
         }
     }
 }
@@ -157,6 +194,7 @@ private fun ViewerChrome(
     name: String?,
     onDismiss: () -> Unit,
     onShare: (() -> Unit)?,
+    shareEnabled: Boolean,
 ) {
     Row(
         modifier =
@@ -186,11 +224,11 @@ private fun ViewerChrome(
             }
         }
         if (onShare != null) {
-            TextButton(onClick = onShare) {
+            TextButton(onClick = onShare, enabled = shareEnabled) {
                 Text(
                     text = stringResource(R.string.component_image_viewer_share),
                     style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
+                    color = if (shareEnabled) Color.White else Color.White.copy(alpha = 0.4f),
                 )
             }
         } else {
@@ -205,9 +243,15 @@ private fun ViewerChrome(
 private fun ZoomableImagePage(
     image: OpenCodeGalleryImage,
     label: String,
+    status: OpenCodeImageViewerPageStatus?,
     onZoomChange: (Boolean) -> Unit,
 ) {
-    val state by rememberGalleryBitmap(image.id, VIEWER_DECODE_MAX_DIMENSION)
+    val state by rememberGalleryBitmap(
+        id = image.id,
+        maxDimension = VIEWER_DECODE_MAX_DIMENSION,
+        loadKey = image.loadKey to status,
+        loadFull = status == null || status == OpenCodeImageViewerPageStatus.Full,
+    )
     var scale by remember(image.id) { mutableFloatStateOf(1f) }
     var offset by remember(image.id) { mutableStateOf(Offset.Zero) }
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -278,3 +322,57 @@ private fun ZoomableImagePage(
         }
     }
 }
+
+/** Small progress pill while the owner loads the full picture over the thumbnail. */
+@Composable
+private fun FullImageProgress(modifier: Modifier) {
+    val label = stringResource(R.string.component_image_viewer_loading_full)
+    Box(
+        modifier =
+            modifier
+                .safeDrawingPadding()
+                .padding(bottom = 24.dp)
+                .size(36.dp)
+                .background(ViewerPillScrim, CircleShape)
+                .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+    }
+}
+
+/** The thumbnail stays up; this says the full picture failed and offers [onRetry]. */
+@Composable
+private fun FullImageFailure(
+    onRetry: (() -> Unit)?,
+    modifier: Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .safeDrawingPadding()
+                .padding(bottom = 16.dp)
+                .background(ViewerPillScrim, OpenCodeSmallShape)
+                .padding(start = 14.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.component_image_viewer_could_not_load_full),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White,
+        )
+        if (onRetry != null) {
+            TextButton(onClick = onRetry) {
+                Text(
+                    text = stringResource(R.string.component_image_viewer_retry),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                )
+            }
+        }
+    }
+}
+
+// Sits on pictures, not on theme surfaces, so it stays dark in both themes.
+private val ViewerPillScrim = Color.Black.copy(alpha = 0.6f)
