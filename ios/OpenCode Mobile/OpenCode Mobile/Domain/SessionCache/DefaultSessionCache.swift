@@ -10,10 +10,11 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
     private var pendingActivity: [String: [SessionActivityCacheEntry]] = [:]
     private var lastActivity: [String: [SessionActivityCacheEntry]] = [:]
     private var activityDebounceTasks: [String: Task<Void, Never>] = [:]
-    private let projectResolutionLock = NSLock()
-    private var pendingProjectResolutions: [SessionCacheKey: HomeProjectResolution] = [:]
+    /// Small Home records (project resolutions, worktree layouts), already encoded.
+    private let homeRecordLock = NSLock()
+    private var pendingHomeRecords: [SessionCacheKey: String] = [:]
     /// The last queued write; each one waits for the one before, so writes land in call order.
-    private var projectResolutionWrites: Task<Void, Never>?
+    private var homeRecordWrites: Task<Void, Never>?
 
     init(
         store: any SessionCacheStore,
@@ -140,47 +141,68 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
     }
 
     func rememberProjectResolution(worktree: String, resolution: HomeProjectResolution) {
+        do {
+            let payload = try SessionCacheCodec.encodeProjectResolution(resolution)
+            queueHomeRecord(worktree: worktree, kind: .projectResolution, payload: payload)
+        } catch {
+            DiagnosticLog.warning(.session, "encode project resolution failed: \(error.localizedDescription)")
+        }
+    }
+
+    func seedWorktreeLayout(worktree: String, connectionID: String?) async -> HomeWorktreeLayout? {
+        guard let connectionId = connectionID ?? connectionIdProvider() else { return nil }
+        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: .worktreeLayout)
+        guard let record = await store.load(key: key) else { return nil }
+        return SessionCacheCodec.decodeWorktreeLayout(record.value.payloadJSON)
+    }
+
+    func rememberWorktreeLayout(worktree: String, layout: HomeWorktreeLayout) {
+        do {
+            let payload = try SessionCacheCodec.encodeWorktreeLayout(layout)
+            queueHomeRecord(worktree: worktree, kind: .worktreeLayout, payload: payload)
+        } catch {
+            DiagnosticLog.warning(.session, "encode worktree layout failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Queues the write under the connection active now; writes land in call order.
+    private func queueHomeRecord(worktree: String, kind: SessionCacheKind, payload: String) {
         guard let connectionId = connectionIdProvider() else { return }
-        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: .projectResolution)
-        projectResolutionLock.lock()
-        pendingProjectResolutions[key] = resolution
-        let previous = projectResolutionWrites
-        projectResolutionWrites = Task { [weak self] in
+        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: kind)
+        homeRecordLock.lock()
+        pendingHomeRecords[key] = payload
+        let previous = homeRecordWrites
+        homeRecordWrites = Task { [weak self] in
             await previous?.value
-            await self?.flushProjectResolutions()
+            await self?.flushHomeRecords()
         }
-        projectResolutionLock.unlock()
+        homeRecordLock.unlock()
     }
 
-    /// Commits the newest queued resolution of each key; a write that finds the queue empty does nothing.
-    private func flushProjectResolutions() async {
-        projectResolutionLock.lock()
-        let queued = pendingProjectResolutions
-        pendingProjectResolutions = [:]
-        projectResolutionLock.unlock()
-        for (key, resolution) in queued {
-            do {
-                let payload = try SessionCacheCodec.encodeProjectResolution(resolution)
-                await store.commit(
-                    key: key,
-                    value: SessionCacheValue(payloadJSON: payload, schemaVersion: SessionCacheCodec.schemaVersion),
-                    meta: SessionCacheCommitMeta(syncedAtEpochMs: clock())
-                )
-            } catch {
-                DiagnosticLog.warning(.session, "encode/commit project resolution failed: \(error.localizedDescription)")
-            }
+    /// Commits the newest queued record of each key; a write that finds the queue empty does nothing.
+    private func flushHomeRecords() async {
+        homeRecordLock.lock()
+        let queued = pendingHomeRecords
+        pendingHomeRecords = [:]
+        homeRecordLock.unlock()
+        for (key, payload) in queued {
+            await store.commit(
+                key: key,
+                value: SessionCacheValue(payloadJSON: payload, schemaVersion: SessionCacheCodec.schemaVersion),
+                meta: SessionCacheCommitMeta(syncedAtEpochMs: clock())
+            )
         }
     }
 
-    /// Drops queued resolutions for `worktree`, or all when `nil`, then waits for a write in
+    /// Drops queued Home records for `worktree`, or all when `nil`, then waits for a write in
     /// flight so the purge that follows evicts its row.
-    private func dropPendingProjectResolutions(worktree: String?) async {
-        projectResolutionLock.lock()
-        pendingProjectResolutions = pendingProjectResolutions.filter { key, _ in
+    private func dropPendingHomeRecords(worktree: String?) async {
+        homeRecordLock.lock()
+        pendingHomeRecords = pendingHomeRecords.filter { key, _ in
             worktree != nil && key.worktree != worktree
         }
-        let inFlight = projectResolutionWrites
-        projectResolutionLock.unlock()
+        let inFlight = homeRecordWrites
+        homeRecordLock.unlock()
         await inFlight?.value
     }
 
@@ -197,7 +219,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
 
     func purgeWorktree(serverBaseURL: String, worktree: String) async {
         dropActivityMemory(directory: worktree)
-        await dropPendingProjectResolutions(worktree: worktree)
+        await dropPendingHomeRecords(worktree: worktree)
         if let connectionId = connectionIdProvider() {
             await store.evict(
                 .worktree(
@@ -220,7 +242,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
         // A pending activity flush would otherwise commit the removed server's activity
         // under whichever profile is active when the debounce fires.
         dropActivityMemory(directory: nil)
-        await dropPendingProjectResolutions(worktree: nil)
+        await dropPendingHomeRecords(worktree: nil)
         if !profileID.isEmpty {
             await store.evict(.connection(connectionIdOrUrlPrefix: profileID, matchByUrlPrefix: false))
         }
@@ -234,7 +256,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
 
     func clearAll() async {
         dropActivityMemory(directory: nil)
-        await dropPendingProjectResolutions(worktree: nil)
+        await dropPendingHomeRecords(worktree: nil)
         await store.evict(.all)
     }
 

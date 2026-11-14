@@ -205,6 +205,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         if let seeded = await sessionCache.seedSessions(worktree: directory) {
             ResumeTiming.shared.markCachePainted()
             ancestry.record(seeded)
+            windows.seededFromCache(directory: directory, count: seeded.count)
             loop.publish(SessionListSnapshot(sessions: seeded, isFromCache: true), applying: viewedWatermarks)
         }
         await syncCoordinator.ensureFresh(key)
@@ -279,6 +280,21 @@ nonisolated final class SessionWindowRegistry: @unchecked Sendable {
 
     func limit(directory: String) -> Int {
         lock.withLock { entries[directory]?.limit ?? HomeSessionPaging.pageSize }
+    }
+
+    /// The Session Cache painted `count` rows before any server load. The first load asks for
+    /// that many (whole pages, at most ``HomeSessionPaging/maxSeededPages``) so a cold start
+    /// does not shrink a window the user had grown with load more.
+    func seededFromCache(directory: String, count: Int) {
+        guard count > 0 else { return }
+        let pageSize = HomeSessionPaging.pageSize
+        let pages = min((count + pageSize - 1) / pageSize, HomeSessionPaging.maxSeededPages)
+        lock.withLock {
+            var entry = entries[directory] ?? Entry()
+            guard entry.loadedLimit == nil else { return }
+            entry.limit = max(entry.limit, pages * pageSize)
+            entries[directory] = entry
+        }
     }
 
     func committed(directory: String, limit: Int, hasMore: Bool) {

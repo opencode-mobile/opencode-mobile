@@ -507,6 +507,8 @@ internal class HomeProjectList(
         homeWorktrees.reset()
         homeWorktrees.seedResolutions(worktrees, connectionId = id)
         if (!isCurrent()) return
+        homeWorktrees.seedLayouts(worktrees, connectionId = id, server = baseUrl)
+        if (!isCurrent()) return
         resetLoads()
         probeWaitsOnAddressCheck = false
         if (sections.isEmpty()) {
@@ -540,8 +542,11 @@ internal class HomeProjectList(
                 homeWorktrees.reload(worktrees)
                 return
             }
-            val sections = loadSectionsFromCache(worktrees)
+            // Project, worktrees and branches first, so the cached paint labels rows and the
+            // project pill as the live load will instead of relabeling them a moment later.
             homeWorktrees.seedResolutions(worktrees)
+            homeWorktrees.seedLayouts(worktrees)
+            val sections = loadSectionsFromCache(worktrees)
             content =
                 MainScreenUiState.Loaded(sections = sections, projectLoads = visibleProjectLoads, home = homeWorktrees.index)
             applyPendingFirstServerSnapshots()

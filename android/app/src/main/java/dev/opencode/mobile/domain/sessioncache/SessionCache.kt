@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.sessioncache
 
 import dev.opencode.mobile.domain.home.ResolvedHomePath
+import dev.opencode.mobile.domain.home.WorktreeLayout
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -52,6 +53,21 @@ interface SessionCache {
     fun rememberProjectResolution(
         worktree: String,
         resolution: ResolvedHomePath,
+    ) = Unit
+
+    /**
+     * The worktrees [worktree] last listed and their branches, so a cold Home labels rows as
+     * the live load will. [connectionId] reads another profile's entry, as for resolutions.
+     */
+    suspend fun seedWorktreeLayout(
+        worktree: String,
+        connectionId: String? = null,
+    ): WorktreeLayout? = null
+
+    /** Queued like [rememberProjectResolution]: call order, dropped by a purge while queued. */
+    fun rememberWorktreeLayout(
+        worktree: String,
+        layout: WorktreeLayout,
     ) = Unit
 
     fun openMessages(

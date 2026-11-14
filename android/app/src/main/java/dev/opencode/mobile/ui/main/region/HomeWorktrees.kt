@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.home.HomeWorktreesFeed
 import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
 import dev.opencode.mobile.domain.home.ResolvedHomePath
+import dev.opencode.mobile.domain.home.WorktreeLayout
 import dev.opencode.mobile.domain.live.SessionListSnapshot
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.session.SessionError
@@ -93,6 +94,12 @@ internal class HomeWorktrees(
     /** V1 added paths whose listed worktrees each need a session list. */
     private val listsSessionsPaths = mutableSetOf<String>()
 
+    /** Added paths whose worktree inventory loaded from the server (not the Session Cache). */
+    private val liveInventoryPaths = mutableSetOf<String>()
+
+    /** Worktree layout last seeded or persisted per added path; a write happens only on change. */
+    private val rememberedLayouts = mutableMapOf<String, WorktreeLayout>()
+
     /** V1 live lists of worktrees that are not added paths, by canonical directory. */
     private var extraObservationJobs: Map<String, Job> = emptyMap()
 
@@ -158,6 +165,38 @@ internal class HomeWorktrees(
     }
 
     /**
+     * Cached worktree inventories and branches for mergeable paths with no live inventory
+     * yet, so cached rows carry their branch and worktree labels from the first frame. Run
+     * after [seedResolutions]: only a mergeable project lists worktrees.
+     */
+    suspend fun seedLayouts(
+        worktrees: List<String>,
+        connectionId: String? = null,
+        server: String = serverBaseUrl(),
+    ) {
+        val cached =
+            worktrees
+                .filter { it !in liveInventoryPaths && index.resolutions[it]?.isMergeable == true }
+                .mapNotNull { path ->
+                    runCatching { sessionCache.seedWorktreeLayout(path, connectionId) }.getOrNull()?.let { path to it }
+                }
+        if (cached.isEmpty()) return
+        cached.forEach { (path, layout) ->
+            rememberedLayouts[path] = layout
+            worktreeInventoryCache.record(WorktreeInventory.loaded(layout.directories), path, server)
+        }
+        state =
+            state.copy(
+                index =
+                    index.copy(
+                        inventories = index.inventories + cached.associate { (path, layout) -> path to layout.directories.toSet() },
+                    ),
+            )
+        // Fills only directories the server has not answered; publishes through onChange.
+        branchLookups.seed(cached.fold(emptyMap()) { branches, (_, layout) -> branches + layout.branches })
+    }
+
+    /**
      * Resolves every added path's project (so Home groups as soon as possible), then loads
      * each project's worktrees and their branches. Sessions never wait for this.
      */
@@ -183,7 +222,9 @@ internal class HomeWorktrees(
                 }
                 requestBranches()
                 for ((worktree, resolution) in resolved) {
-                    applyPathLoad(worktreeLoader.load(worktree, resolution))
+                    // A path the server did not resolve yet lists with its cached project, so
+                    // a cold launch keeps its cached worktrees instead of dropping them.
+                    applyPathLoad(worktreeLoader.load(worktree, resolution ?: index.resolutions[worktree]))
                 }
             }
     }
@@ -238,6 +279,8 @@ internal class HomeWorktrees(
         worktreeLoader.onDisconnected()
         worktreeInventoryCache.clear()
         listsSessionsPaths.clear()
+        liveInventoryPaths.clear()
+        rememberedLayouts.clear()
         branchLookups.clear()
         state = state.copy(index = HomeWorktreeIndex())
     }
@@ -289,6 +332,11 @@ internal class HomeWorktrees(
 
     private fun applyPathLoad(load: HomePathLoad) {
         if (load.listsSessions) listsSessionsPaths += load.addedPath else listsSessionsPaths -= load.addedPath
+        when (load.inventory) {
+            is WorktreeInventory.Loaded -> liveInventoryPaths += load.addedPath
+            WorktreeInventory.Unloaded -> liveInventoryPaths -= load.addedPath
+            WorktreeInventory.Failed -> Unit
+        }
         worktreeInventoryCache.record(load.inventory, load.addedPath, serverBaseUrl())
         updateIndex { index ->
             val resolutions = load.resolution?.let { index.resolutions + (load.addedPath to it) } ?: index.resolutions
@@ -312,7 +360,22 @@ internal class HomeWorktrees(
         state = state.copy(index = next)
         val changed = next.resolutions.filter { (path, resolution) -> previous.resolutions[path] != resolution }
         changed.forEach { (path, resolution) -> sessionCache.rememberProjectResolution(path, resolution) }
+        rememberLayouts(next)
         onIndexChanged(next)
+    }
+
+    /**
+     * Persists the worktree layout of each path whose inventory loaded live, when it differs
+     * from the one last remembered (a new inventory, or a branch answer that changed).
+     */
+    private fun rememberLayouts(index: HomeWorktreeIndex) {
+        for (path in liveInventoryPaths) {
+            val directories = index.inventories[path] ?: continue
+            val layout = WorktreeLayout.of(path, directories, index.resolutions[path], index.branches)
+            if (rememberedLayouts[path] == layout) continue
+            rememberedLayouts[path] = layout
+            sessionCache.rememberWorktreeLayout(path, layout)
+        }
     }
 
     /** Branch names for every project worktree not answered since the last reload. */

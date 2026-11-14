@@ -50,6 +50,8 @@ final class HomeWorktrees {
 
     private let worktreeMarks: HomeWorktreeMarks
     private let branchLookups: HomeBranchLookups
+    /// Worktree layouts last read from or written to the Session Cache, per added path.
+    private var rememberedLayouts: [String: HomeWorktreeLayout] = [:]
     private var serverProjectsTask: Task<Void, Never>?
     private var extrasRefreshTask: Task<Void, Never>?
     private var markTask: Task<Void, Never>?
@@ -130,6 +132,10 @@ final class HomeWorktrees {
         branchLookups.onChange = { [weak self] branches in
             guard let self, self.state.branches != branches else { return }
             self.state.branches = branches
+            // New branch answers update the remembered layouts (unchanged ones are not rewritten).
+            for path in self.state.directories.keys {
+                self.rememberLayout(path)
+            }
         }
     }
 
@@ -210,6 +216,69 @@ final class HomeWorktrees {
         return resolutions
     }
 
+    // MARK: - Cached layouts
+
+    /// Cached worktree lists and branches for paths whose live inventory has not loaded, so a
+    /// cold Home shows the worktree labels and project chip the live load will, not a relabel.
+    func seedLayouts(_ worktrees: [String]) async {
+        let missing = worktrees.filter { state.inventories[$0] == nil }
+        applyLayouts(await cachedLayouts(missing, connectionID: nil))
+    }
+
+    func cachedLayouts(
+        _ worktrees: [String],
+        connectionID: String?
+    ) async -> [String: HomeWorktreeLayout] {
+        var layouts: [String: HomeWorktreeLayout] = [:]
+        for worktree in worktrees {
+            if let layout = await sessionCache.seedWorktreeLayout(worktree: worktree, connectionID: connectionID) {
+                layouts[worktree] = layout
+            }
+        }
+        return layouts
+    }
+
+    /// `replacing` drops what another server left for the same paths (a profile switch paint).
+    /// Run after the resolutions are in: only a mergeable project takes its project id here.
+    func applyLayouts(_ layouts: [String: HomeWorktreeLayout], replacing: Bool = false) {
+        var next = state
+        if replacing {
+            for worktree in layouts.keys {
+                next.inventories[worktree] = nil
+                next.projectIDs[worktree] = nil
+            }
+        }
+        var branches: [String: String] = [:]
+        for (worktree, layout) in layouts where next.inventories[worktree] == nil {
+            next.directories[worktree] = layout.directories
+            next.inventories[worktree] = .loaded(layout.directories)
+            if next.projectIDs[worktree] == nil, let resolution = next.resolutions[worktree], resolution.isMergeable {
+                next.projectIDs[worktree] = resolution.id
+            }
+            rememberedLayouts[worktree] = layout
+            branches.merge(layout.branches) { current, _ in current }
+        }
+        state = next
+        if !branches.isEmpty {
+            branchLookups.seed(branches)
+        }
+    }
+
+    /// Remembers what `addedPath` lists now (worktrees and their branches), when it changed.
+    private func rememberLayout(_ addedPath: String) {
+        guard let directories = state.directories[addedPath], !directories.isEmpty else { return }
+        var members = Set(directories.map(ServerPathPolicy.canonical))
+        members.insert(ServerPathPolicy.canonical(addedPath))
+        if let main = state.resolutions[addedPath]?.mainCheckout { members.insert(main) }
+        let layout = HomeWorktreeLayout(
+            directories: directories,
+            branches: state.branches.filter { members.contains($0.key) }
+        )
+        guard rememberedLayouts[addedPath] != layout else { return }
+        rememberedLayouts[addedPath] = layout
+        sessionCache.rememberWorktreeLayout(worktree: addedPath, layout: layout)
+    }
+
     /// Replaces every resolution (a server switch painting its cached projects).
     func replaceResolutions(_ resolutions: [String: HomeProjectResolution]) {
         state.resolutions = resolutions
@@ -237,6 +306,7 @@ final class HomeWorktrees {
         state.extraDirectories.removeAll()
         state.branches.removeAll()
         state.serverProjectInfo.removeAll()
+        rememberedLayouts.removeAll()
         branchLookups.clear()
         serverProjectsTask?.cancel()
         serverProjectsTask = nil
@@ -394,6 +464,9 @@ final class HomeWorktrees {
         // A failed reload keeps the worktrees Home already knows.
         if update.inventory != .failed, state.directories[update.addedPath] != update.directories {
             state.directories[update.addedPath] = update.directories
+        }
+        if case .loaded = update.inventory {
+            rememberLayout(update.addedPath)
         }
         // The inventory may have grown (v2 lists again after its refresh): ask for new worktrees.
         lookUpBranchesForResolvedProjects()

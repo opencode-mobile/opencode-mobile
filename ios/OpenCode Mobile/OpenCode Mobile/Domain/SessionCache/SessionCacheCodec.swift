@@ -143,6 +143,30 @@ nonisolated enum SessionCacheCodec {
             isRepository: payload.isRepository
         )
     }
+
+    static func encodeWorktreeLayout(_ layout: HomeWorktreeLayout) throws -> String {
+        let payload = CachedWorktreeLayoutPayload(
+            schemaVersion: schemaVersion,
+            directories: layout.directories,
+            branches: layout.branches
+        )
+        let data = try encoder.encode(payload)
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw SessionCacheCodecError.utf8EncodingFailed
+        }
+        return string
+    }
+
+    static func decodeWorktreeLayout(_ raw: String) -> HomeWorktreeLayout? {
+        guard let data = raw.data(using: .utf8),
+              let payload = try? decoder.decode(CachedWorktreeLayoutPayload.self, from: data),
+              payload.schemaVersion == schemaVersion
+        else {
+            DiagnosticLog.warning(.session, "worktree layout decode failed")
+            return nil
+        }
+        return HomeWorktreeLayout(directories: payload.directories, branches: payload.branches)
+    }
 }
 
 nonisolated enum SessionCacheCodecError: Error {
@@ -164,6 +188,12 @@ nonisolated private struct CachedProjectResolutionPayload: Codable, Sendable {
     let canonical: String
     let name: String?
     let isRepository: Bool
+}
+
+nonisolated private struct CachedWorktreeLayoutPayload: Codable, Sendable {
+    let schemaVersion: Int
+    let directories: [String]
+    let branches: [String: String]
 }
 
 nonisolated private struct CachedSessionListPayload: Codable, Sendable {

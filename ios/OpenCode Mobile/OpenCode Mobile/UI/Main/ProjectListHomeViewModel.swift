@@ -17,6 +17,14 @@ struct ProjectSectionItem: Identifiable, Equatable {
     var hasMoreSessions = false
     /// Oldest update in the live window; nil before it loads or when it is empty.
     var oldestWindowUpdatedAtEpochMs: Int64? = nil
+
+    /// The section with the project and worktree inventory a cached layout seeded.
+    func withCachedLayout(projectID: String?, inventory: WorktreeInventory?) -> ProjectSectionItem {
+        var copy = self
+        copy.projectID = projectID ?? self.projectID
+        copy.worktreeInventory = inventory ?? worktreeInventory
+        return copy
+    }
 }
 
 struct ProjectRemovalItem: Equatable {
