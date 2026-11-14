@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.feedback.FeedbackIdentityStore
 import dev.opencode.mobile.domain.live.ProjectionCaches
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.serverhealth.ServerHealthStore
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -87,6 +88,7 @@ class ConnectionSessionCoordinator
         private val syncCoordinator: SyncCoordinator,
         private val worldSignals: WorldSignals,
         private val projectionCaches: ProjectionCaches,
+        private val serverHealthStore: ServerHealthStore,
     ) {
         private val mutex = Mutex()
         private val switchGeneration = AtomicLong(0)
@@ -228,6 +230,7 @@ class ConnectionSessionCoordinator
                         sessionModelSelectionStore.clearConnection(identity)
                         composerDraftStore.clearConnection(identity)
                     }
+                    runCatching { serverHealthStore.purge(target.id) }
                 }
                 is ProfileChange.Cleared -> {
                     secureCredentialStore.clearAll()
@@ -235,6 +238,7 @@ class ConnectionSessionCoordinator
                     sessionModelSelectionStore.clearAll()
                     composerDraftStore.clearAll()
                     feedbackIdentityStore.writeRefreshToken(null)
+                    runCatching { serverHealthStore.purgeAll() }
                 }
             }
             val active =

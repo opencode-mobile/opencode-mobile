@@ -7,16 +7,67 @@ final class ServersViewModel {
     var profiles: [ConnectionProfile] = []
     var activeId: String?
     var pendingRemoval: ConnectionProfile?
+    /// Server Health summary for the active profile's card; nil without an active profile.
+    private(set) var healthQuickView: ServerHealthQuickView?
+    /// Set to open Server Health.
+    var healthRoute: ServerHealthRoute?
 
     private let coordinator: ConnectionSessionCoordinator
+    @ObservationIgnored private let healthMonitor: any ServerHealthMonitoring
+    @ObservationIgnored private let healthStore: any ServerHealthStore
+    @ObservationIgnored private let now: () -> Int64
 
-    init(coordinator: ConnectionSessionCoordinator = Container.shared.connectionSessionCoordinator()) {
+    init(
+        coordinator: ConnectionSessionCoordinator = Container.shared.connectionSessionCoordinator(),
+        healthMonitor: any ServerHealthMonitoring = Container.shared.serverHealthMonitor(),
+        healthStore: any ServerHealthStore = Container.shared.serverHealthStore(),
+        now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
+    ) {
         self.coordinator = coordinator
+        self.healthMonitor = healthMonitor
+        self.healthStore = healthStore
+        self.now = now
     }
 
     func refresh() async {
         profiles = await coordinator.listProfiles()
         activeId = coordinator.currentProfile()?.id
+        await refreshHealth()
+    }
+
+    func openHealth(profileID: String) {
+        guard let profile = profiles.first(where: { $0.id == profileID }) else { return }
+        healthRoute = ServerHealthRoute(profile: profile)
+    }
+
+    /// Keeps the quick view current until the task is cancelled.
+    func observeHealth() async {
+        for await _ in healthMonitor.updates() {
+            await refreshHealth()
+        }
+    }
+
+    /// Recomputes the quick view for the active profile only, over the last 24 hours.
+    func refreshHealth() async {
+        guard let profileID = activeId, !profileID.isEmpty else {
+            healthQuickView = nil
+            return
+        }
+        let nowMs = now()
+        let since = nowMs - ServerHealthRange.day.durationMs
+        let pings = await healthStore.pings(profileID: profileID, sinceMs: since)
+        let events = await healthStore.events(profileID: profileID, sinceMs: since)
+        guard activeId == profileID else { return }
+        let report = ServerHealthReportBuilder.build(pings: pings, events: events, nowMs: nowMs, range: .day)
+        let live = healthMonitor.liveStatus
+        let isLive = live.profileID == profileID
+        healthQuickView = ServerHealthQuickView(
+            state: isLive ? live.state : .stopped,
+            currentPingMs: isLive ? live.lastPingMs : nil,
+            recentPings: ServerHealthReportBuilder.recentPings(pings, nowMs: nowMs),
+            uptimePercent: report.uptimePercent,
+            reconnects: report.drops
+        )
     }
 
     func requestRemove(_ profile: ConnectionProfile) {
@@ -86,7 +137,8 @@ struct ServersView: View {
                                     contrast: .low,
                                     action: { viewModel.requestRemove(profile) }
                                 )
-                            }
+                            },
+                            footer: healthFooter(isActive: isActive, profile: profile)
                         )
                         .padding(.horizontal, 16)
                     }
@@ -108,6 +160,10 @@ struct ServersView: View {
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)
         .task { await viewModel.refresh() }
+        .task { await viewModel.observeHealth() }
+        .navigationDestination(item: $viewModel.healthRoute) { route in
+            ServerHealthView(route: route)
+        }
         .onAppear { Task { await viewModel.refresh() } }
         .onChange(of: refreshToken) { _, _ in
             Task { await viewModel.refresh() }
@@ -131,5 +187,13 @@ struct ServersView: View {
                 viewModel.dismissRemove()
             }
         )
+    }
+
+    /// Server Health summary under the active profile; inactive profiles have none.
+    private func healthFooter(isActive: Bool, profile: ConnectionProfile) -> AnyView? {
+        guard isActive, let quickView = viewModel.healthQuickView else { return nil }
+        return AnyView(ServerHealthQuickFooter(quickView: quickView) {
+            viewModel.openHealth(profileID: profile.id)
+        })
     }
 }

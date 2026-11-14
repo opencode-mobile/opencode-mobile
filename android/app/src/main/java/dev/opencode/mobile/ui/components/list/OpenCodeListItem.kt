@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -196,6 +197,11 @@ fun OpenCodeListItem(
     titleEmphasized: Boolean = false,
     /** Part of [title] to mark, such as the text a search matched; out-of-range parts are ignored. */
     titleHighlight: IntRange? = null,
+    /**
+     * Content below the row, inside the card and under a divider. It owns its own taps; the row
+     * click does not cover it.
+     */
+    footer: (@Composable () -> Unit)? = null,
 ) {
     require(subtitle == null || subtitleSegments == null) {
         "List Item accepts either a plain subtitle or semantic segments"
@@ -294,7 +300,7 @@ fun OpenCodeListItem(
         }
 
     CompositionLocalProvider(LocalContentColor provides contentColor) {
-        Box(
+        Column(
             modifier =
                 modifier
                     .fillMaxWidth()
@@ -307,131 +313,142 @@ fun OpenCodeListItem(
                         } else {
                             Modifier
                         },
-                    ).openCodeFocusRing(focused = isFocused && !isPlain, shape = containerShape)
-                    .then(if (interactionModifier === Modifier) Modifier else Modifier.openCodeControl(enabled))
-                    // A secondary click opens the same actions as a long-press.
-                    .openCodeSecondaryClick(enabled = enabled && onLongPress != null) { onLongPress?.invoke() }
-                    .then(interactionModifier),
+                    ),
         ) {
-            if (isPlain) {
-                Box(
-                    modifier =
-                        Modifier
-                            .matchParentSize()
-                            .padding(
-                                horizontal = ListItemSelectionHorizontalInset,
-                                vertical = ListItemSelectionVerticalInset,
-                            ).clip(ListItemSelectionShape)
-                            .background(plainHighlightColor, ListItemSelectionShape)
-                            .indication(interactionSource, ripple(bounded = true))
-                            .openCodeFocusRing(focused = isFocused, shape = ListItemSelectionShape),
-                )
-            }
-            if (variant == OpenCodeListItemVariant.Compact) {
-                CompactListItemContent(
-                    title = title,
-                    titleEmphasized = titleEmphasized,
-                    titleHighlight = titleHighlight,
-                    path = path,
-                    subtitle = subtitle,
-                    status = status,
-                    caption = caption,
-                    startDecorator = startDecorator,
-                    enabled = enabled,
-                    trailing = trailing,
-                )
-            } else {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = ListItemVerticalPadding),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
-
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(ListItemTitleSubtitleSpacing),
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .openCodeFocusRing(focused = isFocused && !isPlain, shape = containerShape)
+                        .then(if (interactionModifier === Modifier) Modifier else Modifier.openCodeControl(enabled))
+                        // A secondary click opens the same actions as a long-press.
+                        .openCodeSecondaryClick(enabled = enabled && onLongPress != null) { onLongPress?.invoke() }
+                        .then(interactionModifier),
+            ) {
+                if (isPlain) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .matchParentSize()
+                                .padding(
+                                    horizontal = ListItemSelectionHorizontalInset,
+                                    vertical = ListItemSelectionVerticalInset,
+                                ).clip(ListItemSelectionShape)
+                                .background(plainHighlightColor, ListItemSelectionShape)
+                                .indication(interactionSource, ripple(bounded = true))
+                                .openCodeFocusRing(focused = isFocused, shape = ListItemSelectionShape),
+                    )
+                }
+                if (variant == OpenCodeListItemVariant.Compact) {
+                    CompactListItemContent(
+                        title = title,
+                        titleEmphasized = titleEmphasized,
+                        titleHighlight = titleHighlight,
+                        path = path,
+                        subtitle = subtitle,
+                        status = status,
+                        caption = caption,
+                        startDecorator = startDecorator,
+                        enabled = enabled,
+                        trailing = trailing,
+                    )
+                } else {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = ListItemVerticalPadding),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        val titleText = @Composable { titleModifier: Modifier ->
-                            Text(
-                                text = listItemTitleText(title, titleHighlight),
-                                color = if (enabled) textStrong else textWeaker,
-                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = titleModifier,
-                            )
-                        }
-                        if (titleTag.isNullOrBlank() && !isNew) {
-                            titleText(Modifier)
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(ListItemTitleTagSpacing),
-                            ) {
-                                titleText(Modifier.weight(1f, fill = false))
-                                if (!titleTag.isNullOrBlank()) OpenCodeTag(title = titleTag, size = OpenCodeTagSize.Small)
-                                if (isNew) {
-                                    OpenCodeTag(
-                                        title = stringResource(R.string.common_new),
-                                        size = OpenCodeTagSize.Small,
-                                        tone = OpenCodeTagTone.Accent,
-                                    )
+                        ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(ListItemTitleSubtitleSpacing),
+                        ) {
+                            val titleText = @Composable { titleModifier: Modifier ->
+                                Text(
+                                    text = listItemTitleText(title, titleHighlight),
+                                    color = if (enabled) textStrong else textWeaker,
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = titleModifier,
+                                )
+                            }
+                            if (titleTag.isNullOrBlank() && !isNew) {
+                                titleText(Modifier)
+                            } else {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(ListItemTitleTagSpacing),
+                                ) {
+                                    titleText(Modifier.weight(1f, fill = false))
+                                    if (!titleTag.isNullOrBlank()) OpenCodeTag(title = titleTag, size = OpenCodeTagSize.Small)
+                                    if (isNew) {
+                                        OpenCodeTag(
+                                            title = stringResource(R.string.common_new),
+                                            size = OpenCodeTagSize.Small,
+                                            tone = OpenCodeTagTone.Accent,
+                                        )
+                                    }
                                 }
                             }
+                            if (subtitleSegments != null) {
+                                ListItemSegmentsText(subtitleSegments, enabled)
+                            } else if (subtitle != null) {
+                                Text(
+                                    text = subtitle,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (enabled) textBase else textWeaker,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            if (!detailSegments.isNullOrEmpty()) {
+                                ListItemSegmentsText(detailSegments, enabled)
+                            }
                         }
-                        if (subtitleSegments != null) {
-                            ListItemSegmentsText(subtitleSegments, enabled)
-                        } else if (subtitle != null) {
-                            Text(
-                                text = subtitle,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (enabled) textBase else textWeaker,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        if (!detailSegments.isNullOrEmpty()) {
-                            ListItemSegmentsText(detailSegments, enabled)
-                        }
-                    }
 
-                    if (hasMeta) {
-                        ListItemMetaColumn(
-                            status = status,
-                            caption = caption,
-                            enabled = enabled,
-                            textBase = textBase,
-                            textWeaker = textWeaker,
-                        )
-                    }
-
-                    if (trailing != null) {
-                        Box(contentAlignment = Alignment.Center) { trailing() }
-                    }
-
-                    when (val itemAccessory = accessory) {
-                        null -> Unit
-                        OpenCodeListItemAccessory.Disclosure -> {
-                            Icon(
-                                imageVector = OpenCodeIcons.ChevronRight,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker"),
-                            )
-                        }
-                        is OpenCodeListItemAccessory.Toggle -> {
-                            Switch(
-                                checked = itemAccessory.checked,
-                                onCheckedChange = itemAccessory.onCheckedChange,
+                        if (hasMeta) {
+                            ListItemMetaColumn(
+                                status = status,
+                                caption = caption,
                                 enabled = enabled,
+                                textBase = textBase,
+                                textWeaker = textWeaker,
                             )
+                        }
+
+                        if (trailing != null) {
+                            Box(contentAlignment = Alignment.Center) { trailing() }
+                        }
+
+                        when (val itemAccessory = accessory) {
+                            null -> Unit
+                            OpenCodeListItemAccessory.Disclosure -> {
+                                Icon(
+                                    imageVector = OpenCodeIcons.ChevronRight,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker"),
+                                )
+                            }
+                            is OpenCodeListItemAccessory.Toggle -> {
+                                Switch(
+                                    checked = itemAccessory.checked,
+                                    onCheckedChange = itemAccessory.onCheckedChange,
+                                    enabled = enabled,
+                                )
+                            }
                         }
                     }
                 }
+            }
+            if (footer != null) {
+                HorizontalDivider(color = borderWeaker, modifier = Modifier.padding(horizontal = 16.dp))
+                footer()
             }
         }
     }

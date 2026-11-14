@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.message.DisplayMessagePreparing
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
+import dev.opencode.mobile.domain.serverhealth.InMemoryServerHealthStore
 import dev.opencode.mobile.domain.session.SideQuestionStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
@@ -126,6 +127,7 @@ class PlaygroundSession(
                 syncCoordinator = NoOpSyncCoordinator,
                 worldSignals = SilentWorldSignals,
                 projectionCaches = PlaygroundProjectionCaches,
+                serverHealthStore = InMemoryServerHealthStore(),
             )
         return SessionChatViewModel(
             messageRepository = PlaygroundMessageRepository(world, preparing),

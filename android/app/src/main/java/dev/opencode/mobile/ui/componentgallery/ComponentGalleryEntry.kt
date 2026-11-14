@@ -25,6 +25,7 @@ enum class ComponentGalleryEntryId {
     BottomFade,
     Tag,
     KeyValueRow,
+    Charts,
     Attachment,
     ImageGallery,
     OutgoingMessage,
@@ -148,6 +149,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.KeyValueRow,
             title = "Key Value Row",
             description = "Label and value for detail lines and stat cells.",
+            category = ComponentGalleryCategory.Lists,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.Charts,
+            title = "Charts",
+            description = "Sparkline, band, status strip and bar charts, chart cards, stat tiles, and proportion rows.",
             category = ComponentGalleryCategory.Lists,
         ),
         ComponentGalleryEntry(

@@ -13,6 +13,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object ServersHome : NavKey
 
+/** Server Health of Connection Profile [profileId]. */
+@Serializable data class ServerHealth(
+    val profileId: String,
+) : NavKey
+
 @Serializable data object AppearanceHome : NavKey
 
 @Serializable data object ThemePickerHome : NavKey

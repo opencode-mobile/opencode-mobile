@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
+import dev.opencode.mobile.domain.serverhealth.ServerHealthFailureCategory
 import dev.opencode.mobile.network.ActiveConnectionManager
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -27,6 +28,7 @@ import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 class DefaultForegroundEventStreamTest {
@@ -363,6 +365,56 @@ class DefaultForegroundEventStreamTest {
                 }
                 delay(2_000)
                 assertEquals(1, attempts.get())
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun serverHealthObserver_hearsServerErrorsAndHeartbeatStallsOncePerAttempt() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val reported = CopyOnWriteArrayList<ServerHealthFailureCategory>()
+            val client =
+                HttpClient(
+                    MockEngine {
+                        if (attempts.incrementAndGet() == 1) {
+                            respond(content = "", status = HttpStatusCode.ServiceUnavailable)
+                        } else {
+                            val channel = ByteChannel(autoFlush = true)
+                            channel.writeStringUtf8(CONNECTED_V1)
+                            respond(
+                                content = channel,
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                            )
+                        }
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager = ActiveConnectionManager(store, ConnectionProbing { ServerProtocol.V2 })
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                    idleTimeoutMs = 300L,
+                    serverHealthObserver = { reported += it },
+                )
+            try {
+                stream.start()
+                withTimeout(8_000) {
+                    while (reported.size < 2) delay(20)
+                }
+                assertEquals(
+                    listOf(ServerHealthFailureCategory.Server, ServerHealthFailureCategory.Heartbeat),
+                    reported.take(2),
+                )
+                assertTrue(reported.none { it == ServerHealthFailureCategory.Network || it == ServerHealthFailureCategory.Other })
             } finally {
                 stream.stop()
                 client.close()

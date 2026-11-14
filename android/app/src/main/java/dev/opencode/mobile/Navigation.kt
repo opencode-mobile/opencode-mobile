@@ -75,6 +75,7 @@ import dev.opencode.mobile.ui.componentgallery.components.BackgroundWorkPillGall
 import dev.opencode.mobile.ui.componentgallery.components.BottomFadeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ChartsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SplitButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ShellRowGalleryScreen
@@ -169,6 +170,7 @@ import dev.opencode.mobile.ui.settings.DeveloperToolsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
 import dev.opencode.mobile.ui.settings.FeatureFlagsRoute
+import dev.opencode.mobile.ui.serverhealth.ServerHealthScreen
 import dev.opencode.mobile.ui.settings.ServersScreen
 import dev.opencode.mobile.ui.settings.ServersViewModel
 import dev.opencode.mobile.ui.settings.SettingsDetail
@@ -225,6 +227,11 @@ fun MainNavigation(appCovered: Boolean = false) {
     val serversUiState by serversViewModel.uiState.collectAsStateWithLifecycle()
 
     val backStack = rememberNavBackStack(ProjectListHome)
+    LaunchedEffect(serversViewModel) {
+        serversViewModel.openHealthRequests.collect { profileId ->
+            backStack.addRouteUnlessTop(ServerHealth(profileId))
+        }
+    }
     val rootChatFlowNavigator = remember(backStack) { backStack.rootChatFlowNavigator() }
     val homeResetGeneration by rootViewModel.homeResetGeneration.collectAsStateWithLifecycle()
     LaunchedEffect(homeResetGeneration) {
@@ -287,6 +294,7 @@ fun MainNavigation(appCovered: Boolean = false) {
                         onRequestRemove = serversViewModel::requestRemove,
                         onConfirmRemove = serversViewModel::confirmRemove,
                         onDismissRemove = serversViewModel::dismissRemove,
+                        onOpenHealth = serversViewModel::openHealth,
                     )
                 }
                 SettingsDetail.Appearance -> {
@@ -682,6 +690,17 @@ fun MainNavigation(appCovered: Boolean = false) {
                                             }
                                         }
                                     }
+                                    entry<ServerHealth> { key ->
+                                        RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.SERVER_HEALTH,
+                                            )
+                                            ServerHealthScreen(
+                                                profileId = key.profileId,
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
+                                            )
+                                        }
+                                    }
                                     entry<ConnectionSetupHome> {
                                         RouteSurface {
                                             ProductRouteScreenViewEffect(
@@ -791,6 +810,7 @@ fun MainNavigation(appCovered: Boolean = false) {
                                                         ComponentGalleryEntryId.BottomFade -> BottomFadeGalleryScreen()
                                                         ComponentGalleryEntryId.Tag -> TagGalleryScreen()
                                                         ComponentGalleryEntryId.KeyValueRow -> KeyValueRowGalleryScreen()
+                                                        ComponentGalleryEntryId.Charts -> ChartsGalleryScreen()
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
                                                         ComponentGalleryEntryId.ImageGallery -> ImageGalleryGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()

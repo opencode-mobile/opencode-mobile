@@ -8,6 +8,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dev.opencode.mobile.data.local.serverhealth.MIGRATION_1_2
+import dev.opencode.mobile.data.local.serverhealth.ServerHealthDao
 import dev.opencode.mobile.data.local.sessioncache.OpenCodeMobileDatabase
 import dev.opencode.mobile.data.local.sessioncache.RoomSessionCacheStore
 import dev.opencode.mobile.data.local.sessioncache.SessionCacheDao
@@ -40,10 +42,14 @@ abstract class SessionCacheModule {
                     context,
                     OpenCodeMobileDatabase::class.java,
                     "opencode_mobile.db",
-                ).build()
+                ).addMigrations(MIGRATION_1_2)
+                .build()
 
         @Provides
         fun provideSessionCacheDao(database: OpenCodeMobileDatabase): SessionCacheDao = database.sessionCacheDao()
+
+        @Provides
+        fun provideServerHealthDao(database: OpenCodeMobileDatabase): ServerHealthDao = database.serverHealthDao()
 
         @Provides
         @Singleton

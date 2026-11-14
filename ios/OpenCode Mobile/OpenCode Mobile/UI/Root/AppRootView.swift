@@ -185,6 +185,8 @@ struct AppRootView: View {
                 )
             }
             Container.shared.worldSignals().register()
+            // Records Server Health for the app's lifetime by observing the singleton stream.
+            Container.shared.serverHealthMonitor().start()
             await rootViewModel.load()
         }
         .onChange(of: scenePhase) { previousPhase, phase in

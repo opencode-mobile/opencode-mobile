@@ -12,6 +12,9 @@ import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.message.ConnectionEpoch
+import dev.opencode.mobile.domain.serverhealth.ServerHealthFailureCategory
+import dev.opencode.mobile.domain.serverhealth.ServerHealthFailureClassifier
+import dev.opencode.mobile.domain.serverhealth.ServerHealthStreamObserver
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -59,6 +62,7 @@ class DefaultForegroundEventStream
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionProfileStore: ConnectionProfileStore,
         private val deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
+        private val serverHealthObserver: ServerHealthStreamObserver = ServerHealthStreamObserver.None,
     ) : LiveConnection {
         internal constructor(
             eventsApi: EventsApi,
@@ -70,6 +74,7 @@ class DefaultForegroundEventStream
             idleTimeoutMs: Long,
             connectionEpoch: ConnectionEpoch = ConnectionEpoch.shared,
             protocolRecheckIntervalMs: Long = ProtocolRecheckPolicy.MIN_INTERVAL_MS,
+            serverHealthObserver: ServerHealthStreamObserver = ServerHealthStreamObserver.None,
         ) : this(
             eventsApi,
             eventDomainAdapter,
@@ -77,6 +82,7 @@ class DefaultForegroundEventStream
             activeConnectionManager,
             connectionProfileStore,
             deviceNetworkPath,
+            serverHealthObserver,
         ) {
             this.idleTimeoutMs = idleTimeoutMs
             this.connectionEpoch = connectionEpoch
@@ -532,6 +538,7 @@ class DefaultForegroundEventStream
                         val serverConnected = CompletableDeferred<Unit>()
                         val headersOpened = CompletableDeferred<Boolean>()
                         val attemptOutcome = CompletableDeferred<SseAttemptOutcome>()
+                        val heartbeatStalled = AtomicBoolean(false)
                         val streamJob =
                             launch {
                                 val path = "/${target.path}"
@@ -633,6 +640,8 @@ class DefaultForegroundEventStream
                                             DiagnosticLogArea.Sse,
                                             "foreground SSE idle timeout target=${target.key}; reconnecting",
                                         )
+                                        heartbeatStalled.set(true)
+                                        serverHealthObserver.onStreamFailure(ServerHealthFailureCategory.Heartbeat)
                                         streamJob.cancel()
                                         return@launch
                                     }
@@ -677,6 +686,9 @@ class DefaultForegroundEventStream
                         if (generation != streamGeneration.get() || !isRequired(target.key)) return@launch
                         if (lease.currentAttempt() == attemptId) {
                             logAttemptOutcome(target.key, outcome)
+                            if (!heartbeatStalled.get()) {
+                                serverHealthFailureCategory(outcome)?.let(serverHealthObserver::onStreamFailure)
+                            }
                         }
                         if (ProtocolRecheckPolicy.suggestsProtocolChange(
                                 outcome = outcome,
@@ -730,6 +742,13 @@ class DefaultForegroundEventStream
                 }
             return lease
         }
+
+        private fun serverHealthFailureCategory(outcome: SseAttemptOutcome): ServerHealthFailureCategory? =
+            if (outcome is SseAttemptOutcome.Transport && outcome.cause?.message == FIRST_FRAME_FAILED) {
+                ServerHealthFailureCategory.Timeout
+            } else {
+                ServerHealthFailureClassifier.classify(outcome)
+            }
 
         private suspend fun awaitReconnectWakeOrDelay(backoffMs: Long): Boolean =
             if (backoffMs <= 0L) {

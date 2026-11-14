@@ -153,6 +153,9 @@ struct OpenCodeListItem<Trailing: View>: View {
     let action: (() -> Void)?
     let onLongPress: (() -> Void)?
     @ViewBuilder let trailing: () -> Trailing
+    /// Content under the row inside the same card, below a divider. It takes its own taps;
+    /// the row action stays on the row above it.
+    let footer: AnyView?
 
     @State private var isPressing = false
     @State private var popScale: CGFloat = 1
@@ -177,7 +180,8 @@ struct OpenCodeListItem<Trailing: View>: View {
         accessory: OpenCodeListItemAccessory? = nil,
         action: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil,
-        @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
+        @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() },
+        footer: AnyView? = nil
     ) {
         precondition(subtitle == nil || subtitleSegments == nil, "List Item accepts either a plain subtitle or semantic segments")
         self.variant = variant
@@ -200,9 +204,41 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.action = action
         self.onLongPress = onLongPress
         self.trailing = trailing
+        self.footer = footer
     }
 
     var body: some View {
+        if let footer {
+            VStack(spacing: 0) {
+                row
+                Rectangle()
+                    .fill(OpenCodeColors.borderWeakerBase)
+                    .frame(height: 1)
+                    .padding(.horizontal, style == .card ? 0 : 16)
+                footer
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background {
+                if style == .card {
+                    RoundedRectangle(cornerRadius: listItemCornerRadius)
+                        .fill(OpenCodeColors.surfaceBase)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: listItemCornerRadius))
+            .overlay {
+                if style == .card {
+                    RoundedRectangle(cornerRadius: listItemCornerRadius)
+                        .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+                }
+            }
+        } else {
+            row
+        }
+    }
+
+    private var row: some View {
         rowBody
             .openCodeKeyboardFocusable(focusRing, enabled: enabled && keyboardActivate != nil, activate: keyboardActivate)
             // Right-click opens what a long-press opens.
@@ -345,7 +381,8 @@ struct OpenCodeListItem<Trailing: View>: View {
                 containerBackground
             }
             .overlay {
-                if style == .card {
+                // With a footer the outer card draws the border around both.
+                if style == .card, footer == nil {
                     RoundedRectangle(cornerRadius: listItemCornerRadius)
                         .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
                 }
