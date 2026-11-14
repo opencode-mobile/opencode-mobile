@@ -10,17 +10,17 @@ import org.junit.Test
 class InAppBrowserTest {
     @Test
     fun aLocalhostUrlKeepsItsPortPathQueryAndFragmentAndCarriesNoCredentials() {
-        val url = SummaryLinks.onComputer("http://user:secret@localhost:5173/app/page?x=1&y=2#top", "192.168.0.47")
-        assertEquals("http://192.168.0.47:5173/app/page?x=1&y=2#top", url)
+        val url = SummaryLinks.onComputer("http://user:secret@localhost:5173/app/page?x=1&y=2#top", "192.168.1.47")
+        assertEquals("http://192.168.1.47:5173/app/page?x=1&y=2#top", url)
         assertFalse(url.contains("secret") || url.contains("@"))
         assertEquals("http://mbp.local:8080/", SummaryLinks.onComputer("http://0.0.0.0:8080/", "mbp.local"))
     }
 
     @Test
     fun theSameOriginStaysAndAnythingElseGoesToTheSystem() {
-        val start = "http://192.168.0.47:5173/index.html"
-        assertEquals(BrowserNavigation.Stay, BrowserNavigation.of(start, "http://192.168.0.47:5173/second.html?q=1"))
-        assertEquals(BrowserNavigation.System, BrowserNavigation.of(start, "http://192.168.0.47:8080/"))
+        val start = "http://192.168.1.47:5173/index.html"
+        assertEquals(BrowserNavigation.Stay, BrowserNavigation.of(start, "http://192.168.1.47:5173/second.html?q=1"))
+        assertEquals(BrowserNavigation.System, BrowserNavigation.of(start, "http://192.168.1.47:8080/"))
         assertEquals(BrowserNavigation.System, BrowserNavigation.of(start, "https://example.com/"))
         assertEquals(BrowserNavigation.System, BrowserNavigation.of(start, "mailto:me@example.com"))
         assertEquals(BrowserNavigation.System, BrowserNavigation.of(start, "tel:+441234"))

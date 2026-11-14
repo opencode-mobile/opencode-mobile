@@ -787,7 +787,7 @@ private struct HexGalleryContent: View {
             }
             caption("HexReader · Draft with its foot · You said")
             galleryPanel {
-                HexBrowser(title: "Login preview", host: "192.168.0.47:5173", progress: 0.4, canGoBack: true, onDone: {}, onReload: {}) {
+                HexBrowser(title: "Login preview", host: "192.168.1.47:5173", progress: 0.4, canGoBack: true, onDone: {}, onReload: {}) {
                     Color.white
                 }
                 .frame(height: 220)
@@ -795,7 +795,7 @@ private struct HexGalleryContent: View {
             galleryPanel {
                 HexBrowser(
                     title: "localhost:5173",
-                    host: "192.168.0.47:5173",
+                    host: "192.168.1.47:5173",
                     failure: HexBrowserFailure(
                         title: "Couldn’t reach port 5173 on Rapid Bison",
                         detail: "The dev server may only listen on the computer itself. Start it so it listens on the network (for Vite, add `--host`), then try again.",

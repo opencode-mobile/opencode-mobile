@@ -77,7 +77,7 @@ class ComputerTest {
     private val credentials = Credentials()
     private val profiles =
         Profiles(credentials).apply {
-            add(ConnectionProfile("http://192.168.0.47:4196/", "opencode", "1800.sig", id = "p1"))
+            add(ConnectionProfile("http://192.168.1.47:4196/", "opencode", "1800.sig", id = "p1"))
         }
     private val forgetting =
         ComputerForgetting(
@@ -123,7 +123,7 @@ class ComputerTest {
 
     @Test
     fun withoutAHostnameOverlappingAddressesDecide() {
-        assertTrue(PairAgain.isSameComputer(null, "mbp", listOf("http://192.168.0.47:4196/"), listOf("http://192.168.0.47:4196")))
-        assertFalse(PairAgain.isSameComputer("", null, listOf("http://192.168.0.47:4196"), listOf("http://10.0.0.9:4096")))
+        assertTrue(PairAgain.isSameComputer(null, "mbp", listOf("http://192.168.1.47:4196/"), listOf("http://192.168.1.47:4196")))
+        assertFalse(PairAgain.isSameComputer("", null, listOf("http://192.168.1.47:4196"), listOf("http://10.0.0.9:4096")))
     }
 }
