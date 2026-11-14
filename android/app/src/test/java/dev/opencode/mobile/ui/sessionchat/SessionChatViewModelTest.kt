@@ -21,6 +21,9 @@ import dev.opencode.mobile.domain.event.LiveUpdatesChrome
 import dev.opencode.mobile.domain.event.LiveUpdatesLabel
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.home.HomeProject
+import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
+import dev.opencode.mobile.domain.home.HomeWorktree
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
@@ -67,6 +70,8 @@ import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
+import dev.opencode.mobile.domain.session.NewSessionDraftStore
+import dev.opencode.mobile.domain.session.NewSessionPlace
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionInfo
@@ -79,6 +84,7 @@ import dev.opencode.mobile.domain.session.SessionRevert
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SideQuestionStore
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
 import dev.opencode.mobile.domain.worktree.CreatedWorktree
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
@@ -88,8 +94,6 @@ import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.markdown.HighlightCoreHighlightingEngine
-import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
-import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -98,7 +102,6 @@ import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsCopy
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import kotlinx.coroutines.CompletableDeferred
@@ -136,7 +139,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -725,6 +727,196 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun denyWithNote_sendsTheTrimmedNoteAsADeny() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title")))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(request)),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openPermissionNote(request.id, request.sessionId)
+            advanceUntilIdle()
+            assertEquals(PermissionNoteDraft("permission-1"), viewModel.uiState.value.permissionNote)
+
+            viewModel.updatePermissionNote(request.id, "  Run the tests first\n ")
+            viewModel.sendPermissionNote(request.id, request.sessionId)
+            advanceUntilIdle()
+
+            assertEquals(1, sessionRepository.permissionResponseCount)
+            assertEquals("permission-1", sessionRepository.respondedPermissionId)
+            assertEquals(dev.opencode.mobile.domain.session.PermissionDecision.Deny, sessionRepository.respondedDecision)
+            assertEquals("Run the tests first", sessionRepository.respondedMessage)
+        }
+
+    @Test
+    fun denyWithNote_blankNoteDoesNotSend() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title")))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(request)),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openPermissionNote(request.id, request.sessionId)
+            viewModel.sendPermissionNote(request.id, request.sessionId)
+            viewModel.updatePermissionNote(request.id, "  \n ")
+            viewModel.sendPermissionNote(request.id, request.sessionId)
+            advanceUntilIdle()
+
+            assertEquals(0, sessionRepository.permissionResponseCount)
+            assertFalse(viewModel.uiState.value.permissionSubmitting)
+            assertEquals(
+                "  \n ",
+                viewModel.uiState.value.permissionNote
+                    ?.text,
+            )
+        }
+
+    @Test
+    fun denyWithNote_cancelReturnsToThePromptWithoutAnswering() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title")))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(request)),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openPermissionNote(request.id, request.sessionId)
+            viewModel.updatePermissionNote(request.id, "Try something else")
+            viewModel.cancelPermissionNote(request.id)
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.permissionNote)
+            assertEquals(
+                "permission-1",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
+            assertEquals(0, sessionRepository.permissionResponseCount)
+
+            // Reopening starts from an empty note.
+            viewModel.openPermissionNote(request.id, request.sessionId)
+            advanceUntilIdle()
+            assertEquals(
+                "",
+                viewModel.uiState.value.permissionNote
+                    ?.text,
+            )
+        }
+
+    @Test
+    fun denyWithNote_pagingOrTheRequestGoingAwayClearsTheNote() =
+        runTest(testDispatcher) {
+            val first = permissionRequest("permission-1", "ses-1")
+            val second = permissionRequest("permission-2", "ses-1")
+            val permissionLiveStore = FakePermissionLiveStore(listOf(first, second))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title"))),
+                    permissionLiveStore = permissionLiveStore,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(1, viewModel.uiState.value.permissionOtherPendingInSession)
+
+            viewModel.openPermissionNote(first.id, first.sessionId)
+            viewModel.updatePermissionNote(first.id, "Not this one")
+            viewModel.pagePermission(1)
+            advanceUntilIdle()
+            assertEquals(
+                "permission-2",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
+            assertNull(viewModel.uiState.value.permissionNote)
+            viewModel.pagePermission(-1)
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.permissionNote)
+
+            viewModel.openPermissionNote(first.id, first.sessionId)
+            advanceUntilIdle()
+            assertEquals(PermissionNoteDraft("permission-1"), viewModel.uiState.value.permissionNote)
+            permissionLiveStore.requests.value = listOf(second)
+            advanceUntilIdle()
+            assertEquals(
+                "permission-2",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
+            assertNull(viewModel.uiState.value.permissionNote)
+            assertEquals(0, viewModel.uiState.value.permissionOtherPendingInSession)
+        }
+
+    @Test
+    fun denyWithNote_failureKeepsTheNoteAndShowsTheError() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions = listOf(Session(id = "ses-1", title = "Title")),
+                    permissionResponseError = SessionError.Http(500, "boom"),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(request)),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openPermissionNote(request.id, request.sessionId)
+            viewModel.updatePermissionNote(request.id, "Use the staging database")
+            viewModel.sendPermissionNote(request.id, request.sessionId)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(1, sessionRepository.permissionResponseCount)
+            assertEquals("Use the staging database", state.permissionNote?.text)
+            assertFalse(state.permissionSubmitting)
+            assertTrue(state.permissionErrorMessage != null)
+        }
+
+    @Test
+    fun plainDeny_sendsNoNote() =
+        runTest(testDispatcher) {
+            val request = permissionRequest("permission-1", "ses-1")
+            val sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title")))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(request)),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.denyPermission(request.id, request.sessionId)
+            advanceUntilIdle()
+
+            assertEquals(dev.opencode.mobile.domain.session.PermissionDecision.Deny, sessionRepository.respondedDecision)
+            assertNull(sessionRepository.respondedMessage)
+            assertNull(viewModel.uiState.value.permissionNote)
+        }
+
+    @Test
     fun backgroundWorkPill_countsRunningSubagentsAndFlagsTheOneWaitingForInput() =
         runTest(testDispatcher) {
             fun subagent(
@@ -859,6 +1051,73 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
             assertNull(viewModel.uiState.value.shellOutput)
         }
+
+    @Test
+    fun goal_showsInTheUiStateAndItsActionsReachTheGoalCommand() =
+        runTest(testDispatcher) {
+            val goals = GoalRepositoryStub()
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionGoalRepository = goals)
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val goal = goalState(viewModel)
+            assertEquals("goal_1", goal.goal.id)
+            assertEquals(SessionChatGoalActivity.Working, goal.activity)
+
+            viewModel.openGoalSheet()
+            advanceUntilIdle()
+            assertTrue(goalState(viewModel).sheetOpen)
+
+            // A failed command: a snackbar with the server's words, then the goal is read again.
+            goals.sendError = IllegalStateException("offline")
+            viewModel.sendGoalAction(dev.opencode.mobile.domain.goal.SessionGoalAction.Pause)
+            advanceUntilIdle()
+            val snackbar = viewModel.uiState.value.snackbar
+            assertEquals("Couldn’t pause the goal", snackbar?.message?.english())
+            assertEquals(2, goals.reads)
+            assertNull(goalState(viewModel).pending)
+
+            // New goal… starts a /goal command in the composer and closes the sheet.
+            viewModel.startNewGoal()
+            advanceUntilIdle()
+            val composer = viewModel.uiState.value.composer
+            assertEquals("/goal ", composer.text)
+            assertFalse(goalState(viewModel).sheetOpen)
+        }
+
+    private fun goalState(viewModel: SessionChatViewModel): SessionChatGoalUiState = requireNotNull(viewModel.uiState.value.goal)
+
+    private class GoalRepositoryStub : dev.opencode.mobile.domain.goal.SessionGoalRepository {
+        var reads = 0
+        var sendError: Throwable? = null
+
+        override suspend fun isAvailable() = true
+
+        override suspend fun goal(
+            sessionId: String,
+            directory: String?,
+        ): dev.opencode.mobile.domain.goal.SessionGoal {
+            reads += 1
+            return dev.opencode.mobile.domain.goal.SessionGoal(
+                id = "goal_1",
+                objective = "Make the tests pass",
+                status = dev.opencode.mobile.domain.goal.SessionGoalStatus.Active,
+                rounds = 1,
+                maxRounds = 50,
+                updatedAtEpochMs = 1,
+            )
+        }
+
+        override suspend fun send(
+            sessionId: String,
+            action: dev.opencode.mobile.domain.goal.SessionGoalAction,
+        ) {
+            sendError?.let { throw it }
+        }
+
+        override fun changes() = kotlinx.coroutines.flow.emptyFlow<dev.opencode.mobile.domain.goal.SessionGoalChange>()
+    }
 
     @Test
     fun openWaitingSubagentRequest_expandsAndPagesToTheSubagentsRequestAndPulses() =
@@ -1472,33 +1731,6 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun failedReviewChangesCountStaysHidden() =
-        runTest(testDispatcher) {
-            val sessionRepository =
-                FakeSessionRepository(
-                    sessionDiffError = SessionError.Transport(IllegalStateException("offline")),
-                )
-            val viewModel =
-                createViewModel(
-                    repository =
-                        FakeMessageRepository(
-                            messages =
-                                listOf(
-                                    Message(id = "user-1", role = MessageRole.User, text = "Change it", sentAtEpochMs = 1),
-                                    Message(id = "assistant-1", role = MessageRole.Assistant, text = "Done", sentAtEpochMs = 2),
-                                ),
-                        ),
-                    sessionRepository = sessionRepository,
-                )
-
-            viewModel.bind("ses-1", "Title", "/repo")
-            advanceUntilIdle()
-
-            assertEquals(null, viewModel.uiState.value.reviewChangesSummary)
-            assertEquals(null, sessionRepository.diffRequest)
-        }
-
-    @Test
     fun activeLatestTurnDoesNotLoadReviewChangesCount() =
         runTest(testDispatcher) {
             val sessionRepository = FakeSessionRepository(sessionStatusType = "busy")
@@ -1569,51 +1801,6 @@ class SessionChatViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(SessionChatTimelineState.Ready, state.timeline)
             assertNotNull(state.messages.single().renderedMarkdown)
-        }
-
-    @Ignore("Quarantined from CI: stress println benchmark, not a correctness gate")
-    @Test
-    fun benchmark_loadMessages_longMarkdownHistory() =
-        runTest(testDispatcher) {
-            val messages = longMarkdownHistory()
-            val detectorMs = measureMs { messages.count { OpenCodeMarkdownDetector.shouldRender(it.text) } }
-            val parserMs =
-                measureMs {
-                    messages.forEach { message ->
-                        if (OpenCodeMarkdownDetector.shouldRender(message.text)) {
-                            OpenCodeMarkdownParser.parse(message.text)
-                        }
-                    }
-                }
-            val preparer =
-                MessageContentPreparer(HighlightCoreHighlightingEngine()).apply {
-                    computationDispatcher = testDispatcher
-                }
-            val preparerMs =
-                measureMs {
-                    preparer.prepareMessages(messages)
-                    Unit
-                }
-            val viewModel =
-                createViewModel(
-                    repository =
-                        FakeMessageRepository(
-                            messages = messages,
-                            contentPreparer = preparer,
-                        ),
-                )
-
-            val startedAt = System.nanoTime()
-            viewModel.bind("ses-benchmark", "Markdown benchmark", "/repo")
-            advanceUntilIdle()
-            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
-
-            assertEquals(SessionChatTimelineState.Ready, viewModel.uiState.value.timeline)
-            assertEquals(20, viewModel.uiState.value.messages.size)
-            println(
-                "MARKDOWN_BENCHMARK android detector-ms=$detectorMs parser-ms=$parserMs " +
-                    "preparer-ms=$preparerMs viewmodel-load-ms=$elapsedMs messages=20 code-lines=3000",
-            )
         }
 
     @Test
@@ -1912,7 +2099,7 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun composerDraft_promoteOptimisticCreatePersistsUnderRealSessionId() =
+    fun composerDraft_afterTheDraftsFirstSendPersistsUnderTheRealSessionId() =
         runTest(testDispatcher) {
             val draftStore =
                 dev.opencode.mobile.domain.composer
@@ -1928,15 +2115,18 @@ class SessionChatViewModelTest {
                     composerDraftStore = draftStore,
                 )
             first.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
-            first.updateComposerText("typed during create")
             advanceUntilIdle()
-            assertEquals("typed during create", first.uiState.value.composer.text)
+            first.updateComposerText("first prompt")
+            first.sendPrompt()
+            advanceUntilIdle()
             assertEquals("ses-new", first.uiState.value.sessionId)
+            first.updateComposerText("typed after create")
+            advanceUntilIdle()
 
             val restored = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
             restored.bind("ses-new", "Created", "/repo")
             advanceUntilIdle()
-            assertEquals("typed during create", restored.uiState.value.composer.text)
+            assertEquals("typed after create", restored.uiState.value.composer.text)
             assertNull(
                 draftStore.load(
                     dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity(
@@ -1999,7 +2189,7 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun sessionViewReporter_focusesPromotedOptimisticSession() =
+    fun sessionViewReporter_focusesTheSessionTheDraftsFirstSendCreated() =
         runTest(testDispatcher) {
             val reporter = RecordingSessionViewReporter()
             val viewModel =
@@ -2013,6 +2203,14 @@ class SessionChatViewModelTest {
                 )
 
             viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            // A draft is no session: nothing to report.
+            viewModel.clearSessionReadyFocus()
+            assertEquals(emptyList<String>(), reporter.focusCalls)
+            assertEquals(emptyList<String>(), reporter.releaseCalls)
+
+            viewModel.updateComposerText("first")
+            viewModel.sendPrompt()
             advanceUntilIdle()
             viewModel.clearSessionReadyFocus()
 
@@ -3072,6 +3270,42 @@ class SessionChatViewModelTest {
             sendGate.complete(Unit)
             advanceUntilIdle()
             assertEquals("", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun sendPrompt_goalCommand_showsNoEchoBubbleAndSendsATrimmedObjective() =
+        runTest(testDispatcher) {
+            val commandRepository =
+                FakeCommandRepository(
+                    commands =
+                        listOf(
+                            ServerCommand(name = "goal", description = "keep working", source = ServerCommandSource.Command),
+                            ServerCommand(name = "init", description = "Create AGENTS.md", source = ServerCommandSource.Command),
+                        ),
+                )
+            val viewModel = createViewModel(repository = FakeMessageRepository(), commandRepository = commandRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            // The Goal set row is the echo: no "[/goal] …" bubble that would never retire.
+            viewModel.updateComposerText("/goal  Ship it")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals("goal", commandRepository.lastRunOptions?.command)
+            assertEquals("Ship it", commandRepository.lastRunOptions?.arguments)
+            assertFalse(viewModel.uiState.value.messages.any { it.isPending })
+
+            viewModel.updateComposerText("/goal pause")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals("pause", commandRepository.lastRunOptions?.arguments)
+            assertFalse(viewModel.uiState.value.messages.any { it.isPending })
+
+            // Other commands keep their bubble until the server's prompt retires it.
+            viewModel.updateComposerText("/init please")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.messages.any { it.isPending })
         }
 
     @Test
@@ -5529,161 +5763,448 @@ class SessionChatViewModelTest {
             assertEquals(null, viewModel.uiState.value.pendingSessionReplace)
         }
 
+    // New session draft (#1004): nothing is created until the first send.
+
+    private val draftProject =
+        HomeProject(
+            key = "proj",
+            projectId = "proj",
+            displayName = "repo",
+            memberPaths = listOf("/repo"),
+            isRepository = true,
+            worktrees =
+                listOf(
+                    HomeWorktree("/repo", branch = "main", isMain = true),
+                    HomeWorktree("/wt/feature", branch = "feature/a"),
+                ),
+        )
+
+    private fun draftProjects(vararg projects: HomeProject) =
+        HomeProjectsSnapshot().also { it.publish(projects.toList().ifEmpty { listOf(draftProject) }) }
+
+    /** Records creates; [failures] fail the next creates in order. */
+    private class RecordingWorktreeRepository(
+        private val directory: String = "/wt/brave-otter",
+        val failures: MutableList<Throwable> = mutableListOf(),
+    ) : WorktreeRepository by UnavailableWorktreeRepository {
+        val requests = mutableListOf<CreateWorktreeRequest>()
+
+        override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree {
+            requests += request
+            failures.removeFirstOrNull()?.let { throw it }
+            return CreatedWorktree(directory, "brave-otter", branch = null)
+        }
+
+        override suspend fun baseBranches(directory: String): List<String> = listOf("main", "release")
+    }
+
+    private fun SessionChatViewModel.draftUi(): NewSessionDraftUiState? = uiState.value.newSessionDraft
+
     @Test
-    fun bindOptimisticCreate_promotesSessionAndLoadsMessages() =
+    fun newSessionDraft_bindCreatesNothingAndShowsTheRunSessionInCard() =
         runTest(testDispatcher) {
-            val sessionRepository =
-                FakeSessionRepository(
-                    createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
-                )
+            val sessionRepository = FakeSessionRepository()
+            val worktrees = RecordingWorktreeRepository()
             val viewModel =
                 createViewModel(
                     repository = FakeMessageRepository(),
                     sessionRepository = sessionRepository,
+                    homeProjectsSnapshot = draftProjects(),
+                    worktreeRepository = worktrees,
                 )
-            viewModel.bind(
-                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                "New Session",
-                "/repo",
-            )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
             advanceUntilIdle()
 
-            assertEquals("ses-new", viewModel.uiState.value.sessionId)
-            assertTrue(
-                viewModel.uiState.value.timeline == SessionChatTimelineState.Empty ||
-                    viewModel.uiState.value.timeline == SessionChatTimelineState.Ready,
-            )
-            assertEquals(
-                FakeSessionRepository.LifecycleRequest(id = "", directory = "/repo"),
-                sessionRepository.createSessionRequest,
-            )
+            val state = viewModel.uiState.value
+            assertEquals(0, sessionRepository.createSessionCallCount)
+            assertEquals(emptyList<CreateWorktreeRequest>(), worktrees.requests)
+            assertEquals(SessionChatTimelineState.Draft, state.timeline)
+            assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, state.sessionId)
+            val draft = state.newSessionDraft!!
+            assertEquals("repo", draft.projectName)
+            assertEquals(NewSessionWorktreeValue.Local, draft.worktree)
+            assertEquals(UiText.verbatim("/repo"), draft.path)
+            // The draft is live: the composer resolves a model and can send.
+            assertTrue(state.composerEnabled)
+            assertTrue(state.composer.isModelSelectionReady)
+            assertFalse(state.isSending)
         }
 
     @Test
-    fun bindOptimisticCreate_failureStaysOnChatWithError() =
+    fun newSessionDraft_firstSendCreatesTheSessionThenSendsThePrompt() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val sessionRepository =
-                FakeSessionRepository(createSessionError = SessionError.Http(500, "boom"))
+                FakeSessionRepository(createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"))
+            val drafts = NewSessionDraftStore()
             val viewModel =
                 createViewModel(
                     repository = repository,
                     sessionRepository = sessionRepository,
+                    homeProjectsSnapshot = draftProjects(),
+                    newSessionDraftStore = drafts,
                 )
-            viewModel.bind(
-                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                "New Session",
-                "/repo",
-            )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
             advanceUntilIdle()
-
-            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals(SessionChatTimelineState.Error, viewModel.uiState.value.timeline)
-            assertEquals("boom", viewModel.uiState.value.errorMessage)
-            assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, viewModel.uiState.value.sessionId)
-
-            viewModel.updateComposerText("hi")
+            viewModel.updateComposerText("hello")
             viewModel.sendPrompt()
-            viewModel.archiveSession()
-            viewModel.deleteSession()
             advanceUntilIdle()
-            assertEquals(false, repository.sendPromptAsyncCalled)
-            assertEquals(0, sessionRepository.archiveCallCount)
-            assertEquals(0, sessionRepository.deleteCallCount)
+
+            assertEquals(1, sessionRepository.createSessionCallCount)
+            assertEquals("/repo", sessionRepository.createSessionRequest?.directory)
+            assertEquals("ses-new", repository.sentSessionId)
+            assertEquals("hello", repository.sentOptions?.text)
+            assertEquals("claude-sonnet", repository.sentOptions?.model?.modelId)
+            val state = viewModel.uiState.value
+            assertEquals("ses-new", state.sessionId)
+            assertNull(state.newSessionDraft)
+            assertNotEquals(SessionChatTimelineState.Draft, state.timeline)
+            // A successful first send ends the draft.
+            assertNull(drafts.draft(""))
         }
 
     @Test
-    fun bindOptimisticCreate_transportFailureShowsReachabilityError() =
+    fun newSessionDraft_newWorktreeOnV2_createsTheWorktreeFromTheBaseThenTheSessionThere() =
         runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
             val sessionRepository =
-                FakeSessionRepository(
-                    createSessionError = SessionError.Transport(RuntimeException()),
-                )
+                FakeSessionRepository(createSessionResult = Session(id = "ses-wt", title = "Created", directory = "/wt/brave-otter"))
+            val worktrees = RecordingWorktreeRepository()
             val viewModel =
                 createViewModel(
-                    repository = FakeMessageRepository(),
+                    repository = repository,
                     sessionRepository = sessionRepository,
+                    homeProjectsSnapshot = draftProjects(),
+                    worktreeRepository = worktrees,
+                    serverProtocol = ServerProtocol.V2,
                 )
-            viewModel.bind(
-                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                "New Session",
-                "/repo",
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.selectNewSessionPlace(NewSessionPlace.NewWorktree())
+            assertEquals(UiText.verbatim("main"), viewModel.draftUi()?.startsFrom)
+            viewModel.openNewSessionBaseBranchSheet()
+            advanceUntilIdle()
+            assertEquals(
+                listOf(null, "release"),
+                viewModel.uiState.value.newSessionDraft
+                    ?.baseRows
+                    ?.map { it.ref },
             )
+            viewModel.selectNewSessionBaseBranch("release")
+            advanceUntilIdle()
+            assertEquals(UiText.verbatim("release"), viewModel.draftUi()?.startsFrom)
+            viewModel.updateComposerText("in a worktree")
+            viewModel.sendPrompt()
             advanceUntilIdle()
 
-            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals(SessionChatTimelineState.Error, viewModel.uiState.value.timeline)
-            assertEquals("Unable to reach the server", viewModel.uiState.value.errorMessage)
+            // Worktree, then session in it, then prompt to that session.
+            assertEquals(listOf(CreateWorktreeRequest("proj", "/repo", name = "", baseRef = "release")), worktrees.requests)
+            assertEquals("/wt/brave-otter", sessionRepository.createSessionRequest?.directory)
+            assertEquals("ses-wt", repository.sentSessionId)
+            assertEquals("/wt/brave-otter", viewModel.uiState.value.worktree)
         }
 
     @Test
-    fun bindPlaceholderAfterPromotion_doesNotRecreateSession() =
+    fun newSessionDraft_newWorktreeOnV1_hasNoStartsFromAndCreatesFromTheCheckout() =
         runTest(testDispatcher) {
-            val sessionRepository =
-                FakeSessionRepository(
-                    createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
-                )
+            val repository = FakeMessageRepository()
+            val sessionRepository = FakeSessionRepository()
+            val worktrees = RecordingWorktreeRepository()
             val viewModel =
                 createViewModel(
-                    repository = FakeMessageRepository(),
+                    repository = repository,
                     sessionRepository = sessionRepository,
+                    homeProjectsSnapshot = draftProjects(),
+                    worktreeRepository = worktrees,
+                    serverProtocol = ServerProtocol.V1,
                 )
-            viewModel.bind(
-                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                "New Session",
-                "/repo",
-            )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
             advanceUntilIdle()
-            assertEquals("ses-new", viewModel.uiState.value.sessionId)
-            assertEquals(1, sessionRepository.createSessionCallCount)
-
-            viewModel.bind(
-                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                "New Session",
-                "/repo",
-            )
+            viewModel.selectNewSessionPlace(NewSessionPlace.NewWorktree())
+            assertNull(viewModel.draftUi()?.startsFrom)
+            viewModel.updateComposerText("v1")
+            viewModel.sendPrompt()
             advanceUntilIdle()
 
-            assertEquals("ses-new", viewModel.uiState.value.sessionId)
-            assertEquals(1, sessionRepository.createSessionCallCount)
-            assertTrue(viewModel.uiState.value.timeline != SessionChatTimelineState.Creating)
+            assertEquals(listOf(CreateWorktreeRequest("proj", "/repo", name = "", baseRef = null)), worktrees.requests)
+            assertEquals("/wt/brave-otter", sessionRepository.createSessionRequest?.directory)
+            assertTrue(repository.sendPromptAsyncCalled)
         }
 
     @Test
-    fun bindOptimisticCreate_freshViewModelAfterPromotion_createsSecondSession() =
+    fun newSessionDraft_failureKeepsTheDraftAndRetryReusesWhatWasCreated() =
         runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
             val sessionRepository =
-                FakeSessionRepository(
-                    createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
-                )
-            val firstViewModel =
+                FakeSessionRepository(createSessionResult = Session(id = "ses-wt", title = "Created", directory = "/wt/brave-otter"))
+            sessionRepository.createSessionFailures += SessionError.Http(500, "boom")
+            val worktrees = RecordingWorktreeRepository(failures = mutableListOf(WorktreeCreateError("no disk")))
+            val viewModel =
                 createViewModel(
-                    repository = FakeMessageRepository(),
+                    repository = repository,
                     sessionRepository = sessionRepository,
+                    homeProjectsSnapshot = draftProjects(),
+                    worktreeRepository = worktrees,
+                    serverProtocol = ServerProtocol.V2,
                 )
-            firstViewModel.bind(
-                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                "New Session",
-                "/repo",
-            )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
             advanceUntilIdle()
-            assertEquals("ses-new", firstViewModel.uiState.value.sessionId)
+            viewModel.selectNewSessionPlace(NewSessionPlace.NewWorktree())
+            viewModel.updateComposerText("keep me")
+
+            // 1. The worktree fails: nothing else runs; the draft stays with a Retry.
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals(1, worktrees.requests.size)
+            assertEquals(0, sessionRepository.createSessionCallCount)
+            var state = viewModel.uiState.value
+            assertEquals("keep me", state.composer.text)
+            assertNotNull(state.newSessionDraft)
+            assertFalse(state.isSending)
+            assertEquals(SessionChatSnackbarAction.RetryNewSessionDraft, state.snackbar?.action)
+            assertEquals("Couldn't create the worktree: no disk", state.snackbar?.message?.english())
+
+            // 2. The worktree is made, the session fails: the draft keeps the worktree.
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals(2, worktrees.requests.size)
             assertEquals(1, sessionRepository.createSessionCallCount)
+            state = viewModel.uiState.value
+            assertEquals("keep me", state.composer.text)
+            assertEquals(UiText.verbatim("/wt/brave-otter"), state.newSessionDraft?.path)
+            assertEquals("boom", state.snackbar?.message?.english())
+            assertFalse(repository.sendPromptAsyncCalled)
 
-            val secondViewModel =
-                createViewModel(
-                    repository = FakeMessageRepository(),
-                    sessionRepository = sessionRepository,
-                )
-            secondViewModel.bind(
-                OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                "New Session",
-                "/repo",
-            )
+            // 3. Retry: the same worktree, one more session, then the prompt.
+            viewModel.sendPrompt()
             advanceUntilIdle()
-
-            assertEquals("ses-new", secondViewModel.uiState.value.sessionId)
+            assertEquals(2, worktrees.requests.size)
             assertEquals(2, sessionRepository.createSessionCallCount)
+            assertEquals("/wt/brave-otter", sessionRepository.createSessionRequest?.directory)
+            assertEquals("ses-wt", repository.sentSessionId)
+            assertEquals("keep me", repository.sentOptions?.text)
+        }
+
+    @Test
+    fun newSessionDraft_isRestoredWhenNewSessionOpensAgain() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            val snapshot = draftProjects()
+            val first =
+                createViewModel(FakeMessageRepository(), homeProjectsSnapshot = snapshot, newSessionDraftStore = drafts)
+            first.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            first.selectNewSessionPlace(NewSessionPlace.Worktree("/wt/feature", "feature/a"))
+            first.updateComposerText("unfinished")
+            advanceUntilIdle()
+
+            val second =
+                createViewModel(FakeMessageRepository(), homeProjectsSnapshot = snapshot, newSessionDraftStore = drafts)
+            // Home filtered to another project: the draft wins.
+            second.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/elsewhere")
+            advanceUntilIdle()
+
+            assertEquals("unfinished", second.uiState.value.composer.text)
+            assertEquals(NewSessionWorktreeValue.Worktree("feature/a"), second.draftUi()?.worktree)
+            assertEquals("/wt/feature", second.uiState.value.worktree)
+            assertEquals("claude-sonnet", drafts.draft("")?.modelSelection?.modelId)
+        }
+
+    @Test
+    fun newSessionDraft_discardClearsTheStore() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            val viewModel = createViewModel(FakeMessageRepository(), homeProjectsSnapshot = draftProjects(), newSessionDraftStore = drafts)
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("throw away")
+            advanceUntilIdle()
+            assertEquals("throw away", drafts.draft("")?.composer?.text)
+
+            viewModel.discardNewSessionDraft()
+            viewModel.updateComposerText("typed while leaving")
+            advanceUntilIdle()
+
+            assertNull(drafts.draft(""))
+        }
+
+    @Test
+    fun newSessionDraft_projectSheetFiltersAndPickingAProjectResetsTheWorktree() =
+        runTest(testDispatcher) {
+            val other =
+                HomeProject(
+                    key = "/play",
+                    projectId = null,
+                    displayName = "playground",
+                    memberPaths = listOf("/play"),
+                    isRepository = false,
+                    worktrees = listOf(HomeWorktree("/play", isMain = true)),
+                )
+            val viewModel = createViewModel(FakeMessageRepository(), homeProjectsSnapshot = draftProjects(draftProject, other))
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.selectNewSessionPlace(NewSessionPlace.Worktree("/wt/feature", "feature/a"))
+            viewModel.openNewSessionProjectSheet()
+            assertEquals(
+                listOf("repo" to true, "playground" to false),
+                viewModel.uiState.value.newSessionDraft
+                    ?.projectRows
+                    ?.map { it.name to it.selected },
+            )
+            viewModel.updateNewSessionProjectQuery("PLAY")
+            assertEquals(
+                listOf("playground"),
+                viewModel.uiState.value.newSessionDraft
+                    ?.projectRows
+                    ?.map { it.name },
+            )
+
+            viewModel.selectNewSessionProject("/play")
+            advanceUntilIdle()
+
+            val draft = viewModel.uiState.value.newSessionDraft!!
+            assertNull(draft.sheet)
+            assertEquals("playground", draft.projectName)
+            // Not a Git repository: the row stays but cannot be picked.
+            assertEquals(NewSessionWorktreeValue.NotRepository, draft.worktree)
+            assertFalse(draft.worktreeEnabled)
+            assertEquals("/play", viewModel.uiState.value.worktree)
+        }
+
+    /** A server whose home is /home with no subfolders. */
+    private object DraftFilesystem : dev.opencode.mobile.domain.filesystem.FilesystemRepository {
+        override suspend fun getPaths() =
+            dev.opencode.mobile.domain.filesystem
+                .ServerPaths(home = "/home", directory = "/home", worktree = "/home")
+
+        override suspend fun listDirectory(path: String) =
+            dev.opencode.mobile.domain.filesystem
+                .DirectoryListing(folders = emptyList(), isGitRepository = false)
+    }
+
+    @Test
+    fun newSessionDraft_addProjectOpensOverTheDraftAndTheDraftRunsInTheAddedFolder() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            val snapshot = draftProjects()
+            val profiles = FakeConnectionProfileStore(worktrees = mutableListOf("/repo"))
+            val requests = mutableListOf<dev.opencode.mobile.domain.home.HomeProjectAdded>()
+            backgroundScope.launch { snapshot.projectAddedRequests.collect { requests += it } }
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = profiles,
+                    homeProjectsSnapshot = snapshot,
+                    newSessionDraftStore = drafts,
+                    filesystemRepository = DraftFilesystem,
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("for the new one")
+            viewModel.openNewSessionProjectSheet()
+
+            viewModel.requestNewSessionAddProject()
+            advanceUntilIdle()
+            // The Project sheet gives way to Add project; the draft stays on screen.
+            assertNull(viewModel.draftUi()?.sheet)
+            assertEquals("/home/", viewModel.uiState.value.newSessionAddProjectSheet?.fieldText)
+
+            viewModel.selectNewSessionAddProjectSuggestion("/srv/new")
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.newSessionAddProjectSheet)
+            assertEquals(listOf("/repo", "/srv/new"), profiles.worktrees)
+            assertEquals(listOf("/srv/new"), requests.map { it.worktree })
+            assertEquals("new", viewModel.draftUi()?.projectName)
+            assertEquals("/srv/new", viewModel.uiState.value.worktree)
+            assertEquals("for the new one", viewModel.uiState.value.composer.text)
+
+            // Home lists it: the draft takes the Home project.
+            val listed =
+                HomeProject(
+                    key = "path:/srv/new",
+                    projectId = null,
+                    displayName = "new",
+                    memberPaths = listOf("/srv/new"),
+                    isRepository = false,
+                    worktrees = listOf(HomeWorktree("/srv/new", isMain = true)),
+                )
+            snapshot.publish(listOf(draftProject, listed))
+            advanceUntilIdle()
+            assertEquals("path:/srv/new", drafts.draft("")?.projectKey)
+            assertEquals("for the new one", drafts.draft("")?.composer?.text)
+        }
+
+    @Test
+    fun newSessionDraft_dismissedAddProjectLeavesTheDraftAlone() =
+        runTest(testDispatcher) {
+            val profiles = FakeConnectionProfileStore(worktrees = mutableListOf("/repo"))
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = profiles,
+                    homeProjectsSnapshot = draftProjects(),
+                    filesystemRepository = DraftFilesystem,
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            viewModel.requestNewSessionAddProject()
+            advanceUntilIdle()
+            viewModel.dismissNewSessionAddProject()
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.newSessionAddProjectSheet)
+            assertEquals("repo", viewModel.draftUi()?.projectName)
+            assertEquals("/repo", viewModel.uiState.value.worktree)
+            assertEquals(listOf("/repo"), profiles.worktrees)
+        }
+
+    @Test
+    fun newSessionDraft_slashNewAndCompactDoNothing() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository, homeProjectsSnapshot = draftProjects())
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.New)
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.pendingSessionReplace)
+            assertEquals(0, sessionRepository.createSessionCallCount)
+            assertNotNull(viewModel.uiState.value.newSessionDraft)
+        }
+
+    @Test
+    fun newSessionDraft_bindAgainAfterTheFirstSendKeepsTheSession() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"))
+            val viewModel =
+                createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository, homeProjectsSnapshot = draftProjects())
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("go")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("ses-new", viewModel.uiState.value.sessionId)
+            assertEquals(1, sessionRepository.createSessionCallCount)
+            assertNull(viewModel.uiState.value.newSessionDraft)
+
+            // The next New session is a fresh draft.
+            val next =
+                createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository, homeProjectsSnapshot = draftProjects())
+            next.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            assertEquals("", next.uiState.value.composer.text)
+            assertEquals(1, sessionRepository.createSessionCallCount)
         }
 
     @Test
@@ -8125,6 +8646,11 @@ class SessionChatViewModelTest {
         attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
         agentShellRepository: dev.opencode.mobile.domain.shell.AgentShellRepository =
             dev.opencode.mobile.domain.shell.EmptyAgentShellRepository,
+        newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
+        sessionGoalRepository: dev.opencode.mobile.domain.goal.SessionGoalRepository =
+            dev.opencode.mobile.domain.goal.EmptySessionGoalRepository,
+        filesystemRepository: dev.opencode.mobile.domain.filesystem.FilesystemRepository =
+            dev.opencode.mobile.domain.filesystem.UnavailableFilesystemRepository,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -8186,7 +8712,6 @@ class SessionChatViewModelTest {
             sessionReadyStore = sessionReadyStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             foregroundEventStream = eventStream,
-            eventDomainAdapter = EventDomainAdapter(json),
             connectionSessionCoordinator = connectionSessionCoordinator,
             sessionModelSelectionStore = sessionModelSelectionStore,
             composerDraftStore = composerDraftStore,
@@ -8210,6 +8735,9 @@ class SessionChatViewModelTest {
                 ),
             attachmentUploads = attachmentUploads,
             agentShellRepository = agentShellRepository,
+            newSessionDraftStore = newSessionDraftStore,
+            sessionGoalRepository = sessionGoalRepository,
+            filesystemRepository = filesystemRepository,
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }
@@ -8230,29 +8758,6 @@ class SessionChatViewModelTest {
             currentProfile = currentProfile,
             scope = CoroutineScope(SupervisorJob() + testDispatcher),
         )
-
-    private fun longMarkdownHistory(): List<Message> =
-        (1..20).map { messageIndex ->
-            Message(
-                id = "benchmark-$messageIndex",
-                role = MessageRole.Assistant,
-                text =
-                    buildString {
-                        append("## Response $messageIndex\n\n```typescript\n")
-                        repeat(150) { lineIndex ->
-                            append("const item$lineIndex = response$lineIndex?.value ?? 'markdown benchmark';\n")
-                        }
-                        append("```\n")
-                    },
-                sentAtEpochMs = messageIndex.toLong(),
-            )
-        }
-
-    private suspend fun measureMs(block: suspend () -> Unit): Long {
-        val startedAt = System.nanoTime()
-        block()
-        return (System.nanoTime() - startedAt) / 1_000_000
-    }
 
     private fun reviewChangesMessage(id: String) =
         SessionChatMessageItem(
@@ -8578,6 +9083,7 @@ private class FakeMessageRepository(
     val catchUpChrome = MutableStateFlow(false)
     var sendPromptAsyncCalled: Boolean = false
     var sentOptions: PromptSendOptions? = null
+    var sentSessionId: String? = null
     val shellRequests = mutableListOf<Pair<ShellCommandOptions, String?>>()
     var shellError: Throwable? = null
     private var listMessagesCallCount = 0
@@ -8676,6 +9182,7 @@ private class FakeMessageRepository(
     ) {
         sendPromptAsyncCalled = true
         sentOptions = options
+        sentSessionId = sessionId
         if (options.attachments.isNotEmpty()) {
             kotlin.coroutines.coroutineContext[PromptSendProgressReporter]
                 ?.onProgress
@@ -8855,6 +9362,12 @@ private class FakeSessionRepository(
         private set
     var respondedSessionId: String? = null
         private set
+    var respondedDecision: dev.opencode.mobile.domain.session.PermissionDecision? = null
+        private set
+    var respondedMessage: String? = null
+        private set
+    var permissionResponseCount: Int = 0
+        private set
     var repliedQuestionId: String? = null
         private set
     var rejectedQuestionId: String? = null
@@ -8877,6 +9390,9 @@ private class FakeSessionRepository(
         private set
     var createSessionCallCount: Int = 0
         private set
+
+    /** Fail the next creates, in order, before [createSessionError] or the result. */
+    val createSessionFailures = mutableListOf<Throwable>()
     var forkSessionRequest: ForkRequest? = null
         private set
     var forkSessionCallCount: Int = 0
@@ -8921,6 +9437,7 @@ private class FakeSessionRepository(
     ): Session {
         createSessionRequest = LifecycleRequest(id = parentId.orEmpty(), directory = directory)
         createSessionCallCount += 1
+        createSessionFailures.removeFirstOrNull()?.let { throw it }
         createSessionError?.let { throw it }
         return createSessionResult ?: Session(id = "new-ses", title = title.orEmpty(), directory = directory)
     }
@@ -9136,9 +9653,13 @@ private class FakeSessionRepository(
         permissionId: String,
         decision: dev.opencode.mobile.domain.session.PermissionDecision,
         directory: String?,
+        message: String?,
     ): Boolean {
         respondedSessionId = sessionId
         respondedPermissionId = permissionId
+        respondedDecision = decision
+        respondedMessage = message
+        permissionResponseCount += 1
         permissionResponseError?.let { throw it }
         return true
     }

@@ -1,7 +1,7 @@
 package dev.opencode.mobile.ui.settings
 
 import dev.opencode.mobile.R
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Test

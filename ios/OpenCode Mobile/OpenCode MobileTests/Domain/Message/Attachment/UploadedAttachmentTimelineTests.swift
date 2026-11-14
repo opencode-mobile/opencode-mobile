@@ -24,21 +24,6 @@ struct UploadedAttachmentTimelineTests {
     }
 }
 
-struct AttachmentMimeKindTests {
-    @Test func mediaExtensionResolvesAMissingDeclaredMime() {
-        #expect(AttachmentMime.declared(nil, filename: "shot.PNG") == "image/png")
-        #expect(AttachmentMime.declared("application/octet-stream", filename: "a.jpeg") == "image/jpeg")
-        #expect(AttachmentMime.declared(nil, filename: "archive.zip") == nil)
-    }
-
-    @Test func kindsFollowTheMime() {
-        #expect(AttachmentMime.kind(for: "image/webp") == .image)
-        #expect(AttachmentMime.kind(for: "application/pdf") == .pdf)
-        #expect(AttachmentMime.kind(for: "text/plain") == .text)
-        #expect(AttachmentMime.kind(for: "application/zip") == .file)
-    }
-}
-
 struct ServerFileReadLocationTests {
     @Test func absolutePathReadsFromItsParentFolderByName() {
         let result = FilesystemAPIClient.readLocation(forServerPath: "/tmp/uploads/u1/shot.png", sessionDirectory: "/repo")

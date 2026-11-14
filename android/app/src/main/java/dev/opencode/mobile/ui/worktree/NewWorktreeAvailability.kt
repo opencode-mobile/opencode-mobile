@@ -4,7 +4,7 @@ import androidx.annotation.StringRes
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 
 /** Whether a "New worktree…" row works, and why not. The first failing check explains it. */
 data class NewWorktreeAvailability(

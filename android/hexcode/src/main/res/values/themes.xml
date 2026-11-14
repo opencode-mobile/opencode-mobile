@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.HexCode" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/shell_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!--
+        The system splash on a cold start (app-plan.md, Home › Cold start): the logo centred on `bg`, as iOS's launch
+        screen. The launcher icon's bars on its `#0E0F11` tile, which the system shows in its circle
+        (the `IconBackground` parent applies `windowSplashScreenIconBackgroundColor` on Android 12+). Held until home's
+        first state is ready (at most 1.5 s).
+    -->
+    <style name="Theme.HexCode.Splash" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">@color/shell_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.HexCode</item>
+    </style>
+</resources>

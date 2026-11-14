@@ -133,19 +133,8 @@ struct ArchivedSessionsView: View {
                             session: row.row,
                             rowStyle: homeDisplayPreferences.sessionRowStyle,
                             showsStatus: false,
-                            // No long-press: the row's long-press overlay would cover the Unarchive
-                            // button, and a tap already opens the actions.
                             action: { viewModel.openActions(row) },
-                            trailing: {
-                                OpenCodeButton(
-                                    variant: .iconCircle(.unarchive, accessibilityLabel: "archived_sessions.unarchive"),
-                                    contrast: .low,
-                                    action: {
-                                        Task { await viewModel.unarchive(sessionID: row.id) }
-                                    }
-                                )
-                                .accessibilityIdentifier("archivedSessionUnarchive:\(row.id)")
-                            }
+                            onLongPress: { viewModel.openActions(row) }
                         )
                         .accessibilityIdentifier("archivedSessionRow:\(row.id)")
                         .transition(.opacity.combined(with: .move(edge: .leading)))

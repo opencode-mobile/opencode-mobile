@@ -6,8 +6,23 @@ on:
     paths:
       - "android/app/src/main/**"
       - "ios/OpenCode Mobile/OpenCode Mobile/**"
+      # Shared with Hex Code; its text and keys come from OpenCode Mobile's catalog.
+      - "ios/OpenCodeKit/**"
+      # Hex Code's key pair, reported (not failing) by check-string-keys.mjs.
+      - "android/hexcode/src/main/res/**"
+      - "ios/OpenCode Mobile/Hex Code/**"
       - "scripts/check-string-keys.mjs"
       - "scripts/check-hardcoded-text.mjs"
+      - "scripts/check-theme-presets.mjs"
+      - "scripts/check-icons.mjs"
+      - "scripts/lib/**"
+      - "shared/theme-presets/**"
+      - "shared/syntax-presets/**"
+      - "icons/**"
+      - "release-notes/**"
+      - "scripts/release-notes.mjs"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/string-checks.yml"
   push:
     branches: [main]
@@ -32,6 +47,10 @@ jobs:
       - name: String key parity
         run: node scripts/check-string-keys.mjs
 
+      # The in-app What's new sheet reads this file on both platforms.
+      - name: Release notes
+        run: node scripts/release-notes.mjs validate
+
       # Warning only while existing text is extracted; becomes --strict once done (#886).
       - name: Hardcoded text (warning only)
         run: |
@@ -44,3 +63,20 @@ jobs:
             cat hardcoded-text.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  generated-assets:
+    # Theme presets and icons are generated from shared sources; fail when the
+    # committed platform copies drift from them.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install script dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Theme presets match shared sources
+        run: npm run themes:check
+
+      - name: Icon outputs match manifest
+        run: npm run icons:check

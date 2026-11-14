@@ -9,8 +9,13 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
     private var upstreamGeneration: UInt64 = 0
     private var isFinished = false
     private let makeUpstream: (@escaping @Sendable (Value) -> Void) -> Task<Void, Never>
+    private let stopTimeoutMs: Int
 
-    init(makeUpstream: @escaping (@escaping @Sendable (Value) -> Void) -> Task<Void, Never>) {
+    init(
+        stopTimeoutMs: Int = LiveStoreRefreshPolicy.subscriberStopTimeoutMs,
+        makeUpstream: @escaping (@escaping @Sendable (Value) -> Void) -> Task<Void, Never>
+    ) {
+        self.stopTimeoutMs = stopTimeoutMs
         self.makeUpstream = makeUpstream
     }
 
@@ -80,7 +85,7 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
     }
 
     private func scheduleStop() {
-        let timeoutMs = LiveStoreRefreshPolicy.subscriberStopTimeoutMs
+        let timeoutMs = stopTimeoutMs
         lock.lock()
         stopTask?.cancel()
         stopTask = Task { [weak self] in

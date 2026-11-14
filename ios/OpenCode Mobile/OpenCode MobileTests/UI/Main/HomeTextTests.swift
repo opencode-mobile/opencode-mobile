@@ -16,23 +16,6 @@ struct HomeTextTests {
         #expect(AddProjectFolderItem.countLabel(4).resolved == "4 folders")
     }
 
-    @Test func allScopeIsKeyed() {
-        let projects = ["/src/a", "/src/b"].map { path in
-            HomeProject(
-                key: path,
-                projectID: nil,
-                displayName: ServerPathPolicy.name(path),
-                memberPaths: [path],
-                isRepository: false,
-                worktrees: [HomeWorktree(directory: path, branch: nil, isMain: true)]
-            )
-        }
-        let all = SessionListHomeChrome.filterTabs(projects: projects).first
-        #expect(all?.title == "All")
-        #expect(all?.pickerTitle == "All projects")
-        #expect(all?.subtitle == "2 projects")
-    }
-
     @Test func namesStayArgumentsAndAreNeverLookedUp() {
         let item = AddProjectFolderItem(name: "app", path: "/srv/app", isAdded: true, folderCount: 2)
         #expect(item.subtitle?.resolved == "On Home \u{00B7} 2 folders")

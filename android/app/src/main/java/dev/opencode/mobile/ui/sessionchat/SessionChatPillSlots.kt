@@ -122,6 +122,11 @@ data class SessionChatActivitySlot(
 
 /** A top-left context pill. */
 sealed interface SessionChatContextItem {
+    /** The session's `/goal` (#1007); always first. */
+    data class Goal(
+        val goal: SessionChatGoalUiState,
+    ) : SessionChatContextItem
+
     data class Todos(
         val completed: Int,
         val total: Int,
@@ -140,7 +145,7 @@ data class SessionChatNavigationPill(
 /** Pure rules for the three Session Chat corner slots. */
 object SessionChatPillSlots {
     const val FINISHED_FADE_MS = 3_000L
-    const val MAX_CONTEXT_PILLS = 2
+    const val MAX_CONTEXT_PILLS = 3
 
     /**
      * Bottom left: highest priority first, the rest behind "+N". Finished items
@@ -200,13 +205,17 @@ object SessionChatPillSlots {
             .filter { it > nowEpochMs }
             .minOrNull()
 
-    /** Top left: the branch in the corner, then todos, at most two. */
+    /** Top left: the goal in the corner, then the branch, then todos, at most three. */
     fun context(
         todosCompleted: Int?,
         todosTotal: Int?,
         branch: SessionBranchPillUiState?,
+        goal: SessionChatGoalUiState? = null,
     ): List<SessionChatContextItem> {
         val items = mutableListOf<SessionChatContextItem>()
+        if (goal != null) {
+            items += SessionChatContextItem.Goal(goal)
+        }
         if (branch != null && branch.branch.isNotEmpty()) {
             items += SessionChatContextItem.Branch(branch)
         }

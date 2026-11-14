@@ -184,14 +184,6 @@ private final class OffMainTimelineMessageRepository: MessageRepository, @unchec
         messages
     }
 
-    func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message {
-        messages.first { $0.id == messageID }!
-    }
-
-    func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message {
-        Message(id: "sent", role: .user, text: text, model: nil, mode: nil, sentAtEpochMs: 0)
-    }
-
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
 
     func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}

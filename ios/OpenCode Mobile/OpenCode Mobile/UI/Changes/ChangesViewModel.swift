@@ -253,7 +253,7 @@ final class ChangesViewModel {
         let idle = AsyncStream<Void> { continuation in
             let task = Task.detached {
                 for await event in foregroundEventStream.events()
-                    where event.type == Self.sessionIdleEvent && event.sessionID == sessionID {
+                    where event.isSessionRunEnd && event.sessionID == sessionID {
                     continuation.yield()
                 }
                 continuation.finish()
@@ -266,7 +266,6 @@ final class ChangesViewModel {
         }
     }
 
-    private nonisolated static let sessionIdleEvent = "session.idle"
 
     func selectSource(_ source: ChangeSource) async {
         guard source != state.selectedSource, availableSources.contains(source) else { return }
@@ -514,7 +513,7 @@ private struct PreviewChangesRepository: SessionRepository {
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool { false }
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { false }
     func unrevertSession(id: String) async throws -> Bool { false }
-    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool { false }
+    func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?, message: String?) async throws -> Bool { false }
 }
 #endif
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Take photo: the camera writes its picture here, in the cache, before it's prepared (app-plan.md, Attach). -->
+<paths>
+    <cache-path
+        name="camera"
+        path="attach-camera/" />
+</paths>

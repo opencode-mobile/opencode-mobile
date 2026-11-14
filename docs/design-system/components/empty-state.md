@@ -43,15 +43,6 @@ to do next (for example, connected home with no curated projects).
 - iOS Component Gallery entry **Empty State**.
 - Preview: title + message; title + message + Add project icon.
 
-## Completion Ledger
-
-- Public API and applicable states: complete.
-- Token and typography mapping: complete.
-- iOS and Android implementations: complete.
-- Gallery entries and previews: complete.
-- Parity and divergences: complete; none known.
-- Automated checks: complete (compile / gallery registration).
-
 ## Parity And Divergence
 
 None.

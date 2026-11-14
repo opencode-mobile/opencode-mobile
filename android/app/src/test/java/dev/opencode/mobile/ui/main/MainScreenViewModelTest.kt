@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.domain.home.HomeProjectAdded
+import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileCatalog
@@ -44,6 +46,10 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.composer.ComposerDraft
+import dev.opencode.mobile.domain.session.NewSessionDraftStart
+import dev.opencode.mobile.domain.session.NewSessionDraftStore
+import dev.opencode.mobile.domain.session.NewSessionPlace
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -63,10 +69,8 @@ import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
-import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
-import dev.opencode.mobile.domain.worktree.CreatedWorktree
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
-import dev.opencode.mobile.domain.worktree.WorktreeCreateError
 import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
@@ -77,7 +81,6 @@ import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListLocationPart
 import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.components.SessionListStatus
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -87,8 +90,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -103,6 +108,7 @@ import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -130,7 +136,7 @@ class MainScreenViewModelTest {
         runTest(testDispatcher) {
             val viewModel = createViewModel(shouldFailProbe = true)
             advanceUntilIdle()
-            assertTrue(viewModel.uiState.value is MainScreenUiState.ProbeFailed)
+            assertTrue(viewModel.uiState.value.content is MainScreenUiState.ProbeFailed)
         }
 
     @Test
@@ -170,12 +176,12 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
             val painted = mutableListOf<MainScreenUiState>()
-            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect { painted += it } }
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.map { it.content }.distinctUntilChanged().collect { painted += it } }
 
             viewModel.switchProfile("b")
             runCurrent()
 
-            assertEquals(UiText.verbatim("B"), viewModel.serversChrome.value.title)
+            assertEquals(UiText.verbatim("B"), viewModel.uiState.value.servers.title)
             val first =
                 painted.filterIsInstance<MainScreenUiState.Loaded>().first { state ->
                     state.sections.any { it.worktree == "/b/cached" }
@@ -185,7 +191,7 @@ class MainScreenViewModelTest {
             assertNull(first.projectLoads["/b/cached"])
             assertTrue(first.projectLoads["/b/new"] is ProjectFirstLoad.Loading)
             // The switch has bound the server by now; the uncached project still shows its skeleton.
-            val current = viewModel.uiState.value as MainScreenUiState.Loaded
+            val current = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertTrue(current.projectLoads["/b/new"] is ProjectFirstLoad.Loading)
         }
 
@@ -204,11 +210,11 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             viewModel.switchProfile("b")
-            assertEquals(UiText.verbatim("B"), viewModel.serversChrome.value.title)
+            assertEquals(UiText.verbatim("B"), viewModel.uiState.value.servers.title)
             advanceUntilIdle()
 
-            assertEquals(UiText.verbatim("A"), viewModel.serversChrome.value.title)
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(UiText.verbatim("A"), viewModel.uiState.value.servers.title)
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("/a"), loaded.sections.map { it.worktree })
         }
 
@@ -237,17 +243,17 @@ class MainScreenViewModelTest {
                     onCoordinator = { coordinator = it },
                 )
             advanceUntilIdle()
-            assertTrue(viewModel.uiState.value is MainScreenUiState.ProbeFailed)
+            assertTrue(viewModel.uiState.value.content is MainScreenUiState.ProbeFailed)
 
             val held = CompletableDeferred<Unit>().also { holdProbe = it }
             val save = launch { requireNotNull(coordinator).saveProfile(store.profile("a")) }
             runCurrent()
 
-            assertTrue("${viewModel.uiState.value}", viewModel.uiState.value is MainScreenUiState.Empty)
+            assertTrue("${viewModel.uiState.value.content}", viewModel.uiState.value.content is MainScreenUiState.Empty)
             held.complete(Unit)
             save.join()
             advanceUntilIdle()
-            assertTrue("${viewModel.uiState.value}", viewModel.uiState.value is MainScreenUiState.ProbeFailed)
+            assertTrue("${viewModel.uiState.value.content}", viewModel.uiState.value.content is MainScreenUiState.ProbeFailed)
         }
 
     @Test
@@ -258,7 +264,7 @@ class MainScreenViewModelTest {
                 createViewModel(connectionProfileStore = store, bootWorktree = "/boot/project")
             advanceUntilIdle()
             assertEquals(emptyList<String>(), store.added(serverUrl))
-            assertTrue(viewModel.uiState.value is MainScreenUiState.Empty)
+            assertTrue(viewModel.uiState.value.content is MainScreenUiState.Empty)
         }
 
     @Test
@@ -275,7 +281,7 @@ class MainScreenViewModelTest {
                     sessionsByWorktree = mapOf("/repo" to sessions),
                 )
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             val section = loaded.sections.single()
             assertEquals(listOf("active"), section.allSessions.map { it.id })
             assertEquals(1, section.allSessions.size)
@@ -297,12 +303,12 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             fun rows() =
-                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                (viewModel.uiState.value.content as MainScreenUiState.Loaded)
                     .sections
                     .single()
                     .allSessions
 
-            fun canLoadMore() = viewModel.canLoadMoreSessions(viewModel.moreSessionDirectories.value, SessionListFilterTab.ALL_ID)
+            fun canLoadMore() = viewModel.canLoadMoreSessions(viewModel.uiState.value.paging.moreSessionDirectories, SessionListFilterTab.ALL_ID)
 
             assertEquals(50, rows().size)
             assertEquals("120", rows().first().id)
@@ -310,11 +316,11 @@ class MainScreenViewModelTest {
             assertTrue(canLoadMore())
 
             viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
-            assertEquals(SessionListFilterTab.ALL_ID, viewModel.loadingMoreScopeId.value)
+            assertEquals(SessionListFilterTab.ALL_ID, viewModel.uiState.value.paging.loadingMoreScopeId)
             advanceUntilIdle()
 
             assertEquals(100, rows().size)
-            assertNull(viewModel.loadingMoreScopeId.value)
+            assertNull(viewModel.uiState.value.paging.loadingMoreScopeId)
             assertEquals("/repo" to 100, repository.windowLimits.last())
             val requests = repository.windowLimits.size
 
@@ -325,7 +331,7 @@ class MainScreenViewModelTest {
             assertFalse(canLoadMore())
             viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
             advanceUntilIdle()
-            assertNull(viewModel.loadingMoreScopeId.value)
+            assertNull(viewModel.uiState.value.paging.loadingMoreScopeId)
             assertEquals(requests + 1, repository.windowLimits.size)
         }
 
@@ -344,7 +350,7 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
 
-            fun canLoadMore() = viewModel.canLoadMoreSessions(viewModel.moreSessionDirectories.value, SessionListFilterTab.ALL_ID)
+            fun canLoadMore() = viewModel.canLoadMoreSessions(viewModel.uiState.value.paging.moreSessionDirectories, SessionListFilterTab.ALL_ID)
 
             assertTrue(canLoadMore())
             repository.listErrors["/repo"] = IllegalStateException("down")
@@ -378,7 +384,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             viewModel.reorderProjects(listOf("/three", "/one", "/two"))
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("/three", "/one", "/two"), loaded.sections.map { it.worktree })
 
             advanceUntilIdle()
@@ -401,7 +407,7 @@ class MainScreenViewModelTest {
             viewModel.reorderProjects(listOf("/one", "/two"))
             advanceUntilIdle()
 
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/two"), loaded.sections.map { it.worktree })
             assertEquals(listOf("/one", "/two"), store.added(serverUrl))
         }
@@ -416,7 +422,7 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
             viewModel.requestRemoveProject("/one")
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals("/one", loaded.pendingProjectRemoval?.worktree)
             assertEquals("one", loaded.pendingProjectRemoval?.displayName)
         }
@@ -432,7 +438,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             viewModel.requestRemoveProject("/one")
             viewModel.dismissProjectRemoval()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertNull(loaded.pendingProjectRemoval)
         }
 
@@ -451,13 +457,13 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertEquals(listOf("/two"), store.added(serverUrl))
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertNull(loaded.pendingProjectRemoval)
             assertEquals(listOf("/two"), loaded.sections.map { it.worktree })
-            assertEquals("Removed \"one\" from home", viewModel.removalSnackbar.value?.text?.english())
+            assertEquals("Removed \"one\" from home", viewModel.uiState.value.snackbar?.text?.english())
 
             viewModel.consumeProjectRemovalSnackbar()
-            assertNull(viewModel.removalSnackbar.value)
+            assertNull(viewModel.uiState.value.snackbar)
         }
 
     @Test
@@ -475,8 +481,8 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertEquals(emptyList<String>(), store.added(serverUrl))
-            assertTrue(viewModel.uiState.value is MainScreenUiState.Empty)
-            assertEquals("Removed \"one\" from home", viewModel.removalSnackbar.value?.text?.english())
+            assertTrue(viewModel.uiState.value.content is MainScreenUiState.Empty)
+            assertEquals("Removed \"one\" from home", viewModel.uiState.value.snackbar?.text?.english())
         }
 
     @Test
@@ -522,7 +528,7 @@ class MainScreenViewModelTest {
             viewModel.showAddProjectSheet()
             advanceUntilIdle()
 
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             val sheet = requireNotNull(loaded.addProjectSheet)
             assertTrue(loaded.showAddProjectSheet)
             assertEquals("/Users/me/", sheet.fieldText)
@@ -1352,12 +1358,12 @@ class MainScreenViewModelTest {
             assertEquals(AddProjectSheetUi.NO_SUBFOLDERS, currentSheet(viewModel)?.emptyMessage)
             viewModel.confirmAddProject()
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/home"), store.added(serverUrl))
             assertTrue(projectRepository.validatedDirectories.contains("/home"))
             assertTrue(!loaded.showAddProjectSheet)
             assertNull(loaded.addProjectSheet)
-            assertEquals(HomeScopeRequest(filterId = "/home", evenFromAll = true), viewModel.pendingScopeRequest.value)
+            assertEquals(HomeScopeRequest(filterId = "/home", evenFromAll = true), viewModel.uiState.value.pendingScopeRequest)
         }
 
     @Test
@@ -1382,7 +1388,7 @@ class MainScreenViewModelTest {
 
             assertEquals(listOf("/one", "/srv/web"), store.added(serverUrl))
             assertTrue(projectRepository.validatedDirectories.contains("/srv/web"))
-            assertEquals(HomeScopeRequest(filterId = "/srv/web", evenFromAll = true), viewModel.pendingScopeRequest.value)
+            assertEquals(HomeScopeRequest(filterId = "/srv/web", evenFromAll = true), viewModel.uiState.value.pendingScopeRequest)
         }
 
     @Test
@@ -1400,13 +1406,13 @@ class MainScreenViewModelTest {
             projectRepository.validatedDirectories.clear()
             viewModel.addProject("/two")
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/two"), store.added(serverUrl))
             // Already-added path skips GET /project/current validation before reload.
             // Disk-first home paints from Session Cache and does not revalidate directories.
             assertTrue(projectRepository.validatedDirectories.isEmpty())
-            assertEquals(HomeScopeRequest(filterId = "/two", evenFromAll = false), viewModel.pendingScopeRequest.value)
-            assertEquals("\"two\" is already on home", viewModel.removalSnackbar.value?.text?.english())
+            assertEquals(HomeScopeRequest(filterId = "/two", evenFromAll = false), viewModel.uiState.value.pendingScopeRequest)
+            assertEquals("\"two\" is already on home", viewModel.uiState.value.snackbar?.text?.english())
         }
 
     @Test
@@ -1422,7 +1428,7 @@ class MainScreenViewModelTest {
             viewModel.addProject("/new")
             runCurrent()
 
-            assertEquals(HomeScopeRequest(filterId = "/new", evenFromAll = true), viewModel.pendingScopeRequest.value)
+            assertEquals(HomeScopeRequest(filterId = "/new", evenFromAll = true), viewModel.uiState.value.pendingScopeRequest)
             assertTrue("loading stays hidden inside the grace delay", loaded(viewModel).projectLoads.isEmpty())
 
             advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_GRACE_MS + 1)
@@ -1448,7 +1454,7 @@ class MainScreenViewModelTest {
             val (viewModel, _) = viewModelWithOneProject(newSessions = listOf(Session(id = "n1", title = "N1", updatedAtEpochMs = 2L)))
             val exposed = mutableListOf<Map<String, ProjectFirstLoad>>()
             backgroundScope.launch {
-                viewModel.uiState.collect { state -> (state as? MainScreenUiState.Loaded)?.let { exposed += it.projectLoads } }
+                viewModel.uiState.map { it.content }.distinctUntilChanged().collect { state -> (state as? MainScreenUiState.Loaded)?.let { exposed += it.projectLoads } }
             }
 
             viewModel.addProject("/new")
@@ -1610,6 +1616,7 @@ class MainScreenViewModelTest {
     private fun kotlinx.coroutines.test.TestScope.viewModelWithOneProject(
         newSessions: List<Session>,
         timing: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
+        drafts: NewSessionDraftStore = NewSessionDraftStore(),
     ): Pair<MainScreenViewModel, FakeSessionRepository> {
         val repository =
             FakeSessionRepository(
@@ -1623,12 +1630,13 @@ class MainScreenViewModelTest {
                 connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
                 sessionRepository = repository,
                 projectFirstLoadTiming = timing,
+                newSessionDraftStore = drafts,
             )
         advanceUntilIdle()
         return viewModel to repository
     }
 
-    private fun loaded(viewModel: MainScreenViewModel): MainScreenUiState.Loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+    private fun loaded(viewModel: MainScreenViewModel): MainScreenUiState.Loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
 
     private fun section(
         viewModel: MainScreenViewModel,
@@ -1661,7 +1669,7 @@ class MainScreenViewModelTest {
                 )
             viewModel.confirmAddProject()
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/home"), store.added(serverUrl))
             assertTrue(!loaded.showAddProjectSheet)
         }
@@ -1700,7 +1708,7 @@ class MainScreenViewModelTest {
             assertEquals(AddProjectSheetUi.ADD_THIS_FOLDER, currentSheet(viewModel)?.addTitle)
             viewModel.confirmAddProject()
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/repo/android"), store.added(serverUrl))
             assertTrue(!loaded.showAddProjectSheet)
         }
@@ -1721,36 +1729,119 @@ class MainScreenViewModelTest {
             val viewModel = openSheet(projectRepository = projectRepository, filesystem = filesystem)
             viewModel.confirmAddProject()
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertTrue(loaded.showAddProjectSheet)
             assertEquals(UiText.verbatim("not a project"), loaded.addProjectSheet?.fieldError)
             assertFalse(loaded.addProjectSheet?.isValidating == true)
             assertTrue(loaded.addProjectSheet?.addEnabled == true)
-            assertNull(viewModel.pendingScopeRequest.value)
+            assertNull(viewModel.uiState.value.pendingScopeRequest)
 
             viewModel.updateAddProjectField("/home/x")
             assertNull(currentSheet(viewModel)?.fieldError)
         }
 
     @Test
-    fun createSession_usesFocusedWorktreeAndClearsError() =
+    fun openNewSession_opensTheDraftAndCreatesNothing() =
         runTest(testDispatcher) {
             val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            val drafts = NewSessionDraftStore()
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
                     sessionRepository = sessionRepository,
+                    newSessionDraftStore = drafts,
                 )
             advanceUntilIdle()
-            assertEquals(0, viewModel.revealNewestToken.value)
-            viewModel.createSession("/repo")
+            assertEquals(0, viewModel.uiState.value.revealNewestToken)
+            viewModel.openNewSession(NewSessionDraftStart("/repo", "/repo"))
             advanceUntilIdle()
             assertEquals(emptyList<String>(), sessionRepository.createdDirectories)
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals(1, viewModel.revealNewestToken.value)
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
+            assertEquals(1, viewModel.uiState.value.revealNewestToken)
             assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, loaded.pendingOpenSession?.sessionId)
             assertEquals("/repo", loaded.pendingOpenSession?.worktree)
             assertNull(loaded.projectSessionCreateError)
+            assertEquals("/repo", drafts.draft("")?.projectDirectory)
+        }
+
+    @Test
+    fun openNewSession_restoresTheProfilesDraftOverTheHomeFilter() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            drafts.open("", NewSessionDraftStart("/other", "/other"))
+            drafts.update("") { it.copy(composer = ComposerDraft("half a thought")) }
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to emptyList()),
+                    newSessionDraftStore = drafts,
+                )
+            advanceUntilIdle()
+
+            viewModel.openNewSession(NewSessionDraftStart("/repo", "/repo"))
+            advanceUntilIdle()
+
+            assertEquals("/other", (viewModel.uiState.value.content as MainScreenUiState.Loaded).pendingOpenSession?.worktree)
+            assertEquals("half a thought", drafts.draft("")?.composer?.text)
+        }
+
+    @Test
+    fun worktreesNewSessionHere_keepsTheDraftTextAndRunsInThatWorktree() =
+        runTest(testDispatcher) {
+            val worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun loadRefreshed(
+                        addedPath: String,
+                        projectId: String?,
+                        mainWorktree: String?,
+                    ): WorktreeLoad = WorktreeLoad.Loaded(listOf("/repo", "/wt/brave-otter"), listsSessions = false)
+                }
+            val drafts = NewSessionDraftStore()
+            drafts.open("", NewSessionDraftStart("proj", "/repo"))
+            drafts.update("") { it.copy(composer = ComposerDraft("keep me")) }
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionsByWorktree = mapOf("/repo" to emptyList()),
+                    worktreeRepository = worktrees,
+                    serverProtocol = ServerProtocol.V2,
+                    newSessionDraftStore = drafts,
+                )
+            advanceUntilIdle()
+
+            viewModel.openNewSessionHere("/wt/brave-otter")
+            advanceUntilIdle()
+
+            val draft = drafts.draft("")!!
+            assertEquals("keep me", draft.composer.text)
+            assertEquals(NewSessionPlace.Worktree("/wt/brave-otter", null), draft.place)
+            assertEquals("/repo", draft.projectDirectory)
+            assertEquals("/wt/brave-otter", (viewModel.uiState.value.content as MainScreenUiState.Loaded).pendingOpenSession?.worktree)
+        }
+
+    @Test
+    fun projectAddedElsewhere_isListedWithoutOpeningHomesSheet() =
+        runTest(testDispatcher) {
+            val snapshot = HomeProjectsSnapshot()
+            val store = FakeConnectionProfileStore(initial = listOf("/one"))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/new" to emptyList()),
+                    homeProjectsSnapshot = snapshot,
+                )
+            advanceUntilIdle()
+
+            // The draft's Add project sheet saved /new, then asked Home to list it.
+            store.addWorktree(serverUrl, "/new")
+            snapshot.requestProjectAdded(HomeProjectAdded(worktree = "/new", resolution = null))
+            advanceUntilIdle()
+
+            assertTrue(loaded(viewModel).projects.any { it.contains("/new") })
+            assertNotNull(snapshot.projectContaining("/new"))
+            assertFalse(loaded(viewModel).showAddProjectSheet)
+            assertNull(loaded(viewModel).pendingOpenSession)
         }
 
     @Test
@@ -1763,7 +1854,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             viewModel.markHomeHidden(nowEpochMs = 0L)
             viewModel.onHomeRevealed(nowEpochMs = SessionListScrollPin.STALE_AFTER_MS)
-            assertEquals(1, viewModel.revealNewestToken.value)
+            assertEquals(1, viewModel.uiState.value.revealNewestToken)
         }
 
     @Test
@@ -1776,7 +1867,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             viewModel.markHomeHidden(nowEpochMs = 0L)
             viewModel.onHomeRevealed(nowEpochMs = SessionListScrollPin.STALE_AFTER_MS - 1)
-            assertEquals(0, viewModel.revealNewestToken.value)
+            assertEquals(0, viewModel.uiState.value.revealNewestToken)
         }
 
     @Test
@@ -1792,12 +1883,12 @@ class MainScreenViewModelTest {
                     sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to sessions)),
                 )
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("ses-1"), loaded.sections.flatMap { it.allSessions }.map { it.id })
 
             viewModel.refresh()
             advanceUntilIdle()
-            val reloaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val reloaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("ses-1"), reloaded.sections.flatMap { it.allSessions }.map { it.id })
         }
 
@@ -1816,17 +1907,17 @@ class MainScreenViewModelTest {
                     sessionRepository = sessionRepository,
                 )
             advanceUntilIdle()
-            val before = viewModel.uiState.value as MainScreenUiState.Loaded
+            val before = viewModel.uiState.value.content as MainScreenUiState.Loaded
             val listCallsBefore = sessionRepository.listSessionsCallCount
 
             viewModel.pullToRefresh()
             advanceUntilIdle()
 
-            assertFalse(viewModel.isRefreshing.value)
-            val after = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertFalse(viewModel.uiState.value.isRefreshing)
+            val after = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(before.sections.single().worktree, after.sections.single().worktree)
             assertTrue(sessionRepository.listSessionsCallCount > listCallsBefore)
-            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
+            assertTrue(viewModel.uiState.value.content is MainScreenUiState.Loaded)
         }
 
     @Test
@@ -1844,7 +1935,7 @@ class MainScreenViewModelTest {
                     sessionRepository = sessionRepository,
                 )
             advanceUntilIdle()
-            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
+            assertTrue(viewModel.uiState.value.content is MainScreenUiState.Loaded)
 
             val gate = CompletableDeferred<Unit>()
             sessionRepository.nextListGate = gate
@@ -1854,12 +1945,12 @@ class MainScreenViewModelTest {
             // virtual clock would burn through that ceiling before the assert.
             runCurrent()
 
-            assertTrue(viewModel.isRefreshing.value)
+            assertTrue(viewModel.uiState.value.isRefreshing)
 
             gate.complete(Unit)
             advanceUntilIdle()
 
-            assertFalse(viewModel.isRefreshing.value)
+            assertFalse(viewModel.uiState.value.isRefreshing)
         }
 
     @Test
@@ -1877,7 +1968,7 @@ class MainScreenViewModelTest {
                     sessionRepository = sessionRepository,
                 )
             advanceUntilIdle()
-            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
+            assertTrue(viewModel.uiState.value.content is MainScreenUiState.Loaded)
 
             val stalled = CompletableDeferred<Unit>()
             sessionRepository.nextListGate = stalled
@@ -1887,7 +1978,7 @@ class MainScreenViewModelTest {
             assertFalse(
                 "the spinner must drop once the ack ceiling passes; a never-acked invalidate " +
                     "leaves isRefreshing latched true forever",
-                viewModel.isRefreshing.value,
+                viewModel.uiState.value.isRefreshing,
             )
 
             stalled.complete(Unit)
@@ -1901,7 +1992,7 @@ class MainScreenViewModelTest {
                     "makes a lost ack a permanent no-op",
                 sessionRepository.listSessionsCallCount > listCallsBefore,
             )
-            assertFalse(viewModel.isRefreshing.value)
+            assertFalse(viewModel.uiState.value.isRefreshing)
         }
 
     @Test
@@ -1921,7 +2012,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             assertEquals(
                 listOf("Session 1"),
-                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                (viewModel.uiState.value.content as MainScreenUiState.Loaded)
                     .sections
                     .single()
                     .allSessions
@@ -1938,7 +2029,7 @@ class MainScreenViewModelTest {
 
             assertEquals(
                 listOf("New Session Greeting", "Session 1"),
-                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                (viewModel.uiState.value.content as MainScreenUiState.Loaded)
                     .sections
                     .single()
                     .allSessions
@@ -1962,10 +2053,10 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
 
-            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
+            assertTrue(viewModel.uiState.value.content is MainScreenUiState.Loaded)
             assertFalse(
                 "resume catch-up must not latch the pull-to-refresh spinner",
-                viewModel.isRefreshing.value,
+                viewModel.uiState.value.isRefreshing,
             )
         }
 
@@ -1988,7 +2079,7 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
             val before =
-                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                (viewModel.uiState.value.content as MainScreenUiState.Loaded)
                     .sections
                     .single()
                     .allSessions.size
@@ -2003,7 +2094,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             val after =
-                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                (viewModel.uiState.value.content as MainScreenUiState.Loaded)
                     .sections
                     .single()
                     .allSessions.size
@@ -2031,7 +2122,7 @@ class MainScreenViewModelTest {
             viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
             advanceUntilIdle()
 
-            val opened = viewModel.sessionActions.value
+            val opened = viewModel.uiState.value.sessionActions
             assertTrue(opened.sheetVisible)
             assertEquals("Session one", opened.target?.title)
             assertEquals(0, messageRepository.listCallCount)
@@ -2056,11 +2147,11 @@ class MainScreenViewModelTest {
 
             viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
             viewModel.chooseFork()
-            assertTrue(viewModel.sessionActions.value.forkVisible)
+            assertTrue(viewModel.uiState.value.sessionActions.forkVisible)
             advanceUntilIdle()
 
             assertEquals(1, messageRepository.listCallCount)
-            assertNull(viewModel.sessionActions.value.forkBlockedMessage)
+            assertNull(viewModel.uiState.value.sessionActions.forkBlockedMessage)
         }
 
     @Test
@@ -2088,8 +2179,8 @@ class MainScreenViewModelTest {
             viewModel.chooseFork()
             advanceUntilIdle()
 
-            assertTrue(viewModel.sessionActions.value.forkVisible)
-            assertEquals("Nothing to fork yet", viewModel.sessionActions.value.forkBlockedMessage?.english())
+            assertTrue(viewModel.uiState.value.sessionActions.forkVisible)
+            assertEquals("Nothing to fork yet", viewModel.uiState.value.sessionActions.forkBlockedMessage?.english())
 
             viewModel.confirmFork()
             advanceUntilIdle()
@@ -2114,8 +2205,8 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertTrue(sessionRepository.forkedIds.isEmpty())
-            assertFalse(viewModel.sessionActions.value.forkSubmitting)
-            assertEquals("Nothing to fork yet", viewModel.sessionActions.value.forkBlockedMessage?.english())
+            assertFalse(viewModel.uiState.value.sessionActions.forkSubmitting)
+            assertEquals("Nothing to fork yet", viewModel.uiState.value.sessionActions.forkBlockedMessage?.english())
         }
 
     @Test
@@ -2133,7 +2224,7 @@ class MainScreenViewModelTest {
             viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
             viewModel.chooseFork()
             advanceUntilIdle()
-            assertNull(viewModel.sessionActions.value.forkBlockedMessage)
+            assertNull(viewModel.uiState.value.sessionActions.forkBlockedMessage)
 
             viewModel.confirmFork()
             advanceUntilIdle()
@@ -2153,16 +2244,16 @@ class MainScreenViewModelTest {
 
             viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
             viewModel.chooseRename()
-            assertFalse(viewModel.sessionActions.value.sheetVisible)
-            assertTrue(viewModel.sessionActions.value.renameVisible)
-            assertEquals("Session one", viewModel.sessionActions.value.renameDraft)
+            assertFalse(viewModel.uiState.value.sessionActions.sheetVisible)
+            assertTrue(viewModel.uiState.value.sessionActions.renameVisible)
+            assertEquals("Session one", viewModel.uiState.value.sessionActions.renameDraft)
 
             viewModel.updateRenameDraft("Renamed")
             viewModel.confirmRename()
             advanceUntilIdle()
 
             assertEquals(listOf("s1" to "Renamed"), sessionRepository.renamedTitles)
-            assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
+            assertEquals(HomeSessionActionsUiState(), viewModel.uiState.value.sessionActions)
         }
 
     @Test
@@ -2182,8 +2273,8 @@ class MainScreenViewModelTest {
             viewModel.confirmRename()
             advanceUntilIdle()
 
-            assertTrue(viewModel.sessionActions.value.renameVisible)
-            assertEquals("Enter a session title", viewModel.sessionActions.value.renameError?.english())
+            assertTrue(viewModel.uiState.value.sessionActions.renameVisible)
+            assertEquals("Enter a session title", viewModel.uiState.value.sessionActions.renameError?.english())
             assertTrue(sessionRepository.renamedTitles.isEmpty())
         }
 
@@ -2207,9 +2298,9 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertEquals(listOf("s1"), sessionRepository.archivedIds)
-            assertEquals("Couldn't archive session.", viewModel.removalSnackbar.value?.text?.english())
-            assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
-            assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
+            assertEquals("Couldn't archive session.", viewModel.uiState.value.snackbar?.text?.english())
+            assertEquals(HomeSessionActionsUiState(), viewModel.uiState.value.sessionActions)
+            assertTrue(viewModel.uiState.value.content is MainScreenUiState.Loaded)
         }
 
     @Test
@@ -2229,14 +2320,14 @@ class MainScreenViewModelTest {
 
             viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
             viewModel.chooseDelete()
-            assertTrue(viewModel.sessionActions.value.deleteConfirmVisible)
+            assertTrue(viewModel.uiState.value.sessionActions.deleteConfirmVisible)
 
             viewModel.confirmDelete()
             advanceUntilIdle()
 
             assertEquals(listOf("s1"), sessionRepository.deletedIds)
-            assertEquals("Couldn't delete session.", viewModel.removalSnackbar.value?.text?.english())
-            assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
+            assertEquals("Couldn't delete session.", viewModel.uiState.value.snackbar?.text?.english())
+            assertEquals(HomeSessionActionsUiState(), viewModel.uiState.value.sessionActions)
         }
 
     @Test
@@ -2260,20 +2351,20 @@ class MainScreenViewModelTest {
             viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
             advanceUntilIdle()
             viewModel.chooseFork()
-            assertEquals("Fork of Session one", viewModel.sessionActions.value.forkDraft)
+            assertEquals("Fork of Session one", viewModel.uiState.value.sessionActions.forkDraft)
 
             viewModel.confirmFork()
             advanceUntilIdle()
 
             assertEquals(listOf("s1"), sessionRepository.forkedIds)
-            assertTrue(viewModel.sessionActions.value.forkResultVisible)
-            assertEquals("Fork of Session one", viewModel.sessionActions.value.forkedTitle)
+            assertTrue(viewModel.uiState.value.sessionActions.forkResultVisible)
+            assertEquals("Fork of Session one", viewModel.uiState.value.sessionActions.forkedTitle)
 
             viewModel.chooseForkOpen()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals("forked-s1", loaded.pendingOpenSession?.sessionId)
             assertEquals("/repo", loaded.pendingOpenSession?.worktree)
-            assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
+            assertEquals(HomeSessionActionsUiState(), viewModel.uiState.value.sessionActions)
         }
 
     @Test
@@ -2299,9 +2390,9 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             viewModel.chooseForkStay()
 
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertNull(loaded.pendingOpenSession)
-            assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
+            assertEquals(HomeSessionActionsUiState(), viewModel.uiState.value.sessionActions)
         }
 
     @Test
@@ -2327,7 +2418,7 @@ class MainScreenViewModelTest {
                         ),
                 )
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(
                 "Retrying · 2",
                 loaded.sections
@@ -2350,7 +2441,7 @@ class MainScreenViewModelTest {
                         listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to "busy"))),
                 )
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(
                 "Working",
                 loaded.sections
@@ -2387,7 +2478,7 @@ class MainScreenViewModelTest {
                     statusLiveStoreOverride = FakeHomeStatusLiveStore(activity),
                 )
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertNull(
                 loaded.sections
                     .single()
@@ -2424,7 +2515,7 @@ class MainScreenViewModelTest {
                     statusLiveStoreOverride = FakeHomeStatusLiveStore(activity),
                 )
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             val summary =
                 loaded.sections
                     .single()
@@ -2601,7 +2692,7 @@ class MainScreenViewModelTest {
 
             val painted = mutableListOf<SessionListStatus>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-                viewModel.uiState.collect { state ->
+                viewModel.uiState.map { it.content }.distinctUntilChanged().collect { state ->
                     (state as? MainScreenUiState.Loaded)
                         ?.sections
                         ?.flatMap { it.allSessions }
@@ -2637,7 +2728,7 @@ class MainScreenViewModelTest {
         }
 
     private fun homeSummaries(viewModel: MainScreenViewModel): Map<String, SessionSummary> =
-        (viewModel.uiState.value as MainScreenUiState.Loaded)
+        (viewModel.uiState.value.content as MainScreenUiState.Loaded)
             .sections
             .single()
             .allSessions
@@ -2673,14 +2764,14 @@ class MainScreenViewModelTest {
         )
 
     private fun addProjectSheetVisible(viewModel: MainScreenViewModel): Boolean =
-        when (val state = viewModel.uiState.value) {
+        when (val state = viewModel.uiState.value.content) {
             is MainScreenUiState.Loaded -> state.showAddProjectSheet
             is MainScreenUiState.Empty -> state.showAddProjectSheet
             else -> false
         }
 
     private fun currentSheet(viewModel: MainScreenViewModel): AddProjectSheetUi? =
-        when (val state = viewModel.uiState.value) {
+        when (val state = viewModel.uiState.value.content) {
             is MainScreenUiState.Loaded -> state.addProjectSheet
             is MainScreenUiState.Empty -> state.addProjectSheet
             else -> null
@@ -2729,7 +2820,7 @@ class MainScreenViewModelTest {
                     sessionCache = cache,
                 )
             advanceUntilIdle()
-            assertEquals(listOf("proj"), (live.uiState.value as MainScreenUiState.Loaded).projects.map { it.key })
+            assertEquals(listOf("proj"), (live.uiState.value.content as MainScreenUiState.Loaded).projects.map { it.key })
             assertEquals("proj", cache.seedProjectResolution("/repo")?.projectId)
             val cached = listOf(Session(id = "s1", title = "Cached", directory = "/repo", updatedAtEpochMs = 1L))
             cache.rememberSessions("/repo", cached)
@@ -2743,7 +2834,7 @@ class MainScreenViewModelTest {
                     sessionCache = cache,
                 )
             advanceUntilIdle()
-            val painted = cold.uiState.value as MainScreenUiState.Loaded
+            val painted = cold.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("proj"), painted.projects.map { it.key })
             assertEquals(listOf("s1"), painted.homeSessions().map { it.id })
         }
@@ -2819,7 +2910,7 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
 
-            val painted = cold.uiState.value as MainScreenUiState.Loaded
+            val painted = cold.uiState.value.content as MainScreenUiState.Loaded
             val project = painted.projects.single()
             assertEquals(listOf("/repo", "/wt/tax"), project.worktrees.map { it.directory })
             assertEquals(listOf("main", "feature/tax-rounding"), project.worktrees.map { it.branch })
@@ -2850,7 +2941,7 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
 
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("proj", "path:/plain"), loaded.projects.map { it.key })
             assertEquals(listOf("/repo", "/repo-wt"), loaded.projects.first().memberPaths)
             assertEquals(
@@ -2879,10 +2970,10 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertEquals(listOf("/repo", "/repo-wt"), store.added(serverUrl))
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("/repo", "/repo-wt"), loaded.projects.single().memberPaths)
-            assertEquals("Same repo as repo. Showing it as a worktree there.", viewModel.removalSnackbar.value?.text?.english())
-            assertEquals(HomeScopeRequest(filterId = "/repo-wt", evenFromAll = true), viewModel.pendingScopeRequest.value)
+            assertEquals("Same repo as repo. Showing it as a worktree there.", viewModel.uiState.value.snackbar?.text?.english())
+            assertEquals(HomeScopeRequest(filterId = "/repo-wt", evenFromAll = true), viewModel.uiState.value.pendingScopeRequest)
         }
 
     @Test
@@ -2900,13 +2991,13 @@ class MainScreenViewModelTest {
             viewModel.requestRemoveProject("proj")
             assertEquals(
                 listOf("/repo", "/repo-wt"),
-                (viewModel.uiState.value as MainScreenUiState.Loaded).pendingProjectRemoval?.worktrees,
+                (viewModel.uiState.value.content as MainScreenUiState.Loaded).pendingProjectRemoval?.worktrees,
             )
             viewModel.confirmRemoveProject()
             advanceUntilIdle()
 
             assertEquals(listOf("/plain"), store.added(serverUrl))
-            assertEquals("Removed \"repo\" from home", viewModel.removalSnackbar.value?.text?.english())
+            assertEquals("Removed \"repo\" from home", viewModel.uiState.value.snackbar?.text?.english())
         }
 
     @Test
@@ -2955,7 +3046,7 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
 
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("extra", "main"), loaded.homeSessions().map { it.id })
             assertEquals("/wt-unadded", loaded.homeSessions().first().directory)
             assertEquals(
@@ -2975,88 +3066,9 @@ class MainScreenViewModelTest {
             advanceTimeBy(550)
             advanceUntilIdle()
 
-            val refreshed = viewModel.uiState.value as MainScreenUiState.Loaded
+            val refreshed = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(listOf("fresh", "extra", "main"), refreshed.homeSessions().map { it.id })
             assertEquals(2, sessionRepository.listedDirectories.count { it == "/wt-unadded" })
-        }
-
-    @Test
-    fun runInNewWorktreeCreatesThenStartsASessionThereAndListsIt() =
-        runTest(testDispatcher) {
-            var listed = listOf("/repo")
-            val requests = mutableListOf<CreateWorktreeRequest>()
-            val worktrees =
-                object : WorktreeRepository by UnavailableWorktreeRepository {
-                    override suspend fun loadRefreshed(
-                        addedPath: String,
-                        projectId: String?,
-                        mainWorktree: String?,
-                    ): WorktreeLoad = WorktreeLoad.Loaded(listed, listsSessions = false)
-
-                    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree {
-                        requests += request
-                        listed = listed + "/wt/brave-otter"
-                        return CreatedWorktree("/wt/brave-otter", "brave-otter", branch = null)
-                    }
-                }
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
-                    sessionsByWorktree = mapOf("/repo" to emptyList()),
-                    worktreeRepository = worktrees,
-                    serverProtocol = ServerProtocol.V2,
-                )
-            advanceUntilIdle()
-
-            viewModel.openRunInNewWorktree("proj")
-            advanceUntilIdle()
-            val form = viewModel.worktreeCreateForm.value!!
-            assertEquals("/repo", form.sourceDirectory)
-            viewModel.updateNewWorktreeName("brave-otter")
-            viewModel.submitNewWorktree()
-            advanceUntilIdle()
-
-            assertEquals(listOf(CreateWorktreeRequest("proj", "/repo", "brave-otter", baseRef = null)), requests)
-            assertNull(viewModel.worktreeCreateForm.value)
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("/wt/brave-otter", loaded.pendingOpenSession?.worktree)
-            assertEquals(
-                listOf("/repo", "/wt/brave-otter"),
-                loaded.projects
-                    .single()
-                    .worktrees
-                    .map { it.directory },
-            )
-        }
-
-    @Test
-    fun runInNewWorktreeFailureStartsNoSession() =
-        runTest(testDispatcher) {
-            val worktrees =
-                object : WorktreeRepository by UnavailableWorktreeRepository {
-                    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree =
-                        throw WorktreeCreateError("Worktrees are only supported for git projects")
-                }
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
-                    sessionsByWorktree = mapOf("/repo" to emptyList()),
-                    worktreeRepository = worktrees,
-                    serverProtocol = ServerProtocol.V1,
-                )
-            advanceUntilIdle()
-
-            viewModel.openRunInNewWorktree("proj")
-            viewModel.submitNewWorktree()
-            advanceUntilIdle()
-
-            assertEquals(
-                "Couldn't create the worktree: Worktrees are only supported for git projects",
-                viewModel.worktreeCreateForm.value?.errorMessage?.english(),
-            )
-            assertNull((viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession)
         }
 
     @Test
@@ -3108,7 +3120,7 @@ class MainScreenViewModelTest {
             advanceTimeBy(500)
             assertEquals(
                 listOf(null),
-                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                (viewModel.uiState.value.content as MainScreenUiState.Loaded)
                     .projects
                     .single()
                     .worktrees
@@ -3120,7 +3132,7 @@ class MainScreenViewModelTest {
 
             assertEquals(
                 listOf("feature/tax-rounding"),
-                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                (viewModel.uiState.value.content as MainScreenUiState.Loaded)
                     .projects
                     .single()
                     .worktrees
@@ -3167,6 +3179,8 @@ class MainScreenViewModelTest {
         worktreeInventoryCache: dev.opencode.mobile.domain.worktree.WorktreeInventoryCache =
             dev.opencode.mobile.domain.worktree
                 .WorktreeInventoryCache(),
+        newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
+        homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
     ): MainScreenViewModel {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore, connectionProbing)
         runBlocking {
@@ -3242,6 +3256,8 @@ class MainScreenViewModelTest {
             worktreeRepository = worktreeRepository,
             projectFirstLoadTiming = projectFirstLoadTiming,
             worktreeInventoryCache = worktreeInventoryCache,
+            newSessionDraftStore = newSessionDraftStore,
+            homeProjectsSnapshot = homeProjectsSnapshot,
         ).apply { homeRowsDispatcher = testDispatcher }
     }
 }
@@ -3491,6 +3507,7 @@ private class FakeSessionRepository(
         permissionId: String,
         decision: dev.opencode.mobile.domain.session.PermissionDecision,
         directory: String?,
+        message: String?,
     ) = error("unused")
 }
 

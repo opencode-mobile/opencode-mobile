@@ -1,4 +1,3 @@
-import FactoryKit
 import Foundation
 import UIKit
 
@@ -16,6 +15,8 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
     private let connectionProfileIDProvider: @Sendable () -> String
     private let preparedHistoryCache: PreparedHistoryCache
     private let decorationCache: BlockDecorationCache
+    /// Trimmed on memory pressure; the app passes its Session Chat highlighter.
+    private let codeHighlighter: (any TextMateHighlighting)?
     private var memoryPressureObserver: NSObjectProtocol?
 
     init(
@@ -24,7 +25,8 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         clock: (any DisplayMessagePipelineClock)? = nil,
         connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
         preparedHistoryCache: PreparedHistoryCache? = nil,
-        decorationCache: BlockDecorationCache = .shared
+        decorationCache: BlockDecorationCache = .shared,
+        codeHighlighter: any TextMateHighlighting = HighlightCoreHighlightingEngine.shared
     ) {
         self.snapshotSource = messageSync
         self.contentPreparer = contentPreparer
@@ -33,6 +35,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         self.connectionProfileIDProvider = connectionProfileIDProvider
         self.preparedHistoryCache = preparedHistoryCache ?? PreparedHistoryCache()
         self.decorationCache = decorationCache
+        self.codeHighlighter = codeHighlighter
         observeMemoryPressure()
     }
 
@@ -52,6 +55,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         self.connectionProfileIDProvider = connectionProfileIDProvider
         self.preparedHistoryCache = preparedHistoryCache ?? PreparedHistoryCache()
         self.decorationCache = decorationCache
+        self.codeHighlighter = nil
     }
 
     deinit {
@@ -99,8 +103,9 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
             queue: .main
         ) { [weak self] _ in
             self?.preparedHistoryCache.handleMemoryPressure()
+            guard let codeHighlighter = self?.codeHighlighter else { return }
             Task {
-                await Container.codeHighlighter.trim(.critical)
+                await codeHighlighter.trim(.critical)
             }
         }
     }

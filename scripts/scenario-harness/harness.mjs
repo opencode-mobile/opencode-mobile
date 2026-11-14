@@ -41,7 +41,12 @@ Apps connect to:
 
 In the app, arm a scenario in the web UI and send any prompt, or send a prompt
 containing "scenario: <id>". Unscripted model calls answer "ok"; title and
-summary requests are answered automatically.`;
+summary requests are answered automatically.
+
+/goal (v2): the reviewer answers "done" unless verdicts are queued with
+POST /harness/goal {"verdicts":[{"verdict":"continue","reason":"..."}],"turnMs":8000}
+(verdicts: continue | done | blocked | paused | wait; "append":true adds to the
+queue; turnMs slows unscripted turns so a working goal stays on screen).`;
 
 function parseArgs(argv) {
   const args = {
@@ -409,6 +414,7 @@ const routes = {
   "POST /harness/run": (body) => run(body),
   "POST /harness/release": (body) => ({ released: model.release(body.gate) }),
   "POST /harness/pacing": (body) => model.setPacing(body.value),
+  "POST /harness/goal": (body) => model.setGoal(body),
   "POST /harness/model/abort": () => model.abortAll(),
   "POST /harness/reset": () => {
     clearAutomation();

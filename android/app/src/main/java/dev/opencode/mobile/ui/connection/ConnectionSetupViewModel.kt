@@ -24,9 +24,9 @@ import dev.opencode.mobile.domain.connection.ServerAddressProbe
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.toProbeStatus
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.network.ServerConnection
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

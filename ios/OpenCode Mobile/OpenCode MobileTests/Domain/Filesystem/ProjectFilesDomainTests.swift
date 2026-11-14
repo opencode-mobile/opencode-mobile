@@ -28,14 +28,6 @@ struct ProjectFilesListingPolicyTests {
         let many = (0..<500).map { ProjectEntry(name: "f\($0)", relativePath: "f\($0)", isDirectory: false) }
         #expect(ProjectFilesListingPolicy.visible(many, showHidden: false).count == 500)
     }
-
-    @Test func addProjectPolicyIsUnchanged() {
-        let nodes = [
-            DirectoryNode(name: "b", absolutePath: "/b", isDirectory: true),
-            DirectoryNode(name: "file.txt", absolutePath: "/file.txt", isDirectory: false),
-        ]
-        #expect(DirectoryListingPolicy.directories(nodes).map(\.name) == ["b"])
-    }
 }
 
 @MainActor

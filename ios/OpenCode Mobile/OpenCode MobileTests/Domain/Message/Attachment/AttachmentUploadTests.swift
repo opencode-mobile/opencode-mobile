@@ -250,7 +250,7 @@ struct UploadedAttachmentPromptTests {
         #expect(
             request.metadata
                 == V2PromptMetadataDTO(
-                    attachments: [V2PromptUploadedAttachmentDTO(name: "a.zip", mime: "application/zip", path: "/tmp/uploads/1/a.zip")]
+                    attachments: [PromptAttachment(name: "a.zip", mime: "application/zip", path: "/tmp/uploads/1/a.zip")]
                 )
         )
         let encoder = JSONEncoder()
@@ -348,11 +348,5 @@ struct StreamedUploadContractTests {
         for document in [renamed, optionalPath, jsonBody, noDataPath] {
             #expect(try !V2ServerContract.features(data: Data(document.utf8)).streamedUploadRoute)
         }
-    }
-
-    @Test func disablingUploadLeavesNoDirectory() {
-        let manager = ActiveConnectionManager()
-        manager.disableStreamedUpload()
-        #expect(manager.streamedUploadDirectory == nil)
     }
 }

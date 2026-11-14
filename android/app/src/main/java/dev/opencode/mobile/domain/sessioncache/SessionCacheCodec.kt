@@ -289,6 +289,7 @@ internal data class CachedMessagePartPayload(
     val isStreaming: Boolean = false,
     val isSynthetic: Boolean = false,
     val isIgnored: Boolean = false,
+    val goalKickoffId: String? = null,
     val toolName: String? = null,
     val status: String? = null,
     val title: String? = null,
@@ -307,6 +308,8 @@ internal data class CachedMessagePartPayload(
     val auto: Boolean = false,
     val isInterrupted: Boolean = false,
     val isMalformed: Boolean = false,
+    val isDeclined: Boolean = false,
+    val userNote: String? = null,
     /** A tool part's images: metadata only, the data URL blanked. */
     val images: List<CachedMessagePartPayload>? = null,
     /** A tool image whose thumbnail file was saved alongside the cache. */
@@ -517,6 +520,7 @@ private fun MessagePart.toCachePayload(hasThumbnail: (MessagePart.File) -> Boole
                 isStreaming = isStreaming,
                 isSynthetic = isSynthetic,
                 isIgnored = isIgnored,
+                goalKickoffId = goalKickoffId,
             )
         is MessagePart.Tool ->
             CachedMessagePartPayload(
@@ -534,6 +538,8 @@ private fun MessagePart.toCachePayload(hasThumbnail: (MessagePart.File) -> Boole
                 timeEndEpochMs = timeEndEpochMs,
                 isInterrupted = isInterrupted,
                 isMalformed = isMalformed,
+                isDeclined = isDeclined,
+                userNote = userNote,
                 images = images.takeIf { it.isNotEmpty() }?.map { it.toCachePayload(hasThumbnail(it)) },
             )
         is MessagePart.File -> toCachePayload(hasThumbnail = false)
@@ -571,6 +577,7 @@ private fun CachedMessagePartPayload.toDomain(thumbnailPath: (String) -> String?
                 id = id,
                 isSynthetic = isSynthetic,
                 isIgnored = isIgnored,
+                goalKickoffId = goalKickoffId,
             )
         "tool" ->
             MessagePart.Tool(
@@ -589,6 +596,8 @@ private fun CachedMessagePartPayload.toDomain(thumbnailPath: (String) -> String?
                 timeEndEpochMs = timeEndEpochMs,
                 isInterrupted = isInterrupted,
                 isMalformed = isMalformed,
+                isDeclined = isDeclined,
+                userNote = userNote,
                 images =
                     images.orEmpty().mapNotNull { image ->
                         image.toFileDomain(thumbnailPath = if (image.hasThumbnail) thumbnailPath else { _ -> null })

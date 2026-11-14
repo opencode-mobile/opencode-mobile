@@ -42,6 +42,12 @@ enum OpenCodeOutgoingMessageSteering: Equatable {
     }
 }
 
+/// A label over the bubble that says what kind of prompt it is.
+enum OpenCodeOutgoingMessageHeader: Equatable {
+    /// A `/goal` kickoff the server sent as the user's prompt: the goal mark and `label`.
+    case goal(label: String)
+}
+
 private struct OutgoingMessageTrailingMaxWidthLayout: Layout {
     let maxWidthFraction: CGFloat
 
@@ -83,6 +89,7 @@ struct OpenCodeOutgoingMessage: View {
     /// Revealed by dragging the message left. Nil: no reveal.
     let sentAt: Date?
     let steering: OpenCodeOutgoingMessageSteering?
+    let header: OpenCodeOutgoingMessageHeader?
     let onTap: (() -> Void)?
     let onLongPress: (() -> Void)?
 
@@ -93,9 +100,11 @@ struct OpenCodeOutgoingMessage: View {
         metadataLabel: String,
         sentAt: Date? = nil,
         steering: OpenCodeOutgoingMessageSteering? = nil,
+        header: OpenCodeOutgoingMessageHeader? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
+        self.header = header
         self.content = attachments.map(OpenCodeOutgoingMessageContent.attachment) + [
             .text(id: "message", text: text),
         ]
@@ -113,9 +122,11 @@ struct OpenCodeOutgoingMessage: View {
         metadataLabel: String,
         sentAt: Date? = nil,
         steering: OpenCodeOutgoingMessageSteering? = nil,
+        header: OpenCodeOutgoingMessageHeader? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
+        self.header = header
         self.content = content
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
@@ -128,7 +139,17 @@ struct OpenCodeOutgoingMessage: View {
     var body: some View {
         OutgoingMessageTrailingMaxWidthLayout(maxWidthFraction: outgoingMessageMaxWidthFraction) {
             VStack(alignment: .trailing, spacing: 4) {
-                if steering?.showsLabel == true {
+                if case let .goal(label) = header {
+                    HStack(spacing: 4) {
+                        OpenCodeIconImage(icon: .radioButtonChecked, size: 12)
+                        Text(label)
+                    }
+                    .font(OpenCodeTypography.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
+                } else if steering?.showsLabel == true {
                     Text(OpenCodeOutgoingMessageSteering.label)
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(OpenCodeColors.textWeak)

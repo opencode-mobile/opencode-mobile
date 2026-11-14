@@ -428,9 +428,25 @@ nonisolated enum SessionChatTimelineProjector {
     /// A v2 command takes no id, and its echo is the expanded template, so the first
     /// user row that was not loaded when the send began stands for it.
     static func isNewServerEcho(_ server: TimelineRow, of pending: TimelineRow, baselineIDs: Set<String>) -> Bool {
+        if server.role == .notice {
+            // `/goal <objective>` answers with its Goal set notice, not a user row.
+            return !baselineIDs.contains(server.id) && isGoalCommand(pending) && isGoalSetNotice(server)
+        }
         guard server.role == .user else { return false }
         if ClientMessageID.isClientID(pending.id) { return server.id == pending.id }
         return !baselineIDs.contains(server.id)
+    }
+
+    private static func isGoalCommand(_ pending: TimelineRow) -> Bool {
+        let command = SessionGoalKickoff.commandName
+        return pending.text.hasPrefix("[/\(command)] ") || SessionGoalDraft.objective(pending.text)?.isEmpty == false
+    }
+
+    private static func isGoalSetNotice(_ row: TimelineRow) -> Bool {
+        row.blocks.contains { block in
+            guard case let .notice(_, notice) = block, case .goalSet = notice.kind else { return false }
+            return true
+        }
     }
 
     private static func splicePending(
@@ -512,7 +528,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .attachment(let id, let file):
                 "a:\(id):\(file.id):\(file.previewData != nil)"
             case .toolCard(let id, let card):
-                "c:\(id):\(card.errorText != nil):\(card.additions ?? -1):\(card.deletions ?? -1)"
+                "c:\(id):\(card.errorText != nil):\(card.declineNote != nil):\(card.additions ?? -1):\(card.deletions ?? -1)"
             case .toolGroup(let id, let group):
                 "g:\(id):\(group.count):\(group.errorText != nil)"
             case .childSessionRow(let id, let row):
@@ -520,14 +536,14 @@ nonisolated enum SessionChatTimelineProjector {
             case .reasoning(let id, _, _, _):
                 "n:\(id)"
             case .stepParagraph(let id, let paragraph):
-                "s:\(id):\(paragraph.text != nil):\(paragraph.renderedMarkdown != nil):\(paragraph.errorLines.count):"
+                "s:\(id):\(paragraph.text != nil):\(paragraph.renderedMarkdown != nil):\(paragraph.errorLines.count):\(paragraph.declineNoteLines.count):"
                     + paragraph.chips.map {
                         "\($0.status.rawValue)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
                     }.joined(separator: ",")
             case .stepRail(let id, let rail):
                 "sr:\(id):"
                     + rail.steps.map {
-                        "\($0.id)/\($0.status.rawValue)/\($0.isBranch)/\($0.detail != nil)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
+                        "\($0.id)/\($0.status.rawValue)/\($0.isBranch)/\($0.detail != nil)/\($0.card?.declineNote != nil)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
                     }.joined(separator: ",")
             case .activityCard(let id, let card):
                 "ac:\(id):"

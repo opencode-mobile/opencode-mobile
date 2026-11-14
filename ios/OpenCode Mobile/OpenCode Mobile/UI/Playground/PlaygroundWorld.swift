@@ -275,6 +275,7 @@ nonisolated extension ToolPart {
             timeEndEpochMs: endMs ?? timeEndEpochMs ?? timeStartEpochMs.map { $0 + 1_800 },
             isInterrupted: isInterrupted,
             isMalformed: isMalformed,
+            decline: isInterrupted ? decline : nil,
             images: images
         )
     }

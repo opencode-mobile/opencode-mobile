@@ -69,16 +69,6 @@ final class PlaygroundMessageRepository: MessageRepository, DisplayMessageSnapsh
         world.state.messages(sessionID)
     }
 
-    func getMessage(sessionID: String, messageID: String, directory _: String?) async throws -> Message {
-        guard let message = world.state.messages(sessionID).first(where: { $0.id == messageID }) else { throw notInPlayground }
-        return message
-    }
-
-    func sendMessage(sessionID: String, text: String, directory _: String?) async throws -> Message {
-        world.acceptPrompt(sessionID: sessionID, text: text, messageID: nil)
-        return world.state.messages(sessionID).last!
-    }
-
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory _: String?) async throws {
         world.acceptPrompt(sessionID: sessionID, text: options.text, messageID: options.messageID)
     }
@@ -206,7 +196,7 @@ final class PlaygroundSessionRepository: SessionRepository {
 
     func commitRevert(id _: String) async throws -> Bool { true }
 
-    func respondToPermission(sessionID _: String, permissionID: String, decision _: PermissionDecision, directory _: String?) async throws -> Bool {
+    func respondToPermission(sessionID _: String, permissionID: String, decision _: PermissionDecision, directory _: String?, message _: String?) async throws -> Bool {
         world.update { current in
             var copy = current
             copy.permissions.removeAll { $0.id == permissionID }

@@ -43,11 +43,11 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val OpenCodeButtonCornerRadius = OpenCodeSmallShape
-private val OpenCodeButtonBorderWidth = 1.dp
-private val OpenCodeButtonTextHorizontalPadding = 14.dp
-private val OpenCodeButtonTextVerticalPadding = 10.dp
+internal val OpenCodeButtonBorderWidth = 1.dp
+internal val OpenCodeButtonTextHorizontalPadding = 14.dp
+internal val OpenCodeButtonTextVerticalPadding = 10.dp
 private val OpenCodeButtonFullMinHeight = 48.dp
-private val OpenCodeButtonCompactMinHeight = 40.dp
+internal val OpenCodeButtonCompactMinHeight = 40.dp
 private val OpenCodeButtonIconSquareSize = 40.dp
 private val OpenCodeButtonIconCircleSize = 40.dp
 private val OpenCodeButtonIconSize = 18.dp
@@ -120,35 +120,10 @@ fun OpenCodeButton(
         )
         return
     }
-    val targetContainer =
-        when {
-            !enabled && contrast == OpenCodeButtonContrast.Accent ->
-                lerp(openCodeColor("surface-raised-base"), openCodeColor("interactive"), 0.10f)
-            !enabled -> MaterialTheme.colorScheme.surfaceVariant
-            contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.surfaceVariant
-            contrast == OpenCodeButtonContrast.Accent -> openCodeColor("interactive")
-            contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.onSurface
-        }
-    val targetBorder =
-        when {
-            !enabled && contrast == OpenCodeButtonContrast.Accent ->
-                lerp(openCodeColor("surface-raised-base"), openCodeColor("interactive"), 0.10f)
-            !enabled -> MaterialTheme.colorScheme.outlineVariant
-            contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.outlineVariant
-            contrast == OpenCodeButtonContrast.Accent -> openCodeColor("interactive")
-            contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.onSurface
-        }
-    val targetContent =
-        when {
-            !enabled && contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-weak")
-            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
-            contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.onSurface
-            contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-on-brand-base")
-            contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.onError
-            else -> MaterialTheme.colorScheme.surface
-        }
+    val targetColors = openCodeButtonColors(contrast, enabled)
+    val targetContainer = targetColors.container
+    val targetBorder = targetColors.border
+    val targetContent = targetColors.content
     val isAccent = contrast == OpenCodeButtonContrast.Accent
     val accentColorSpring =
         spring<Color>(
@@ -308,6 +283,50 @@ fun OpenCodeButton(
             is OpenCodeButtonVariant.Link -> Unit
         }
     }
+}
+
+/** Fill, border and content colors of a filled [OpenCodeButton]; [OpenCodeSplitButton] shares them. */
+internal data class OpenCodeButtonColors(
+    val container: Color,
+    val border: Color,
+    val content: Color,
+)
+
+@Composable
+internal fun openCodeButtonColors(
+    contrast: OpenCodeButtonContrast,
+    enabled: Boolean,
+): OpenCodeButtonColors {
+    val disabledAccent = lerp(openCodeColor("surface-raised-base"), openCodeColor("interactive"), 0.10f)
+    return OpenCodeButtonColors(
+        container =
+            when {
+                !enabled && contrast == OpenCodeButtonContrast.Accent -> disabledAccent
+                !enabled -> MaterialTheme.colorScheme.surfaceVariant
+                contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.surfaceVariant
+                contrast == OpenCodeButtonContrast.Accent -> openCodeColor("interactive")
+                contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+        border =
+            when {
+                !enabled && contrast == OpenCodeButtonContrast.Accent -> disabledAccent
+                !enabled -> MaterialTheme.colorScheme.outlineVariant
+                contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.outlineVariant
+                contrast == OpenCodeButtonContrast.Accent -> openCodeColor("interactive")
+                contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+        content =
+            when {
+                !enabled && contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-weak")
+                !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                contrast == OpenCodeButtonContrast.Low -> MaterialTheme.colorScheme.onSurface
+                contrast == OpenCodeButtonContrast.Accent -> openCodeColor("text-on-brand-base")
+                contrast == OpenCodeButtonContrast.Destructive -> MaterialTheme.colorScheme.onError
+                else -> MaterialTheme.colorScheme.surface
+            },
+    )
 }
 
 @Preview(showBackground = true)

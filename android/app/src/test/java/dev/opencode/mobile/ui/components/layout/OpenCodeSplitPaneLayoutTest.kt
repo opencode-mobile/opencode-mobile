@@ -103,14 +103,6 @@ class OpenCodeSplitPaneLayoutTest {
     }
 
     @Test
-    fun defaultState_isOpenAtDefaultWidth() {
-        assertEquals(
-            OpenCodeSplitPaneState(leadingWidth = 360.dp, isCollapsed = false),
-            OpenCodeSplitPaneState(),
-        )
-    }
-
-    @Test
     fun everyScreen_usesTheHomeSidebarRange() {
         val bounds = OpenCodeSplitPaneLayout.sidebarBounds
         assertEquals(280.dp, bounds.minLeading)

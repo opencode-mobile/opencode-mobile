@@ -63,18 +63,6 @@ class SessionListStatusMappingTest {
     }
 
     @Test
-    fun unseededShowsNoStatusChip() {
-        val summary =
-            SessionSummary(
-                id = "ses-1",
-                title = "Chat",
-                statusLabel = null,
-                isReady = false,
-            )
-        assertEquals(SessionListStatus.Idle, summary.toSessionListStatusForTest())
-    }
-
-    @Test
     fun cachedRunningUsesStaleTone() {
         assertEquals(
             OpenCodeListItemStatusTone.Stale,

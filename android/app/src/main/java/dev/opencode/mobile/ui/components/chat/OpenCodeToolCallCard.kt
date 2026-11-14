@@ -60,6 +60,8 @@ fun OpenCodeToolCallCard(
     errorText: String? = null,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    /** Muted secondary line under [errorText], such as the note a denied call was sent with. */
+    noteText: String? = null,
 ) {
     require(additions == null || additions >= 0) { "Tool Call Card additions must be nonnegative" }
     require(deletions == null || deletions >= 0) { "Tool Call Card deletions must be nonnegative" }
@@ -72,6 +74,7 @@ fun OpenCodeToolCallCard(
             additions = additions,
             deletions = deletions,
             errorText = errorText,
+            noteText = noteText,
         )
     val shape = RoundedCornerShape(ToolCallCardCornerRadius)
 
@@ -174,6 +177,16 @@ fun OpenCodeToolCallCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+
+                if (!noteText.isNullOrEmpty()) {
+                    Text(
+                        text = noteText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = openCodeColor("text-weak"),
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
@@ -197,6 +210,7 @@ internal fun buildToolCallCardAccessibilityLabel(
     additions: Int?,
     deletions: Int?,
     errorText: String?,
+    noteText: String? = null,
 ): String {
     val parts = mutableListOf(status.name.lowercase(), title)
     if (!subtitle.isNullOrEmpty()) {
@@ -210,6 +224,9 @@ internal fun buildToolCallCardAccessibilityLabel(
     }
     if (!errorText.isNullOrEmpty()) {
         parts += errorText
+    }
+    if (!noteText.isNullOrEmpty()) {
+        parts += noteText
     }
     return parts.joinToString(", ")
 }

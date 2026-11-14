@@ -122,7 +122,6 @@ enum StoreScreenshotSeeder {
         HomeDisplayPreferences.shared.clear()
         AnalyticsConsentPreferences.shared.clear()
         AppOnboardingPreferences.shared.clear()
-        DeveloperToolsPreferences.shared.clear()
         PerformanceOverlayPreferences.shared.clear()
         SessionChatDisplayPreferences.shared.clear()
         SplitPanePreferences.shared.clear()

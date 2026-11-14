@@ -8,20 +8,31 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.command.ClientSlashAction
+import dev.opencode.mobile.domain.command.ComposerShellCommand
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
-import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
+import dev.opencode.mobile.domain.event.isWorktreeUpdated
 import dev.opencode.mobile.domain.event.namedProjectId
 import dev.opencode.mobile.domain.event.sessionMoved
-import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import dev.opencode.mobile.domain.event.sessionRevertUpdate
+import dev.opencode.mobile.domain.goal.EmptySessionGoalRepository
+import dev.opencode.mobile.domain.goal.SessionGoalAction
+import dev.opencode.mobile.domain.goal.SessionGoalDraft
+import dev.opencode.mobile.domain.goal.SessionGoalLimits
+import dev.opencode.mobile.domain.goal.SessionGoalRepository
+import dev.opencode.mobile.domain.filesystem.FilesystemRepository
+import dev.opencode.mobile.domain.filesystem.UnavailableFilesystemRepository
+import dev.opencode.mobile.domain.home.HomeProjectAdded
+import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
+import dev.opencode.mobile.domain.home.HomeWorktreesFeed
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.NoOpSessionViewReporter
@@ -39,29 +50,31 @@ import dev.opencode.mobile.domain.message.AttachmentIngestionResult
 import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
-import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ServerFilePreviews
 import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
 import dev.opencode.mobile.domain.message.UnavailableServerFilePreviews
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
-import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
-import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.UnavailableProjectRepository
+import dev.opencode.mobile.ui.main.AddProjectFlow
+import dev.opencode.mobile.ui.main.AddProjectResult
+import dev.opencode.mobile.domain.session.NewSessionDraft
+import dev.opencode.mobile.domain.session.NewSessionDraftStore
+import dev.opencode.mobile.domain.session.NewSessionPlace
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
-import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.session.SideQuestion
@@ -72,52 +85,41 @@ import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
-import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
-import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatImageViewer
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatDictation
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatGoal
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionNotice
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShells
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestions
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatInbox
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatNewSessionDraft
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatProjectHeader
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatRepoStrip
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimelinePresentationHost
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimelineOffers
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatPendingPromptAction
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatTurnStatus
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMove
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveAvailability
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveRow
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
-import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
-import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
-import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
-import kotlin.coroutines.coroutineContext
-
-/** Minimum time a child session's current action stays on screen before the next one replaces it. */
-private const val ACTIVITY_CHILD_UPDATE_HOLD_MS = 800L
-private const val ATTACHMENT_PREVIEW_MAX_BYTES = 32 * 1024 * 1024
 
 @HiltViewModel
 class SessionChatViewModel
@@ -134,27 +136,30 @@ class SessionChatViewModel
         private val sessionReadyStore: SessionReadyStore = EmptySessionReadyStore,
         sessionStatusLiveStore: SessionStatusLiveStore,
         foregroundEventStream: ForegroundEventStream,
-        eventDomainAdapter: EventDomainAdapter,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionModelSelectionStore: SessionModelSelectionStore,
         composerDraftStore: ComposerDraftStore,
         projectFilesRepository: dev.opencode.mobile.domain.filesystem.ProjectFilesRepository,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
-        private val connectionProfileStore: ConnectionProfileStore,
+        connectionProfileStore: ConnectionProfileStore,
         private val activeConnectionManager: ActiveConnectionManager,
         lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
         private val syncCoordinator: SyncCoordinator = NoOpSyncCoordinator,
         mcpRepository: McpRepository = EmptyMcpRepository,
         private val sessionViewReporter: SessionViewReporter = NoOpSessionViewReporter,
-        private val worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
-        private val projectRepository: ProjectRepository = UnavailableProjectRepository,
-        private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
-        private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
+        projectRepository: ProjectRepository = UnavailableProjectRepository,
+        homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
         sideQuestionStore: SideQuestionStore? = null,
-        private val serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
+        serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
         private val attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
         agentShellRepository: AgentShellRepository = EmptyAgentShellRepository,
+        newSessionDraftStore: NewSessionDraftStore = NewSessionDraftStore(),
+        homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
+        sessionGoalRepository: SessionGoalRepository = EmptySessionGoalRepository,
+        filesystemRepository: FilesystemRepository = UnavailableFilesystemRepository,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -166,7 +171,9 @@ class SessionChatViewModel
                 commands.ioDispatcher = value
                 inbox.ioDispatcher = value
                 worktreeMove.ioDispatcher = value
-                worktreeCreate.ioDispatcher = value
+                projectHeader.ioDispatcher = value
+                turnStatus.ioDispatcher = value
+                newSessionDraft.ioDispatcher = value
             }
 
         internal var nowMs: () -> Long = { System.currentTimeMillis() }
@@ -189,6 +196,19 @@ class SessionChatViewModel
                 scope = viewModelScope,
                 listChildSessions = { id -> sessionRepository.listChildSessions(id) },
                 derivesChangeNotices = { !activeConnectionManager.currentCapabilities().recordsTimelineChangeNotices },
+                serverFilePreviews = serverFilePreviews,
+                nowMs = { nowMs() },
+                presentationHost =
+                    object : SessionChatTimelinePresentationHost {
+                        override val publishedUiState: SessionChatUiState get() = _uiState.value
+
+                        override fun patchUiState(state: SessionChatUiState) {
+                            _uiState.value = state
+                        }
+
+                        override val boundSessionId: String? get() = this@SessionChatViewModel.boundSessionId
+                        override val boundWorktree: String? get() = this@SessionChatViewModel.boundWorktree
+                    },
             )
         private val composer =
             SessionChatComposer(
@@ -210,7 +230,6 @@ class SessionChatViewModel
                 sessionRepository = sessionRepository,
                 sessionStatusLiveStore = sessionStatusLiveStore,
                 foregroundEventStream = foregroundEventStream,
-                eventDomainAdapter = eventDomainAdapter,
                 scope = viewModelScope,
                 liveUpdates = liveUpdates,
             )
@@ -275,28 +294,108 @@ class SessionChatViewModel
                 nowMs = { nowMs() },
             )
 
+        /** The session's `/goal` (#1007): pill, sheet and status row. */
+        private val goal =
+            SessionChatGoal(
+                repository = sessionGoalRepository,
+                connectionState = foregroundEventStream.connectionState,
+                scope = viewModelScope,
+            )
+
+        /** Composer dictation card; Insert splices through [updateComposerText]. */
+        private val dictation =
+            SessionChatDictation(
+                scope = viewModelScope,
+                nowMs = { nowMs() },
+                onChange = { publishUiState() },
+                onCommit = { transcript -> spliceDictationTranscript(transcript) },
+            )
+
+        /** The one-time Chip timeline intro (OPE-270) and Timeline Style picker (#805). */
+        private val timelineOffers =
+            SessionChatTimelineOffers(
+                scope = viewModelScope,
+                nowMs = { nowMs() },
+                loadedMessages = { timeline.loadedMessages() },
+                isBlocked = { _uiState.value.blocksChipTimelineIntro() },
+                isSessionBusy = { isSessionBusy() },
+                onChange = { publishUiState() },
+            )
+
+        /** The header's project label, letter, accent and worktree-checkout flag. */
+        private val projectHeader =
+            SessionChatProjectHeader(
+                worktreeInventoryCache = worktreeInventoryCache,
+                connectionProfileStore = connectionProfileStore,
+                projectRepository = projectRepository,
+                worktreeRepository = worktreeRepository,
+                currentProfileBaseUrl = { connectionSessionCoordinator.currentProfile()?.baseUrl },
+                inventoryServerKey = { activeConnectionManager.current()?.baseUrl.orEmpty() },
+                boundWorktree = { boundWorktree },
+                scope = viewModelScope,
+                onChange = { publishUiState() },
+            )
+
+        /** Working footer, pending-prompts strip, and background work rows. */
+        private val turnStatus =
+            SessionChatTurnStatus(
+                sessionRepository = sessionRepository,
+                scope = viewModelScope,
+                nowMs = { nowMs() },
+                applyOptimistic = { id, delivery, removed -> timeline.applyOptimisticPendingPrompt(id, delivery, removed) },
+                reportError = { text -> commands.reportActionError(text) },
+                onWake = { publishUiState() },
+            )
+
+        /** New session draft (#1004): Session Chat before its first send. */
+        private val newSessionDraft =
+            SessionChatNewSessionDraft(
+                owner = this,
+                newSessionDraftStore = newSessionDraftStore,
+                worktreeRepository = worktreeRepository,
+                sessionRepository = sessionRepository,
+                newSessionModelSelectionResolver = newSessionModelSelectionResolver,
+                homeProjectsSnapshot = homeProjectsSnapshot,
+                homeWorktreesFeed = homeWorktreesFeed,
+                currentProfile = { connectionSessionCoordinator.currentProfile() },
+                protocolHint = { activeConnectionManager.protocolHint() },
+                composerState = { composer.state.value.composer },
+                scope = viewModelScope,
+                nowMs = { nowMs() },
+                onChange = { publishUiState() },
+            )
+
+        /** The draft's own Add project sheet (#1021); Home lists what it saves. */
+        private val addProject =
+            AddProjectFlow(
+                filesystemRepository = filesystemRepository,
+                projectRepository = projectRepository,
+                connectionProfileStore = connectionProfileStore,
+                scope = viewModelScope,
+                serverBaseUrl = { activeConnectionManager.current()?.baseUrl.orEmpty() },
+                addedProjectIds = { added ->
+                    added
+                        .mapNotNull { path ->
+                            homeProjectsSnapshot
+                                .projectContaining(path)
+                                ?.takeUnless { it.key.startsWith(HomeProjectGrouping.PATH_KEY_PREFIX) }
+                                ?.projectId
+                        }.toSet()
+                },
+                onSheetChanged = { publishUiState() },
+            )
+        private val homeProjects = homeProjectsSnapshot
+
         private val worktreeMove =
             SessionChatWorktreeMove(
                 moveSession = { id, directory -> sessionRepository.moveSession(id, directory) },
                 scope = viewModelScope,
-            )
-
-        /** The Move sheet's New worktree form: create a checkout from this one, then move there. */
-        private val worktreeCreate =
-            WorktreeCreateForm(
-                repository = worktreeRepository,
-                scope = viewModelScope,
-                onCreated = { origin, created ->
-                    val sessionId = (origin as? WorktreeCreateOrigin.Move)?.sessionId
-                    if (sessionId != null && sessionId == boundSessionId) {
-                        worktreeMove.move(
-                            sessionId = sessionId,
-                            destination = SessionChatWorktreeMoveRow.created(created.directory, created.branch ?: created.name),
-                            isBusy = isSessionBusy(),
-                        )
-                    }
-                },
-                onInventoryChanged = { _, request -> homeProjectsSnapshot.requestWorktreeRefresh(request.sourceDirectory) },
+                worktreeRepository = worktreeRepository,
+                homeProjectsSnapshot = homeProjectsSnapshot,
+                supportsSessionMove = { activeConnectionManager.currentCapabilities().supportsSessionMove },
+                protocolHint = { activeConnectionManager.protocolHint() },
+                boundSessionId = { boundSessionId },
+                isSessionBusy = { isSessionBusy() },
             )
 
         private val _uiState =
@@ -317,111 +416,33 @@ class SessionChatViewModel
         // The directory the transcript (timeline cache and sync projection) is keyed by; a move
         // keeps it so the timeline does not reload.
         private var transcriptWorktree: String? = null
-        private var projectIdentity = SessionChatProjectIdentity.None
-        private var projectIdentityJob: kotlinx.coroutines.Job? = null
-        private val checkoutProjectIds = mutableSetOf<String>()
         private var lastSnackbarKey: String? = null
-        private var loggedWorkingLamp = false
-        private var lastWorkingLamp: String? = null
-        private var workingChrome: WorkingTurnIndicator.Chrome = WorkingTurnIndicator.Chrome.Unmounted
-        private var workingHold: WorkingTurnIndicator.Hold? = null
-        private var workingHoldJob: Job? = null
-        private val pendingPromptsGate = PendingPromptsStripGate()
-        private var pendingPromptsWakeJob: Job? = null
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
         private var turnDiffNotice: String? = null
         private var branchCopiedNotice: String? = null
 
-        // Chip-timeline paragraphs the user expanded past `+N more`, keyed by
-        // expansion id with the chip count at tap time; reset per session.
-        private var expandedStepParagraphs: Map<String, Int> = emptyMap()
-
-        // Step rails the user unfolded past `N earlier steps`, keyed by rail id; reset per session.
-        private var unfoldedStepRails: Set<String> = emptySet()
-        private val imageViewer = SessionChatImageViewer()
-
-        // Activity card whose sheet is open, by block id; reset per session (#779).
-        private var presentedActivityCard: String? = null
-
-        // Step of the presented card whose detail the sheet shows in place of its list (#779).
-        private var activityCardDetailStepId: String? = null
-
-        // Child sessions observed for activity cards: their jobs and what they are doing (#779).
-        private val activityMessageRepository = messageRepository
-        private val activityChildJobs = mutableMapOf<String, Job>()
-        private var activityCardChildren: Map<String, SessionChatChildActivity> = emptyMap()
-
-        // Activity card footer hold per live card, step entry debounce, and their next tick (#779).
-        private val activityFooterHolds = mutableMapOf<String, SessionChatActivityFooterHold>()
-        private var stepEntryDebounce = SessionChatStepEntryDebounce()
-        private var activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap()
-
-        /**
-         * Done rows of the background work panel the user has seen (#966); null until the first
-         * rows of the open session, which count as seen.
-         */
-        private var seenDoneSubagentIds: Set<String>? = null
-
-        /** The background work panel shows its Done tab, so finishes are seen as they land. */
-        private var backgroundWorkDoneVisible = false
-
-        /** When subagents seen working finished live, keyed by tool part id, for rows with no server time. */
-        private var subagentFinishTimes: Map<String, Long> = emptyMap()
-
-        /**
-         * When the connection last became live; null while it is not. Rows published before it
-         * were seen before a gap, so a finish found after it is not stamped locally.
-         */
-        private var subagentLiveSinceMs: Long? = null
-
-        /** When the published subagent rows were computed. */
-        private var subagentsSeenAtMs: Long? = null
-        private var debouncedStepIds: Set<String> = emptySet()
-        private var stepTimingJob: Job? = null
-        private var liveRailSource: List<SessionChatMessageItem>? = null
-        private var liveRailMarked: List<SessionChatMessageItem> = emptyList()
-        private var liveRailActive = false
-
-        // Composer dictation card. An active card is cancelled without inserting when the
-        // mode, background, or screen goes away.
-        private var dictation: ComposerDictationUiState? = null
-        private var dictationGeneration = 0
-        private var dictationInsertJob: Job? = null
-        internal var dictationFinishDelayMs: Long = 350
-
-        // One-time Chip timeline intro (OPE-270): offered after a long turn finishes.
-        private var chipTimelineIntroVisible = false
-        private var chipTimelineIntroNotice: String? = null
-        private var chipTimelineIntroTurnActive: Boolean? = null
-        private var chipTimelineIntroJob: Job? = null
-
-        // One-time Timeline Style picker (#805): offered once per ViewModel after the first
-        // history load shows messages. The answer notice shares the Chip intro's notice slot.
-        private var timelineStylePickerVisible = false
-
-        // Taken when the picker shows, so its rows stay put while the sheet slides out.
-        private var timelineStylePickerOptions: List<SessionChatTimelineStyleOption> = emptyList()
-        private var timelineStylePickerChecked = false
-        private var timelineStylePickerJob: Job? = null
+        internal var dictationFinishDelayMs: Long
+            get() = dictation.finishDelayMs
+            set(value) {
+                dictation.finishDelayMs = value
+            }
 
         // Title / custom-answer fields change per keystroke; report the first edit per
         // dialog appearance so analytics measures engagement instead of typing volume.
         private var renameDraftEditReported = false
         private var forkDraftEditReported = false
         private var questionCustomEditReportedRequestId: String? = null
-        private var optimisticCreateJob: kotlinx.coroutines.Job? = null
+
         private var pendingSend: PendingSend? = null
         private var armedSendAcceptance: ArmedSendAcceptance? = null
-        private val newSessionModelSelectionResolver = newSessionModelSelectionResolver
-        private val connectionSessionCoordinator = connectionSessionCoordinator
 
         init {
             timeline.ioDispatcher = ioDispatcher
             composer.ioDispatcher = ioDispatcher
             viewModelScope.launch {
                 foregroundEventStream.events.collect { event ->
-                    eventDomainAdapter.sessionRevertUpdate(event)?.let { update ->
+                    event.sessionRevertUpdate()?.let { update ->
                         commands.applyRevertUpdate(update)
                         return@collect
                     }
@@ -429,10 +450,9 @@ class SessionChatViewModel
                         worktreeMove.onSessionMoved(moved, boundSessionId, boundWorktree)?.let(::rebindMovedSession)
                         return@collect
                     }
-                    if (event.type != "worktree.updated") return@collect
+                    if (!event.isWorktreeUpdated) return@collect
                     val projectId = event.namedProjectId() ?: return@collect
-                    if (projectId !in checkoutProjectIds) return@collect
-                    boundWorktree?.let { scheduleProjectIdentityRefine(it) }
+                    projectHeader.onWorktreeUpdated(projectId)
                 }
             }
             viewModelScope.launch {
@@ -466,7 +486,7 @@ class SessionChatViewModel
                     )
                     if (infoState.hasResolvedSessionStatus) {
                         repoStrip.updateTurnActive(isTurnActive)
-                        updateChipTimelineIntroTurnActive(isTurnActive)
+                        timelineOffers.updateTurnActive(isTurnActive)
                     }
                     commands.updateVisibility(
                         messages = timelineState.messages,
@@ -476,7 +496,7 @@ class SessionChatViewModel
                         messages = timeline.loadedMessages(),
                         isSessionBusy = infoState.sessionStatusLabel != null,
                     )
-                    observeTimelineStylePickerLoad(timelineState.timeline)
+                    timelineOffers.observeTimelineLoad(timelineState.timeline)
                     shellMessages.value = timeline.loadedMessages()
                     publishUiState(
                         timelineState,
@@ -498,13 +518,23 @@ class SessionChatViewModel
                 shells.state.collect { publishUiState() }
             }
             viewModelScope.launch {
-                combine(
-                    worktreeMove.state,
-                    homeProjectsSnapshot.projects,
-                    snapshotFlow { HomeDisplayPreferences.showsWorktrees },
-                    worktreeCreate.state,
-                    worktreeRepository.canCreate,
-                ) { _, _, _, _, _ -> }.collect { publishUiState() }
+                goal.state.collect { publishUiState() }
+            }
+            viewModelScope.launch {
+                worktreeMove.changes.collect { publishUiState() }
+            }
+            viewModelScope.launch {
+                // The draft's Worktree sheet shows running sessions per worktree.
+                newSessionDraft.runningSessions.collect { if (newSessionDraft.isActive) publishUiState() }
+            }
+            viewModelScope.launch {
+                composer.state.collect { newSessionDraft.syncFromComposer() }
+            }
+            viewModelScope.launch {
+                // A project the draft added shows up once Home lists it.
+                homeProjectsSnapshot.projects.collect {
+                    if (newSessionDraft.onProjectsChanged { moved -> bindDraftDirectory(moved) }) publishUiState()
+                }
             }
             viewModelScope.launch {
                 snapshotFlow { SessionChatDisplayPreferences.collapseConsecutiveToolCalls }
@@ -536,7 +566,7 @@ class SessionChatViewModel
             worktree: String,
         ) {
             if (OptimisticSessionCreate.isPlaceholder(sessionId)) {
-                bindOptimisticCreate(sessionTitle, worktree)
+                bindNewSessionDraft(sessionTitle, worktree)
                 return
             }
             if (boundSessionId == sessionId && routeWorktree == worktree) {
@@ -561,19 +591,15 @@ class SessionChatViewModel
             snackbarSequence = 0L
             turnDiffNotice = null
             branchCopiedNotice = null
-            expandedStepParagraphs = emptyMap()
-            unfoldedStepRails = emptySet()
-            imageViewer.dismiss()
-            resetActivityCards()
-            resetBackgroundWorkSeen()
-            resetChipTimelineIntro()
-            resetWorkingFooter()
+            timeline.resetPresentation()
+            timelineOffers.reset()
+            turnStatus.reset()
             worktreeMove.reset()
-            worktreeCreate.dismiss()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             // A new session starts from no messages, so no shell carries over from the last one.
             shellMessages.value = emptyList()
-            seedProjectIdentity(worktree)
+            projectHeader.seed(worktree)
+            val projectIdentity = projectHeader.identity
             _uiState.value =
                 SessionChatUiState.initial(sessionId = sessionId, sessionTitle = sessionTitle).copy(
                     projectLabel = projectIdentity.label,
@@ -581,7 +607,7 @@ class SessionChatViewModel
                     projectLetterAccent = projectIdentity.accent,
                     worktreeCheckout = projectIdentity.isWorktreeCheckout,
                 )
-            scheduleProjectIdentityRefine(worktree)
+            projectHeader.refine(worktree)
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
             bindTitleIfChanged(sessionId, sessionTitle, worktree)
@@ -591,6 +617,7 @@ class SessionChatViewModel
             inbox.bind(sessionId, worktree)
             sideQuestions.bind(sessionId)
             bindShells(sessionId, worktree)
+            goal.bind(sessionId, worktree)
             syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
@@ -610,9 +637,11 @@ class SessionChatViewModel
             sessionViewReporter.focus(sessionId)
             bindTitleIfChanged(sessionId, sessionTitle, worktree)
             // Peers may have changed while the screen was away; re-resolve smart label.
-            scheduleProjectIdentityRefine(worktree)
+            projectHeader.refine(worktree)
             timeline.restartLiveObservation()
             sideQuestions.bind(sessionId)
+            // Goal changes while the screen was away were missed.
+            goal.refresh()
             syncCoordinator.markFocused(ProjectionKey.Transcript(transcriptWorktree ?: worktree, sessionId))
         }
 
@@ -628,124 +657,107 @@ class SessionChatViewModel
             logI("session moved session=$sessionId from=$previous to=$directory")
             boundWorktree = directory
             sessionReadyStore.setFocusedSession(sessionId, directory)
-            seedProjectIdentity(directory)
-            scheduleProjectIdentityRefine(directory)
+            projectHeader.seed(directory)
+            projectHeader.refine(directory)
             composer.moveDirectory(directory)
             sessionInfo.moveDirectory(directory)
             commands.moveDirectory(directory)
             inbox.moveDirectory(directory)
             bindShells(sessionId, directory)
-            val knownBranch =
-                homeProjectsSnapshot
-                    .projectContaining(directory)
-                    ?.worktree(ServerPathPolicy.canonical(directory))
-                    ?.branch
-            repoStrip.moveTo(directory, knownBranch)
+            goal.moveDirectory(directory)
+            repoStrip.moveTo(directory, worktreeMove.knownBranch(directory))
             publishUiState()
         }
 
-        private fun bindOptimisticCreate(
+        /**
+         * New session (#1004): the profile's draft, or a fresh one at [worktree]. Nothing is created
+         * on the server until the first send. A route that binds again (or after the first send
+         * promoted this screen to the created session) changes nothing.
+         */
+        private fun bindNewSessionDraft(
             sessionTitle: String,
             worktree: String,
         ) {
-            if ((boundWorktree == worktree || routeWorktree == worktree) && boundSessionId != null) {
-                return
-            }
-            optimisticCreateJob?.cancel()
-            boundSessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
+            if (routeWorktree == worktree && boundSessionId != null) return
+            val draft = newSessionDraft.claim(worktree)
             boundSessionTitle = sessionTitle
-            boundWorktree = worktree
             routeWorktree = worktree
-            transcriptWorktree = worktree
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             turnDiffNotice = null
             branchCopiedNotice = null
-            expandedStepParagraphs = emptyMap()
-            unfoldedStepRails = emptySet()
-            imageViewer.dismiss()
-            resetActivityCards()
-            resetBackgroundWorkSeen()
-            resetChipTimelineIntro()
-            resetWorkingFooter()
+            timeline.resetPresentation()
+            timelineOffers.reset()
+            turnStatus.reset()
             worktreeMove.reset()
-            worktreeCreate.dismiss()
-            logI("bind optimistic create worktree=$worktree title=$sessionTitle")
-            seedProjectIdentity(worktree)
+            newSessionDraft.resetForBind()
+            shellMessages.value = emptyList()
+            logI("bind new session draft directory=${draft.directory}")
             _uiState.value =
-                SessionChatUiState
-                    .initial(
-                        sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                        sessionTitle = sessionTitle,
-                        timeline = SessionChatTimelineState.Creating,
-                    ).copy(
-                        projectLabel = projectIdentity.label,
-                        projectLetter = projectIdentity.letter,
-                        projectLetterAccent = projectIdentity.accent,
-                        worktreeCheckout = projectIdentity.isWorktreeCheckout,
-                    )
-            scheduleProjectIdentityRefine(worktree)
-            timeline.bindCreating(worktree)
-            composer.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
-            sessionInfo.bindCreating(sessionTitle, worktree)
-            reviewChanges.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
-            repoStrip.bind(worktree, startExpanded = true)
-            commands.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
-            shells.reset()
-            optimisticCreateJob =
-                viewModelScope.launch {
-                    runCatching {
-                        withContext(ioDispatcher) {
-                            val profile = connectionSessionCoordinator.currentProfile()
-                            val session = sessionRepository.createSession(directory = worktree)
-                            val selection = profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
-                            if (profile != null && selection != null) {
-                                newSessionModelSelectionResolver.seedSession(profile, worktree, session.id, selection)
-                            }
-                            session
-                        }
-                    }.onSuccess { session ->
-                        logI("optimistic create success id=${session.id}")
-                        promoteOptimisticSession(session.id, session.title, worktree)
-                    }.onFailure { error ->
-                        if (error is CancellationException) throw error
-                        logI("optimistic create failed error=${error.message}")
-                        timeline.showCreateFailed(createSessionErrorMessage(error))
-                    }
-                }
+                SessionChatUiState.initial(
+                    sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+                    sessionTitle = sessionTitle,
+                    timeline = SessionChatTimelineState.Draft,
+                )
+            newSessionDraft.adopt(draft)
+            bindDraftDirectory(draft, force = true)
+            publishUiState()
         }
 
-        private fun createSessionErrorMessage(error: Throwable): String =
-            when (error) {
-                is SessionError.Http -> error.message ?: "Unable to create session"
-                is SessionError.Transport -> "Unable to reach the server"
-                is SessionError.Decoding -> "Unable to read server response"
-                else -> error.message ?: "Unable to create session"
+        /** Binds the regions to [draft]'s checkout (models, commands and files come from there). */
+        private fun bindDraftDirectory(
+            draft: NewSessionDraft,
+            force: Boolean = false,
+        ) {
+            val directory = draft.directory
+            if (!force && boundWorktree == directory) return
+            boundSessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
+            boundWorktree = directory
+            transcriptWorktree = directory
+            newSessionDraft.withSyncPaused {
+                timeline.bindDraft(directory)
+                composer.bindDraft(directory, draft.composer, draft.attachments, draft.modelSelection)
+                sessionInfo.bindDraft(boundSessionTitle.orEmpty(), directory)
+                reviewChanges.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, directory)
+                commands.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, directory)
+                shells.reset()
+                goal.reset()
             }
+            viewModelScope.launch { composer.loadCatalog() }
+        }
 
-        private fun promoteOptimisticSession(
+        /**
+         * The draft's first send created session [sessionId] in [directory]: this screen becomes
+         * that session, as if it had been opened from Home, and the draft is done.
+         */
+        private fun promoteNewSessionDraft(
             sessionId: String,
             sessionTitle: String,
-            worktree: String,
+            directory: String,
         ) {
+            newSessionDraft.release()
             boundSessionId = sessionId
             boundSessionTitle = sessionTitle
-            resetWorkingFooter()
-            sessionReadyStore.setFocusedSession(sessionId, worktree)
+            boundWorktree = directory
+            transcriptWorktree = directory
+            turnStatus.resetFooter()
+            sessionReadyStore.setFocusedSession(sessionId, directory)
             sessionViewReporter.focus(sessionId)
-            timeline.bind(sessionId, worktree)
-            composer.bind(sessionId, worktree)
-            sessionInfo.bind(sessionId, sessionTitle, worktree)
-            reviewChanges.bind(sessionId, worktree)
-            commands.bind(sessionId, worktree)
-            inbox.bind(sessionId, worktree)
+            projectHeader.seed(directory)
+            projectHeader.refine(directory)
+            timeline.bind(sessionId, directory)
+            composer.adoptCreatedSession(sessionId, directory)
+            sessionInfo.bind(sessionId, sessionTitle, directory)
+            reviewChanges.bind(sessionId, directory)
+            repoStrip.bind(directory, startExpanded = false)
+            commands.bind(sessionId, directory)
+            inbox.bind(sessionId, directory)
             sideQuestions.bind(sessionId)
-            bindShells(sessionId, worktree)
-            syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
-            viewModelScope.launch {
-                composer.loadCatalog()
-            }
+            bindShells(sessionId, directory)
+            goal.bind(sessionId, directory)
+            syncCoordinator.markFocused(ProjectionKey.Transcript(directory, sessionId))
+            publishUiState()
         }
 
         private fun bindShells(
@@ -768,14 +780,35 @@ class SessionChatViewModel
          * shows, every finished row counts as seen and the tab's dot clears.
          */
         fun setBackgroundWorkDoneVisible(visible: Boolean) {
-            if (backgroundWorkDoneVisible == visible) return
-            backgroundWorkDoneVisible = visible
-            if (visible) publishUiState()
+            if (turnStatus.setDoneVisible(visible)) publishUiState()
         }
 
-        private fun resetBackgroundWorkSeen() {
-            seenDoneSubagentIds = null
-            backgroundWorkDoneVisible = false
+        // Goal (#1007): the goal pill, sheet and status row.
+
+        fun openGoalSheet() {
+            goal.openSheet()
+        }
+
+        fun closeGoalSheet() {
+            goal.closeSheet()
+        }
+
+        fun toggleGoalObjective() {
+            goal.toggleObjective()
+        }
+
+        /** Pause, Resume or Clear: sends the goal command; progress shows until the goal changes. */
+        fun sendGoalAction(action: SessionGoalAction) {
+            goal.send(action)
+        }
+
+        /** New goal…: the composer starts a `/goal ` command, keeping any draft as the objective. */
+        fun startNewGoal() {
+            goal.closeSheet()
+            val draft = composer.state.value.composer.text
+            val command = "/${SessionGoalLimits.COMMAND} "
+            val text = if (SessionGoalDraft.objective(draft) != null) draft else command + draft.trimStart()
+            updateComposerText(text, cursor = text.length)
         }
 
         fun closeShellOutput() {
@@ -812,7 +845,7 @@ class SessionChatViewModel
         fun clearSessionReadyFocus() {
             // Only release our own focus: the next Session Chat (child, parent, fork) may
             // already have focused itself before this screen leaves composition.
-            boundSessionId?.let {
+            boundSessionId?.takeIf { hasCreatedSession() }?.let {
                 sessionReadyStore.releaseFocusedSession(it)
                 sessionViewReporter.release(it)
             }
@@ -822,15 +855,10 @@ class SessionChatViewModel
             timeline.loadMessages()
         }
 
-        /** Error-state Retry. Create failures start the session again. Load failures refetch the timeline. */
+        /** Error-state Retry: refetches the timeline. */
         fun retryFailedTimeline() {
             val sessionId = boundSessionId
-            if (sessionId == null || OptimisticSessionCreate.isPlaceholder(sessionId)) {
-                val worktree = boundWorktree ?: return
-                boundSessionId = null
-                bindOptimisticCreate(boundSessionTitle.orEmpty(), worktree)
-                return
-            }
+            if (sessionId == null || OptimisticSessionCreate.isPlaceholder(sessionId)) return
             loadMessages()
         }
 
@@ -842,9 +870,7 @@ class SessionChatViewModel
             expansionId: String,
             chipCount: Int,
         ) {
-            if ((expandedStepParagraphs[expansionId] ?: -1) >= chipCount) return
-            expandedStepParagraphs = expandedStepParagraphs + (expansionId to chipCount)
-            _uiState.value = _uiState.value.copy(expandedStepParagraphs = expandedStepParagraphs)
+            timeline.expandStepParagraph(expansionId, chipCount)
         }
 
         fun refreshMessages() {
@@ -934,7 +960,9 @@ class SessionChatViewModel
             sideQuestions.dismissFailed()
         }
 
-        private fun supportsSideQuestion(): Boolean = activeConnectionManager.currentCapabilities().supportsSideQuestion
+        /** A draft has no session to ask about. */
+        private fun supportsSideQuestion(): Boolean =
+            !newSessionDraft.isActive && activeConnectionManager.currentCapabilities().supportsSideQuestion
 
         /** Session Chat left the screen: the open answer was read; requests keep running. */
         fun leaveSideQuestions() {
@@ -979,15 +1007,7 @@ class SessionChatViewModel
             languageLabel: String,
             onDevice: Boolean,
         ) {
-            invalidateDictationInsert()
-            dictation =
-                ComposerDictationUiState(
-                    phase = ComposerDictationPhase.Listening,
-                    languageLabel = languageLabel,
-                    onDevice = onDevice,
-                    startedAtEpochMs = nowMs(),
-                )
-            publishUiState()
+            dictation.begin(languageLabel, onDevice)
         }
 
         fun beginDictationUnavailable(
@@ -995,19 +1015,7 @@ class SessionChatViewModel
             message: String? = null,
             languageLabel: String = "",
         ) {
-            if (!phase.isUnavailable) return
-            // A recognizer error can arrive after Insert has already been confirmed.
-            // Dropping the card here would cancel the splice.
-            if (dictation?.phase == ComposerDictationPhase.Finishing) return
-            invalidateDictationInsert()
-            dictation =
-                ComposerDictationUiState(
-                    phase = phase,
-                    languageLabel = languageLabel,
-                    startedAtEpochMs = nowMs(),
-                    errorMessage = message,
-                )
-            publishUiState()
+            dictation.beginUnavailable(phase, message, languageLabel)
         }
 
         /** Applies a model download update only while the card still shows the model. */
@@ -1015,79 +1023,43 @@ class SessionChatViewModel
             phase: ComposerDictationPhase,
             progress: Float? = null,
         ) {
-            val current = dictation ?: return
-            if (!phase.isModelPhase || !current.phase.isModelPhase) return
-            dictation = current.copy(phase = phase, downloadProgress = progress)
-            publishUiState()
+            dictation.modelDownload(phase, progress)
         }
 
         fun dictationPartial(
             committed: String,
             volatile: String,
         ) {
-            val current = dictation ?: return
-            if (current.phase != ComposerDictationPhase.Listening) return
-            dictation = current.copy(committed = committed, volatile = volatile)
-            publishUiState()
+            dictation.partial(committed, volatile)
         }
 
         fun dictationLevel(level: Float) {
-            val current = dictation ?: return
-            if (current.phase != ComposerDictationPhase.Listening) return
-            dictation = current.copy(level = level.coerceIn(0f, 1f))
-            publishUiState()
+            dictation.level(level)
         }
 
         /** Listening ended but the transcript stays on the card so Insert still works. */
         fun dictationStopped() {
-            val current = dictation ?: return
-            if (current.phase != ComposerDictationPhase.Listening) return
-            dictation = current.copy(phase = ComposerDictationPhase.Stopped, level = 0f)
-            publishUiState()
+            dictation.stopped()
         }
 
         fun dictationInsert() {
-            val current = dictation ?: return
-            if (
-                current.phase != ComposerDictationPhase.Listening &&
-                current.phase != ComposerDictationPhase.Stopped &&
-                current.phase != ComposerDictationPhase.Finishing
-            ) {
-                return
-            }
-            val transcript = current.committed + current.volatile
-            if (transcript.trim().isEmpty()) return
-            if (current.phase == ComposerDictationPhase.Finishing) return
-            val generation = ++dictationGeneration
-            dictation = current.copy(phase = ComposerDictationPhase.Finishing)
-            publishUiState()
-            dictationInsertJob?.cancel()
-            dictationInsertJob =
-                viewModelScope.launch {
-                    delay(dictationFinishDelayMs)
-                    if (generation != dictationGeneration) return@launch
-                    val latest = dictation ?: return@launch
-                    if (latest.phase != ComposerDictationPhase.Finishing) return@launch
-                    spliceDictationTranscript(latest.committed + latest.volatile)
-                    dictation = null
-                    publishUiState()
-                }
+            dictation.insert()
         }
 
         fun dictationCancel() {
-            cancelActiveDictation()
+            dictation.cancel()
         }
 
         fun cancelDictationForModeChange() {
-            if (dictation != null) cancelActiveDictation()
+            dictation.cancelIfActive()
         }
 
         fun cancelDictationForBackground() {
-            if (dictation != null) cancelActiveDictation()
+            dictation.cancelIfActive()
         }
 
         fun cancelDictationForDismiss() {
-            if (dictation != null) cancelActiveDictation()
+            dictation.cancelIfActive()
         }
 
         fun selectSlashSuggestion(commandName: String) {
@@ -1113,10 +1085,7 @@ class SessionChatViewModel
         fun attachmentUploadAvailable(): Boolean = attachmentUploads.isAvailable()
 
         /** Bytes of an image that lives on the server, for a timeline preview; null on any failure. */
-        suspend fun loadAttachmentPreview(serverPath: String): ByteArray? {
-            val directory = boundWorktree ?: return null
-            return serverFilePreviews.read(serverPath, directory, ATTACHMENT_PREVIEW_MAX_BYTES)
-        }
+        suspend fun loadAttachmentPreview(serverPath: String): ByteArray? = timeline.loadAttachmentPreview(serverPath)
 
         /**
          * The full picture of timeline image [imageId] in [messageId], fetched from the server
@@ -1230,10 +1199,7 @@ class SessionChatViewModel
                 parameters = mapOf(ProductAnalytics.Param.CLIENT_SLASH to action.name.lowercase()),
             )
             when (action) {
-                ClientSlashAction.New -> {
-                    if (!isConnectionLive()) return
-                    commands.runNew()
-                }
+                ClientSlashAction.New -> commands.runNew(prepareNewSessionDraft())
                 ClientSlashAction.Fork -> {
                     if (!isConnectionLive()) return
                     forkDraftEditReported = false
@@ -1370,75 +1336,33 @@ class SessionChatViewModel
         }
 
         fun dismissMoveToWorktree() {
-            worktreeCreate.dismiss()
             worktreeMove.dismissSheet()
         }
 
         /** Move sheet → "New worktree…": the form, made from the session's current checkout. */
         fun openMoveToNewWorktree() {
-            if (!moveToWorktreeUiState().newWorktree.enabled) return
-            val sessionId = boundSessionId?.takeIf { hasCreatedSession() } ?: return
-            val directory = boundWorktree?.trim()?.takeIf { it.isNotEmpty() }?.let(ServerPathPolicy::canonical) ?: return
-            val project = homeProjectsSnapshot.projectContaining(directory)
-            worktreeCreate.open(
-                origin = WorktreeCreateOrigin.Move(sessionId),
-                protocol = activeConnectionManager.protocolHint(),
-                projectId = project?.projectId,
-                sourceDirectory = directory,
-                sourceBranch = project?.worktree(directory)?.branch,
-            )
+            worktreeMove.openNewWorktreeForm(sessionId = boundSessionId?.takeIf { hasCreatedSession() }, boundWorktree = boundWorktree)
         }
 
-        fun updateNewWorktreeName(name: String) = worktreeCreate.updateName(name)
+        fun updateNewWorktreeName(name: String) = worktreeMove.updateName(name)
 
-        fun showNewWorktreeBasePicker() = worktreeCreate.showBasePicker()
+        fun showNewWorktreeBasePicker() = worktreeMove.showBasePicker()
 
-        fun hideNewWorktreeBasePicker() = worktreeCreate.hideBasePicker()
+        fun hideNewWorktreeBasePicker() = worktreeMove.hideBasePicker()
 
-        fun selectNewWorktreeBase(ref: String?) = worktreeCreate.selectBase(ref)
+        fun selectNewWorktreeBase(ref: String?) = worktreeMove.selectBase(ref)
 
-        fun submitNewWorktree() = worktreeCreate.submit()
+        fun submitNewWorktree() = worktreeMove.submit()
 
         /** Form → Back: the Move sheet's list again. */
-        fun closeNewWorktreeForm() = worktreeCreate.dismiss()
+        fun closeNewWorktreeForm() = worktreeMove.closeForm()
 
         fun moveToWorktree(directory: String) {
             val sessionId = boundSessionId?.takeIf { hasCreatedSession() } ?: return
-            val destination = moveToWorktreeUiState().rows.firstOrNull { it.directory == directory } ?: return
-            worktreeMove.move(sessionId, destination, isBusy = isSessionBusy())
+            worktreeMove.moveToDirectory(sessionId, directory, boundWorktree)
         }
 
-        private fun moveToWorktreeUiState(): SessionChatWorktreeMoveUiState {
-            val project = homeProjectsSnapshot.projectContaining(boundWorktree)
-            val regionState = worktreeMove.state.value
-            val supportsMove = activeConnectionManager.currentCapabilities().supportsSessionMove
-            val worktreesEnabled = HomeDisplayPreferences.showsWorktrees
-            val sessionCreated = hasCreatedSession()
-            val newWorktree =
-                NewWorktreeAvailability.move(
-                    supportsMove = supportsMove,
-                    worktreesEnabled = worktreesEnabled,
-                    sessionCreated = sessionCreated,
-                    isRepository = project?.hasVcs == true,
-                    projectId = project?.projectId,
-                    serverCanCreate = worktreeRepository.canCreate.value,
-                )
-            return SessionChatWorktreeMoveUiState(
-                availability =
-                    SessionChatWorktreeMoveAvailability.resolve(
-                        supportsSessionMove = supportsMove,
-                        worktreesEnabled = worktreesEnabled,
-                        sessionCreated = sessionCreated,
-                        worktreeCount = project?.worktrees?.size ?: 0,
-                        canCreateWorktree = newWorktree.enabled,
-                    ),
-                sheetVisible = regionState.sheetVisible,
-                rows = SessionChatWorktreeMoveRow.rows(project, boundWorktree),
-                submittingDirectory = regionState.submittingDirectory,
-                newWorktree = newWorktree,
-                form = worktreeCreate.state.value?.takeIf { it.origin is WorktreeCreateOrigin.Move },
-            )
-        }
+        private fun moveToWorktreeUiState(): SessionChatWorktreeMoveUiState = worktreeMove.uiState(boundWorktree, hasCreatedSession())
 
         fun consumePendingTerminalOpen() {
             commands.consumePendingTerminalOpen()
@@ -1449,118 +1373,44 @@ class SessionChatViewModel
         }
 
         fun enableChipTimelineFromIntro() {
-            hideChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_ENABLE)
-            SessionChatDisplayPreferences.updateChipTimeline(true)
-            chipTimelineIntroNotice = CHIP_TIMELINE_INTRO_ENABLED_NOTICE
+            if (timelineOffers.enableChipTimeline()) logChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_ENABLE)
             publishUiState()
         }
 
         /** Later button, swipe, scrim, or back. */
         fun postponeChipTimelineIntro() {
-            hideChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_LATER)
-            SessionChatDisplayPreferences.postponeChipTimelineIntro(nowMs())
+            if (timelineOffers.postponeChipTimelineIntro(nowMs())) logChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_LATER)
             publishUiState()
         }
 
         fun dismissChipTimelineIntro() {
-            hideChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_NEVER)
-            SessionChatDisplayPreferences.finishChipTimelineIntro()
+            if (timelineOffers.dismissChipTimelineIntro()) logChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_NEVER)
             publishUiState()
         }
 
         /** Use button of the Timeline Style picker. */
         fun chooseTimelineStyleFromPicker(style: SessionChatTimelineStyle) {
-            if (!timelineStylePickerVisible) return
-            timelineStylePickerVisible = false
+            if (!timelineOffers.chooseTimelineStyle(style)) return
             logAction(
                 ProductAnalytics.Action.TIMELINE_STYLE_PICKER_USE,
                 screenId = ProductAnalytics.Screen.SESSION_TIMELINE_STYLE_PICKER,
                 parameters = mapOf(ProductAnalytics.Param.MODE to style.wireValue),
             )
-            SessionChatDisplayPreferences.updateTimelineStyle(style)
-            chipTimelineIntroNotice = timelineStylePickerNotice(style)
             publishUiState()
         }
 
         /** Timeline Style picker swipe, scrim, back, or close: keeps the recommended Activity Card. */
         fun dismissTimelineStylePicker() {
-            if (!timelineStylePickerVisible) return
-            timelineStylePickerVisible = false
+            if (!timelineOffers.dismissTimelineStylePicker()) return
             logAction(
                 ProductAnalytics.Action.TIMELINE_STYLE_PICKER_DISMISS,
                 screenId = ProductAnalytics.Screen.SESSION_TIMELINE_STYLE_PICKER,
             )
-            SessionChatDisplayPreferences.dismissTimelineStylePicker()
-            chipTimelineIntroNotice = timelineStylePickerNotice(SessionChatTimelineStyle.ActivityCard)
             publishUiState()
         }
 
-        /**
-         * The first settled history load decides the picker for this ViewModel: messages on
-         * screen schedule it; a new or empty session skips it. A failed load waits for a retry.
-         */
-        private fun observeTimelineStylePickerLoad(state: SessionChatTimelineState) {
-            if (timelineStylePickerChecked) return
-            when (state) {
-                SessionChatTimelineState.Loading, SessionChatTimelineState.Error -> return
-                SessionChatTimelineState.Creating, SessionChatTimelineState.Empty -> {
-                    timelineStylePickerChecked = true
-                    return
-                }
-                SessionChatTimelineState.Ready -> timelineStylePickerChecked = true
-            }
-            if (!SessionChatDisplayPreferences.timelineStylePickerPending) return
-            timelineStylePickerJob?.cancel()
-            timelineStylePickerJob =
-                viewModelScope.launch {
-                    delay(TIMELINE_STYLE_PICKER_DELAY_MILLIS)
-                    if (!SessionChatDisplayPreferences.timelineStylePickerPending) return@launch
-                    // Blocked: skip for this ViewModel; the next session open offers it again.
-                    if (chipTimelineIntroVisible || _uiState.value.blocksChipTimelineIntro()) return@launch
-                    timelineStylePickerOptions =
-                        SessionChatTimelineStyleOption.pickerOptions(
-                            available = SessionChatDisplayPreferences.availableTimelineStyles,
-                            current = SessionChatDisplayPreferences.timelineStyle,
-                        )
-                    timelineStylePickerVisible = true
-                    publishUiState()
-                }
-        }
-
-        private fun hideChipTimelineIntro(actionId: String) {
-            if (!chipTimelineIntroVisible) return
-            chipTimelineIntroVisible = false
+        private fun logChipTimelineIntro(actionId: String) {
             logAction(actionId, screenId = ProductAnalytics.Screen.SESSION_CHIP_TIMELINE_INTRO)
-        }
-
-        private fun resetChipTimelineIntro() {
-            chipTimelineIntroJob?.cancel()
-            chipTimelineIntroJob = null
-            chipTimelineIntroVisible = false
-            chipTimelineIntroNotice = null
-            chipTimelineIntroTurnActive = null
-        }
-
-        /** Offers the intro once a long turn goes busy → idle and stays settled. */
-        private fun updateChipTimelineIntroTurnActive(isTurnActive: Boolean) {
-            val previous = chipTimelineIntroTurnActive
-            chipTimelineIntroTurnActive = isTurnActive
-            if (isTurnActive) {
-                chipTimelineIntroJob?.cancel()
-                return
-            }
-            if (previous != true || chipTimelineIntroVisible) return
-            val toolCalls = ChipTimelineIntro.lastTurnToolCalls(timeline.loadedMessages())
-            if (!SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(toolCalls, nowMs())) return
-            chipTimelineIntroJob?.cancel()
-            chipTimelineIntroJob =
-                viewModelScope.launch {
-                    delay(ChipTimelineIntro.SETTLE_DELAY_MILLIS)
-                    if (isSessionBusy() || _uiState.value.blocksChipTimelineIntro()) return@launch
-                    if (!SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(toolCalls, nowMs())) return@launch
-                    chipTimelineIntroVisible = true
-                    publishUiState()
-                }
         }
 
         /** The last turn moved folders, so its combined diff cannot be shown. Stay on this screen. */
@@ -1583,11 +1433,13 @@ class SessionChatViewModel
         fun consumeSnackbar() {
             logAction(ProductAnalytics.Action.CHAT_DISMISS_SNACKBAR)
             suppressedSnackbarKey = lastSnackbarKey
+            newSessionDraft.clearSendError()
             turnDiffNotice = null
             branchCopiedNotice = null
-            chipTimelineIntroNotice = null
+            timelineOffers.clearNotices()
             commands.clearActionFeedback()
             sideQuestions.clearNotice()
+            goal.clearNotice()
             worktreeMove.clearMessages()
             composer.clearTransientErrors()
             sessionInfo.clearTransientErrors()
@@ -1642,35 +1494,15 @@ class SessionChatViewModel
         }
 
         fun steerPendingPrompt(id: String) {
-            runPendingPromptAction(
-                actionId = ProductAnalytics.Action.CHAT_STEER_PENDING_PROMPT,
-                inboxId = id,
-                optimistic = { timeline.applyOptimisticPendingPrompt(id, FollowUpDelivery.Steer) },
-            ) { sessionId, worktree ->
-                sessionRepository.steerPendingPrompt(sessionId, id, worktree)
-            }
+            runPendingPromptAction(ProductAnalytics.Action.CHAT_STEER_PENDING_PROMPT, SessionChatPendingPromptAction.Steer, id)
         }
 
         fun queuePendingPrompt(id: String) {
-            runPendingPromptAction(
-                actionId = ProductAnalytics.Action.CHAT_QUEUE_PENDING_PROMPT,
-                inboxId = id,
-                optimistic = { timeline.applyOptimisticPendingPrompt(id, FollowUpDelivery.Queue) },
-            ) { sessionId, worktree ->
-                sessionRepository.queuePendingPrompt(sessionId, id, worktree)
-            }
+            runPendingPromptAction(ProductAnalytics.Action.CHAT_QUEUE_PENDING_PROMPT, SessionChatPendingPromptAction.Queue, id)
         }
 
         fun cancelPendingPrompt(id: String) {
-            runPendingPromptAction(
-                actionId = ProductAnalytics.Action.CHAT_CANCEL_PENDING_PROMPT,
-                inboxId = id,
-                optimistic = {
-                    timeline.applyOptimisticPendingPrompt(id, removed = true)
-                },
-            ) { sessionId, worktree ->
-                sessionRepository.cancelPendingPrompt(sessionId, id, worktree)
-            }
+            runPendingPromptAction(ProductAnalytics.Action.CHAT_CANCEL_PENDING_PROMPT, SessionChatPendingPromptAction.Cancel, id)
         }
 
         fun clearPendingPrompts() {
@@ -1682,43 +1514,31 @@ class SessionChatViewModel
 
         private fun runPendingPromptAction(
             actionId: String,
+            action: SessionChatPendingPromptAction,
             inboxId: String,
-            optimistic: () -> Unit,
-            call: suspend (sessionId: String, worktree: String) -> Boolean,
         ) {
             if (!activeConnectionManager.currentCapabilities().supportsFollowUpDelivery) return
             logAction(actionId)
-            val sessionId = boundSessionId ?: return
-            val worktree = boundWorktree ?: return
-            viewModelScope.launch {
-                runCatching {
-                    withContext(ioDispatcher) { call(sessionId, worktree) }
-                }.onSuccess { ok ->
-                    if (ok) {
-                        optimistic()
-                    } else {
-                        commands.reportActionError(UiText.resource(R.string.session_chat_pending_prompt_update_failed))
-                    }
-                }.onFailure { error ->
-                    if (error is CancellationException) throw error
-                    DiagnosticLog.warning(
-                        DiagnosticLogArea.Chat,
-                        "pending prompt $actionId failed id=$inboxId",
-                        error,
-                    )
-                    commands.reportActionError(UiText.resource(R.string.session_chat_pending_prompt_update_failed))
-                }
-            }
+            turnStatus.updatePendingPrompt(action, inboxId, logLabel = actionId, sessionId = boundSessionId, worktree = boundWorktree)
         }
 
         fun sendPrompt() {
-            if (!hasCreatedSession()) return
+            if (newSessionDraft.isActive) {
+                sendNewSessionDraft()
+                return
+            }
+            sendToBoundSession()
+        }
+
+        /** Sends the composer to the bound session; false when nothing was sent. */
+        private fun sendToBoundSession(): Boolean {
+            if (!hasCreatedSession()) return false
             // A side question never becomes a prompt, including a typed `/btw` this server cannot answer.
             if (sideQuestions.state.value.ui.composerMode ||
                 SideQuestion.questionInDraft(composer.state.value.composer.text) != null
             ) {
                 if (sessionInfo.state.value.composerEnabled) askSideQuestion()
-                return
+                return false
             }
             val composerState = composer.state.value.composer
             logAction(
@@ -1729,20 +1549,20 @@ class SessionChatViewModel
                         ProductAnalytics.Param.MODE to composerState.selectedMode,
                     ),
             )
-            if (!sessionInfo.state.value.composerEnabled) return
-            if (pendingSend != null || composer.state.value.isSending) return
+            if (!sessionInfo.state.value.composerEnabled) return false
+            if (pendingSend != null || composer.state.value.isSending) return false
             if (inbox.state.value.permissionRequests
                     .isNotEmpty() ||
                 inbox.state.value.questionRequests
                     .isNotEmpty()
             ) {
-                return
+                return false
             }
-            val sessionId = boundSessionId ?: return
-            val worktree = boundWorktree ?: return
+            val sessionId = boundSessionId ?: return false
+            val worktree = boundWorktree ?: return false
             val shouldQueue = !sessionInfo.state.value.canMutate
             val capabilities = activeConnectionManager.currentCapabilities()
-            composer.sendPrompt(
+            return composer.sendPrompt(
                 sessionId = sessionId,
                 worktree = worktree,
                 isSessionBusy = sessionInfo.state.value.sessionStatusLabel != null,
@@ -1756,6 +1576,8 @@ class SessionChatViewModel
                     }
                 },
                 onOptimisticRows = { rows ->
+                    // A draft's first prompt shows: the draft's sending state hands over to the send's.
+                    newSessionDraft.endCreating()
                     armSendAcceptance()
                     if (shouldQueue) {
                         pendingSend = PendingSend(queuedAtMs = System.currentTimeMillis())
@@ -1775,6 +1597,7 @@ class SessionChatViewModel
                     publishUiState()
                 },
                 onSendFailed = { optimisticId, error ->
+                    newSessionDraft.endCreating()
                     armedSendAcceptance = null
                     pendingSend = null
                     // Server and transport errors stay the timeline error; app text goes to the snackbar.
@@ -1785,6 +1608,157 @@ class SessionChatViewModel
                 serverAlreadyAccepted = ::serverAlreadyAccepted,
                 beforePrompt = { commands.commitPendingRevert(sessionId, worktree) },
             )
+        }
+
+        // New session draft (#1004): the Run session in card, its sheets, and the first send.
+
+        /** Card → Project row. */
+        fun openNewSessionProjectSheet() {
+            if (newSessionDraft.openProjectSheet()) publishUiState()
+        }
+
+        /** Card → Worktree row; a project that is not a Git repository has none to pick. */
+        fun openNewSessionWorktreeSheet() {
+            if (newSessionDraft.openWorktreeSheet()) publishUiState()
+        }
+
+        /** Card → Starts from row (a new worktree on v2). */
+        fun openNewSessionBaseBranchSheet() {
+            if (newSessionDraft.openBaseBranchSheet()) publishUiState()
+        }
+
+        fun dismissNewSessionSheet() {
+            if (newSessionDraft.dismissSheet()) publishUiState()
+        }
+
+        fun updateNewSessionProjectQuery(query: String) {
+            newSessionDraft.updateProjectQuery(query)
+            publishUiState()
+        }
+
+        /** Project sheet → a project: it runs on that project's main checkout. */
+        fun selectNewSessionProject(projectKey: String) {
+            if (newSessionDraft.selectProject(projectKey) { moved -> bindDraftDirectory(moved) }) publishUiState()
+        }
+
+        /** Worktree sheet → Local, New worktree, or an existing worktree. */
+        fun selectNewSessionPlace(place: NewSessionPlace) {
+            if (newSessionDraft.selectPlace(place) { moved -> bindDraftDirectory(moved) }) publishUiState()
+        }
+
+        /** Starts from sheet → a branch; null (or the main checkout's own branch) is the default. */
+        fun selectNewSessionBaseBranch(ref: String?) {
+            if (newSessionDraft.selectBaseBranch(ref)) publishUiState()
+        }
+
+        /** Project sheet → Add project…: the project Home's Add project flow adds becomes the draft's. */
+        /** Project sheet → Add project…: the Add project sheet opens over the draft (#1021). */
+        fun requestNewSessionAddProject() {
+            if (!newSessionDraft.beginAddProject()) return
+            newSessionDraft.syncFromComposer()
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                actionId = ProductAnalytics.Action.HOME_ADD_PROJECT,
+            )
+            addProject.open()
+            publishUiState()
+        }
+
+        fun dismissNewSessionAddProject() {
+            if (addProject.session == null) return
+            addProject.end()
+            publishUiState()
+        }
+
+        fun updateNewSessionAddProjectField(text: String) = addProject.updateField(text)
+
+        fun newSessionAddProjectUp() = addProject.up()
+
+        fun selectNewSessionAddProjectRoot(path: String) = addProject.selectRoot(path)
+
+        fun openNewSessionAddProjectFolder(path: String) = addProject.openFolder(path)
+
+        fun submitNewSessionAddProjectField() = addProject.submitField()
+
+        fun newSessionAddProjectFolderRowAppeared(path: String) = addProject.rowAppeared(path)
+
+        fun newSessionAddProjectFolderRowDisappeared(path: String) = addProject.rowDisappeared(path)
+
+        fun browseNewSessionAddProjectFolders() = addProject.browseFolders()
+
+        fun closeNewSessionAddProjectBrowser() = addProject.backFromBrowser()
+
+        fun retryNewSessionAddProjectListing() = addProject.retry()
+
+        fun selectNewSessionAddProjectSuggestion(path: String) {
+            addProject.suggestionToAdd(path)?.let(::addNewSessionProject)
+        }
+
+        fun confirmNewSessionAddProject() {
+            addProject.confirmTarget()?.let(::addNewSessionProject)
+        }
+
+        /** Saves [worktree] to the Connection Profile, asks Home to list it, and runs the draft there. */
+        private fun addNewSessionProject(worktree: String) {
+            viewModelScope.launch {
+                when (val result = addProject.add(worktree) { }) {
+                    AddProjectResult.Failed -> return@launch
+                    AddProjectResult.AlreadyAdded -> Unit
+                    is AddProjectResult.Added -> homeProjects.requestProjectAdded(HomeProjectAdded(worktree, result.resolution))
+                }
+                addProject.end()
+                newSessionDraft.adoptAddedProject(worktree) { moved -> bindDraftDirectory(moved) }
+                publishUiState()
+            }
+        }
+
+        /** ⋯ → Discard draft: the draft is gone; the screen goes back. */
+        fun discardNewSessionDraft() {
+            if (newSessionDraft.discard()) publishUiState()
+        }
+
+        /**
+         * Ctrl+N or `/new` from a session: the profile's draft (it wins), else a fresh one in this
+         * session's place. Returns the draft's checkout, which the route names.
+         */
+        fun prepareNewSessionDraft(): String = newSessionDraft.prepare(boundWorktree.orEmpty())
+
+        /**
+         * The draft's first send: creates the new worktree (if chosen), then the session in its
+         * checkout, then sends the prompt through the normal path. A failure keeps the draft and
+         * shows the error with Retry; what was already created is reused on the next try.
+         */
+        private fun sendNewSessionDraft() {
+            if (!newSessionDraft.isActive || newSessionDraft.isCreating) return
+            val composerState = composer.state.value.composer
+            if (!composerState.canSend || composerState.selectedModel == null || !composerState.isModelSelectionReady) return
+            if (!sessionInfo.state.value.composerEnabled) return
+            newSessionDraft.syncFromComposer()
+            newSessionDraft.beginCreate()
+            publishUiState()
+            val job =
+                viewModelScope.launch {
+                    val created =
+                        try {
+                            newSessionDraft.create()
+                        } catch (cancellation: CancellationException) {
+                            throw cancellation
+                        } catch (error: Throwable) {
+                            logI("new session draft create failed error=${error.message}")
+                            newSessionDraft.failCreate(error)
+                            publishUiState()
+                            return@launch
+                        }
+                    logI("new session draft created session=${created.id}")
+                    val shellCommand = ComposerShellCommand.isShellMode(composer.state.value.composer.text)
+                    promoteNewSessionDraft(created.id, created.title, created.directory)
+                    // The prompt's own sending state takes over once its row shows.
+                    if (!sendToBoundSession() || shellCommand) {
+                        newSessionDraft.endCreating()
+                        publishUiState()
+                    }
+                }
+            newSessionDraft.trackSubmit(job)
         }
 
         private fun armSendAcceptance() {
@@ -1907,6 +1881,42 @@ class SessionChatViewModel
             inbox.denyPermission(requestId, sessionId)
         }
 
+        /** "Deny with a note…": swaps the permission prompt for the note step. */
+        fun openPermissionNote(
+            requestId: String,
+            sessionId: String,
+        ) {
+            logAction(actionId = ProductAnalytics.Action.PERMISSION_NOTE_OPEN)
+            inbox.openPermissionNote(requestId, sessionId)
+        }
+
+        fun updatePermissionNote(
+            requestId: String,
+            text: String,
+        ) {
+            inbox.updatePermissionNote(requestId, text)
+        }
+
+        /** Leaves the note step for the permission prompt without answering. */
+        fun cancelPermissionNote(requestId: String) {
+            logAction(actionId = ProductAnalytics.Action.PERMISSION_NOTE_CANCEL)
+            inbox.cancelPermissionNote(requestId)
+        }
+
+        /** Denies the permission request with the trimmed note; ignored while the note is blank. */
+        fun sendPermissionNote(
+            requestId: String,
+            sessionId: String,
+        ) {
+            val note = inbox.state.value.visiblePermissionNote
+            if (note == null || note.requestId != requestId || note.trimmedText.isEmpty()) return
+            logAction(
+                actionId = ProductAnalytics.Action.PERMISSION_DENY,
+                parameters = mapOf(ProductAnalytics.Param.PERMISSION_DECISION to "deny_with_note"),
+            )
+            inbox.sendPermissionNote(requestId, sessionId)
+        }
+
         fun toggleQuestionOption(
             requestId: String,
             sessionId: String,
@@ -2012,111 +2022,6 @@ class SessionChatViewModel
             )
         }
 
-        /** Connection key Home records worktree inventories under. */
-        private fun inventoryServerKey(): String = activeConnectionManager.current()?.baseUrl.orEmpty()
-
-        /** Identity from the inventories Home (or an earlier Session Chat) loaded; null when unknown. */
-        private fun cachedProjectIdentity(worktree: String): SessionChatProjectIdentity? {
-            val snapshot = worktreeInventoryCache.snapshot(inventoryServerKey()) ?: return null
-            return SessionChatProjectIdentity.resolve(worktree, snapshot.addedPaths, snapshot::inventoryFor)
-        }
-
-        /**
-         * What Home already loaded decides the identity before the first frame; the refine only
-         * changes it when the server now answers differently.
-         */
-        private fun seedProjectIdentity(worktree: String) {
-            projectIdentityJob?.cancel()
-            checkoutProjectIds.clear()
-            projectIdentity =
-                if (worktree.isBlank()) {
-                    SessionChatProjectIdentity.None
-                } else {
-                    cachedProjectIdentity(worktree) ?: SessionChatProjectIdentity.folder(worktree)
-                }
-        }
-
-        private fun applyProjectIdentity(identity: SessionChatProjectIdentity) {
-            if (identity == projectIdentity) return
-            projectIdentity = identity
-            publishUiState()
-        }
-
-        /**
-         * Re-resolves the identity from the server. Keeps the identity on screen until the answer
-         * lands, so an agreeing answer changes nothing.
-         */
-        private fun scheduleProjectIdentityRefine(worktree: String) {
-            if (worktree.isBlank()) return
-            projectIdentityJob?.cancel()
-            cachedProjectIdentity(worktree)?.let(::applyProjectIdentity)
-            projectIdentityJob =
-                viewModelScope.launch {
-                    val peers =
-                        withContext(ioDispatcher) {
-                            val baseUrl =
-                                connectionSessionCoordinator.currentProfile()?.baseUrl
-                                    ?: connectionProfileStore.activeProfile()?.baseUrl
-                            if (baseUrl.isNullOrBlank()) {
-                                emptyList()
-                            } else {
-                                connectionProfileStore.addedWorktrees(baseUrl)
-                            }
-                        }
-                    coroutineContext.ensureActive()
-                    if (boundWorktree != worktree) return@launch
-                    val inventories = loadInventories(peers)
-                    coroutineContext.ensureActive()
-                    if (boundWorktree != worktree) return@launch
-                    applyProjectIdentity(
-                        SessionChatProjectIdentity.resolve(worktree, peers) { added ->
-                            inventories[added] ?: WorktreeInventory.Unloaded
-                        },
-                    )
-                }
-        }
-
-        /**
-         * Fresh inventory of every added path. A load that did not succeed falls back to the last
-         * known one, so a transient failure does not turn a checkout back into a project letter.
-         */
-        private suspend fun loadInventories(peers: List<String>): Map<String, WorktreeInventory> {
-            val server = inventoryServerKey()
-            val cached = worktreeInventoryCache.snapshot(server)
-            worktreeInventoryCache.setAddedPaths(peers, server)
-            if (peers.isEmpty()) return emptyMap()
-            val baseUrl =
-                connectionSessionCoordinator.currentProfile()?.baseUrl
-                    ?: connectionProfileStore.activeProfile()?.baseUrl
-            if (!baseUrl.isNullOrBlank()) worktreeRepository.onConnection(baseUrl)
-            val inventories = mutableMapOf<String, WorktreeInventory>()
-            checkoutProjectIds.clear()
-            for (added in peers) {
-                coroutineContext.ensureActive()
-                val project =
-                    try {
-                        projectRepository.getCurrentProject(added)
-                    } catch (cancellation: CancellationException) {
-                        throw cancellation
-                    } catch (_: Exception) {
-                        null
-                    }
-                val projectId = project?.id?.takeIf { it.isNotBlank() }
-                if (projectId != null) checkoutProjectIds += projectId
-                val load = worktreeRepository.loadRefreshed(added, projectId, project?.worktree?.takeIf { it != "/" })
-                inventories[added] =
-                    when (load) {
-                        is WorktreeLoad.Loaded ->
-                            WorktreeInventory.loaded(load.directories).also { inventory ->
-                                worktreeInventoryCache.record(inventory, added, server)
-                            }
-                        is WorktreeLoad.Failed -> cached?.inventories?.get(added) ?: WorktreeInventory.Failed
-                        WorktreeLoad.Unloaded, WorktreeLoad.Stopped -> cached?.inventories?.get(added) ?: WorktreeInventory.Unloaded
-                    }
-            }
-            return inventories
-        }
-
         private fun publishUiState(
             timelineState: SessionChatTimelineRegionState,
             composerState: SessionChatComposerRegionState,
@@ -2134,60 +2039,14 @@ class SessionChatViewModel
                     commandsState,
                     inboxState,
                 )
-            syncStepTiming(merged.messages, nowMs())
+            timeline.syncStepTiming(merged.messages, nowMs())
             _uiState.value =
                 merged.copy(
-                    activityCardFooters = activityCardFooters,
-                    debouncedStepIds = debouncedStepIds,
-                    imageViewer = imageViewer.reconcile(merged.messages),
+                    activityCardFooters = timeline.activityCardFooters,
+                    debouncedStepIds = timeline.debouncedStepIds,
+                    imageViewer = timeline.reconcileImageViewer(merged.messages),
                 )
-            syncActivityChildren(_uiState.value.messages)
-        }
-
-        /**
-         * Subagent rows from the linked timeline, live session activity and the pending
-         * requests of the session tree; remembers when rows seen working finish.
-         */
-        private fun resolveSubagents(
-            inboxState: SessionChatInboxRegionState,
-            infoState: SessionInfoRegionState,
-        ): List<SessionChatSubagent> {
-            val now = nowMs()
-            val isLive = infoState.connectionStatus == SessionConnectionStatus.Live
-            if (!isLive) {
-                subagentLiveSinceMs = null
-            } else if (subagentLiveSinceMs == null) {
-                subagentLiveSinceMs = now
-            }
-            val liveSince = subagentLiveSinceMs
-            val seenAt = subagentsSeenAtMs
-            val seenLive = isLive && liveSince != null && seenAt != null && seenAt >= liveSince
-            subagentsSeenAtMs = now
-            val messages = SessionChatChildSessionLinker.link(timeline.loadedMessages(), timeline.childSessions)
-            val sessions = inboxState.permissionSessions + inboxState.questionSessions
-            val requestSessionIds =
-                inboxState.permissionRequests.map { it.sessionId } + inboxState.questionRequests.map { it.sessionId }
-
-            fun rows(finishTimes: Map<String, Long>) =
-                SessionChatBackgroundWork.subagents(
-                    messages = messages,
-                    sessions = sessions,
-                    busySessionIds = infoState.busySessionIds,
-                    requestSessionIds = requestSessionIds,
-                    localFinishedAtMs = finishTimes,
-                )
-            val current = rows(subagentFinishTimes)
-            val finishTimes =
-                SessionChatBackgroundWork.finishTimes(
-                    previous = _uiState.value.subagents,
-                    current = current,
-                    known = subagentFinishTimes,
-                    nowMs = now,
-                    seenLive = seenLive,
-                )
-            if (finishTimes == subagentFinishTimes) return current
-            subagentFinishTimes = finishTimes
-            return rows(finishTimes)
+            timeline.syncActivityChildren(_uiState.value.messages)
         }
 
         private fun mergeUiState(
@@ -2224,7 +2083,7 @@ class SessionChatViewModel
                 timelineState.timelineFrame === previous.timelineFrame &&
                     timelineState.messages === previous.messages
             val messages =
-                markLiveStepRail(
+                timeline.presentMessages(
                     messages =
                         if (timelineUnchanged) {
                             previous.messages
@@ -2245,18 +2104,21 @@ class SessionChatViewModel
                 } else {
                     null
                 }
+            val draftSendError = newSessionDraft.state.value.sendError
             val transientError =
                 if (timelineState.timeline == SessionChatTimelineState.Error) {
                     null
                 } else {
                     // Other regions still report plain strings; they are shown as is.
                     when {
+                        draftSendError != null -> draftSendError
                         infoState.unarchiveFailed -> UiText.resource(R.string.archived_sessions_unarchive_failed)
                         infoState.lifecycleErrorMessage != null -> UiText.verbatim(infoState.lifecycleErrorMessage)
                         worktreeMove.state.value.errorMessage != null -> TimelineText.verbatim(worktreeMove.state.value.errorMessage)
                         composerState.errorMessage != null -> UiText.verbatim(composerState.errorMessage)
                         composerState.abortErrorMessage != null -> UiText.verbatim(composerState.abortErrorMessage)
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
+                        goal.state.value.notice != null -> goal.state.value.notice
                         turnDiffNotice != null -> TimelineText.verbatim(turnDiffNotice)
                         infoState.errorMessage != null -> UiText.verbatim(infoState.errorMessage)
                         inboxSnapshot.permissionRequests.isEmpty() &&
@@ -2267,13 +2129,15 @@ class SessionChatViewModel
                         else -> null
                     }
                 }
+            val timelineOffersState = timelineOffers.state.value
             val snackbar =
                 resolveSnackbar(
                     transientError,
+                    retryNewSessionDraft = transientError != null && transientError == draftSendError,
                     sideQuestions.state.value.notice,
                     TimelineText.verbatim(composerState.followUpNotice ?: worktreeMove.state.value.notice)
                         ?: commandsState.actionSuccessMessage
-                        ?: TimelineText.verbatim(branchCopiedNotice ?: chipTimelineIntroNotice),
+                        ?: TimelineText.verbatim(branchCopiedNotice ?: timelineOffersState.chipTimelineIntroNotice),
                 )
             val sessionStatusLabel =
                 if (isCompacting) {
@@ -2281,81 +2145,35 @@ class SessionChatViewModel
                 } else {
                     infoState.sessionStatusLabel
                 }
-            val awaitingUser =
-                inboxSnapshot.permissionRequests.isNotEmpty() || inboxSnapshot.questionRequests.isNotEmpty()
-            val lastIsThinking =
-                WorkingTurnIndicator.isStreamingThinking(timeline.loadedMessages()) ||
-                    WorkingTurnIndicator.lastIsThinking(messages)
-            val activeWorkingLabel =
-                WorkingTurnIndicator.labelForActiveTurn(
-                    statusLabel = sessionStatusLabel,
+            val turn =
+                turnStatus.resolve(
+                    sessionStatusLabel = sessionStatusLabel,
                     isCompacting = isCompacting,
-                    isAwaitingUser = awaitingUser,
                     sendProgressPercent = composerState.sendProgressPercent,
-                    isThinking = lastIsThinking,
+                    isBound = boundSessionId != null,
+                    messages = messages,
+                    loadedMessages = { timeline.loadedMessages() },
+                    pendingOptimistic = { timeline.pendingOptimisticItems() },
+                    childSessions = { timeline.childSessions },
+                    inboxState = inboxSnapshot,
+                    infoState = infoState,
+                    previousSubagents = _uiState.value.subagents,
                 )
-            val workingResolution =
-                WorkingTurnIndicator.resolveFooter(
-                    activeLabel = activeWorkingLabel,
-                    lastIsThinking = lastIsThinking,
-                    hideImmediately = awaitingUser || boundSessionId == null,
-                    previous = workingChrome,
-                    hold = workingHold,
-                    nowMs = nowMs(),
-                )
-            workingChrome = workingResolution.chrome
-            workingHold = workingResolution.hold
-            scheduleWorkingFooterWake(workingResolution.wakeAfterMs)
-            // Step rail / activity card: the live rail's or card's running or Thinking… line is the indicator (#779).
-            val workingIndicatorLabel =
-                workingResolution.chrome.label.takeUnless {
-                    activeWorkingLabel != null && SessionChatStepRail.hasLiveRail(messages)
-                }
-            val workingIndicatorCollapsed = workingResolution.chrome.collapsed
-            val workingIndicatorFading = workingResolution.chrome.fading
-            val workingLampKey =
-                "${workingIndicatorLabel ?: "none"}:" +
-                    "${if (workingIndicatorCollapsed) 1 else 0}:" +
-                    "${if (workingIndicatorFading) 1 else 0}:" +
-                    "${if (workingHold != null) 1 else 0}"
-            if (!loggedWorkingLamp || lastWorkingLamp != workingLampKey) {
-                loggedWorkingLamp = true
-                lastWorkingLamp = workingLampKey
-                logI(
-                    "workingLamp label=${workingIndicatorLabel ?: "none"} " +
-                        "collapsed=${if (workingIndicatorCollapsed) 1 else 0} " +
-                        "fading=${if (workingIndicatorFading) 1 else 0} " +
-                        "hold=${if (workingHold != null) 1 else 0} " +
-                        "status=${sessionStatusLabel ?: "none"} " +
-                        "awaitingUser=${if (awaitingUser) 1 else 0} " +
-                        "lastIsThinking=${if (lastIsThinking) 1 else 0}",
-                )
-            }
             val syncingIndicatorLabel =
                 if (timelineState.isSyncingMessages) {
                     SessionMessageSyncChrome.statusLabel
                 } else {
                     null
                 }
-            val pendingResolution =
-                pendingPromptsGate.resolve(
-                    pendingPromptsFrom(
-                        loaded = timeline.loadedMessages(),
-                        optimistic = timeline.pendingOptimisticItems(),
-                    ),
-                    nowMs = nowMs(),
-                )
-            schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
-            val subagents = resolveSubagents(inboxSnapshot, infoState)
-            val seenDone = SessionChatBackgroundWork.seenDoneIds(seenDoneSubagentIds, subagents, backgroundWorkDoneVisible)
-            seenDoneSubagentIds = seenDone
+            val subagents = turn.subagents
             val shellsState = shells.state.value
+            val projectIdentity = projectHeader.identity
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
                 timeline = timelineState.timeline,
                 messages = messages,
-                pendingPrompts = pendingResolution.prompts,
+                pendingPrompts = turn.pendingPrompts,
                 timelineFrame = timelineFrame,
                 composer =
                     composerState.composer.copy(
@@ -2363,17 +2181,17 @@ class SessionChatViewModel
                             activeConnectionManager.currentCapabilities().supportsFollowUpDelivery,
                         attachmentUploadAvailable = attachmentUploads.isAvailable(),
                     ),
-                isSending = composerState.isSending,
+                isSending = composerState.isSending || newSessionDraft.isCreating,
                 isRefreshing = timelineState.isRefreshing,
                 hasOlder = timelineState.hasOlder,
                 isLoadingOlder = timelineState.isLoadingOlder,
                 isAborting = composerState.isAborting,
                 sessionStatusLabel = sessionStatusLabel,
-                workingIndicatorLabel = workingIndicatorLabel,
+                workingIndicatorLabel = turn.workingIndicatorLabel,
                 retryCard = infoState.retryCard,
                 isRetrying = infoState.isRetrying,
-                workingIndicatorCollapsed = workingIndicatorCollapsed,
-                workingIndicatorFading = workingIndicatorFading,
+                workingIndicatorCollapsed = turn.workingIndicatorCollapsed,
+                workingIndicatorFading = turn.workingIndicatorFading,
                 syncingIndicatorLabel = syncingIndicatorLabel,
                 sessionTodos = inboxSnapshot.sessionTodos,
                 sessionTodosVisible = SessionTodoList.isVisible(inboxSnapshot.sessionTodos),
@@ -2385,7 +2203,7 @@ class SessionChatViewModel
                 shells = shellsState.shells,
                 shellOutput = shellsState.output,
                 backgroundWorkPill = SessionChatBackgroundWork.pill(subagents, shellsState.shells),
-                backgroundWorkDoneUnseen = SessionChatBackgroundWork.hasUnseenDone(subagents, seenDone),
+                backgroundWorkDoneUnseen = turn.backgroundWorkDoneUnseen,
                 connectionStatus = infoState.connectionStatus,
                 canMutate = infoState.canMutate,
                 composerEnabled = infoState.composerEnabled,
@@ -2408,6 +2226,8 @@ class SessionChatViewModel
                 permissionDockHidden = inboxSnapshot.isPermissionDockHidden,
                 permissionSubmitting = inboxSnapshot.permissionSubmittingId != null,
                 permissionErrorMessage = inboxSnapshot.permissionError ?: inboxSnapshot.permissionTopologyError,
+                permissionNote = inboxSnapshot.visiblePermissionNote,
+                permissionOtherPendingInSession = inboxSnapshot.otherPendingPermissionsInVisibleSession,
                 questionRequest = visibleQuestion,
                 questionQueuePosition = inboxSnapshot.questionPageIndex + 1,
                 questionQueueCount = inboxSnapshot.questionRequests.size,
@@ -2454,16 +2274,16 @@ class SessionChatViewModel
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
                 moveToWorktree = moveToWorktreeUiState(),
-                expandedStepParagraphs = expandedStepParagraphs,
-                unfoldedStepRails = unfoldedStepRails,
-                presentedActivityCard = presentedActivityCard,
-                activityCardDetailStepId = activityCardDetailStepId,
-                activityCardChildren = activityCardChildren,
-                activityCardFooters = activityCardFooters,
-                debouncedStepIds = debouncedStepIds,
-                chipTimelineIntroVisible = chipTimelineIntroVisible,
-                timelineStylePickerVisible = timelineStylePickerVisible,
-                timelineStylePickerOptions = timelineStylePickerOptions,
+                expandedStepParagraphs = timeline.expandedStepParagraphs,
+                unfoldedStepRails = timeline.unfoldedStepRails,
+                presentedActivityCard = timeline.presentedActivityCard,
+                activityCardDetailStepId = timeline.activityCardDetailStepId,
+                activityCardChildren = timeline.activityCardChildren,
+                activityCardFooters = timeline.activityCardFooters,
+                debouncedStepIds = timeline.debouncedStepIds,
+                chipTimelineIntroVisible = timelineOffersState.chipTimelineIntroVisible,
+                timelineStylePickerVisible = timelineOffersState.timelineStylePickerVisible,
+                timelineStylePickerOptions = timelineOffersState.timelineStylePickerOptions,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 pendingFilesOpen = commandsState.pendingFilesOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
@@ -2473,34 +2293,28 @@ class SessionChatViewModel
                 worktreeCheckout = projectIdentity.isWorktreeCheckout,
                 sessionBranchPill =
                     repoStrip.state.value.toSessionBranchPill(isWorktree = projectIdentity.isWorktreeCheckout),
+                goal =
+                    SessionChatGoalUiState.resolve(
+                        region = goal.state.value,
+                        isChildSession = infoState.parentId != null,
+                        isSessionBusy = sessionStatusLabel != null,
+                        hasPermission = inboxSnapshot.permissionRequests.isNotEmpty(),
+                        hasQuestion = inboxSnapshot.questionRequests.isNotEmpty(),
+                        runningShellCommand = shellsState.shells.firstOrNull { it.isRunning }?.command,
+                        hasRunningSubagent = subagents.any { it.status == SessionChatSubagentStatus.Running },
+                        canMutate = infoState.canMutate,
+                    ),
+                goalCommandAvailable = composerState.serverCommands.any { it.name == SessionGoalLimits.COMMAND },
                 worktree = boundWorktree.orEmpty(),
-                dictation = dictation,
+                dictation = dictation.state.value.dictation,
                 sideQuestions =
                     sideQuestions.state.value.ui.let { side ->
-                        val supported = activeConnectionManager.currentCapabilities().supportsSideQuestion
+                        val supported = supportsSideQuestion()
                         side.copy(supported = supported, composerMode = side.composerMode && supported)
                     },
+                newSessionDraft = newSessionDraft.uiState(),
+                newSessionAddProjectSheet = addProject.sheet.takeIf { newSessionDraft.isActive },
             )
-        }
-
-        /**
-         * Marks the trailing rail of a working turn live. Cached on the source
-         * list so a republish from another region keeps the same message list.
-         */
-        private fun markLiveStepRail(
-            messages: List<SessionChatMessageItem>,
-            isTurnActive: Boolean,
-        ): List<SessionChatMessageItem> {
-            if (messages === liveRailMarked && isTurnActive == liveRailActive) return messages
-            if (messages === liveRailSource && isTurnActive == liveRailActive) return liveRailMarked
-            // Re-mark from the built list: a marked list has settled one-step cards swapped
-            // for standard blocks, which could not turn back into a live card.
-            val source = if (messages === liveRailMarked) liveRailSource ?: messages else messages
-            val marked = SessionChatStepRail.markLive(source, isTurnActive)
-            liveRailSource = source
-            liveRailActive = isTurnActive
-            liveRailMarked = marked
-            return marked
         }
 
         /** Opens the full-screen viewer on image [index] of timeline gallery [galleryId] (#898). */
@@ -2508,169 +2322,44 @@ class SessionChatViewModel
             galleryId: String,
             index: Int,
         ) {
-            imageViewer.open(galleryId, index)
-            publishImageViewer()
+            timeline.openImageViewer(galleryId, index)
         }
 
         fun showImageViewerPage(index: Int) {
-            imageViewer.showPage(index)
-            publishImageViewer()
+            timeline.showImageViewerPage(index)
         }
 
         fun dismissImageViewer() {
-            imageViewer.dismiss()
-            publishImageViewer()
-        }
-
-        private fun publishImageViewer() {
-            val viewer = imageViewer.reconcile(_uiState.value.messages)
-            if (viewer != _uiState.value.imageViewer) _uiState.value = _uiState.value.copy(imageViewer = viewer)
+            timeline.dismissImageViewer()
         }
 
         /** Shows every step of a folded step rail, or folds it again. */
         fun toggleStepRailFold(railId: String) {
-            unfoldedStepRails = if (railId in unfoldedStepRails) unfoldedStepRails - railId else unfoldedStepRails + railId
-            _uiState.value = _uiState.value.copy(unfoldedStepRails = unfoldedStepRails)
+            timeline.toggleStepRailFold(railId)
         }
 
         /** Opens the live activity sheet for card [blockId] (#779). */
         fun openActivityCard(blockId: String) {
-            presentedActivityCard = blockId
-            activityCardDetailStepId = null
-            _uiState.value = _uiState.value.copy(presentedActivityCard = blockId, activityCardDetailStepId = null)
-            syncActivityChildren(_uiState.value.messages)
+            timeline.openActivityCard(blockId)
         }
 
         fun dismissActivityCard() {
-            if (presentedActivityCard == null) return
-            presentedActivityCard = null
-            activityCardDetailStepId = null
-            _uiState.value = _uiState.value.copy(presentedActivityCard = null, activityCardDetailStepId = null)
-            syncActivityChildren(_uiState.value.messages)
+            timeline.dismissActivityCard()
         }
 
         /** Shows step [stepId]'s detail inside the open activity sheet, in place of its list. */
         fun openActivityCardStep(stepId: String) {
-            val presented = presentedActivityCard ?: return
-            if (!SessionChatActivityCard.hasStep(_uiState.value.messages, presented, stepId)) return
-            activityCardDetailStepId = stepId
-            _uiState.value = _uiState.value.copy(activityCardDetailStepId = stepId)
+            timeline.openActivityCardStep(stepId)
         }
 
         /** Returns the open activity sheet from a step's detail to its list. */
         fun closeActivityCardStep() {
-            if (activityCardDetailStepId == null) return
-            activityCardDetailStepId = null
-            _uiState.value = _uiState.value.copy(activityCardDetailStepId = null)
-        }
-
-        private fun resetActivityCards() {
-            presentedActivityCard = null
-            activityCardDetailStepId = null
-            activityChildJobs.values.forEach { it.cancel() }
-            activityChildJobs.clear()
-            activityCardChildren = emptyMap()
-            stepTimingJob?.cancel()
-            stepTimingJob = null
-            activityFooterHolds.clear()
-            stepEntryDebounce = SessionChatStepEntryDebounce()
-            activityCardFooters = emptyMap()
-            debouncedStepIds = emptySet()
-        }
-
-        /**
-         * Step timing (#779): the entry debounce hides steps seen in flight for
-         * less than 300 ms (step rail and activity card), and each live activity
-         * card's footer hold latches what its band shows. Re-runs itself at the
-         * next due time; a card that stops being live drops its hold.
-         */
-        private fun syncStepTiming(
-            messages: List<SessionChatMessageItem>,
-            now: Long,
-        ) {
-            val blocks = messages.flatMap { it.blocks }
-            val steps =
-                blocks.flatMap { block ->
-                    when (block) {
-                        is SessionChatTimelineBlock.StepRail -> block.steps
-                        is SessionChatTimelineBlock.ActivityCard -> block.steps
-                        else -> emptyList()
-                    }
-                }
-            debouncedStepIds = stepEntryDebounce.submit(steps, now)
-            val liveCards = blocks.filterIsInstance<SessionChatTimelineBlock.ActivityCard>().filter { it.isLive }
-            activityFooterHolds.keys.retainAll(liveCards.mapTo(HashSet()) { it.blockID })
-            activityCardFooters =
-                liveCards.associate { card ->
-                    val hold = activityFooterHolds.getOrPut(card.blockID) { SessionChatActivityFooterHold() }
-                    card.blockID to hold.submit(card.steps.filter { it.id !in debouncedStepIds }, now)
-                }
-            val due = (listOfNotNull(stepEntryDebounce.nextDueMs) + activityFooterHolds.values.mapNotNull { it.expiresAtMs }).minOrNull()
-            stepTimingJob?.cancel()
-            stepTimingJob =
-                due?.let {
-                    viewModelScope.launch {
-                        delay((it - now).coerceAtLeast(0))
-                        stepTimingJob = null
-                        // Never earlier than due, so a test's virtual clock still expires the hold.
-                        syncStepTiming(_uiState.value.messages, maxOf(nowMs(), it))
-                        val current = _uiState.value
-                        if (current.activityCardFooters != activityCardFooters || current.debouncedStepIds != debouncedStepIds) {
-                            _uiState.value = current.copy(activityCardFooters = activityCardFooters, debouncedStepIds = debouncedStepIds)
-                        }
-                    }
-                }
-        }
-
-        /**
-         * Observes the messages of running child sessions on the live card and
-         * the presented one, through the same store and live events as the
-         * child's own Session Chat, so agent rows show what each child does.
-         * Closes the sheet once its card left the timeline.
-         */
-        private fun syncActivityChildren(messages: List<SessionChatMessageItem>) {
-            val presented = presentedActivityCard
-            if (presented != null && messages.isNotEmpty() && !SessionChatActivityCard.hasCard(messages, presented)) {
-                presentedActivityCard = null
-                activityCardDetailStepId = null
-                _uiState.value = _uiState.value.copy(presentedActivityCard = null, activityCardDetailStepId = null)
-            }
-            // A detail whose step left the card goes back to the list.
-            val detailStep = activityCardDetailStepId
-            val card = presentedActivityCard
-            val detailLeft =
-                detailStep != null &&
-                    messages.isNotEmpty() &&
-                    (card == null || !SessionChatActivityCard.hasStep(messages, card, detailStep))
-            if (detailLeft) {
-                activityCardDetailStepId = null
-                _uiState.value = _uiState.value.copy(activityCardDetailStepId = null)
-            }
-            val worktree = boundWorktree
-            val wanted =
-                if (worktree == null) emptySet() else SessionChatActivityCard.observedChildSessionIds(messages, presentedActivityCard)
-            (activityChildJobs.keys - wanted).forEach { id -> activityChildJobs.remove(id)?.cancel() }
-            for (childId in wanted - activityChildJobs.keys) {
-                val parentId = boundSessionId
-                activityChildJobs[childId] =
-                    viewModelScope.launch {
-                        // conflate + delay: a child's current action changes at most once per
-                        // hold period, always settling on the latest value, so fast tool bursts
-                        // read as a smooth update instead of flicker.
-                        activityMessageRepository.observeMessages(childId, worktree).conflate().collect { update ->
-                            if (boundSessionId != parentId || update !is MessageListUpdate.Messages) return@collect
-                            val activity = SessionChatActivityCard.childActivity(update.messages)
-                            if (activityCardChildren[childId] == activity) return@collect
-                            activityCardChildren = activityCardChildren + (childId to activity)
-                            _uiState.value = _uiState.value.copy(activityCardChildren = activityCardChildren)
-                            delay(ACTIVITY_CHILD_UPDATE_HOLD_MS)
-                        }
-                    }
-            }
+            timeline.closeActivityCardStep()
         }
 
         private fun resolveSnackbar(
             transientError: UiText?,
+            retryNewSessionDraft: Boolean,
             sideQuestionNotice: SessionChatSideQuestionNotice?,
             successNotice: UiText?,
         ): SessionChatSnackbar? {
@@ -2717,6 +2406,7 @@ class SessionChatViewModel
                         SessionChatSnackbarTone.Default
                     },
                 id = snackbarSequence,
+                action = SessionChatSnackbarAction.RetryNewSessionDraft.takeIf { retryNewSessionDraft },
             )
         }
 
@@ -2739,27 +2429,14 @@ class SessionChatViewModel
         }
 
         override fun onCleared() {
-            invalidateDictationInsert()
-            dictation = null
+            newSessionDraft.leave()
+            dictation.discardInsert()
             composer.flushDraft()
             inbox.stop()
-            resetWorkingFooter()
+            turnStatus.resetFooter()
             clearSessionReadyFocus()
             syncCoordinator.markFocused(null)
             super.onCleared()
-        }
-
-        private fun cancelActiveDictation() {
-            invalidateDictationInsert()
-            if (dictation == null) return
-            dictation = null
-            publishUiState()
-        }
-
-        private fun invalidateDictationInsert() {
-            dictationGeneration += 1
-            dictationInsertJob?.cancel()
-            dictationInsertJob = null
         }
 
         private fun spliceDictationTranscript(transcript: String) {
@@ -2768,38 +2445,6 @@ class SessionChatViewModel
             val cursor = composerState.cursor.coerceIn(0, text.length)
             val updated = text.substring(0, cursor) + transcript + text.substring(cursor)
             updateComposerText(updated, cursor + transcript.length)
-        }
-
-        private fun resetWorkingFooter() {
-            workingHoldJob?.cancel()
-            workingHoldJob = null
-            workingHold = null
-            workingChrome = WorkingTurnIndicator.Chrome.Unmounted
-            pendingPromptsWakeJob?.cancel()
-            pendingPromptsWakeJob = null
-            pendingPromptsGate.reset()
-        }
-
-        private fun schedulePendingPromptsWake(wakeAfterMs: Long?) {
-            pendingPromptsWakeJob?.cancel()
-            pendingPromptsWakeJob = null
-            if (wakeAfterMs == null) return
-            pendingPromptsWakeJob =
-                viewModelScope.launch {
-                    delay(wakeAfterMs)
-                    publishUiState()
-                }
-        }
-
-        private fun scheduleWorkingFooterWake(wakeAfterMs: Long?) {
-            workingHoldJob?.cancel()
-            workingHoldJob = null
-            if (wakeAfterMs == null) return
-            workingHoldJob =
-                viewModelScope.launch {
-                    delay(wakeAfterMs)
-                    publishUiState()
-                }
         }
 
         private fun logI(message: String) {
@@ -2821,14 +2466,14 @@ class SessionChatViewModel
         companion object {
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
-            const val CHIP_TIMELINE_INTRO_ENABLED_NOTICE = "Chip timeline is on. Turn it off in Settings."
+            const val CHIP_TIMELINE_INTRO_ENABLED_NOTICE = SessionChatTimelineOffers.CHIP_TIMELINE_INTRO_ENABLED_NOTICE
             const val BRANCH_COPIED_MESSAGE = "Branch name copied"
 
             /** Pause after the first history load before the Timeline Style picker rises (#805). */
-            const val TIMELINE_STYLE_PICKER_DELAY_MILLIS = 600L
+            const val TIMELINE_STYLE_PICKER_DELAY_MILLIS = SessionChatTimelineOffers.TIMELINE_STYLE_PICKER_DELAY_MILLIS
 
             fun timelineStylePickerNotice(style: SessionChatTimelineStyle): String =
-                "Timeline: ${style.title}. Change it any time in Settings."
+                SessionChatTimelineOffers.timelineStylePickerNotice(style)
         }
     }
 

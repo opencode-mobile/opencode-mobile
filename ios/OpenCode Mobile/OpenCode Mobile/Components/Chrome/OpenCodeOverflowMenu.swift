@@ -199,6 +199,12 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
         return view
     }
 
+    /// The anchor went away while the menu was open (an inline control replaced by
+    /// other content): take the window overlay down with it.
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        coordinator.tearDown()
+    }
+
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.update(
             isPresented: isPresented,
@@ -262,14 +268,17 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                     overlayController?.view.frame = window.bounds
                 }
             } else {
-                if let view = overlayController?.view {
-                    OpenCodeWindowOverlayRegistry.shared.detach(view)
-                }
-                OpenCodeOverlayEscape.unregister(self)
-                overlayController?.resignFirstResponder()
-                overlayController?.view.removeFromSuperview()
-                overlayController = nil
+                tearDown()
             }
+        }
+
+        func tearDown() {
+            guard let overlayController else { return }
+            OpenCodeWindowOverlayRegistry.shared.detach(overlayController.view)
+            OpenCodeOverlayEscape.unregister(self)
+            overlayController.resignFirstResponder()
+            overlayController.view.removeFromSuperview()
+            self.overlayController = nil
         }
     }
 }

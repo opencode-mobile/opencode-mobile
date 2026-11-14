@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.ui.main.AddProjectSheetUi
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
@@ -30,6 +31,7 @@ import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
@@ -41,7 +43,6 @@ import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellOutputUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
 data class SessionChatComposerState(
@@ -115,18 +116,22 @@ data class SessionChatComposerState(
     val canAttachFiles: Boolean
         get() = selectedModel?.option?.canAttachFiles == true || (attachmentUploadAvailable && selectedModel != null)
 
-    fun attachmentSources(developerToolsUnlocked: Boolean): ComposerAttachmentSources =
-        ComposerAttachmentSources(
-            photos = canAttachPhotos,
-            files = canAttachFiles,
-            logFile = developerToolsUnlocked,
-        )
+    val attachmentSources: ComposerAttachmentSources
+        get() =
+            ComposerAttachmentSources(
+                photos = canAttachPhotos,
+                files = canAttachFiles,
+                logFile = true,
+                acceptsAnyType = attachmentUploadAvailable,
+            )
 }
 
 data class ComposerAttachmentSources(
     val photos: Boolean,
     val files: Boolean,
     val logFile: Boolean,
+    /** Streamed uploads take any file, so the gallery offers videos too and Files takes every type. */
+    val acceptsAnyType: Boolean = false,
 ) {
     val isAttachEnabled: Boolean
         get() = photos || files || logFile
@@ -155,6 +160,11 @@ sealed interface SessionChatSnackbarAction {
     data class RetrySideQuestion(
         val id: String,
     ) : SessionChatSnackbarAction {
+        override val label: String get() = "Retry"
+    }
+
+    /** Send the New session draft again after its first send failed; reuses what it already created. */
+    data object RetryNewSessionDraft : SessionChatSnackbarAction {
         override val label: String get() = "Retry"
     }
 }
@@ -270,6 +280,10 @@ data class SessionChatUiState(
     val permissionDockHidden: Boolean = false,
     val permissionSubmitting: Boolean = false,
     val permissionErrorMessage: String? = null,
+    /** "Deny with a note" draft for [permissionRequest]; non-null shows the note step. */
+    val permissionNote: PermissionNoteDraft? = null,
+    /** Other waiting permission requests of [permissionRequest]'s session, which a deny also rejects. */
+    val permissionOtherPendingInSession: Int = 0,
     val questionRequest: QuestionRequest? = null,
     /** 1-based position of [questionRequest] among the waiting question requests. */
     val questionQueuePosition: Int = 1,
@@ -291,6 +305,10 @@ data class SessionChatUiState(
     /** Parent of the loaded session; a child opened without a navigation parent still locks the composer. */
     val sessionParentId: String? = null,
     val sessionBranchPill: SessionBranchPillUiState? = null,
+    /** The session's `/goal` (#1007); null without one, on v1, and in subagent sessions. */
+    val goal: SessionChatGoalUiState? = null,
+    /** The server offers the `/goal` command, so a `/goal …` draft is checked against its limit. */
+    val goalCommandAvailable: Boolean = false,
     val supportsSessionMessageDiff: Boolean = true,
     val supportsSessionArchive: Boolean = true,
     /** When the open session was archived; Session Chat shows the archived banner while set. */
@@ -360,6 +378,10 @@ data class SessionChatUiState(
     val worktree: String = "",
     /** `/btw` side questions: composer mode, chips above the composer and the answer sheet. */
     val sideQuestions: SessionChatSideQuestionsUiState = SessionChatSideQuestionsUiState(),
+    /** New session before its first send (#1004); null once the session exists. */
+    val newSessionDraft: NewSessionDraftUiState? = null,
+    /** The draft's Add project sheet (#1021); null when closed. */
+    val newSessionAddProjectSheet: AddProjectSheetUi? = null,
 ) {
     /** A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet. */
     fun blocksChipTimelineIntro(): Boolean =
@@ -774,6 +796,12 @@ data class SessionChatInboxRegionState(
     val permissionSubmittingId: String? = null,
     val permissionError: String? = null,
     val permissionTopologyError: String? = null,
+    /**
+     * The note the user is writing to deny a permission request with ("Deny with a note").
+     * Non-null swaps that request's prompt for the note step; paging, the request going away,
+     * or another session clears it.
+     */
+    val permissionNote: PermissionNoteDraft? = null,
     /** Sessions loaded to place descendant permission requests; also names the asking subagent. */
     val permissionSessions: List<Session> = emptyList(),
     val questionRequests: List<QuestionRequest> = emptyList(),
@@ -800,6 +828,17 @@ data class SessionChatInboxRegionState(
 
     val visiblePermissionRequest: PermissionRequest?
         get() = permissionRequests.getOrNull(permissionPageIndex)
+
+    /** The note draft of the shown permission request, or null when its prompt shows the buttons. */
+    val visiblePermissionNote: PermissionNoteDraft?
+        get() = permissionNote?.takeIf { it.requestId == visiblePermissionRequest?.id }
+
+    /** Other waiting permission requests of the shown request's session; a deny rejects them too. */
+    val otherPendingPermissionsInVisibleSession: Int
+        get() {
+            val visible = visiblePermissionRequest ?: return 0
+            return permissionRequests.count { it.sessionId == visible.sessionId && it.id != visible.id }
+        }
 
     val questionPageIndex: Int
         get() = InboxRequestPaging.index(questionRequests.map { it.id }, questionSelectedId)
@@ -833,6 +872,16 @@ data class SessionChatInboxRegionState(
 
     val questionDraft: QuestionAnswerDraft
         get() = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+}
+
+/** The note of "Deny with a note" for the permission request [requestId]. */
+data class PermissionNoteDraft(
+    val requestId: String,
+    val text: String = "",
+) {
+    /** The note as sent: trimmed; Send stays disabled while it is empty. */
+    val trimmedText: String
+        get() = text.trim()
 }
 
 data class KeptQuestionDraft(
@@ -984,7 +1033,8 @@ data class SessionChatTimelineStyleOption(
 }
 
 enum class SessionChatTimelineState {
-    Creating,
+    /** New session before its first send: nothing on the server yet. */
+    Draft,
     Loading,
     Empty,
     Ready,
@@ -1021,6 +1071,8 @@ data class SessionChatMessageItem(
     val sentAtEpochMs: Long? = null,
     /** Set on a prompt steered into a running turn, pending or delivered. */
     val steer: SessionChatSteer? = null,
+    /** A `/goal` kickoff sent as the user's prompt: the bubble is labelled Goal (#1007). */
+    val goalKickoffId: String? = null,
 )
 
 data class SessionChatAttachmentItem(

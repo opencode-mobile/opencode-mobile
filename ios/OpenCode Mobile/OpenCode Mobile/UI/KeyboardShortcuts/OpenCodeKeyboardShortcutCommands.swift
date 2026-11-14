@@ -43,6 +43,7 @@ private struct SearchSessionsShortcutKey: FocusedValueKey { typealias Value = Op
 private struct PromptPrimaryShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
 private struct PromptAlwaysAllowShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
 private struct PromptRejectShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
+private struct PromptRejectWithNoteShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
 private struct ProjectShortcutsKey: FocusedValueKey { typealias Value = OpenCodeProjectShortcutActions }
 
 extension FocusedValues {
@@ -106,6 +107,11 @@ extension FocusedValues {
         set { self[PromptRejectShortcutKey.self] = newValue }
     }
 
+    var openCodePromptRejectWithNote: OpenCodeKeyboardShortcutAction? {
+        get { self[PromptRejectWithNoteShortcutKey.self] }
+        set { self[PromptRejectWithNoteShortcutKey.self] = newValue }
+    }
+
     var openCodeProjectShortcuts: OpenCodeProjectShortcutActions? {
         get { self[ProjectShortcutsKey.self] }
         set { self[ProjectShortcutsKey.self] = newValue }
@@ -128,6 +134,7 @@ extension OpenCodeKeyboardShortcut {
         case .promptPrimary: \.openCodePromptPrimary
         case .promptAlwaysAllow: \.openCodePromptAlwaysAllow
         case .promptReject: \.openCodePromptReject
+        case .promptRejectWithNote: \.openCodePromptRejectWithNote
         case .switchProject: nil
         }
     }
@@ -150,6 +157,7 @@ struct OpenCodeKeyboardShortcutCommands: Commands {
     @FocusedValue(\.openCodePromptPrimary) private var promptPrimary
     @FocusedValue(\.openCodePromptAlwaysAllow) private var promptAlwaysAllow
     @FocusedValue(\.openCodePromptReject) private var promptReject
+    @FocusedValue(\.openCodePromptRejectWithNote) private var promptRejectWithNote
     @FocusedValue(\.openCodeProjectShortcuts) private var projects
 
     var body: some Commands {
@@ -179,6 +187,7 @@ struct OpenCodeKeyboardShortcutCommands: Commands {
             command(.promptPrimary, promptPrimary)
             command(.promptAlwaysAllow, promptAlwaysAllow)
             command(.promptReject, promptReject)
+            command(.promptRejectWithNote, promptRejectWithNote)
         }
         CommandMenu("keyboard_shortcuts.group.go") {
             command(.searchSessions, searchSessions)

@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLeading
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
@@ -18,7 +19,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import dev.opencode.mobile.ui.text.UiText
 
 class SessionChatPillSlotsTest {
     private val now = 1_000_000L
@@ -184,7 +184,7 @@ class SessionChatPillSlotsTest {
     // Context
 
     @Test
-    fun contextShowsBranchInTheCornerThenTodosAtMostTwo() {
+    fun contextShowsBranchInTheCornerThenTodosWithoutAGoal() {
         val branch = SessionBranchPillUiState(
                 OpenCodeSessionBranchSummary("main", files = listOf(OpenCodeSessionBranchChangedFile("a.kt", 1, 2))),
             )
@@ -198,7 +198,7 @@ class SessionChatPillSlotsTest {
             SessionChatPillSlots.context(0, 0, branch),
         )
         assertTrue(SessionChatPillSlots.context(null, null, null).isEmpty())
-        assertEquals(2, SessionChatPillSlots.MAX_CONTEXT_PILLS)
+        assertEquals(3, SessionChatPillSlots.MAX_CONTEXT_PILLS)
     }
 
     // Navigation

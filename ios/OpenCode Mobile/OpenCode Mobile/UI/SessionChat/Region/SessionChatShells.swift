@@ -30,7 +30,7 @@ final class SessionChatShells {
     private(set) var state = SessionChatShellsRegionState()
 
     private var sessionID: String
-    private let worktree: String
+    private var worktree: String
     private let repository: any AgentShellRepository
     private let transcript = SessionChatTranscriptFeed()
     private var listTask: Task<Void, Never>?
@@ -70,6 +70,10 @@ final class SessionChatShells {
     func stop() {
         listTask?.cancel()
         listTask = nil
+    }
+
+    func retarget(worktree: String) {
+        self.worktree = worktree
     }
 
     func rebind(sessionID: String) {

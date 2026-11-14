@@ -56,13 +56,13 @@ nonisolated enum SessionChatChildSessionLinker {
                       metadataSessionID(tool) == nil
                 else { return part }
                 if let resumed = inputSessionID(tool) {
-                    return .tool(tool.withMetadataValue(.string(resumed), forKey: "sessionID"))
+                    return .tool(tool.withChildSessionID(resumed))
                 }
                 guard let description = description(tool),
                       let index = available.firstIndex(where: { $0.title.hasPrefix(description) })
                 else { return part }
                 let child = available.remove(at: index)
-                return .tool(tool.withMetadataValue(.string(child.id), forKey: "sessionID"))
+                return .tool(tool.withChildSessionID(child.id))
             }
             return message.withParts(parts)
         }
@@ -80,20 +80,14 @@ nonisolated enum SessionChatChildSessionLinker {
     }
 
     private static func metadataSessionID(_ tool: ToolPart) -> String? {
-        nonEmpty(tool.metadata?["sessionID"]?.stringValue)
-            ?? nonEmpty(tool.metadata?["sessionId"]?.stringValue)
+        tool.linkedChildSessionID
     }
 
     private static func inputSessionID(_ tool: ToolPart) -> String? {
-        nonEmpty(tool.input?["sessionID"]?.stringValue)
+        tool.inputSessionID
     }
 
     private static func description(_ tool: ToolPart) -> String? {
-        nonEmpty(tool.input?["description"]?.stringValue)
-    }
-
-    private static func nonEmpty(_ value: String?) -> String? {
-        guard let value, !value.isEmpty else { return nil }
-        return value
+        tool.linkDescription
     }
 }

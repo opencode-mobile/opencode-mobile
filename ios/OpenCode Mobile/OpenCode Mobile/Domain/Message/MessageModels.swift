@@ -288,15 +288,7 @@ nonisolated struct SessionFailure: Equatable, Sendable {
 
     /// Upstream `unwrapErrorMessage`: a JSON envelope `{type: "message", message}` is the text inside it.
     static func unwrap(_ raw: String?) -> String {
-        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard trimmed.hasPrefix("{"),
-              let data = trimmed.data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              (root["type"] as? String) == "message",
-              let nested = (root["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !nested.isEmpty
-        else { return trimmed }
-        return unwrap(nested)
+        SessionFailureMessage.unwrap(raw)
     }
 
     static func fromV1(
@@ -491,85 +483,6 @@ nonisolated struct TextPart: Equatable, Sendable {
     }
 }
 
-nonisolated enum AttachmentKind: String, Equatable, Sendable {
-    case image
-    case pdf
-    case text
-    /// Anything else, which only travels as a file uploaded to the server.
-    case file
-}
-
-/// Where an attachment's bytes live: in the prompt body (`inline`), on their way to the server,
-/// or already on the server at `serverPath` (streamed upload, #644).
-nonisolated enum AttachmentUploadState: Equatable, Sendable {
-    case inline
-    case uploading(fraction: Double)
-    case uploaded(serverPath: String)
-
-    var isPending: Bool {
-        if case .uploading = self { return true }
-        return false
-    }
-
-    var serverPath: String? {
-        if case let .uploaded(path) = self { return path }
-        return nil
-    }
-}
-
-nonisolated struct Attachment: Equatable, Sendable, Identifiable {
-    let id: String
-    let filename: String
-    let mime: String
-    let kind: AttachmentKind
-    let dataURL: String
-    let fileURL: URL?
-    let byteCount: Int64
-    let previewData: Data?
-    var upload: AttachmentUploadState
-
-    var usesFileBackedBody: Bool { fileURL != nil }
-    /// Bytes already on the server: the prompt names the path instead of carrying them.
-    var uploadedServerPath: String? { upload.serverPath }
-    var isServerFile: Bool { uploadedServerPath != nil }
-    var isUploadPending: Bool { upload.isPending }
-
-    init(
-        id: String,
-        filename: String,
-        mime: String,
-        kind: AttachmentKind,
-        dataURL: String,
-        fileURL: URL? = nil,
-        byteCount: Int64 = 0,
-        previewData: Data? = nil,
-        upload: AttachmentUploadState = .inline
-    ) {
-        self.id = id
-        self.filename = filename
-        self.mime = mime
-        self.kind = kind
-        self.dataURL = dataURL
-        self.fileURL = fileURL
-        self.byteCount = byteCount
-        self.previewData = previewData
-        self.upload = upload
-    }
-
-    func withUpload(_ upload: AttachmentUploadState) -> Attachment {
-        var copy = self
-        copy.upload = upload
-        return copy
-    }
-}
-
-extension Sequence where Element == Attachment {
-    /// Attachments whose bytes ride in the prompt body.
-    var inlineAttachments: [Attachment] { filter { !$0.isServerFile } }
-    /// Attachments already on the server; the prompt names their paths.
-    var uploadedAttachments: [Attachment] { filter(\.isServerFile) }
-}
-
 nonisolated struct FilePart: Equatable, Sendable {
     let id: String
     let filename: String
@@ -599,6 +512,12 @@ nonisolated struct FilePart: Equatable, Sendable {
     }
 }
 
+/// The user denied a tool call's permission request.
+nonisolated struct ToolDecline: Equatable, Sendable {
+    /// What the user told the agent to do instead (Deny with a note); nil for a plain deny.
+    let note: String?
+}
+
 nonisolated struct ToolPart: Equatable, Sendable {
     let id: String?
     let toolName: String
@@ -616,6 +535,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
     let isInterrupted: Bool
     /// The model emitted a tool call the server could not run (`executed: false`).
     let isMalformed: Bool
+    /// Set when the call failed because the user denied its permission (always `isInterrupted`).
+    let decline: ToolDecline?
     /// Images the tool returned (v1 `attachments`, v2 `content` files), as inline data URLs.
     /// Only kinds the app can show; other returned files are dropped.
     let images: [FilePart]
@@ -634,6 +555,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         timeEndEpochMs: Int64? = nil,
         isInterrupted: Bool = false,
         isMalformed: Bool = false,
+        decline: ToolDecline? = nil,
         images: [FilePart] = []
     ) {
         self.id = id
@@ -649,6 +571,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         self.timeEndEpochMs = timeEndEpochMs
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
+        self.decline = decline
         self.images = images
     }
 
@@ -667,6 +590,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
             timeEndEpochMs: timeEndEpochMs,
             isInterrupted: isInterrupted,
             isMalformed: isMalformed,
+            decline: decline,
             images: images
         )
     }
@@ -707,6 +631,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
             timeEndEpochMs: timeEndEpochMs,
             isInterrupted: isInterrupted,
             isMalformed: isMalformed,
+            decline: decline,
             images: images
         )
     }
@@ -756,6 +681,8 @@ nonisolated enum TimelineNoticeKind: Equatable, Sendable {
     case systemNote(String)
     /// The server restarted mid-turn and resumed it.
     case restart
+    /// A `/goal` kickoff: `description` is the server's "Goal: <objective>" line.
+    case goalSet(goalID: String, description: String)
 }
 
 nonisolated struct TimelineNoticeModel: Equatable, Sendable {
@@ -868,23 +795,6 @@ nonisolated enum MessageRole: String, Sendable {
             "Notice"
         case .unknown:
             "Message"
-        }
-    }
-}
-
-nonisolated enum MessageError: Error, Equatable {
-    case transport(TransportFailure)
-    case http(statusCode: Int, message: String?)
-    case decoding(String)
-
-    var localizedDescription: String {
-        switch self {
-        case let .transport(detail):
-            detail.message
-        case let .http(_, message):
-            message ?? "Request failed"
-        case let .decoding(message):
-            message
         }
     }
 }

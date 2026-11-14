@@ -2,7 +2,9 @@ name: Distribute From PR Comment
 
 # Comment `/distribute`, `/distribute android`, or `/distribute ios` on a pull
 # request to send that PR's head commit to the Firebase tester groups. Only the
-# repository maintainer's comments are honoured.
+# repository maintainer's comments are honoured. `/distribute hex`,
+# `/distribute hex android`, or `/distribute hex ios` sends Hex Code instead
+# (hexcode-app-distribution.yml).
 
 on:
   issue_comment:
@@ -34,17 +36,33 @@ jobs:
         run: |
           set -euo pipefail
           first_line="$(head -n 1 <<<"$COMMENT_BODY" | tr -d '\r')"
-          read -r command target _ <<<"$first_line"
+          read -r command target hex_target _ <<<"$first_line"
           if [[ "$command" != "/distribute" ]]; then
             exit 0
           fi
+          usage="Use \`/distribute\`, \`/distribute android\`, \`/distribute ios\`, \`/distribute hex\`, \`/distribute hex android\`, or \`/distribute hex ios\`."
+          # Set only for Hex Code, whose one workflow takes the platform as an input.
+          hex_platform=""
           case "${target:-all}" in
             all) platforms=(android ios) ;;
             android) platforms=(android) ;;
             ios) platforms=(ios) ;;
+            hex)
+              hex_platform="${hex_target:-all}"
+              case "$hex_platform" in
+                all) platforms=(android ios) ;;
+                android) platforms=(android) ;;
+                ios) platforms=(ios) ;;
+                *)
+                  gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+                    --body "Unknown target \`$target $hex_target\`. $usage"
+                  exit 0
+                  ;;
+              esac
+              ;;
             *)
               gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-                --body "Unknown target \`$target\`. Use \`/distribute\`, \`/distribute android\`, or \`/distribute ios\`."
+                --body "Unknown target \`$target\`. $usage"
               exit 0
               ;;
           esac
@@ -64,11 +82,21 @@ jobs:
           fi
 
           gh api "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID/reactions" -f content=rocket >/dev/null || true
-          for platform in "${platforms[@]}"; do
-            gh workflow run "$platform-app-distribution.yml" \
+          if [[ -n "$hex_platform" ]]; then
+            gh workflow run hexcode-app-distribution.yml \
               --repo "$GITHUB_REPOSITORY" \
               --ref "$DEFAULT_BRANCH" \
+              -f platform="$hex_platform" \
               -f source_ref="$head_sha"
-          done
+            distributing="Hex Code: ${platforms[*]}"
+          else
+            for platform in "${platforms[@]}"; do
+              gh workflow run "$platform-app-distribution.yml" \
+                --repo "$GITHUB_REPOSITORY" \
+                --ref "$DEFAULT_BRANCH" \
+                -f source_ref="$head_sha"
+            done
+            distributing="${platforms[*]}"
+          fi
           gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --body "Distributing \`${head_sha:0:12}\` (${platforms[*]}). Progress: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions"
+            --body "Distributing \`${head_sha:0:12}\` ($distributing). Progress: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions"

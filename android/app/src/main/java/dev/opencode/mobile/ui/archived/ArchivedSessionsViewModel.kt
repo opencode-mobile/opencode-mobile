@@ -52,8 +52,6 @@ class ArchivedSessionsViewModel
 
         fun confirmDelete() = model.confirmDelete()
 
-        fun unarchive(sessionId: String) = model.unarchive(sessionId)
-
         fun undoUnarchive(sessionId: String) = model.undoUnarchive(sessionId)
 
         fun consumeSnackbar() = model.consumeSnackbar()

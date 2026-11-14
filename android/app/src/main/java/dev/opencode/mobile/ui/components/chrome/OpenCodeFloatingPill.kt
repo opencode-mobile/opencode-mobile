@@ -6,11 +6,20 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -56,6 +65,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -64,6 +74,12 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 private val FloatingPillShape = RoundedCornerShape(percent = 50)
 private val FloatingPillPaddingHorizontal = 14.dp
 private val FloatingPillPaddingVertical = 8.dp
+
+/** Closes the round body to [FloatingPillMinHeight] around a 16 dp mark. */
+private val FloatingPillCompactPaddingHorizontal = 10.dp
+
+/** How long folding between full and compact takes. */
+private const val FloatingPillMorphMs = 260
 internal val FloatingPillMinHeight = 36.dp
 private val FloatingPillIconSize = 16.dp
 private val FloatingPillSpinnerSize = 14.dp
@@ -224,8 +240,9 @@ internal fun floatingPillCloseDescription(
  * Shared floating pill for Session Chat: one look, five layouts, five states.
  * Without [onClick] the pill is a status, not a button. [compact] shrinks it to its round
  * mark (icon, spinner, dot or check) and hides the text and ✕, still speaking the full
- * label. [accessibilityLabel] replaces the default "label, state" speech. [badgeCount], when above 1, adds a small count
- * badge on the pill's top corner (a round pill standing for several items).
+ * label; changing it folds the same pill's width rather than swapping pills.
+ * [accessibilityLabel] replaces the default "label, state" speech. [badgeCount], when above 1,
+ * adds a small count badge on the pill's top corner (a round pill standing for several items).
  */
 @Composable
 fun OpenCodeFloatingPill(
@@ -249,15 +266,28 @@ fun OpenCodeFloatingPill(
         if (floatingPillHasRing(state)) BorderStroke(1.dp, openCodeColor("warning")) else OpenCodeFloatingPillStyle.border()
     val description = floatingPillDescription(layout, state, accessibilityLabel)
     val announcesUpdates = floatingPillAnnouncesUpdates(layout, state)
-    val round = compact || layout is OpenCodeFloatingPillLayout.IconOnly
-    val leading = if (compact) floatingPillCompactLeading(layout, state) else floatingPillLeading(layout, state)
+    val iconOnly = layout is OpenCodeFloatingPillLayout.IconOnly
+    val hasFullMark = floatingPillLeading(layout, state) != OpenCodeFloatingPillLeading.None
+    // Full and compact share one structure, so a change of [compact] animates the pill's width:
+    // the label and ✕ fold away, the padding closes up around the mark, and a mark only the
+    // compact form has (the state dot) folds in. Nothing cross-fades between two pills.
+    val markShown = compact || iconOnly || hasFullMark
+    val labelShown = !compact && !iconOnly
+    val closeShown = onClose != null && floatingPillShowsClose(layout, compact, hasCloseAction = true)
+    val paddingHorizontal by animateDpAsState(
+        targetValue = if (compact || iconOnly) FloatingPillCompactPaddingHorizontal else FloatingPillPaddingHorizontal,
+        animationSpec = tween(FloatingPillMorphMs, easing = FastOutSlowInEasing),
+        label = "floatingPillPadding",
+    )
+    val widthSpec = tween<IntSize>(FloatingPillMorphMs, easing = FastOutSlowInEasing)
+    val foldIn = expandHorizontally(widthSpec, expandFrom = Alignment.Start) + fadeIn(tween(FloatingPillMorphMs))
+    val foldOut = shrinkHorizontally(widthSpec, shrinkTowards = Alignment.Start) + fadeOut(tween(FloatingPillMorphMs / 2))
+    val lateFadeIn = tween<Float>(FloatingPillMorphMs / 2, delayMillis = FloatingPillMorphMs / 2)
 
     // The surface sits behind the content instead of wrapping it, so its clip doesn't cut
     // the ✕'s 48 dp touch target down to the 36 dp pill.
     Box(
-        modifier =
-            modifier
-                .defaultMinSize(minWidth = if (round) FloatingPillMinHeight else 0.dp, minHeight = FloatingPillMinHeight),
+        modifier = modifier.defaultMinSize(minHeight = FloatingPillMinHeight),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
@@ -290,39 +320,52 @@ fun OpenCodeFloatingPill(
                             .clearAndSetSemantics {
                                 contentDescription = description
                                 if (announcesUpdates) liveRegion = LiveRegionMode.Polite
-                            }.then(
-                                if (round) {
-                                    Modifier.size(FloatingPillMinHeight)
-                                } else {
-                                    Modifier.padding(horizontal = FloatingPillPaddingHorizontal, vertical = FloatingPillPaddingVertical)
-                                },
-                            ),
-                    horizontalArrangement = Arrangement.spacedBy(FloatingPillIconSpacing, Alignment.CenterHorizontally),
+                            }.defaultMinSize(minHeight = FloatingPillMinHeight)
+                            .padding(horizontal = paddingHorizontal, vertical = FloatingPillPaddingVertical),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FloatingPillLeadingMark(leading, contentColor)
-                    if (!round) {
+                    AnimatedVisibility(visible = markShown, enter = foldIn, exit = foldOut) {
+                        // The compact mark is the full mark when there is one, so it never swaps.
+                        FloatingPillLeadingMark(floatingPillCompactLeading(layout, state), contentColor)
+                    }
+                    AnimatedVisibility(visible = labelShown, enter = foldIn, exit = foldOut) {
                         Text(
                             text = layout.label,
                             style = MaterialTheme.typography.labelLarge,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = if (hasFullMark) FloatingPillIconSpacing else 0.dp),
                         )
                     }
                 }
-                if (onClose != null && floatingPillShowsClose(layout, compact, hasCloseAction = true)) {
-                    FloatingPillClose(
-                        description = floatingPillCloseDescription(layout, accessibilityLabel),
-                        onClose = onClose,
-                    )
+                if (onClose != null) {
+                    // Unclipped, so the ✕'s 48 dp touch target survives. It fades in only once the
+                    // width has mostly opened, so it never shows past the pill's edge.
+                    AnimatedVisibility(
+                        visible = closeShown,
+                        enter = expandHorizontally(widthSpec, expandFrom = Alignment.Start, clip = false) + fadeIn(lateFadeIn),
+                        exit = shrinkHorizontally(widthSpec, shrinkTowards = Alignment.Start, clip = false) + fadeOut(tween(FloatingPillMorphMs / 2)),
+                    ) {
+                        FloatingPillClose(
+                            description = floatingPillCloseDescription(layout, accessibilityLabel),
+                            onClose = onClose,
+                        )
+                    }
                 }
             }
         }
-        if (badgeCount > 1) {
-            FloatingPillBadge(
-                count = badgeCount,
-                modifier = Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp),
-            )
+        // Keeps the last count on screen while the badge fades out. Plain, not state: a new
+        // [badgeCount] already recomposes this.
+        val lastBadgeCount = remember { intArrayOf(badgeCount) }
+        if (badgeCount > 1) lastBadgeCount[0] = badgeCount
+        // Pops in once the pill is nearly round, instead of riding in on its closing edge.
+        AnimatedVisibility(
+            visible = badgeCount > 1,
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp),
+            enter = fadeIn(lateFadeIn) + scaleIn(lateFadeIn, initialScale = 0.5f),
+            exit = fadeOut(tween(FloatingPillMorphMs / 2)) + scaleOut(tween(FloatingPillMorphMs / 2), targetScale = 0.5f),
+        ) {
+            FloatingPillBadge(count = lastBadgeCount[0])
         }
     }
 }

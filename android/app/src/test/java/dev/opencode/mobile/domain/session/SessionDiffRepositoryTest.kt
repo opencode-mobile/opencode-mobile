@@ -11,6 +11,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -99,6 +104,28 @@ class SessionDiffRepositoryTest {
             repository.getVcsDiff(VcsDiffMode.MainBranch, "/repo", context = 12)
 
             assertEquals("branch", captured?.url?.parameters?.get("mode"))
+        }
+
+    @Test fun aCancelledCallStaysACancellationInsteadOfATransportError() =
+        runTest {
+            val json = Json { ignoreUnknownKeys = true }
+            val client = testClient(json) { awaitCancellation() }
+            val repository = DefaultSessionRepository(SessionsApi(client, json), SessionDomainAdapter())
+            var failure: Throwable? = null
+
+            val lookup =
+                launch {
+                    try {
+                        repository.getVcsInfo("/repo")
+                    } catch (error: Throwable) {
+                        failure = error
+                        throw error
+                    }
+                }
+            runCurrent()
+            lookup.cancelAndJoin()
+
+            assertTrue("$failure", failure is CancellationException)
         }
 
     private fun testClient(

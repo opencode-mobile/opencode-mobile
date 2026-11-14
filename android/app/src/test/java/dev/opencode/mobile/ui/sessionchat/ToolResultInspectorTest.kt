@@ -1,10 +1,10 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 
 class ToolResultInspectorTest {

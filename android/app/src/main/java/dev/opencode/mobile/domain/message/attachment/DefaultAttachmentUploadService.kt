@@ -36,10 +36,11 @@ class DefaultAttachmentUploadService
                     DiagnosticLog.warning(DiagnosticLogArea.Chat, "attachment upload failed", error)
                     return AttachmentUploadResult.TransportFailure
                 }
+            val path = response.path
             val result =
                 when {
                     !response.isSuccess -> AttachmentUploadFailure.classify(response.status)
-                    response.path != null -> AttachmentUploadResult.Uploaded(response.path)
+                    path != null -> AttachmentUploadResult.Uploaded(path)
                     // A 200 without data.path is a reshaped route, not a failed file.
                     else -> AttachmentUploadResult.ContractMiss
                 }

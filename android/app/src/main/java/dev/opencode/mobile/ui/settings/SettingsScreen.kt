@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.settings
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
@@ -29,14 +30,14 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.R
 import dev.opencode.mobile.SourceCode
+import dev.opencode.mobile.SupportLinks
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.message.FollowUpDelivery
-import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
-import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.openCodeColor
@@ -58,18 +59,16 @@ import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.components.openCodeBottomSheetScrollTarget
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 
 @Composable
 fun SettingsScreen(
-    onComponentGalleryClick: () -> Unit,
-    onFeatureFlagsClick: () -> Unit = {},
-    /** Lab builds only; null hides the Highlighting Lab row. */
-    onHighlightingLabClick: (() -> Unit)? = null,
-    onSessionChatPlaygroundClick: () -> Unit = {},
+    onDeveloperToolsClick: () -> Unit,
     onDiagnosticLogsClick: () -> Unit,
     onNavigateBack: () -> Unit,
+    onWhatsNewClick: () -> Unit = {},
+    /** Shows the New tag on What's new from when the sheet appeared until the history is opened. */
+    whatsNewBadgePending: Boolean = false,
     onServersClick: () -> Unit,
     onAppearanceClick: () -> Unit,
     onSendFeedbackClick: () -> Unit = {},
@@ -460,6 +459,19 @@ fun SettingsScreen(
 
                 OpenCodeSectionHeader(title = stringResource(R.string.settings_section_about))
 
+                val whatsNewTitle = stringResource(R.string.whats_new_title)
+                OpenCodeListItem(
+                    title = whatsNewTitle,
+                    subtitle = stringResource(R.string.whats_new_settings_subtitle),
+                    isNew = whatsNewBadgePending,
+                    selected = selectedDetail == SettingsDetail.WhatsNew,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Sparkles, whatsNewTitle),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = onWhatsNewClick,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
                 val versionTitle = stringResource(R.string.settings_version)
                 OpenCodeListItem(
                     title = versionTitle,
@@ -493,64 +505,58 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                if (DeveloperToolsPreferences.unlocked) {
-                    OpenCodeSectionHeader(title = DeveloperToolsCopy.SECTION)
+                val rateAppTitle = stringResource(R.string.settings_rate_app_title)
+                OpenCodeListItem(
+                    title = rateAppTitle,
+                    subtitle = stringResource(R.string.settings_rate_app_subtitle),
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.RateReview, rateAppTitle),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_RATE_APP)
+                        openPlayStoreListing(context)
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsRateApp"),
+                )
 
-                    OpenCodeListItem(
-                        title = DeveloperToolsCopy.COMPONENT_GALLERY,
-                        selected = selectedDetail == SettingsDetail.ComponentGallery,
-                        subtitle = DeveloperToolsCopy.COMPONENT_GALLERY_SUBTITLE,
-                        style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, DeveloperToolsCopy.COMPONENT_GALLERY),
-                        onClick = onComponentGalleryClick,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
+                val starOnGitHubTitle = stringResource(R.string.settings_star_on_github_title)
+                OpenCodeListItem(
+                    title = starOnGitHubTitle,
+                    subtitle = "opencode-mobile/opencode-mobile",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Star, starOnGitHubTitle),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_STAR_ON_GITHUB)
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.GITHUB)))
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsStarOnGitHub"),
+                )
 
-                    OpenCodeListItem(
-                        title = DeveloperToolsCopy.PLAYGROUND,
-                        subtitle = DeveloperToolsCopy.PLAYGROUND_SUBTITLE,
-                        style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, DeveloperToolsCopy.PLAYGROUND),
-                        accessory = OpenCodeListItemAccessory.Disclosure,
-                        onClick = onSessionChatPlaygroundClick,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
+                val followOnXTitle = stringResource(R.string.settings_follow_on_x_title)
+                OpenCodeListItem(
+                    title = followOnXTitle,
+                    subtitle = SupportLinks.X_HANDLE,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.AtSign, followOnXTitle),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_FOLLOW_ON_X)
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.X_PROFILE)))
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsFollowOnX"),
+                )
 
-                    if (onHighlightingLabClick != null) {
-                        OpenCodeListItem(
-                            title = DeveloperToolsCopy.HIGHLIGHTING_LAB,
-                            subtitle = DeveloperToolsCopy.HIGHLIGHTING_LAB_SUBTITLE,
-                            style = OpenCodeListItemStyle.Card,
-                            startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, DeveloperToolsCopy.HIGHLIGHTING_LAB),
-                            accessory = OpenCodeListItemAccessory.Disclosure,
-                            onClick = onHighlightingLabClick,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
-
-                    OpenCodeListItem(
-                        title = DeveloperToolsCopy.FEATURE_FLAGS,
-                        selected = selectedDetail == SettingsDetail.FeatureFlags,
-                        subtitle = DeveloperToolsCopy.FEATURE_FLAGS_SUBTITLE,
-                        style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, DeveloperToolsCopy.FEATURE_FLAGS),
-                        onClick = onFeatureFlagsClick,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-
-                    OpenCodeListItem(
-                        title = DeveloperToolsCopy.PERFORMANCE_OVERLAY,
-                        subtitle = DeveloperToolsCopy.PERFORMANCE_OVERLAY_SUBTITLE,
-                        style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, DeveloperToolsCopy.PERFORMANCE_OVERLAY),
-                        accessory =
-                            OpenCodeListItemAccessory.Toggle(
-                                checked = PerformanceOverlayPreferences.enabled,
-                                onCheckedChange = PerformanceOverlayPreferences::updateEnabled,
-                            ),
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
+                OpenCodeListItem(
+                    title = DeveloperToolsCopy.TITLE,
+                    selected = selectedDetail == SettingsDetail.DeveloperTools,
+                    subtitle = DeveloperToolsCopy.SETTINGS_SUBTITLE,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Terminal, DeveloperToolsCopy.TITLE),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = onDeveloperToolsClick,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
             }
         }
     }
@@ -767,26 +773,21 @@ internal fun recentWindowHoursLabel(hours: Int): UiText {
     return UiText.plural(R.plurals.settings_recent_window_hours, sanitized)
 }
 
-/** Developer Tools rows are developer-only and stay English. */
-private object DeveloperToolsCopy {
-    const val SECTION = "Developer Tools"
-    const val COMPONENT_GALLERY = "Component Gallery"
-    const val COMPONENT_GALLERY_SUBTITLE = "Design-system foundations and reusable components"
-    const val PLAYGROUND = "Session Chat Playground"
-    const val PLAYGROUND_SUBTITLE = "The real chat over fake scenarios, no server"
-    const val HIGHLIGHTING_LAB = "Highlighting Lab"
-    const val HIGHLIGHTING_LAB_SUBTITLE = "Data sets and on-device benchmarks"
-    const val FEATURE_FLAGS = "Feature Flags"
-    const val FEATURE_FLAGS_SUBTITLE = "Remote flags with device overrides"
-    const val PERFORMANCE_OVERLAY = "Performance Overlay"
-    const val PERFORMANCE_OVERLAY_SUBTITLE = "Live FPS and frame-time spikes"
-}
-
 private fun logSettingsAction(actionId: String) {
     ProductAnalytics.logUserAction(
         screenId = ProductAnalytics.Screen.SETTINGS,
         actionId = actionId,
     )
+}
+
+/** Opens this app's Play Store page, or its web page when no store app is installed. */
+private fun openPlayStoreListing(context: Context) {
+    val packageName = context.packageName
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.playStoreMarket(packageName))))
+    } catch (_: ActivityNotFoundException) {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.playStoreWeb(packageName))))
+    }
 }
 
 private fun copyAboutValueToClipboard(
@@ -814,7 +815,7 @@ private fun logSettingsToggle(
 private fun SettingsScreenLightPreview() {
     OpenCodeTheme(darkTheme = false) {
         SettingsScreen(
-            onComponentGalleryClick = {},
+            onDeveloperToolsClick = {},
             onDiagnosticLogsClick = {},
             onNavigateBack = {},
             onServersClick = {},
@@ -848,7 +849,7 @@ private fun SettingsScreenLightPreview() {
 private fun SettingsScreenDarkPreview() {
     OpenCodeTheme(darkTheme = true) {
         SettingsScreen(
-            onComponentGalleryClick = {},
+            onDeveloperToolsClick = {},
             onDiagnosticLogsClick = {},
             onNavigateBack = {},
             onServersClick = {},

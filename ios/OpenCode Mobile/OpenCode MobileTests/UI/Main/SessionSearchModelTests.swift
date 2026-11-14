@@ -677,7 +677,8 @@ private final class ScriptedSearchRepository: SessionRepository, @unchecked Send
         sessionID: String,
         permissionID: String,
         decision: PermissionDecision,
-        directory: String?
+        directory: String?,
+        message: String?
     ) async throws -> Bool { false }
 }
 

@@ -4,7 +4,7 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.sessioncontext.SessionContextMessageCounts
 import dev.opencode.mobile.domain.sessioncontext.SessionContextRepository
 import dev.opencode.mobile.domain.sessioncontext.SessionContextSnapshot
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

@@ -510,3 +510,13 @@ private final class FakeReadyStatusStore: SessionStatusLiveStore {
         live.values.forEach { bucket in bucket.values.forEach { $0.finish() } }
     }
 }
+
+final class MutableSessionReadyClock: SessionReadyClock, @unchecked Sendable {
+    var nowEpochMsValue: Double
+
+    init(nowEpochMsValue: Double) {
+        self.nowEpochMsValue = nowEpochMsValue
+    }
+
+    func nowEpochMs() -> Double { nowEpochMsValue }
+}

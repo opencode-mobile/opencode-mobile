@@ -17,7 +17,9 @@ import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
+import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageLabel
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageSteering
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class OutgoingMessageSample(
     val label: String,
@@ -96,6 +98,20 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
             metadataLabel = "Build · DeepSeek V4 Flash · 9:07 PM",
             steering = OpenCodeOutgoingMessageSteering.Pending(showsLabel = true),
             modifier = Modifier.fillMaxWidth(),
+        )
+
+        Text(text = "Label", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "A caption above the bubble names the kind of prompt, such as a goal kickoff.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OpenCodeOutgoingMessage(
+            text = "Match the layout in the screenshot",
+            metadataLabel = "Build · DeepSeek V4 Flash · 9:08 PM",
+            label = OpenCodeOutgoingMessageLabel("Goal", OpenCodeIcons.RadioButtonChecked),
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {},
         )
     }
 }

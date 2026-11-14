@@ -20,6 +20,7 @@ import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionForkTitle
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.PendingTerminalOpen
 import dev.opencode.mobile.ui.sessionchat.SessionChatCommandsRegionState
@@ -27,7 +28,6 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionCompactChrome
 import dev.opencode.mobile.ui.sessionchat.SessionCompactionPresence
 import dev.opencode.mobile.ui.sessionchat.TimelineProjector
-import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -296,9 +296,9 @@ class SessionChatCommands(
         }
     }
 
-    fun runNew() {
+    /** `/new`: the New session draft, whose checkout is [worktree]. */
+    fun runNew(worktree: String) {
         dismissCommands()
-        val worktree = boundWorktree ?: return
         _state.update { it.copy(actionErrorMessage = null, actionSuccessMessage = null) }
         _state.update {
             it.copy(

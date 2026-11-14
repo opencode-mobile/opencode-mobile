@@ -20,7 +20,13 @@ object ComposerSubmitRouting {
         val trimmed = text.trim()
         val match = leadingCommand(trimmed, commands) ?: return ComposerSubmitIntent.Prompt(text = trimmed)
         if (match.isV2Skill) return ComposerSubmitIntent.Prompt(text = trimmed)
-        val arguments = trimmed.split(" ", limit = 2).getOrNull(1).orEmpty()
+        // "/goal  Make…" (a space after the picked "/goal ") sends "Make…", not " Make…".
+        val arguments =
+            trimmed
+                .split(" ", limit = 2)
+                .getOrNull(1)
+                .orEmpty()
+                .trimStart()
         return ComposerSubmitIntent.ServerCommand(command = match.name, arguments = arguments)
     }
 

@@ -29,6 +29,8 @@ data class TimelineRow(
     val steer: SessionChatSteer? = null,
     val contentRevision: ContentRevision,
     val layoutRevision: Long,
+    /** A `/goal` kickoff sent as the user's prompt: the bubble is labelled Goal (#1007). */
+    val goalKickoffId: String? = null,
 )
 
 data class TimelineFrame(
@@ -218,6 +220,7 @@ object TimelineProjector {
                 steer = item.steer,
                 contentRevision = contentRevision,
                 layoutRevision = 0L,
+                goalKickoffId = item.goalKickoffId,
             )
         return finalizeRow(draft, previous)
     }
@@ -244,6 +247,7 @@ object TimelineProjector {
             contextInputTokens = row.contextInputTokens,
             sentAtEpochMs = row.sentAtEpochMs,
             steer = row.steer,
+            goalKickoffId = row.goalKickoffId,
         )
     }
 
@@ -332,6 +336,10 @@ object TimelineProjector {
                 steer = previous?.steer,
                 contentRevision = ContentRevision.of(displayText),
                 layoutRevision = 0L,
+                goalKickoffId =
+                    message.parts
+                        .firstNotNullOfOrNull { (it as? MessagePart.Text)?.goalKickoffId }
+                        .takeIf { message.role == MessageRole.User },
             )
         return finalizeRow(draft, previous)
     }
@@ -370,7 +378,8 @@ object TimelineProjector {
             left.contextInputTokens == right.contextInputTokens &&
             left.sentAtEpochMs == right.sentAtEpochMs &&
             left.steer == right.steer &&
-            left.contentRevision == right.contentRevision
+            left.contentRevision == right.contentRevision &&
+            left.goalKickoffId == right.goalKickoffId
 
     private fun layoutKey(row: TimelineRow): LayoutKey =
         LayoutKey(
@@ -394,7 +403,7 @@ object TimelineProjector {
             is SessionChatTimelineBlock.ImageGallery ->
                 "ig:${block.blockID}:${block.images.size}"
             is SessionChatTimelineBlock.ToolCard ->
-                "c:${block.blockID}:${block.errorText != null}:${block.additions}:${block.deletions}"
+                "c:${block.blockID}:${block.errorText != null}:${block.noteText != null}:${block.additions}:${block.deletions}"
             is SessionChatTimelineBlock.ToolGroup ->
                 "g:${block.blockID}:${block.count}:${block.errorText != null}"
             is SessionChatTimelineBlock.ChildSessionRow ->
@@ -412,13 +421,14 @@ object TimelineProjector {
                 "f:${block.blockID}:${block.providerBody != null}:${block.isNeutral}:${block.action != null}:" +
                     "${block.retryAtEpochMs != null}"
             is SessionChatTimelineBlock.Notice -> "o:${block.blockID}:${block.notice.hashCode()}"
+            is SessionChatTimelineBlock.GoalStatus -> "gs:${block.blockID}"
         }
 
     /** Chip status / counts change chip width and error captions, so they are layout. */
     private fun stepParagraphChipFingerprint(block: SessionChatTimelineBlock.StepParagraph): String =
         block.chips.joinToString(",") { chip ->
             "${chip.status.ordinal}:${chip.additions}:${chip.deletions}:${chip.trailingText != null}"
-        } + ":${block.errorLines.size}"
+        } + ":${block.errorLines.size}:${block.noteLines.size}"
 
     /** Step count, status, branch and detail presence change rail rows and their height. */
     private fun stepRailFingerprint(block: SessionChatTimelineBlock.StepRail): String =
@@ -696,7 +706,7 @@ object TimelineProjector {
             is SessionChatTimelineBlock.ImageGallery ->
                 "ig:${block.blockID}:${block.images.size}"
             is SessionChatTimelineBlock.ToolCard ->
-                "c:${block.blockID}:${block.errorText != null}:${block.additions}:${block.deletions}"
+                "c:${block.blockID}:${block.errorText != null}:${block.noteText != null}:${block.additions}:${block.deletions}"
             is SessionChatTimelineBlock.ToolGroup ->
                 "g:${block.blockID}:${block.count}:${block.errorText != null}"
             is SessionChatTimelineBlock.ChildSessionRow ->
@@ -710,6 +720,7 @@ object TimelineProjector {
             is SessionChatTimelineBlock.StopNote -> "x:${block.blockID}:${block.reason}"
             is SessionChatTimelineBlock.FailureLine -> "f:${block.blockID}:${block.providerBody != null}"
             is SessionChatTimelineBlock.Notice -> "o:${block.blockID}:${block.notice.hashCode()}"
+            is SessionChatTimelineBlock.GoalStatus -> "gs:${block.blockID}"
         }
 
     private fun markdownFingerprint(row: TimelineRow): String =

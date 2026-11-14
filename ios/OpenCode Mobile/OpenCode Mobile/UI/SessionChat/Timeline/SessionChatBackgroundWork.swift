@@ -193,7 +193,7 @@ nonisolated enum SessionChatBackgroundWork {
                 id: partID,
                 childSessionID: childID,
                 agentName: agentName(tool, session: session),
-                title: string(tool.input, "description") ?? nonEmpty(session?.title),
+                title: tool.subagentDescription ?? nonEmpty(session?.title),
                 status: status,
                 startedAtMs: tool.timeStartEpochMs,
                 finishedAtMs: isActive ? nil : finishTime(tool, session: session, local: localFinishedAtMs[partID]),
@@ -318,28 +318,7 @@ nonisolated enum SessionChatBackgroundWork {
     /// sends the child's tool parts there; later v1 and v2 send none): the count and the
     /// latest call as a step title. Nil when the part carries no summary.
     static func childToolSummary(_ tool: ToolPart) -> SessionChatChildToolSummary? {
-        guard case let .array(summary)? = tool.metadata?["summary"] else { return nil }
-        let calls = summary.enumerated().compactMap { index, element -> ToolPart? in
-            guard case let .dictionary(part) = element, let name = string(part, "tool") else { return nil }
-            var state: [String: AnyCodable]?
-            if case let .dictionary(value)? = part["state"] { state = value }
-            var input: [String: AnyCodable]?
-            if case let .dictionary(value)? = state?["input"] { input = value }
-            let status: ToolStatus =
-                switch string(state, "status") {
-                case "pending": .pending
-                case "running": .running
-                case "error": .error
-                default: .completed
-                }
-            return ToolPart(
-                id: string(part, "id") ?? "summary-\(index)",
-                toolName: name,
-                status: status,
-                title: string(state, "title"),
-                input: input
-            )
-        }
+        guard let calls = tool.summaryCalls else { return nil }
         guard !calls.isEmpty else { return nil }
         // The activity card's rule: the latest running call's running title, else the last call.
         let activity = SessionChatTimelineBlocks.childActivity(from: [
@@ -528,8 +507,7 @@ nonisolated enum SessionChatBackgroundWork {
     }
 
     private static func knownAgentName(_ tool: ToolPart, session: Session?) -> String? {
-        string(tool.input, "agent") ?? string(tool.input, "subagent_type")
-            ?? string(tool.metadata, "agent")
+        tool.subagentAgentName
             ?? session?.agentName
             ?? session.flatMap { InboxRequestAttribution.agentName(fromTitle: $0.title) }
     }
@@ -544,20 +522,11 @@ nonisolated enum SessionChatBackgroundWork {
     }
 
     private static func isBackground(_ tool: ToolPart) -> Bool {
-        switch tool.metadata?["background"] {
-        case .bool(let flag)?: flag
-        case .string(let text)?: text.lowercased() == "true" || text == "1"
-        default: false
-        }
+        tool.isBackground
     }
 
     private static func childSessionID(_ tool: ToolPart) -> String? {
-        string(tool.metadata, "sessionID") ?? string(tool.metadata, "sessionId")
-    }
-
-    private static func string(_ values: [String: AnyCodable]?, _ key: String) -> String? {
-        guard case let .string(value)? = values?[key] else { return nil }
-        return nonEmpty(value)
+        tool.subagentSessionID
     }
 
     private static func nonEmpty(_ value: String?) -> String? {

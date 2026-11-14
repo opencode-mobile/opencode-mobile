@@ -2,14 +2,6 @@ package dev.opencode.mobile.domain.diagnostic
 
 import kotlin.math.roundToInt
 
-/** Whether the performance HUD should be on screen. */
-object PerformanceOverlayGate {
-    fun isVisible(
-        developerToolsUnlocked: Boolean,
-        enabled: Boolean,
-    ): Boolean = developerToolsUnlocked && enabled
-}
-
 /** One sample of the live frame-time HUD. */
 data class FrameTimeSnapshot(
     val framesPerSecond: Int? = null,

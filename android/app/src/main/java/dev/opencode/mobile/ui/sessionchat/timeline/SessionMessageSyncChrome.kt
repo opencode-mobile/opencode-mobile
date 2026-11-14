@@ -1,7 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.R
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 
 /** Top-of-timeline Syncing pill copy while a cached timeline waits for network confirmation. */
 object SessionMessageSyncChrome {

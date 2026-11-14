@@ -187,11 +187,17 @@ interface SessionRepository {
         directory: String? = null,
     ): Boolean = true
 
+    /**
+     * Answers a permission request. [message] is a note for [PermissionDecision.Deny] that tells
+     * the agent what to do instead; it is trimmed, and blank means none. A deny also rejects the
+     * other pending requests of the session.
+     */
     suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,
         decision: PermissionDecision,
         directory: String? = null,
+        message: String? = null,
     ): Boolean
 
     suspend fun replyToQuestion(

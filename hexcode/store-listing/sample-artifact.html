@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Sign-in speed: before and after</title>
+<style>
+  /* Sample artifact for Hex Code's sample sessions and store screenshots: a report page the agent
+     published. Deliberately looks like a web document, not like Hex Code. Offline: no external files. */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #161b26; color: #dfe4ee;
+    font: 15px/1.5 Georgia, "Times New Roman", serif;
+  }
+  .band { background: #232c40; color: #e8ecf4; border-bottom: 1px solid #2e3850; padding: 18px 18px 16px; }
+  .band small { display: block; font: 600 11px/1 -apple-system, Roboto, "Segoe UI", sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #8fa9d9; margin-bottom: 8px; }
+  .band h1 { margin: 0; font-size: 25px; line-height: 1.15; font-weight: 700; }
+  main { padding: 18px; }
+  .big { display: flex; align-items: baseline; gap: 10px; margin: 0 0 4px; }
+  .big b { font: 700 46px/1 -apple-system, Roboto, "Segoe UI", sans-serif; color: #8fb0ef; letter-spacing: -0.02em; }
+  .big span { font-size: 17px; }
+  .lede { margin: 0 0 18px; color: #9aa3b5; }
+  h2 { font: 700 13px/1 -apple-system, Roboto, "Segoe UI", sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #8a93a6; margin: 0 0 10px; }
+  .legend { display: flex; gap: 16px; font: 13px -apple-system, Roboto, "Segoe UI", sans-serif; color: #9aa3b5; margin-bottom: 8px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  svg { display: block; width: 100%; height: auto; margin-bottom: 18px; }
+  table { width: 100%; border-collapse: collapse; font: 14px -apple-system, Roboto, "Segoe UI", sans-serif; margin-bottom: 18px; }
+  th, td { text-align: left; padding: 8px 0; border-bottom: 1px solid #2a3244; }
+  th { font-size: 12px; color: #8a93a6; font-weight: 600; }
+  th.n, td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .pass { color: #79c497; font-weight: 600; }
+  p.note { font-size: 14px; color: #9aa3b5; margin: 0; }
+</style>
+</head>
+<body>
+  <div class="band">
+    <small>Report · Login screen rewrite</small>
+    <h1>Sign-in speed: before and after</h1>
+  </div>
+  <main>
+    <p class="big"><b>2.6×</b><span>faster sign-in</span></p>
+    <p class="lede">Median time from tapping Sign in to the first screen, with the new token refresh.</p>
+
+    <h2>Median sign-in time</h2>
+    <div class="legend"><span><i style="background:#3d4659"></i>Before</span><span><i style="background:#d08a5a"></i>After</span></div>
+    <svg viewBox="0 0 340 186" role="img" aria-label="Sign-in time before and after, in milliseconds">
+      <g font-family="-apple-system, Roboto, sans-serif" font-size="12" fill="#9aa3b5">
+        <text x="0" y="22">Web</text><text x="0" y="82">iOS</text><text x="0" y="142">Android</text>
+      </g>
+      <g>
+        <rect x="62" y="8" width="214" height="18" rx="3" fill="#3d4659"/><rect x="62" y="30" width="82" height="18" rx="3" fill="#d08a5a"/>
+        <rect x="62" y="68" width="245" height="18" rx="3" fill="#3d4659"/><rect x="62" y="90" width="92" height="18" rx="3" fill="#d08a5a"/>
+        <rect x="62" y="128" width="264" height="18" rx="3" fill="#3d4659"/><rect x="62" y="150" width="99" height="18" rx="3" fill="#d08a5a"/>
+      </g>
+      <g font-family="-apple-system, Roboto, sans-serif" font-size="11" fill="#c4cbd8" text-anchor="end">
+        <text x="270" y="21">820 ms</text><text x="301" y="81">940 ms</text><text x="320" y="141">1010 ms</text>
+      </g>
+      <g font-family="-apple-system, Roboto, sans-serif" font-size="11" font-weight="600" fill="#e8ecf4">
+        <text x="150" y="43">310 ms</text><text x="160" y="103">350 ms</text><text x="167" y="163">380 ms</text>
+      </g>
+    </svg>
+
+    <h2>Auth tests</h2>
+    <table>
+      <tr><th>Suite</th><th class="n">Tests</th><th class="n">Result</th></tr>
+      <tr><td>Token refresh</td><td class="n">18</td><td class="n pass">Pass</td></tr>
+      <tr><td>Login form</td><td class="n">21</td><td class="n pass">Pass</td></tr>
+      <tr><td>Session expiry</td><td class="n">9</td><td class="n pass">Pass</td></tr>
+    </table>
+    <p class="note">The old helper refreshed the token twice on every sign-in. It now refreshes once, in the shared API client.</p>
+  </main>
+</body>
+</html>

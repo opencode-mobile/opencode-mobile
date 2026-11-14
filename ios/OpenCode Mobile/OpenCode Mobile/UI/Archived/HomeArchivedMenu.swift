@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 /// Home menu's "Archived sessions" entry: its scope and, once counted, how many are archived there.
 struct HomeArchivedMenuEntry: Equatable {
@@ -9,18 +8,27 @@ struct HomeArchivedMenuEntry: Equatable {
     var count: Int?
 }
 
-/// Counts the archived sessions of Home's scope for the ⋯ menu entry. `entry` is nil on servers
+/// Counts the archived sessions of Home's scope for the ⋯ menu entry. `state` is nil on servers
 /// that cannot list and restore archived sessions, so the menu leaves the entry out.
 @MainActor
-@Observable
 final class HomeArchivedMenu {
-    private(set) var entry: HomeArchivedMenuEntry?
+    /// Every change reports through `onChange`, so the facade republishes Home's state.
+    private(set) var state: HomeArchivedMenuEntry? {
+        didSet {
+            if state != oldValue { onChange?() }
+        }
+    }
 
-    @ObservationIgnored private let sessionRepository: any SessionRepository
-    @ObservationIgnored private let supported: @MainActor () -> Bool
-    @ObservationIgnored private var task: Task<Void, Never>?
+    var onChange: (() -> Void)?
+
+    /// The menu entry; same as `state`.
+    var entry: HomeArchivedMenuEntry? { state }
+
+    private let sessionRepository: any SessionRepository
+    private let supported: @MainActor () -> Bool
+    private var task: Task<Void, Never>?
     /// The last scope Home asked about, so `recheck()` can count it again.
-    @ObservationIgnored private var lastRequest: (scopeID: String, worktreesEnabled: Bool)?
+    private var lastRequest: (scopeID: String, worktreesEnabled: Bool)?
 
     init(sessionRepository: any SessionRepository, supported: @escaping @MainActor () -> Bool) {
         self.sessionRepository = sessionRepository
@@ -32,25 +40,25 @@ final class HomeArchivedMenu {
         lastRequest = (scopeID, worktreesEnabled)
         task?.cancel()
         guard supported() else {
-            entry = nil
+            state = nil
             return
         }
         let resolved = HomeScope.resolve(id: scopeID, projects: projects, worktreesEnabled: worktreesEnabled) ?? .all
         let title = archivedScopeTitle(resolved, projects: projects)
-        let previous = entry?.scopeID == scopeID ? entry?.count : nil
-        entry = HomeArchivedMenuEntry(scopeID: scopeID, scopeTitle: title, count: previous)
+        let previous = state?.scopeID == scopeID ? state?.count : nil
+        state = HomeArchivedMenuEntry(scopeID: scopeID, scopeTitle: title, count: previous)
         let repository = sessionRepository
         task = Task { [weak self] in
             let count = try? await Self.count(resolved, projects: projects, repository: repository)
             guard !Task.isCancelled, let self else { return }
-            entry = HomeArchivedMenuEntry(scopeID: scopeID, scopeTitle: title, count: count)
+            state = HomeArchivedMenuEntry(scopeID: scopeID, scopeTitle: title, count: count)
         }
     }
 
     /// Recounts the last scope after the server's capabilities may have changed (a probe that
     /// finished after the menu first opened), so the entry appears without reopening the menu.
     func recheck(projects: [HomeProject]) {
-        guard let lastRequest, supported() != (entry != nil) else { return }
+        guard let lastRequest, supported() != (state != nil) else { return }
         refresh(scopeID: lastRequest.scopeID, projects: projects, worktreesEnabled: lastRequest.worktreesEnabled)
     }
 

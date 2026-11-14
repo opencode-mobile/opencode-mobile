@@ -92,8 +92,6 @@ struct ArchivedSessionsSnackbar: Equatable {
 @MainActor
 @Observable
 final class ArchivedSessionsViewModel {
-    /// Live events after which the archived list may have changed.
-    static let refreshEventTypes: Set<String> = ["session.archived", "session.unarchived", "session.deleted"]
     static let refreshDebounceMs: UInt64 = 300
 
     private(set) var scopeTitle = String(localized: "home.all_projects", defaultValue: "All projects")
@@ -157,7 +155,7 @@ final class ArchivedSessionsViewModel {
         guard let events else { return }
         for await event in events {
             if Task.isCancelled { break }
-            if Self.refreshEventTypes.contains(event.type) { scheduleRefresh() }
+            if event.triggersArchivedListRefresh { scheduleRefresh() }
         }
     }
 

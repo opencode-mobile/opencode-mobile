@@ -2,8 +2,8 @@ package dev.opencode.mobile.ui.keyboard
 
 import android.view.KeyEvent
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.components.OpenCodeFocusedTextInput
-import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

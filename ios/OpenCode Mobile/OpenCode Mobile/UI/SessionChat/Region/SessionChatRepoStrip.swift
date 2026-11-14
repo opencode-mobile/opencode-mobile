@@ -7,13 +7,11 @@ import Foundation
 /// is dirty; an active session starts collapsed. The user toggle wins over both defaults.
 @MainActor
 final class SessionChatRepoStrip {
-    static let branchUpdatedEvent = "vcs.branch.updated"
-
     var onChange: (() -> Void)?
 
     private(set) var state = SessionChatRepoStripRegionState()
 
-    private let worktree: String
+    private var worktree: String
     private let sessionRepository: any SessionRepository
     private let foregroundEventStream: (any ForegroundEventStream)?
     private var expandWhenDirty: Bool
@@ -37,6 +35,11 @@ final class SessionChatRepoStrip {
         self.foregroundEventStream = foregroundEventStream
     }
 
+    /// Not started while drafting, so the next `start()` reads the new checkout.
+    func retarget(worktree: String) {
+        self.worktree = worktree
+    }
+
     func start() {
         guard !started else { return }
         started = true
@@ -46,7 +49,7 @@ final class SessionChatRepoStrip {
         eventTask = Task { [weak self] in
             for await event in foregroundEventStream.events() {
                 if Task.isCancelled { return }
-                guard event.type == Self.branchUpdatedEvent else { continue }
+                guard event.isBranchUpdated else { continue }
                 self?.refresh()
             }
         }

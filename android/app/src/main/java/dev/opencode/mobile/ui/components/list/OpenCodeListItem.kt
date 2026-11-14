@@ -177,6 +177,8 @@ fun OpenCodeListItem(
     caption: String? = null,
     /** Small tag after the title, such as "git". The title truncates; the tag never does. */
     titleTag: String? = null,
+    /** Accent "New" tag after the title (and [titleTag]), for a feature this install has not opened yet. */
+    isNew: Boolean = false,
     selected: Boolean = false,
     enabled: Boolean = true,
     style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
@@ -363,7 +365,7 @@ fun OpenCodeListItem(
                                 modifier = titleModifier,
                             )
                         }
-                        if (titleTag.isNullOrBlank()) {
+                        if (titleTag.isNullOrBlank() && !isNew) {
                             titleText(Modifier)
                         } else {
                             Row(
@@ -371,7 +373,14 @@ fun OpenCodeListItem(
                                 horizontalArrangement = Arrangement.spacedBy(ListItemTitleTagSpacing),
                             ) {
                                 titleText(Modifier.weight(1f, fill = false))
-                                OpenCodeTag(title = titleTag, size = OpenCodeTagSize.Small)
+                                if (!titleTag.isNullOrBlank()) OpenCodeTag(title = titleTag, size = OpenCodeTagSize.Small)
+                                if (isNew) {
+                                    OpenCodeTag(
+                                        title = stringResource(R.string.common_new),
+                                        size = OpenCodeTagSize.Small,
+                                        tone = OpenCodeTagTone.Accent,
+                                    )
+                                }
                             }
                         }
                         if (subtitleSegments != null) {

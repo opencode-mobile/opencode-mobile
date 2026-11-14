@@ -174,13 +174,6 @@ final class OpenCode_MobileUITests: XCTestCase {
         XCTAssertFalse(disabled.isEnabled)
     }
 
-    @MainActor
-    func testLaunchPerformance() throws {
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
-        }
-    }
-
     /// Exercises the production connection flow against an actual opencode server.
     ///
     /// This test intentionally has no mock server. It is skipped unless the invoking

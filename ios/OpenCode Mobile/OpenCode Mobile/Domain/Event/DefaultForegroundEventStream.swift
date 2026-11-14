@@ -535,7 +535,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         let lease = Lease(target: target)
         let retry = RetryBox()
         lease.retry = retry
-        lease.loopTask = Task { [weak self, weak lease] in
+        lease.setLoopTask(Task { [weak self, weak lease] in
             guard let self, let lease else { return }
             while !Task.isCancelled, generation == self.currentGeneration(), self.isOccupying() {
                 guard self.isRequired(target.key) else { return }
@@ -599,7 +599,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                         return .transport(error)
                     }
                 }
-                lease.streamTask = streamTask
+                lease.attachStream(streamTask)
                 let watchTask = Task {
                     while !Task.isCancelled, generation == self.currentGeneration(), !streamTask.isCancelled {
                         let remaining = self.idleTimeout - lease.activity.elapsed()
@@ -651,7 +651,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 watchTask.cancel()
                 pathTask.cancel()
                 if lease.currentAttempt() == attemptId {
-                    lease.streamTask = nil
+                    lease.detachStream()
                     self.markLeaseDead(lease, generation: generation)
                 }
                 guard generation == self.currentGeneration(), self.isRequired(target.key) else { return }
@@ -693,7 +693,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                     }
                 }
             }
-        }
+        })
         return lease
     }
 
@@ -1147,8 +1147,12 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         let activity = ActivityBox()
         private let liveLock = NSLock()
         private var _live = false
-        var loopTask: Task<Void, Never>?
-        var streamTask: Task<SseAttemptOutcome, any Error>?
+        // The loop task writes `streamTask` while `stop()` cancels the lease from another thread, so
+        // both task handles stay behind `liveLock`: an unguarded write races `cancel()` and can
+        // over-release the task.
+        private var loopTask: Task<Void, Never>?
+        private var streamTask: Task<SseAttemptOutcome, any Error>?
+        private var cancelled = false
         var retry: RetryBox?
         private var attempt = 0
 
@@ -1181,15 +1185,42 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             liveLock.unlock()
         }
 
+        /// A lease cancelled before its loop is set cancels the loop at once.
+        func setLoopTask(_ task: Task<Void, Never>) {
+            liveLock.lock()
+            let wasCancelled = cancelled
+            if !wasCancelled { loopTask = task }
+            liveLock.unlock()
+            if wasCancelled { task.cancel() }
+        }
+
+        /// Lets `cancel()` stop this attempt's stream. A lease already cancelled cancels it at once.
+        func attachStream(_ task: Task<SseAttemptOutcome, any Error>) {
+            liveLock.lock()
+            let wasCancelled = cancelled
+            if !wasCancelled { streamTask = task }
+            liveLock.unlock()
+            if wasCancelled { task.cancel() }
+        }
+
+        func detachStream() {
+            liveLock.lock()
+            streamTask = nil
+            liveLock.unlock()
+        }
+
         @discardableResult
         func cancel() -> (loop: Task<Void, Never>?, stream: Task<SseAttemptOutcome, any Error>?) {
-            setLive(false)
+            liveLock.lock()
+            cancelled = true
+            _live = false
             let loop = loopTask
             let stream = streamTask
-            loop?.cancel()
-            stream?.cancel()
             loopTask = nil
             streamTask = nil
+            liveLock.unlock()
+            loop?.cancel()
+            stream?.cancel()
             return (loop, stream)
         }
     }

@@ -33,6 +33,9 @@ enum class OpenCodeFocusedTextInput {
 
     /** The "Type your own answer" field of a question prompt; prompt chords treat it specially. */
     QuestionCustomAnswer,
+
+    /** The note field of "Deny with a note" on a permission prompt; treated like [QuestionCustomAnswer]. */
+    PermissionNote,
 }
 
 /**
@@ -73,6 +76,8 @@ class OpenCodeInputFocusRegistry {
             when {
                 OpenCodeFocusedTextInput.QuestionCustomAnswer in focusedInputs.values ->
                     OpenCodeFocusedTextInput.QuestionCustomAnswer
+                OpenCodeFocusedTextInput.PermissionNote in focusedInputs.values ->
+                    OpenCodeFocusedTextInput.PermissionNote
                 OpenCodeFocusedTextInput.Field in focusedInputs.values -> OpenCodeFocusedTextInput.Field
                 OpenCodeFocusedTextInput.SessionComposer in focusedInputs.values ->
                     OpenCodeFocusedTextInput.SessionComposer

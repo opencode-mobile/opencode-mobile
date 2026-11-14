@@ -357,7 +357,7 @@ private fun ConnectionSetupScreenEditPreview() {
             uiState =
                 ConnectionSetupUiState(
                     name = "Mac Mini V1",
-                    baseUrl = "http://192.168.0.99:4096/",
+                    baseUrl = "http://192.168.1.2:4096/",
                     mode = ConnectionSetupMode.Edit,
                     profileId = "profile-1",
                     connectionUnchanged = true,

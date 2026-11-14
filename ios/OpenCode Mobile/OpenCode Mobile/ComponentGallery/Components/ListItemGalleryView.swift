@@ -410,6 +410,13 @@ struct ListItemGalleryView: View {
                     startDecorator: .icon(.folder),
                     action: {}
                 )
+                OpenCodeListItem(
+                    title: .verbatim("What's new"),
+                    isNew: true,
+                    startDecorator: .icon(.star),
+                    accessory: .disclosure,
+                    action: {}
+                )
             }
 
             Text("Trailing")

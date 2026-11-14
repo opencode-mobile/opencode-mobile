@@ -1,0 +1,105 @@
+import Foundation
+
+/// OpenCode HTTP API generation for an active server connection.
+///
+/// Detection prefers `/global/health` with `healthy: true` (v1), else
+/// `/api/info` or `/api/health` with numeric `pid` (v2; `healthy` may be absent).
+public nonisolated enum ServerProtocol: String, Sendable, Equatable, Hashable {
+    case v1
+    case v2
+
+    public var wireValue: String { rawValue }
+
+    public var shortLabel: String { rawValue }
+
+    public var apiCaption: String { "API \(rawValue)" }
+
+    public var reachableMessage: String { "Server reachable · API \(rawValue)" }
+}
+
+/// Product capabilities derived from `ServerProtocol`. Screen Models read these
+/// flags instead of branching on protocol themselves.
+///
+/// v2 session archive, per-turn diff and side questions depend on the server release, not the protocol:
+/// pass `v2Features` from the server's API contract probe.
+public nonisolated struct ServerCapabilities: Sendable, Equatable {
+    public let supportsSessionMessageDiff: Bool
+    public let supportsSessionArchive: Bool
+    public let supportsFollowUpDelivery: Bool
+    /// Server-tracked unread state (`time.idle` / `time.viewed`, `POST /view`, `session.viewed`).
+    public let supportsSessionViewed: Bool
+    /// `POST /api/session/{id}/move` (v2). v1 has no move endpoint.
+    public let supportsSessionMove: Bool
+    /// The command route keeps a client message id (v1 `messageID`); v2 `…/command` takes none.
+    public var commandKeepsClientMessageID: Bool = false
+    /// `/btw` side questions: `POST /api/session/{id}/generate` answers from the session's context
+    /// without adding to it (v2 releases that declare it). v1 has no equivalent.
+    public var supportsSideQuestion: Bool = false
+    /// Files can stream to the server (`POST /api/experimental/fs/write`, #644). Off unless the
+    /// server's API contract still matches what the app sends.
+    public var supportsStreamedUpload: Bool = false
+    /// The server records agent and model switches as timeline notices (v2). Without them
+    /// (v1) Session Chat derives the same notices from consecutive user messages.
+    public var recordsTimelineChangeNotices: Bool = false
+    /// Session Chat can list the shells the agent runs. v1 reads them from the transcript's
+    /// bash calls; v2 needs a release whose contract declares `GET /api/shell`.
+    public var supportsAgentShells: Bool = false
+    /// Archived sessions can be listed and restored (`GET /api/session?archived=true`,
+    /// `PATCH /api/session/{id}` with `archived: false`; v2 releases with archive). v1 archives
+    /// through `time.archived` but has no way to clear it.
+    public var supportsArchivedSessions: Bool = false
+
+    public static func forProtocol(_ serverProtocol: ServerProtocol, v2Features: V2ServerFeatures = V2ServerFeatures()) -> ServerCapabilities {
+        switch serverProtocol {
+        case .v1:
+            return ServerCapabilities(
+                supportsSessionMessageDiff: true,
+                supportsSessionArchive: true,
+                supportsFollowUpDelivery: false,
+                supportsSessionViewed: false,
+                supportsSessionMove: false,
+                commandKeepsClientMessageID: true,
+                supportsAgentShells: true
+            )
+        case .v2:
+            return ServerCapabilities(
+                supportsSessionMessageDiff: v2Features.sessionTurnDiff,
+                supportsSessionArchive: v2Features.sessionArchive,
+                supportsFollowUpDelivery: true,
+                supportsSessionViewed: true,
+                supportsSessionMove: true,
+                supportsSideQuestion: v2Features.sessionGenerate,
+                supportsStreamedUpload: v2Features.streamedUpload,
+                recordsTimelineChangeNotices: true,
+                supportsAgentShells: v2Features.agentShells,
+                supportsArchivedSessions: v2Features.sessionArchive
+            )
+        }
+    }
+
+    public init(
+        supportsSessionMessageDiff: Bool,
+        supportsSessionArchive: Bool,
+        supportsFollowUpDelivery: Bool,
+        supportsSessionViewed: Bool,
+        supportsSessionMove: Bool,
+        commandKeepsClientMessageID: Bool = false,
+        supportsSideQuestion: Bool = false,
+        supportsStreamedUpload: Bool = false,
+        recordsTimelineChangeNotices: Bool = false,
+        supportsAgentShells: Bool = false,
+        supportsArchivedSessions: Bool = false
+    ) {
+        self.supportsSessionMessageDiff = supportsSessionMessageDiff
+        self.supportsSessionArchive = supportsSessionArchive
+        self.supportsFollowUpDelivery = supportsFollowUpDelivery
+        self.supportsSessionViewed = supportsSessionViewed
+        self.supportsSessionMove = supportsSessionMove
+        self.commandKeepsClientMessageID = commandKeepsClientMessageID
+        self.supportsSideQuestion = supportsSideQuestion
+        self.supportsStreamedUpload = supportsStreamedUpload
+        self.recordsTimelineChangeNotices = recordsTimelineChangeNotices
+        self.supportsAgentShells = supportsAgentShells
+        self.supportsArchivedSessions = supportsArchivedSessions
+    }
+}

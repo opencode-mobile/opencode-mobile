@@ -120,6 +120,7 @@ struct SessionChatPlaygroundTests {
             case .instructionsUpdated: return "instructionsUpdated"
             case .systemNote: return "systemNote"
             case .restart: return "restart"
+            case .goalSet: return "goalSet"
             }
         })
         #expect(noticeKinds == ["agentChanged", "modelChanged", "moved", "instructionsUpdated"])

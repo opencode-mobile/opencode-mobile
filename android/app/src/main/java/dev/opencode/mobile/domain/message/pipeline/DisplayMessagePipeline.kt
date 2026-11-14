@@ -5,9 +5,6 @@ import dev.opencode.mobile.markdown.MarkdownBlock
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
-import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
-import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
-import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -678,7 +675,7 @@ internal data class StreamingDecorationTarget(
 /**
  * Resolve the streaming text presentation block for decoration.
  *
- * Matches [SessionChatTimelineBlocks] text-run boundaries: visible tools and
+ * Matches the timeline text-run boundaries ([TimelineSegments]): visible tools and
  * file parts flush a run; invisible tools (e.g. todowrite) do not. Prefer the
  * last run that still contains streaming text — the active block the user is
  * watching — then fall back to [PresentationBlockId.messageFallback].
@@ -741,7 +738,7 @@ internal fun resolveStreamingDecorationTarget(message: Message): StreamingDecora
     )
 }
 
-/** Mirrors [SessionChatTimelineBlocks] visibility used when flushing text runs. */
+/** The timeline visibility used when flushing text runs. */
 private fun isVisibleToolForStreamingDecoration(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isVisibleOnTimeline(tool)
 
 /** Copies stable fence colors onto a newly parsed structure so a growing stream does not flash plain. */
@@ -789,16 +786,12 @@ internal fun MarkdownDocument.hasSameCodeSpans(other: MarkdownDocument): Boolean
     return left.zip(right).all { (a, b) -> a.code == b.code && a.spans == b.spans }
 }
 
-private fun messageHasSoleTextBlock(message: Message): Boolean {
-    val blocks =
-        SessionChatTimelineBlocks.buildOrFallback(
-            role = message.role,
-            parts = message.parts,
-            messageId = message.id,
-            fallbackText = message.text,
-        )
-    return blocks.count { it is SessionChatTimelineBlock.Text } == 1
-}
+private fun messageHasSoleTextBlock(message: Message): Boolean =
+    TimelineSegments.hasSoleTextBlock(
+        role = message.role,
+        parts = message.parts,
+        fallbackText = message.text,
+    )
 
 internal fun shouldPlainFirstHistoryPublish(
     messages: List<Message>,

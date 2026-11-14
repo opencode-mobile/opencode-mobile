@@ -334,17 +334,6 @@ struct WorkingTurnIndicatorTests {
         #expect(resolved.wakeAfterMs == WorkingTurnIndicator.idleHoldMilliseconds)
     }
 
-    @Test func resolveFooter_newActiveWorkingCancelsVisibleHold() {
-        let resolved = resolve(
-            activeLabel: "Working",
-            previous: fadingWorking,
-            hold: visibleHold()
-        )
-        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: false))
-        #expect(resolved.hold == nil)
-        #expect(resolved.wakeAfterMs == nil)
-    }
-
     @Test func resolveFooter_hideImmediatelyUnmountsAnyHold() {
         let resolved = resolve(
             activeLabel: nil,

@@ -363,6 +363,68 @@ struct V2LiveTurnTimelineTests {
         #expect(restTool?.isInterrupted == true)
     }
 
+    @Test func toolDeniedWithANote_isDeclinedWithTheNote_liveAndAfterReload() throws {
+        apply(prompt("u1", "Run the tests.", at: 1_000))
+        apply(step("a1", at: 1_100))
+        let fields = #""assistantMessageID":"a1","id":"call_9","name":"bash""#
+        apply([
+            envelope("session.tool.input.started", 1_120, fields),
+            envelope("session.tool.called", 1_121, fields + #","input":{"command":"npm test"}"#),
+            envelope(
+                "session.tool.failed",
+                1_200,
+                fields + #","error":{"type":"permission.rejected","message":"Use pnpm instead"}"#
+            ),
+        ])
+
+        let liveTool = try #require(liveTool("a1"))
+        #expect(liveTool.isInterrupted)
+        #expect(liveTool.decline == ToolDecline(note: "Use pnpm instead"))
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        let paragraph = try #require(stepParagraphs(frame.messages[1].blocks).first?.paragraph)
+        #expect(paragraph.errorLines.isEmpty)
+        let card = try #require(paragraph.chips.first?.card)
+        #expect(card.isInterrupted)
+        #expect(english(card.errorText) == "Declined")
+        #expect(english(card.declineNote) == "Your note: Use pnpm instead")
+        #expect(paragraph.declineNoteLines.map(\.resolved) == ["Your note: Use pnpm instead"])
+
+        let rest = try restMessages(
+            """
+            [
+              {"id":"u1","type":"user","text":"Run the tests.","time":{"created":1000}},
+              {"id":"a1","type":"assistant","finish":"tool-calls",
+               "content":[{"type":"tool","id":"call_9","name":"bash","state":{"status":"error","input":{"command":"npm test"},
+                  "error":{"type":"permission.rejected","message":"Use pnpm instead"}}}],
+               "time":{"created":1100,"completed":1200}}
+            ]
+            """
+        )
+        let restTool = try #require(rest[1].parts.compactMap { part -> ToolPart? in
+            if case .tool(let tool) = part { return tool }
+            return nil
+        }.first)
+        #expect(restTool.isInterrupted)
+        #expect(restTool.decline == ToolDecline(note: "Use pnpm instead"))
+    }
+
+    @Test func toolDeniedWithoutANote_isDeclinedWithNoNote() throws {
+        apply(prompt("u1", "Run the tests.", at: 1_000))
+        apply(step("a1", at: 1_100))
+        let fields = #""assistantMessageID":"a1","id":"call_10","name":"bash""#
+        apply([
+            envelope("session.tool.called", 1_121, fields + #","input":{"command":"npm test"}"#),
+            envelope("session.tool.failed", 1_200, fields + #","error":{"type":"permission.rejected","message":""}"#),
+        ])
+
+        let tool = try #require(liveTool("a1"))
+        #expect(tool.isInterrupted)
+        #expect(tool.decline == ToolDecline(note: nil))
+        let card = try #require(liveToolCard("a1"))
+        #expect(english(card.errorText) == "Declined")
+        #expect(card.declineNote == nil)
+    }
+
     @Test func streamingShellArguments_growOnThePendingCardUntilCalledSettlesThem() throws {
         apply(prompt("u1", "List files", at: 1_000))
         apply(step("a1", at: 1_100))

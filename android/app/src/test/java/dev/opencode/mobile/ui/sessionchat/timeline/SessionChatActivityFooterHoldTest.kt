@@ -1,9 +1,9 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
-import dev.opencode.mobile.ui.text.UiText
 
 class SessionChatActivityFooterHoldTest {
     private val running = SessionChatStepStatus.Running

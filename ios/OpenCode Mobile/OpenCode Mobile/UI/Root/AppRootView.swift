@@ -20,6 +20,8 @@ final class AppRootViewModel {
     private let worldSignals: SceneWorldSignals
     private let appOnboardingPreferences: AppOnboardingPreferences
     private let sessionChatDisplayPreferences: SessionChatDisplayPreferences
+    private let newFeatures: NewFeatureStore
+    private let whatsNew: WhatsNewStore
 
     init(
         connectionProfileStore: any ConnectionProfileStore,
@@ -27,7 +29,9 @@ final class AppRootViewModel {
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         worldSignals: SceneWorldSignals,
         appOnboardingPreferences: AppOnboardingPreferences,
-        sessionChatDisplayPreferences: SessionChatDisplayPreferences
+        sessionChatDisplayPreferences: SessionChatDisplayPreferences,
+        newFeatures: NewFeatureStore,
+        whatsNew: WhatsNewStore
     ) {
         self.connectionProfileStore = connectionProfileStore
         self.activeConnectionManager = activeConnectionManager
@@ -35,6 +39,8 @@ final class AppRootViewModel {
         self.worldSignals = worldSignals
         self.appOnboardingPreferences = appOnboardingPreferences
         self.sessionChatDisplayPreferences = sessionChatDisplayPreferences
+        self.newFeatures = newFeatures
+        self.whatsNew = whatsNew
 
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
@@ -48,6 +54,10 @@ final class AppRootViewModel {
         let hasProfile = await connectionProfileStore.activeProfile() != nil
         let existingInstall = appOnboardingPreferences.isCompleted || hasProfile
         sessionChatDisplayPreferences.resolveTimelineForInstall(existingInstall: existingInstall)
+        // Before Home appears, so no screen reads a badge that is not settled yet.
+        newFeatures.sync(isFreshInstall: !existingInstall)
+        // Existing app data is the upgrade signal the first version with notes needs.
+        whatsNew.prepareLaunch(isUpgrade: existingInstall)
         if !existingInstall {
             state = .appOnboarding
         } else {

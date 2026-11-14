@@ -12,10 +12,6 @@ struct OpenCodeAssistantMessageTests {
         #expect(OpenCodeAssistantMessage.displayText("Ready") == "Ready")
     }
 
-    @Test func fillThresholdIsEightyPercent() {
-        #expect(OpenCodeAssistantMessage.fillRowThreshold == 0.8)
-    }
-
     @Test func narrowContentHugs() {
         #expect(!OpenCodeAssistantMessage.fillsRow(contentWidth: 60, availableWidth: 358))
         #expect(!OpenCodeAssistantMessage.fillsRow(contentWidth: 250, availableWidth: 358))

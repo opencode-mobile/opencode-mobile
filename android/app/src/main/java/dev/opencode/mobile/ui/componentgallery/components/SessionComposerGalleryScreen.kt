@@ -30,6 +30,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
+import dev.opencode.mobile.ui.components.OpenCodeSessionComposerNote
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 import dev.opencode.mobile.ui.components.rememberOpenCodeSessionComposerFocus
 
@@ -44,6 +45,8 @@ private enum class SessionComposerGalleryScenario(
     Revert("Revert"),
     Shell("Shell"),
     SideQuestion("/btw"),
+    CommandHint("Hint"),
+    LimitNote("Limit"),
     ChildLockout("Child"),
     Permission("Permission"),
     PermissionEdit("Edit"),
@@ -51,6 +54,7 @@ private enum class SessionComposerGalleryScenario(
     SubagentPermission("Subagent"),
     Submitting("Submitting"),
     Error("Error"),
+    DenyNote("Deny note"),
     Question("Question"),
     QuestionWizard("Wizard"),
     MultiSelect("Multi-select"),
@@ -95,6 +99,7 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
     var customSelected by rememberSaveable { mutableStateOf(false) }
     var customText by rememberSaveable { mutableStateOf("") }
     var questionIndex by rememberSaveable { mutableIntStateOf(0) }
+    var permissionNote by rememberSaveable { mutableStateOf<String?>(null) }
     val scenario =
         runCatching { SessionComposerGalleryScenario.valueOf(scenarioName) }
             .getOrDefault(SessionComposerGalleryScenario.Empty)
@@ -144,17 +149,30 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                 promptState(text = shellText, shellMode = ComposerShellCommand.isShellMode(shellText))
             SessionComposerGalleryScenario.SideQuestion ->
                 promptState(text = sideQuestionText, showStop = true, sideQuestionMode = sideQuestionMode)
+            // A command waiting for its argument, and a placeholder that asks for a reply.
+            SessionComposerGalleryScenario.CommandHint ->
+                promptState(text = "/goal ").copy(
+                    sendEnabled = false,
+                    argumentHint = "Describe what “done” looks like…",
+                    placeholder = "Reply, then resume the goal…",
+                )
+            SessionComposerGalleryScenario.LimitNote ->
+                promptState(text = "/goal " + "Keep the public API the same. ".repeat(12)).copy(
+                    sendEnabled = false,
+                    note = OpenCodeSessionComposerNote("4,312 / 4,000 characters · shorten the objective to send", isError = true),
+                )
             SessionComposerGalleryScenario.ChildLockout ->
                 OpenCodeSessionComposerState.ChildLockout(
                     selectedModelLabel = "Claude Sonnet 4",
                     selectedVariantLabel = "High",
                     showVariant = true,
                 )
-            SessionComposerGalleryScenario.Permission -> permissionState()
-            SessionComposerGalleryScenario.PermissionEdit -> permissionState(edit = true)
-            SessionComposerGalleryScenario.Queued -> permissionState(queueCount = 3)
+            SessionComposerGalleryScenario.Permission -> permissionState(note = permissionNote)
+            SessionComposerGalleryScenario.PermissionEdit -> permissionState(edit = true, note = permissionNote)
+            SessionComposerGalleryScenario.Queued -> permissionState(queueCount = 3, note = permissionNote, otherPendingInSessionCount = 2)
             SessionComposerGalleryScenario.SubagentPermission ->
                 permissionState(
+                    note = permissionNote,
                     queuePosition = 2,
                     queueCount = 3,
                     attribution =
@@ -165,7 +183,14 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                         ),
                 )
             SessionComposerGalleryScenario.Submitting -> permissionState(submitting = true)
-            SessionComposerGalleryScenario.Error -> permissionState(errorMessage = "The permission response failed. Try again.")
+            SessionComposerGalleryScenario.Error ->
+                permissionState(note = permissionNote, errorMessage = "The permission response failed. Try again.")
+            SessionComposerGalleryScenario.DenyNote ->
+                permissionState(
+                    queueCount = 2,
+                    note = permissionNote,
+                    otherPendingInSessionCount = 1,
+                )
             SessionComposerGalleryScenario.Question ->
                 questionState(
                     questionIndex = 0,
@@ -270,6 +295,8 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                         selected = option == scenario,
                         onClick = {
                             scenarioName = option.name
+                            permissionNote =
+                                if (option == SessionComposerGalleryScenario.DenyNote) "Run the tests first, then push." else null
                             when (option) {
                                 SessionComposerGalleryScenario.MultiSelect -> {
                                     selectedLabels = listOf("Minimal patch", "Investigate first")
@@ -360,6 +387,10 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                         }
                     }
                     is OpenCodeSessionComposerAction.QuestionCustomTextChanged -> customText = action.text
+                    is OpenCodeSessionComposerAction.OpenPermissionNote -> permissionNote = ""
+                    is OpenCodeSessionComposerAction.PermissionNoteChanged -> permissionNote = action.text
+                    is OpenCodeSessionComposerAction.CancelPermissionNote -> permissionNote = null
+                    is OpenCodeSessionComposerAction.SendPermissionNote -> permissionNote = null
                     is OpenCodeSessionComposerAction.QuestionBack ->
                         questionIndex = (questionIndex - 1).coerceAtLeast(0)
                     is OpenCodeSessionComposerAction.QuestionNext ->
@@ -406,6 +437,8 @@ private fun permissionState(
     submitting: Boolean = false,
     errorMessage: String? = null,
     edit: Boolean = false,
+    note: String? = null,
+    otherPendingInSessionCount: Int = 0,
 ) = OpenCodeSessionComposerState.Permission(
     requestId = "permission-gallery",
     sessionId = "session-gallery",
@@ -426,6 +459,8 @@ private fun permissionState(
     attribution = attribution,
     submitting = submitting,
     errorMessage = errorMessage,
+    note = note,
+    otherPendingInSessionCount = otherPendingInSessionCount,
 )
 
 private fun questionState(
@@ -491,6 +526,10 @@ private val OpenCodeSessionComposerAction.label: String
             is OpenCodeSessionComposerAction.AllowPermissionOnce -> "Allow once"
             is OpenCodeSessionComposerAction.DenyPermission -> "Deny"
             is OpenCodeSessionComposerAction.AlwaysAllowPermission -> "Always"
+            is OpenCodeSessionComposerAction.OpenPermissionNote -> "Deny with a note"
+            is OpenCodeSessionComposerAction.PermissionNoteChanged -> "Note changed"
+            is OpenCodeSessionComposerAction.CancelPermissionNote -> "Cancel note"
+            is OpenCodeSessionComposerAction.SendPermissionNote -> "Send note"
             is OpenCodeSessionComposerAction.HidePermission -> "Hide permission"
             is OpenCodeSessionComposerAction.HideQuestion -> "Hide question"
             is OpenCodeSessionComposerAction.PageRequest -> if (delta < 0) "Previous request" else "Next request"

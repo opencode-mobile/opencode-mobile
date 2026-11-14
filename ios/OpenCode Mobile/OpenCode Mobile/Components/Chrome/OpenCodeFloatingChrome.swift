@@ -21,19 +21,26 @@ struct OpenCodeFloatingChrome: ViewModifier {
     }
 }
 
-/// Inner dock / composer controls: Liquid Glass on iOS 26+, a 0.05 ink wash
-/// below. Do not paint an opaque raised underlay — that is what made the
-/// project selector look solid on glass.
+/// Inner dock / composer controls: a soft `text-strong` ink well on the
+/// floating chrome. Not a second `.glassEffect` — glass on glass doubles the
+/// rims and lensing, and Tinted glass or Reduce Transparency turns each layer
+/// into a heavy grey slab. Not an opaque raised underlay either — that made
+/// the project selector look solid.
 struct OpenCodeSubtleControlChrome<S: Shape>: ViewModifier {
     var shape: S
 
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            content.glassEffect(.regular, in: shape)
-        } else {
-            content.background(OpenCodeColors.textStrong.opacity(0.05), in: shape)
-        }
+        content.background(OpenCodeColors.textStrong.opacity(OpenCodeSubtleWell.opacity), in: shape)
     }
+}
+
+/// `text-strong` ink opacities for wells on floating chrome. Shared by
+/// `OpenCodeSubtleControlChrome`, `OpenCodeButtonContrast.subtle` and the
+/// `.glass` choice badge so the dock and composer controls match.
+enum OpenCodeSubtleWell {
+    static let opacity: CGFloat = 0.06
+    /// A selected well (an active mode chip).
+    static let selectedOpacity: CGFloat = 0.12
 }
 
 /// Press cue for subtle glass and wash controls. An opacity fade sinks into a

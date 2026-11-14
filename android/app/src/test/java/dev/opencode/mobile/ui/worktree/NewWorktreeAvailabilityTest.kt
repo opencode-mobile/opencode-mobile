@@ -3,7 +3,7 @@ package dev.opencode.mobile.ui.worktree
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeWorktree
-import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.domain.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

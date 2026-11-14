@@ -222,12 +222,12 @@ extension Container {
                 let container = try SwiftDataSessionCacheStore.makePersistentContainer()
                 return SwiftDataSessionCacheStore(container: container)
             } catch {
-                print("SessionCache: persistent SwiftData store failed (\(error)); using in-memory fallback")
+                DiagnosticLog.warning(.session, "SessionCache: persistent SwiftData store failed; using in-memory fallback", error: error)
                 do {
                     let container = try SwiftDataSessionCacheStore.makeInMemoryContainer()
                     return SwiftDataSessionCacheStore(container: container)
                 } catch {
-                    print("SessionCache: in-memory SwiftData store failed (\(error)); using InMemorySessionCacheStore")
+                    DiagnosticLog.error(.session, "SessionCache: in-memory SwiftData store failed; using InMemorySessionCacheStore", error: error)
                     return InMemorySessionCacheStore()
                 }
             }
@@ -336,7 +336,8 @@ extension Container {
                         baseURL: connection.baseURL.absoluteString,
                         username: connection.username
                     )
-                }
+                },
+                codeHighlighter: Container.codeHighlighter
             )
         }.singleton
     }
@@ -433,6 +434,20 @@ extension Container {
             DefaultAgentShellRepository(
                 api: self.shellAPIClient(),
                 eventStream: self.foregroundEventStream(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
+    var goalAPIClient: Factory<GoalAPIClient> {
+        onMainActor { GoalAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var sessionGoalRepository: Factory<any SessionGoalRepository> {
+        onMainActor {
+            DefaultSessionGoalRepository(
+                api: self.goalAPIClient(),
+                commandRepository: self.commandRepository(),
                 activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
@@ -679,7 +694,9 @@ extension Container {
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 worldSignals: self.worldSignals(),
                 appOnboardingPreferences: AppOnboardingPreferences.shared,
-                sessionChatDisplayPreferences: SessionChatDisplayPreferences.shared
+                sessionChatDisplayPreferences: SessionChatDisplayPreferences.shared,
+                newFeatures: NewFeatureStore.shared,
+                whatsNew: WhatsNewStore.shared
             )
         }
     }
@@ -702,9 +719,15 @@ extension Container {
                 worktreeRepository: self.worktreeRepository(),
                 foregroundEventStream: self.foregroundEventStream(),
                 worktreeInventoryCache: self.worktreeInventoryCache(),
-                homeWorktreesFeed: self.homeWorktreesFeed()
+                homeWorktreesFeed: self.homeWorktreesFeed(),
+                newSessionDraftStore: self.newSessionDraftStore()
             )
         }
+    }
+
+    /// New session drafts (#1004), one per Connection Profile, in memory for the app's life.
+    var newSessionDraftStore: Factory<NewSessionDraftStore> {
+        onMainActor { NewSessionDraftStore() }.singleton
     }
 
     var lastTurnReviewChangesStore: Factory<LastTurnReviewChangesStore> {
@@ -748,7 +771,9 @@ extension Container {
                 worktreeRepository: self.worktreeRepository(),
                 projectRepository: self.projectRepository(),
                 worktreeInventoryCache: self.worktreeInventoryCache(),
-                agentShellRepository: self.agentShellRepository()
+                agentShellRepository: self.agentShellRepository(),
+                newSessionDraftStore: self.newSessionDraftStore(),
+                goalRepository: self.sessionGoalRepository()
             )
         }
     }
@@ -896,6 +921,7 @@ extension Container {
         Task { @MainActor in
             await shared.connectionSessionCoordinator().clearConnectionData()
             await shared.sessionCache().clearAll()
+            shared.newSessionDraftStore().clearAll()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
             AnalyticsConsentPreferences.shared.clear()
@@ -905,7 +931,6 @@ extension Container {
             )
             AppLockPreferences.shared.clear()
             AppOnboardingPreferences.shared.clear()
-            DeveloperToolsPreferences.shared.clear()
             PerformanceOverlayPreferences.shared.clear()
             await codeHighlighter.trim(.critical)
             SessionChatDisplayPreferences.shared.clear()
@@ -930,4 +955,9 @@ extension Container {
         shared.projectionCaches().clearAll()
         await shared.sessionCache().clearAll()
     }
+}
+
+nonisolated extension MessageContentPreparer {
+    /// The app's preparer, coloring code fences with the Session Chat highlighter.
+    static let shared = MessageContentPreparer(textMateEngine: Container.codeHighlighter)
 }

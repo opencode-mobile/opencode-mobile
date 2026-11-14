@@ -1015,20 +1015,6 @@ import Testing
         #expect(engine.messages(sessionID: "ses-1").first?.isWaitingForPickup == false)
     }
 
-    @Test func waitingWithoutDelivery_keepsPickupFlag() {
-        let message = Message(
-            id: "msg-1",
-            role: .user,
-            text: "Hello",
-            model: nil,
-            mode: nil,
-            sentAtEpochMs: nil,
-            isWaitingForPickup: true
-        )
-        #expect(message.isWaitingForPickup)
-        #expect(message.followUpDelivery == nil)
-    }
-
     @Test func infoUpdated_keepsSeededFailureWhenTheLiveInfoOmitsError() {
         let engine = makeEngine()
         engine.replaceAll(

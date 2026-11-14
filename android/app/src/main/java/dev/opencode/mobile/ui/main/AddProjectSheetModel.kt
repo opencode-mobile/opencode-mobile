@@ -7,8 +7,8 @@ import dev.opencode.mobile.domain.filesystem.DirectoryNode
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ServerProjectSuggestions
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
-import dev.opencode.mobile.ui.text.UiText
 
 /**
  * Add project: a short suggestion sheet, or the full-screen browser when [isBrowsing].
