@@ -5118,6 +5118,72 @@
         }
       }
     },
+    "sample.banner": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sample session — not connected to a computer"
+          }
+        }
+      }
+    },
+    "sample.leave": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave"
+          }
+        }
+      }
+    },
+    "sample.settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is a sample"
+          }
+        }
+      }
+    },
+    "sample.settings.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave it to pair your computer."
+          }
+        }
+      }
+    },
+    "sample.try": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try: “%@”"
+          }
+        }
+      }
+    },
+    "sample.try.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sends it to the sample agent"
+          }
+        }
+      }
+    },
     "scan.again": {
       "extractionState": "manual",
       "localizations": {
@@ -5812,6 +5878,28 @@
         }
       }
     },
+    "settings.sample": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sample session"
+          }
+        }
+      }
+    },
+    "settings.sample.sub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try it with a made-up project. Your session waits."
+          }
+        }
+      }
+    },
     "settings.save_failed": {
       "extractionState": "manual",
       "localizations": {
@@ -6248,6 +6336,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "There are no rules."
+          }
+        }
+      }
+    },
+    "welcome.sample": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try a sample session"
           }
         }
       }

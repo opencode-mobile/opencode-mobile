@@ -3,7 +3,8 @@ import OpenCodeKit
 
 /// Fake sessions for looking at home without a server: Settings › Developer › Sample session, or
 /// `-HexCodeDemoSession <preset>` at launch (debug builds). Nothing here talks to OpenCode. The
-/// presets are the same on both platforms.
+/// presets are the same on both platforms. `playground` is the one every build offers, from
+/// Welcome and Settings › Sample session (`PlaygroundScript`).
 ///
 /// Two more launch arguments, for screenshots (debug builds, with `-HexCodeDemoSetup YES`):
 /// - `-HexCodeDemoOpenArtifact YES` with the `artifact` preset: its artifact opens in the artifact
@@ -46,11 +47,11 @@ enum TodaySessionDemo: String, CaseIterable {
     /// waiting and a to-do row: the card steps down in size by what is drawn, not by its character
     /// count.
     case branches
-    #if DEBUG
     /// Idle, with an artifact from the latest run: the card's artifact tile. With
-    /// `-HexCodeDemoOpenArtifact YES` it opens in the artifact viewer at launch. Debug builds only.
+    /// `-HexCodeDemoOpenArtifact YES` it opens in the artifact viewer at launch.
     case artifact
-    #endif
+    /// Idle and reactive: a take plays a scripted run (`PlaygroundScript`).
+    case playground
 
     static var launchPreset: TodaySessionDemo? {
         #if DEBUG
@@ -103,10 +104,8 @@ enum TodaySessionDemo: String, CaseIterable {
         + "Next: Finish sweeping branches, then publish the findings page.\n"
         + "Link: Prototype | http://Studio-Mac.local:8787/2026-11-06/mobile-apps/"
 
-    #if DEBUG
     static let artifactReply = "## Login screen rewrite\nNow: Sign-in is 2.6 times faster with the new token refresh, "
         + "and all 48 auth tests pass.\nNext: Say if the report looks right, then I'll open a PR."
-    #endif
 
     static let fallbackReply = """
     Okay, I finished the token refresh and now I am going through the auth tests one at a time. Two of them \
@@ -117,6 +116,7 @@ enum TodaySessionDemo: String, CaseIterable {
     /// A session in this state; call `start(_:)` to fill it.
     @MainActor
     func make(toasts: HexToaster, now: Date = Date()) -> TodaySession {
+        if self == .playground { return PlaygroundScript.session(toasts: toasts, now: now) }
         let today = DailySession.title(for: now)
         let yesterday = DailySession.title(for: now.addingTimeInterval(-86_400))
         let memory = DemoMemory(lastOpenedDay: self == .empty ? nil : yesterday)
@@ -134,7 +134,6 @@ enum TodaySessionDemo: String, CaseIterable {
             toasts: toasts,
             control: DemoControl(running: sampleRunning(now: now), recent: Self.sampleTools(now: now))
         )
-        #if DEBUG
         if self == .artifact {
             // The real artifacts model and pick, over a fake server that has one artifact on.
             let artifacts = ArtifactsModel(
@@ -146,11 +145,9 @@ enum TodaySessionDemo: String, CaseIterable {
             )
             session.artifactSource = { rootID, sessions in await artifacts.cardArtifact(rootID: rootID, sessions: sessions) }
         }
-        #endif
         return session
     }
 
-    #if DEBUG
     /// The `artifact` preset's artifact, updated a few minutes ago in today's session.
     static func sampleArtifact(now: Date) -> ArtifactInfo {
         ArtifactInfo(
@@ -171,7 +168,6 @@ enum TodaySessionDemo: String, CaseIterable {
     static var samplePage: Data? {
         Bundle.main.url(forResource: "sample-artifact", withExtension: "html").flatMap { try? Data(contentsOf: $0) }
     }
-    #endif
 
     /// Opens the session and puts it in this state; `updating` then starts a refresh that never
     /// ends, and `updatefailed` one that fails.
@@ -206,6 +202,8 @@ enum TodaySessionDemo: String, CaseIterable {
         if let sent = UserDefaults.standard.string(forKey: "HexCodeSentMessage") { session.sentMessage = sent }
         #endif
         if self == .reconnecting { session.streamUp = false }
+        // Ask on the side has no session to read; open has just set the one that asks the fake.
+        if self == .playground { session.ask.generate = PlaygroundScript.askAnswer }
         switch self {
         case .updating:
             session.summary.generator = DemoGenerator(reply: nil, hangs: true)
@@ -229,9 +227,8 @@ enum TodaySessionDemo: String, CaseIterable {
         case .branches: Self.branchesReply
         case .needs: "## Login screen rewrite\nNow: Token refresh is done. Paused before changing login length.\nNext: Your answers, then the auth tests."
         case .approval: "## Login screen rewrite\nNow: The auth tests need a clean database. Waiting for your approval.\nNext: Then run the auth tests."
-        #if DEBUG
         case .artifact: Self.artifactReply
-        #endif
+        case .playground: PlaygroundScript.readyReply
         default: Self.reply
         }
     }
@@ -291,9 +288,7 @@ enum TodaySessionDemo: String, CaseIterable {
         switch self {
         case .card: Self.loginTodos(.completed, .completed, .inProgress, .pending)
         case .needs, .approval: Self.loginTodos(.completed, .completed, .completed, .pending)
-        #if DEBUG
         case .artifact: Self.loginTodos(.completed, .inProgress, .completed, .pending)
-        #endif
         case .reconnecting: Self.loginTodos(.completed, .inProgress, .pending, .pending)
         case .updating, .updatefailed: Self.loginTodos(.completed, .completed, .inProgress, .pending)
         case .long: Self.loginTodos(.completed, .completed, .completed, .completed)
@@ -318,7 +313,7 @@ enum TodaySessionDemo: String, CaseIterable {
         }
     }
 
-    private static let directory = "/Users/example/Projects/hexcode"
+    private static let directory = DemoSetup.setup.project.path
 }
 
 #if DEBUG
@@ -339,7 +334,7 @@ enum DemoTake: String {
 #endif
 
 @MainActor
-private final class DemoMemory: DailySessionMemory {
+final class DemoMemory: DailySessionMemory {
     var lastOpenedDay: String?
     var lastSessionID: String?
 
@@ -350,7 +345,7 @@ private final class DemoMemory: DailySessionMemory {
 
 private struct DemoFailure: Error {}
 
-private struct DemoService: DailySessionService {
+struct DemoService: DailySessionService {
     let sessions: [SessionListing]
     let fails: Bool
 
@@ -408,7 +403,6 @@ private struct DemoGenerator: SummaryGenerating {
     }
 }
 
-#if DEBUG
 /// A server with artifacts on and one artifact; the setup session is never used.
 private struct DemoArtifacts: ArtifactsAPI {
     let artifact: ArtifactInfo
@@ -444,4 +438,3 @@ private struct DemoArtifacts: ArtifactsAPI {
     func reply(sessionID: String, requestID: String, allow: Bool) async throws { throw DemoFailure() }
     func transcript(sessionID: String) async -> [SetupMessage] { [] }
 }
-#endif
