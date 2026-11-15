@@ -12,6 +12,7 @@ import android.os.Process
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import androidx.annotation.RequiresApi
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
@@ -72,7 +73,7 @@ internal fun openEngine(
     return when (model.engine) {
         "sherpa-onnx" -> SherpaOnnxEngine(store, model, threads, options.provider, mask)
         "litert" -> LiteRtEngine(store, model, threads, gpu = model.kind == "tdt_gpu", context.cacheDir, mask)
-        "android" -> AndroidSystemEngine(context)
+        "android" -> if (Build.VERSION.SDK_INT >= 33) AndroidSystemEngine(context) else error("Needs Android 13 or later.")
         else -> error("Unknown engine ${model.engine}")
     }
 }
@@ -164,11 +165,11 @@ internal inline fun <T> onCores(
  * microphone so it hears exactly what the other engines hear. It works while audio arrives, so a take fed live
  * leaves only its last moment to finish when you let go.
  */
+@RequiresApi(33)
 private class AndroidSystemEngine(
     private val context: Context,
 ) : SpeechEngine {
     init {
-        check(Build.VERSION.SDK_INT >= 33) { "Needs Android 13 or later." }
         check(SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) { "This phone has no on-device speech recognizer." }
     }
 
@@ -185,6 +186,7 @@ private class AndroidSystemEngine(
     override fun close() {}
 }
 
+@RequiresApi(33)
 private class SystemStream(
     context: Context,
 ) : SpeechStream {
