@@ -253,6 +253,10 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
         textMateEngine: any TextMateHighlighting,
         highlightRevisions: TextMateHighlightRevisionSource
     ) async -> DisplayMessage {
+        // The timeline shows a cut user message as plain text; never parse the hidden rest.
+        if message.role == .user, MessageTextLimit.cut(message.text) != nil {
+            return DisplayMessage(message: message, renderedMarkdown: nil)
+        }
         let isStreaming = messageIsStreaming(message)
         if mode == .historyPlainFirst {
             if let reusable = reusableDocument(

@@ -8,9 +8,37 @@ struct SessionChatSelectTextTarget: Equatable {
     let text: String
     /// The code block the Message sheet was opened from; the sheet opens with it in view.
     var codeBlock: String? = nil
+    /// Opened from the Show full message row of a cut message: titled Full message.
+    var isFullMessage = false
+
+    /// The whole text of a message the timeline shows cut.
+    static func fullMessage(id: String, text: String) -> SessionChatSelectTextTarget {
+        SessionChatSelectTextTarget(id: id, text: text, isFullMessage: true)
+    }
+}
+
+private struct OpenFullMessageKey: EnvironmentKey {
+    static let defaultValue: ((SessionChatSelectTextTarget) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    /// Opens the Select text sheet over a cut message's whole text (#1043).
+    var openFullMessage: ((SessionChatSelectTextTarget) -> Void)? {
+        get { self[OpenFullMessageKey.self] }
+        set { self[OpenFullMessageKey.self] = newValue }
+    }
 }
 
 enum SessionChatSelectText {
+    /// Text larger than this (UTF-8 bytes, read without a scan) opens in a text view that
+    /// scrolls itself in a half-height sheet, instead of one view as tall as the text: a pasted
+    /// log of 190,000 lines must not lay out or measure the whole text at once (#1043).
+    static let selfScrollingThresholdBytes = 32 * 1_024
+
+    static func scrollsItself(_ text: String) -> Bool {
+        text.utf8.count > selfScrollingThresholdBytes
+    }
+
     /// Where `codeBlock` sits in the raw message text (UTF-16), so the sheet
     /// can bring it into view. Falls back to the block's first non-blank line
     /// when the raw text indents or wraps the block differently.
@@ -56,11 +84,20 @@ private struct SessionChatSelectTextSheetModifier: ViewModifier {
                         }
                     }
                 ),
-                title: "session_chat_sheet.select_text.title",
-                scrollTargetID: focusFrame == nil ? nil : Self.focusID,
-                height: .fitAllContent,
+                title: title,
+                scrollTargetID: focusFrame == nil || scrollsItself ? nil : Self.focusID,
+                height: scrollsItself ? .half : .fitAllContent,
                 content: {
-                    if let target {
+                    if let target, scrollsItself {
+                        SessionChatScrollingSelectTextBody(
+                            text: target.text,
+                            focusRange: SessionChatSelectText.focusRange(
+                                text: target.text,
+                                codeBlock: target.codeBlock
+                            )
+                        )
+                        .openCodeBottomSheetContentInset()
+                    } else if let target {
                         SessionChatSelectTextBody(
                             text: target.text,
                             focusRange: SessionChatSelectText.focusRange(
@@ -88,6 +125,16 @@ private struct SessionChatSelectTextSheetModifier: ViewModifier {
             .onChange(of: target?.id) { _, _ in
                 focusFrame = nil
             }
+    }
+
+    private var scrollsItself: Bool {
+        target.map { SessionChatSelectText.scrollsItself($0.text) } ?? false
+    }
+
+    private var title: OpenCodeText {
+        target?.isFullMessage == true
+            ? "session_chat_sheet.select_text.full_message_title"
+            : "session_chat_sheet.select_text.title"
     }
 
     /// Message text stays out of Analytics; only the taxonomy action is reported.
@@ -136,6 +183,70 @@ private struct SessionChatSelectTextBody: View {
     }
 }
 
+/// A very long text in a read-only `UITextView` that scrolls itself and fills the sheet body,
+/// so TextKit lays out only what is in view. Same font, colour and selection as the short body.
+private struct SessionChatScrollingSelectTextBody: View {
+    let text: String
+    let focusRange: NSRange?
+
+    @Environment(\.openCodeBottomSheetBodyHeight) private var bodyHeight
+
+    private static let bottomPadding: CGFloat = 8
+    /// Until the sheet reports its body, a height no half sheet body exceeds.
+    private static let provisionalHeight: CGFloat = 320
+
+    var body: some View {
+        SessionChatScrollingSelectableText(text: text, focusRange: focusRange)
+            .frame(maxWidth: .infinity)
+            .frame(height: max((bodyHeight ?? Self.provisionalHeight) - Self.bottomPadding, 1))
+            .padding(.bottom, Self.bottomPadding)
+    }
+}
+
+private struct SessionChatScrollingSelectableText: UIViewRepresentable {
+    let text: String
+    let focusRange: NSRange?
+
+    final class Coordinator {
+        var text: String?
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView(usingTextLayoutManager: true)
+        SessionChatSelectableText.configure(view)
+        view.isScrollEnabled = true
+        view.alwaysBounceVertical = false
+        view.showsVerticalScrollIndicator = true
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        view.textColor = UIColor(OpenCodeColors.textBase)
+        view.tintColor = UIColor(OpenCodeColors.interactive)
+        // Same storage compares in constant time; the text is only set once per target.
+        guard context.coordinator.text != text else { return }
+        context.coordinator.text = text
+        view.text = text
+        view.setContentOffset(.zero, animated: false)
+        if let focusRange {
+            DispatchQueue.main.async {
+                view.scrollRangeToVisible(focusRange)
+            }
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0, width.isFinite,
+              let height = proposal.height, height > 0, height.isFinite
+        else { return nil }
+        return CGSize(width: width, height: height)
+    }
+}
+
 /// Read-only `UITextView`, for range selection with handles: SwiftUI
 /// `Text.textSelection` only copies the whole text on iOS. It does not scroll
 /// and sizes to its text, so the sheet body scrolls it; the sheet leaves drags
@@ -147,9 +258,15 @@ private struct SessionChatSelectableText: UIViewRepresentable {
 
     func makeUIView(context: Context) -> SessionChatSelectableTextView {
         let view = SessionChatSelectableTextView(usingTextLayoutManager: true)
+        Self.configure(view)
+        view.isScrollEnabled = false
+        return view
+    }
+
+    /// Read-only, selectable, body font: shared by the short and the self-scrolling body.
+    static func configure(_ view: UITextView) {
         view.isEditable = false
         view.isSelectable = true
-        view.isScrollEnabled = false
         view.dataDetectorTypes = []
         view.backgroundColor = .clear
         view.textContainerInset = .zero
@@ -158,7 +275,6 @@ private struct SessionChatSelectableText: UIViewRepresentable {
         view.font = UIFontMetrics(forTextStyle: .body).scaledFont(for: .systemFont(ofSize: 16, weight: .regular))
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.accessibilityIdentifier = "session_chat.select_text.text"
-        return view
     }
 
     func updateUIView(_ view: SessionChatSelectableTextView, context: Context) {

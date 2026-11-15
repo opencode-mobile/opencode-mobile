@@ -209,6 +209,10 @@ class MessageContentPreparer
             mode: MessagePreparationMode,
             sessionKey: String = "",
         ): DisplayMessage {
+            // The timeline shows a cut user message as plain text; never parse the hidden rest.
+            if (message.role == MessageRole.User && MessageTextLimit.cut(message.text) != null) {
+                return DisplayMessage(message = message, renderedMarkdown = null)
+            }
             val isStreaming = messageIsStreaming(message)
             if (mode == MessagePreparationMode.HistoryPlainFirst) {
                 reusableDocument(message, previous, mode)?.let { reusable ->

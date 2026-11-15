@@ -29,6 +29,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case imageGallery
     case imageViewer
     case outgoingMessage
+    case truncationRow
     case assistantMessage
     case toolCallCard
     case toolChip
@@ -398,6 +399,12 @@ let componentGalleryEntries = [
         id: .outgoingMessage,
         title: "Outgoing Message",
         description: "Trailing prompt card that renders sent prompts at full height.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .truncationRow,
+        title: "Truncation Row",
+        description: "Row at the cut of a long message that opens the whole text.",
         category: .chat
     ),
     ComponentGalleryEntry(

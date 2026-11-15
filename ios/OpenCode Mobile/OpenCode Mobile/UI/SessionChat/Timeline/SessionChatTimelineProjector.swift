@@ -525,6 +525,8 @@ nonisolated enum SessionChatTimelineProjector {
             switch block {
             case .text(let id, _, let doc):
                 "t:\(id):\(doc != nil)"
+            case .limitedText(let id, _, let limit):
+                "lt:\(id):\(limit.shownCharacters)"
             case .attachment(let id, let file):
                 "a:\(id):\(file.id):\(file.previewData != nil)"
             case .toolCard(let id, let card):
@@ -589,6 +591,8 @@ nonisolated enum SessionChatTimelineProjector {
             switch block {
             case .text(let id, _, _):
                 "t:\(id)"
+            case .limitedText(let id, _, _):
+                "lt:\(id)"
             case .attachment(let id, let file):
                 "a:\(id):\(file.id)"
             case .toolCard(let id, _):

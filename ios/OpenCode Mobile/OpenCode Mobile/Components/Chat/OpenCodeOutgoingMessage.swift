@@ -5,15 +5,24 @@ private let outgoingMessagePaddingVertical: CGFloat = 8
 
 private let outgoingMessageMaxWidthFraction: CGFloat = 0.8
 
+/// A text cut to the part the timeline shows; the bubble ends with a row that opens the rest.
+struct OpenCodeOutgoingMessageLimit {
+    let shownCharacters: Int
+    let totalCharacters: Int
+    /// Opens the whole text. Nil: the row is not drawn.
+    let onShowFull: (() -> Void)?
+}
+
 enum OpenCodeOutgoingMessageContent: Identifiable {
-    case text(id: String, text: String)
+    /// `limit`: the text is the shown part of a longer message.
+    case text(id: String, text: String, limit: OpenCodeOutgoingMessageLimit? = nil)
     case attachment(OpenCodeAttachmentPresentation)
     /// Attached images as one gallery; `onOpen` receives the tapped index.
     case images(id: String, items: [OpenCodeImageGalleryItem], onOpen: ((Int) -> Void)?)
 
     var id: String {
         switch self {
-        case .text(let id, _): "text-\(id)"
+        case .text(let id, _, _): "text-\(id)"
         case .attachment(let attachment): "attachment-\(attachment.id)"
         case .images(let id, _, _): "images-\(id)"
         }
@@ -157,8 +166,10 @@ struct OpenCodeOutgoingMessage: View {
                 }
                 ForEach(content) { item in
                     switch item {
-                    case .text(_, let text):
-                        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    case .text(_, let text, let limit):
+                        if let limit, let onShowFull = limit.onShowFull {
+                            interactiveTextPill(text: text, limit: limit, onShowFull: onShowFull)
+                        } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             interactiveTextPill(text: text)
                         }
                     case .attachment(let attachment):
@@ -199,8 +210,18 @@ struct OpenCodeOutgoingMessage: View {
 
     private var pendingOpacity: Double { 0.6 }
 
-    private func textPill(text: String) -> some View {
-        pillContent(text: text)
+    private func textPill(text: String, limit: OpenCodeOutgoingMessageLimit? = nil, onShowFull: (() -> Void)? = nil) -> some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            if !text.isEmpty {
+                pillContent(text: text, isLimited: limit != nil)
+            }
+            if let limit, let onShowFull {
+                OpenCodeTruncationRow(
+                    variant: .fullMessage(shownCharacters: limit.shownCharacters, totalCharacters: limit.totalCharacters),
+                    action: onShowFull
+                )
+            }
+        }
             .padding(.horizontal, outgoingMessagePaddingHorizontal)
             .padding(.vertical, outgoingMessagePaddingVertical)
             .background(
@@ -218,6 +239,33 @@ struct OpenCodeOutgoingMessage: View {
                         )
                 }
             }
+    }
+
+    /// A cut text: the bubble stays one VoiceOver element with the message actions, and the
+    /// row is also a named action on it.
+    private func interactiveTextPill(
+        text: String,
+        limit: OpenCodeOutgoingMessageLimit,
+        onShowFull: @escaping () -> Void
+    ) -> some View {
+        let open = onTap ?? onLongPress
+        let variant = OpenCodeTruncationRowVariant.fullMessage(
+            shownCharacters: limit.shownCharacters,
+            totalCharacters: limit.totalCharacters
+        )
+        return textPill(text: text, limit: limit, onShowFull: onShowFull)
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .gesture(TapGesture().onEnded { onTap?() }, including: onTap == nil ? .subviews : .all)
+            .gesture(LongPressGesture().onEnded { _ in onLongPress?() }, including: onLongPress == nil ? .subviews : .all)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text("component.outgoing_message.label"))
+            .accessibilityValue([variant.caption, accessibilityValue].filter { !$0.isEmpty }.joined(separator: ", "))
+            .accessibilityHint(open == nil ? Text(verbatim: "") : Text("component.outgoing_message.shows_actions_hint"))
+            // Combined, the row's button would take the bubble's activation; keep it on the bubble.
+            .accessibilityAction { open?() }
+            .accessibilityAction(named: Text(variant.title), onShowFull)
+            .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), enabled: open != nil, activate: open)
+            .openCodeSecondaryClick(onLongPress)
     }
 
     @ViewBuilder
@@ -254,8 +302,8 @@ struct OpenCodeOutgoingMessage: View {
     }
 
     @ViewBuilder
-    private func pillContent(text: String) -> some View {
-        if let renderedMarkdown, content.lazy.filter({
+    private func pillContent(text: String, isLimited: Bool = false) -> some View {
+        if !isLimited, let renderedMarkdown, content.lazy.filter({
             if case .text = $0 { return true }
             return false
         }).count == 1 {

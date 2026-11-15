@@ -1124,8 +1124,9 @@ final class SessionChatComposer {
             if case .serverCommand = intent, !commandKeepsClientMessageID { return nil }
             return ClientMessageID.next()
         }()
-        let optimisticBlocks =
-            (displayText.isEmpty
+        let optimisticBlocks = SessionChatTimelineBlocks.limitUserText(
+            role: .user,
+            blocks: (displayText.isEmpty
                 ? []
                 : [
                     SessionChatTimelineBlock.text(
@@ -1134,6 +1135,7 @@ final class SessionChatComposer {
                         renderedMarkdown: nil
                     ),
                 ]) + attachmentBlocks
+        )
 
         let optimistic = SessionChatRow(
             id: messageID ?? "pending-\(UUID().uuidString)",

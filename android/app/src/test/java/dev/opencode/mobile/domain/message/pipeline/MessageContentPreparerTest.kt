@@ -66,6 +66,19 @@ class MessageContentPreparerTest {
         }
 
     @Test
+    fun cutUserMessageIsNotParsedAsMarkdown() =
+        runTest(testDispatcher) {
+            val preparer = createPreparer()
+            val markdown = "# Title\n\n" + (1..60).joinToString("\n") { "- item $it" }
+
+            val cut = preparer.prepareMessage(Message(id = "u1", role = MessageRole.User, text = markdown))
+            val reply = preparer.prepareMessage(Message(id = "a1", role = MessageRole.Assistant, text = markdown))
+
+            assertNull(cut.renderedMarkdown)
+            assertNotNull(reply.renderedMarkdown)
+        }
+
+    @Test
     fun streamingTextBlockRendersTableOnceDelimiterRowStarts() =
         runTest(testDispatcher) {
             val preparer = createPreparer()

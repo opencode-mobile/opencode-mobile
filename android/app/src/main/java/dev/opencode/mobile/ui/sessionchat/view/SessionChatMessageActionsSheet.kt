@@ -21,6 +21,8 @@ internal data class SessionChatMessageActionsTarget(
     val showsRevertMessage: Boolean,
     /** The code block the tap landed on, offered as its own copy action. */
     val codeBlock: String? = null,
+    /** Select text only: opened from a cut message's Show full message row, titled Full message. */
+    val isFullMessage: Boolean = false,
 )
 
 @Composable

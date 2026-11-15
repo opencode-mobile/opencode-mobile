@@ -397,7 +397,7 @@ object TimelineProjector {
         when (block) {
             // Presence only. Streaming text/markdown growth is GrowBottom or Content.
             is SessionChatTimelineBlock.Text ->
-                "t:${block.blockID}:${block.renderedMarkdown != null}"
+                "t:${block.blockID}:${block.renderedMarkdown != null}:${block.limit?.shownCharacters ?: -1}"
             is SessionChatTimelineBlock.Attachment ->
                 "a:${block.blockID}:${block.attachment.filename}"
             is SessionChatTimelineBlock.ImageGallery ->

@@ -82,10 +82,20 @@ data class OpenCodeOutgoingMessageLabel(
     val icon: ImageVector? = null,
 )
 
+/** A text cut to the part the timeline shows; the bubble ends with a row that opens the rest. */
+data class OpenCodeOutgoingMessageLimit(
+    val shownCharacters: Int,
+    val totalCharacters: Int,
+    /** Opens the whole text. Null: the row is not drawn. */
+    val onShowFull: (() -> Unit)?,
+)
+
 sealed interface OpenCodeOutgoingMessageContent {
+    /** [limit]: [text] is the shown part of a longer message. */
     data class Text(
         val text: String,
         val renderedMarkdown: MarkdownDocument? = null,
+        val limit: OpenCodeOutgoingMessageLimit? = null,
     ) : OpenCodeOutgoingMessageContent
 
     /** [id] names this attachment to [OpenCodeOutgoingMessage]'s `onImageClick`. */
@@ -201,7 +211,9 @@ fun OpenCodeOutgoingMessage(
                                         ),
                                     horizontalAlignment = Alignment.End,
                                 ) {
-                                    if (part.renderedMarkdown != null) {
+                                    if (part.limit != null && part.text.isEmpty()) {
+                                        // Nothing shown before the cut: the bubble holds the row only.
+                                    } else if (part.renderedMarkdown != null && part.limit == null) {
                                         OpenCodeRenderedMarkdown(
                                             document = part.renderedMarkdown,
                                             variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
@@ -230,6 +242,21 @@ fun OpenCodeOutgoingMessage(
                                             color = bubbleTextColor,
                                             overflow = TextOverflow.Clip,
                                             modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
+                                        )
+                                    }
+                                    val onShowFull = part.limit?.onShowFull
+                                    if (part.limit != null && onShowFull != null) {
+                                        OpenCodeTruncationRow(
+                                            variant =
+                                                OpenCodeTruncationRowVariant.FullMessage(
+                                                    shownCharacters = part.limit.shownCharacters,
+                                                    totalCharacters = part.limit.totalCharacters,
+                                                ),
+                                            onClick = onShowFull,
+                                            modifier =
+                                                Modifier
+                                                    .widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2)
+                                                    .padding(top = if (part.text.isEmpty()) 0.dp else 8.dp),
                                         )
                                     }
                                 }

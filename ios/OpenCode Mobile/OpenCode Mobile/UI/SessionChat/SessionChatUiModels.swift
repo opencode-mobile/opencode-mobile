@@ -104,9 +104,22 @@ extension SessionChatRow: MessageListTimelineHeightEstimating {
                 .compact
             }
         return MessageListTimelineRowHeightEstimate.fallback(
-            characterCount: text.count,
+            characterCount: role == .user ? userCharacterCountEstimate : text.count,
             style: style
         )
+    }
+}
+
+private extension SessionChatRow {
+    /// A cut user message lays out only its shown part, plus the Show full message row.
+    var userCharacterCountEstimate: Int {
+        var limitedCount = 0
+        var isLimited = false
+        for case let .limitedText(_, text, _) in blocks {
+            isLimited = true
+            limitedCount += text.count + MessageTextLimit.charactersPerLine * 2
+        }
+        return isLimited ? limitedCount : text.count
     }
 }
 

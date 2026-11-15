@@ -298,6 +298,7 @@ enum ProductAnalytics {
         static let messageActionsSelectText = "message_actions_select_text"
         static let selectTextCopyAll = "select_text_copy_all"
         static let selectTextDismiss = "select_text_dismiss"
+        static let chatShowFullMessage = "chat_show_full_message"
         static let chatSteerPendingPrompt = "chat_steer_pending_prompt"
         static let chatQueuePendingPrompt = "chat_queue_pending_prompt"
         static let chatCancelPendingPrompt = "chat_cancel_pending_prompt"

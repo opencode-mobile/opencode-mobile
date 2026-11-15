@@ -5,6 +5,9 @@ import Foundation
 /// Every block carries a stable `blockID` derived from server part IDs.
 nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case text(blockID: String, text: String, renderedMarkdown: NativeMarkdownDocument?)
+    /// The shown part of a user's own message that is too long to lay out in full (#1043).
+    /// `text` is the cut prefix; the message keeps the whole text for copy and Select text.
+    case limitedText(blockID: String, text: String, limit: SessionChatTextLimit)
     case attachment(blockID: String, file: FilePart)
     case toolCard(blockID: String, card: SessionChatToolCardBlock)
     case toolGroup(blockID: String, group: SessionChatToolGroupBlock)
@@ -40,6 +43,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     var blockID: String {
         switch self {
         case .text(let blockID, _, _):
+            blockID
+        case .limitedText(let blockID, _, _):
             blockID
         case .attachment(let blockID, _):
             blockID
@@ -84,8 +89,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(_, let paragraph):
             guard let textBlockID = paragraph.textBlockID, let text = paragraph.text else { return nil }
             return (textBlockID, text, paragraph.renderedMarkdown)
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
-             .failureLine, .notice, .imageGallery:
+        case .limitedText, .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard,
+             .stopNote, .failureLine, .notice, .imageGallery:
             return nil
         }
     }
@@ -97,8 +102,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             return .text(blockID: blockID, text: text, renderedMarkdown: document)
         case .stepParagraph(let blockID, let paragraph):
             return .stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(document))
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
-             .failureLine, .notice, .imageGallery:
+        case .limitedText, .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard,
+             .stopNote, .failureLine, .notice, .imageGallery:
             return self
         }
     }
@@ -126,6 +131,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
                 && lText == rText
                 && lDoc?.sourceHash == rDoc?.sourceHash
                 && lDoc?.renderTreeVersion == rDoc?.renderTreeVersion
+        case let (.limitedText(lID, lText, lLimit), .limitedText(rID, rText, rLimit)):
+            lID == rID && lLimit == rLimit && lText == rText
         case let (.attachment(lID, lFile), .attachment(rID, rFile)):
             lID == rID && lFile == rFile
         case let (.toolCard(lID, lCard), .toolCard(rID, rCard)):
@@ -158,6 +165,12 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             false
         }
     }
+}
+
+/// How much of a limited user message the timeline shows.
+nonisolated struct SessionChatTextLimit: Equatable, Sendable {
+    let shownCharacters: Int
+    let totalCharacters: Int
 }
 
 nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
@@ -1411,8 +1424,8 @@ nonisolated enum SessionChatTimelineBlocks {
         case .imageGallery(_, let gallery):
             // Tool images ride with their card, so a tool-only step still merges.
             gallery.source == .tool
-        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .activityCard, .stopNote,
-             .failureLine, .notice:
+        case .text, .limitedText, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .activityCard,
+             .stopNote, .failureLine, .notice:
             false
         }
     }
@@ -2449,7 +2462,7 @@ nonisolated enum SessionChatTimelineBlocks {
             stepRail: stepRail,
             activityCard: activityCard
         )
-        return collapseCommandInvocations(
+        let collapsed = collapseCommandInvocations(
             role: message.role,
             blocks: admitPromptSkills(
                 role: message.role,
@@ -2460,6 +2473,22 @@ nonisolated enum SessionChatTimelineBlocks {
             commands: commands,
             skillMentions: skillMentions(message.promptSkills, commands: commands)
         )
+        return limitUserText(role: message.role, blocks: collapsed)
+    }
+
+    /// Cuts each user text block that is too long to lay out (`MessageTextLimit`) to the part
+    /// the timeline shows, so the row never lays out, measures or parses the rest (#1043).
+    /// Assistant and every other role keep their text.
+    static func limitUserText(role: MessageRole, blocks: [SessionChatTimelineBlock]) -> [SessionChatTimelineBlock] {
+        guard role == .user else { return blocks }
+        return blocks.map { block in
+            guard case .text(let blockID, let text, _) = block, let cut = MessageTextLimit.cut(text) else { return block }
+            return .limitedText(
+                blockID: blockID,
+                text: cut.visibleText,
+                limit: SessionChatTextLimit(shownCharacters: cut.shownCharacters, totalCharacters: text.count)
+            )
+        }
     }
 
     /// The `/name` spans a user prompt carries, for `[/name]` collapse. A skill sent without

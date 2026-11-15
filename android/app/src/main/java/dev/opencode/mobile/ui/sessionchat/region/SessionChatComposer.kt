@@ -1299,18 +1299,22 @@ class SessionChatComposer(
                             renderedMarkdown = optimisticMarkdown,
                             attachments = attachmentItems,
                             blocks =
-                                buildList {
-                                    if (display.text.isNotBlank()) {
-                                        add(
-                                            SessionChatTimelineBlock.Text(
-                                                blockID = PresentationBlockId.messageFallback(display.id),
-                                                text = display.text,
-                                                renderedMarkdown = optimisticMarkdown,
-                                            ),
-                                        )
-                                    }
-                                    addAll(SessionChatTimelineBlocks.attachmentBlocks(attachmentItems))
-                                },
+                                SessionChatTimelineBlocks.limitUserText(
+                                    role = dev.opencode.mobile.domain.message.MessageRole.User,
+                                    blocks =
+                                        buildList {
+                                            if (display.text.isNotBlank()) {
+                                                add(
+                                                    SessionChatTimelineBlock.Text(
+                                                        blockID = PresentationBlockId.messageFallback(display.id),
+                                                        text = display.text,
+                                                        renderedMarkdown = optimisticMarkdown,
+                                                    ),
+                                                )
+                                            }
+                                            addAll(SessionChatTimelineBlocks.attachmentBlocks(attachmentItems))
+                                        },
+                                ),
                         ),
                     )
                 }
