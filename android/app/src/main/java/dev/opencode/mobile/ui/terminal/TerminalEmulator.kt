@@ -45,8 +45,11 @@ fun TerminalEmulator(
     foregroundHex: String,
     onEvent: (TerminalEmulatorEvent) -> Unit,
     modifier: Modifier = Modifier,
+    /** xterm font size in CSS px (dp); follows the Code text size (#1044). */
+    fontSizePx: Float = TERMINAL_BASE_FONT_SIZE_PX,
 ) {
     val onEventState by rememberUpdatedState(onEvent)
+    val fontSizeState by rememberUpdatedState(fontSizePx)
     val backgroundState by rememberUpdatedState(backgroundHex)
     val foregroundState by rememberUpdatedState(foregroundHex)
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -68,6 +71,7 @@ fun TerminalEmulator(
                 .put("cursor", foregroundState)
                 .toString()
         target.evaluateJavascript("window.terminalSetTheme($theme)", null)
+        target.evaluateJavascript("window.terminalSetFontSize($fontSizeState)", null)
     }
 
     LaunchedEffect(webView) {
@@ -151,6 +155,9 @@ fun TerminalEmulator(
         },
     )
 }
+
+/** The terminal's font size at Default text size and a font scale of 1. */
+internal const val TERMINAL_BASE_FONT_SIZE_PX = 12f
 
 private class TerminalJsBridge(
     private val onMessage: (String) -> Unit,

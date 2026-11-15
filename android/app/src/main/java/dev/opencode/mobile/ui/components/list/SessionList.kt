@@ -40,12 +40,14 @@ import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.home.HomeSessionLadderKind
 import dev.opencode.mobile.domain.home.HomeSessionLadderSection
 import dev.opencode.mobile.domain.home.HomeSessionOrderStabilizer
+import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.OpenCodeTextRegion
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
@@ -712,7 +714,7 @@ private fun SessionListFeedRows(
                 when (section.kind) {
                     HomeSessionLadderKind.Recent -> {
                         item(key = "header-${section.id}") {
-                            OpenCodeSectionHeader(title = section.title.resolve())
+                            OpenCodeTextRegion(AppearanceTextRegion.HomeList) { OpenCodeSectionHeader(title = section.title.resolve()) }
                         }
                         items(
                             section.items,
@@ -732,7 +734,7 @@ private fun SessionListFeedRows(
                     HomeSessionLadderKind.Week,
                     -> {
                         item(key = "header-${section.id}") {
-                            OpenCodeSectionHeader(title = section.title.resolve())
+                            OpenCodeTextRegion(AppearanceTextRegion.HomeList) { OpenCodeSectionHeader(title = section.title.resolve()) }
                         }
                         items(
                             section.items,
@@ -801,6 +803,34 @@ internal fun SessionListRow(
     titleHighlight: IntRange? = null,
     showsStatus: Boolean = true,
     trailing: (@Composable () -> Unit)? = null,
+) {
+    // Home list text size (#1044), also where Archived sessions and session search reuse the row.
+    OpenCodeTextRegion(AppearanceTextRegion.HomeList) {
+        SessionListRowContent(
+            session = session,
+            showStatusDot = showStatusDot,
+            selected = selected,
+            onSessionSelected = onSessionSelected,
+            onSessionLongPress = onSessionLongPress,
+            rowStyle = rowStyle,
+            titleHighlight = titleHighlight,
+            showsStatus = showsStatus,
+            trailing = trailing,
+        )
+    }
+}
+
+@Composable
+private fun SessionListRowContent(
+    session: SessionListSession,
+    showStatusDot: Boolean,
+    selected: Boolean,
+    onSessionSelected: (SessionListSession) -> Unit,
+    onSessionLongPress: ((SessionListSession) -> Unit)?,
+    rowStyle: HomeSessionRowStyle,
+    titleHighlight: IntRange?,
+    showsStatus: Boolean,
+    trailing: (@Composable () -> Unit)?,
 ) {
     val status =
         session.status.toListItemStatus(

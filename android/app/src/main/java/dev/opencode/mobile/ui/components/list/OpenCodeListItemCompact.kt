@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.theme.openCodeTextScaled
 import kotlin.math.ceil
 
 private val CompactRowMinHeight = 66.dp
@@ -353,12 +354,14 @@ internal fun ListItemTile(
     modifier: Modifier = Modifier,
 ) {
     val backgroundBase = openCodeColor("background-base")
-    Box(modifier = modifier.size(CompactTileSize)) {
+    // Grows with the row's text inside a text region (#1044).
+    val tileSize = openCodeTextScaled(CompactTileSize)
+    Box(modifier = modifier.size(tileSize)) {
         ListItemLetterCircle(
             character = decorator.character,
             accent = decorator.accent,
             glyphSize = CompactTileGlyphSize,
-            modifier = Modifier.size(CompactTileSize),
+            modifier = Modifier.size(tileSize),
         )
         val tone = decorator.statusDot
         if (tone != null) {

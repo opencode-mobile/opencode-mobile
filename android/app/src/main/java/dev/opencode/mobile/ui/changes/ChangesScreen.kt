@@ -44,9 +44,11 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductRouteScreenViewEffect
 import dev.opencode.mobile.R
 import dev.opencode.mobile.backwardRouteTransition
+import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.forwardRouteTransition
+import dev.opencode.mobile.theme.OpenCodeTextRegion
 import dev.opencode.mobile.ui.components.OpenCodeDiffStat
 import dev.opencode.mobile.ui.components.OpenCodeDiffStatSeparator
 import dev.opencode.mobile.ui.components.OpenCodeDiffStatStyle
@@ -517,14 +519,17 @@ private fun FileViewerScreen(
                             .verticalScroll(scrollState)
                             .padding(start = 16.dp, top = 16.dp, end = 16.dp),
                     ) {
-                        OpenCodeUnifiedDiff(
-                            file = file,
-                            document = viewer.document,
-                            contextMode = viewer.contextMode,
-                            selectedHunkId = viewer.selectedHunkId,
-                            onSelectedHunkOffset = { selectedHunkOffset = it },
-                            revealSelectedHunk = hunkNavigated,
-                        )
+                        // Code text size (#1044).
+                        OpenCodeTextRegion(AppearanceTextRegion.Code) {
+                            OpenCodeUnifiedDiff(
+                                file = file,
+                                document = viewer.document,
+                                contextMode = viewer.contextMode,
+                                selectedHunkId = viewer.selectedHunkId,
+                                onSelectedHunkOffset = { selectedHunkOffset = it },
+                                revealSelectedHunk = hunkNavigated,
+                            )
+                        }
                         Spacer(Modifier.height(trailingScrollSpace))
                     }
                     OpenCodeHunkNavigationPill(

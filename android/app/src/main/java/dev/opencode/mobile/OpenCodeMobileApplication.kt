@@ -14,6 +14,7 @@ import dev.opencode.mobile.domain.featureflags.FeatureFlags
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
+import dev.opencode.mobile.domain.preferences.AppearancePreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
@@ -35,6 +36,7 @@ class OpenCodeMobileApplication : Application() {
         ComposeFoundationWorkarounds.apply()
         ThemeManager.initialize(this)
         HomeDisplayPreferences.initialize(this)
+        AppearancePreferences.initialize(this)
         AnalyticsConsentPreferences.initialize(this)
         AppLockPreferences.initialize(this)
         AppOnboardingPreferences.initialize(this)

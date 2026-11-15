@@ -14,7 +14,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,53 +28,144 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.preferences.AppearanceMode
+import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
+import dev.opencode.mobile.domain.preferences.AppearanceTextSize
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.session.FileDiff
+import dev.opencode.mobile.domain.session.FileDiffStatus
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.CodeTokenRole
+import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
+import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
+import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
+import dev.opencode.mobile.theme.OpenCodeTextRegion
 import dev.opencode.mobile.theme.ResolvedTokens
 import dev.opencode.mobile.theme.SyntaxHighlightPreset
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.ThemePreset
 import dev.opencode.mobile.theme.ThemeResolver
+import dev.opencode.mobile.theme.letterCharacterForProject
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.CodeColors
+import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.components.OpenCodeCodeSnippet
 import dev.opencode.mobile.ui.components.OpenCodeCodeSnippetSurface
+import dev.opencode.mobile.ui.components.OpenCodeFilterTab
+import dev.opencode.mobile.ui.components.OpenCodeFilterTabs
+import dev.opencode.mobile.ui.components.OpenCodeFilterTabsStyle
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
+import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeSelectableCard
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
+import dev.opencode.mobile.ui.components.OpenCodeTextSizeSlider
+import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
+import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
+import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
+import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
+import dev.opencode.mobile.ui.components.SessionListRow
+import dev.opencode.mobile.ui.components.SessionListSession
+import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.components.UnifiedDiffParser
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
 fun AppearanceSettingsScreen(
+    state: AppearanceSettingsUiState,
     onNavigateBack: () -> Unit,
-    detailControl: OpenCodeSplitPaneDetailControl? = null,
     onThemeClick: () -> Unit,
     onSyntaxClick: () -> Unit,
+    onModeSelect: (AppearanceMode) -> Unit,
+    onTextSizeSelect: (AppearanceTextRegion, AppearanceTextSize) -> Unit,
+    onResetTextSizes: () -> Unit,
+    onResetAll: () -> Unit,
     modifier: Modifier = Modifier,
+    detailControl: OpenCodeSplitPaneDetailControl? = null,
 ) {
     val theme = ThemeManager.currentTheme
     val syntax = ThemeManager.currentSyntaxPreset
+    var menuExpanded by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxSize()) {
-        OpenCodeTopBar(
-            title = stringResource(R.string.appearance_title),
-            leading = openCodeDetailLeading(detailControl, onNavigateBack),
-            showDivider = true,
-        )
+        OpenCodeTopBarOverflowHost(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+            entries =
+                listOf(
+                    OpenCodeOverflowMenuEntry(
+                        title = stringResource(R.string.appearance_reset_text_sizes),
+                        icon = OpenCodeIcons.Restart,
+                        enabled = state.canResetTextSizes,
+                        onClick = onResetTextSizes,
+                        testTag = "appearanceResetTextSizes",
+                    ),
+                    OpenCodeOverflowMenuEntry(
+                        title = stringResource(R.string.appearance_reset_all),
+                        icon = OpenCodeIcons.Undo,
+                        enabled = state.canResetAll,
+                        destructive = true,
+                        onClick = onResetAll,
+                        testTag = "appearanceResetAll",
+                    ),
+                ),
+        ) {
+            OpenCodeTopBar(
+                title = stringResource(R.string.appearance_title),
+                leading = openCodeDetailLeading(detailControl, onNavigateBack),
+                actions =
+                    listOf(
+                        OpenCodeTopBarAction.Icon(
+                            imageVector = OpenCodeIcons.MoreVert,
+                            contentDescription = stringResource(R.string.appearance_more_options),
+                            onClick = { menuExpanded = true },
+                        ),
+                    ),
+                showDivider = true,
+            )
+        }
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
             Column(
                 modifier =
                     Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(top = 16.dp, bottom = 16.dp),
+                        .padding(top = 8.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                AppearanceSectionHeader(stringResource(R.string.appearance_mode_title))
+                OpenCodeFilterTabs(
+                    tabs =
+                        listOf(
+                            OpenCodeFilterTab(AppearanceMode.System.wireValue, stringResource(R.string.appearance_mode_system)),
+                            OpenCodeFilterTab(AppearanceMode.Light.wireValue, stringResource(R.string.appearance_mode_light)),
+                            OpenCodeFilterTab(AppearanceMode.Dark.wireValue, stringResource(R.string.appearance_mode_dark)),
+                        ),
+                    selectedTabId = state.mode.wireValue,
+                    onTabSelected = { id -> AppearanceMode.fromWire(id)?.let(onModeSelect) },
+                    style = OpenCodeFilterTabsStyle.Segmented,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                AppearanceNote(
+                    stringResource(
+                        when (state.mode) {
+                            AppearanceMode.System -> R.string.appearance_mode_note_system
+                            AppearanceMode.Light -> R.string.appearance_mode_note_light
+                            AppearanceMode.Dark -> R.string.appearance_mode_note_dark
+                        },
+                    ),
+                )
+
+                AppearanceSectionHeader(stringResource(R.string.appearance_theme_title))
                 val themeTitle = stringResource(R.string.appearance_theme_title)
                 OpenCodeListItem(
                     title = themeTitle,
@@ -106,10 +200,188 @@ fun AppearanceSettingsScreen(
                     },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
+
+                AppearanceTextSizeSection(
+                    title = stringResource(R.string.appearance_text_home_title),
+                    region = AppearanceTextRegion.HomeList,
+                    state = state,
+                    onTextSizeSelect = onTextSizeSelect,
+                ) { AppearanceHomeSample() }
+                AppearanceTextSizeSection(
+                    title = stringResource(R.string.appearance_text_session_chat_title),
+                    region = AppearanceTextRegion.SessionChat,
+                    state = state,
+                    onTextSizeSelect = onTextSizeSelect,
+                ) { AppearanceSessionChatSample() }
+                AppearanceTextSizeSection(
+                    title = stringResource(R.string.appearance_text_code_title),
+                    region = AppearanceTextRegion.Code,
+                    state = state,
+                    onTextSizeSelect = onTextSizeSelect,
+                ) { AppearanceCodeSample() }
+                AppearanceNote(stringResource(R.string.appearance_text_code_note))
+                AppearanceNote(
+                    stringResource(R.string.appearance_text_session_chat_note),
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
     }
 }
+
+@Composable
+private fun AppearanceSectionHeader(title: String) {
+    OpenCodeSectionHeader(title = title, modifier = Modifier.padding(top = 12.dp))
+}
+
+@Composable
+private fun AppearanceNote(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = openCodeColor("text-weak"),
+        modifier = modifier.padding(horizontal = 20.dp),
+    )
+}
+
+/** A text-size section: header, the slider card, then a flat live sample at that size (#1044). */
+@Composable
+private fun AppearanceTextSizeSection(
+    title: String,
+    region: AppearanceTextRegion,
+    state: AppearanceSettingsUiState,
+    onTextSizeSelect: (AppearanceTextRegion, AppearanceTextSize) -> Unit,
+    sample: @Composable () -> Unit,
+) {
+    val stepNames = AppearanceTextSize.entries.map { stringResource(it.labelRes()) }
+    AppearanceSectionHeader(title)
+    OpenCodeTextSizeSlider(
+        title = stringResource(R.string.appearance_text_size_label),
+        stepNames = stepNames,
+        selectedIndex = state.textSizes[region].ordinal,
+        defaultIndex = AppearanceTextSize.DEFAULT.ordinal,
+        onSelectedIndexChange = { index -> onTextSizeSelect(region, AppearanceTextSize.atIndex(index)) },
+        accessibilityLabel = stringResource(R.string.appearance_text_size_accessibility, title),
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+    OpenCodeTextRegion(region) {
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { sample() }
+    }
+}
+
+private fun AppearanceTextSize.labelRes(): Int =
+    when (this) {
+        AppearanceTextSize.ExtraSmall -> R.string.appearance_text_size_extra_small
+        AppearanceTextSize.Small -> R.string.appearance_text_size_small
+        AppearanceTextSize.Default -> R.string.appearance_text_size_default
+        AppearanceTextSize.Large -> R.string.appearance_text_size_large
+        AppearanceTextSize.ExtraLarge -> R.string.appearance_text_size_extra_large
+    }
+
+/** A project header and two real Home session rows. */
+@Composable
+private fun AppearanceHomeSample() {
+    val project = stringResource(R.string.appearance_sample_project)
+    val sessions =
+        listOf(
+            SessionListSession(
+                id = "appearance-sample-1",
+                title = stringResource(R.string.appearance_sample_session_one),
+                worktree = APPEARANCE_SAMPLE_DIRECTORY,
+                letter = letterCharacterForProject(stringResource(R.string.appearance_sample_session_one)),
+                letterAccent = LetterAccent.Violet,
+                subtitle = APPEARANCE_SAMPLE_DIRECTORY,
+                status = SessionListStatus.Running,
+                caption = UiText.verbatim(stringResource(R.string.appearance_sample_time_now)),
+                projectName = project,
+            ),
+            SessionListSession(
+                id = "appearance-sample-2",
+                title = stringResource(R.string.appearance_sample_session_two),
+                worktree = APPEARANCE_SAMPLE_DIRECTORY,
+                letter = letterCharacterForProject(stringResource(R.string.appearance_sample_session_two)),
+                letterAccent = LetterAccent.Violet,
+                subtitle = APPEARANCE_SAMPLE_DIRECTORY,
+                status = SessionListStatus.Idle,
+                caption = UiText.verbatim(stringResource(R.string.appearance_sample_time_minutes)),
+                projectName = project,
+                compactWorktree = stringResource(R.string.appearance_sample_branch_two),
+            ),
+        )
+    OpenCodeSectionHeader(title = project)
+    sessions.forEach { session ->
+        SessionListRow(
+            session = session,
+            showStatusDot = true,
+            selected = false,
+            onSessionSelected = {},
+            onSessionLongPress = null,
+            rowStyle = HomeDisplayPreferences.sessionRowStyle,
+        )
+    }
+}
+
+/** A user message, an assistant paragraph with inline code, and a tool line, as Session Chat draws them. */
+@Composable
+private fun AppearanceSessionChatSample() {
+    val assistantText = stringResource(R.string.appearance_sample_assistant_message)
+    val assistantMarkdown =
+        remember(assistantText) {
+            runCatching { OpenCodeMarkdownParser.parse(assistantText, codeHighlighter = OpenCodeHighlightCoreCodeHighlighter) }
+                .getOrNull()
+        }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        OpenCodeOutgoingMessage(
+            text = stringResource(R.string.appearance_sample_user_message),
+            metadataLabel = "",
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OpenCodeAssistantMessage(text = assistantText, renderedMarkdown = assistantMarkdown)
+        OpenCodeToolCallCard(
+            status = OpenCodeToolCallCardStatus.Completed,
+            title = stringResource(R.string.appearance_sample_tool_title),
+            subtitle = stringResource(R.string.appearance_sample_tool_subtitle),
+            additions = 6,
+            deletions = 2,
+        )
+    }
+}
+
+/** A short diff hunk with line numbers, as Changes draws it. */
+@Composable
+private fun AppearanceCodeSample() {
+    val document = remember { UnifiedDiffParser.parse(AppearanceSampleDiff.patch.orEmpty()) }
+    OpenCodeUnifiedDiff(
+        file = AppearanceSampleDiff,
+        document = document,
+        selectedHunkId = null,
+        revealSelectedHunk = false,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
+}
+
+private const val APPEARANCE_SAMPLE_DIRECTORY = "/Users/example/Projects/web-app"
+
+private val AppearanceSampleDiff =
+    FileDiff(
+        path = "src/auth/redirect.ts",
+        patch =
+            "@@ -18,4 +18,5 @@ export async function signIn(form: Credentials) {\n" +
+                "   const session = await login(form)\n" +
+                "-  return redirect(\"/home\")\n" +
+                "+  await session.persist()\n" +
+                "+  return redirect(\"/home\")\n" +
+                " }",
+        additions = 2,
+        deletions = 1,
+        status = FileDiffStatus.Modified,
+    )
 
 @Composable
 fun ThemePickerScreen(

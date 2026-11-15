@@ -78,6 +78,7 @@ import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.theme.openCodeTextScaled
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val ListItemLetterBadgeSize = 32.dp
@@ -567,7 +568,8 @@ internal fun ListItemStartDecoration(
             Box(
                 modifier =
                     Modifier
-                        .size(ListItemLetterBadgeSize)
+                        // Grows with the row's text inside a text region (#1044).
+                        .size(openCodeTextScaled(ListItemLetterBadgeSize))
                         .then(emphasize),
             ) {
                 ListItemLetterCircle(
