@@ -89,6 +89,7 @@ val HexComponentSamples: List<HexSampleSection> =
         HexSampleSection("HexThumbnail") { ThumbnailSample() },
         HexSampleSection("HexToast, HexToastHost") { ToastSample() },
         HexSampleSection("HexProgress") { ProgressSample() },
+        HexSampleSection("HexSpeechDial") { SpeechDialSample() },
         HexSampleSection("HexLinkTile, HexTileRow") { LinkTileSample() },
         HexSampleSection("HexCodeText") { CodeTextSample() },
         HexSampleSection("HexOption") { OptionSample() },
@@ -333,6 +334,7 @@ private fun IconsSample() {
             "img" to HexIcons.img,
             "scan" to HexIcons.scan,
             "alert" to HexIcons.alert,
+            "wifi" to HexIcons.wifi,
             "moon" to HexIcons.moon,
             "sun" to HexIcons.sun,
             "globe" to HexIcons.globe,
@@ -938,6 +940,32 @@ private fun ProgressSample() {
         StateSample("one item, eight items, a long item") {
             HexProgress(listOf(c), AnnotatedString("1 of 1 · Fix the build"), onClick = {})
             HexProgress(listOf(d, d, d, d, c, p, p, p), AnnotatedString("5 of 8 · Rewrite every test that leans on the…"), onClick = {})
+        }
+    }
+}
+
+/** Each of the speech model dial's states, at the sheet's, the speech line's and the label's sizes. */
+@Composable
+private fun SpeechDialSample() {
+    val states =
+        listOf(
+            "not on the phone yet" to (HexDialMode.Stalled to 0f),
+            "downloading" to (HexDialMode.Downloading to 0.19f),
+            "connection dropped" to (HexDialMode.Stalled to 0.19f),
+            "loading" to (HexDialMode.Loading to 1f),
+            "warming up" to (HexDialMode.WarmingUp to 1f),
+            "ready" to (HexDialMode.Ready to 1f),
+            "failed" to (HexDialMode.Failed to 0.19f),
+        )
+    Edge {
+        states.forEach { (name, look) ->
+            StateSample(name) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    HexSpeechDial(look.first, look.second, HexDialSize.Sheet)
+                    HexSpeechDial(look.first, look.second, HexDialSize.Line)
+                    HexSpeechDial(look.first, look.second, HexDialSize.Label)
+                }
+            }
         }
     }
 }

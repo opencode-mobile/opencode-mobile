@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.home
 
+import dev.opencode.voiceengine.VoiceEngine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -65,6 +66,12 @@ class SpeechWaitTest {
 
         override fun loadNow() {
             loadsNow += 1
+        }
+
+        var triedNow = 0
+
+        override fun tryNow() {
+            triedNow += 1
         }
     }
 
@@ -233,4 +240,91 @@ class SpeechWaitTest {
         assertEquals(DraftLabel.Summary, DraftLabel.of(Draft(), SpeechStatus.Failed))
         assertEquals(DraftLabel.SpeechFailed, DraftLabel.of(waiting.waitingFailed(), SpeechStatus.Failed))
     }
+
+    /** app-plan.md, Speech line and dial › Draft label: the shorter words while a chunk waits. */
+    @Test
+    fun theLabelWhileTheModelGetsReady() {
+        val waiting = Draft().startTake().endTake(1_000).let { it.waiting(it.chunks.single().id) }
+        val dropped = SpeechDownload(done = 120_000_000, total = 640_000_000, retryIn = 4)
+        assertEquals(DraftLabel.SpeechRetrying(4), DraftLabel.of(waiting, SpeechStatus.Loading(dropped)))
+        // "trying again…" while the attempt is made.
+        assertEquals(DraftLabel.SpeechRetrying(0), DraftLabel.of(waiting, SpeechStatus.Loading(dropped.copy(retryIn = 0))))
+        // Loading and warming up read the same.
+        assertEquals(DraftLabel.SpeechLoading, DraftLabel.of(waiting, SpeechStatus.Loading(stage = SpeechStage.WarmUp)))
+        assertEquals(
+            DraftLabel.SpeechNotOnPhone,
+            DraftLabel.of(waiting, SpeechStatus.Loading(stage = SpeechStage.NotOnPhone)),
+        )
+        // Each of them carries the dial and opens the sheet; the summary doesn't.
+        assertTrue(DraftLabel.SpeechRetrying(4).isSpeech && DraftLabel.SpeechFailed.isSpeech)
+        assertFalse(DraftLabel.Summary.isSpeech || DraftLabel.Transcribing.isSpeech)
+    }
+
+    /** The engine's state as dictation sees it: not on the phone, downloading, retrying, loading, warming up. */
+    @Test
+    fun theEngineStatesAsDictationSeesThem() {
+        assertEquals(
+            SpeechStatus.Loading(stage = SpeechStage.NotOnPhone),
+            speechStatus(VoiceEngine.ModelState.NotLoaded) { false },
+        )
+        assertEquals(SpeechStatus.Loading(), speechStatus(VoiceEngine.ModelState.NotLoaded) { true })
+        val downloading =
+            VoiceEngine.ModelState.Preparing(0.2, "", done = 120, total = 600, bytesPerSecond = 8_400_000, retryIn = 2)
+        assertEquals(
+            SpeechStatus.Loading(SpeechDownload(120, 600, bytesPerSecond = 8_400_000, retryIn = 2)),
+            speechStatus(downloading),
+        )
+        val warming = VoiceEngine.ModelState.Preparing(1.0, "", stage = VoiceEngine.ModelState.Stage.WarmUp)
+        assertEquals(SpeechStatus.Loading(stage = SpeechStage.WarmUp), speechStatus(warming))
+    }
+
+    @Test
+    fun theSpeechLineShowsWhileTheModelGetsReadyThenSaysReadyThenGoesForGood() =
+        runTest(dispatcher) {
+            val engine = Engine()
+            val memory = SpeechLineMemory()
+            val vm = HomeViewModel(engine, takes = store, speechLine = memory) { 0 }
+            advanceUntilIdle()
+            assertEquals(SpeechLineShow.GettingReady, vm.uiState.value.speechLine)
+            engine.speech.value = SpeechStatus.Ready
+            dispatcher.scheduler.runCurrent()
+            assertEquals(SpeechLineShow.Ready, vm.uiState.value.speechLine)
+            dispatcher.scheduler.advanceTimeBy(SpeechLineMemory.READY_MS + 1)
+            assertEquals(SpeechLineShow.Hidden, vm.uiState.value.speechLine)
+            // It doesn't come back in this process, on this home or the next.
+            engine.speech.value = SpeechStatus.Failed
+            advanceUntilIdle()
+            assertEquals(SpeechLineShow.Hidden, vm.uiState.value.speechLine)
+            val next = HomeViewModel(Engine(), takes = MemoryTakeStore(), speechLine = memory) { 0 }
+            advanceUntilIdle()
+            assertEquals(SpeechLineShow.Hidden, next.uiState.value.speechLine)
+        }
+
+    @Test
+    fun aModelReadyFromTheStartNeverShowsTheSpeechLine() =
+        runTest(dispatcher) {
+            val engine = Engine().apply { speech.value = SpeechStatus.Ready }
+            val vm = HomeViewModel(engine, takes = store, speechLine = SpeechLineMemory()) { 0 }
+            advanceUntilIdle()
+            assertEquals(SpeechLineShow.Hidden, vm.uiState.value.speechLine)
+        }
+
+    @Test
+    fun theSheetOpensAndItsTryNowAndTryAgainReachTheEngine() =
+        runTest(dispatcher) {
+            val engine = Engine().apply { speech.value = SpeechStatus.Failed }
+            val vm = HomeViewModel(engine, takes = store, speechLine = SpeechLineMemory()) { 0 }
+            advanceUntilIdle()
+            vm.openSpeechSheet()
+            assertTrue(vm.uiState.value.speechSheet)
+            vm.speechTryNow()
+            assertEquals(1, engine.triedNow)
+            // Try again loads the model again, with no take waiting too.
+            vm.speechTryAgain()
+            advanceUntilIdle()
+            assertEquals(1, engine.reloads)
+            assertEquals(SpeechStatus.Ready, vm.uiState.value.speech)
+            vm.closeSpeechSheet()
+            assertFalse(vm.uiState.value.speechSheet)
+        }
 }

@@ -47,7 +47,6 @@ import dev.opencode.mobile.network.KtorClientFactory
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.network.ServerConnection
-import dev.opencode.voiceengine.NoSpeechException
 import dev.opencode.voiceengine.VoiceEngine
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -167,23 +166,24 @@ class HexServices(
         appScope.launch { prepareSpeech() }
     }
 
-    /** Loads the model, then turns half a second of silence into text so the first real take is as fast as the rest. */
+    /** The speech model sheet's Try now: a download waiting to retry after a dropped connection tries again at once. */
+    fun speechTryNow() = voice.tryNow()
+
+    /**
+     * Downloads the model if needed, loads it, and warms it up with half a second of silence, so the first real take is
+     * as fast as the rest ([VoiceEngine.prepare]: the model counts as ready after the warm-up).
+     */
     private suspend fun prepareSpeech() {
         val started = SystemClock.elapsedRealtime()
         voice.prepare()
-        val loaded = SystemClock.elapsedRealtime()
         if (voice.modelState.value != VoiceEngine.ModelState.Ready) {
-            Log.w(TalkLog.TAG, "speech model didn't load after ${loaded - started} ms: ${voice.modelState.value}")
-            return
+            Log.w(
+                TalkLog.TAG,
+                "speech model didn't get ready after ${SystemClock.elapsedRealtime() - started} ms: ${voice.modelState.value}",
+            )
+        } else {
+            Log.i(TalkLog.TAG, "speech model ready in ${SystemClock.elapsedRealtime() - started} ms")
         }
-        try {
-            voice.transcribe(FloatArray(VoiceEngine.SAMPLE_RATE / 2))
-        } catch (_: NoSpeechException) {
-            // Silence has no text; the engine has run once, which is the point.
-        } catch (error: Exception) {
-            Log.w(TalkLog.TAG, "speech warm-up failed", error)
-        }
-        Log.i(TalkLog.TAG, "speech model loaded in ${loaded - started} ms, warmed up in ${SystemClock.elapsedRealtime() - loaded} ms")
     }
 
     /**

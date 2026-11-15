@@ -85,6 +85,7 @@ import dev.opencode.hexcode.home.MicRecorder
 import dev.opencode.hexcode.home.NoFileAttacher
 import dev.opencode.hexcode.home.SampleArtifactFetcher
 import dev.opencode.hexcode.home.SampleHome
+import dev.opencode.hexcode.home.SpeechModelSheet
 import dev.opencode.hexcode.home.VoiceEngineDictation
 import dev.opencode.hexcode.session.PlaygroundScript
 import dev.opencode.hexcode.session.SessionSetup
@@ -641,6 +642,18 @@ private fun AfterFirstRun(
                         artifacts = artifactsUi,
                         artifactActions = homeModel,
                         serverHome = home,
+                        speechModelName = homeUi.speechModel?.name,
+                        speechSheet = { visible, onDone ->
+                            SpeechModelSheet(
+                                visible = visible,
+                                speech = homeUi.speech,
+                                model = homeUi.speechModel,
+                                draft = homeUi.draft,
+                                onDone = onDone,
+                                onTryNow = homeModel::speechTryNow,
+                                onTryAgain = homeModel::speechTryAgain,
+                            )
+                        },
                     )
                 Page.SettingsProject, Page.SettingsBrowse, Page.SettingsModel -> SettingsPage(pages, pageState, current)
                 Page.SettingsGallery -> HexGallery(galleryDark, { galleryDark = it }, onBack = { page = Page.Settings })
