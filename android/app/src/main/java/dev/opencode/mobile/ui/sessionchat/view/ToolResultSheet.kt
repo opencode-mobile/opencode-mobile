@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +45,7 @@ import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.OpenCodeSelectionContainer
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.components.UnifiedDiffParser
@@ -428,7 +428,7 @@ private fun UnrecognizedBody(presentation: ToolResultPresentation.Unrecognized) 
         presentation.error?.let { error ->
             Text(text = error, style = MaterialTheme.typography.bodyMedium, color = openCodeColor("error"))
         }
-        SelectionContainer {
+        OpenCodeSelectionContainer {
             Text(
                 text = presentation.raw,
                 modifier =

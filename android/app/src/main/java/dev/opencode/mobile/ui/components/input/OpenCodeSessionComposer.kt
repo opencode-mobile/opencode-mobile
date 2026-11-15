@@ -39,7 +39,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -119,6 +118,7 @@ import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodePageIndicator
+import dev.opencode.mobile.ui.components.OpenCodeSelectionContainer
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.keyboard.ComposerReturnAction
 import dev.opencode.mobile.ui.keyboard.CustomAnswerKeyAction
@@ -1353,7 +1353,7 @@ private fun PermissionPromptContent(
                 )
             }
             Text(state.permission.replace('_', ' '), style = MaterialTheme.typography.bodyMedium)
-            SelectionContainer {
+            OpenCodeSelectionContainer {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (state.files.isNotEmpty()) {
                         state.files.forEach { file -> PermissionFileLine(file) }
