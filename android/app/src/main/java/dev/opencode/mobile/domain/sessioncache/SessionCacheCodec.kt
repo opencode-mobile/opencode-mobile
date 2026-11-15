@@ -57,22 +57,60 @@ object SessionCacheCodec {
         }.getOrNull()
 
     /**
+     * Characters a cached message timeline may hold (#1033): about 4 MB of UTF-16. The cache only
+     * paints a session before its live load, so it keeps the newest messages that fit.
+     */
+    const val MESSAGE_TIMELINE_BUDGET_CHARS: Int = 2_000_000
+
+    /**
      * Tool images keep only metadata (data URLs never go to disk); [hasThumbnail] marks the
      * ones whose thumbnail file was saved, so a decode can point at it again.
+     *
+     * Encodes one message at a time, newest first, and keeps the newest messages whose JSON fits
+     * in [budgetChars] (always the newest one), so no flush builds a string the size of the whole
+     * transcript (#1033). Kept messages are whole: nothing inside a message is trimmed, so a
+     * cached first paint never shows a cut output as the complete one. [onMessageEncoded] sees
+     * each message's JSON length, for tests.
      */
     fun encodeMessages(
         messages: List<Message>,
         json: Json,
         hasThumbnail: (MessagePart.File) -> Boolean = { it.thumbnailPath != null },
-    ): String =
-        json.encodeToString(
-            CachedEnvelope(
-                schemaVersion = SCHEMA_VERSION,
-                sessions = null,
-                messages = CachedMessageListPayload(messages.map { it.toCachePayload(hasThumbnail) }),
-                activity = null,
-            ),
-        )
+        budgetChars: Int = MESSAGE_TIMELINE_BUDGET_CHARS,
+        onMessageEncoded: (length: Int) -> Unit = {},
+    ): String {
+        val kept = ArrayList<String>()
+        var keptChars = 0
+        for (index in messages.indices.reversed()) {
+            val piece = json.encodeToString(CachedMessagePayload.serializer(), messages[index].toCachePayload(hasThumbnail))
+            onMessageEncoded(piece.length)
+            if (kept.isNotEmpty() && keptChars + piece.length + 1 > budgetChars) break
+            kept += piece
+            keptChars += piece.length + 1
+        }
+        // The envelope around an empty list, so the payload keeps the exact shape decode reads.
+        val shell =
+            json.encodeToString(
+                CachedEnvelope(
+                    schemaVersion = SCHEMA_VERSION,
+                    sessions = null,
+                    messages = CachedMessageListPayload(emptyList()),
+                    activity = null,
+                ),
+            )
+        val listAt = shell.lastIndexOf(EMPTY_LIST)
+        check(listAt >= 0) { "message envelope has no list" }
+        return buildString(shell.length + keptChars) {
+            append(shell, 0, listAt + 1)
+            for (index in kept.indices.reversed()) {
+                append(kept[index])
+                if (index > 0) append(',')
+            }
+            append(shell, listAt + 1, shell.length)
+        }
+    }
+
+    private const val EMPTY_LIST = "[]"
 
     /**
      * [thumbnailPath] resolves a tool image id marked as having a thumbnail to its file; a null
@@ -83,7 +121,8 @@ object SessionCacheCodec {
         json: Json,
         thumbnailPath: (imageId: String) -> String? = { null },
     ): List<Message>? =
-        runCatching {
+        // Exceptions only: an OutOfMemoryError must not be logged away with the heap still full (#1033).
+        try {
             val envelope = json.decodeFromString<CachedEnvelope>(raw)
             if (envelope.schemaVersion != SCHEMA_VERSION) {
                 DiagnosticLog.warning(DiagnosticLogArea.Session, "message schema mismatch: ${envelope.schemaVersion}")
@@ -91,9 +130,10 @@ object SessionCacheCodec {
             }
             envelope.messages?.messages?.map { it.toDomain(thumbnailPath) }
                 ?: error("missing messages payload")
-        }.onFailure { error ->
+        } catch (error: Exception) {
             DiagnosticLog.warning(DiagnosticLogArea.Session, "message decode failed", error)
-        }.getOrNull()
+            null
+        }
 
     fun encodeActivity(
         entries: List<SessionActivityCacheEntry>,

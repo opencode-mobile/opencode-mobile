@@ -85,10 +85,25 @@ sealed class SessionChatTimelineBlock {
         val errorText: UiText? = null,
         val additions: Int? = null,
         val deletions: Int? = null,
-        /** Non-null when the card should open a Bottom Sheet with this body. */
+        /**
+         * Non-null when the card opens a Bottom Sheet with this body: a compaction summary. A tool
+         * card leaves it null and sets [opensToolDetail]; its detail is built from the tool part
+         * when it opens ([SessionChatTimelineBlocks.toolDetail]).
+         */
         val detailText: String? = null,
         /** True when [detailText] is markdown (a compaction summary), not tool output. */
         val detailIsMarkdown: Boolean = false,
+        /**
+         * Tapping opens the tool detail sheet for this tool part (#1033). The card keeps only what
+         * its collapsed row draws; the output and its per-line presentation are built on open.
+         */
+        val opensToolDetail: Boolean = false,
+        /**
+         * Changes when the tool's detail would (the lengths of its output, error and written
+         * content): a cheap stand-in for the output the card no longer carries, so a detail shown
+         * live (the activity sheet) is built again as a running tool's output grows.
+         */
+        val detailRevision: Int = 0,
         /** Non-null when tap should open this child session's Session Chat. */
         val childSessionId: String? = null,
         /** When true, tap opens owning-turn Changes (optional File Viewer path). */
@@ -104,8 +119,6 @@ sealed class SessionChatTimelineBlock {
          * read so far from the partial input, or a placeholder until one appears.
          */
         val isReceivingArguments: Boolean = false,
-        /** Inspector body for the tool-result sheet. Null when the card does not open one. */
-        val presentation: ToolResultPresentation? = null,
         /** Images the tool returned; the Standard timeline shows them in an [ImageGallery] under the card. */
         val images: List<SessionChatAttachmentItem> = emptyList(),
     ) : SessionChatTimelineBlock()
@@ -2036,7 +2049,8 @@ object SessionChatTimelineBlocks {
             errorText = errorText,
             additions = chrome.additions,
             deletions = chrome.deletions,
-            detailText = chrome.detailText,
+            opensToolDetail = chrome.detail != null || ToolResultInspector.hasResult(tool),
+            detailRevision = detailRevision(tool),
             childSessionId = chrome.childSessionId,
             opensChangesReview = chrome.opensChangesReview,
             changesInitialFilePath = chrome.changesInitialFilePath,
@@ -2044,9 +2058,14 @@ object SessionChatTimelineBlocks {
             noteText = tool.userNote?.takeIf { interrupted }?.let { UiText.resource(R.string.tool_user_note, it) },
             isMalformed = tool.isMalformed,
             isReceivingArguments = receivingArguments,
-            presentation = ToolResultInspector.fromTool(tool, chrome.title),
             images = tool.images.map(AttachmentPresentationMapper::from),
         )
+    }
+
+    private fun detailRevision(tool: MessagePart.Tool): Int {
+        var revision = tool.output?.length ?: -1
+        revision = 31 * revision + (tool.error?.length ?: -1)
+        return 31 * revision + (tool.writeContent?.length ?: -1)
     }
 
     /** What a card says while its arguments stream in and none can be read yet (TUI v2 copy). */
@@ -2073,12 +2092,38 @@ object SessionChatTimelineBlocks {
         return exit.takeIf { it != 0 }
     }
 
+    /** The card [tool] draws as a tool group member, the same one the timeline projects. */
+    fun toolCard(tool: MessagePart.Tool): SessionChatTimelineBlock.ToolCard? = toToolCard(tool)
+
+    /**
+     * A tool card's detail sheet body and inspector, built from the tool part when the detail
+     * opens, never during timeline projection (#1033). Null when [tool] opens no detail.
+     */
+    fun toolDetail(tool: MessagePart.Tool): ToolCardDetail? {
+        val name = tool.toolName.lowercase()
+        val chrome = specializedChrome(name, tool) ?: genericChrome(tool)
+        val presentation = ToolResultInspector.fromTool(tool, chrome.title)
+        val text = chrome.detail?.invoke()
+        if (presentation == null && text == null) return null
+        return ToolCardDetail(text = text, presentation = presentation)
+    }
+
+    /**
+     * What a tool card's detail shows: [text] is the plain body the card used to carry, and
+     * [presentation] the typed inspector body.
+     */
+    data class ToolCardDetail(
+        val text: String?,
+        val presentation: ToolResultPresentation?,
+    )
+
     private data class Chrome(
         val title: UiText,
         val subtitle: UiText?,
         val additions: Int? = null,
         val deletions: Int? = null,
-        val detailText: String? = null,
+        /** Builds the detail body when the detail opens; null when the card has none. */
+        val detail: (() -> String?)? = null,
         val childSessionId: String? = null,
         val opensChangesReview: Boolean = false,
         val changesInitialFilePath: String? = null,
@@ -2092,7 +2137,7 @@ object SessionChatTimelineBlocks {
         return Chrome(
             title = UiText.verbatim(ToolPartIdentity.calledTitle(tool.toolName)),
             subtitle = TimelineText.verbatim(subtitle),
-            detailText = settledDetail(tool),
+            detail = settledDetailSource(tool),
         )
     }
 
@@ -2182,11 +2227,15 @@ object SessionChatTimelineBlocks {
         return lineCount(content)
     }
 
-    /** Lines in a file body; a trailing newline does not start another line. */
+    /**
+     * Lines in a file body; a trailing newline does not start another line. Counts without
+     * splitting, so projecting a large write allocates nothing per line (#1033).
+     */
     private fun lineCount(content: String): Int {
         if (content.isEmpty()) return 0
-        val lines = content.split("\n")
-        return if (lines.last().isEmpty()) lines.size - 1 else lines.size
+        var newlines = 0
+        for (char in content) if (char == '\n') newlines++
+        return if (content.endsWith('\n')) newlines else newlines + 1
     }
 
     private fun canOpenChangesReview(status: ToolStatus): Boolean = status == ToolStatus.Completed || status == ToolStatus.Error
@@ -2241,7 +2290,7 @@ object SessionChatTimelineBlocks {
         Chrome(
             title = exploredTitle(listOf(tool)),
             subtitle = TimelineText.verbatim(runningTitleOverride(tool) ?: subtitle),
-            detailText = settledDetail(tool),
+            detail = settledDetailSource(tool),
         )
 
     private fun shellChrome(tool: MessagePart.Tool): Chrome {
@@ -2252,7 +2301,7 @@ object SessionChatTimelineBlocks {
         return Chrome(
             title = UiText.resource(R.string.tool_title_shell),
             subtitle = TimelineText.verbatim(command),
-            detailText = settledDetail(tool),
+            detail = settledDetailSource(tool),
         )
     }
 
@@ -2268,16 +2317,23 @@ object SessionChatTimelineBlocks {
                 calls.size == 1 -> UiText.verbatim(calls.first())
                 else -> UiText.plural(R.plurals.tool_count_tool, calls.size)
             }
-        val detail =
-            buildString {
-                if (calls.isNotEmpty()) append(calls.joinToString("\n"))
-                val extra = settledDetail(tool)
-                if (extra != null) {
-                    if (isNotEmpty()) append("\n\n")
-                    append(extra)
+        val callsText = calls.joinToString("\n")
+        val detail: (() -> String?)? =
+            if (callsText.isEmpty() && !hasSettledDetail(tool)) {
+                null
+            } else {
+                {
+                    buildString {
+                        append(callsText)
+                        val extra = settledDetail(tool)
+                        if (extra != null) {
+                            if (isNotEmpty()) append("\n\n")
+                            append(extra)
+                        }
+                    }.takeIf { it.isNotEmpty() }
                 }
-            }.takeIf { it.isNotEmpty() }
-        return Chrome(title = UiText.resource(R.string.tool_title_execute), subtitle = subtitle, detailText = detail)
+            }
+        return Chrome(title = UiText.resource(R.string.tool_title_execute), subtitle = subtitle, detail = detail)
     }
 
     private fun lspChrome(tool: MessagePart.Tool): Chrome {
@@ -2304,7 +2360,7 @@ object SessionChatTimelineBlocks {
         return Chrome(
             title = UiText.resource(R.string.tool_title_lsp),
             subtitle = TimelineText.verbatim(subtitle),
-            detailText = settledDetail(tool),
+            detail = settledDetailSource(tool),
         )
     }
 
@@ -2314,8 +2370,24 @@ object SessionChatTimelineBlocks {
             subtitle =
                 TimelineText.verbatim(tool.title?.takeIf { it.isNotEmpty() })
                     ?: UiText.resource(R.string.tool_subtitle_plan_ready),
-            detailText = settledDetail(tool),
+            detail = settledDetailSource(tool),
         )
+
+    /** [settledDetail] for [Chrome.detail]: checked here without building it. */
+    private fun settledDetailSource(tool: MessagePart.Tool): (() -> String?)? =
+        if (hasSettledDetail(tool)) {
+            { settledDetail(tool) }
+        } else {
+            null
+        }
+
+    /** Whether [settledDetail] is non-null, reading only as far as the first non-blank character. */
+    private fun hasSettledDetail(tool: MessagePart.Tool): Boolean =
+        when (tool.status) {
+            ToolStatus.Completed, ToolStatus.Error ->
+                (tool.status == ToolStatus.Error && !tool.error.isNullOrBlank()) || !tool.output.isNullOrBlank()
+            ToolStatus.Pending, ToolStatus.Running -> false
+        }
 
     private fun settledDetail(tool: MessagePart.Tool): String? =
         when (tool.status) {
@@ -2338,14 +2410,14 @@ object SessionChatTimelineBlocks {
         val detail =
             when (tool.status) {
                 ToolStatus.Completed, ToolStatus.Error ->
-                    tool.output?.takeIf { it.isNotEmpty() }
-                        ?: tool.error?.takeIf { it.isNotEmpty() }
+                    (tool.output?.takeIf { it.isNotEmpty() } ?: tool.error?.takeIf { it.isNotEmpty() })
+                        ?.let { body -> { body } }
                 ToolStatus.Pending, ToolStatus.Running -> null
             }
         return Chrome(
             title = displayTitle,
             subtitle = TimelineText.verbatim(subtitle),
-            detailText = detail,
+            detail = detail,
         )
     }
 
@@ -2392,12 +2464,12 @@ object SessionChatTimelineBlocks {
         return Chrome(
             title = askedQuestionsTitle(count),
             subtitle = TimelineText.verbatim(firstAnswer),
-            detailText =
+            detail =
                 questionDetail(
                     questions = questions.ifEmpty { listOfNotNull(firstQuestion) },
                     answers = answers,
                     error = dismissed,
-                ),
+                )?.let { text -> { text } },
         )
     }
 

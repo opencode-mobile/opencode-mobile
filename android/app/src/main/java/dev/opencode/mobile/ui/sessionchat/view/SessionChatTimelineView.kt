@@ -1155,6 +1155,7 @@ private fun AssistantMessageContent(
             onChildSessionTap = onChildSessionTap,
             onChangesReviewTap = onChangesReviewTap,
             onToolDetailTap = onToolDetailTap,
+            toolDetails = LocalSessionChatToolDetailResolver.current,
         )
 
     fun toolCardAction(block: SessionChatTimelineBlock.ToolCard): (() -> Unit)? = toolTaps.toolCardAction(block)
@@ -1404,6 +1405,7 @@ private class ToolTapTargets(
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    val toolDetails: SessionChatToolDetailResolver,
 ) {
     fun toolCardAction(block: SessionChatTimelineBlock.ToolCard): (() -> Unit)? =
         when {
@@ -1417,7 +1419,11 @@ private class ToolTapTargets(
                     onChangesReviewTap(messageId, block.changesInitialFilePath)
                 }
             }
-            else -> sessionChatToolCardDetail(block)?.let { target -> { onToolDetailTap(target) } }
+            // Built on tap from the tool part, not carried by the card (#1033).
+            SessionChatToolDetails.opensDetail(block) -> {
+                { toolDetails.detail(block)?.let(onToolDetailTap) }
+            }
+            else -> null
         }
 
     // A rail or activity card step opens what the standard timeline opens for its tool card.
@@ -1425,7 +1431,10 @@ private class ToolTapTargets(
         val card = step.card
         return when {
             card != null -> toolCardAction(card)
-            else -> sessionChatStepDetail(step, supportsSessionMessageDiff)?.let { target -> { onToolDetailTap(target) } }
+            stepOpensDetail(step, supportsSessionMessageDiff) -> {
+                { sessionChatStepDetail(step, supportsSessionMessageDiff, toolDetails)?.let(onToolDetailTap) }
+            }
+            else -> null
         }
     }
 }
@@ -1449,18 +1458,6 @@ private fun stepThoughtDuration(step: SessionChatStep): String? {
     return SessionChatTimelineBlocks.thoughtDurationLabel(end - start)
 }
 
-private fun sessionChatToolCardDetail(block: SessionChatTimelineBlock.ToolCard): SessionChatToolDetailTarget? {
-    val presentation = block.presentation?.takeUnless { block.detailIsMarkdown }
-    val text = block.detailText
-    if (presentation == null && text == null) return null
-    return SessionChatToolDetailTarget(
-        title = presentation?.title ?: block.title,
-        body = text ?: presentation?.raw.orEmpty(),
-        bodyIsMarkdown = block.detailIsMarkdown,
-        presentation = presentation,
-    )
-}
-
 /** A child session card's title is its agent name, which is server content. */
 internal val SessionChatTimelineBlock.ToolCard.childSessionTitle: String
     get() = (title as? UiText.Verbatim)?.value.orEmpty()
@@ -1473,18 +1470,33 @@ internal val SessionChatTimelineBlock.ToolCard.childSessionTitle: String
 internal fun sessionChatStepDetail(
     step: SessionChatStep,
     supportsSessionMessageDiff: Boolean,
+    toolDetails: SessionChatToolDetailResolver,
 ): SessionChatToolDetailTarget? {
+    if (!stepOpensDetail(step, supportsSessionMessageDiff)) return null
     val card = step.card
     val thoughtText = step.thoughtText
     return when {
-        card != null ->
-            if (card.childSessionId != null || (card.opensChangesReview && supportsSessionMessageDiff)) {
-                null
-            } else {
-                sessionChatToolCardDetail(card)
-            }
+        card != null -> toolDetails.detail(card)
         thoughtText != null -> thoughtDetailTarget(thoughtText, stepThoughtDuration(step))
         else -> null
+    }
+}
+
+/**
+ * Whether [sessionChatStepDetail] has a detail to show, checked without building it: a step's
+ * card opens one only when its tool part is still there when the detail is built.
+ */
+internal fun stepOpensDetail(
+    step: SessionChatStep,
+    supportsSessionMessageDiff: Boolean,
+): Boolean {
+    val card = step.card
+    return when {
+        card != null ->
+            card.childSessionId == null &&
+                !(card.opensChangesReview && supportsSessionMessageDiff) &&
+                SessionChatToolDetails.opensDetail(card)
+        else -> step.thoughtText != null
     }
 }
 
@@ -1596,6 +1608,7 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
     if (resolved != null) lastContent.value = resolved
     val visible = resolved != null
     val content = resolved ?: lastContent.value
+    val toolDetails = LocalSessionChatToolDetailResolver.current
     val taps =
         content?.let {
             ToolTapTargets(
@@ -1604,16 +1617,17 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
                 onToolDetailTap = props.onToolDetailTap,
+                toolDetails = toolDetails,
             )
         }
     val stepsById = content?.let { sheet -> (sheet.steps + sheet.agents.map { it.step }).associateBy { it.id } }.orEmpty()
 
-    fun detailOf(step: SessionChatStep): SessionChatToolDetailTarget? =
-        if (step.kind == SessionChatStepKind.ChildSession) null else sessionChatStepDetail(step, props.supportsSessionMessageDiff)
+    fun opensDetail(step: SessionChatStep): Boolean =
+        step.kind != SessionChatStepKind.ChildSession && stepOpensDetail(step, props.supportsSessionMessageDiff)
 
     fun tap(id: String) {
         val step = stepsById[id] ?: return
-        if (detailOf(step) != null) {
+        if (opensDetail(step)) {
             props.onOpenActivityCardStep(id)
             return
         }
@@ -1623,7 +1637,12 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
     }
     // Resolved live too: a running tool's output grows while its detail shows.
     val detailStepId = props.activityCardDetailStepId
-    val detailTarget = detailStepId?.let { id -> stepsById[id]?.let(::detailOf) }
+    val detailStep = detailStepId?.let(stepsById::get)?.takeIf(::opensDetail)
+    // Built from the tool part only for the open step, again when the timeline changes.
+    val detailTarget =
+        remember(detailStep, props.messages, toolDetails) {
+            detailStep?.let { sessionChatStepDetail(it, props.supportsSessionMessageDiff, toolDetails) }
+        }
     val detail = detailTarget?.let { target -> detailStepId?.let { OpenCodeActivitySheetDetail(stepId = it, title = target.title.resolve()) } }
     OpenCodeActivitySheet(
         visible = visible,

@@ -108,6 +108,8 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatTurnStatus
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMove
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetails
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -1421,6 +1423,16 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             publishUiState()
         }
+
+        /**
+         * The detail sheet [card] opens, built now from its tool part in the loaded transcript
+         * (#1033). Null when the part is no longer there.
+         */
+        internal fun toolDetail(card: SessionChatTimelineBlock.ToolCard): SessionChatToolDetailTarget? =
+            SessionChatToolDetails.target(card, timeline.loadedMessages())
+
+        /** The directory the transcript is loaded under: the bound one, kept across a move. */
+        internal fun transcriptDirectory(): String? = transcriptWorktree ?: boundWorktree
 
         /** The branch pill copied the branch name; confirm it with a snackbar. */
         fun branchNameCopied() {

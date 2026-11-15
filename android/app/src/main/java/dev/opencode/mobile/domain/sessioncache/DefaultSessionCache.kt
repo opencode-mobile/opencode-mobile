@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.ToolImageThumbnails
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,8 @@ class DefaultSessionCache(
     private val thumbnails: ToolImageThumbnails? = null,
     private val thumbnailDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val thumbnailEvictionDebounceMs: Long = DEFAULT_THUMBNAIL_EVICTION_DEBOUNCE_MS,
+    /** Encodes a message timeline flush; within [SessionCacheCodec.MESSAGE_TIMELINE_BUDGET_CHARS] by default. */
+    private val messageEncoder: SessionCacheMessageEncoder = SessionCacheMessageEncoder.Default,
 ) : SessionCache {
     private val thumbnailEvictionJob = AtomicReference<Job?>(null)
 
@@ -165,6 +168,7 @@ class DefaultSessionCache(
             thumbnails = thumbnails,
             thumbnailDispatcher = thumbnailDispatcher,
             onThumbnailsWritten = ::scheduleThumbnailEviction,
+            messageEncoder = messageEncoder,
         )
 
     /**
@@ -416,6 +420,19 @@ class DefaultSessionCache(
     }
 }
 
+/**
+ * [runCatching] for exceptions only: an [Error] such as [OutOfMemoryError], and cancellation,
+ * propagate instead of being logged away.
+ */
+private inline fun <T> catchingExceptions(block: () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (exception: Exception) {
+        Result.failure(exception)
+    }
+
 private fun logSessionCacheIo(
     action: String,
     error: Throwable,
@@ -443,6 +460,7 @@ private class DefaultSessionMessageCacheHandle(
     private val thumbnails: ToolImageThumbnails?,
     private val thumbnailDispatcher: CoroutineDispatcher,
     private val onThumbnailsWritten: () -> Unit,
+    private val messageEncoder: SessionCacheMessageEncoder,
 ) : SessionMessageCacheHandle {
     private val mutex = Mutex()
     private var pending: List<Message>? = null
@@ -461,11 +479,11 @@ private class DefaultSessionMessageCacheHandle(
 
     override suspend fun seed(): List<Message>? {
         val key = keyOrNull() ?: return null
-        runCatching {
+        catchingExceptions {
             store.retain(key, SessionCacheRetainReason.Opened, clock())
         }.onFailure { logSessionCacheIo("retain opened", it) }
         val record =
-            runCatching { store.load(key) }
+            catchingExceptions { store.load(key) }
                 .onFailure { logSessionCacheIo("load messages", it) }
                 .getOrNull()
                 ?: return null
@@ -523,18 +541,20 @@ private class DefaultSessionMessageCacheHandle(
         val saved =
             thumbnails?.let { store ->
                 withContext(thumbnailDispatcher) {
-                    runCatching { store.sync(key.connectionId, sessionId, messages) }
+                    catchingExceptions { store.sync(key.connectionId, sessionId, messages) }
                         .onFailure { logSessionCacheIo("save thumbnails", it) }
                         .getOrNull()
                 }
             }
         if (saved?.wrote == true) onThumbnailsWritten()
         val savedIds = saved?.paths?.keys.orEmpty()
+        // Exceptions only (#1033): an OutOfMemoryError here used to be logged and swallowed, leaving
+        // the heap at its limit for the next allocation anywhere in the app.
         val payload =
-            runCatching { SessionCacheCodec.encodeMessages(messages, json, hasThumbnail = { it.id in savedIds }) }
+            catchingExceptions { messageEncoder.encode(messages, json, hasThumbnail = { it.id in savedIds }) }
                 .onFailure { logSessionCacheIo("encode messages", it) }
                 .getOrNull() ?: return
-        runCatching {
+        catchingExceptions {
             store.retain(key, SessionCacheRetainReason.Opened, clock())
             store.commit(
                 key = key,

@@ -258,6 +258,35 @@ internal object ToolResultInspector {
         )
     }
 
+    /**
+     * Whether [fromTool] returns a presentation for [tool], without building one: the timeline
+     * asks this for every card, so it reads only up to the first non-blank character of the
+     * output, never splitting or copying it (#1033).
+     */
+    fun hasResult(tool: MessagePart.Tool): Boolean {
+        if (!tool.output.isNullOrBlank() || !tool.error.isNullOrBlank()) return true
+        val fields = tool.resultFields
+        return when (tool.toolName.lowercase()) {
+            "write" -> fields.content != null && !fields.path.isNullOrBlank()
+            "edit", "apply_patch", "patch" ->
+                fields.metadataPatch?.contains("@@") == true || linesDiffer(fields.oldString, fields.newString)
+            else -> false
+        }
+    }
+
+    /** Whether [syntheticPatch] builds a patch from [old] and [new]. */
+    private fun linesDiffer(
+        old: String?,
+        new: String?,
+    ): Boolean {
+        if (old == null && new == null) return false
+        val oldText = old.orEmpty()
+        val newText = new.orEmpty()
+        // splitLines drops one trailing empty line, and maps "" to no lines at all.
+        if (oldText.isEmpty() || newText.isEmpty()) return oldText.isEmpty() != newText.isEmpty()
+        return oldText.removeSuffix("\n") != newText.removeSuffix("\n")
+    }
+
     fun thought(text: String, durationLabel: String?): ToolResultPresentation.Thought? {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return null

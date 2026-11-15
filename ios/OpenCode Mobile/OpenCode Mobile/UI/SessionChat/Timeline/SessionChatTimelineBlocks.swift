@@ -187,8 +187,10 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     /// v2 is still streaming this tool's arguments: `subtitle` is the value
     /// read so far from the partial input, or a placeholder until one appears.
     let isReceivingArguments: Bool
-    /// Inspector body for the tool-result sheet. Nil when there is nothing to classify.
-    let presentation: ToolResultPresentation?
+    /// What the inspector classifies when the detail opens (#1033); nil when it has nothing to
+    /// classify. It holds the tool part's own strings, which share their storage, so the card
+    /// copies no output and projection splits no body into lines.
+    let resultRequest: ToolResultRequest?
     /// Images the tool returned; the timeline shows them as a gallery under the card.
     let images: [FilePart]
 
@@ -209,7 +211,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         declineNote: TimelineText? = nil,
         isMalformed: Bool = false,
         isReceivingArguments: Bool = false,
-        presentation: ToolResultPresentation? = nil,
+        resultRequest: ToolResultRequest? = nil,
         images: [FilePart] = []
     ) {
         self.toolName = toolName
@@ -228,8 +230,19 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.declineNote = declineNote
         self.isMalformed = isMalformed
         self.isReceivingArguments = isReceivingArguments
-        self.presentation = presentation
+        self.resultRequest = resultRequest
         self.images = images
+    }
+
+    /// Inspector body for the tool-result sheet, classified now: read it only when the detail
+    /// opens, never while projecting or drawing the timeline.
+    var presentation: ToolResultPresentation? {
+        resultRequest.flatMap(ToolResultInspector.classify)
+    }
+
+    /// Whether a tap opens the detail sheet, checked without building the detail.
+    var opensDetail: Bool {
+        detailText != nil || resultRequest != nil
     }
 
     /// The card's caption: `errorText`, then a declined call's note as a second line. Both are
@@ -256,7 +269,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
             isInterrupted: isInterrupted,
             declineNote: declineNote,
             isMalformed: isMalformed,
-            presentation: presentation,
+            resultRequest: resultRequest,
             images: images
         )
     }
@@ -2886,20 +2899,21 @@ nonisolated enum SessionChatTimelineBlocks {
                 declineNote: interrupted ? declineNoteText(tool.decline) : nil,
                 isMalformed: tool.isMalformed,
                 isReceivingArguments: receivingArguments,
-                presentation: toolResultPresentation(tool, fallbackTitle: chrome.title),
+                resultRequest: toolResultRequest(tool, fallbackTitle: chrome.title),
                 images: tool.images.map(AttachmentPreviewCache.shared.resolved)
             )
         )
     }
 
-    /// Classifies the part for the inspector sheet. Duration is omitted: a tool
-    /// part has a start but no end, and an exit is taken only from metadata.
-    private static func toolResultPresentation(
+    /// The inputs the inspector sheet classifies when it opens; nil when it would show nothing.
+    /// Duration is omitted: a tool part has a start but no end, and an exit is taken only from
+    /// metadata. Reads no further into the output than its first non-blank character (#1033).
+    private static func toolResultRequest(
         _ tool: ToolPart,
         fallbackTitle: TimelineText
-    ) -> ToolResultPresentation? {
+    ) -> ToolResultRequest? {
         let fields = tool.resultFields
-        return ToolResultInspector.classify(
+        let request =
             ToolResultRequest(
                 toolName: tool.toolName,
                 fallbackTitle: fallbackTitle,
@@ -2917,11 +2931,11 @@ nonisolated enum SessionChatTimelineBlocks {
                 oldString: fields.oldString,
                 newString: fields.newString
             )
-        )
+        return ToolResultInspector.hasResult(request) ? request : nil
     }
 
     private static func nonBlank(_ value: String?) -> String? {
-        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        guard let value, !ToolResultInspector.isBlankText(value) else { return nil }
         return value
     }
 
@@ -3095,11 +3109,16 @@ nonisolated enum SessionChatTimelineBlocks {
         return lineCount(content)
     }
 
-    /// Lines in a file body; a trailing newline does not start another line.
+    /// Lines in a file body; a trailing newline does not start another line. Counts newline
+    /// bytes instead of splitting, so projecting a large write allocates nothing per line (#1033).
     private static func lineCount(_ content: String) -> Int {
         guard !content.isEmpty else { return 0 }
-        let lines = content.components(separatedBy: "\n")
-        return lines.last?.isEmpty == true ? lines.count - 1 : lines.count
+        let newline = UInt8(ascii: "\n")
+        var newlines = 0
+        for byte in content.utf8 where byte == newline {
+            newlines += 1
+        }
+        return content.utf8.last == newline ? newlines : newlines + 1
     }
 
     private static func canOpenChangesReview(_ status: ToolStatus) -> Bool {
@@ -3238,6 +3257,8 @@ nonisolated enum SessionChatTimelineBlocks {
                 tool.status == .error ? nonEmpty(tool.error) : nil,
                 nonEmpty(tool.output),
             ].compactMap { $0 }
+            // One part is returned as is, so the card shares the output's storage.
+            if parts.count == 1 { return parts[0] }
             return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
         case .pending, .running:
             return nil

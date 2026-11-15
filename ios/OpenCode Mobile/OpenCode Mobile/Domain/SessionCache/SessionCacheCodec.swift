@@ -49,19 +49,55 @@ nonisolated enum SessionCacheCodec {
 
     /// `thumbnailImageIDs` names the tool images with a thumbnail file on disk; each tool image
     /// is stored as metadata only (no data URL, no thumbnail bytes).
-    static func encodeMessages(_ messages: [Message], thumbnailImageIDs: Set<String> = []) throws -> String {
-        let envelope = CachedEnvelope(
-            schemaVersion: schemaVersion,
-            sessions: nil,
-            messages: CachedMessageListPayload(messages: messages.map { $0.toCachePayload(thumbnailImageIDs: thumbnailImageIDs) }),
-            activity: nil
+    ///
+    /// Encodes one message at a time, newest first, and keeps the newest messages whose JSON fits
+    /// in `budgetBytes` (always the newest one), so no flush builds the whole transcript as one
+    /// block (#1033). Kept messages are whole: nothing inside a message is trimmed, so a cached
+    /// first paint never shows a cut output as the complete one. `onMessageEncoded` sees each
+    /// message's JSON size, for tests.
+    static func encodeMessages(
+        _ messages: [Message],
+        thumbnailImageIDs: Set<String> = [],
+        budgetBytes: Int = messageTimelineBudgetBytes,
+        onMessageEncoded: (Int) -> Void = { _ in }
+    ) throws -> String {
+        var kept: [Data] = []
+        var keptBytes = 0
+        for message in messages.reversed() {
+            let piece = try encoder.encode(message.toCachePayload(thumbnailImageIDs: thumbnailImageIDs))
+            onMessageEncoded(piece.count)
+            if !kept.isEmpty, keptBytes + piece.count + 1 > budgetBytes { break }
+            kept.append(piece)
+            keptBytes += piece.count + 1
+        }
+        // The envelope around an empty list, so the payload keeps the exact shape decode reads.
+        let shell = try encoder.encode(
+            CachedEnvelope(
+                schemaVersion: schemaVersion,
+                sessions: nil,
+                messages: CachedMessageListPayload(messages: []),
+                activity: nil
+            )
         )
-        let data = try encoder.encode(envelope)
-        guard let string = String(data: data, encoding: .utf8) else {
+        guard let list = shell.range(of: Data("[]".utf8), options: .backwards) else {
+            throw SessionCacheCodecError.utf8EncodingFailed
+        }
+        var payload = Data(capacity: shell.count + keptBytes)
+        payload.append(shell[shell.startIndex ..< list.lowerBound + 1])
+        for (index, piece) in kept.reversed().enumerated() {
+            if index > 0 { payload.append(UInt8(ascii: ",")) }
+            payload.append(piece)
+        }
+        payload.append(shell[(list.lowerBound + 1)...])
+        guard let string = String(data: payload, encoding: .utf8) else {
             throw SessionCacheCodecError.utf8EncodingFailed
         }
         return string
     }
+
+    /// UTF-8 bytes a cached message timeline may hold (#1033), as on Android. The cache only paints
+    /// a session before its live load, so it keeps the newest messages that fit.
+    static let messageTimelineBudgetBytes = 2_000_000
 
     static func decodeMessages(_ raw: String) -> [Message]? {
         decodeMessageTimeline(raw)?.messages

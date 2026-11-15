@@ -490,7 +490,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals(PresentationBlockId.direct("prt-2"), tool.blockID)
         assertEquals("Shell", tool.title?.english())
         assertEquals("ls", tool.subtitle?.english())
-        assertEquals("a.txt", tool.detailText)
+        assertEquals("a.txt", tool.toolDetailText)
         assertEquals(
             SessionChatTimelineBlock.Text(
                 blockID = PresentationBlockId.direct("prt-3"),
@@ -553,7 +553,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals(PresentationBlockId.direct("prt-3"), tool.blockID)
         assertEquals("Asked 1 question", tool.title?.english())
         assertNull(tool.subtitle)
-        assertEquals("Which option?", tool.detailText)
+        assertEquals("Which option?", tool.toolDetailText)
     }
 
     @Test
@@ -585,7 +585,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals("The user dismissed this question", tool.errorText?.english())
         assertEquals(
             "What would you like to do in this session?\n\nThe user dismissed this question",
-            tool.detailText,
+            tool.toolDetailText,
         )
     }
 
@@ -626,7 +626,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals("Build a third sibling", tool.subtitle?.english())
         assertEquals(
             "What should we do with these two projects this session?\nBuild a third sibling",
-            tool.detailText,
+            tool.toolDetailText,
         )
     }
 
@@ -782,7 +782,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals(PresentationBlockId.direct("prt-1"), tool.blockID)
         assertEquals("Explored — 1 read", tool.title?.english())
         assertEquals("src/Main.kt", tool.subtitle?.english())
-        assertNull(tool.detailText)
+        assertNull(tool.toolDetailText)
     }
 
     @Test
@@ -804,7 +804,7 @@ class SessionChatTimelineBlocksTest {
 
         assertEquals("Explored — 1 read", tool.title?.english())
         assertEquals("src/app.ts", tool.subtitle?.english())
-        assertEquals("1: export function handler()", tool.detailText)
+        assertEquals("1: export function handler()", tool.toolDetailText)
     }
 
     @Test
@@ -1013,7 +1013,7 @@ class SessionChatTimelineBlocksTest {
 
         assertEquals("Shell", tool.title?.english())
         assertEquals("echo hi", tool.subtitle?.english())
-        assertNull(tool.detailText)
+        assertNull(tool.toolDetailText)
     }
 
     @Test
@@ -1036,7 +1036,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals("Shell", tool.title?.english())
         assertEquals("false", tool.subtitle?.english())
         assertEquals("exit 1", tool.errorText?.english())
-        assertEquals("exit 1", tool.detailText)
+        assertEquals("exit 1", tool.toolDetailText)
     }
 
     @Test
@@ -1078,7 +1078,7 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolCard
         assertEquals("Fetch", fetch.title?.english())
         assertEquals("https://example.com", fetch.subtitle?.english())
-        assertEquals("ok", fetch.detailText)
+        assertEquals("ok", fetch.toolDetailText)
 
         val search =
             buildBlocks(
@@ -1096,7 +1096,7 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolCard
         assertEquals("Explored — 1 search", search.title?.english())
         assertEquals("opencode mobile", search.subtitle?.english())
-        assertEquals("https://a.example\nhttps://b.example", search.detailText)
+        assertEquals("https://a.example\nhttps://b.example", search.toolDetailText)
     }
 
     @Test
@@ -1117,7 +1117,7 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolCard
 
         assertEquals("Fetch", tool.title?.english())
-        assertNull(tool.detailText)
+        assertNull(tool.toolDetailText)
     }
 
     @Test
@@ -1138,7 +1138,7 @@ class SessionChatTimelineBlocksTest {
 
         assertEquals("Skill", tool.title?.english())
         assertEquals("tdd", tool.subtitle?.english())
-        assertNull(tool.detailText)
+        assertNull(tool.toolDetailText)
     }
 
     @Test
@@ -1471,7 +1471,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals(1, tool.deletions)
         assertTrue(tool.opensChangesReview)
         assertEquals("src/Main.kt", tool.changesInitialFilePath)
-        assertNull(tool.detailText)
+        assertNull(tool.toolDetailText)
         assertNull(tool.childSessionId)
     }
 
@@ -1719,7 +1719,7 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolCard
         assertEquals(PresentationBlockId.direct("prt-1"), tool.blockID)
         assertEquals("Called custom_mcp", tool.title?.english())
-        assertNull(tool.detailText)
+        assertNull(tool.toolDetailText)
         assertNull(tool.childSessionId)
         assertTrue(!tool.opensChangesReview)
     }
@@ -3235,7 +3235,7 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.StepParagraph
         val members = requireNotNull(folded.exploreSummary).members
         assertEquals(listOf("README.md", "src/app.ts"), members.map { it.subtitle?.english() })
-        assertEquals(listOf("body of README.md", "body of src/app.ts"), members.map { it.detailText })
+        assertEquals(listOf("body of README.md", "body of src/app.ts"), members.map { it.toolDetailText })
     }
 
     @Test
@@ -3278,7 +3278,7 @@ class SessionChatTimelineBlocksTest {
         // The tool name stays the detail sheet title.
         assertEquals("Called github_create_issue", paragraph.chips[2].card.title?.english())
         assertEquals("Add handler tests", paragraph.chips[2].card.subtitle?.english())
-        assertEquals("Created issue #42", paragraph.chips[2].card.detailText)
+        assertEquals("Created issue #42", paragraph.chips[2].card.toolDetailText)
     }
 
     @Test
@@ -3296,7 +3296,7 @@ class SessionChatTimelineBlocksTest {
         val card = buildBlocks(role = MessageRole.Assistant, parts = listOf(shell)).single() as SessionChatTimelineBlock.ToolCard
         assertEquals(ToolStatus.Error, card.status)
         assertEquals("Exited with code 3", card.errorText?.english())
-        assertEquals("about to fail\nCommand exited with code 3.", card.detailText)
+        assertEquals("about to fail\nCommand exited with code 3.", card.toolDetailText)
 
         val paragraph =
             buildBlocks(role = MessageRole.Assistant, chipTimeline = true, parts = listOf(shell, ok))
@@ -3361,19 +3361,32 @@ class SessionChatTimelineBlocksTest {
         assertTrue(card.detailIsMarkdown)
     }
 
+    /** Every part this test projected, so a card's detail can be built from its tool part. */
+    private val builtParts = mutableListOf<MessagePart>()
+
+    /** The plain detail body a tool card opens, built from its tool part as on tap (#1033). */
+    private val SessionChatTimelineBlock.ToolCard.toolDetailText: String?
+        get() =
+            builtParts
+                .filterIsInstance<MessagePart.Tool>()
+                .lastOrNull { tool -> tool.id?.let(PresentationBlockId::direct) == blockID }
+                ?.let { SessionChatTimelineBlocks.toolDetail(it)?.text }
+
     private fun buildBlocks(
         role: MessageRole,
         parts: List<MessagePart>,
         collapseConsecutiveToolCalls: Boolean = false,
         chipTimeline: Boolean = false,
-    ): List<SessionChatTimelineBlock> =
-        when (
+    ): List<SessionChatTimelineBlock> {
+        builtParts += parts
+        return when (
             val result =
                 SessionChatTimelineBlocks.build(role, parts, collapseConsecutiveToolCalls, chipTimeline)
         ) {
             is SessionChatTimelineBlocksResult.Ok -> result.blocks
             SessionChatTimelineBlocksResult.MissingPartIds -> error("expected Ok, got MissingPartIds")
         }
+    }
 
     private fun toolOnlyBody(
         id: String,
