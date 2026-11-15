@@ -1,6 +1,9 @@
 package dev.opencode.mobile.ui.serverhealth
 
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.connection.ConnectionProfileCatalog
+import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.serverhealth.InMemoryServerHealthStore
 import dev.opencode.mobile.domain.serverhealth.ServerHealthClock
 import dev.opencode.mobile.domain.serverhealth.ServerHealthConnectionState
@@ -41,12 +44,36 @@ class ServerHealthViewModelTest {
         store: InMemoryServerHealthStore,
         harness: MonitorHarness,
         activeId: String? = "a",
+        profileStore: ConnectionProfileStore = ProfilesStore(listOf(workProfile, homeProfile), activeId),
     ) = ServerHealthViewModel(
         monitor = harness.monitor,
         store = store,
-        profileStore = ProfilesStore(listOf(workProfile, homeProfile), activeId),
+        profileStore = profileStore,
         clock = ServerHealthClock { HEALTH_EPOCH + testScheduler.currentTime },
-    )
+    ).also { it.workDispatcher = testDispatcher }
+
+    @Test
+    fun bind_showsTheProfileWithoutReadingPasswords() =
+        runTest(testDispatcher) {
+            val store = InMemoryServerHealthStore()
+            val harness = MonitorHarness(backgroundScope, store) { HEALTH_EPOCH + testScheduler.currentTime }
+            val profiles =
+                object : ConnectionProfileStore by ProfilesStore(listOf(workProfile, homeProfile), "a") {
+                    override suspend fun activeProfile(): ConnectionProfile = error("decrypts a password")
+
+                    override suspend fun listProfiles(): List<ConnectionProfile> = error("decrypts every password")
+
+                    override suspend fun catalogWithoutPasswords() =
+                        ConnectionProfileCatalog(listOf(workProfile, homeProfile), activeId = "a")
+                }
+            val viewModel = viewModel(store, harness, profileStore = profiles)
+
+            viewModel.bind("a")
+            advanceUntilIdle()
+
+            assertEquals("Work", viewModel.uiState.value.profileName)
+            assertTrue(viewModel.uiState.value.isActiveProfile)
+        }
 
     @Test
     fun bind_loadsTheProfileAndTheDayReport() =

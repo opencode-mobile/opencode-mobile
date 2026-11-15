@@ -53,17 +53,37 @@ final class ServersViewModel {
             healthQuickView = nil
             return
         }
-        let nowMs = now()
-        let since = nowMs - ServerHealthRange.day.durationMs
-        let pings = await healthStore.pings(profileID: profileID, sinceMs: since)
-        let events = await healthStore.events(profileID: profileID, sinceMs: since)
+        let summary = await Self.daySummary(store: healthStore, profileID: profileID, nowMs: now())
         guard activeId == profileID else { return }
-        let report = ServerHealthReportBuilder.build(pings: pings, events: events, nowMs: nowMs, range: .day)
         let live = healthMonitor.liveStatus
         let isLive = live.profileID == profileID
         healthQuickView = ServerHealthQuickView(
             state: isLive ? live.state : .stopped,
             currentPingMs: isLive ? live.lastPingMs : nil,
+            recentPings: summary.recentPings,
+            uptimePercent: summary.uptimePercent,
+            reconnects: summary.reconnects
+        )
+    }
+
+    private struct DaySummary: Sendable {
+        let recentPings: [Int?]
+        let uptimePercent: Double?
+        let reconnects: Int
+    }
+
+    /// A day of pings and its report, read and built off the MainActor.
+    @concurrent
+    private nonisolated static func daySummary(
+        store: any ServerHealthStore,
+        profileID: String,
+        nowMs: Int64
+    ) async -> DaySummary {
+        let since = nowMs - ServerHealthRange.day.durationMs
+        let pings = await store.pings(profileID: profileID, sinceMs: since)
+        let events = await store.events(profileID: profileID, sinceMs: since)
+        let report = ServerHealthReportBuilder.build(pings: pings, events: events, nowMs: nowMs, range: .day)
+        return DaySummary(
             recentPings: ServerHealthReportBuilder.recentPings(pings, nowMs: nowMs),
             uptimePercent: report.uptimePercent,
             reconnects: report.drops

@@ -15,9 +15,11 @@ import dev.opencode.mobile.domain.connection.SecureCredentialStoreException
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.UUID
@@ -33,11 +35,13 @@ class DataStoreConnectionProfileStore
         override fun configurationRevisions(): Flow<Unit> = context.connectionProfileDataStore.data.map { }
 
         override suspend fun activeProfile(): ConnectionProfile? {
-            val catalog = migratedCatalog()
-            return catalog.activeProfile()?.withPassword()
+            val active = migratedCatalog().activeProfile() ?: return null
+            return withPasswords(listOf(active)).single()
         }
 
-        override suspend fun listProfiles(): List<ConnectionProfile> = migratedCatalog().profiles.map { it.withPassword() }
+        override suspend fun listProfiles(): List<ConnectionProfile> = withPasswords(migratedCatalog().profiles)
+
+        override suspend fun catalogWithoutPasswords(): ConnectionProfileCatalog = migratedCatalog()
 
         override suspend fun saveProfile(profile: ConnectionProfile) {
             val previous = migratedCatalog()
@@ -53,7 +57,7 @@ class DataStoreConnectionProfileStore
                         )
                 } ?: return
             try {
-                writePassword(saved, profile.password)
+                withContext(Dispatchers.IO) { writePassword(saved, profile.password) }
             } catch (error: SecureCredentialStoreException) {
                 // No password, no profile: put the catalog back the way it was.
                 mutateCatalog { previous }
@@ -69,8 +73,10 @@ class DataStoreConnectionProfileStore
             val existing = migratedCatalog().profiles.firstOrNull { it.id == id }
             mutateCatalog { catalog -> catalog.remove(id) }
             if (existing != null) {
-                secureCredentialStore.deletePassword(existing.id)
-                secureCredentialStore.deletePassword(existing.baseUrl)
+                withContext(Dispatchers.IO) {
+                    secureCredentialStore.deletePassword(existing.id)
+                    secureCredentialStore.deletePassword(existing.baseUrl)
+                }
                 context.connectionProfileDataStore.edit { prefs ->
                     prefs.remove(worktreeKey(existing.id))
                     prefs.remove(stringPreferencesKey(existing.baseUrl))
@@ -283,6 +289,11 @@ class DataStoreConnectionProfileStore
             if (raw.isNullOrBlank()) return emptyList()
             return runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
         }
+
+        // Each read is an Android Keystore decrypt, several binder calls to keystore2 (tens of ms per
+        // profile on a Pixel 9). Keep them off the caller's thread, which is often Main.
+        private suspend fun withPasswords(profiles: List<ConnectionProfile>): List<ConnectionProfile> =
+            if (profiles.isEmpty()) profiles else withContext(Dispatchers.IO) { profiles.map { it.withPassword() } }
 
         private fun ConnectionProfile.withPassword(): ConnectionProfile {
             val password =

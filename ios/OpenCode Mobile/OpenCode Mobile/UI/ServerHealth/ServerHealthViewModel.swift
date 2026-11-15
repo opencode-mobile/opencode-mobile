@@ -107,19 +107,22 @@ final class ServerHealthViewModel {
     func selectRange(_ range: ServerHealthRange) async {
         guard range != state.range else { return }
         state.range = range
-        rebuild()
+        await rebuild()
     }
 
-    /// Loads the last 7 days once and builds the report for the selected range from it.
+    /// Loads the last 7 days once and builds the report for the selected range from it. Up to a
+    /// week of pings: the fetch and the report run off the MainActor so opening the page stays smooth.
     func reload() async {
         lastReload = ContinuousClock.now
         loadedRevision = monitor.revision
         let since = now() - ServerHealthRetention.windowMs
-        pings = await store.pings(profileID: route.profileID, sinceMs: since)
-        events = await store.events(profileID: route.profileID, sinceMs: since)
-        storedVersion = await store.lastPid(profileID: route.profileID)?.version
+        let record = await Self.loadRecord(store: store, profileID: route.profileID, sinceMs: since)
+        if Task.isCancelled { return }
+        pings = record.pings
+        events = record.events
+        storedVersion = record.storedVersion
         applyLiveStatus()
-        rebuild()
+        await rebuild()
     }
 
     private func applyLiveStatus() {
@@ -133,11 +136,53 @@ final class ServerHealthViewModel {
         state.serverVersion = (isActive ? live.lastVersion : nil) ?? storedVersion
     }
 
-    private func rebuild() {
-        let nowMs = now()
+    private func rebuild() async {
+        let range = state.range
+        let built = await Self.buildReport(pings: pings, events: events, nowMs: now(), range: range)
+        // A range picked while this one was building wins; its own rebuild applies it.
+        guard range == state.range, !Task.isCancelled else { return }
+        state.recentPings = built.recentPings
+        state.recentP95Ms = built.recentP95Ms
+        state.report = built.report
+    }
+
+    private struct Record: Sendable {
+        let pings: [ServerHealthPing]
+        let events: [ServerHealthEvent]
+        let storedVersion: String?
+    }
+
+    private struct BuiltReport: Sendable {
+        let recentPings: [Int?]
+        let recentP95Ms: Int?
+        let report: ServerHealthReport
+    }
+
+    /// The store's methods run on the caller's executor, so this is what keeps the fetch off Main.
+    @concurrent
+    private nonisolated static func loadRecord(
+        store: any ServerHealthStore,
+        profileID: String,
+        sinceMs: Int64
+    ) async -> Record {
+        let pings = await store.pings(profileID: profileID, sinceMs: sinceMs)
+        let events = await store.events(profileID: profileID, sinceMs: sinceMs)
+        let version = await store.lastPid(profileID: profileID)?.version
+        return Record(pings: pings, events: events, storedVersion: version)
+    }
+
+    @concurrent
+    private nonisolated static func buildReport(
+        pings: [ServerHealthPing],
+        events: [ServerHealthEvent],
+        nowMs: Int64,
+        range: ServerHealthRange
+    ) async -> BuiltReport {
         let recent = ServerHealthReportBuilder.recentPings(pings, nowMs: nowMs)
-        state.recentPings = recent
-        state.recentP95Ms = ServerHealthReportBuilder.percentile(recent.compactMap { $0 }.sorted(), 95)
-        state.report = ServerHealthReportBuilder.build(pings: pings, events: events, nowMs: nowMs, range: state.range)
+        return BuiltReport(
+            recentPings: recent,
+            recentP95Ms: ServerHealthReportBuilder.percentile(recent.compactMap { $0 }.sorted(), 95),
+            report: ServerHealthReportBuilder.build(pings: pings, events: events, nowMs: nowMs, range: range)
+        )
     }
 }
