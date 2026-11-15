@@ -5,10 +5,12 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -205,10 +207,15 @@ fun OpenCodeOutgoingMessage(
                             ) {
                                 Column(
                                     modifier =
-                                        Modifier.padding(
-                                            horizontal = OutgoingMessagePaddingHorizontal,
-                                            vertical = OutgoingMessagePaddingVertical,
-                                        ),
+                                        Modifier
+                                            .padding(
+                                                horizontal = OutgoingMessagePaddingHorizontal,
+                                                vertical = OutgoingMessagePaddingVertical,
+                                            ).then(
+                                                // A cut bubble is as wide as the wider of its text and the row, like an
+                                                // uncut bubble hugs its text; the row alone would fill the full width.
+                                                if (part.limit != null) Modifier.width(IntrinsicSize.Max) else Modifier,
+                                            ),
                                     horizontalAlignment = Alignment.End,
                                 ) {
                                     if (part.limit != null && part.text.isEmpty()) {

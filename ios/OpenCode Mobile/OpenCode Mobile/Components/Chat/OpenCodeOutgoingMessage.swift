@@ -211,7 +211,12 @@ struct OpenCodeOutgoingMessage: View {
     private var pendingOpacity: Double { 0.6 }
 
     private func textPill(text: String, limit: OpenCodeOutgoingMessageLimit? = nil, onShowFull: (() -> Void)? = nil) -> some View {
-        VStack(alignment: .trailing, spacing: 8) {
+        // A cut bubble is as wide as the wider of its text and the row, like an uncut bubble
+        // hugs its text; the row alone would stretch it to the full width.
+        let layout = limit == nil
+            ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 8))
+            : AnyLayout(OutgoingLimitedTextLayout(spacing: 8))
+        return layout {
             if !text.isEmpty {
                 pillContent(text: text, isLimited: limit != nil)
             }
@@ -319,6 +324,43 @@ struct OpenCodeOutgoingMessage: View {
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+/// Stacks a cut text and its truncation row at one width: the wider of the text (wrapped to the
+/// offered width) and the row's natural width, never more than offered.
+private struct OutgoingLimitedTextLayout: Layout {
+    let spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = sharedWidth(proposal: proposal, subviews: subviews)
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        let gaps = spacing * CGFloat(max(0, subviews.count - 1))
+        return CGSize(width: width, height: heights.reduce(0, +) + gaps)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        // Trailing, as the bubble's text sits when the row is the wider of the two.
+        var y = bounds.minY
+        for subview in subviews {
+            let size = subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            subview.place(
+                at: CGPoint(x: bounds.maxX, y: y),
+                anchor: .topTrailing,
+                proposal: ProposedViewSize(width: bounds.width, height: size.height)
+            )
+            y += size.height + spacing
+        }
+    }
+
+    private func sharedWidth(proposal: ProposedViewSize, subviews: Subviews) -> CGFloat {
+        let widths = subviews.map { subview in
+            let natural = subview.sizeThatFits(.unspecified).width
+            guard let offered = proposal.width else { return natural }
+            return min(natural, subview.sizeThatFits(ProposedViewSize(width: offered, height: nil)).width)
+        }
+        let width = widths.max() ?? 0
+        return proposal.width.map { min(width, $0) } ?? width
     }
 }
 

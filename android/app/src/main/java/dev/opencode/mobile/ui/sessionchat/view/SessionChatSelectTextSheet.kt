@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
@@ -52,6 +53,10 @@ internal const val SELECT_TEXT_CHUNK_LINES = 40
 
 /** Longest piece of one source line laid out at once. */
 internal const val SELECT_TEXT_CHUNK_CHARACTERS = 4_000
+
+/** Line height kept at both ends of a piece, so no seam shows where two pieces meet. */
+private val SelectTextChunkLineHeightStyle =
+    LineHeightStyle(alignment = LineHeightStyle.Alignment.Proportional, trim = LineHeightStyle.Trim.None)
 
 /** Vertical padding around the body text, top and bottom. */
 private val SelectTextBodyVerticalPadding = 8.dp
@@ -150,7 +155,8 @@ private fun SessionChatScrollingSelectTextBody(
                 Text(
                     text = target.text.substring(chunk.first, chunk.last + 1),
                     modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.bodyLarge,
+                    // Keep each piece's outer half-leading so the pieces stack at the body's line spacing.
+                    style = MaterialTheme.typography.bodyLarge.copy(lineHeightStyle = SelectTextChunkLineHeightStyle),
                     color = openCodeColor("text-strong"),
                 )
             }
