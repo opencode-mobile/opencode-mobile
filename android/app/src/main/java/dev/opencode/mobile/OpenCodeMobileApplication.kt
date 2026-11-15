@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.app.NewFeatures
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.MainThreadHangWatchdog
 import dev.opencode.mobile.domain.featureflags.FeatureFlags
+import dev.opencode.mobile.domain.message.TranscriptMemoryPressureObserver
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
@@ -50,6 +51,10 @@ class OpenCodeMobileApplication : Application() {
             .fromApplication(this, TextMatePressureEntryPoint::class.java)
             .textMateProcessPressureObserver()
             .start()
+        EntryPointAccessors
+            .fromApplication(this, TranscriptPressureEntryPoint::class.java)
+            .transcriptMemoryPressureObserver()
+            .start()
         val hangWatchdogEntry =
             EntryPointAccessors.fromApplication(this, HangWatchdogEntryPoint::class.java)
         hangWatchdogEntry.diagnosticLogBuffer()
@@ -61,6 +66,12 @@ class OpenCodeMobileApplication : Application() {
 @InstallIn(SingletonComponent::class)
 interface TextMatePressureEntryPoint {
     fun textMateProcessPressureObserver(): TextMateProcessPressureObserver
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface TranscriptPressureEntryPoint {
+    fun transcriptMemoryPressureObserver(): TranscriptMemoryPressureObserver
 }
 
 @EntryPoint

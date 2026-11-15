@@ -85,6 +85,15 @@ nonisolated final class SessionMessageEngine: @unchecked Sendable {
         store.clear()
     }
 
+    /// Drops every message, part and raw info held for one session.
+    func release(sessionID: String) {
+        store.release(sessionID: sessionID)
+    }
+
+    func retains(sessionID: String) -> Bool {
+        store.retains(sessionID: sessionID)
+    }
+
     /// Live SSE publishability without scanning the full message list.
     func shouldPublishLive(_ changeSet: SessionChangeSet) -> Bool {
         !changeSet.changedPartIDsByMessage.isEmpty

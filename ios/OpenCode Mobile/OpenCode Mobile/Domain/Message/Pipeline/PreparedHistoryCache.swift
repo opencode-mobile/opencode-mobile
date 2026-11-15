@@ -72,6 +72,13 @@ nonisolated final class PreparedHistoryCache: @unchecked Sendable {
         evictIfNeededLocked(reason: "commit")
     }
 
+    /// Drops one session's prepared rows once its transcript is released.
+    func remove(key: PreparedHistoryCacheKey) {
+        lock.lock()
+        defer { lock.unlock() }
+        entries.removeValue(forKey: key)
+    }
+
     func removeSession(sessionID: String) {
         lock.lock()
         defer { lock.unlock() }

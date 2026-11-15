@@ -18,9 +18,15 @@ import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.ProjectionState
 import dev.opencode.mobile.domain.sync.SyncCoordinator
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -82,7 +88,10 @@ class MessageSync(
             ?: { _, _, _ -> MessagePage(messages = emptyList(), olderCursor = null, hasOlder = false) }
     private val listSplitTurn: MessageOlderFetcher = listSplitTurnMessages ?: listOlder
 
-    private val observationCache = ConcurrentHashMap<MessageSessionKey, SharedFlow<MessageListUpdate>>()
+    private val retentionLock = Any()
+    private val observations = ConcurrentHashMap<MessageSessionKey, Observation>()
+    private val releasesInFlight = ConcurrentHashMap<MessageSessionKey, Job>()
+    private var closedCounter = 0L
     private val lastIdentities = ConcurrentHashMap<String, MessageFrameIdentity>()
     private val lastPublishedFrames = ConcurrentHashMap<String, List<Message>>()
     private val healthByKey = ConcurrentHashMap<MessageSessionKey, MessageSyncHealth>()
@@ -107,34 +116,152 @@ class MessageSync(
         directory: String?,
     ): Flow<MessageListUpdate> {
         val key = sessionKey(sessionId, directory)
-        val shared =
-            observationCache.getOrPut(key) {
-                buildMessageFlow(key)
-                    .shareIn(
-                        scope = liveStoreScope.coroutineScope,
-                        started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
-                        replay = 1,
-                    )
-            }
         return flow {
-            // replay=1 may be CacheSyncConfirmed or a Messages frame from before
-            // loadOlderMessages. Emit the current transcript first, then drop the
-            // shared replay so it cannot regress hasOlder or the painted list.
-            val snapshot = replayPublishedSnapshot(key)
-            if (snapshot != null) {
-                emit(snapshot)
-                var skipStaleReplay = shared.replayCache.isNotEmpty()
-                shared.collect { update ->
-                    if (skipStaleReplay) {
-                        skipStaleReplay = false
-                        return@collect
+            val observation = acquireObservation(key)
+            try {
+                val shared = observation.shared
+                // replay=1 may be CacheSyncConfirmed or a Messages frame from before
+                // loadOlderMessages. Emit the current transcript first, then drop the
+                // shared replay so it cannot regress hasOlder or the painted list.
+                // A transcript still being released is not painted: it loads like a first open.
+                val snapshot = if (observation.afterRelease == null) replayPublishedSnapshot(key) else null
+                if (snapshot != null) {
+                    emit(snapshot)
+                    var skipStaleReplay = shared.replayCache.isNotEmpty()
+                    shared.collect { update ->
+                        if (skipStaleReplay) {
+                            skipStaleReplay = false
+                            return@collect
+                        }
+                        emit(update)
                     }
-                    emit(update)
+                } else {
+                    emitAll(shared)
                 }
-            } else {
-                emitAll(shared)
+            } finally {
+                releaseObserver(observation)
             }
         }
+    }
+
+    /**
+     * Releases every session nothing observes, ignoring the grace period and the warm cap.
+     * Called on memory pressure; open sessions are untouched.
+     */
+    fun releaseClosedSessions() {
+        synchronized(retentionLock) {
+            observations.values.filter { it.observers == 0 }.forEach { releaseLocked(it) }
+        }
+    }
+
+    /** True while [sessionId] holds an in-memory transcript or its observation. */
+    fun retainsTranscript(
+        sessionId: String,
+        directory: String?,
+    ): Boolean {
+        val key = sessionKey(sessionId, directory)
+        val slot = key.storeSlot
+        return observations.containsKey(key) ||
+            lastPublishedFrames.containsKey(slot) ||
+            historyWindows.containsKey(slot) ||
+            engine.retains(slot)
+    }
+
+    /**
+     * One session's shared observation. It runs in its own scope so releasing the session
+     * stops the share coroutine and frees its replay buffer.
+     */
+    private inner class Observation(
+        val key: MessageSessionKey,
+        /** Release of an earlier observation of the same session; the upstream waits for it. */
+        val afterRelease: Job?,
+    ) {
+        val scope: CoroutineScope =
+            liveStoreScope.coroutineScope.coroutineContext.let { parent ->
+                CoroutineScope(parent + SupervisorJob(parent[Job]))
+            }
+        val shared: SharedFlow<MessageListUpdate> =
+            flow {
+                afterRelease?.join()
+                emitAll(buildMessageFlow(key))
+            }.shareIn(
+                scope = scope,
+                started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
+                replay = 1,
+            )
+
+        /** Guarded by [retentionLock]. */
+        var observers = 0
+
+        /** Order in which the last observer stopped; guarded by [retentionLock]. */
+        var closedOrder = 0L
+
+        /** Guarded by [retentionLock]. */
+        var graceJob: Job? = null
+    }
+
+    private fun acquireObservation(key: MessageSessionKey): Observation =
+        synchronized(retentionLock) {
+            val observation =
+                observations.getOrPut(key) {
+                    Observation(key, afterRelease = releasesInFlight[key]?.takeIf { it.isActive })
+                }
+            observation.observers += 1
+            observation.graceJob?.cancel()
+            observation.graceJob = null
+            observation
+        }
+
+    private fun releaseObserver(observation: Observation) {
+        synchronized(retentionLock) {
+            if (observations[observation.key] !== observation) return
+            observation.observers -= 1
+            if (observation.observers > 0) return
+            observation.closedOrder = ++closedCounter
+            observation.graceJob =
+                liveStoreScope.coroutineScope.launch {
+                    delay(TranscriptRetentionPolicy.CLOSED_SESSION_GRACE_MS)
+                    synchronized(retentionLock) {
+                        if (observations[observation.key] === observation && observation.observers == 0) {
+                            releaseLocked(observation)
+                        }
+                    }
+                }
+            observations.values
+                .filter { it.observers == 0 }
+                .sortedByDescending { it.closedOrder }
+                .drop(TranscriptRetentionPolicy.MAX_WARM_CLOSED_SESSIONS)
+                .forEach { releaseLocked(it) }
+        }
+    }
+
+    /** Stops [observation]'s share coroutine, then drops everything held for its session. */
+    private fun releaseLocked(observation: Observation) {
+        val key = observation.key
+        observations.remove(key, observation)
+        observation.graceJob?.cancel()
+        observation.graceJob = null
+        val generation = observationGeneration.get()
+        val release =
+            liveStoreScope.coroutineScope.launch {
+                observation.scope.coroutineContext[Job]?.cancelAndJoin()
+                if (observationGeneration.get() == generation) dropSession(key)
+            }
+        releasesInFlight[key] = release
+        release.invokeOnCompletion { releasesInFlight.remove(key, release) }
+    }
+
+    private fun dropSession(key: MessageSessionKey) {
+        val storeSlot = key.storeSlot
+        lastIdentities.remove(storeSlot)
+        lastPublishedFrames.remove(storeSlot)
+        historyWindows.remove(storeSlot)
+        extraPublishes.remove(storeSlot)
+        awaitingCacheSyncConfirm.remove(storeSlot)
+        healthByKey.remove(key)
+        setCatchUpSlot(key, false)
+        closeMessageCacheHandle(key)
+        engine.release(storeSlot)
     }
 
     suspend fun refreshMessages(
@@ -251,7 +378,14 @@ class MessageSync(
 
     fun clearCache() {
         observationGeneration.incrementAndGet()
-        observationCache.clear()
+        val stale =
+            synchronized(retentionLock) {
+                observations.values.toList().also { observations.clear() }
+            }
+        stale.forEach { observation ->
+            observation.graceJob?.cancel()
+            observation.scope.cancel()
+        }
         lastIdentities.clear()
         lastPublishedFrames.clear()
         healthByKey.clear()
@@ -400,6 +534,10 @@ class MessageSync(
 
             fun observationStillCurrent(): Boolean = observationGeneration.get() == startedGeneration
 
+            // A stopped or released observation must not commit a late REST page: the loader
+            // runs in the coordinator's scope and can outlive this one by a suspension point.
+            fun mayCommit(): Boolean = observationStillCurrent() && isActive
+
             val staging = Channel<StagedItem>(capacity = eventStagingCapacity)
             val queued = AtomicInteger(0)
             val queuedBytes = AtomicInteger(0)
@@ -515,7 +653,7 @@ class MessageSync(
                                             applyQueuedIncrementalEvents()
                                         }
                                     },
-                                    stillCurrent = { syncCoordinator.profileGeneration == generation },
+                                    stillCurrent = { syncCoordinator.profileGeneration == generation && mayCommit() },
                                 )
                         ) {
                             is ReloadResult.Accepted,
@@ -545,7 +683,7 @@ class MessageSync(
                                 }
                                 backfillSplitTurnIfNeeded(
                                     key,
-                                    stillCurrent = { observationStillCurrent() },
+                                    stillCurrent = { mayCommit() },
                                     emitMessages = { frame -> emitMessages(frame, isFromCache = false) },
                                 )
                                 healthByKey[key] = MessageSyncHealth.Fresh

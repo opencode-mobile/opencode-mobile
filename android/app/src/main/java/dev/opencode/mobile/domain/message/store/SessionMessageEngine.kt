@@ -78,6 +78,11 @@ class SessionMessageEngine
 
         fun clear() = store.clear()
 
+        /** Drops every message, part and raw info held for one session. */
+        fun release(sessionId: String) = store.release(sessionId)
+
+        fun retains(sessionId: String): Boolean = store.retains(sessionId)
+
         /** Live SSE publishability without scanning the full message list. */
         fun shouldPublishLive(changeSet: SessionChangeSet): Boolean =
             changeSet.changedPartIdsByMessage.isNotEmpty() ||

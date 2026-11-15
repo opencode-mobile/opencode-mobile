@@ -2436,6 +2436,48 @@ class SessionStatusLiveStoreTest {
         }
 
     @Test
+    fun statusKeepsUpdatingForSessionWhoseTranscriptWasReleased() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(statuses = emptyList())
+            val eventStream = FakeForegroundEventStream()
+            val statusStore = createStatusStore(repository, eventStream)
+            val messageStore = InMemoryMessageStore(MessageDomainAdapter())
+            val messageScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+            val messageSync =
+                MessageSync(
+                    listMessages = { _, _ -> listOf(Message(id = "m1", role = MessageRole.User, text = "hi")) },
+                    engine = SessionMessageEngine(messageStore),
+                    eventStream = eventStream,
+                    liveStoreScope = messageScope,
+                    syncCoordinator =
+                        testSyncCoordinator(
+                            eventStream = eventStream,
+                            scope = messageScope.coroutineScope,
+                            nowMs = { testDispatcher.scheduler.currentTime },
+                            wait = { delay(1) },
+                        ),
+                    nowMs = { testDispatcher.scheduler.currentTime },
+                )
+            val emissions = mutableListOf<SessionActivitySnapshot>()
+            val home = launch { statusStore.observeActivity("/repo").collect { emissions.add(it) } }
+            val chat = launch { messageSync.observeMessages("ses-1", "/repo").collect { } }
+            runCurrent()
+            chat.cancel()
+            runCurrent()
+            messageSync.releaseClosedSessions()
+            runCurrent()
+            assertFalse(messageSync.retainsTranscript("ses-1", "/repo"))
+
+            eventStream.emit(busyStatusEvent("ses-1"))
+            advanceTimeBy(1_000)
+            runCurrent()
+
+            assertEquals(SessionActivity.Running, emissions.last().entries["ses-1"]?.activity)
+            assertFalse(messageSync.retainsTranscript("ses-1", "/repo"))
+            home.cancel()
+        }
+
+    @Test
     fun parsesRetryPayloadFromStatusEvent() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository(statuses = emptyList())

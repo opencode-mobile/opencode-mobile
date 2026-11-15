@@ -314,6 +314,32 @@ class InMemoryMessageStore
             if (changed) bumpRevision(sessionId)
         }
 
+        /** Drops everything held for [sessionId]; the next load starts as a first open. */
+        @Synchronized
+        fun release(sessionId: String) {
+            perSessionMaps().forEach { it.remove(sessionId) }
+        }
+
+        /** True while any state is held for [sessionId]. */
+        @Synchronized
+        fun retains(sessionId: String): Boolean = perSessionMaps().any { it.containsKey(sessionId) }
+
+        private fun perSessionMaps(): List<MutableMap<String, *>> =
+            listOf(
+                infoCaches,
+                partsCaches,
+                partOrders,
+                ignoredPartIds,
+                messageOrders,
+                baseMessages,
+                revisions,
+                deltaChunks,
+                absorbedReplayChars,
+                runningContexts,
+                contextStamps,
+                contextContributors,
+            )
+
         @Synchronized
         override fun clear() {
             infoCaches.clear()

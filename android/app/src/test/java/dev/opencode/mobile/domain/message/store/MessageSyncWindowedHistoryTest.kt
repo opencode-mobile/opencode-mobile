@@ -542,7 +542,8 @@ class MessageSyncWindowedHistoryTest {
                     },
                 )
 
-            sync.observeMessages("ses-1", "/repo").first()
+            // The screen stays open while it loads older pages.
+            val screen = launch { sync.observeMessages("ses-1", "/repo").collect { } }
             advanceUntilIdle()
             val result = sync.loadOlderMessages("ses-1", "/repo")
 
@@ -550,6 +551,7 @@ class MessageSyncWindowedHistoryTest {
             assertEquals(listOf("a", "b", "c", "d"), result.messages.map { it.id })
             assertFalse(result.hasOlder)
             assertEquals(2, result.addedCount)
+            screen.cancel()
         }
 
     @Test
@@ -588,7 +590,8 @@ class MessageSyncWindowedHistoryTest {
                         ),
                 )
 
-            sync.observeMessages("ses-1", "/repo").first()
+            // The screen stays open while it loads older pages.
+            val screen = launch { sync.observeMessages("ses-1", "/repo").collect { } }
             advanceUntilIdle()
             val first = sync.loadOlderMessages("ses-1", "/repo")
 
@@ -602,6 +605,7 @@ class MessageSyncWindowedHistoryTest {
             assertEquals(1, second.addedCount)
             assertEquals(listOf("pre", "a", "b", "c", "d"), second.messages.map { it.id })
             assertFalse(second.hasOlder)
+            screen.cancel()
         }
 
     @Test
@@ -654,12 +658,14 @@ class MessageSyncWindowedHistoryTest {
                     nowMs = { testDispatcher.scheduler.currentTime },
                 )
 
-            sync.observeMessages("ses-1", "/repo").first()
+            // The screen stays open while it loads older pages.
+            val screen = launch { sync.observeMessages("ses-1", "/repo").collect { } }
             advanceUntilIdle()
             val result = sync.loadOlderMessages("ses-1", "/repo")
 
             assertEquals(listOf("m1", "m3"), result.messages.map { it.id })
             assertEquals("Hello world", result.messages.last().text)
+            screen.cancel()
         }
 
     @Test

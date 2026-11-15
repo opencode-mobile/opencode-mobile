@@ -336,6 +336,35 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         bumpRevision(sessionID: sessionID)
     }
 
+    /// Drops everything held for `sessionID`; the next load starts as a first open.
+    func release(sessionID: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        infoCache.removeValue(forKey: sessionID)
+        partsCache.removeValue(forKey: sessionID)
+        partOrder.removeValue(forKey: sessionID)
+        ignoredPartIDs.removeValue(forKey: sessionID)
+        messageOrder.removeValue(forKey: sessionID)
+        baseMessages.removeValue(forKey: sessionID)
+        revisions.removeValue(forKey: sessionID)
+        deltaChunks.removeValue(forKey: sessionID)
+        absorbedReplayChars.removeValue(forKey: sessionID)
+        runningContexts.removeValue(forKey: sessionID)
+        contextStamps.removeValue(forKey: sessionID)
+        contextContributors.removeValue(forKey: sessionID)
+    }
+
+    /// True while any state is held for `sessionID`.
+    func retains(sessionID: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return infoCache[sessionID] != nil || partsCache[sessionID] != nil || partOrder[sessionID] != nil ||
+            ignoredPartIDs[sessionID] != nil || messageOrder[sessionID] != nil || baseMessages[sessionID] != nil ||
+            revisions[sessionID] != nil || deltaChunks[sessionID] != nil || absorbedReplayChars[sessionID] != nil ||
+            runningContexts[sessionID] != nil || contextStamps[sessionID] != nil ||
+            contextContributors[sessionID] != nil
+    }
+
     func clear() {
         lock.lock()
         defer { lock.unlock() }
