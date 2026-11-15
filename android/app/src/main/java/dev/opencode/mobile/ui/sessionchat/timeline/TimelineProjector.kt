@@ -201,7 +201,7 @@ object TimelineProjector {
         item: SessionChatMessageItem,
         previous: TimelineRow? = null,
     ): TimelineRow {
-        val contentRevision = ContentRevision.of(item.text)
+        val contentRevision = ContentRevision.of(item.text, item.blocks)
         val draft =
             TimelineRow(
                 id = item.id,
@@ -334,7 +334,7 @@ object TimelineProjector {
                 sentAtEpochMs = message.sentAtEpochMs,
                 // Carried so an unchanged row stays the same instance; [markSteers] decides.
                 steer = previous?.steer,
-                contentRevision = ContentRevision.of(displayText),
+                contentRevision = ContentRevision.of(displayText, body.blocks),
                 layoutRevision = 0L,
                 goalKickoffId =
                     message.parts

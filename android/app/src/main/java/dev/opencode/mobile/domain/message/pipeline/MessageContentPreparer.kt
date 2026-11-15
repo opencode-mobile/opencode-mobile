@@ -8,9 +8,6 @@ import dev.opencode.mobile.markdown.HighlightRevision
 import dev.opencode.mobile.markdown.MarkdownCodeFence
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownHighlightAttachment
-import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
-import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeStructureOnlyHighlighter
 import dev.opencode.mobile.markdown.TextMateHighlightingEngine
 import dev.opencode.mobile.markdown.TextMateParseOutcome
 import dev.opencode.mobile.markdown.attachTextMateResult
@@ -132,14 +129,11 @@ class MessageContentPreparer
             sessionKey: String = "",
         ): MarkdownDocument? =
             withContext(computationDispatcher) {
-                if (!OpenCodeMarkdownDetector.shouldRender(plain)) {
+                if (!MarkdownInputProbe.shouldRender(plain)) {
                     return@withContext null
                 }
                 try {
-                    OpenCodeMarkdownParser.parse(
-                        markdown = plain,
-                        codeHighlighter = OpenCodeStructureOnlyHighlighter,
-                    )
+                    MarkdownInputProbe.parseStructure(plain)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
@@ -162,15 +156,12 @@ class MessageContentPreparer
             sessionKey: String = "",
         ): StreamingHighlight? =
             withContext(computationDispatcher) {
-                if (!OpenCodeMarkdownDetector.shouldRender(plain)) {
+                if (!MarkdownInputProbe.shouldRender(plain)) {
                     return@withContext null
                 }
                 try {
                     val structure =
-                        OpenCodeMarkdownParser.parse(
-                            markdown = plain,
-                            codeHighlighter = OpenCodeStructureOnlyHighlighter,
-                        )
+                        MarkdownInputProbe.parseStructure(plain)
                     val revision = HighlightRevision(nextHighlightRevision.incrementAndGet())
                     val fences =
                         structure.codeFences(
@@ -209,10 +200,8 @@ class MessageContentPreparer
             mode: MessagePreparationMode,
             sessionKey: String = "",
         ): DisplayMessage {
-            // The timeline shows a cut user message as plain text; never parse the hidden rest.
-            if (message.role == MessageRole.User && MessageTextLimit.cut(message.text) != null) {
-                return DisplayMessage(message = message, renderedMarkdown = null)
-            }
+            // A cut user message is detected and parsed from its shown part only (#1043).
+            val source = message.markdownSourceText
             val isStreaming = messageIsStreaming(message)
             if (mode == MessagePreparationMode.HistoryPlainFirst) {
                 reusableDocument(message, previous, mode)?.let { reusable ->
@@ -222,7 +211,7 @@ class MessageContentPreparer
                         awaitingTextMateUpgrade = previous?.awaitingTextMateUpgrade == true,
                     )
                 }
-                if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
+                if (!MarkdownInputProbe.shouldRender(source)) {
                     return DisplayMessage(
                         message = message,
                         renderedMarkdown = null,
@@ -230,10 +219,7 @@ class MessageContentPreparer
                 }
                 val document =
                     try {
-                        OpenCodeMarkdownParser.parse(
-                            markdown = message.text,
-                            codeHighlighter = OpenCodeStructureOnlyHighlighter,
-                        )
+                        MarkdownInputProbe.parseStructure(source)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
@@ -250,7 +236,7 @@ class MessageContentPreparer
                     awaitingTextMateUpgrade = document != null,
                 )
             }
-            if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
+            if (!MarkdownInputProbe.shouldRender(source)) {
                 return DisplayMessage(
                     message = message,
                     renderedMarkdown = null,
@@ -262,7 +248,7 @@ class MessageContentPreparer
                     parseDocumentSafely(
                         sessionKey = sessionKey,
                         blockID = message.id,
-                        text = message.text,
+                        text = source,
                         isStreaming = isStreaming,
                         intent = mode.highlightIntent(),
                     )
@@ -331,7 +317,7 @@ class MessageContentPreparer
             isStreaming: Boolean,
             intent: HighlightIntent,
         ): ParsedDocument? {
-            if (!OpenCodeMarkdownDetector.shouldRender(text)) {
+            if (!MarkdownInputProbe.shouldRender(text)) {
                 return null
             }
             val cacheKey =
@@ -347,10 +333,7 @@ class MessageContentPreparer
                 cache[cacheKey]?.let { return ParsedDocument(it, settled = true) }
             }
             val structure =
-                OpenCodeMarkdownParser.parse(
-                    markdown = text,
-                    codeHighlighter = OpenCodeStructureOnlyHighlighter,
-                )
+                MarkdownInputProbe.parseStructure(text)
             var document = structure
             var settled = true
             if (!isStreaming) {

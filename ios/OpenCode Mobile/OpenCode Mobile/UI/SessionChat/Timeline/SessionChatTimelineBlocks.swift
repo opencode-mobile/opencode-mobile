@@ -968,7 +968,7 @@ nonisolated enum SessionChatTimelineBlocks {
             switch parts[index] {
             case .text(let textPart):
                 if textPart.isDisplayable {
-                    let trimmed = textPart.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let trimmed = textPart.text.trimmingWhitespaceAndNewlines
                     if !trimmed.isEmpty {
                         guard let partId = textPart.id else { return .missingPartIds }
                         pendingText.append((id: partId, text: trimmed))
@@ -2483,10 +2483,15 @@ nonisolated enum SessionChatTimelineBlocks {
         guard role == .user else { return blocks }
         return blocks.map { block in
             guard case .text(let blockID, let text, _) = block, let cut = MessageTextLimit.cut(text) else { return block }
+            // Counted in UTF-16 units, as Android counts them: `utf16.count` does not walk the
+            // whole text the way a grapheme count does (#1043).
             return .limitedText(
                 blockID: blockID,
                 text: cut.visibleText,
-                limit: SessionChatTextLimit(shownCharacters: cut.shownCharacters, totalCharacters: text.count)
+                limit: SessionChatTextLimit(
+                    shownCharacters: text.prefix(cut.shownCharacters).utf16.count,
+                    totalCharacters: text.utf16.count
+                )
             )
         }
     }

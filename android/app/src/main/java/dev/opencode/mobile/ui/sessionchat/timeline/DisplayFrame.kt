@@ -20,6 +20,25 @@ data class ContentRevision(
                 textHash = stableMarkdownSourceHash(plain),
                 textLength = plain.length,
             )
+
+        /**
+         * A row's revision. A cut user message (#1043) is not hashed whole: it does not change once
+         * sent, so its shown parts and its whole length stand for it.
+         */
+        fun of(
+            text: String,
+            blocks: List<SessionChatTimelineBlock>,
+        ): ContentRevision {
+            val shown =
+                blocks.mapNotNull { block ->
+                    (block as? SessionChatTimelineBlock.Text)?.takeIf { it.limit != null }?.text
+                }
+            if (shown.isEmpty()) return of(text)
+            return ContentRevision(
+                textHash = stableMarkdownSourceHash(shown.joinToString("\u0000")),
+                textLength = text.length,
+            )
+        }
     }
 }
 

@@ -212,13 +212,14 @@ struct OpenCodeOutgoingMessage: View {
 
     private func textPill(text: String, limit: OpenCodeOutgoingMessageLimit? = nil, onShowFull: (() -> Void)? = nil) -> some View {
         // A cut bubble is as wide as the wider of its text and the row, like an uncut bubble
-        // hugs its text; the row alone would stretch it to the full width.
-        let layout = limit == nil
+        // hugs its text; the row alone would stretch it to the full width. Rendered markdown
+        // takes the full width as in an uncut bubble, so it keeps the plain stack.
+        let layout = limit == nil || rendersMarkdown
             ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 8))
             : AnyLayout(OutgoingLimitedTextLayout(spacing: 8))
         return layout {
             if !text.isEmpty {
-                pillContent(text: text, isLimited: limit != nil)
+                pillContent(text: text)
             }
             if let limit, let onShowFull {
                 OpenCodeTruncationRow(
@@ -306,12 +307,18 @@ struct OpenCodeOutgoingMessage: View {
         }
     }
 
-    @ViewBuilder
-    private func pillContent(text: String, isLimited: Bool = false) -> some View {
-        if !isLimited, let renderedMarkdown, content.lazy.filter({
+    /// The text renders as markdown: one text in the bubble and a document for it. A cut text's
+    /// document is parsed from its shown part, so it renders like an uncut one (#1043).
+    private var rendersMarkdown: Bool {
+        renderedMarkdown != nil && content.lazy.filter({
             if case .text = $0 { return true }
             return false
-        }).count == 1 {
+        }).count == 1
+    }
+
+    @ViewBuilder
+    private func pillContent(text: String) -> some View {
+        if rendersMarkdown, let renderedMarkdown {
             OpenCodeRenderedMarkdown(
                 document: renderedMarkdown,
                 variant: .outgoingMessage

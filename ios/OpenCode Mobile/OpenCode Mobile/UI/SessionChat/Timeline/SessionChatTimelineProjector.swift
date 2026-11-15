@@ -197,7 +197,7 @@ nonisolated enum SessionChatTimelineProjector {
             }
             return paragraphTexts.count > 1 ? paragraphTexts.joined(separator: "\n\n") : message.text
         }()
-        let contentRevision = ContentRevision.of(displayText)
+        let contentRevision = ContentRevision.of(displayText, blocks: body.blocks)
         let bridgeMarkdown = bridgeRenderedMarkdown(body: body, previous: previous)
 
         if let previous,

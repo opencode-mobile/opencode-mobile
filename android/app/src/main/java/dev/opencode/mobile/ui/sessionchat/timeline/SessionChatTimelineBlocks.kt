@@ -1700,6 +1700,25 @@ object SessionChatTimelineBlocks {
     }
 
     /**
+     * Puts [document], parsed from the shown part of [messageText] (`Message.markdownSourceText`), on the
+     * sole cut user text when that text is the same shown part, so a cut bubble renders like an
+     * uncut one up to the cut (#1043). Any other blocks are returned as they are.
+     */
+    fun attachLimitedTextMarkdown(
+        blocks: List<SessionChatTimelineBlock>,
+        document: MarkdownDocument?,
+        messageText: String,
+    ): List<SessionChatTimelineBlock> {
+        if (document == null) return blocks
+        if (blocks.count { it is SessionChatTimelineBlock.Text } != 1) return blocks
+        val index = blocks.indexOfFirst { it is SessionChatTimelineBlock.Text && it.limit != null }
+        if (index < 0) return blocks
+        val block = blocks[index] as SessionChatTimelineBlock.Text
+        if (block.renderedMarkdown != null || MessageTextLimit.cut(messageText)?.visibleText != block.text) return blocks
+        return blocks.toMutableList().also { it[index] = block.copy(renderedMarkdown = document) }
+    }
+
+    /**
      * Cuts each user text block that is too long to lay out ([MessageTextLimit]) to the part the
      * timeline shows, so the row never lays out, measures or parses the rest (#1043). Assistant
      * and every other role keep their text.

@@ -1122,7 +1122,8 @@ private fun SessionChatMessageItem.outgoingContent(
                     text = block.text,
                     renderedMarkdown =
                         if (block.limit != null) {
-                            null
+                            // Only a document parsed from the shown part rides on a cut text.
+                            block.renderedMarkdown
                         } else {
                             block.renderedMarkdown ?: renderedMarkdown.takeIf { textBlockCount == 1 }
                         },

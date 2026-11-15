@@ -91,6 +91,20 @@ import Testing
         #expect(MessageTextLimit.cut(text) == MessageTextCut(visibleText: kept + "…", shownCharacters: 1_000))
     }
 
+    @Test func crlfLineBreaks_countLikeLineFeeds() {
+        // Same vector as Android: "\r\n" is one line break, not a character of the line.
+        let line = String(repeating: "a", count: 40)
+        #expect(MessageTextLimit.cut(Array(repeating: line, count: 30).joined(separator: "\r\n")) == nil)
+
+        let cut = MessageTextLimit.cut(Array(repeating: line, count: 31).joined(separator: "\r\n"))
+        #expect(cut?.visibleText == Array(repeating: line, count: 25).joined(separator: "\r\n"))
+    }
+
+    @Test(arguments: ["", "   ", "\n\n", "plain", "  lead", "trail \n", "\t both \r\n", "é\u{2028}", "\u{00A0}x\u{3000}"])
+    func trimmingWhitespaceAndNewlines_matchesFoundation(text: String) {
+        #expect(text.trimmingWhitespaceAndNewlines == text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
     @Test func multiMegabyteLog_stopsReadingEarly() {
         // About 3.2 MB of 35-character log lines.
         let line = "2026-01-01T00:00:00Z INFO worker ok"

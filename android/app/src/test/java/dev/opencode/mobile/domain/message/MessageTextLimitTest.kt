@@ -96,6 +96,17 @@ class MessageTextLimitTest {
     }
 
     @Test
+    fun crlfLineBreaks_countLikeLineFeeds() {
+        // 40 characters fill one line; the CR of a CRLF must not start a second one (iOS reads
+        // "\r\n" as one Character).
+        val line = "a".repeat(40)
+        assertNull(MessageTextLimit.cut(List(30) { line }.joinToString("\r\n")))
+
+        val cut = MessageTextLimit.cut(List(31) { line }.joinToString("\r\n"))
+        assertEquals(List(25) { line }.joinToString("\r\n"), cut?.visibleText)
+    }
+
+    @Test
     fun cutNeverSplitsASurrogatePair() {
         // 999 letters, then emoji: the 1,000th unit is the first half of a pair.
         val text = "a".repeat(999) + "😀".repeat(200)

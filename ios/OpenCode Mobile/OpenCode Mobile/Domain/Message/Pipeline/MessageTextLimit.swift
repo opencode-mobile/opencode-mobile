@@ -118,3 +118,37 @@ nonisolated enum MessageTextLimit {
         return characters[characters.startIndex ..< end]
     }
 }
+
+nonisolated extension MessageTextLimit {
+    /// The text markdown detection, parsing and highlighting read for a message: the shown part
+    /// of a cut user message, so none of them ever sees the hidden rest (#1043); the whole text
+    /// otherwise. A cut bubble then renders like an uncut one up to the cut.
+    static func markdownSource(role: MessageRole, text: String) -> String {
+        guard role == .user, let cut = cut(text) else { return text }
+        return cut.visibleText
+    }
+}
+
+nonisolated extension Message {
+    /// See `MessageTextLimit.markdownSource(role:text:)`.
+    var markdownSourceText: String {
+        MessageTextLimit.markdownSource(role: role, text: text)
+    }
+}
+
+nonisolated extension String {
+    /// `trimmingCharacters(in: .whitespacesAndNewlines)`, without the Foundation round trip that
+    /// copies the whole text on every timeline frame: the text itself when there is nothing to
+    /// trim, else a native copy of the trimmed range (#1043).
+    var trimmingWhitespaceAndNewlines: String {
+        let set = CharacterSet.whitespacesAndNewlines
+        let scalars = unicodeScalars
+        guard let start = scalars.firstIndex(where: { !set.contains($0) }),
+              let last = scalars.lastIndex(where: { !set.contains($0) })
+        else { return "" }
+        if start == scalars.startIndex, scalars.index(after: last) == scalars.endIndex {
+            return self
+        }
+        return String(scalars[start ... last])
+    }
+}

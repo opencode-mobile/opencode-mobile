@@ -66,17 +66,75 @@ class MessageContentPreparerTest {
         }
 
     @Test
-    fun cutUserMessageIsNotParsedAsMarkdown() =
+    fun cutUserMessageIsDetectedAndParsedFromItsShownPartOnly() =
         runTest(testDispatcher) {
             val preparer = createPreparer()
+            val marker = java.util.UUID.randomUUID().toString()
+            val markdown = "# Title $marker\n\n" + (1..60).joinToString("\n") { "- item $it $marker" }
+
+            val (inputs, cut) = recordingMarkdownInputs { preparer.prepareMessage(Message(id = "u1", role = MessageRole.User, text = markdown)) }
+
+            val shown = MessageTextLimit.cut(markdown)!!.visibleText
+            val mine = inputs.filter { (_, text) -> text.contains(marker) }
+            assertTrue(mine.any { (stage, _) -> stage == MarkdownInputProbe.Stage.Detect })
+            assertTrue(mine.any { (stage, _) -> stage == MarkdownInputProbe.Stage.Parse })
+            assertTrue(mine.all { (_, text) -> text == shown })
+            val blocks = cut.renderedMarkdown!!.blocks
+            assertTrue(blocks.first() is MarkdownBlock.Heading)
+            assertTrue((blocks.last() as MarkdownBlock.BulletList).items.size < 60)
+        }
+
+    @Test
+    fun assistantMessageOfTheSameLengthIsStillParsedWhole() =
+        runTest(testDispatcher) {
             val markdown = "# Title\n\n" + (1..60).joinToString("\n") { "- item $it" }
 
-            val cut = preparer.prepareMessage(Message(id = "u1", role = MessageRole.User, text = markdown))
-            val reply = preparer.prepareMessage(Message(id = "a1", role = MessageRole.Assistant, text = markdown))
+            val reply = createPreparer().prepareMessage(Message(id = "a1", role = MessageRole.Assistant, text = markdown))
 
-            assertNull(cut.renderedMarkdown)
-            assertNotNull(reply.renderedMarkdown)
+            assertEquals(60, (reply.renderedMarkdown!!.blocks.last() as MarkdownBlock.BulletList).items.size)
         }
+
+    @Test
+    fun multiMegabyteUserMessageReachesTheDetectorAndParserOnlyAsItsShownPart() =
+        runTest(testDispatcher) {
+            val preparer = createPreparer()
+            val marker = java.util.UUID.randomUUID().toString()
+            val text =
+                (1..10).joinToString("\n") { "## Step $it $marker" } + "\n" +
+                    (1..60_000).joinToString("\n") { "2026-01-01T00:00:00Z INFO worker $it ok" } +
+                    "\ntail-$marker"
+            assertTrue(text.length > 2_000_000)
+            val message = Message(id = "u1", role = MessageRole.User, text = text)
+
+            val (inputs, _) =
+                recordingMarkdownInputs {
+                    preparer.prepareMessage(message, mode = MessagePreparationMode.HistoryPlainFirst)
+                    preparer.prepareMessage(message, mode = MessagePreparationMode.HistoryEnrichment)
+                    preparer.prepareMessages(listOf(message), mode = MessagePreparationMode.Final)
+                    shouldPlainFirstHistoryPublish(listOf(message), previousById = emptyMap())
+                    newestMarkdownViewportIds(listOf(message))
+                }
+
+            val mine = inputs.filter { (_, input) -> input.contains(marker) }
+            assertTrue(mine.isNotEmpty())
+            assertTrue(mine.all { (_, input) -> input.length <= 2_000 })
+            assertFalse(mine.any { (_, input) -> input.contains("tail-$marker") })
+        }
+
+    private suspend fun <T> recordingMarkdownInputs(body: suspend () -> T): Pair<List<Pair<MarkdownInputProbe.Stage, String>>, T> {
+        val inputs = java.util.Collections.synchronizedList(mutableListOf<Pair<MarkdownInputProbe.Stage, String>>())
+        val previous = MarkdownInputProbe.observer
+        MarkdownInputProbe.observer = { stage, text ->
+            previous?.invoke(stage, text)
+            inputs += stage to text
+        }
+        try {
+            val value = body()
+            return inputs.toList() to value
+        } finally {
+            MarkdownInputProbe.observer = previous
+        }
+    }
 
     @Test
     fun streamingTextBlockRendersTableOnceDelimiterRowStarts() =

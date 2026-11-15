@@ -1,5 +1,10 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
+import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
+import dev.opencode.mobile.markdown.OpenCodeStructureOnlyHighlighter
+
 /** The part of a long message the timeline shows, and how many of its characters that is. */
 data class MessageTextCut(
     /** The shown prefix; ends with "…" when a line was cut part way. */
@@ -58,6 +63,11 @@ object MessageTextLimit {
 
         while (read < length) {
             val character = text[read]
+            if (character == '\r' && read + 1 < length && text[read + 1] == '\n') {
+                // CRLF is one line break, as on iOS where "\r\n" is one Character.
+                read += 1
+                continue
+            }
             if (character == '\n') {
                 val cost = lineCost(lineLength)
                 markOverflowIfNeeded(cost)
@@ -119,5 +129,35 @@ object MessageTextLimit {
         var trimmed = end
         while (trimmed > start && text[trimmed - 1].isWhitespace()) trimmed -= 1
         return trimmed
+    }
+}
+
+/**
+ * The text markdown detection, parsing and highlighting read for a message: the shown part of a
+ * cut user message, so none of them ever sees the hidden rest (#1043); the whole text otherwise.
+ * A cut bubble then renders like an uncut one up to the cut.
+ */
+val Message.markdownSourceText: String
+    get() = if (role == MessageRole.User) MessageTextLimit.cut(text)?.visibleText ?: text else text
+
+/**
+ * Every markdown detection and parse in the message pipeline goes through here. It also lets a
+ * test see what they are given, to check that the hidden part of a cut message never reaches
+ * them (#1043). Nothing observes outside tests.
+ */
+internal object MarkdownInputProbe {
+    enum class Stage { Detect, Parse }
+
+    @Volatile
+    var observer: ((Stage, String) -> Unit)? = null
+
+    fun shouldRender(text: String): Boolean {
+        observer?.invoke(Stage.Detect, text)
+        return OpenCodeMarkdownDetector.shouldRender(text)
+    }
+
+    fun parseStructure(markdown: String): MarkdownDocument {
+        observer?.invoke(Stage.Parse, markdown)
+        return OpenCodeMarkdownParser.parse(markdown = markdown, codeHighlighter = OpenCodeStructureOnlyHighlighter)
     }
 }
