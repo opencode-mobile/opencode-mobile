@@ -7,18 +7,8 @@ name: Hex Code iOS Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "ios/OpenCode Mobile/Hex Code.xcodeproj/**"
-      - "ios/OpenCode Mobile/Hex Code/**"
-      - "ios/OpenCode Mobile/Hex CodeTests/**"
-      - "ios/OpenCode Mobile/Hex Code Info.plist"
-      - "ios/OpenCodeKit/**"
-      - "shared/voice-engine/Package.swift"
-      - "shared/voice-engine/Package.resolved"
-      - "shared/voice-engine/adapter/ios/**"
-      - ".github/scripts/resolve-ios-packages.sh"
-      - ".github/scripts/select-ios-simulator.sh"
-      - ".github/workflows/hexcode-ios-checks.yml"
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
@@ -26,12 +16,47 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    # Path filters live here, not under `on:`: a merge queue ignores `paths`, and
+    # a workflow that never starts leaves a required check pending. A job
+    # skipped by `if:` reports as skipped, which counts as passing.
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.match.outputs.relevant }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Match changed paths
+        id: match
+        env:
+          EVENT: ${{ github.event_name }}
+          MERGE_BASE: ${{ github.event.merge_group.base_sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PATTERNS: |
+            ios/OpenCode Mobile/Hex Code.xcodeproj/**
+            ios/OpenCode Mobile/Hex Code/**
+            ios/OpenCode Mobile/Hex CodeTests/**
+            ios/OpenCode Mobile/Hex Code Info.plist
+            ios/OpenCodeKit/**
+            shared/voice-engine/Package.swift
+            shared/voice-engine/Package.resolved
+            shared/voice-engine/adapter/ios/**
+            .github/scripts/resolve-ios-packages.sh
+            .github/scripts/select-ios-simulator.sh
+            .github/workflows/hexcode-ios-checks.yml
+            .github/scripts/changed-paths.py
+        run: python3 .github/scripts/changed-paths.py
+
   hexcode-ios-checks:
     # Self-hosted runner: never run pull requests from forks.
-    if: github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository))
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.relevant != 'false' && (github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository))) }}
     runs-on: [self-hosted, macOS, mac-mini]
     defaults:
       run:
