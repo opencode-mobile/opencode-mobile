@@ -59,6 +59,7 @@ enum class ComponentGalleryEntryId {
     ReorderableList,
     ChoiceBadge,
     FilterTabs,
+    TextSizeSlider,
     MenuChip,
     ActionPill,
     ActionTile,
@@ -217,6 +218,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.FilterTabs,
             title = "Filter Tabs",
             description = "Horizontal single-select filters with optional count badges.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.TextSizeSlider,
+            title = "Text Size Slider",
+            description = "Card that picks an app text size on a stepped slider, Default marked.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(

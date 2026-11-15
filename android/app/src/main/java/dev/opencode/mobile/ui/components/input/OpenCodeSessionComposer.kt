@@ -112,9 +112,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.FollowUpDelivery
+import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeRadius
+import dev.opencode.mobile.theme.OpenCodeTextRegion
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodePageIndicator
@@ -468,6 +470,7 @@ private const val PromptMaxVisibleLines = 5
 private const val QuestionCustomMinLines = 3
 private const val QuestionCustomMaxLines = 5
 
+/** The Session Chat composer, at the Session Chat text size (#1044). */
 @Composable
 fun OpenCodeSessionComposer(
     state: OpenCodeSessionComposerState,
@@ -478,6 +481,21 @@ fun OpenCodeSessionComposer(
     dictation: ComposerDictationCardModel? = null,
     /** The first Esc armed the interrupt: shows "Esc again to interrupt" above the content. */
     interruptArmed: Boolean = false,
+) {
+    OpenCodeTextRegion(AppearanceTextRegion.SessionChat) {
+        OpenCodeSessionComposerContent(state, onAction, modifier, focus, status, dictation, interruptArmed)
+    }
+}
+
+@Composable
+private fun OpenCodeSessionComposerContent(
+    state: OpenCodeSessionComposerState,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+    modifier: Modifier,
+    focus: OpenCodeSessionComposerFocus?,
+    status: (@Composable () -> Unit)?,
+    dictation: ComposerDictationCardModel?,
+    interruptArmed: Boolean,
 ) {
     val composerFocus = focus ?: rememberOpenCodeSessionComposerFocus()
     val showsPrompt = state is OpenCodeSessionComposerState.Prompt

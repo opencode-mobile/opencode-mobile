@@ -28,7 +28,9 @@ import androidx.lifecycle.compose.currentStateAsState
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.theme.CodeTextStyle
+import dev.opencode.mobile.theme.OpenCodeTextRegion
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
@@ -91,7 +93,8 @@ internal fun SessionChatShellOutputSheet(
             }
         },
     ) {
-        if (sheet != null) SessionChatShellOutputBody(sheet)
+        // Shell output reads at the Code text size (#1044).
+        if (sheet != null) OpenCodeTextRegion(AppearanceTextRegion.Code) { SessionChatShellOutputBody(sheet) }
     }
 }
 

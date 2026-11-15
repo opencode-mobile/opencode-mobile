@@ -32,6 +32,7 @@ android {
             java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/keyboard")
             java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/text")
             java.srcDir("../app/src/main/java/dev/opencode/mobile/domain/text")
+            java.srcDir("build/generated/appearancePreferences")
             assets.srcDir("../app/src/main/assets")
             res.srcDir("../app/src/main/res")
         }
@@ -41,6 +42,14 @@ android {
 kotlin {
     jvmToolchain(21)
 }
+
+// theme/ reads Mode and text sizes from AppearancePreferences; copy that one file instead of the
+// whole preferences package, which pulls in app-only code.
+val syncAppearancePreferences by tasks.registering(Sync::class) {
+    from("../app/src/main/java/dev/opencode/mobile/domain/preferences/AppearancePreferences.kt")
+    into("build/generated/appearancePreferences")
+}
+tasks.named("preBuild") { dependsOn(syncAppearancePreferences) }
 
 // recordPaparazziDebug is for throwaway snapshot evidence only.
 // Do not add verifyPaparazzi* to check or Android Checks, and do not let

@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -39,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
@@ -56,10 +56,12 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
+import dev.opencode.mobile.domain.preferences.AppearancePreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.security.AppLockAvailability
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeAppDarkTheme
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
@@ -132,6 +134,7 @@ import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.StepRailGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TagGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.TextSizeSliderGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TimelineNoticeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolChipGalleryScreen
@@ -166,6 +169,7 @@ import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.archived.ArchivedSessionsScreen
 import dev.opencode.mobile.ui.settings.AppearanceSettingsScreen
+import dev.opencode.mobile.ui.settings.AppearanceSettingsViewModel
 import dev.opencode.mobile.ui.settings.DeveloperToolsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
@@ -307,7 +311,18 @@ fun MainNavigation(appCovered: Boolean = false) {
                                 ProductAnalytics.Presentation.ROUTE
                             },
                     )
+                    val appearanceViewModel: AppearanceSettingsViewModel = hiltViewModel()
+                    val appearanceState by appearanceViewModel.state.collectAsStateWithLifecycle()
+                    LifecycleResumeEffect(appearanceViewModel) {
+                        appearanceViewModel.refresh()
+                        onPauseOrDispose {}
+                    }
                     AppearanceSettingsScreen(
+                        state = appearanceState,
+                        onModeSelect = appearanceViewModel::selectMode,
+                        onTextSizeSelect = appearanceViewModel::selectTextSize,
+                        onResetTextSizes = appearanceViewModel::resetTextSizes,
+                        onResetAll = appearanceViewModel::resetAll,
                         onNavigateBack = onNavigateBack,
                         detailControl = detailControl,
                         onThemeClick = {
@@ -367,15 +382,16 @@ fun MainNavigation(appCovered: Boolean = false) {
             }
         }
     var themeMode by rememberSaveable { mutableStateOf(ComponentGalleryThemeMode.System) }
-    val systemDarkTheme = isSystemInDarkTheme()
+    // The gallery's System follows the app's Appearance mode (#1044), which follows the phone.
+    val appDarkTheme = openCodeAppDarkTheme()
     val darkTheme =
         when (themeMode) {
-            ComponentGalleryThemeMode.System -> systemDarkTheme
+            ComponentGalleryThemeMode.System -> appDarkTheme
             ComponentGalleryThemeMode.Light -> false
             ComponentGalleryThemeMode.Dark -> true
         }
 
-    OpenCodeTheme(darkTheme = darkTheme) {
+    OpenCodeTheme(darkTheme = darkTheme, textSizes = AppearancePreferences.textSizes) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // Ctrl+,: Settings from Home and the session screens; not from Settings itself.
@@ -846,6 +862,7 @@ fun MainNavigation(appCovered: Boolean = false) {
                                                         ComponentGalleryEntryId.ReorderableList -> ReorderableListGalleryScreen()
                                                         ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                                                         ComponentGalleryEntryId.FilterTabs -> FilterTabsGalleryScreen()
+                                                        ComponentGalleryEntryId.TextSizeSlider -> TextSizeSliderGalleryScreen()
                                                         ComponentGalleryEntryId.MenuChip -> MenuChipGalleryScreen()
                                                         ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
                                                         ComponentGalleryEntryId.ActionTile -> ActionTileGalleryScreen()

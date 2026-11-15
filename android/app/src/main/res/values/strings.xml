@@ -1231,6 +1231,38 @@
     <string name="appearance_preview_dark">Dark</string>
     <string name="appearance_preview_sample_message">Walk the token store.</string>
     <string name="appearance_preview_sample_reply">Refreshing once, then retry.</string>
+    <string name="appearance_more_options">More options</string>
+    <string name="appearance_reset_text_sizes">Reset text sizes</string>
+    <string name="appearance_reset_all">Reset all appearance</string>
+    <string name="appearance_mode_title">Mode</string>
+    <string name="appearance_mode_system">System</string>
+    <string name="appearance_mode_light">Light</string>
+    <string name="appearance_mode_dark">Dark</string>
+    <string name="appearance_mode_note_system">Follows the phone\'s light or dark setting.</string>
+    <string name="appearance_mode_note_light">Always light, whatever the phone is set to.</string>
+    <string name="appearance_mode_note_dark">Always dark, whatever the phone is set to.</string>
+    <string name="appearance_text_home_title">Home list text</string>
+    <string name="appearance_text_session_chat_title">Session Chat text</string>
+    <string name="appearance_text_code_title">Code text</string>
+    <string name="appearance_text_size_label">Size</string>
+    <string name="appearance_text_size_accessibility">%1$s size</string>
+    <string name="appearance_text_size_extra_small">Extra small</string>
+    <string name="appearance_text_size_small">Small</string>
+    <string name="appearance_text_size_default">Default</string>
+    <string name="appearance_text_size_large">Large</string>
+    <string name="appearance_text_size_extra_large">Extra large</string>
+    <string name="appearance_text_code_note">Terminal, Changes, the file viewer and tool output.</string>
+    <string name="appearance_text_session_chat_note">Code blocks inside messages and the composer follow the Session Chat size.</string>
+    <string name="appearance_sample_project" translatable="false">web-app</string>
+    <string name="appearance_sample_session_one">Fix the flaky login redirect test</string>
+    <string name="appearance_sample_session_two">Migrate settings to the new store</string>
+    <string name="appearance_sample_branch_two" translatable="false">settings-store</string>
+    <string name="appearance_sample_time_now">now</string>
+    <string name="appearance_sample_time_minutes">12m</string>
+    <string name="appearance_sample_user_message">Why does the login redirect test fail one run in five?</string>
+    <string name="appearance_sample_assistant_message">The test reads the session cookie right after `login()` resolves, but the cookie is written one tick later.</string>
+    <string name="appearance_sample_tool_title">Edited</string>
+    <string name="appearance_sample_tool_subtitle" translatable="false">src/auth/redirect.ts</string>
     <string name="feature_flags_title">Feature Flags</string>
     <string name="feature_flags_clear_overrides">Clear overrides</string>
     <string name="feature_flags_more_options">More options</string>

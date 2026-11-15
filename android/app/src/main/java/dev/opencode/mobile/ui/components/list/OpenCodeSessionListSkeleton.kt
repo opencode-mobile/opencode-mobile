@@ -3,7 +3,6 @@ package dev.opencode.mobile.ui.components
 import android.content.res.Configuration
 import android.provider.Settings
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +40,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
@@ -154,7 +154,7 @@ private fun SkeletonRow(
     val highlight = openCodeColor("text-weaker").copy(alpha = SKELETON_HIGHLIGHT_ALPHA)
     val avatar =
         if (accent != null) {
-            accent.badgeColors(isSystemInDarkTheme()).second.copy(alpha = SKELETON_AVATAR_ALPHA)
+            accent.badgeColors(LocalOpenCodeDarkTheme.current).second.copy(alpha = SKELETON_AVATAR_ALPHA)
         } else {
             bar
         }

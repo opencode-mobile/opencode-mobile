@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.R
 import dev.opencode.mobile.ProductRouteScreenViewEffect
+import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
+import dev.opencode.mobile.theme.OpenCodeTextRegion
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeCodeFile
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
@@ -229,12 +231,15 @@ private fun TextContent(
                     }.distinctUntilChanged()
                         .collect { (first, last) -> reportVisibleLines(first, last) }
                 }
-                OpenCodeCodeFile(
-                    lines = content.lines,
-                    wrapLines = wrapLines,
-                    modifier = Modifier.fillMaxSize(),
-                    state = listState,
-                )
+                // Code text size (#1044).
+                OpenCodeTextRegion(AppearanceTextRegion.Code) {
+                    OpenCodeCodeFile(
+                        lines = content.lines,
+                        wrapLines = wrapLines,
+                        modifier = Modifier.fillMaxSize(),
+                        state = listState,
+                    )
+                }
             }
         }
         Box(

@@ -83,6 +83,12 @@
         }
       };
 
+      window.terminalSetFontSize = function (size) {
+        if (!term || !size) return;
+        term.options.fontSize = size;
+        if (fitAddon) fitAddon.fit();
+      };
+
       window.terminalFit = function () {
         if (fitAddon) fitAddon.fit();
       };

@@ -13,7 +13,6 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,11 +72,13 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.OpenCodePillShape
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.theme.openCodeTextScaled
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val ListItemLetterBadgeSize = 32.dp
@@ -567,7 +568,8 @@ internal fun ListItemStartDecoration(
             Box(
                 modifier =
                     Modifier
-                        .size(ListItemLetterBadgeSize)
+                        // Grows with the row's text inside a text region (#1044).
+                        .size(openCodeTextScaled(ListItemLetterBadgeSize))
                         .then(emphasize),
             ) {
                 ListItemLetterCircle(
@@ -680,7 +682,7 @@ internal fun ListItemLetterCircle(
     glyphSize: TextUnit,
     modifier: Modifier = Modifier,
 ) {
-    val (fill, tint) = accent.badgeColors(isSystemInDarkTheme())
+    val (fill, tint) = accent.badgeColors(LocalOpenCodeDarkTheme.current)
     Box(
         modifier =
             modifier

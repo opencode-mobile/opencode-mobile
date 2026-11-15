@@ -34,6 +34,7 @@ import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.theme.openCodeTextScaled
 import kotlin.math.roundToInt
 
 enum class UnifiedDiffRowKind { Hunk, Metadata, Context, Addition, Deletion }
@@ -259,9 +260,9 @@ private fun UnifiedDiffRowView(
                 .heightIn(min = 20.dp)
                 .clearAndSetSemantics { contentDescription = row.accessibilityLabel() },
     ) {
-        Text(row.oldLine?.toString().orEmpty(), Modifier.width(24.dp), style = CodeTextStyle)
-        Text(row.newLine?.toString().orEmpty(), Modifier.width(24.dp), style = CodeTextStyle)
-        Text(row.kind.marker(), Modifier.width(20.dp), color = foreground, style = CodeTextStyle)
+        Text(row.oldLine?.toString().orEmpty(), Modifier.width(openCodeTextScaled(24.dp)), style = CodeTextStyle)
+        Text(row.newLine?.toString().orEmpty(), Modifier.width(openCodeTextScaled(24.dp)), style = CodeTextStyle)
+        Text(row.kind.marker(), Modifier.width(openCodeTextScaled(20.dp)), color = foreground, style = CodeTextStyle)
         Text(
             text = row.text,
             modifier = Modifier.padding(horizontal = 8.dp),

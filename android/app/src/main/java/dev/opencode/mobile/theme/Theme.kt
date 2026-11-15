@@ -12,13 +12,21 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import dev.opencode.mobile.domain.preferences.AppearancePreferences
+import dev.opencode.mobile.domain.preferences.AppearanceTextSizes
 
 val LocalOpenCodeDarkTheme = staticCompositionLocalOf { false }
 
+/** Whether the app draws dark: the Appearance mode over the phone's own setting (#1044). */
+@Composable
+fun openCodeAppDarkTheme(): Boolean = AppearancePreferences.mode.isDark(systemDark = isSystemInDarkTheme())
+
 @Composable
 fun OpenCodeTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = openCodeAppDarkTheme(),
     dynamicColor: Boolean = false,
+    /** App text sizes for [OpenCodeTextRegion]s; a nested theme keeps the outer one's. */
+    textSizes: AppearanceTextSizes = LocalOpenCodeTextSizes.current,
     content: @Composable () -> Unit,
 ) {
     val colorScheme =
@@ -96,7 +104,10 @@ fun OpenCodeTheme(
             }
         }
 
-    CompositionLocalProvider(LocalOpenCodeDarkTheme provides darkTheme) {
+    CompositionLocalProvider(
+        LocalOpenCodeDarkTheme provides darkTheme,
+        LocalOpenCodeTextSizes provides textSizes,
+    ) {
         MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
     }
 }

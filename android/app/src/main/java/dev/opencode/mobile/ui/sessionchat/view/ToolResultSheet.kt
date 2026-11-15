@@ -38,12 +38,14 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeSmallShape
+import dev.opencode.mobile.theme.OpenCodeTextRegion
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeSelectionContainer
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
@@ -101,8 +103,14 @@ internal fun ToolResultPinnedHeader(presentation: ToolResultPresentation) {
     }
 }
 
+/** A tool's output, at the Code text size (#1044). */
 @Composable
 internal fun ToolResultBody(presentation: ToolResultPresentation) {
+    OpenCodeTextRegion(AppearanceTextRegion.Code) { ToolResultBodyContent(presentation) }
+}
+
+@Composable
+private fun ToolResultBodyContent(presentation: ToolResultPresentation) {
     when (presentation) {
         is ToolResultPresentation.FileStatus ->
             Column {

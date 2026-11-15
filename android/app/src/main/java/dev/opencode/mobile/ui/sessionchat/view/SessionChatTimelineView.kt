@@ -76,7 +76,9 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.goal.SessionGoalAction
 import dev.opencode.mobile.domain.message.TimelineNotice
+import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.theme.OpenCodeTextRegion
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageLabel
 import dev.opencode.mobile.ui.sessionchat.SessionChatGoalTimeline
 import dev.opencode.mobile.ui.sessionchat.SessionChatGoalUiState
@@ -927,6 +929,54 @@ private fun SessionChatMessageRow(
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
+) {
+    // Session Chat text size (#1044): messages, inline code, code blocks, tool lines.
+    OpenCodeTextRegion(AppearanceTextRegion.SessionChat) {
+        SessionChatMessageRowContent(
+            message = message,
+            onMessageActionsTap = onMessageActionsTap,
+            onToolDetailTap = onToolDetailTap,
+            onToolGroupTap = onToolGroupTap,
+            onSkillsTap = onSkillsTap,
+            onChildSessionTap = onChildSessionTap,
+            onChangesReviewTap = onChangesReviewTap,
+            supportsSessionMessageDiff = supportsSessionMessageDiff,
+            expandedStepParagraphs = expandedStepParagraphs,
+            onExpandStepParagraph = onExpandStepParagraph,
+            unfoldedStepRails = unfoldedStepRails,
+            onToggleStepRailFold = onToggleStepRailFold,
+            activityCardChildren = activityCardChildren,
+            activityCardFooters = activityCardFooters,
+            debouncedStepIds = debouncedStepIds,
+            onOpenActivityCard = onOpenActivityCard,
+            animateSizeChanges = animateSizeChanges,
+            onContentSizeAnimationFinished = onContentSizeAnimationFinished,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+private fun SessionChatMessageRowContent(
+    message: SessionChatMessageItem,
+    onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
+    onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
+    onSkillsTap: (SessionChatSkillsTarget) -> Unit,
+    onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
+    onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
+    supportsSessionMessageDiff: Boolean,
+    expandedStepParagraphs: Map<String, Int>,
+    onExpandStepParagraph: (expansionId: String, chipCount: Int) -> Unit,
+    unfoldedStepRails: Set<String>,
+    onToggleStepRailFold: (railId: String) -> Unit,
+    activityCardChildren: Map<String, SessionChatChildActivity>,
+    activityCardFooters: Map<String, SessionChatActivityFooter>,
+    debouncedStepIds: Set<String>,
+    onOpenActivityCard: (blockId: String) -> Unit,
+    animateSizeChanges: Boolean,
+    onContentSizeAnimationFinished: (() -> Unit)?,
+    modifier: Modifier,
 ) {
     fun openMessageActions(
         showsRevertMessage: Boolean,

@@ -15,6 +15,7 @@ import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
+import dev.opencode.mobile.domain.preferences.AppearancePreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
@@ -90,6 +91,7 @@ class SettingsViewModel
                 runCatching { sessionCache.clearAll() }
                 ThemeManager.clearAll()
                 HomeDisplayPreferences.clear()
+                AppearancePreferences.clear()
                 AnalyticsConsentPreferences.clear()
                 // Apply the reset default to Crashlytics and Analytics collection now, not at next launch.
                 OpenCodeReleaseObservability.setProductAnalyticsConsented(

@@ -18,10 +18,12 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.FailureAction
+import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
+import dev.opencode.mobile.theme.OpenCodeTextRegion
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
@@ -204,6 +206,12 @@ internal fun SessionChatToolDetailSheet(
  */
 @Composable
 internal fun SessionChatToolDetailBody(target: SessionChatToolDetailTarget) {
+    // Tool output reads at the Code text size (#1044).
+    OpenCodeTextRegion(AppearanceTextRegion.Code) { SessionChatToolDetailBodyContent(target) }
+}
+
+@Composable
+private fun SessionChatToolDetailBodyContent(target: SessionChatToolDetailTarget) {
     val presentation = target.presentation?.takeUnless { target.bodyIsMarkdown }
     if (presentation != null) {
         Column(

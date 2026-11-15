@@ -6,23 +6,24 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.ThemeResolver
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
+import dev.opencode.mobile.theme.openCodeRegionTextSize
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
@@ -107,10 +108,13 @@ private fun TerminalLivePane(viewModel: TerminalViewModel) {
                 .fillMaxSize()
                 .imePadding(),
     ) {
+        // Code text size (#1044) over the phone's font scale; xterm takes CSS px, which are dp.
+        val fontSizePx = openCodeRegionTextSize(AppearanceTextRegion.Code, TERMINAL_BASE_FONT_SIZE_PX.sp).value
         TerminalEmulator(
             output = viewModel.output,
             backgroundHex = tokens["background-base"],
             foregroundHex = tokens["text-strong"],
+            fontSizePx = fontSizePx,
             onEvent = { event ->
                 when (event) {
                     TerminalEmulatorEvent.Ready -> Unit

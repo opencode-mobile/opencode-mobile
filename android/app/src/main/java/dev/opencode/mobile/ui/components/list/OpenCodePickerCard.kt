@@ -3,7 +3,6 @@ package dev.opencode.mobile.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +34,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
@@ -202,7 +202,7 @@ private fun PickerCardTile(
     val shape = if (compact) TileShapeCompact else TileShape
     when (tile) {
         is OpenCodePickerCardTile.Letter -> {
-            val (fill, tint) = tile.accent.badgeColors(isSystemInDarkTheme())
+            val (fill, tint) = tile.accent.badgeColors(LocalOpenCodeDarkTheme.current)
             Box(
                 modifier =
                     Modifier

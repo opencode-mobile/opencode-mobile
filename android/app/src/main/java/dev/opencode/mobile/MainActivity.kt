@@ -1,17 +1,20 @@
 package dev.opencode.mobile
 
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.KeyboardShortcutGroup
 import android.view.Menu
 import android.view.WindowManager
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -29,6 +32,7 @@ import dev.opencode.mobile.domain.security.AppLockAvailability
 import dev.opencode.mobile.domain.security.AppLockPolicy
 import dev.opencode.mobile.domain.serverhealth.ServerHealthMonitor
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeAppDarkTheme
 import dev.opencode.mobile.ui.components.LocalOpenCodeInputFocusRegistry
 import dev.opencode.mobile.ui.diagnostic.PerformanceOverlayHost
 import dev.opencode.mobile.ui.keyboard.KeyboardFocusRoot
@@ -87,6 +91,9 @@ class MainActivity : FragmentActivity() {
         }
         keyboardShortcuts.systemBack = { onBackPressedDispatcher.onBackPressed() }
         setContent {
+            // System bar icons follow the Appearance mode (#1044), not only the phone's setting.
+            val darkSystemBars = openCodeAppDarkTheme()
+            LaunchedEffect(darkSystemBars) { applySystemBarStyle(darkSystemBars) }
             CompositionLocalProvider(
                 LocalKeyboardShortcutHost provides keyboardShortcuts,
                 LocalOpenCodeInputFocusRegistry provides keyboardShortcuts.inputFocus,
@@ -157,6 +164,13 @@ class MainActivity : FragmentActivity() {
         outState.putBoolean(
             STATE_UNLOCKED_ACROSS_RECREATE,
             isChangingConfigurations && !wasInBackground && !privacyCover.value.locked,
+        )
+    }
+
+    private fun applySystemBarStyle(dark: Boolean) {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
+            navigationBarStyle = SystemBarStyle.auto(SYSTEM_BAR_LIGHT_SCRIM, SYSTEM_BAR_DARK_SCRIM) { dark },
         )
     }
 
@@ -235,5 +249,9 @@ class MainActivity : FragmentActivity() {
 
     private companion object {
         const val STATE_UNLOCKED_ACROSS_RECREATE = "appLock.unlockedAcrossRecreate"
+
+        // enableEdgeToEdge's own navigation bar scrims, for 3-button navigation.
+        val SYSTEM_BAR_LIGHT_SCRIM = Color.argb(0xe6, 0xFF, 0xFF, 0xFF)
+        val SYSTEM_BAR_DARK_SCRIM = Color.argb(0x80, 0x1b, 0x1b, 0x1b)
     }
 }
