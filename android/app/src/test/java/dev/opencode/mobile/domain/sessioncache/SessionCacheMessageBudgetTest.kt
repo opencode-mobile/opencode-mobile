@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -36,9 +37,9 @@ class SessionCacheMessageBudgetTest {
         assertTrue(pieces.max() < 250_000)
         assertTrue("payload ${payload.length} over budget", payload.length < 1_000_200)
         assertTrue(total > 7 * payload.length)
-        // Only the messages it kept were encoded, and one more to learn it did not fit.
+        // Only the messages it kept were encoded, and at most one more to learn it did not fit.
         val decoded = SessionCacheCodec.decodeMessages(payload, json)!!
-        assertEquals(pieces.size - 1, decoded.size)
+        assertTrue(pieces.size - decoded.size in 0..1)
         // The newest messages, whole: nothing inside a kept message is cut.
         assertEquals(messages.takeLast(decoded.size), decoded)
     }
@@ -72,11 +73,63 @@ class SessionCacheMessageBudgetTest {
     }
 
     @Test
-    fun encodeMessages_keepsTheNewestMessageEvenWhenItAloneIsOverTheBudget() {
+    fun encodeMessages_doesNotEncodeAMessageWhoseTextAloneIsOverTheBudget() {
+        // One huge tool output must not build its JSON string just to learn it does not fit.
         val messages = transcript(count = 3, outputChars = 50_000)
-        val decoded = SessionCacheCodec.decodeMessages(SessionCacheCodec.encodeMessages(messages, json, budgetBytes = 10), json)
-        assertEquals(listOf(messages.last()), decoded)
+        val pieces = mutableListOf<Int>()
+        val payload = SessionCacheCodec.encodeMessages(messages, json, budgetBytes = 40_000, onMessageEncoded = { pieces += it })
+        assertEquals(emptyList<Int>(), pieces)
+        assertEquals(emptyList<Message>(), SessionCacheCodec.decodeMessages(payload, json))
     }
+
+    @Test
+    fun encodeMessages_keepsNoMessagesWhenTheNewestIsOverTheBudget() {
+        // The floor is under the budget, the encoded JSON over it: still not kept.
+        val messages = transcript(count = 3, outputChars = 50_000)
+        val payload = SessionCacheCodec.encodeMessages(messages, json, budgetBytes = 50_050)
+        assertEquals(emptyList<Message>(), SessionCacheCodec.decodeMessages(payload, json))
+    }
+
+    @Test
+    fun seed_readsATimelineThatKeptNoMessagesAsAMiss() =
+        runTest {
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { "profile-a" },
+                    scope = backgroundScope,
+                    json = json,
+                    messageEncoder = { messages, json, hasThumbnail ->
+                        SessionCacheCodec.encodeMessages(messages, json, hasThumbnail, budgetBytes = 10)
+                    },
+                )
+            val handle = cache.openMessages("s1", "/repo")
+            handle.note(transcript(count = 2, outputChars = 1_000))
+            testScheduler.runCurrent()
+            handle.flush()
+            assertNull(cache.openMessages("s1", "/repo").seed())
+        }
+
+    @Test
+    fun seed_readsAnErrorFromTheLoadOrDecodeAsAMiss() =
+        runTest {
+            // #1033: a legacy row too big to decode is a cache miss, so the live load still runs.
+            for (failure in listOf(OutOfMemoryError("test: decode"), StackOverflowError("test: decode"), IllegalStateException("test: load"))) {
+                val inner = InMemorySessionCacheStore()
+                val store =
+                    object : SessionCacheStore by inner {
+                        override suspend fun load(key: SessionCacheKey): SessionCacheRecord? = throw failure
+                    }
+                val cache =
+                    DefaultSessionCache(
+                        store = store,
+                        connectionIdProvider = { "profile-a" },
+                        scope = backgroundScope,
+                        json = json,
+                    )
+                assertNull(cache.openMessages("s1", "/repo").seed())
+            }
+        }
 
     @Test
     fun flush_commitsAPayloadWithinTheBudget() =

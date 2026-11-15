@@ -482,18 +482,36 @@ private class DefaultSessionMessageCacheHandle(
         catchingExceptions {
             store.retain(key, SessionCacheRetainReason.Opened, clock())
         }.onFailure { logSessionCacheIo("retain opened", it) }
-        val record =
-            catchingExceptions { store.load(key) }
-                .onFailure { logSessionCacheIo("load messages", it) }
-                .getOrNull()
-                ?: return null
+        // A seed is only a first paint, so any failure is a miss and the live load still runs
+        // (#1033). An OutOfMemoryError is caught too, but only here: by now the row and whatever
+        // the decode built belong to [loadSeed]'s finished frame, so the heap is free again
+        // before the log line, unlike swallowing it where it was thrown.
+        val failure: Throwable =
+            try {
+                return loadSeed(key)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (exception: Exception) {
+                exception
+            } catch (outOfMemory: OutOfMemoryError) {
+                outOfMemory
+            } catch (overflow: StackOverflowError) {
+                overflow
+            }
+        logSessionCacheIo("seed messages", failure)
+        return null
+    }
+
+    private suspend fun loadSeed(key: SessionCacheKey): List<Message>? {
+        val record = store.load(key) ?: return null
         if (record.value.payloadJson.isBlank()) return null
         val connectionId = key.connectionId
-        return SessionCacheCodec.decodeMessages(
-            record.value.payloadJson,
-            json,
-            thumbnailPath = { imageId -> thumbnails?.existingPath(connectionId, sessionId, imageId) },
-        )
+        return SessionCacheCodec
+            .decodeMessages(
+                record.value.payloadJson,
+                json,
+                thumbnailPath = { imageId -> thumbnails?.existingPath(connectionId, sessionId, imageId) },
+            )?.takeIf { it.isNotEmpty() }
     }
 
     override fun note(messages: List<Message>) {

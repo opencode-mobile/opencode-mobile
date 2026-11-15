@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.sessioncache.SessionMessageCacheHandle
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.ProjectionState
 import dev.opencode.mobile.domain.sync.SyncCoordinator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
@@ -731,7 +732,7 @@ class MessageSync(
 
             logI("observeMessages subscribe session=${key.sessionId} directory=${directory ?: "-"}")
             try {
-                val seeded = cacheHandle.seed()
+                val seeded = seedOrNull(cacheHandle, key.sessionId)
                 if (seeded != null) {
                     val seedRevision = engine.revision(storeSlot)
                     engine.replaceAllIfRevision(storeSlot, seeded, seedRevision)
@@ -770,6 +771,31 @@ class MessageSync(
                 }
             }
         }
+
+    /**
+     * The cache seed, or null when it fails: a seed is only a first paint, so its failure must
+     * never abort the subscription before [SyncCoordinator.ensureFresh] loads the session (#1033).
+     * The handle's frame has unwound by the catch, so an OutOfMemoryError's allocations are free.
+     */
+    private suspend fun seedOrNull(
+        cacheHandle: SessionMessageCacheHandle,
+        sessionId: String,
+    ): List<Message>? {
+        val failure: Throwable =
+            try {
+                return cacheHandle.seed()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (exception: Exception) {
+                exception
+            } catch (outOfMemory: OutOfMemoryError) {
+                outOfMemory
+            } catch (overflow: StackOverflowError) {
+                overflow
+            }
+        logW("observeMessages cache seed failed session=$sessionId: ${failure::class.simpleName}")
+        return null
+    }
 
     private sealed interface StagedItem {
         data class Event(

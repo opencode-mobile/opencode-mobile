@@ -68,10 +68,13 @@ object SessionCacheCodec {
      * ones whose thumbnail file was saved, so a decode can point at it again.
      *
      * Encodes one message at a time, newest first, and keeps the newest messages whose JSON fits
-     * in [budgetBytes] of UTF-8 (always the newest one), so no flush builds a string the size of the whole
-     * transcript (#1033). Kept messages are whole: nothing inside a message is trimmed, so a
-     * cached first paint never shows a cut output as the complete one. [onMessageEncoded] sees
-     * each message's JSON size in UTF-8 bytes, for tests.
+     * in [budgetBytes] of UTF-8, so no flush builds a string the size of the whole transcript
+     * (#1033). A message whose text alone is over what is left is not encoded at all, so one huge
+     * tool output does not build that string either; when the newest message does not fit, the
+     * timeline keeps no messages, which a seed reads as a miss. Kept messages are whole: nothing
+     * inside a message is trimmed, so a cached first paint never shows a cut output as the
+     * complete one. [onMessageEncoded] sees each encoded message's JSON size in UTF-8 bytes, for
+     * tests.
      */
     fun encodeMessages(
         messages: List<Message>,
@@ -84,10 +87,12 @@ object SessionCacheCodec {
         var keptChars = 0
         var keptBytes = 0
         for (index in messages.indices.reversed()) {
-            val piece = json.encodeToString(CachedMessagePayload.serializer(), messages[index].toCachePayload(hasThumbnail))
+            val message = messages[index]
+            if (keptBytes + message.minEncodedChars() + 1 > budgetBytes) break
+            val piece = json.encodeToString(CachedMessagePayload.serializer(), message.toCachePayload(hasThumbnail))
             val pieceBytes = utf8Length(piece)
             onMessageEncoded(pieceBytes)
-            if (kept.isNotEmpty() && keptBytes + pieceBytes + 1 > budgetBytes) break
+            if (keptBytes + pieceBytes + 1 > budgetBytes) break
             kept += piece
             keptChars += piece.length + 1
             keptBytes += pieceBytes + 1
@@ -115,6 +120,25 @@ object SessionCacheCodec {
     }
 
     private const val EMPTY_LIST = "[]"
+
+    /**
+     * A floor on this message's encoded JSON size, read from its large text fields without
+     * encoding it: each character is at least one UTF-8 byte, and JSON escaping only adds.
+     */
+    private fun Message.minEncodedChars(): Long {
+        var chars = text.length.toLong() + (failure?.message?.length ?: 0) + (failure?.providerBody?.length ?: 0)
+        for (part in parts) {
+            chars +=
+                when (part) {
+                    is MessagePart.Text -> part.text.length
+                    is MessagePart.Tool -> (part.output?.length ?: 0) + (part.error?.length ?: 0) + (part.title?.length ?: 0)
+                    is MessagePart.Reasoning -> part.text.length
+                    is MessagePart.Compaction -> part.summary?.length ?: 0
+                    else -> 0
+                }
+        }
+        return chars
+    }
 
     /** [text]'s size in UTF-8, counted without encoding it. */
     private fun utf8Length(text: String): Int {
