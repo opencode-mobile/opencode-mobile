@@ -44,7 +44,8 @@ enum SpeechLine: Equatable, Sendable {
         }
     }
 
-    /// Megabytes as the model list counts them (1,000,000 bytes), rounded down, as on Android.
+    /// Megabytes as the model list counts them (1,000,000 bytes), rounded down, as on Android. The one rule for every
+    /// MB figure the speech line, the draft label and the details sheet show.
     static func megabytes(_ bytes: Int64) -> Int {
         Int(max(0, bytes) / 1_000_000)
     }
@@ -82,150 +83,61 @@ enum SpeechLine: Equatable, Sendable {
             String(localized: "home.speech.failed", defaultValue: "Speech model didn’t load")
         }
     }
-
-    /// The speech line shows while the model isn't ready, and for 1.6 s after it became ready ("Speech ready");
-    /// then it is gone for the process.
-    static func shows(_ status: SpeechStatus, readySince: TimeInterval?, now: TimeInterval) -> Bool {
-        guard status == .ready else { return true }
-        guard let readySince else { return false }
-        return now - readySince < readyFor
-    }
-
-    static let readyFor: TimeInterval = 1.6
 }
 
-/// The speech model's dial (app plan, "Speech line and dial" › The dial): a ring with a small mic inside, drawn in a
-/// 24-unit box. A `tint` 13 % track and an arc (2 units, round caps, from 12 o'clock): the share downloaded in
-/// `text2`, or `text3` while the connection is down or nothing is on the phone yet; loading, a 28 % arc turning once
-/// every 0.9 s; warming up, the full ring breathing (1.4 s); ready, the full ring in `green` with a check; failed,
-/// `red` with "!". With Reduce Motion nothing turns or breathes: loading and warming up show the full ring, still.
-struct SpeechDial: View {
-    enum Look: Equatable {
-        case downloading(Double)
-        /// The connection is down, or the download hasn't started: grey.
-        case stalled(Double)
-        case loading
-        case warmingUp
-        case ready
-        case failed(Double)
+/// What the speech line above the dock shows (app plan, "Speech line and dial" › Speech line), as home's state.
+enum SpeechLineShow: Equatable, Sendable {
+    /// Nothing: the model was ready before the line showed, or the line has had its moment.
+    case hidden
+    /// The model is getting ready, or failed.
+    case gettingReady
+    /// "Speech ready" with the green dial, for `SpeechLineMemory.readyFor`, then gone.
+    case ready
+}
 
-        /// `lastFraction`: the share downloaded when it stopped; 1 when the model was on the phone (a failed load).
-        init(_ status: SpeechStatus, lastFraction: Double = 1) {
-            switch status {
-            case .notOnPhone: self = .stalled(0)
-            case let .downloading(download):
-                self = download.connection == .flowing ? .downloading(download.fraction) : .stalled(download.fraction)
-            case .loading: self = .loading
-            case .warmingUp: self = .warmingUp
-            case .ready: self = .ready
-            case .failed: self = .failed(lastFraction)
-            }
+/// The speech line's memory for the whole process: whether it showed the model getting ready, and whether it has
+/// gone. Once gone it doesn't come back in this process, whichever home is on screen (as Android's
+/// `SpeechLineMemory`).
+@MainActor
+final class SpeechLineMemory {
+    /// How long "Speech ready" shows before the line goes.
+    static let readyFor: Duration = .milliseconds(1600)
+    /// The process's one memory.
+    static let process = SpeechLineMemory()
+
+    private var sawGettingReady = false
+    private var gone = false
+
+    /// The line has had its moment (or had nothing to say): it won't show again in this process.
+    var isGone: Bool { gone }
+
+    /// What the line shows next for `status`; `.ready`, said once per process, is the cue to hide it after `readyFor`.
+    func next(_ status: SpeechStatus) -> SpeechLineShow {
+        if gone { return .hidden }
+        guard status == .ready else {
+            sawGettingReady = true
+            return .gettingReady
         }
+        // Gone from now on, so a home made during the 1.6 s (or after it) doesn't say it again.
+        gone = true
+        // Ready before the line ever showed: nothing to say.
+        return sawGettingReady ? .ready : .hidden
     }
+}
 
-    let look: Look
-    /// 14 (the draft's label), 16 (the speech line) or 60 (the details sheet).
-    var size: CGFloat = 16
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var turning = false
-    @State private var breathing = false
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(HexColor.tint(13), lineWidth: line)
-            arc
+extension HexSpeechDial.Look {
+    /// The dial for the model's status. `lastFraction`: the share downloaded when it stopped; 1 when the model was on
+    /// the phone (a failed load).
+    init(_ status: SpeechStatus, lastFraction: Double = 1) {
+        switch status {
+        case .notOnPhone: self = .stalled(0)
+        case let .downloading(download):
+            self = download.connection == .flowing ? .downloading(download.fraction) : .stalled(download.fraction)
+        case .loading: self = .loading
+        case .warmingUp: self = .warmingUp
+        case .ready: self = .ready
+        case .failed: self = .failed(lastFraction)
         }
-        // The ring's radius is 10 of the box's 24.
-        .padding(size / 12)
-        .frame(width: size, height: size)
-        .overlay { glyph }
-        .animation(.linear(duration: 0.3), value: progress)
-        .accessibilityHidden(true)
-    }
-
-    /// The ring's stroke: 2 units of 24, a little finer at the sheet's size.
-    private var line: CGFloat { size / 24 * (size >= 40 ? 1.6 : 2) }
-
-    private var progress: Double {
-        switch look {
-        case let .downloading(fraction), let .stalled(fraction), let .failed(fraction): max(fraction, 0.02)
-        case .loading, .warmingUp, .ready: 1
-        }
-    }
-
-    private var color: Color {
-        switch look {
-        case .downloading, .loading, .warmingUp: HexColor.text2
-        case .stalled: HexColor.text3
-        case .ready: HexColor.green
-        case .failed: HexColor.red
-        }
-    }
-
-    @ViewBuilder
-    private var arc: some View {
-        switch look {
-        case .loading where !reduceMotion:
-            Circle()
-                .trim(from: 0, to: 0.28)
-                .stroke(color, style: StrokeStyle(lineWidth: line, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .rotationEffect(.degrees(turning ? 360 : 0))
-                .onAppear {
-                    turning = false
-                    withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { turning = true }
-                }
-        case .warmingUp where !reduceMotion:
-            Circle()
-                .stroke(color, style: StrokeStyle(lineWidth: line, lineCap: .round))
-                .opacity(breathing ? 1 : 0.45)
-                .onAppear {
-                    breathing = false
-                    withAnimation(HexMotion.ease(0.7).repeatForever(autoreverses: true)) { breathing = true }
-                }
-        case .stalled(0):
-            EmptyView()
-        default:
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(color, style: StrokeStyle(lineWidth: line, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-        }
-    }
-
-    private var glyph: some View {
-        Canvas { context, canvas in
-            let scale = canvas.width / 24
-            context.scaleBy(x: scale, y: scale)
-            switch look {
-            case .ready:
-                var check = Path()
-                check.move(to: CGPoint(x: 7.6, y: 12.4))
-                check.addLine(to: CGPoint(x: 10.6, y: 15.4))
-                check.addLine(to: CGPoint(x: 16.4, y: 9.2))
-                context.stroke(check, with: .color(color), style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
-            case .failed:
-                var bar = Path()
-                bar.move(to: CGPoint(x: 12, y: 7.5))
-                bar.addLine(to: CGPoint(x: 12, y: 12.7))
-                context.stroke(bar, with: .color(color), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
-                context.fill(Path(ellipseIn: CGRect(x: 10.7, y: 15.1, width: 2.6, height: 2.6)), with: .color(color))
-            default:
-                // The prototype's mic at 0.44 of the box, centred.
-                context.translateBy(x: 12, y: 12)
-                context.scaleBy(x: 0.44, y: 0.44)
-                context.translateBy(x: -12, y: -12)
-                var mic = Path(roundedRect: CGRect(x: 9, y: 3, width: 6, height: 12), cornerRadius: 3)
-                mic.move(to: CGPoint(x: 19, y: 11))
-                mic.addArc(center: CGPoint(x: 12, y: 11), radius: 7, startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
-                mic.move(to: CGPoint(x: 12, y: 18))
-                mic.addLine(to: CGPoint(x: 12, y: 21))
-                context.stroke(mic, with: .color(color), style: StrokeStyle(lineWidth: 3.3, lineCap: .round, lineJoin: .round))
-            }
-        }
-        .frame(width: size, height: size)
     }
 }
 
@@ -241,7 +153,7 @@ struct SpeechLineView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             Button(action: action) {
                 HStack(spacing: 8) {
-                    SpeechDial(look: SpeechDial.Look(status, lastFraction: speech.lastDownload?.fraction ?? 1), size: 16)
+                    HexSpeechDial(look: HexSpeechDial.Look(status, lastFraction: speech.lastDownload?.fraction ?? 1), size: .line)
                     Text(verbatim: SpeechLine.of(status, now: context.date).text(timeLeft: false))
                         .hexFont(HexTextStyle.small.weight(.regular))
                         .foregroundStyle(HexColor.text2)

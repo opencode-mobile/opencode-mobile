@@ -41,15 +41,9 @@ struct HomeView: View {
 
     private var drafting: Bool { home.isRecording || !home.draft.isEmpty }
 
-    /// Changes once "Speech ready" has had its 1.6 s, so the speech line is read again.
-    @State private var speechLineTick = 0
-
-    /// The speech line shows while the model isn't ready and for 1.6 s after; while you talk or have a draft the
-    /// draft's label line carries it instead.
-    private var showsSpeechLine: Bool {
-        _ = speechLineTick
-        return SpeechLine.shows(home.speech.status, readySince: home.speech.readySince, now: ProcessInfo.processInfo.systemUptime)
-    }
+    /// The speech line shows while the model gets ready and for 1.6 s once it is (home's `speechLine`); while you
+    /// talk or have a draft the draft's label line carries it instead.
+    private var showsSpeechLine: Bool { home.speechLine != .hidden }
 
     private var speechLine: some View {
         SpeechLineView(speech: home.speech) { home.showsSpeechModel = true }
@@ -206,14 +200,8 @@ struct HomeView: View {
         }
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: drafting)
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
-        .hexAnimation(HexMotion.ease(HexMotion.fade), value: showsSpeechLine)
         // "Speech ready" for 1.6 s, then the speech line fades out for good.
-        .task(id: home.speech.readySince) {
-            guard let since = home.speech.readySince else { return }
-            let left = since + SpeechLine.readyFor - ProcessInfo.processInfo.systemUptime
-            if left > 0 { try? await Task.sleep(for: .seconds(left)) }
-            speechLineTick += 1
-        }
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: showsSpeechLine)
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.goalLine)
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.ask.shown?.id)
         // The draft's ⋯ menu opens above its button; a tap anywhere else closes it.
@@ -603,7 +591,7 @@ struct DraftView: View {
             // The dial at 14 pt and the shorter words; tapping opens the speech model's details.
             Button { home.showsSpeechModel = true } label: {
                 HStack(spacing: 6) {
-                    SpeechDial(look: dialLook, size: 14)
+                    HexSpeechDial(look: dialLook, size: .label)
                     Text(verbatim: words.text(timeLeft: true))
                         .foregroundStyle(words == .failed ? HexColor.red : HexColor.text3)
                 }
@@ -623,9 +611,9 @@ struct DraftView: View {
     }
 
     /// The label's dial: as the model, but a take about to start (ready, still waiting) spins as loading.
-    private var dialLook: SpeechDial.Look {
+    private var dialLook: HexSpeechDial.Look {
         let status = home.speech.status
-        return status == .ready ? .loading : SpeechDial.Look(status, lastFraction: home.speech.lastDownload?.fraction ?? 1)
+        return status == .ready ? .loading : HexSpeechDial.Look(status, lastFraction: home.speech.lastDownload?.fraction ?? 1)
     }
 
     private var recordingLabel: String {

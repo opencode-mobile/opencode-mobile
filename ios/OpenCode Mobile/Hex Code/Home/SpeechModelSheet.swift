@@ -33,7 +33,8 @@ enum SpeechSheetCopy {
         case later
     }
 
-    /// The share of the download that counts as all of it: a failed download stopped short of this.
+    /// True when the download got all of it (its bytes reached the total), or when there was no download because the
+    /// model was already on the phone; false when it stopped short, or before its total was known.
     private static func downloadFinished(_ download: ModelDownload?) -> Bool {
         guard let download, let total = download.total else { return download == nil }
         return download.done >= total
@@ -56,7 +57,7 @@ enum SpeechSheetCopy {
                     ? String(localized: "speech.sheet.dropped", defaultValue: "Connection dropped")
                     : String(localized: "speech.sheet.downloading", defaultValue: "Downloading"),
                 tone: dropped ? .amber : .plain,
-                line: of(download) ?? String(localized: "speech.sheet.starting", defaultValue: "Starting the download"),
+                line: progressText(download) ?? String(localized: "speech.sheet.starting", defaultValue: "Starting the download"),
                 detail: dropped
                     ? String(localized: "speech.sheet.picks_up", defaultValue: "picks up where it stopped")
                     : speed(download)
@@ -83,7 +84,7 @@ enum SpeechSheetCopy {
                 detail: String(localized: "speech.sheet.ready.detail", defaultValue: "loaded · warmed up")
             )
         case .failed:
-            let stopped = details.lastDownload.flatMap { downloadFinished($0) ? nil : of($0) }
+            let stopped = details.lastDownload.flatMap { downloadFinished($0) ? nil : progressText($0) }
             return Hero(
                 title: String(localized: "home.speech.failed", defaultValue: "Speech model didn’t load"),
                 tone: .red,
@@ -93,8 +94,8 @@ enum SpeechSheetCopy {
         }
     }
 
-    /// "120 of 640 MB"; nil before the total is known.
-    static func of(_ download: ModelDownload) -> String? {
+    /// The download's progress as "120 of 640 MB"; nil before the total is known.
+    static func progressText(_ download: ModelDownload) -> String? {
         guard let total = download.total else { return nil }
         let done = SpeechLine.megabytes(download.done)
         return String(localized: "speech.sheet.of", defaultValue: "\(done) of \(SpeechLine.megabytes(total)) MB")
@@ -122,9 +123,9 @@ enum SpeechSheetCopy {
         return String(localized: "speech.sheet.on_phone", defaultValue: "\(size(bytes)) on this phone")
     }
 
-    /// A size for a row: whole megabytes, rounded, at least 1.
+    /// A size for a row: whole megabytes, rounded down as every MB figure is (`SpeechLine.megabytes`), at least 1.
     static func size(_ bytes: Int64) -> String {
-        let megabytes = max(1, Int((Double(bytes) / 1_000_000).rounded()))
+        let megabytes = max(1, SpeechLine.megabytes(bytes))
         return String(localized: "speech.sheet.mb", defaultValue: "\(megabytes) MB")
     }
 
@@ -200,7 +201,7 @@ struct SpeechModelSheet: View {
     private func hero(_ status: SpeechStatus, details: SpeechDetails) -> some View {
         let hero = SpeechSheetCopy.hero(status, details: details)
         return HStack(spacing: 16) {
-            SpeechDial(look: SpeechDial.Look(status, lastFraction: details.lastDownload?.fraction ?? 1), size: 60)
+            HexSpeechDial(look: HexSpeechDial.Look(status, lastFraction: details.lastDownload?.fraction ?? 1), size: .sheet)
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: hero.title)
                     .hexFont(HexTextStyle.headline.sized(19))
@@ -305,7 +306,8 @@ struct SpeechModelSheet: View {
                     return String(localized: "speech.sheet.trying", defaultValue: "Trying again…")
                 }(),
                 detail: String(localized: "speech.sheet.retries", defaultValue: "Retries a few times, picking up where it stopped."),
-                action: words == .tryingAgain ? nil : AnyView(HexButton(LocalizedStringResource("speech.sheet.try_now", defaultValue: "Try now")) { speech.retryNow() })
+                // No Try now while it is already trying again.
+                action: words == .tryingAgain ? nil : AnyView(HexButton(LocalizedStringResource("speech.sheet.try_now", defaultValue: "Try now")) { home.speechTryNow() })
             )
         }
         if status == .failed {
@@ -319,8 +321,8 @@ struct SpeechModelSheet: View {
                     : String(localized: "speech.sheet.load_failed", defaultValue: "The model didn’t load."),
                 detail: downloading
                     ? String(localized: "speech.sheet.picks_up_at", defaultValue: "Try again picks up at \(at) MB.")
-                    : String(localized: "speech.sheet.loads_again", defaultValue: "Try again loads it again."),
-                action: AnyView(HexButton(LocalizedStringResource("common.try_again", defaultValue: "Try again"), style: .primary) { tryAgain() })
+                    : String(localized: "speech.sheet.loads_again", defaultValue: "Try again loads it once more."),
+                action: AnyView(HexButton(LocalizedStringResource("common.try_again", defaultValue: "Try again"), style: .primary) { home.speechTryAgain() })
             )
         }
         let waiting = home.draft.waitingTakes
@@ -334,16 +336,6 @@ struct SpeechModelSheet: View {
                 detail: String(localized: "speech.sheet.waiting.detail", defaultValue: "It turns into text as soon as the model is ready."),
                 action: nil
             )
-        }
-    }
-
-    /// Try again: loads the model again (the download carries on where it stopped), then transcribes the takes that
-    /// failed for it.
-    private func tryAgain() {
-        if home.canRetryTakes {
-            home.retryFailedTakes()
-        } else {
-            speech.reload()
         }
     }
 

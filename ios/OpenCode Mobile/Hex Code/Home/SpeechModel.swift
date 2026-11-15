@@ -39,13 +39,27 @@ struct SpeechDetails: Equatable, Sendable {
     )
 }
 
+/// The model's and the pause detector's sizes on the phone, nil for one that isn't all there. Reading them walks the
+/// model folder (about 600 MB of files), so it happens off the main thread, and only when they may have changed.
+nonisolated struct SpeechSizes: Equatable, Sendable {
+    var modelBytes: Int64?
+    var pauseDetectorBytes: Int64?
+
+    /// Walks the folders: call it off the main thread.
+    static func read() -> SpeechSizes {
+        SpeechSizes(
+            modelBytes: VoiceEngine.hasDownloadedModel ? VoiceEngine.modelBytesOnPhone : nil,
+            pauseDetectorBytes: VoiceEngine.hasDownloadedPauseDetector ? VoiceEngine.pauseDetectorBytesOnPhone : nil
+        )
+    }
+}
+
 /// Turns finished takes into text. Recording never waits for it; only transcription does.
 @MainActor
 protocol SpeechTranscribing: AnyObject {
     var status: SpeechStatus { get }
-    /// When the model last became ready (system uptime); nil while it isn't.
-    var readySince: TimeInterval? { get }
-    /// The model and the pause detector, for the details sheet (reads the files on the phone).
+    /// The model and the pause detector, for the details sheet. Cheap to read: sizes on the phone are kept, not read
+    /// from the files on each look.
     var details: SpeechDetails { get }
     /// The download as it last stood, kept after it stopped.
     var lastDownload: ModelDownload? { get }
@@ -64,7 +78,6 @@ protocol SpeechTranscribing: AnyObject {
 }
 
 extension SpeechTranscribing {
-    var readySince: TimeInterval? { status == .ready ? 0 : nil }
     var details: SpeechDetails { .placeholder }
     var lastDownload: ModelDownload? { nil }
     func retryNow() {}
@@ -72,8 +85,9 @@ extension SpeechTranscribing {
 
 /// The speech model on this phone (Parakeet V2 through `VoiceEngine`). It starts loading after the
 /// first frame (`start()`, once; see `SpeechLoadTrigger`), and after loading transcribes one short take of silence so
-/// the first real take is as fast as the rest; it counts as ready only after that. Debug builds can hold readiness
-/// back (`-HexCodeSpeechDelay <seconds>`) or fail the first load (`-HexCodeSpeechFail YES`).
+/// the first real take is as fast as the rest; it counts as ready only after that. It reads Warming up only while
+/// that warm-up is to come or running, so an engine readied elsewhere (the speech lab) reads Ready. Debug builds can
+/// hold readiness back (`-HexCodeSpeechDelay <seconds>`) or fail the first load (`-HexCodeSpeechFail YES`).
 @MainActor
 @Observable
 final class SpeechModel: SpeechTranscribing {
@@ -83,9 +97,13 @@ final class SpeechModel: SpeechTranscribing {
     /// The model was on the phone when the process started: before the load begins it reads Loading.
     @ObservationIgnored private let wasOnPhone: Bool
     @ObservationIgnored private var loadTask: Task<Void, Never>?
-    /// Loaded, and the silent take is being transcribed.
+    /// A load under way will warm the engine up once loaded, or is doing it now: a ready engine reads Warming up.
     private var warmingUp = false
-    private(set) var readySince: TimeInterval?
+    /// The silent take has been through the engine in this process.
+    @ObservationIgnored private var warmedUp = false
+    /// Sizes on the phone, as last read (off the main thread).
+    private var sizes = SpeechSizes()
+    @ObservationIgnored private var sizesTask: Task<Void, Never>?
     /// Debug: readiness is held back for a while after loading.
     private var heldUntilReady = false
     /// Debug: the next load fails.
@@ -97,9 +115,9 @@ final class SpeechModel: SpeechTranscribing {
         self.voice = voice
         wasOnPhone = VoiceEngine.hasDownloadedModel
         #if DEBUG
-        heldUntilReady = UserDefaults.standard.double(forKey: "HexCodeSpeechDelay") > 0
         forcedFailure = UserDefaults.standard.bool(forKey: "HexCodeSpeechFail")
         #endif
+        refreshSizes()
     }
 
     var status: SpeechStatus {
@@ -112,24 +130,21 @@ final class SpeechModel: SpeechTranscribing {
         case .loading:
             return .loading
         case .ready:
-            return warmingUp || heldUntilReady || readySince == nil ? .warmingUp : .ready
+            return warmingUp || heldUntilReady ? .warmingUp : .ready
         case .failed:
             return .failed
         }
     }
 
     var details: SpeechDetails {
-        let ready = status == .ready
-        let onPhone = VoiceEngine.hasDownloadedModel
-        let pauseBytes = VoiceEngine.hasDownloadedPauseDetector ? VoiceEngine.pauseDetectorBytesOnPhone : nil
-        return SpeechDetails(
+        SpeechDetails(
             modelName: voice.modelName,
             runtimeName: VoiceEngine.runtimeName,
             runtimeDetail: VoiceEngine.runtimeDetail,
-            modelBytes: ready || onPhone ? VoiceEngine.modelBytesOnPhone : (voice.lastDownload?.total ?? voice.knownDownloadTotal),
+            modelBytes: sizes.modelBytes ?? voice.lastDownload?.total ?? voice.knownDownloadTotal,
             lastDownload: voice.lastDownload,
             pauseDetectorName: VoiceEngine.pauseDetectorName,
-            pauseDetectorBytes: pauseBytes,
+            pauseDetectorBytes: sizes.pauseDetectorBytes,
             pauseDetector: voice.pauseDetector
         )
     }
@@ -155,39 +170,61 @@ final class SpeechModel: SpeechTranscribing {
     private func load() {
         loadTask?.cancel()
         let voice = voice
+        // Set before the load, so the moment the engine is ready already reads Warming up.
+        warmingUp = !warmedUp
+        #if DEBUG
+        heldUntilReady = !warmedUp && UserDefaults.standard.double(forKey: "HexCodeSpeechDelay") > 0
+        #endif
         loadTask = Task { [weak self] in
             #if DEBUG
             if self?.forcedFailure == true {
                 try? await Task.sleep(for: .seconds(3))
                 self?.forcedFailure = false
+                self?.warmingUp = false
+                self?.heldUntilReady = false
                 self?.debugFailed = true
                 HexLog.dictation.error("speech: the model load was made to fail (-HexCodeSpeechFail)")
                 return
             }
             #endif
             let begun = ProcessInfo.processInfo.systemUptime
+            // Waits for a preparation already under way (the speech lab's) rather than returning early.
             await voice.prepare()
             guard let self else { return }
             let loaded = ProcessInfo.processInfo.systemUptime
             guard voice.modelState == .ready else {
+                self.warmingUp = false
+                self.heldUntilReady = false
+                self.refreshSizes()
                 HexLog.dictation.error("speech: the model didn't load after \(hexMilliseconds(from: begun, to: loaded)) ms")
                 return
             }
             HexLog.dictation.info("speech: model loaded in \(hexMilliseconds(from: begun, to: loaded)) ms")
-            if self.readySince == nil {
-                self.warmingUp = true
+            if !self.warmedUp {
                 await self.warmUp()
-                self.warmingUp = false
+                self.warmedUp = true
                 HexLog.dictation.info("speech: warm-up took \(hexMilliseconds(from: loaded, to: ProcessInfo.processInfo.systemUptime)) ms")
             }
+            self.warmingUp = false
             #if DEBUG
             let delay = UserDefaults.standard.double(forKey: "HexCodeSpeechDelay")
             if delay > 0, self.heldUntilReady {
                 try? await Task.sleep(for: .seconds(delay))
-                self.heldUntilReady = false
             }
+            self.heldUntilReady = false
             #endif
-            if self.readySince == nil { self.readySince = ProcessInfo.processInfo.systemUptime }
+            // The download (if any) is over and the model is in place: its size on the phone is read once more.
+            self.refreshSizes()
+        }
+    }
+
+    /// Reads the sizes on the phone off the main thread, then keeps them.
+    private func refreshSizes() {
+        sizesTask?.cancel()
+        sizesTask = Task { [weak self] in
+            let sizes = await Task.detached(priority: .utility) { SpeechSizes.read() }.value
+            guard !Task.isCancelled else { return }
+            self?.sizes = sizes
         }
     }
 

@@ -96,15 +96,18 @@ final class HomeModel {
         toasts: HexToaster? = nil,
         now: @escaping () -> Date = Date.init,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-        prepareImage: @escaping @Sendable (PickedImage.Content) async throws -> PreparedImage = PickedImage.prepare
+        prepareImage: @escaping @Sendable (PickedImage.Content) async throws -> PreparedImage = PickedImage.prepare,
+        speechLine: SpeechLineMemory = .process
     ) {
         self.recorder = recorder
+        speechLineMemory = speechLine
         self.prepareImage = prepareImage
         self.sleep = sleep
         self.speech = speech
         self.toasts = toasts ?? HexToaster()
         self.now = now
         recorder.onPart = { [weak self] part in self?.receivePart(part) }
+        watchSpeech()
     }
 
     /// The notice showing now.
@@ -668,6 +671,48 @@ final class HomeModel {
     var showsDraftReader = false
     /// The speech model's details sheet, from the speech line, the draft's label or Settings › Speech model.
     var showsSpeechModel = false
+    /// The speech line above the dock (app plan, "Speech line and dial" › Speech line): while the model gets ready,
+    /// then "Speech ready" for 1.6 s once it is, then gone for the rest of the process. While you talk or have a draft
+    /// the draft's label line carries it instead.
+    private(set) var speechLine: SpeechLineShow = .hidden
+    @ObservationIgnored private let speechLineMemory: SpeechLineMemory
+    @ObservationIgnored private var speechReadyShown: Task<Void, Never>?
+
+    /// Follows the speech model's status for the speech line, until the line is gone for good.
+    private func watchSpeech() {
+        guard speechReadyShown == nil, !(speechLineMemory.isGone && speechLine == .hidden) else { return }
+        let status = withObservationTracking { speech.status } onChange: { [weak self] in
+            Task { @MainActor in self?.watchSpeech() }
+        }
+        showSpeechLine(status)
+    }
+
+    private func showSpeechLine(_ status: SpeechStatus) {
+        let show = speechLineMemory.next(status)
+        if show != speechLine { speechLine = show }
+        guard show == .ready else { return }
+        // "Speech ready" has its 1.6 s whatever the model does next; after it the line is gone for good.
+        let sleep = sleep
+        speechReadyShown = Task { [weak self] in
+            try? await sleep(SpeechLineMemory.readyFor)
+            self?.speechLine = .hidden
+        }
+    }
+
+    /// The speech model sheet's Try now: a download waiting to retry after a dropped connection tries again at once.
+    func speechTryNow() {
+        speech.retryNow()
+    }
+
+    /// The speech model sheet's Try again: the takes that failed go again (loading the model first), or with none to
+    /// retry, the model loads once more.
+    func speechTryAgain() {
+        if canRetryTakes {
+            retryFailedTakes()
+        } else {
+            speech.reload()
+        }
+    }
 
     /// The reader's paragraphs and meta for `text` (the You line): the phone's own message when it is
     /// this one, else the text as one paragraph, with what went with it.

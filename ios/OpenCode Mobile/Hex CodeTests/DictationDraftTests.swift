@@ -1,5 +1,7 @@
 import Foundation
 import Testing
+import Observation
+import os
 import VoiceEngineKit
 @testable import Hex_Code
 
@@ -202,8 +204,9 @@ final class FakeRecorder: TakeRecording {
     func cancelRecording() { cancelled += 1 }
 }
 
-/// A speech model whose readiness the test controls.
+/// A speech model whose readiness the test controls. Observable, so home's speech line follows its status.
 @MainActor
+@Observable
 final class FakeSpeech: SpeechTranscribing {
     var status: SpeechStatus {
         didSet {
@@ -220,9 +223,11 @@ final class FakeSpeech: SpeechTranscribing {
     var failsTranscription = false
     private(set) var transcribed: [URL] = []
     private(set) var reloads = 0
+    /// Times Try now was asked for.
+    private(set) var retries = 0
     /// Times `start()` was called.
     private(set) var starts = 0
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
 
     init(_ status: SpeechStatus = .ready) {
         self.status = status
@@ -244,6 +249,10 @@ final class FakeSpeech: SpeechTranscribing {
         status = .loading
     }
 
+    func retryNow() {
+        retries += 1
+    }
+
     func transcribe(_ take: RecordedTake) async throws -> String {
         transcribed.append(take.url)
         if failsTranscription { throw CancellationError() }
@@ -258,7 +267,7 @@ final class FakeSpeech: SpeechTranscribing {
     var failingParts: Set<Int> = []
     /// While set, part transcriptions wait until `releaseParts()`.
     var holdsParts = false
-    private var heldParts: [CheckedContinuation<Void, Never>] = []
+    @ObservationIgnored private var heldParts: [CheckedContinuation<Void, Never>] = []
 
     func transcribe(part: TakePart) async throws -> String {
         transcribedParts.append(part.range)
@@ -288,6 +297,37 @@ struct HomeModelTests {
         let recorder = given ?? FakeRecorder()
         let clock = Clock()
         return (HomeModel(recorder: recorder, speech: speech ?? FakeSpeech(), now: { clock.now }), recorder, clock)
+    }
+
+    @Test func theSpeechLineShowsWhileTheModelGetsReadyThenSpeechReadyThenIsGoneForTheProcess() async {
+        let speech = FakeSpeech(.loading)
+        let memory = SpeechLineMemory()
+        let shownFor = OSAllocatedUnfairLock<Duration?>(initialState: nil)
+        let ends = OSAllocatedUnfairLock(initialState: false)
+        let home = HomeModel(recorder: FakeRecorder(), speech: speech, sleep: { duration in
+            shownFor.withLock { $0 = duration }
+            while !ends.withLock({ $0 }) { try await Task.sleep(for: .milliseconds(5)) }
+        }, speechLine: memory)
+        #expect(home.speechLine == .gettingReady)
+        speech.status = .failed
+        #expect(home.speechLine == .gettingReady)
+        speech.status = .ready
+        for _ in 0 ..< 200 where home.speechLine != .ready { try? await Task.sleep(for: .milliseconds(5)) }
+        #expect(home.speechLine == .ready)
+        // "Speech ready" for 1.6 s, whatever the model does next.
+        speech.status = .loading
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(home.speechLine == .ready)
+        #expect(shownFor.withLock { $0 } == .milliseconds(1600))
+        ends.withLock { $0 = true }
+        for _ in 0 ..< 200 where home.speechLine != .hidden { try? await Task.sleep(for: .milliseconds(5)) }
+        #expect(home.speechLine == .hidden)
+        // A later home in the same process doesn't show it again.
+        let next = HomeModel(recorder: FakeRecorder(), speech: FakeSpeech(.loading), speechLine: memory)
+        #expect(next.speechLine == .hidden)
+        // Ready before the line ever showed: nothing.
+        let quiet = HomeModel(recorder: FakeRecorder(), speech: FakeSpeech(.ready), speechLine: SpeechLineMemory())
+        #expect(quiet.speechLine == .hidden)
     }
 
     @Test func holdAndReleaseMakesAChunkAndNeverSends() async {
@@ -512,6 +552,25 @@ struct WaitingTakeTests {
         speech.status = .ready
         await eventually { home.draft.isComplete }
         #expect(home.draft.chunks.map(\.text) == ["hello there"])
+    }
+
+    @Test func theSheetsTryAgainRetriesTheFailedTakesOrLoadsTheModelOnceMore() async {
+        let speech = FakeSpeech(.loading)
+        let (home, clock) = make(speech)
+        await take(home, clock)
+        speech.status = .failed
+        await eventually { home.canRetryTakes }
+        // A take to retry: it goes back to waiting, and the model loads again first.
+        home.speechTryAgain()
+        #expect(speech.reloads == 1)
+        #expect(home.draft.chunks.map(\.state) == [.waiting])
+        // No take to retry: the model loads once more all the same.
+        let empty = FakeSpeech(.failed)
+        let (other, _) = make(empty)
+        other.speechTryAgain()
+        #expect(empty.reloads == 1)
+        other.speechTryNow()
+        #expect(empty.retries == 1)
     }
 
     @Test func aFailedTakeCanStillBeReRecordedOrDeleted() async {

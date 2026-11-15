@@ -53,23 +53,30 @@ struct SpeechLineTests {
         #expect(line(ModelDownload(done: 0, total: nil)).text(timeLeft: true) == "Speech model · downloading…")
     }
 
-    @Test func theLineShowsUntilReadyThenForOnePointSixSeconds() {
-        #expect(SpeechLine.shows(.loading, readySince: nil, now: 50))
-        #expect(SpeechLine.shows(.failed, readySince: nil, now: 50))
-        #expect(SpeechLine.shows(.ready, readySince: 49, now: 50))
-        #expect(!SpeechLine.shows(.ready, readySince: 48.3, now: 50))
-        #expect(!SpeechLine.shows(.ready, readySince: nil, now: 50))
+    @Test @MainActor func theLineShowsWhileGettingReadyThenSaysReadyOnceForTheProcess() {
+        let memory = SpeechLineMemory()
+        #expect(memory.next(.loading) == .gettingReady)
+        #expect(memory.next(.failed) == .gettingReady)
+        #expect(memory.next(.ready) == .ready)
+        #expect(memory.isGone)
+        // Once it has gone it doesn't come back, even if the model loads again.
+        #expect(memory.next(.loading) == .hidden)
+        #expect(memory.next(.ready) == .hidden)
+        // Ready before the line ever showed: nothing to say.
+        let quiet = SpeechLineMemory()
+        #expect(quiet.next(.ready) == .hidden)
+        #expect(quiet.next(.loading) == .hidden)
     }
 
     @Test func theDialGoesGreyWhileTheConnectionIsDown() {
         let flowing = ModelDownload(done: 320, total: 640)
-        #expect(SpeechDial.Look(.downloading(flowing)) == .downloading(0.5))
+        #expect(HexSpeechDial.Look(.downloading(flowing)) == .downloading(0.5))
         var dropped = flowing
         dropped.connection = .retrying
-        #expect(SpeechDial.Look(.downloading(dropped)) == .stalled(0.5))
-        #expect(SpeechDial.Look(.notOnPhone) == .stalled(0))
-        #expect(SpeechDial.Look(.failed, lastFraction: 0.2) == .failed(0.2))
-        #expect(SpeechDial.Look(.warmingUp) == .warmingUp)
+        #expect(HexSpeechDial.Look(.downloading(dropped)) == .stalled(0.5))
+        #expect(HexSpeechDial.Look(.notOnPhone) == .stalled(0))
+        #expect(HexSpeechDial.Look(.failed, lastFraction: 0.2) == .failed(0.2))
+        #expect(HexSpeechDial.Look(.warmingUp) == .warmingUp)
     }
 }
 
@@ -114,9 +121,18 @@ struct SpeechSheetCopyTests {
     @Test func readyNamesTheSizeOnThePhone() {
         var ready = details
         ready.modelBytes = 482_600_000
-        #expect(SpeechSheetCopy.hero(.ready, details: ready) == .init(title: "Ready", tone: .green, line: "483 MB on this phone", detail: "loaded · warmed up"))
-        #expect(SpeechSheetCopy.size(1_700_000) == "2 MB")
+        #expect(SpeechSheetCopy.hero(.ready, details: ready) == .init(title: "Ready", tone: .green, line: "482 MB on this phone", detail: "loaded · warmed up"))
+        // Every MB figure rounds down; a small file still reads 1 MB, never 0.
+        #expect(SpeechSheetCopy.size(1_700_000) == "1 MB")
         #expect(SpeechSheetCopy.size(200_000) == "1 MB")
+    }
+
+    @Test func theSheetAndTheSpeechLineReadTheSameMegabytes() {
+        let download = ModelDownload(done: 120_900_000, total: 640_700_000)
+        #expect(SpeechSheetCopy.progressText(download) == "120 of 640 MB")
+        #expect(SpeechLine.of(.downloading(download), now: Date()).text(timeLeft: false) == "Speech model · 120 of 640 MB")
+        #expect(SpeechSheetCopy.size(640_700_000) == "640 MB")
+        #expect(SpeechSheetCopy.progressText(ModelDownload(done: 1, total: nil)) == nil)
     }
 }
 
@@ -177,7 +193,8 @@ struct ResumableDownloadTests {
 
     @Test func aStalledAttemptIsStoppedAndTriedAgain() async throws {
         let script = Script()
-        let download = make(script, stallTimeout: .milliseconds(80)) { attempt, alive in
+        // Long enough that a busy test run can't stall the second attempt before it starts.
+        let download = make(script, stallTimeout: .milliseconds(300)) { attempt, alive in
             alive()
             // The first attempt hangs with nothing coming; it is stopped, not waited for.
             if attempt == 1 { try await Task.sleep(for: .seconds(60)) }
@@ -212,6 +229,46 @@ struct ResumableDownloadTests {
         }
         await #expect(throws: CocoaError.self) { try await download.run() }
         #expect(script.attempts == 1)
+    }
+}
+
+/// The download's updates in order, each from its attempt: a late one from a failed attempt is dropped.
+struct DownloadTrackerTests {
+    private let date = Date(timeIntervalSinceReferenceDate: 1_000)
+
+    @Test func lateBytesFromAFailedAttemptDontUndoTheRetry() {
+        var progress = DownloadTracker(ModelDownload(done: 0, total: nil))
+        progress.apply(.bytes(done: 100, total: 1_000, attempt: 1), uptime: 0, date: date)
+        #expect(progress.download.connection == .flowing)
+        progress.apply(.event(.waiting(.seconds(4)), attempt: 1), uptime: 1, date: date)
+        #expect(progress.download.connection == .waiting(retryAt: date.addingTimeInterval(4)))
+        // Bytes from attempt 1 that were still on their way when it failed.
+        let late = progress.apply(.bytes(done: 120, total: 1_000, attempt: 1), uptime: 1.1, date: date)
+        #expect(!late)
+        #expect(progress.download.connection == .waiting(retryAt: date.addingTimeInterval(4)))
+        #expect(progress.download.done == 100)
+        progress.apply(.event(.retrying, attempt: 1), uptime: 5, date: date)
+        #expect(progress.download.connection == .retrying)
+        let stillLate = progress.apply(.bytes(done: 130, total: 1_000, attempt: 1), uptime: 5.1, date: date)
+        #expect(!stillLate)
+        #expect(progress.download.connection == .retrying)
+        // The next attempt's bytes: the connection is back.
+        let fromTheNext = progress.apply(.bytes(done: 140, total: 1_000, attempt: 2), uptime: 5.2, date: date)
+        #expect(fromTheNext)
+        #expect(progress.download.connection == .flowing)
+        #expect(progress.download.done == 140)
+    }
+
+    @Test func aWaitClearsTheSpeedAndTheTotalIsKept() {
+        var progress = DownloadTracker(ModelDownload(done: 0, total: 1_000))
+        for tenth in 0 ... 40 {
+            progress.apply(.bytes(done: Int64(tenth) * 10, total: nil, attempt: 1), uptime: Double(tenth) / 10, date: date)
+        }
+        #expect(progress.download.total == 1_000)
+        #expect(progress.download.bytesPerSecond != nil)
+        progress.apply(.event(.waiting(.seconds(1)), attempt: 1), uptime: 4.1, date: date)
+        #expect(progress.download.bytesPerSecond == nil)
+        #expect(progress.download.secondsLeft == nil)
     }
 }
 

@@ -76,6 +76,58 @@ public struct DownloadRate: Sendable {
     }
 }
 
+/// The download as it stands, from its updates in the order they were sent: bytes from an attempt, and the retry
+/// events between attempts. Each update names its attempt (1 for the first), so bytes that arrive late from an
+/// attempt that already failed are dropped: they can't turn "retrying in 4 s" back into a flowing download.
+public struct DownloadTracker: Sendable {
+    public enum Update: Equatable, Sendable {
+        /// Bytes on the phone during `attempt`, and the whole download when it can be told.
+        case bytes(done: Int64, total: Int64?, attempt: Int)
+        /// `attempt` failed (`.waiting`), or the one after it is starting (`.retrying`).
+        case event(ResumableDownload.Event, attempt: Int)
+    }
+
+    public private(set) var download: ModelDownload
+    private var rate = DownloadRate()
+    /// The last attempt known to have ended; bytes from it or an earlier one are late.
+    private var ended = 0
+
+    public init(_ download: ModelDownload) {
+        self.download = download
+    }
+
+    /// Applies `update` (`uptime` from a monotonic clock for the speed, `date` for the retry time). Returns false when
+    /// it was dropped as late.
+    @discardableResult
+    public mutating func apply(_ update: Update, uptime: TimeInterval, date: Date) -> Bool {
+        switch update {
+        case let .bytes(done, total, attempt):
+            guard attempt > ended else { return false }
+            download.done = done
+            if let total { download.total = total }
+            if download.connection != .flowing {
+                // Bytes again from a live attempt: the connection is back, and the speed is measured afresh.
+                download.connection = .flowing
+                rate = DownloadRate()
+            }
+            let reading = rate.update(done: download.done, total: download.total, now: uptime)
+            download.bytesPerSecond = reading?.bytesPerSecond
+            download.secondsLeft = reading?.secondsLeft
+        case let .event(event, attempt):
+            ended = max(ended, attempt)
+            switch event {
+            case let .waiting(pause):
+                download.connection = .waiting(retryAt: date.addingTimeInterval(TimeInterval(pause.components.seconds)))
+                download.bytesPerSecond = nil
+                download.secondsLeft = nil
+            case .retrying:
+                download.connection = .retrying
+            }
+        }
+        return true
+    }
+}
+
 /// Runs a download that resumes, one attempt after another, until it finishes (app plan, "The speech model" ›
 /// Download). Each attempt carries on from what is already on the phone. Errors are retried after 1, 2, 4 and 8 s;
 /// an attempt that got more onto the phone starts that count again, so a long download on a flaky network keeps
