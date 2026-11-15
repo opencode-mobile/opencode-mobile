@@ -34,7 +34,7 @@ class DefaultSessionCache(
     private val thumbnails: ToolImageThumbnails? = null,
     private val thumbnailDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val thumbnailEvictionDebounceMs: Long = DEFAULT_THUMBNAIL_EVICTION_DEBOUNCE_MS,
-    /** Encodes a message timeline flush; within [SessionCacheCodec.MESSAGE_TIMELINE_BUDGET_CHARS] by default. */
+    /** Encodes a message timeline flush; within [SessionCacheCodec.MESSAGE_TIMELINE_BUDGET_BYTES] by default. */
     private val messageEncoder: SessionCacheMessageEncoder = SessionCacheMessageEncoder.Default,
 ) : SessionCache {
     private val thumbnailEvictionJob = AtomicReference<Job?>(null)

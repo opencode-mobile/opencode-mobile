@@ -10,6 +10,24 @@ interface SessionCacheDao {
     @Query("SELECT * FROM session_cache_snapshot WHERE cache_key = :cacheKey LIMIT 1")
     suspend fun get(cacheKey: String): SessionCacheSnapshotEntity?
 
+    /**
+     * A row's retain time and payload size, without reading the payload into a cursor window: a
+     * row over the window's 2 MB cannot be read by [get] at all (SQLiteBlobTooBigException, #1033).
+     */
+    @Query(
+        """
+        SELECT retained_at_ms, LENGTH(CAST(payload_json AS BLOB)) AS payload_bytes
+        FROM session_cache_snapshot WHERE cache_key = :cacheKey LIMIT 1
+        """,
+    )
+    suspend fun meta(cacheKey: String): SessionCacheRowMeta?
+
+    @Query("UPDATE session_cache_snapshot SET retained_at_ms = :retainedAtEpochMs WHERE cache_key = :cacheKey")
+    suspend fun setRetainedAt(
+        cacheKey: String,
+        retainedAtEpochMs: Long,
+    )
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: SessionCacheSnapshotEntity)
 
@@ -149,4 +167,12 @@ data class SessionCacheEntryRef(
     val connectionId: String,
     @androidx.room.ColumnInfo(name = "entry_id")
     val entryId: String,
+)
+
+/** One row's retain time and payload size in UTF-8 bytes, without its payload. */
+data class SessionCacheRowMeta(
+    @androidx.room.ColumnInfo(name = "retained_at_ms")
+    val retainedAtEpochMs: Long?,
+    @androidx.room.ColumnInfo(name = "payload_bytes")
+    val payloadBytes: Long,
 )

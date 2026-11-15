@@ -57,36 +57,40 @@ object SessionCacheCodec {
         }.getOrNull()
 
     /**
-     * Characters a cached message timeline may hold (#1033): about 4 MB of UTF-16. The cache only
-     * paints a session before its live load, so it keeps the newest messages that fit.
+     * UTF-8 bytes a cached message timeline may hold (#1033), the unit SQLite stores it in. It
+     * stays under Android's 2 MB cursor window, or the row could not be read back at all. The
+     * cache only paints a session before its live load, so it keeps the newest messages that fit.
      */
-    const val MESSAGE_TIMELINE_BUDGET_CHARS: Int = 2_000_000
+    const val MESSAGE_TIMELINE_BUDGET_BYTES: Int = 1_800_000
 
     /**
      * Tool images keep only metadata (data URLs never go to disk); [hasThumbnail] marks the
      * ones whose thumbnail file was saved, so a decode can point at it again.
      *
      * Encodes one message at a time, newest first, and keeps the newest messages whose JSON fits
-     * in [budgetChars] (always the newest one), so no flush builds a string the size of the whole
+     * in [budgetBytes] of UTF-8 (always the newest one), so no flush builds a string the size of the whole
      * transcript (#1033). Kept messages are whole: nothing inside a message is trimmed, so a
      * cached first paint never shows a cut output as the complete one. [onMessageEncoded] sees
-     * each message's JSON length, for tests.
+     * each message's JSON size in UTF-8 bytes, for tests.
      */
     fun encodeMessages(
         messages: List<Message>,
         json: Json,
         hasThumbnail: (MessagePart.File) -> Boolean = { it.thumbnailPath != null },
-        budgetChars: Int = MESSAGE_TIMELINE_BUDGET_CHARS,
+        budgetBytes: Int = MESSAGE_TIMELINE_BUDGET_BYTES,
         onMessageEncoded: (length: Int) -> Unit = {},
     ): String {
         val kept = ArrayList<String>()
         var keptChars = 0
+        var keptBytes = 0
         for (index in messages.indices.reversed()) {
             val piece = json.encodeToString(CachedMessagePayload.serializer(), messages[index].toCachePayload(hasThumbnail))
-            onMessageEncoded(piece.length)
-            if (kept.isNotEmpty() && keptChars + piece.length + 1 > budgetChars) break
+            val pieceBytes = utf8Length(piece)
+            onMessageEncoded(pieceBytes)
+            if (kept.isNotEmpty() && keptBytes + pieceBytes + 1 > budgetBytes) break
             kept += piece
             keptChars += piece.length + 1
+            keptBytes += pieceBytes + 1
         }
         // The envelope around an empty list, so the payload keeps the exact shape decode reads.
         val shell =
@@ -111,6 +115,22 @@ object SessionCacheCodec {
     }
 
     private const val EMPTY_LIST = "[]"
+
+    /** [text]'s size in UTF-8, counted without encoding it. */
+    private fun utf8Length(text: String): Int {
+        var bytes = 0
+        for (char in text) {
+            bytes +=
+                when {
+                    char.code < 0x80 -> 1
+                    char.code < 0x800 -> 2
+                    // Each half of a surrogate pair: four bytes for the pair.
+                    Character.isSurrogate(char) -> 2
+                    else -> 3
+                }
+        }
+        return bytes
+    }
 
     /**
      * [thumbnailPath] resolves a tool image id marked as having a thumbnail to its file; a null

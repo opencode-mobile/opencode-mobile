@@ -30,7 +30,7 @@ class SessionCacheMessageBudgetTest {
         val pieces = mutableListOf<Int>()
 
         val payload =
-            SessionCacheCodec.encodeMessages(messages, json, budgetChars = 1_000_000, onMessageEncoded = { pieces += it })
+            SessionCacheCodec.encodeMessages(messages, json, budgetBytes = 1_000_000, onMessageEncoded = { pieces += it })
 
         // Every string built is one message's JSON, never one of the whole 8M-character transcript.
         assertTrue(pieces.max() < 250_000)
@@ -60,9 +60,21 @@ class SessionCacheMessageBudgetTest {
     }
 
     @Test
+    fun encodeMessages_countsTheBudgetInUtf8Bytes() {
+        // Three bytes a character in UTF-8, the unit SQLite stores and the cursor window reads.
+        val messages = transcript(count = 10, outputChars = 100_000, fill = "\u6587")
+        val payload = SessionCacheCodec.encodeMessages(messages, json, budgetBytes = 1_000_000)
+        val bytes = payload.toByteArray(Charsets.UTF_8).size
+        assertTrue("payload $bytes bytes over budget", bytes < 1_000_200)
+        val decoded = SessionCacheCodec.decodeMessages(payload, json)!!
+        assertEquals(3, decoded.size)
+        assertEquals(messages.takeLast(3), decoded)
+    }
+
+    @Test
     fun encodeMessages_keepsTheNewestMessageEvenWhenItAloneIsOverTheBudget() {
         val messages = transcript(count = 3, outputChars = 50_000)
-        val decoded = SessionCacheCodec.decodeMessages(SessionCacheCodec.encodeMessages(messages, json, budgetChars = 10), json)
+        val decoded = SessionCacheCodec.decodeMessages(SessionCacheCodec.encodeMessages(messages, json, budgetBytes = 10), json)
         assertEquals(listOf(messages.last()), decoded)
     }
 
@@ -78,7 +90,7 @@ class SessionCacheMessageBudgetTest {
                     scope = backgroundScope,
                     json = json,
                     messageEncoder = { messages, json, hasThumbnail ->
-                        SessionCacheCodec.encodeMessages(messages, json, hasThumbnail, budgetChars = budget)
+                        SessionCacheCodec.encodeMessages(messages, json, hasThumbnail, budgetBytes = budget)
                     },
                 )
             val messages = transcript(count = 20, outputChars = 100_000)
@@ -146,6 +158,7 @@ class SessionCacheMessageBudgetTest {
     private fun transcript(
         count: Int,
         outputChars: Int,
+        fill: String? = null,
     ): List<Message> =
         (1..count).map { index ->
             Message(
@@ -160,7 +173,9 @@ class SessionCacheMessageBudgetTest {
                             status = ToolStatus.Completed,
                             id = "prt-$index",
                             input = buildJsonObject { put("filePath", JsonPrimitive("src/File$index.kt")) },
-                            output = "line $index\n".repeat(outputChars / 8).take(outputChars),
+                            output =
+                                fill?.repeat(outputChars)
+                                    ?: "line $index\n".repeat(outputChars / 8).take(outputChars),
                         ),
                     ),
             )
