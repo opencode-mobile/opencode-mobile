@@ -4,7 +4,8 @@ import Foundation
 nonisolated struct MessageTextCut: Equatable, Sendable {
     /// The shown prefix; ends with "…" when a line was cut part way.
     let visibleText: String
-    /// Characters of the message kept in `visibleText`, without the "…".
+    /// Characters of the message up to the end of `visibleText`, without the "…". Leading blank
+    /// lines the shown part skips count as shown.
     let shownCharacters: Int
 }
 
@@ -27,8 +28,64 @@ nonisolated enum MessageTextLimit {
     ///
     /// One pass that stops as soon as the message is known to be over `tolerance`: it reads at
     /// most about `tolerance * charactersPerLine` characters plus `tolerance` line breaks,
-    /// whatever the length of the text.
+    /// whatever the length of the text. Leading blank lines count toward that decision, but the
+    /// shown part starts at the first line with content, so a paste that opens with many blank
+    /// lines never shows an empty bubble; `MessageTextCut.shownCharacters` counts the skipped
+    /// blank lines as shown.
     static func cut(_ text: some Sequence<Character>) -> MessageTextCut? {
+        var iterator = text.makeIterator()
+        var consumed: [Character] = []
+        consumed.reserveCapacity(tolerance * charactersPerLine + tolerance + 1)
+        guard let first = scan(forced: false, next: {
+            guard let character = iterator.next() else { return nil }
+            consumed.append(character)
+            return character
+        }) else { return nil }
+        if first.contentLineStart == 0 { return first.cut }
+
+        // The characters from the first line with content on: what is left of `consumed`, then
+        // the rest of the text.
+        var replay: [Character]
+        let skipped: Int
+        if let contentLineStart = first.contentLineStart {
+            skipped = contentLineStart
+            replay = Array(consumed[contentLineStart...])
+        } else {
+            // Everything read so far is blank; keep looking, holding the current line's blanks.
+            let lineStart = (consumed.lastIndex(where: { $0 == "\n" || $0 == "\r\n" }) ?? -1) + 1
+            var blankCount = lineStart
+            var pending = Array(consumed[lineStart...])
+            var found = false
+            while let character = iterator.next() {
+                if character == "\n" || character == "\r\n" {
+                    blankCount += pending.count + 1
+                    pending.removeAll(keepingCapacity: true)
+                } else {
+                    pending.append(character)
+                    if !character.isWhitespace {
+                        found = true
+                        break
+                    }
+                }
+            }
+            guard found, blankCount > 0 else { return first.cut }
+            skipped = blankCount
+            replay = pending
+        }
+        replay.reverse()
+        guard let rest = scan(forced: true, next: { replay.popLast() ?? iterator.next() }) else { return first.cut }
+        return MessageTextCut(visibleText: rest.cut.visibleText, shownCharacters: skipped + rest.cut.shownCharacters)
+    }
+
+    private struct Scan {
+        let cut: MessageTextCut
+        /// Start of the first line with a non-blank character among those read, if any.
+        let contentLineStart: Int?
+    }
+
+    /// Counts the characters `next` yields. Nil when they fit `tolerance`, unless `forced`: then
+    /// the part costing at most `limit` is returned even when the rest would fit.
+    private static func scan(forced: Bool, next: () -> Character?) -> Scan? {
         var read: [Character] = []
         read.reserveCapacity(tolerance * charactersPerLine + tolerance + 1)
         var used = 0
@@ -38,6 +95,7 @@ nonisolated enum MessageTextLimit {
         var overflowStart: Int?
         var overflowBudget = 0
         var isOver = false
+        var contentLineStart: Int?
 
         func lineCost(_ length: Int) -> Int {
             max(1, (length + charactersPerLine - 1) / charactersPerLine)
@@ -54,7 +112,7 @@ nonisolated enum MessageTextLimit {
             }
         }
 
-        for character in text {
+        while let character = next() {
             if character == "\n" || character == "\r\n" {
                 let cost = lineCost(lineLength)
                 markOverflowIfNeeded(cost: cost)
@@ -67,6 +125,7 @@ nonisolated enum MessageTextLimit {
                 lineStart = read.count
                 lineLength = 0
             } else {
+                if contentLineStart == nil, !character.isWhitespace { contentLineStart = lineStart }
                 read.append(character)
                 lineLength += 1
                 let cost = lineCost(lineLength)
@@ -80,7 +139,7 @@ nonisolated enum MessageTextLimit {
         if !isOver {
             let cost = lineCost(lineLength)
             markOverflowIfNeeded(cost: cost)
-            guard used + cost > tolerance else { return nil }
+            guard forced || used + cost > tolerance else { return nil }
         }
 
         var visible: ArraySlice<Character>
@@ -100,14 +159,17 @@ nonisolated enum MessageTextLimit {
         } else {
             visible = read[0 ..< wholeEnd]
         }
+        let cut: MessageTextCut
         if partial.isEmpty {
             visible = trimmedTrailingWhitespace(read[0 ..< wholeEnd])
-            return MessageTextCut(visibleText: String(visible), shownCharacters: visible.count)
+            cut = MessageTextCut(visibleText: String(visible), shownCharacters: visible.count)
+        } else {
+            cut = MessageTextCut(
+                visibleText: String(visible) + String(partial) + "…",
+                shownCharacters: visible.count + partial.count
+            )
         }
-        return MessageTextCut(
-            visibleText: String(visible) + String(partial) + "…",
-            shownCharacters: visible.count + partial.count
-        )
+        return Scan(cut: cut, contentLineStart: contentLineStart)
     }
 
     private static func trimmedTrailingWhitespace(_ characters: ArraySlice<Character>) -> ArraySlice<Character> {

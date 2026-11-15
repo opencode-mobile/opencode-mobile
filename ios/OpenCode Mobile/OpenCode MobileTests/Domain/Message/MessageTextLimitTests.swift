@@ -58,6 +58,37 @@ import Testing
         #expect(MessageTextLimit.cut(text) == MessageTextCut(visibleText: "first", shownCharacters: 5))
     }
 
+    @Test func manyLeadingBlankLines_showTheContentAfterThem() {
+        // 40 blank lines alone are over the tolerance; the shown part starts at the content.
+        let shown = Self.lines(25)
+        #expect(
+            MessageTextLimit.cut(String(repeating: "\n", count: 40) + Self.lines(100))
+                == MessageTextCut(visibleText: shown, shownCharacters: 40 + shown.count)
+        )
+        #expect(
+            MessageTextLimit.cut(String(repeating: "\n", count: 40) + "hello")
+                == MessageTextCut(visibleText: "hello", shownCharacters: 45)
+        )
+    }
+
+    @Test func leadingWhitespaceOnlyLines_areSkippedButIndentationIsKept() {
+        let text = String(repeating: "  \n", count: 40) + "    indented\nmore"
+        #expect(MessageTextLimit.cut(text) == MessageTextCut(visibleText: "    indented\nmore", shownCharacters: text.count))
+    }
+
+    @Test func fewLeadingBlankLines_stillStartTheCutAtTheContent() {
+        let shown = Self.lines(25)
+        #expect(MessageTextLimit.cut("\n\nhello") == nil)
+        #expect(
+            MessageTextLimit.cut("\n\n" + Self.lines(100))
+                == MessageTextCut(visibleText: shown, shownCharacters: 2 + shown.count)
+        )
+    }
+
+    @Test func onlyBlankLines_showNothing() {
+        #expect(MessageTextLimit.cut(String(repeating: "\n", count: 100)) == MessageTextCut(visibleText: "", shownCharacters: 0))
+    }
+
     @Test func unbrokenLineAtTheTolerance_showsInFull() {
         #expect(MessageTextLimit.cut(String(repeating: "a", count: 1_200)) == nil)
     }

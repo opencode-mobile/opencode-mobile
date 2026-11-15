@@ -59,6 +59,32 @@ class MessageTextLimitTest {
     }
 
     @Test
+    fun manyLeadingBlankLines_showTheContentAfterThem() {
+        // 40 blank lines alone are over the tolerance; the shown part starts at the content.
+        val shown = lines(25)
+        assertEquals(MessageTextCut(shown, 40 + shown.length), MessageTextLimit.cut("\n".repeat(40) + lines(100)))
+        assertEquals(MessageTextCut("hello", 45), MessageTextLimit.cut("\n".repeat(40) + "hello"))
+    }
+
+    @Test
+    fun leadingWhitespaceOnlyLines_areSkippedButIndentationIsKept() {
+        val text = "  \n".repeat(40) + "    indented\nmore"
+        assertEquals(MessageTextCut("    indented\nmore", text.length), MessageTextLimit.cut(text))
+    }
+
+    @Test
+    fun fewLeadingBlankLines_stillStartTheCutAtTheContent() {
+        val shown = lines(25)
+        assertNull(MessageTextLimit.cut("\n\nhello"))
+        assertEquals(MessageTextCut(shown, 2 + shown.length), MessageTextLimit.cut("\n\n" + lines(100)))
+    }
+
+    @Test
+    fun onlyBlankLines_showNothing() {
+        assertEquals(MessageTextCut("", 0), MessageTextLimit.cut("\n".repeat(100)))
+    }
+
+    @Test
     fun unbrokenLineAtTheTolerance_showsInFull() {
         assertNull(MessageTextLimit.cut("a".repeat(1_200)))
     }

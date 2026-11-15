@@ -9,7 +9,10 @@ import dev.opencode.mobile.markdown.OpenCodeStructureOnlyHighlighter
 data class MessageTextCut(
     /** The shown prefix; ends with "…" when a line was cut part way. */
     val visibleText: String,
-    /** Characters of the message kept in [visibleText], without the "…". */
+    /**
+     * Characters of the message up to the end of [visibleText], without the "…". Leading blank
+     * lines the shown part skips count as shown.
+     */
     val shownCharacters: Int,
 )
 
@@ -35,18 +38,45 @@ object MessageTextLimit {
      *
      * One pass that stops as soon as the message is known to be over [TOLERANCE]: it reads at
      * most about `TOLERANCE * CHARACTERS_PER_LINE` characters plus [TOLERANCE] line breaks,
-     * whatever the length of the text.
+     * whatever the length of the text. Leading blank lines count toward that decision, but the
+     * shown part starts at the first line with content, so a paste that opens with many blank
+     * lines never shows an empty bubble; [MessageTextCut.shownCharacters] counts the skipped
+     * blank lines as shown.
      */
     fun cut(text: CharSequence): MessageTextCut? {
+        val first = scan(text, start = 0, forced = false) ?: return null
+        val contentStart = if (first.contentLineStart >= 0) first.contentLineStart else contentLineStart(text, first.read)
+        if (contentStart <= 0 || contentStart >= text.length) return first.cut
+        return scan(text, start = contentStart, forced = true)?.cut ?: first.cut
+    }
+
+    private class Scan(
+        val cut: MessageTextCut,
+        /** Start of the first line with a non-blank character among those read, or -1. */
+        val contentLineStart: Int,
+        /** Where the pass stopped reading. */
+        val read: Int,
+    )
+
+    /**
+     * Counts [text] from [start]. Null when it fits [TOLERANCE], unless [forced]: then the part
+     * costing at most [LIMIT] is returned even when the rest would fit.
+     */
+    private fun scan(
+        text: CharSequence,
+        start: Int,
+        forced: Boolean,
+    ): Scan? {
         val length = text.length
-        var read = 0
+        var read = start
         var used = 0
-        var lineStart = 0
+        var lineStart = start
         var lineLength = 0
-        var wholeEnd = 0
+        var wholeEnd = start
         var overflowStart = -1
         var overflowBudget = 0
         var isOver = false
+        var contentLineStart = -1
 
         fun lineCost(characters: Int): Int = maxOf(1, (characters + CHARACTERS_PER_LINE - 1) / CHARACTERS_PER_LINE)
 
@@ -80,6 +110,7 @@ object MessageTextLimit {
                 lineStart = read
                 lineLength = 0
             } else {
+                if (contentLineStart < 0 && !character.isWhitespace()) contentLineStart = lineStart
                 read += 1
                 lineLength += 1
                 val cost = lineCost(lineLength)
@@ -93,11 +124,11 @@ object MessageTextLimit {
         if (!isOver) {
             val cost = lineCost(lineLength)
             markOverflowIfNeeded(cost)
-            if (used + cost <= TOLERANCE) return null
+            if (!forced && used + cost <= TOLERANCE) return null
         }
 
-        var partialStart = 0
-        var partialEnd = 0
+        var partialStart = start
+        var partialEnd = start
         if (overflowStart >= 0 && overflowBudget > 0) {
             partialStart = overflowStart
             val end = overflowStart + overflowBudget * CHARACTERS_PER_LINE
@@ -113,12 +144,34 @@ object MessageTextLimit {
             }
             partialEnd = trimmedEnd(text, partialStart, partialEnd)
         }
-        if (partialEnd <= partialStart) {
-            val visibleEnd = trimmedEnd(text, 0, wholeEnd)
-            return MessageTextCut(visibleText = text.substring(0, visibleEnd), shownCharacters = visibleEnd)
+        val cut =
+            if (partialEnd <= partialStart) {
+                val visibleEnd = trimmedEnd(text, start, wholeEnd)
+                MessageTextCut(visibleText = text.substring(start, visibleEnd), shownCharacters = visibleEnd)
+            } else {
+                MessageTextCut(visibleText = text.substring(start, partialEnd) + "…", shownCharacters = partialEnd)
+            }
+        return Scan(cut, contentLineStart, read)
+    }
+
+    /** Start of the first line of [text] with a non-blank character, looking from [from]; the length if none. */
+    private fun contentLineStart(
+        text: CharSequence,
+        from: Int,
+    ): Int {
+        var lineStart = from
+        while (lineStart > 0 && text[lineStart - 1] != '\n') lineStart -= 1
+        var index = from
+        while (index < text.length) {
+            val character = text[index]
+            if (character == '\n') {
+                lineStart = index + 1
+            } else if (!character.isWhitespace()) {
+                return lineStart
+            }
+            index += 1
         }
-        val visible = text.substring(0, partialStart) + text.substring(partialStart, partialEnd)
-        return MessageTextCut(visibleText = "$visible…", shownCharacters = visible.length)
+        return text.length
     }
 
     private fun trimmedEnd(
