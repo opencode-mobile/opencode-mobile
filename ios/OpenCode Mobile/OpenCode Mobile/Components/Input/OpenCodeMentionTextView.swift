@@ -7,20 +7,30 @@ import UniformTypeIdentifiers
 /// `sizeThatFits` returns the capped bounds and the next update turns scroll
 /// back off (OPE-213).
 enum OpenCodeMentionTextViewLayout {
-    static let font = UIFont.systemFont(ofSize: 16, weight: .regular)
+    static let font = font(scale: 1)
     /// ~5 body lines — enough for a long prompt without swallowing the chat.
-    static var maxCollapsedHeight: CGFloat { font.lineHeight * 5 }
+    static var maxCollapsedHeight: CGFloat { maxCollapsedHeight(scale: 1) }
+
+    /// The prompt font at the Session Chat text scale (#1044).
+    static func font(scale: CGFloat) -> UIFont {
+        OpenCodeTypography.Style.body.uiFont(scale: scale)
+    }
+
+    static func maxCollapsedHeight(scale: CGFloat) -> CGFloat {
+        font(scale: scale).lineHeight * 5
+    }
     static let scrollThreshold: CGFloat = 0.5
 
     static func attributedString(
         text: String,
         mentionRanges: [Range<Int>],
         textColor: UIColor,
-        mentionColor: UIColor
+        mentionColor: UIColor,
+        scale: CGFloat = 1
     ) -> NSAttributedString {
         let result = NSMutableAttributedString(
             string: text,
-            attributes: [.foregroundColor: textColor, .font: font]
+            attributes: [.foregroundColor: textColor, .font: font(scale: scale)]
         )
         for range in mentionRanges.sorted(by: { $0.lowerBound < $1.lowerBound }) {
             guard range.lowerBound >= 0, range.upperBound <= text.count, range.lowerBound < range.upperBound,
@@ -31,7 +41,8 @@ enum OpenCodeMentionTextViewLayout {
         return result
     }
 
-    static func contentHeight(for attributedText: NSAttributedString, width: CGFloat) -> CGFloat {
+    static func contentHeight(for attributedText: NSAttributedString, width: CGFloat, scale: CGFloat = 1) -> CGFloat {
+        let font = font(scale: scale)
         guard width > 0 else { return font.lineHeight }
         guard attributedText.length > 0 else { return font.lineHeight }
         let rect = attributedText.boundingRect(
@@ -42,12 +53,12 @@ enum OpenCodeMentionTextViewLayout {
         return max(ceil(rect.height), font.lineHeight)
     }
 
-    static func clampedHeight(contentHeight: CGFloat) -> CGFloat {
-        min(max(contentHeight, font.lineHeight), maxCollapsedHeight)
+    static func clampedHeight(contentHeight: CGFloat, scale: CGFloat = 1) -> CGFloat {
+        min(max(contentHeight, font(scale: scale).lineHeight), maxCollapsedHeight(scale: scale))
     }
 
-    static func shouldScroll(contentHeight: CGFloat) -> Bool {
-        contentHeight > maxCollapsedHeight + scrollThreshold
+    static func shouldScroll(contentHeight: CGFloat, scale: CGFloat = 1) -> Bool {
+        contentHeight > maxCollapsedHeight(scale: scale) + scrollThreshold
     }
 }
 
@@ -132,7 +143,9 @@ private struct Representable: UIViewRepresentable {
     func makeUIView(context: Context) -> PlaceholderTextView {
         let view = PlaceholderTextView()
         view.backgroundColor = .clear
-        view.font = OpenCodeMentionTextViewLayout.font
+        let font = OpenCodeMentionTextViewLayout.font(scale: context.environment.openCodeTextScale)
+        view.font = font
+        view.textScale = context.environment.openCodeTextScale
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
         // Keep scroll on. Toggling it from `sizeThatFits` while measuring the
@@ -143,7 +156,7 @@ private struct Representable: UIViewRepresentable {
         view.setContentHuggingPriority(.defaultLow, for: .vertical)
         view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         view.delegate = context.coordinator
-        view.placeholderLabel.font = OpenCodeMentionTextViewLayout.font
+        view.placeholderLabel.font = font
         return view
     }
 
@@ -152,6 +165,13 @@ private struct Representable: UIViewRepresentable {
         let resolvedMentionColor = UIColor(OpenCodeColors.syntaxType)
         uiView.placeholderLabel.text = placeholder
         uiView.placeholderLabel.textColor = UIColor(OpenCodeColors.textWeak)
+        let scale = context.environment.openCodeTextScale
+        if context.coordinator.scale != scale {
+            let font = OpenCodeMentionTextViewLayout.font(scale: scale)
+            uiView.font = font
+            uiView.placeholderLabel.font = font
+        }
+        uiView.textScale = scale
         context.coordinator.onFocusChange = onFocusChange
         uiView.onDeleteBackwardWhenEmpty = onDeleteBackwardWhenEmpty
         uiView.onPasteAttachments = onPasteAttachments
@@ -173,6 +193,7 @@ private struct Representable: UIViewRepresentable {
             selectionStart: selectionStart,
             selectionEnd: selectionEnd,
             selectionRevision: selectionRevision,
+            scale: scale,
             to: uiView
         )
     }
@@ -195,6 +216,7 @@ private struct Representable: UIViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: PlaceholderTextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width.isFinite else { return nil }
         // Measure from current props — `sizeThatFits` can run before `updateUIView`.
+        let scale = context.environment.openCodeTextScale
         let resolvedTextColor = UIColor(OpenCodeColors.textStrong)
         let resolvedMentionColor = UIColor(OpenCodeColors.syntaxType)
         context.coordinator.apply(
@@ -205,15 +227,20 @@ private struct Representable: UIViewRepresentable {
             selectionStart: selectionStart,
             selectionEnd: selectionEnd,
             selectionRevision: selectionRevision,
+            scale: scale,
             to: uiView
         )
         let contentHeight = OpenCodeMentionTextViewLayout.contentHeight(
             for: uiView.attributedText ?? NSAttributedString(),
-            width: width
+            width: width,
+            scale: scale
         )
         // Cap growth so chips/send stay above the keyboard; further text scrolls
         // inside the field (OPE-118 / OPE-213).
-        return CGSize(width: width, height: OpenCodeMentionTextViewLayout.clampedHeight(contentHeight: contentHeight))
+        return CGSize(
+            width: width,
+            height: OpenCodeMentionTextViewLayout.clampedHeight(contentHeight: contentHeight, scale: scale)
+        )
     }
 
     func makeCoordinator() -> Coordinator {
@@ -228,6 +255,8 @@ private struct Representable: UIViewRepresentable {
         private var lastRenderedMentionRanges: [Range<Int>] = []
         private var lastAppliedSelectionRevision: Int?
         private var textColor: UIColor = .label
+        /// Session Chat text scale the text was last drawn at (#1044).
+        private(set) var scale: CGFloat?
 
         init(focusRequestToken: Int, onChange: @escaping (String, Int, Int) -> Void) {
             lastFocusRequestToken = focusRequestToken
@@ -250,16 +279,24 @@ private struct Representable: UIViewRepresentable {
             selectionStart: Int?,
             selectionEnd: Int?,
             selectionRevision: Int,
+            scale: CGFloat,
             to view: PlaceholderTextView
         ) {
             self.textColor = textColor
-            if lastRenderedText != text || lastRenderedMentionRanges != mentionRanges {
+            if lastRenderedText != text || lastRenderedMentionRanges != mentionRanges || self.scale != scale {
+                let selection = view.selectedRange
+                let scaleChanged = self.scale != nil && self.scale != scale
+                self.scale = scale
                 view.attributedText = OpenCodeMentionTextViewLayout.attributedString(
                     text: text,
                     mentionRanges: mentionRanges,
                     textColor: textColor,
-                    mentionColor: mentionColor
+                    mentionColor: mentionColor,
+                    scale: scale
                 )
+                if scaleChanged, text == lastRenderedText {
+                    view.selectedRange = selection
+                }
                 lastRenderedText = text
                 lastRenderedMentionRanges = mentionRanges
             }
@@ -281,7 +318,10 @@ private struct Representable: UIViewRepresentable {
                 return false
             }
             if textView.markedTextRange == nil {
-                textView.typingAttributes = [.foregroundColor: textColor, .font: OpenCodeMentionTextViewLayout.font]
+                textView.typingAttributes = [
+                    .foregroundColor: textColor,
+                    .font: OpenCodeMentionTextViewLayout.font(scale: scale ?? 1),
+                ]
             }
             return true
         }
@@ -346,6 +386,8 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput, OpenCode
     var onDeleteBackwardWhenEmpty: (() -> Void)?
     var onPasteAttachments: (([NSItemProvider]) -> Void)?
     var returnKey: OpenCodeHardwareReturnKey?
+    /// Session Chat text scale, so caret-follow uses the same line cap as the field (#1044).
+    var textScale: CGFloat = 1
     /// Tab or Shift+Tab (`backward`) left the field; nil just stops editing.
     var onTabOut: ((_ backward: Bool) -> Void)?
     var onHistoryKey: ((OpenCodePromptHistoryDirection, String, OpenCodePromptCaret) -> Bool)?
@@ -618,9 +660,10 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput, OpenCode
         }
         let contentHeight = OpenCodeMentionTextViewLayout.contentHeight(
             for: attributedText ?? NSAttributedString(),
-            width: bounds.width
+            width: bounds.width,
+            scale: textScale
         )
-        guard OpenCodeMentionTextViewLayout.shouldScroll(contentHeight: contentHeight) else {
+        guard OpenCodeMentionTextViewLayout.shouldScroll(contentHeight: contentHeight, scale: textScale) else {
             pendingCaretScroll = false
             return
         }

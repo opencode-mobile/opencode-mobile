@@ -1392,6 +1392,7 @@ struct ProjectListHomeView: View {
             showsEmptyContent: sections.isEmpty,
             emptyContent: { NoProjectsEmptyState() }
         )
+        .openCodeTextScale(.homeList)
         .onChange(of: selectedFilterId, initial: true) { _, resolved in
             if selectedSessionFilterId != resolved {
                 selectedSessionFilterId = resolved

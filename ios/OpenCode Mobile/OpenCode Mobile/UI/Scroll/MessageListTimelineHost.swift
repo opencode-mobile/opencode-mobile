@@ -48,6 +48,7 @@ where Item.ID == String {
         viewController.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
         viewController.canLoadOlder = canLoadOlder
         viewController.onNearOldestVisible = onNearOldestVisible
+        viewController.updateTextScale(context.environment.openCodeTextScale)
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
         viewController.updateRefreshControlAvailability()
@@ -71,6 +72,7 @@ where Item.ID == String {
         viewController.itemContent = itemContent
         viewController.updateBottomOverlayInset(bottomOverlayInset, animation: bottomOverlayAnimation)
         viewController.updateTopOverlayInset(topOverlayInset)
+        viewController.updateTextScale(context.environment.openCodeTextScale)
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
         viewController.updateRefreshControlAvailability()
@@ -112,6 +114,9 @@ where Item.ID == String {
     private var itemsByID: [String: Item] = [:]
     private var orderedIDs: [String] = []
     private let rowHeightCache = MessageListTimelineRowHeightCache()
+    /// Region text scale (#1044). Hosted cells do not inherit SwiftUI's environment,
+    /// so the host passes it into each cell.
+    private var textScale: CGFloat = 1
     private var lastAppliedFrameRevision: UInt64?
     private var lastContentHeight: CGFloat = 0
     private var lastViewportHeight: CGFloat = 0
@@ -391,6 +396,18 @@ where Item.ID == String {
                 completion: { _ in finish() }
             )
         }
+    }
+
+    /// A new text size redraws every row and drops the cached heights, which no longer fit.
+    func updateTextScale(_ scale: CGFloat) {
+        guard scale != textScale else { return }
+        textScale = scale
+        guard dataSource != nil else { return }
+        rowHeightCache.retainOnly(ids: [])
+        var snapshot = dataSource.snapshot()
+        guard !snapshot.itemIdentifiers.isEmpty else { return }
+        snapshot.reconfigureItems(snapshot.itemIdentifiers)
+        dataSource.apply(snapshot, animatingDifferences: false)
     }
 
     func updateTopOverlayInset(_ value: CGFloat) {
@@ -1113,9 +1130,11 @@ where Item.ID == String {
             cell.heightCache = self.rowHeightCache
             cell.estimatedHeightSeed = self.estimatedHeightSeed(for: item)
             let focusGroup = self.focusGroup
+            let textScale = self.textScale
             cell.contentConfiguration = UIHostingConfiguration {
                 self.itemContent(item)
                     .openCodeFocusGroup(focusGroup)
+                    .environment(\.openCodeTextScale, textScale)
             }
             .margins(.all, 0)
             .minSize(width: 0, height: 0)

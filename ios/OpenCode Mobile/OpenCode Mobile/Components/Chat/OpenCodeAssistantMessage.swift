@@ -23,7 +23,7 @@ struct OpenCodeAssistantMessage: View {
                 )
             } else {
                 Text(Self.displayText(text))
-                    .font(OpenCodeTypography.body)
+                    .openCodeFont(.body)
                     .lineSpacing(4)
                     .foregroundStyle(OpenCodeColors.textStrong)
             }

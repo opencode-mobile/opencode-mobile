@@ -3,54 +3,49 @@ import SwiftUI
 struct AppearanceSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var themeManager = ThemeManager.shared
+    @State private var appearance = AppearancePreferences.shared
     @State private var showThemePicker = false
     @State private var showSyntaxPicker = false
+    @State private var menuExpanded = false
 
     /// Set when shown as the trailing root of the tablet Settings split view.
     var detailControl: OpenCodeSplitPaneDetailControl? = nil
 
     var body: some View {
         VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: "appearance.title",
-                leading: OpenCodeSplitPane.detailLeading(detailControl, back: { dismiss() }),
-                showDivider: true
-            )
+            OpenCodeTopBarOverflowHost(isPresented: $menuExpanded, entries: menuEntries) {
+                OpenCodeTopBar(
+                    title: "appearance.title",
+                    leading: OpenCodeSplitPane.detailLeading(detailControl, back: { dismiss() }),
+                    actions: [
+                        .icon(.moreVert, accessibilityLabel: "appearance.more_options") {
+                            menuExpanded = true
+                        },
+                    ],
+                    showDivider: true
+                )
+            }
             ScrollView {
-                VStack(spacing: 8) {
-                    OpenCodeListItem(
-                        title: "appearance.theme.title",
-                        subtitle: themeSubtitle,
-                        style: .card,
-                        startDecorator: .icon(.widgets, accessibilityLabel: "appearance.theme.title"),
-                        accessory: .disclosure,
-                        action: {
-                            ProductAnalytics.logUserAction(
-                                screenId: ProductAnalytics.Screen.settingsAppearance,
-                                actionId: ProductAnalytics.Action.settingsOpenThemePicker
-                            )
-                            showThemePicker = true
-                        }
-                    )
-                    .padding(.horizontal, 16)
-
-                    OpenCodeListItem(
-                        title: "appearance.code_highlight.title",
-                        subtitle: syntaxSubtitle,
-                        style: .card,
-                        startDecorator: .icon(.description, accessibilityLabel: "appearance.code_highlight.title"),
-                        accessory: .disclosure,
-                        action: {
-                            ProductAnalytics.logUserAction(
-                                screenId: ProductAnalytics.Screen.settingsAppearance,
-                                actionId: ProductAnalytics.Action.settingsOpenSyntaxPicker
-                            )
-                            showSyntaxPicker = true
-                        }
-                    )
-                    .padding(.horizontal, 16)
+                VStack(alignment: .leading, spacing: 0) {
+                    modeSection
+                    themeSection
+                    textSizeSection(.homeList)
+                    AppearanceHomeSample()
+                        .openCodeTextScale(.homeList)
+                    textSizeSection(.sessionChat)
+                    AppearanceSessionChatSample()
+                        .openCodeTextScale(.sessionChat)
+                        .padding(.horizontal, 16)
+                    textSizeSection(.code)
+                    AppearanceCodeSample()
+                        .openCodeTextScale(.code)
+                        .padding(.horizontal, 16)
+                    note("appearance.text_code_note")
+                        .padding(.top, 8)
+                    note("appearance.text_session_chat_note")
+                        .padding(.top, 16)
                 }
-                .padding(.vertical, 16)
+                .padding(.bottom, 24)
             }
             .openCodeFocusGroup(.vertical)
             .openCodeReadableColumn()
@@ -72,6 +67,152 @@ struct AppearanceSettingsView: View {
         }
     }
 
+    private var modeSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            OpenCodeSectionHeader(title: "appearance.mode_title")
+                .padding(.bottom, 4)
+            OpenCodeSegmentedControl(
+                options: AppearanceMode.allCases.map { mode in
+                    OpenCodeSegmentedControlOption(
+                        id: mode,
+                        title: mode.title,
+                        accessibilityIdentifier: "appearanceMode:\(mode.wireValue)"
+                    )
+                },
+                selection: appearance.mode,
+                onSelect: { mode in
+                    log(
+                        ProductAnalytics.Action.settingsAppearanceMode,
+                        [ProductAnalytics.Param.mode: mode.wireValue]
+                    )
+                    appearance.setMode(mode)
+                }
+            )
+            .padding(.horizontal, 16)
+            note(appearance.mode.note)
+                .padding(.top, 8)
+        }
+    }
+
+    private var themeSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            OpenCodeSectionHeader(title: "appearance.theme.title")
+            OpenCodeListItem(
+                title: "appearance.theme.title",
+                subtitle: themeSubtitle,
+                style: .card,
+                startDecorator: .icon(.widgets, accessibilityLabel: "appearance.theme.title"),
+                accessory: .disclosure,
+                action: {
+                    log(ProductAnalytics.Action.settingsOpenThemePicker)
+                    showThemePicker = true
+                }
+            )
+            .padding(.horizontal, 16)
+
+            OpenCodeListItem(
+                title: "appearance.code_highlight.title",
+                subtitle: syntaxSubtitle,
+                style: .card,
+                startDecorator: .icon(.description, accessibilityLabel: "appearance.code_highlight.title"),
+                accessory: .disclosure,
+                action: {
+                    log(ProductAnalytics.Action.settingsOpenSyntaxPicker)
+                    showSyntaxPicker = true
+                }
+            )
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func textSizeSection(_ region: AppTextRegion) -> some View {
+        let size = appearance.textSize(for: region)
+        return VStack(alignment: .leading, spacing: 0) {
+            OpenCodeSectionHeader(title: region.sectionTitle)
+                .padding(.bottom, 4)
+            OpenCodeListGroup([region], id: \.self) { region in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("appearance.text_size_label")
+                            .font(OpenCodeTypography.body)
+                            .foregroundStyle(OpenCodeColors.textStrong)
+                        Spacer(minLength: 8)
+                        Text(openCode: size.title)
+                            .font(OpenCodeTypography.bodySecondary)
+                            .foregroundStyle(OpenCodeColors.textBase)
+                    }
+                    .accessibilityHidden(true)
+                    OpenCodeStepSlider(
+                        stepCount: AppTextSize.allCases.count,
+                        selectedIndex: size.stepIndex,
+                        defaultIndex: AppTextSize.defaultSize.stepIndex,
+                        accessibilityLabel: region.sliderAccessibilityLabel,
+                        accessibilityValue: { AppTextSize.fromStepIndex($0).title },
+                        onSelect: { index in
+                            let next = AppTextSize.fromStepIndex(index)
+                            log(
+                                ProductAnalytics.Action.settingsAppearanceTextSize,
+                                [
+                                    ProductAnalytics.Param.textRegion: region.rawValue,
+                                    ProductAnalytics.Param.textSize: next.wireValue,
+                                ]
+                            )
+                            appearance.setTextSize(next, for: region)
+                        }
+                    )
+                    .accessibilityIdentifier("appearanceTextSize:\(region.rawValue)")
+                }
+                .padding(14)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
+    }
+
+    private func note(_ text: OpenCodeText) -> some View {
+        Text(openCode: text)
+            .font(OpenCodeTypography.caption)
+            .foregroundStyle(OpenCodeColors.textWeak)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+    }
+
+    private var menuEntries: [OpenCodeOverflowMenuEntry] {
+        [
+            OpenCodeOverflowMenuEntry(
+                id: "resetTextSizes",
+                title: "appearance.reset_text_sizes",
+                icon: .restart,
+                enabled: appearance.canResetTextSizes,
+                accessibilityIdentifier: "appearanceResetTextSizes",
+                action: {
+                    log(ProductAnalytics.Action.settingsAppearanceResetTextSizes)
+                    appearance.resetTextSizes()
+                }
+            ),
+            OpenCodeOverflowMenuEntry(
+                id: "resetAll",
+                title: "appearance.reset_all",
+                icon: .undo,
+                enabled: appearance.canResetAll,
+                destructive: true,
+                accessibilityIdentifier: "appearanceResetAll",
+                action: {
+                    log(ProductAnalytics.Action.settingsAppearanceResetAll)
+                    appearance.resetAll()
+                }
+            ),
+        ]
+    }
+
+    private func log(_ actionId: String, _ parameters: [String: String] = [:]) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.settingsAppearance,
+            actionId: actionId,
+            parameters: parameters
+        )
+    }
+
     /// The preset name is theme data and stays an argument.
     private var themeSubtitle: OpenCodeText {
         let name = themeManager.currentTheme.name
@@ -84,6 +225,170 @@ struct AppearanceSettingsView: View {
         let preset = themeManager.currentSyntaxPreset
         return .verbatim([preset.name, preset.blurb].joined(separator: " · "))
     }
+}
+
+extension AppearanceMode {
+    var title: OpenCodeText {
+        switch self {
+        case .system: "appearance.mode_system"
+        case .light: "appearance.mode_light"
+        case .dark: "appearance.mode_dark"
+        }
+    }
+
+    var note: OpenCodeText {
+        switch self {
+        case .system: "appearance.mode_note_system"
+        case .light: "appearance.mode_note_light"
+        case .dark: "appearance.mode_note_dark"
+        }
+    }
+}
+
+extension AppTextSize {
+    var title: OpenCodeText {
+        switch self {
+        case .extraSmall: "appearance.text_size_extra_small"
+        case .small: "appearance.text_size_small"
+        case .default: "appearance.text_size_default"
+        case .large: "appearance.text_size_large"
+        case .extraLarge: "appearance.text_size_extra_large"
+        }
+    }
+}
+
+extension AppTextRegion {
+    /// "Home list text size".
+    var sliderAccessibilityLabel: OpenCodeText {
+        let title = sectionTitle.resolved
+        return OpenCodeText(LocalizedStringResource("appearance.text_size_accessibility", defaultValue: "\(title) size"))
+    }
+
+    var sectionTitle: OpenCodeText {
+        switch self {
+        case .homeList: "appearance.text_home_title"
+        case .sessionChat: "appearance.text_session_chat_title"
+        case .code: "appearance.text_code_title"
+        }
+    }
+}
+
+/// Home sample: a project header and two real session rows, drawn flat like Home.
+private struct AppearanceHomeSample: View {
+    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            OpenCodeSectionHeader(title: .verbatim(Self.project))
+            ForEach(Self.sessions) { session in
+                SessionListRow(
+                    session: session,
+                    rowStyle: homeDisplayPreferences.sessionRowStyle,
+                    showStatusDot: true,
+                    action: {}
+                )
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .contain)
+    }
+
+    private static var project: String {
+        String(localized: "appearance.sample_project", defaultValue: "web-app")
+    }
+
+    private static var sessions: [SessionListSession] {
+        [
+            SessionListSession(
+                id: "appearance-sample-1",
+                title: String(localized: "appearance.sample_session_one", defaultValue: "Fix the flaky login redirect test"),
+                worktree: "/Users/example/web-app",
+                letter: "W",
+                letterAccent: .violet,
+                subtitle: "~/web-app",
+                status: .running,
+                caption: String(localized: "appearance.sample_time_now", defaultValue: "now"),
+                projectName: project
+            ),
+            SessionListSession(
+                id: "appearance-sample-2",
+                title: String(localized: "appearance.sample_session_two", defaultValue: "Migrate settings to the new store"),
+                worktree: "/Users/example/web-app",
+                letter: "W",
+                letterAccent: .violet,
+                subtitle: "~/web-app",
+                status: .idle,
+                caption: String(localized: "appearance.sample_time_minutes", defaultValue: "12m"),
+                projectName: project,
+                worktreeLabel: String(localized: "appearance.sample_branch_two", defaultValue: "settings-store")
+            ),
+        ]
+    }
+}
+
+/// Session Chat sample: a user bubble, an assistant paragraph with inline code, and a tool line.
+private struct AppearanceSessionChatSample: View {
+    @State private var reply: NativeMarkdownDocument?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            OpenCodeOutgoingMessage(
+                text: String(
+                    localized: "appearance.sample_user_message",
+                    defaultValue: "Why does the login redirect test fail one run in five?"
+                ),
+                metadataLabel: ""
+            )
+            OpenCodeAssistantMessage(text: Self.replyText, renderedMarkdown: reply)
+            OpenCodeToolCallCard(
+                status: .completed,
+                title: String(localized: "appearance.sample_tool_title", defaultValue: "Edited"),
+                subtitle: String(localized: "appearance.sample_tool_subtitle", defaultValue: "src/auth/redirect.ts"),
+                additions: 6,
+                deletions: 2
+            )
+        }
+        .padding(.vertical, 8)
+        .allowsHitTesting(false)
+        .task {
+            let source = Self.replyText
+            reply = await Task.detached(priority: .userInitiated) {
+                OpenCodeRenderedMarkdownParser.parse(source, variant: .assistantMessage)
+            }.value
+        }
+    }
+
+    private static var replyText: String {
+        String(
+            localized: "appearance.sample_assistant_message",
+            defaultValue: "The test reads the session cookie right after `login()` resolves, but the cookie is written one tick later."
+        )
+    }
+}
+
+/// Code sample: a short diff hunk with line numbers and added and removed lines.
+private struct AppearanceCodeSample: View {
+    var body: some View {
+        OpenCodeUnifiedDiff(
+            file: FileDiff(path: "src/auth/redirect.ts", patch: Self.patch, additions: 2, deletions: 1, status: .modified),
+            document: Self.document,
+            contextMode: .expanded
+        )
+        .padding(.vertical, 8)
+        .allowsHitTesting(false)
+    }
+
+    private static let patch = """
+    @@ -12,4 +12,5 @@
+     export async function signIn(form: Credentials) {
+       const session = await login(form)
+    -  return redirect("/home")
+    +  await session.persist()
+    +  return redirect("/home")
+     }
+    """
+
+    private static let document = UnifiedDiffParser.parse(patch)
 }
 
 struct ThemePickerView: View {

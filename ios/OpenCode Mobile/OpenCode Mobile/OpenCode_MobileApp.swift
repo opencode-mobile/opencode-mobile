@@ -23,6 +23,7 @@ struct OpenCode_MobileApp: App {
             launchView
                 .openCodeWindowMetrics()
                 .openCodeTheme()
+                .openCodeAppearanceMode()
                 .background {
                     OpenCodeHapticAnchor()
                         .allowsHitTesting(false)

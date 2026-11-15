@@ -186,6 +186,10 @@ struct OpenCodeUnifiedDiff: View {
     let document: UnifiedDiffDocument
     var contextMode: UnifiedDiffContextMode = .collapsed
     var selectedHunkID: Int?
+    /// Code text scale (#1044): type, gutters and row height follow it.
+    @Environment(\.openCodeTextScale) private var textScale
+
+    private var rowHeight: CGFloat { 20 * textScale }
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -205,7 +209,7 @@ struct OpenCodeUnifiedDiff: View {
             VStack(spacing: 0) {
                 ForEach(rows) { row in
                     Color.clear
-                        .frame(width: 1, height: 20)
+                        .frame(width: 1, height: rowHeight)
                         .id(UnifiedDiffScrollTarget(rowID: row.id))
                 }
             }
@@ -223,18 +227,18 @@ struct OpenCodeUnifiedDiff: View {
     private func rowView(_ row: UnifiedDiffRow) -> some View {
         HStack(spacing: 0) {
             Text(row.oldLine.map(String.init) ?? "")
-                .frame(width: 24, alignment: .trailing)
+                .frame(width: 24 * textScale, alignment: .trailing)
             Text(row.newLine.map(String.init) ?? "")
-                .frame(width: 24, alignment: .trailing)
-            Text(marker(row.kind)).frame(width: 20)
+                .frame(width: 24 * textScale, alignment: .trailing)
+            Text(marker(row.kind)).frame(width: 20 * textScale)
             Text(row.text)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 8)
         }
-        .font(OpenCodeTypography.code)
+        .openCodeFont(.code)
         .foregroundStyle(foreground(row.kind))
-        .frame(minHeight: 20)
+        .frame(minHeight: rowHeight)
         .background(selectedHunkID == row.id && row.kind == .hunk ? OpenCodeColors.surfaceInteractiveWeak : background(row.kind))
         .accessibilityLabel(accessibilityLabel(row))
     }

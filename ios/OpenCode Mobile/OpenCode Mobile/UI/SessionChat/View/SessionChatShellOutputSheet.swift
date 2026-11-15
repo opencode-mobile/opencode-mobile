@@ -58,7 +58,7 @@ struct SessionChatShellOutputHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(shell.command.isEmpty ? " " : shell.command)
-                .font(OpenCodeTypography.code)
+                .openCodeFont(.code)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .lineLimit(2)
                 .truncationMode(.tail)
@@ -72,6 +72,7 @@ struct SessionChatShellOutputHeader: View {
             }
         }
         .padding(.bottom, 8)
+        .openCodeTextScale(.code)
     }
 
     /// "Command, npm test".
@@ -107,7 +108,7 @@ struct SessionChatShellOutputBody: View {
                     .foregroundStyle(OpenCodeColors.textWeak)
             } else {
                 Text(output.text)
-                    .font(OpenCodeTypography.code)
+                    .openCodeFont(.code)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -115,6 +116,7 @@ struct SessionChatShellOutputBody: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom, 8)
+        .openCodeTextScale(.code)
     }
 }
 

@@ -682,6 +682,7 @@ struct SessionChatView: View {
                 goal: goalTimelineContext
             )
         )
+        .openCodeTextScale(.sessionChat)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(edges: .bottom)
     }
@@ -2070,6 +2071,7 @@ struct SessionChatView: View {
             onAction: { action in handleComposerAction(action) },
             status: status
         )
+        .openCodeTextScale(.sessionChat)
     }
 
     /// Composer buttons and keyboard chords both answer through here.

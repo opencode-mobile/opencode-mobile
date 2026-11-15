@@ -20,6 +20,8 @@ enum ComponentGalleryEntryID: String, Hashable {
     case bottomFade
     case actionBar
     case tag
+    case segmentedControl
+    case stepSlider
     case keyValueRow
     case charts
     case featureItem
@@ -144,6 +146,18 @@ let componentGalleryEntries = [
         id: .tag,
         title: "Tag",
         description: "Static capsule label.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .segmentedControl,
+        title: "Segmented Control",
+        description: "Short exclusive choice as equal-width segments, such as the Appearance mode.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .stepSlider,
+        title: "Step Slider",
+        description: "Slider that snaps to named steps with ticks; the text-size variant frames it with a small and a large A.",
         category: .controls
     ),
     ComponentGalleryEntry(

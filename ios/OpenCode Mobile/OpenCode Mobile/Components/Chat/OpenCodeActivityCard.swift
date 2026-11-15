@@ -114,6 +114,7 @@ struct OpenCodeActivityCard: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openCodeTextScale) private var textScale
 
     var body: some View {
         Group {
@@ -147,14 +148,14 @@ struct OpenCodeActivityCard: View {
             Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        OpenCodeRunningShimmerText(text: OpenCodeActivityText.working, font: OpenCodeTypography.bodySecondary.weight(.semibold))
+                        OpenCodeRunningShimmerText(text: OpenCodeActivityText.working, font: OpenCodeTypography.Style.bodySecondary.font(scale: textScale).weight(.semibold))
                         Spacer(minLength: 0)
                         if let startedAtMs {
                             OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
                         }
                     }
                     Text(summary)
-                        .font(OpenCodeTypography.caption)
+                        .openCodeFont(.caption)
                         .foregroundStyle(OpenCodeColors.textWeak)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -258,14 +259,14 @@ struct OpenCodeActivityCard: View {
                     .frame(width: ActivityCardMetrics.iconSize)
                     .accessibilityHidden(true)
                 Text(current.title)
-                    .font(OpenCodeTypography.bodySecondary)
+                    .openCodeFont(.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if current.running, current.extraRunning > 0 {
                     Text("+\(current.extraRunning)")
-                        .font(OpenCodeTypography.caption)
+                        .openCodeFont(.caption)
                         .foregroundStyle(OpenCodeColors.textWeak)
                         .fixedSize()
                 }
@@ -274,7 +275,7 @@ struct OpenCodeActivityCard: View {
                 }
             } else {
                 Text(idleText ?? OpenCodeActivityText.thinkingEllipsis)
-                    .font(OpenCodeTypography.bodySecondary)
+                    .openCodeFont(.bodySecondary)
                     .italic()
                     .foregroundStyle(OpenCodeColors.textWeaker)
                     .lineLimit(1)
@@ -312,7 +313,7 @@ struct OpenCodeActivityCard: View {
             HStack(spacing: 8) {
                 OpenCodeActivityStatusDot(status: worstStatus)
                 settledText(stepCount: stepCount)
-                    .font(OpenCodeTypography.bodySecondary)
+                    .openCodeFont(.bodySecondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -387,12 +388,12 @@ private struct ActivityCardAgentRow: View {
         HStack(spacing: 8) {
             OpenCodeActivityAgentTile(agentName: agent.agentName)
             Text(agent.agentName)
-                .font(OpenCodeTypography.bodySecondary.weight(.semibold))
+                .openCodeFont(.bodySecondary, weight: .semibold)
                 .foregroundStyle(OpenCodeColors.info)
                 .lineLimit(1)
                 .fixedSize()
             Text(agent.action ?? "")
-                .font(OpenCodeTypography.bodySecondary)
+                .openCodeFont(.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textWeak)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -552,7 +553,7 @@ struct OpenCodeLiveElapsedText: View {
 
     private func label(_ text: String) -> some View {
         Text(text)
-            .font(OpenCodeTypography.caption.monospacedDigit())
+            .openCodeFont(.caption).monospacedDigit()
             .foregroundStyle(OpenCodeColors.textWeaker)
             .fixedSize()
             .accessibilityHidden(true)

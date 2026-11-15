@@ -120,6 +120,7 @@ enum StoreScreenshotSeeder {
         await Container.shared.sessionCache().clearAll()
         ThemeManager.shared.clearAll()
         HomeDisplayPreferences.shared.clear()
+        AppearancePreferences.shared.clear()
         AnalyticsConsentPreferences.shared.clear()
         AppOnboardingPreferences.shared.clear()
         PerformanceOverlayPreferences.shared.clear()

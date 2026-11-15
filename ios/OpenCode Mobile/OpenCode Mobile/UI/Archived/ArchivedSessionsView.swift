@@ -149,6 +149,7 @@ struct ArchivedSessionsView: View {
                     .padding(.vertical, 16)
             }
             .animation(.easeInOut(duration: 0.25), value: sections)
+            .openCodeTextScale(.homeList)
             .padding(.bottom, 88)
         }
     }

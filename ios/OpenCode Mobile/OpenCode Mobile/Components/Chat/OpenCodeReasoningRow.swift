@@ -17,7 +17,7 @@ struct OpenCodeReasoningRow: View {
                 EmptyView()
             }
             Text(label)
-                .font(OpenCodeTypography.body)
+                .openCodeFont(.body)
                 .foregroundStyle(OpenCodeColors.textWeak)
             Spacer(minLength: 0)
         }

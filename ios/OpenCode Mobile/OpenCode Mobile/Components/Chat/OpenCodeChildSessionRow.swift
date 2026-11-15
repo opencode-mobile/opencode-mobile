@@ -77,19 +77,19 @@ struct OpenCodeChildSessionRow: View {
             VStack(alignment: .leading, spacing: Self.textStackSpacing) {
                 HStack(alignment: .firstTextBaseline, spacing: Self.titleRowSpacing) {
                     Text(title)
-                        .font(OpenCodeTypography.heading)
+                        .openCodeFont(.heading)
                         .foregroundStyle(OpenCodeColors.textStrong)
                         .lineLimit(1)
                     if let caption, !caption.isEmpty {
                         Text(caption)
-                            .font(OpenCodeTypography.caption)
+                            .openCodeFont(.caption)
                             .foregroundStyle(OpenCodeColors.textWeaker)
                             .lineLimit(1)
                     }
                 }
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(OpenCodeTypography.caption)
+                        .openCodeFont(.caption)
                         .foregroundStyle(OpenCodeColors.textBase)
                         .lineLimit(1)
                 }
@@ -99,13 +99,13 @@ struct OpenCodeChildSessionRow: View {
             HStack(spacing: Self.trailingSpacing) {
                 if let status {
                     Text(status.label)
-                        .font(OpenCodeTypography.caption)
+                        .openCodeFont(.caption)
                         .foregroundStyle(status.color)
                         .lineLimit(1)
                 }
                 if let elapsed, !elapsed.isEmpty {
                     Text(elapsed)
-                        .font(OpenCodeTypography.caption.monospacedDigit())
+                        .openCodeFont(.caption).monospacedDigit()
                         .foregroundStyle(OpenCodeColors.textWeaker)
                 }
                 if action != nil {

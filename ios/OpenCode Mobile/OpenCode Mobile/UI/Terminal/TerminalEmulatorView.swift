@@ -45,13 +45,18 @@ struct TerminalEmulatorView: UIViewRepresentable {
         context.coordinator.foregroundHex = foregroundHex
         context.coordinator.onData = onData
         context.coordinator.onResize = onResize
+        context.coordinator.fontSize = Self.baseFontSize * context.environment.openCodeTextScale
         uiView.backgroundColor = UIColor(Color(hex: backgroundHex))
         uiView.scrollView.backgroundColor = UIColor(Color(hex: backgroundHex))
         if context.coordinator.pageReady {
             context.coordinator.applyTheme()
+            context.coordinator.applyFontSize()
             context.coordinator.fit()
         }
     }
+
+    /// xterm.js font size in CSS px at the Default Code text size; the page starts at it too.
+    static let baseFontSize: CGFloat = 12
 
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
         coordinator.viewModel.detachOutput()
@@ -66,6 +71,9 @@ struct TerminalEmulatorView: UIViewRepresentable {
         var onResize: (Int, Int) -> Void = { _, _ in }
         weak var webView: WKWebView?
         var pageReady = false
+        /// Code text size (#1044) in CSS px.
+        var fontSize: CGFloat = TerminalEmulatorView.baseFontSize
+        private var appliedFontSize: CGFloat = TerminalEmulatorView.baseFontSize
         private var pending: [String] = []
 
         init(viewModel: TerminalViewModel, backgroundHex: String, foregroundHex: String) {
@@ -94,6 +102,13 @@ struct TerminalEmulatorView: UIViewRepresentable {
             webView?.evaluateJavaScript("window.terminalSetTheme(\(json))", completionHandler: nil)
         }
 
+        func applyFontSize() {
+            guard appliedFontSize != fontSize else { return }
+            appliedFontSize = fontSize
+            let rounded = (fontSize * 2).rounded() / 2
+            webView?.evaluateJavaScript("window.terminalSetFontSize && window.terminalSetFontSize(\(rounded))", completionHandler: nil)
+        }
+
         func fit() {
             webView?.evaluateJavaScript("window.terminalFit()", completionHandler: nil)
         }
@@ -117,6 +132,8 @@ struct TerminalEmulatorView: UIViewRepresentable {
             case "ready":
                 pageReady = true
                 applyTheme()
+                appliedFontSize = TerminalEmulatorView.baseFontSize
+                applyFontSize()
                 pending.forEach(evaluateWrite)
                 pending.removeAll()
                 fit()

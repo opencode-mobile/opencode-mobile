@@ -23,12 +23,14 @@ private let listItemCompactStatusRingWidth: CGFloat = 2.5
 private let listItemCompactStatusDotOffset: CGFloat = 2
 private let listItemCompactHeight: CGFloat = 66
 private let listItemCompactLineSpacing: CGFloat = 5
-private let listItemCompactTitleFont = Font.system(size: 16, weight: .medium)
-private let listItemCompactEmphasizedTitleFont = Font.system(size: 16, weight: .semibold)
-private let listItemCompactPathFont = Font.system(size: 13.5, weight: .regular)
+private func listItemCompactTitleFont(_ scale: CGFloat) -> Font { Font.system(size: 16 * scale, weight: .medium) }
+private func listItemCompactEmphasizedTitleFont(_ scale: CGFloat) -> Font {
+    Font.system(size: 16 * scale, weight: .semibold)
+}
+private func listItemCompactPathFont(_ scale: CGFloat) -> Font { Font.system(size: 13.5 * scale, weight: .regular) }
 private let listItemCompactPathSpacing: CGFloat = 5
 /// Same size as the path beside it, one weight up.
-private let listItemCompactStatusFont = Font.system(size: 13.5, weight: .semibold)
+private func listItemCompactStatusFont(_ scale: CGFloat) -> Font { Font.system(size: 13.5 * scale, weight: .semibold) }
 private let listItemPulseDuration: Double = 1.2
 private let listItemPulseMinOpacity: Double = 0.3
 private let listItemPressedScale: CGFloat = 0.965
@@ -159,6 +161,8 @@ struct OpenCodeListItem<Trailing: View>: View {
 
     @State private var isPressing = false
     @State private var popScale: CGFloat = 1
+    /// Region text scale (#1044): type, the letter badge and the compact row height follow it.
+    @Environment(\.openCodeTextScale) private var textScale
 
     init(
         variant: OpenCodeListItemVariant = .standard,
@@ -375,8 +379,8 @@ struct OpenCodeListItem<Trailing: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .padding(.horizontal, 16)
-            .padding(.vertical, variant == .compact ? 0 : listItemVerticalPadding)
-            .frame(height: variant == .compact ? listItemCompactHeight : nil)
+            .padding(.vertical, variant == .compact ? 0 : listItemVerticalPadding * min(textScale, 1))
+            .frame(height: variant == .compact ? listItemCompactHeight * textScale : nil)
             .background {
                 containerBackground
             }
@@ -402,16 +406,16 @@ struct OpenCodeListItem<Trailing: View>: View {
         HStack(alignment: .center, spacing: 12) {
             startDecoratorContent
 
-            VStack(alignment: .leading, spacing: listItemCompactLineSpacing) {
+            VStack(alignment: .leading, spacing: listItemCompactLineSpacing * textScale) {
                 HStack(spacing: 8) {
                     titleText
-                        .font(emphasized ? listItemCompactEmphasizedTitleFont : listItemCompactTitleFont)
+                        .font(emphasized ? listItemCompactEmphasizedTitleFont(textScale) : listItemCompactTitleFont(textScale))
                         .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if let caption, !caption.isEmpty {
                         Text(openCode: caption)
-                            .font(OpenCodeTypography.caption.monospacedDigit())
+                            .font(OpenCodeTypography.Style.caption.font(scale: textScale).monospacedDigit())
                             .foregroundStyle(enabled ? OpenCodeColors.textWeak : OpenCodeColors.textWeaker)
                             .lineLimit(1)
                             .fixedSize()
@@ -438,14 +442,14 @@ struct OpenCodeListItem<Trailing: View>: View {
     @ViewBuilder
     private var compactSecondLine: some View {
         if let path {
-            OpenCodeListItemPathLine(path: path, enabled: enabled)
+            OpenCodeListItemPathLine(path: path, enabled: enabled, scale: textScale)
         } else if let subtitleSegments {
             semanticSubtitle(subtitleSegments)
-                .font(listItemCompactPathFont)
+                .font(listItemCompactPathFont(textScale))
                 .lineLimit(1)
         } else if let subtitle {
             Text(openCode: subtitle)
-                .font(listItemCompactPathFont)
+                .font(listItemCompactPathFont(textScale))
                 .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                 .lineLimit(1)
         }
@@ -455,10 +459,10 @@ struct OpenCodeListItem<Trailing: View>: View {
         HStack(alignment: .center, spacing: 12) {
             startDecoratorContent
 
-            VStack(alignment: .leading, spacing: listItemTitleSubtitleSpacing) {
+            VStack(alignment: .leading, spacing: listItemTitleSubtitleSpacing * textScale) {
                 HStack(spacing: 6) {
                     titleText
-                        .font(OpenCodeTypography.body.weight(.semibold))
+                        .font(OpenCodeTypography.Style.body.font(scale: textScale).weight(.semibold))
                         .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                         .lineLimit(1)
                     if let titleTag {
@@ -471,18 +475,18 @@ struct OpenCodeListItem<Trailing: View>: View {
 
                 if let subtitleSegments {
                     semanticSubtitle(subtitleSegments)
-                        .font(OpenCodeTypography.caption)
+                        .font(OpenCodeTypography.Style.caption.font(scale: textScale))
                         .lineLimit(1)
                 } else if let subtitle {
                     Text(openCode: subtitle)
-                        .font(OpenCodeTypography.caption)
+                        .font(OpenCodeTypography.Style.caption.font(scale: textScale))
                         .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                         .lineLimit(1)
                 }
 
                 if let detailSegments {
                     semanticSubtitle(detailSegments)
-                        .font(OpenCodeTypography.caption)
+                        .font(OpenCodeTypography.Style.caption.font(scale: textScale))
                         .lineLimit(1)
                 }
             }
@@ -504,7 +508,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         VStack(alignment: .trailing, spacing: listItemMetaSpacing) {
             if let caption, !caption.isEmpty {
                 Text(openCode: caption)
-                    .font(OpenCodeTypography.caption)
+                    .font(OpenCodeTypography.Style.caption.font(scale: textScale))
                     .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -520,18 +524,18 @@ struct OpenCodeListItem<Trailing: View>: View {
 
     private func statusPill(_ status: OpenCodeListItemStatus) -> some View {
         Text(openCode: status.text)
-            .font(OpenCodeTypography.caption.weight(.semibold))
+            .font(OpenCodeTypography.Style.caption.font(scale: textScale).weight(.semibold))
             .foregroundStyle(statusForeground(status.tone))
             .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 8 * textScale)
+            .padding(.vertical, 4 * textScale)
             .background(statusBackground(status.tone), in: Capsule())
     }
 
     /// Compact rows show the status as coloured text, without the pill's capsule.
     private func compactStatusLabel(_ status: OpenCodeListItemStatus) -> some View {
         Text(openCode: status.text)
-            .font(listItemCompactStatusFont)
+            .font(listItemCompactStatusFont(textScale))
             .foregroundStyle(statusForeground(status.tone))
             .lineLimit(1)
     }
@@ -540,7 +544,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         segments.reduce(Text("")) { result, segment in
             let color = subtitleColor(segment.tone)
             var text = result
-            if let icon = segment.icon, let image = OpenCodeInlineIcon.image(icon, pointSize: listItemSubtitleIconSize) {
+            if let icon = segment.icon, let image = OpenCodeInlineIcon.image(icon, pointSize: listItemSubtitleIconSize * textScale) {
                 text = text + Text(image).foregroundColor(color).baselineOffset(-1) + Text("\u{2009}")
             }
             return text + Text(segment.text).foregroundColor(color).strikethrough(segment.tone == .removed)
@@ -637,7 +641,7 @@ struct OpenCodeListItem<Trailing: View>: View {
             EmptyView()
         case let .letter(character, accent, statusDot, worktree):
             ZStack {
-                letterBadge(character, accent, size: listItemLetterBadgeSize, glyphSize: listItemLetterGlyphSize)
+                letterBadge(character, accent, size: listItemLetterBadgeSize * textScale, glyphSize: listItemLetterGlyphSize * textScale)
 
                 if let statusDot, worktree {
                     OpenCodeIconImage(icon: .callSplit, size: 10)
@@ -673,9 +677,9 @@ struct OpenCodeListItem<Trailing: View>: View {
                     }
                 }
             }
-            .frame(width: listItemLetterBadgeSize, height: listItemLetterBadgeSize)
+            .frame(width: listItemLetterBadgeSize * textScale, height: listItemLetterBadgeSize * textScale)
         case let .compactLetter(character, accent, statusDot, pulsing):
-            letterBadge(character, accent, size: listItemCompactBadgeSize, glyphSize: listItemCompactGlyphSize)
+            letterBadge(character, accent, size: listItemCompactBadgeSize * textScale, glyphSize: listItemCompactGlyphSize * textScale)
                 .overlay(alignment: .topTrailing) {
                     if let statusDot {
                         OpenCodeListItemCompactStatusDot(color: statusForeground(statusDot), pulsing: pulsing)
@@ -738,6 +742,7 @@ private struct OpenCodeListItemCompactStatusDot: View {
 private struct OpenCodeListItemPathLine: View {
     let path: OpenCodeListItemPath
     let enabled: Bool
+    var scale: CGFloat = 1
 
     var body: some View {
         if let secondary = path.secondary {
@@ -755,14 +760,14 @@ private struct OpenCodeListItemPathLine: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            .font(listItemCompactPathFont)
+            .font(listItemCompactPathFont(scale))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(
                 [path.primary, secondary, path.secondaryRemovedNote].compactMap { $0 }.joined(separator: ", ")
             )
         } else {
             primaryText
-                .font(listItemCompactPathFont)
+                .font(listItemCompactPathFont(scale))
         }
     }
 

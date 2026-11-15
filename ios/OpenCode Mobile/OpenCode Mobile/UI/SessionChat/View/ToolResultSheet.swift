@@ -36,6 +36,7 @@ struct ToolResultPinnedHeader: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom, 8)
+        .openCodeTextScale(.code)
     }
 
     private func grepSubline(_ grep: ToolResultPresentation.Grep) -> String {
@@ -57,6 +58,11 @@ struct ToolResultBody: View {
     let presentation: ToolResultPresentation
 
     var body: some View {
+        content.openCodeTextScale(.code)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch presentation {
         case .fileStatus(let status):
             VStack(alignment: .leading, spacing: 0) {
@@ -133,7 +139,7 @@ private struct FileResultRow: View {
         HStack(alignment: .top, spacing: 10) {
             if let letter {
                 Text(letter)
-                    .font(OpenCodeTypography.code)
+                    .openCodeFont(.code)
                     .foregroundStyle(tone.map(toneColor) ?? OpenCodeColors.textBase)
                     .frame(width: 16, alignment: .leading)
             }
@@ -244,6 +250,7 @@ private struct SourceBody: View {
     let presentation: ToolResultPresentation.Source
 
     @State private var spans: [NativeCodeSpan] = []
+    @Environment(\.openCodeTextScale) private var textScale
 
     var body: some View {
         let source = presentation.lines.map(\.text).joined(separator: "\n")
@@ -252,9 +259,9 @@ private struct SourceBody: View {
             VStack(alignment: .trailing, spacing: 0) {
                 ForEach(Array(presentation.lines.enumerated()), id: \.offset) { _, line in
                     Text(String(line.number))
-                        .font(OpenCodeTypography.code)
+                        .openCodeFont(.code)
                         .foregroundStyle(OpenCodeColors.textWeaker)
-                        .frame(width: 36, height: 20, alignment: .trailing)
+                        .frame(width: 36 * textScale, height: 20 * textScale, alignment: .trailing)
                         .padding(.trailing, 8)
                         .accessibilityHidden(true)
                 }
@@ -288,16 +295,19 @@ private struct SourceBody: View {
         Group {
             if spans.isEmpty {
                 Text(line.text.isEmpty ? " " : line.text)
-                    .font(OpenCodeTypography.code)
+                    .openCodeFont(.code)
                     .foregroundStyle(OpenCodeColors.codeText)
             } else {
-                Text(NativeMarkdownAttributedString.code(line.text, spans: spans))
-                    .font(OpenCodeTypography.code)
+                Text(NativeMarkdownAttributedString.scaledCode(
+                    NativeMarkdownAttributedString.code(line.text, spans: spans),
+                    scale: textScale
+                ))
+                .openCodeFont(.code)
             }
         }
         .lineLimit(1)
         .fixedSize(horizontal: true, vertical: false)
-        .frame(height: 20, alignment: .leading)
+        .frame(height: 20 * textScale, alignment: .leading)
         .accessibilityLabel(Text(lineAccessibilityLabel(line)))
     }
 
@@ -336,6 +346,7 @@ private struct SourceBody: View {
 
 private struct GrepBody: View {
     let presentation: ToolResultPresentation.Grep
+    @Environment(\.openCodeTextScale) private var textScale
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -353,12 +364,12 @@ private struct GrepBody: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(alignment: .firstTextBaseline, spacing: 0) {
                                 Text(String(hit.line))
-                                    .font(OpenCodeTypography.code)
+                                    .openCodeFont(.code)
                                     .foregroundStyle(OpenCodeColors.textWeaker)
-                                    .frame(width: 36, alignment: .trailing)
+                                    .frame(width: 36 * textScale, alignment: .trailing)
                                     .padding(.trailing, 8)
                                 Text(markPattern(hit.text, pattern: presentation.pattern))
-                                    .font(OpenCodeTypography.code)
+                                    .openCodeFont(.code)
                                     .foregroundStyle(OpenCodeColors.textStrong)
                                     .lineLimit(1)
                                     .fixedSize(horizontal: true, vertical: false)
@@ -404,7 +415,7 @@ private struct UnrecognizedBody: View {
             }
             ScrollView(.horizontal, showsIndicators: true) {
                 Text(presentation.raw)
-                    .font(OpenCodeTypography.code)
+                    .openCodeFont(.code)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .fixedSize(horizontal: true, vertical: true)
                     .textSelection(.enabled)
@@ -466,7 +477,7 @@ private func commandStrip(_ command: String?, exitCode: Int?, durationLabel: Str
             HStack(spacing: 10) {
                 if let command, hasCommand {
                     Text(command)
-                        .font(OpenCodeTypography.code)
+                        .openCodeFont(.code)
                         .foregroundStyle(OpenCodeColors.textBase)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)

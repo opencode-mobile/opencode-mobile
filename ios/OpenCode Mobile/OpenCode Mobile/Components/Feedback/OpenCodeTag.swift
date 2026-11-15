@@ -53,7 +53,7 @@ struct OpenCodeTag: View {
         switch size {
         case .regular:
             Text(openCode: title)
-                .font(OpenCodeTypography.caption)
+                .openCodeFont(.caption)
                 .fontWeight(.bold)
                 .foregroundStyle(textColor(neutral: OpenCodeColors.textStrong))
                 .padding(.horizontal, 10)
@@ -61,7 +61,7 @@ struct OpenCodeTag: View {
                 .background(fill, in: Capsule())
         case .small:
             Text(openCode: title)
-                .font(OpenCodeTypography.caption)
+                .openCodeFont(.caption)
                 .fontWeight(.semibold)
                 .foregroundStyle(textColor(neutral: OpenCodeColors.textWeak))
                 .lineLimit(1)

@@ -144,14 +144,14 @@ struct OpenCodeOutgoingMessage: View {
                         OpenCodeIconImage(icon: .radioButtonChecked, size: 12)
                         Text(label)
                     }
-                    .font(OpenCodeTypography.caption)
+                    .openCodeFont(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isHeader)
                 } else if steering?.showsLabel == true {
                     Text(OpenCodeOutgoingMessageSteering.label)
-                        .font(OpenCodeTypography.caption)
+                        .openCodeFont(.caption)
                         .foregroundStyle(OpenCodeColors.textWeak)
                         .accessibilityAddTraits(.isHeader)
                 }
@@ -171,7 +171,7 @@ struct OpenCodeOutgoingMessage: View {
                 }
                 if isPending {
                     Text(OpenCodeOutgoingMessageSteering.pendingCaption)
-                        .font(OpenCodeTypography.caption)
+                        .openCodeFont(.caption)
                         .foregroundStyle(OpenCodeColors.textWeak)
                         .multilineTextAlignment(.trailing)
                 }
@@ -266,7 +266,7 @@ struct OpenCodeOutgoingMessage: View {
             .foregroundStyle(OpenCodeColors.textStrong)
         } else {
             Text(attributedCommandDisplayText(text))
-                .font(OpenCodeTypography.body)
+                .openCodeFont(.body)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
