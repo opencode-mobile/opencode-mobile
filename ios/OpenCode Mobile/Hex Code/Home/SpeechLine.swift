@@ -145,11 +145,14 @@ extension HexSpeechDial.Look {
 /// line's slot and look, with the dial at 16 pt, the words and a chevron. Tapping it opens the details sheet.
 struct SpeechLineView: View {
     let speech: any SpeechTranscribing
+    /// Home's `speechLine`: once it is `.ready` the line says "Speech ready" for its 1.6 s, whatever the model does
+    /// next (as on Android).
+    let show: SpeechLineShow
     let action: () -> Void
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: HexRadius.m, style: .continuous)
-        let status = speech.status
+        let status = Self.status(speech.status, show: show)
         TimelineView(.periodic(from: .now, by: 1)) { context in
             Button(action: action) {
                 HStack(spacing: 8) {
@@ -173,5 +176,10 @@ struct SpeechLineView: View {
             .buttonStyle(HexPressStyle())
             .accessibilityHint(Text(LocalizedStringResource("speech.line.hint", defaultValue: "Shows the speech model’s details")))
         }
+    }
+
+    /// The status the line draws: ready throughout its ready moment, the model's own status otherwise.
+    static func status(_ status: SpeechStatus, show: SpeechLineShow) -> SpeechStatus {
+        show == .ready ? .ready : status
     }
 }

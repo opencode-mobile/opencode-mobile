@@ -46,7 +46,7 @@ struct HomeView: View {
     private var showsSpeechLine: Bool { home.speechLine != .hidden }
 
     private var speechLine: some View {
-        SpeechLineView(speech: home.speech) { home.showsSpeechModel = true }
+        SpeechLineView(speech: home.speech, show: home.speechLine) { home.showsSpeechModel = true }
             .transition(.opacity)
     }
 
