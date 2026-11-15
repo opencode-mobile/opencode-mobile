@@ -3,9 +3,6 @@ package dev.opencode.voiceengine
 import android.content.Context
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.MessageDigest
 
 /** One file of a speech model, pinned to a Hugging Face revision and checked by its SHA-256. */
 data class ModelFile(
@@ -148,12 +145,13 @@ object SpeechModels {
 /**
  * Where model files live: the app's own files folder, `models/<id>/`. For testing, debug builds can be filled
  * without downloading: `adb push` to /data/local/tmp, then `adb shell run-as <app id> cp` into that folder.
- * Downloads go to a `.part` file first and are checked against their SHA-256.
+ * Downloads go to a `.part` file first, resume after a dropped connection, and are checked against their SHA-256.
  */
 class ModelStore(
     context: Context,
 ) {
     private val root = File(context.filesDir, "models")
+    private val downloader = ModelDownload()
 
     fun dir(model: SpeechModel) = File(root, model.id)
 
@@ -183,7 +181,10 @@ class ModelStore(
             .map { it.name }
     }
 
-    /** Downloads the files that are missing. [progress] gets bytes done and bytes in all. */
+    /**
+     * Downloads the files that are missing, carrying on a `.part` an earlier attempt left ([ModelDownload]).
+     * [progress] gets bytes on the phone and bytes in all.
+     */
     fun download(
         model: SpeechModel,
         progress: (Long, Long) -> Unit,
@@ -192,43 +193,9 @@ class ModelStore(
         var before = 0L
         for (f in model.files) {
             val target = file(model, f.name)
-            if (target.length() != f.bytes) fetch(f, target) { progress(before + it, model.bytes) }
+            if (target.length() != f.bytes) downloader.fetch(f, target) { progress(before + it, model.bytes) }
             before += f.bytes
             progress(before, model.bytes)
         }
-    }
-
-    private fun fetch(
-        f: ModelFile,
-        target: File,
-        progress: (Long) -> Unit,
-    ) {
-        val part = File(target.path + ".part")
-        val connection = URL(f.url).openConnection() as HttpURLConnection
-        val digest = MessageDigest.getInstance("SHA-256")
-        connection.inputStream.use { input ->
-            part.outputStream().use { output ->
-                val buffer = ByteArray(1 shl 16)
-                var done = 0L
-                var lastReport = 0L
-                while (true) {
-                    val n = input.read(buffer)
-                    if (n < 0) break
-                    output.write(buffer, 0, n)
-                    digest.update(buffer, 0, n)
-                    done += n
-                    if (done - lastReport > 2_000_000) {
-                        lastReport = done
-                        progress(done)
-                    }
-                }
-            }
-        }
-        val sha = digest.digest().joinToString("") { "%02x".format(it) }
-        if (sha != f.sha256) {
-            part.delete()
-            error("${f.name} downloaded damaged. Try again.")
-        }
-        check(part.renameTo(target)) { "Could not save ${f.name}" }
     }
 }

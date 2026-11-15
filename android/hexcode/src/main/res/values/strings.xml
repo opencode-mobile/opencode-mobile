@@ -302,7 +302,9 @@
     <string name="home_chunk_deleted">Chunk deleted</string>
     <string name="home_take_dropped">Take dropped</string>
     <string name="home_speech_loading">Speech model loading…</string>
-    <string name="home_speech_downloading">Downloading the speech model · %1$d%%</string>
+    <string name="home_speech_downloading">Downloading the speech model · %1$d of %2$d MB</string>
+    <string name="home_speech_downloading_left">Downloading the speech model · %1$d of %2$d MB · %3$d min left</string>
+    <string name="home_speech_downloading_soon">Downloading the speech model · %1$d of %2$d MB · under a minute left</string>
     <string name="home_speech_failed">Speech model didn’t load</string>
     <string name="home_take_retry">Try again</string>
     <string name="home_transcribe_failed">Couldn’t turn this take into text</string>

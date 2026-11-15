@@ -29,9 +29,16 @@ class VoiceEngine(
     sealed interface ModelState {
         data object NotLoaded : ModelState
 
+        /**
+         * Downloading ([total] > 0: [done] of [total] bytes on the phone, about [secondsLeft] to go once the speed is
+         * known) or loading ([fraction] 1).
+         */
         data class Preparing(
             val fraction: Double,
             val detail: String,
+            val done: Long = 0,
+            val total: Long = 0,
+            val secondsLeft: Long? = null,
         ) : ModelState
 
         data object Ready : ModelState
@@ -119,8 +126,16 @@ class VoiceEngine(
                     if (!store.isInstalled(model)) {
                         val pauses = SpeechModels.PAUSES.takeUnless { store.isInstalled(it) }
                         val all = model.bytes + (pauses?.bytes ?: 0)
+                        val rate = DownloadRate()
                         val progress = { done: Long ->
-                            state.value = ModelState.Preparing(done.toDouble() / all, "Downloading · ${done / 1_000_000} MB")
+                            state.value =
+                                ModelState.Preparing(
+                                    fraction = done.toDouble() / all,
+                                    detail = "Downloading · ${done / 1_000_000} of ${all / 1_000_000} MB",
+                                    done = done,
+                                    total = all,
+                                    secondsLeft = rate.secondsLeft(done, all),
+                                )
                         }
                         store.download(model) { done, _ -> progress(done) }
                         if (pauses != null) {

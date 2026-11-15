@@ -363,10 +363,27 @@ sealed interface DraftLabel {
     /** "Speech model loading…": a take waits. */
     data object SpeechLoading : DraftLabel
 
-    /** "Downloading the speech model · 45%": a take waits for the first download. */
+    /**
+     * "Downloading the speech model · 120 of 640 MB · 2 min left": a take waits for the first download. [minutesLeft]
+     * is null until the speed is known, and 0 for "under a minute left".
+     */
     data class SpeechDownloading(
-        val percent: Int,
-    ) : DraftLabel
+        val doneMb: Long,
+        val totalMb: Long,
+        val minutesLeft: Long? = null,
+    ) : DraftLabel {
+        companion object {
+            fun of(download: SpeechDownload): SpeechDownloading =
+                SpeechDownloading(
+                    doneMb = download.done / MB,
+                    totalMb = download.total / MB,
+                    minutesLeft = download.secondsLeft?.let { if (it < 60) 0 else (it + 59) / 60 },
+                )
+
+            /** Megabytes as the label counts them, as the model list does: 1,000,000 bytes. */
+            private const val MB = 1_000_000L
+        }
+    }
 
     /** "Speech model didn't load": takes failed for it and can be tried again. */
     data object SpeechFailed : DraftLabel
@@ -383,10 +400,7 @@ sealed interface DraftLabel {
             when {
                 draft.isListening -> Recording
                 draft.isTranscribing -> Transcribing
-                draft.isWaiting -> {
-                    val downloaded = (speech as? SpeechStatus.Loading)?.downloaded
-                    if (downloaded != null) SpeechDownloading((downloaded * 100).toInt().coerceIn(0, 99)) else SpeechLoading
-                }
+                draft.isWaiting -> (speech as? SpeechStatus.Loading)?.download?.let(SpeechDownloading::of) ?: SpeechLoading
                 draft.canRetry && speech == SpeechStatus.Failed -> SpeechFailed
                 else -> Summary
             }
@@ -395,9 +409,9 @@ sealed interface DraftLabel {
 
 /** Whether takes can be turned into text yet (app-plan.md, The speech model). */
 sealed interface SpeechStatus {
-    /** Loading, or downloading for the first time with [downloaded] (0 to 1) of it on the phone. */
+    /** Loading, or downloading for the first time ([download]). */
     data class Loading(
-        val downloaded: Double? = null,
+        val download: SpeechDownload? = null,
     ) : SpeechStatus
 
     data object Ready : SpeechStatus
@@ -405,3 +419,10 @@ sealed interface SpeechStatus {
     /** The model didn't download or load. */
     data object Failed : SpeechStatus
 }
+
+/** The speech model's first download: [done] of [total] bytes on the phone, about [secondsLeft] to go once known. */
+data class SpeechDownload(
+    val done: Long,
+    val total: Long,
+    val secondsLeft: Long? = null,
+)

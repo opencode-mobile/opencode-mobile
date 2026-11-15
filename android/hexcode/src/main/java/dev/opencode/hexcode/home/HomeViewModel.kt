@@ -103,7 +103,8 @@ interface Dictation {
 
     /**
      * The talk button was pressed: the speech model starts loading now if it hasn't yet, instead of about 1 s after
-     * the first frame (app-plan.md, Dictation › Load). The take waits for it as for any load.
+     * the first frame (app-plan.md, Dictation › Load), and downloads first if it isn't on the phone. The take waits
+     * for it as for any load.
      */
     fun loadNow() = Unit
 }
@@ -112,7 +113,10 @@ interface Dictation {
 fun speechStatus(model: VoiceEngine.ModelState): SpeechStatus =
     when (model) {
         VoiceEngine.ModelState.NotLoaded -> SpeechStatus.Loading()
-        is VoiceEngine.ModelState.Preparing -> SpeechStatus.Loading(model.fraction.takeIf { it < 1.0 })
+        is VoiceEngine.ModelState.Preparing ->
+            SpeechStatus.Loading(
+                SpeechDownload(model.done, model.total, model.secondsLeft).takeIf { model.total > 0 && model.done < model.total },
+            )
         VoiceEngine.ModelState.Ready -> SpeechStatus.Ready
         is VoiceEngine.ModelState.Failed -> SpeechStatus.Failed
     }
@@ -131,7 +135,7 @@ class VoiceEngineDictation(
     holdMs: Long = 0,
     /** Debug builds (`--ez HexCodeSpeechFail`): the first load counts as failed, until Try again. */
     failOnce: Boolean = false,
-    /** Starts the speech model's first load now, if it hasn't started (a talk press before its delay ran out). */
+    /** A talk press: the speech model downloads if needed and loads now, if that hasn't started. */
     private val startLoad: () -> Unit = {},
 ) : Dictation {
     private val audio = Executors.newSingleThreadExecutor { Thread(it, "hex-audio") }.asCoroutineDispatcher()

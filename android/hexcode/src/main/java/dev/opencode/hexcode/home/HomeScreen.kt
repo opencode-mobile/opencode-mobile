@@ -1124,6 +1124,18 @@ private fun DraftWindow(
     }
 }
 
+/** "Downloading the speech model · 120 of 640 MB", then "· 2 min left" once the speed is known. */
+@Composable
+private fun speechDownloading(label: DraftLabel.SpeechDownloading?): String {
+    val done = label?.doneMb ?: 0
+    val total = label?.totalMb ?: 0
+    return when (val minutes = label?.minutesLeft) {
+        null -> stringResource(R.string.home_speech_downloading, done, total)
+        0L -> stringResource(R.string.home_speech_downloading_soon, done, total)
+        else -> stringResource(R.string.home_speech_downloading_left, done, total, minutes)
+    }
+}
+
 /** "● Recording 0:04", "Transcribing on this phone…", or "Draft · 2 chunks · 0:12". */
 @Composable
 private fun DraftLabel(state: HomeUiState) {
@@ -1139,8 +1151,8 @@ private fun DraftLabel(state: HomeUiState) {
     }
     val label = DraftLabel.of(draft, state.speech)
     AnimatedContent(
-        // The download's share changes without animating the whole line.
-        targetState = if (label is DraftLabel.SpeechDownloading) DraftLabel.SpeechDownloading(0) else label,
+        // The download's progress changes without animating the whole line.
+        targetState = if (label is DraftLabel.SpeechDownloading) DraftLabel.SpeechDownloading(0, 0) else label,
         transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) },
         label = "draft-label",
     ) { kind ->
@@ -1170,8 +1182,7 @@ private fun DraftLabel(state: HomeUiState) {
                 }
                 is DraftLabel.SpeechDownloading -> {
                     HexSpinner(size = HexTheme.size.iconSmall)
-                    val percent = (label as? DraftLabel.SpeechDownloading)?.percent ?: 0
-                    Text(stringResource(R.string.home_speech_downloading, percent), style = style, color = color)
+                    Text(speechDownloading(label as? DraftLabel.SpeechDownloading), style = style, color = color)
                 }
                 DraftLabel.SpeechFailed ->
                     Text(stringResource(R.string.home_speech_failed), style = style, color = HexTheme.colors.amber)

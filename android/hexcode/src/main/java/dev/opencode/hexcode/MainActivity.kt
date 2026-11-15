@@ -424,7 +424,7 @@ private fun AfterFirstRun(
                         services::reloadSpeech,
                         services.speechHoldMs,
                         services.speechFailOnce,
-                        services.speechLaunch::now,
+                        services::loadSpeechNow,
                     )
                 } else {
                     val app = context.applicationContext
@@ -436,7 +436,7 @@ private fun AfterFirstRun(
                         services::reloadSpeech,
                         services.speechHoldMs,
                         services.speechFailOnce,
-                        services.speechLaunch::now,
+                        services::loadSpeechNow,
                     )
                 },
                 // A sample keeps its takes in memory and uploads nothing: it never touches what the real home keeps.

@@ -212,14 +212,24 @@ class SpeechWaitTest {
     fun theLabelRules() {
         val waiting = Draft().startTake().endTake(1_000).let { it.waiting(it.chunks.single().id) }
         assertEquals(DraftLabel.SpeechLoading, DraftLabel.of(waiting, SpeechStatus.Loading()))
-        assertEquals(DraftLabel.SpeechDownloading(45), DraftLabel.of(waiting, SpeechStatus.Loading(downloaded = 0.456)))
+        val download = SpeechDownload(done = 120_400_000, total = 640_000_000)
+        assertEquals(DraftLabel.SpeechDownloading(120, 640), DraftLabel.of(waiting, SpeechStatus.Loading(download)))
+        // Time left once the speed is known: whole minutes rounded up, and "under a minute" below one.
+        assertEquals(
+            DraftLabel.SpeechDownloading(120, 640, minutesLeft = 3),
+            DraftLabel.of(waiting, SpeechStatus.Loading(download.copy(secondsLeft = 121))),
+        )
+        assertEquals(
+            DraftLabel.SpeechDownloading(120, 640, minutesLeft = 0),
+            DraftLabel.of(waiting, SpeechStatus.Loading(download.copy(secondsLeft = 59))),
+        )
         // Recording comes first, then transcribing.
         assertEquals(DraftLabel.Recording, DraftLabel.of(waiting.startTake(), SpeechStatus.Loading()))
         val transcribing = Draft().startTake().endTake(1_000)
         assertEquals(DraftLabel.Transcribing, DraftLabel.of(transcribing, SpeechStatus.Ready))
         // With no chunk waiting, nothing about the model shows.
         val settled = transcribing.transcribed(transcribing.chunks.single().id, "Hello")
-        assertEquals(DraftLabel.Summary, DraftLabel.of(settled, SpeechStatus.Loading(downloaded = 0.2)))
+        assertEquals(DraftLabel.Summary, DraftLabel.of(settled, SpeechStatus.Loading(SpeechDownload(1, 10))))
         assertEquals(DraftLabel.Summary, DraftLabel.of(Draft(), SpeechStatus.Failed))
         assertEquals(DraftLabel.SpeechFailed, DraftLabel.of(waiting.waitingFailed(), SpeechStatus.Failed))
     }
