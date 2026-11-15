@@ -19,13 +19,15 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CopyOnWriteArrayList
 
 /** The reconnect read-back and the setup calls over OpenCode's API, with live-captured bodies (m2-api-notes.md). */
 class OpenCodeTodayApiTest {
     private val headers = headersOf(HttpHeaders.ContentType, "application/json")
-    private val requests = mutableListOf<String>()
-    private val messageOrders = mutableListOf<String?>()
-    private val messageCursors = mutableListOf<String?>()
+    // snapshot() sends its requests concurrently and MockEngine answers them on IO threads.
+    private val requests = CopyOnWriteArrayList<String>()
+    private val messageOrders = CopyOnWriteArrayList<String?>()
+    private val messageCursors = CopyOnWriteArrayList<String?>()
 
     private fun api(routes: (String) -> String?): OpenCodeTodayApi {
         val json = Json { ignoreUnknownKeys = true }

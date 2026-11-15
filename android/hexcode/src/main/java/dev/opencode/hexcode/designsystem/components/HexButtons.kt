@@ -84,11 +84,14 @@ fun HexPrimaryButton(
 /** A [HexButton]'s look: `secondary` (`panel2` and `line`), `primary` (`solid`) or `danger` (red text). */
 enum class HexButtonStyle { Secondary, Primary, Danger }
 
-/** 30 pt (`.btn`) or 38 pt (`.cbtn`). */
-enum class HexButtonSize { Small, Regular }
+/**
+ * 30 pt (`.btn`), 38 pt (`.cbtn`) or 50 pt: the full-width height, for a secondary action stacked with a
+ * [HexPrimaryButton].
+ */
+enum class HexButtonSize { Small, Regular, Large }
 
 /**
- * A small or regular button with a label, an optional leading icon, or only an icon (then [contentDescription] names
+ * A small, regular or large button with a label, an optional leading icon, or only an icon (then [contentDescription] names
  * it and the button is square). A [Modifier] size can make the icon-only form bigger, to match a field beside it.
  * While [loading], a spinner takes the icon's place and taps do nothing.
  */
@@ -110,8 +113,19 @@ fun HexButton(
     val type = HexTheme.type
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val height = if (size == HexButtonSize.Small) 30.dp else 38.dp
-    val shape = RoundedCornerShape(if (size == HexButtonSize.Small) HexTheme.radius.s else HexTheme.radius.l)
+    val height =
+        when (size) {
+            HexButtonSize.Small -> 30.dp
+            HexButtonSize.Regular -> 38.dp
+            HexButtonSize.Large -> 50.dp
+        }
+    val shape =
+        RoundedCornerShape(
+            when (size) {
+                HexButtonSize.Small -> HexTheme.radius.s
+                HexButtonSize.Regular, HexButtonSize.Large -> HexTheme.radius.l
+            },
+        )
     val fill by animateColorAsState(
         when {
             style == HexButtonStyle.Primary -> colors.solid
@@ -141,10 +155,16 @@ fun HexButton(
             colors.line
         }
     val textStyle =
-        when {
-            size == HexButtonSize.Small -> type.small
-            style == HexButtonStyle.Primary -> type.button.copy(fontWeight = FontWeight.SemiBold)
-            else -> type.button
+        when (size) {
+            HexButtonSize.Small -> type.small
+            HexButtonSize.Regular ->
+                if (style == HexButtonStyle.Primary) type.button.copy(fontWeight = FontWeight.SemiBold) else type.button
+            HexButtonSize.Large -> type.bodyStrong
+        }
+    val padding =
+        when (size) {
+            HexButtonSize.Small -> 11.dp
+            HexButtonSize.Regular, HexButtonSize.Large -> 16.dp
         }
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
@@ -157,7 +177,7 @@ fun HexButton(
                 .background(fill)
                 .border(BorderStroke(1.dp, border), shape)
                 .clickable(source, null, enabled = enabled && !loading, role = Role.Button, onClick = onClick)
-                .then(if (text != null) Modifier.padding(horizontal = if (size == HexButtonSize.Small) 11.dp else 16.dp) else Modifier)
+                .then(if (text != null) Modifier.padding(horizontal = padding) else Modifier)
                 .then(
                     if (text == null &&
                         contentDescription != null
@@ -168,7 +188,11 @@ fun HexButton(
                     },
                 ),
     ) {
-        val iconSize = if (size == HexButtonSize.Small) HexTheme.size.iconSmall else HexTheme.size.icon
+        val iconSize =
+            when (size) {
+                HexButtonSize.Small -> HexTheme.size.iconSmall
+                HexButtonSize.Regular, HexButtonSize.Large -> HexTheme.size.icon
+            }
         val leading = !iconAfter || text == null
         if (loading) {
             HexSpinner(size = iconSize, tint = iconTint)

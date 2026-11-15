@@ -14,6 +14,8 @@ import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.serverhealth.ServerHealthQuickView
 import dev.opencode.mobile.ui.serverhealth.ServerHealthQuickViewData
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class ServersUiState(
@@ -64,6 +67,9 @@ class ServersViewModel
 
         /** Profile ids whose Server Health page should open. */
         val openHealthRequests: SharedFlow<String> = _openHealthRequests.asSharedFlow()
+
+        /** Reads a day of pings and builds the quick view's report; kept off Main. */
+        internal var workDispatcher: CoroutineDispatcher = Dispatchers.Default
 
         private var healthData: Pair<String, ServerHealthQuickViewData>? = null
         private var liveStatus = ServerHealthLiveStatus()
@@ -125,7 +131,9 @@ class ServersViewModel
             }
             val data =
                 try {
-                    ServerHealthQuickViewData.load(serverHealthStore, activeId, clock.nowMs())
+                    withContext(workDispatcher) {
+                        ServerHealthQuickViewData.load(serverHealthStore, activeId, clock.nowMs())
+                    }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {

@@ -236,6 +236,7 @@ private struct HexGalleryContent: View {
                 HexButton("Deny", size: .regular, style: .danger) {}
             }
             HexButton("Forget this computer", size: .regular, style: .danger, fullWidth: true) {}
+            HexButton("Try a sample session", icon: .play, size: .large, fullWidth: true) {}
             HStack(spacing: 8) {
                 HexRoundButton(.chevL, label: "Back") {}
                 HexRoundButton(.target, label: "Goal", on: true) {}
