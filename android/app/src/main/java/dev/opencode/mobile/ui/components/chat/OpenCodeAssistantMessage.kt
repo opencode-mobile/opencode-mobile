@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +17,7 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.OpenCodeSelectionContainer
 
 private val AssistantMessageCornerRadius = OpenCodeRadius.small
 private val AssistantMessagePaddingHorizontal = 12.dp
@@ -114,7 +114,7 @@ fun OpenCodeAssistantMessage(
             onTextTap = onTextTap,
         )
     } else {
-        SelectionContainer(modifier = Modifier.opensMessageActionsOnTextTap(onTextTap)) {
+        OpenCodeSelectionContainer(modifier = Modifier.opensMessageActionsOnTextTap(onTextTap)) {
             Text(
                 text = assistantMessageDisplayText(text),
                 modifier = bubbleModifier,

@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
@@ -76,6 +75,7 @@ import dev.opencode.mobile.markdown.isLikelyExpandable
 import dev.opencode.mobile.markdown.plainTextFromMarkdownInlines
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.OpenCodeSelectionContainer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -167,7 +167,7 @@ fun OpenCodeRenderedMarkdown(
     if (variant == OpenCodeRenderedMarkdownVariant.OutgoingMessage) {
         blocks()
     } else {
-        SelectionContainer(
+        OpenCodeSelectionContainer(
             modifier = Modifier.opensMessageActionsOnTextTap(onTextTap, tapGate),
         ) {
             blocks()

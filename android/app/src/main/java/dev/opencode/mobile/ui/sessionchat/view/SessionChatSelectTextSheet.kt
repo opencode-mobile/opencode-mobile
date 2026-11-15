@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +27,7 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeSelectionContainer
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.components.openCodeBottomSheetScrollTarget
 import kotlin.math.roundToInt
@@ -86,7 +86,7 @@ private fun SessionChatSelectTextBody(
 ) {
     var layout by remember(target) { mutableStateOf<TextLayoutResult?>(null) }
     val density = LocalDensity.current
-    SelectionContainer {
+    OpenCodeSelectionContainer {
         Box(
             modifier =
                 Modifier
