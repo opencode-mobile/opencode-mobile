@@ -120,7 +120,7 @@ fun WelcomeScreen(
         HexButton(
             onClick = onTrySample,
             text = stringResource(R.string.welcome_sample),
-            size = HexButtonSize.Regular,
+            size = HexButtonSize.Large,
             modifier =
                 Modifier
                     .fillMaxWidth()

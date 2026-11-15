@@ -44,7 +44,7 @@ struct WelcomeView: View {
             HexButton(
                 LocalizedStringResource("welcome.sample", defaultValue: "Try a sample session"),
                 icon: .play,
-                size: .regular,
+                size: .large,
                 fullWidth: true,
                 action: onSample
             )
