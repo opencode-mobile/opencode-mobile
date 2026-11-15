@@ -3,7 +3,6 @@ package dev.opencode.mobile.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
@@ -343,7 +343,7 @@ private fun TopBarLetterBadge(
     character: Char,
     accent: LetterAccent,
 ) {
-    val dark = isSystemInDarkTheme()
+    val dark = LocalOpenCodeDarkTheme.current
     val (fill, tint) = accent.badgeColors(dark)
     val letter = character.uppercaseChar().toString()
     val textMeasurer = rememberTextMeasurer()

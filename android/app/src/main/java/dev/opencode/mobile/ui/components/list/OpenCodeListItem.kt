@@ -13,7 +13,6 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,6 +72,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.OpenCodePillShape
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -682,7 +682,7 @@ internal fun ListItemLetterCircle(
     glyphSize: TextUnit,
     modifier: Modifier = Modifier,
 ) {
-    val (fill, tint) = accent.badgeColors(isSystemInDarkTheme())
+    val (fill, tint) = accent.badgeColors(LocalOpenCodeDarkTheme.current)
     Box(
         modifier =
             modifier
