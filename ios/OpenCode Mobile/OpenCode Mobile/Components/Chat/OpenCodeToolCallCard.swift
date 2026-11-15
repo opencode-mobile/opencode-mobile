@@ -64,7 +64,7 @@ struct OpenCodeToolCallCard: View {
 
             VStack(alignment: .leading, spacing: Self.contentSpacing) {
                 Text(title)
-                    .font(OpenCodeTypography.heading)
+                    .openCodeFont(.heading)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(1)
 
@@ -74,7 +74,7 @@ struct OpenCodeToolCallCard: View {
 
                 if let errorText, !errorText.isEmpty {
                     Text(errorText)
-                        .font(OpenCodeTypography.caption)
+                        .openCodeFont(.caption)
                         .foregroundStyle(status == .interrupted ? OpenCodeColors.textWeak : OpenCodeColors.error)
                         .lineLimit(3)
                 }
@@ -104,7 +104,7 @@ struct OpenCodeToolCallCard: View {
         HStack(alignment: .center, spacing: Self.metaRowSpacing) {
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(OpenCodeTypography.caption)
+                    .openCodeFont(.caption)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .lineLimit(1)
             }

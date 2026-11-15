@@ -199,6 +199,7 @@ struct FileViewerContent: View {
             maxLineLength: document.maxLineLength,
             onLineAppear: { viewModel.lineAppeared(relativePath, line: $0) }
         )
+        .openCodeTextScale(.code)
     }
 
     private func footer(_ viewer: ProjectFileViewerState, document: FileTextDocument) -> some View {

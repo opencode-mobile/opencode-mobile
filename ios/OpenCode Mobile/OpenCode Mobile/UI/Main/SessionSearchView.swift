@@ -154,6 +154,7 @@ struct SessionSearchView: View {
                     }
                 }
                 .padding(.bottom, 24)
+                .openCodeTextScale(.homeList)
                 .openCodeReadableColumn()
             }
             .scrollDismissesKeyboard(.immediately)

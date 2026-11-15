@@ -47,13 +47,13 @@ struct OpenCodeShellRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Self.textStackSpacing) {
                 Text(command.isEmpty ? " " : command)
-                    .font(OpenCodeTypography.code)
+                    .openCodeFont(.code)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if let description, !description.isEmpty {
                     Text(description)
-                        .font(OpenCodeTypography.caption)
+                        .openCodeFont(.caption)
                         .foregroundStyle(OpenCodeColors.textBase)
                         .lineLimit(1)
                 }
@@ -63,7 +63,7 @@ struct OpenCodeShellRow: View {
             HStack(spacing: Self.trailingSpacing) {
                 if let elapsed, !elapsed.isEmpty {
                     Text(elapsed)
-                        .font(OpenCodeTypography.caption.monospacedDigit())
+                        .openCodeFont(.caption).monospacedDigit()
                         .foregroundStyle(OpenCodeColors.textWeaker)
                 }
                 if action != nil {

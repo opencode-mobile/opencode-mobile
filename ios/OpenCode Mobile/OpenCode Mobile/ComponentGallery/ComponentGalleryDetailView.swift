@@ -94,6 +94,10 @@ struct ComponentGalleryDetailView: View {
             ActionBarGalleryView()
         case .tag:
             TagGalleryView()
+        case .segmentedControl:
+            SegmentedControlGalleryView()
+        case .stepSlider:
+            StepSliderGalleryView()
         case .keyValueRow:
             KeyValueRowGalleryView()
         case .charts:

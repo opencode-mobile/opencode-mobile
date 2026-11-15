@@ -458,6 +458,7 @@ private struct FileViewerView: View {
                                 contextMode: state.contextMode,
                                 selectedHunkID: state.selectedHunkID
                             )
+                            .openCodeTextScale(.code)
                             .frame(width: max(0, geometry.size.width - 32), alignment: .leading)
                             .padding(.horizontal, 16)
 

@@ -90,7 +90,7 @@ struct OpenCodeTimelineNotice: View {
                 OpenCodeTag(.localized(tag), size: .small)
             }
         }
-        .font(OpenCodeTypography.caption)
+        .openCodeFont(.caption)
         .padding(.vertical, Self.verticalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(variant == .goalEnded ? Self.endedOpacity : 1)

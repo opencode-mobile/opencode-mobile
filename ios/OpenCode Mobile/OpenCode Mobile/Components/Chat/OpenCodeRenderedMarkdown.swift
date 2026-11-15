@@ -60,6 +60,8 @@ struct OpenCodeRenderedMarkdown: View {
     let onLinkTap: (URL) -> Void
 
     @State private var measuredHeight: CGFloat
+    /// Session Chat text scale (#1044); 1 outside a scaled region.
+    @Environment(\.openCodeTextScale) private var textScale
 
     init(
         document: NativeMarkdownDocument,
@@ -109,11 +111,11 @@ struct OpenCodeRenderedMarkdown: View {
     private func blockView(_ block: NativeMarkdownBlock) -> some View {
         switch block {
         case .paragraph(let inlines):
-            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong, lineSpacing: 4)
+            inlineText(inlines, font: scaled(.body), color: OpenCodeColors.textStrong, lineSpacing: 4)
         case .heading(let level, let inlines):
             inlineText(inlines, font: headingFont(level), color: headingColor(level))
         case .blockquote(let inlines):
-            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.markdownQuoteText, lineSpacing: 4)
+            inlineText(inlines, font: scaled(.body), color: OpenCodeColors.markdownQuoteText, lineSpacing: 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 13)
                 .overlay(alignment: .leading) {
@@ -167,15 +169,15 @@ struct OpenCodeRenderedMarkdown: View {
     ) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(widestMarker)
-                .font(OpenCodeTypography.body.monospacedDigit())
+                .font(scaled(.body).monospacedDigit())
                 .hidden()
                 .overlay(alignment: .trailing) {
                     Text(marker)
-                        .font(OpenCodeTypography.body.monospacedDigit())
+                        .font(scaled(.body).monospacedDigit())
                         .foregroundStyle(OpenCodeColors.markdownListMarker)
                 }
                 .accessibilityHidden(true)
-            inlineText(inlines, font: OpenCodeTypography.body, color: OpenCodeColors.textStrong, lineSpacing: 4)
+            inlineText(inlines, font: scaled(.body), color: OpenCodeColors.textStrong, lineSpacing: 4)
         }
         .accessibilityElement(children: .combine)
     }
@@ -186,7 +188,7 @@ struct OpenCodeRenderedMarkdown: View {
         color: Color,
         lineSpacing: CGFloat = 0
     ) -> some View {
-        InlineMarkdownText(inlines: inlines, font: font, color: color, lineSpacing: lineSpacing)
+        InlineMarkdownText(inlines: inlines, font: font, color: color, lineSpacing: lineSpacing * textScale)
     }
 
     @ViewBuilder
@@ -230,7 +232,7 @@ struct OpenCodeRenderedMarkdown: View {
     ) -> some View {
         let allRows = [header] + rows
         let columnCount = allRows.map(\.count).max() ?? 0
-        let preferredWidths = Self.tableColumnWidths(rows: allRows, columnCount: columnCount)
+        let preferredWidths = Self.tableColumnWidths(rows: allRows, columnCount: columnCount, scale: textScale)
         return MarkdownTableLayout(preferredWidths: preferredWidths) { availableWidths in
             tableRow(header, columnWidths: availableWidths, isHeader: true)
             ForEach(rows.indices, id: \.self) { index in
@@ -249,7 +251,7 @@ struct OpenCodeRenderedMarkdown: View {
                 let inlines = index < row.count ? row[index] : []
                 inlineText(
                     inlines,
-                    font: isHeader ? OpenCodeTypography.bodySecondary.weight(.medium) : OpenCodeTypography.bodySecondary,
+                    font: isHeader ? scaled(.bodySecondary).weight(.medium) : scaled(.bodySecondary),
                     color: OpenCodeColors.textStrong
                 )
                 .padding(.horizontal, Self.tableCellHorizontalPadding)
@@ -267,9 +269,10 @@ struct OpenCodeRenderedMarkdown: View {
 
     private static func tableColumnWidths(
         rows: [[[NativeMarkdownInline]]],
-        columnCount: Int
+        columnCount: Int,
+        scale: CGFloat
     ) -> [CGFloat] {
-        let font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        let font = OpenCodeTypography.Style.bodySecondary.uiFont(scale: scale)
         return (0..<columnCount).map { column in
             let contentWidth =
                 rows.map { row -> CGFloat in
@@ -291,14 +294,18 @@ struct OpenCodeRenderedMarkdown: View {
         }
     }
 
+    private func scaled(_ style: OpenCodeTypography.Style) -> Font {
+        style.font(scale: textScale)
+    }
+
     private func headingFont(_ level: Int) -> Font {
         switch level {
         case 1:
-            OpenCodeTypography.title
+            scaled(.title)
         case 2:
-            OpenCodeTypography.heading
+            scaled(.heading)
         default:
-            OpenCodeTypography.bodySecondary.weight(.medium)
+            scaled(.bodySecondary).weight(.medium)
         }
     }
 
@@ -352,11 +359,22 @@ enum NativeMarkdownAttributedString {
     static func inline(
         _ inlines: [NativeMarkdownInline],
         font: Font,
-        color: Color
+        color: Color,
+        scale: CGFloat = 1
     ) -> AttributedString {
         var output = AttributedString()
-        append(inlines, into: &output, font: font, color: color)
+        append(inlines, into: &output, font: font, color: color, codeFont: OpenCodeTypography.Style.code.font(scale: scale))
         return output
+    }
+
+    /// Prepared code text drawn at `scale`. The prepared string carries the base code font,
+    /// so a scaled region swaps it for the scaled one.
+    static func scaledCode(_ code: AttributedString, scale: CGFloat) -> AttributedString {
+        guard scale != 1 else { return code }
+        var scaled = code
+        scaled.uiKit.font = nil
+        scaled.font = OpenCodeTypography.Style.code.font(scale: scale)
+        return scaled
     }
 
     static func code(
@@ -501,7 +519,8 @@ enum NativeMarkdownAttributedString {
         _ inlines: [NativeMarkdownInline],
         into output: inout AttributedString,
         font: Font,
-        color: Color
+        color: Color,
+        codeFont: Font
     ) {
         for inline in inlines {
             switch inline {
@@ -511,21 +530,22 @@ enum NativeMarkdownAttributedString {
                 // Native attributed backgrounds have no CSS padding; side spaces
                 // approximate desktop `padding: 2px 4px` horizontal inset.
                 var code = AttributedString("\u{2009}\(value)\u{2009}")
-                code.font = OpenCodeTypography.code.weight(.medium)
+                code.font = codeFont.weight(.medium)
                 code.foregroundColor = OpenCodeColors.markdownCodeText
                 code.backgroundColor = OpenCodeColors.markdownCodeBackground
                 output.append(code)
             case .emphasis(let children):
-                append(children, into: &output, font: font.italic(), color: OpenCodeColors.markdownEm)
+                append(children, into: &output, font: font.italic(), color: OpenCodeColors.markdownEm, codeFont: codeFont)
             case .strong(let children):
-                append(children, into: &output, font: font.weight(.semibold), color: OpenCodeColors.markdownStrong)
+                append(children, into: &output, font: font.weight(.semibold), color: OpenCodeColors.markdownStrong, codeFont: codeFont)
             case .link(let destination, let children):
                 var linkText = AttributedString()
                 append(
                     children,
                     into: &linkText,
                     font: font.weight(.bold),
-                    color: OpenCodeColors.markdownLinkText
+                    color: OpenCodeColors.markdownLinkText,
+                    codeFont: codeFont
                 )
                 let underline = Text.LineStyle(pattern: .solid, color: OpenCodeColors.markdownLinkUnderline)
                 linkText.underlineStyle = underline
@@ -722,9 +742,10 @@ private struct InlineMarkdownText: View {
     let font: Font
     let color: Color
     var lineSpacing: CGFloat = 0
+    @Environment(\.openCodeTextScale) private var textScale
 
     var body: some View {
-        Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color))
+        Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color, scale: textScale))
             .lineSpacing(lineSpacing)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -737,15 +758,19 @@ private struct DeferredHighlightedCodeText: View {
     let code: String
     let spans: [NativeCodeSpan]
     let forcePlain: Bool
+    @Environment(\.openCodeTextScale) private var textScale
 
     var body: some View {
         if forcePlain {
             Text(code)
-                .font(OpenCodeTypography.code)
+                .openCodeFont(.code)
                 .foregroundStyle(OpenCodeColors.codeText)
         } else {
-            Text(NativeMarkdownAttributedString.code(code, spans: spans))
-                .font(OpenCodeTypography.code)
+            Text(NativeMarkdownAttributedString.scaledCode(
+                NativeMarkdownAttributedString.code(code, spans: spans),
+                scale: textScale
+            ))
+            .openCodeFont(.code)
         }
     }
 }
@@ -759,13 +784,17 @@ extension OpenCodeRenderedMarkdown {
 
 private struct DeferredHighlightedDiffBlock: View {
     let lines: [NativeDiffLine]
+    @Environment(\.openCodeTextScale) private var textScale
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(lines.indices, id: \.self) { index in
                 let line = lines[index]
-                Text(NativeMarkdownAttributedString.code(line.text, spans: line.spans))
-                    .font(OpenCodeTypography.code)
+                Text(NativeMarkdownAttributedString.scaledCode(
+                    NativeMarkdownAttributedString.code(line.text, spans: line.spans),
+                    scale: textScale
+                ))
+                    .openCodeFont(.code)
                     .fixedSize(horizontal: true, vertical: false)
                     .frame(minWidth: 320, alignment: .leading)
                     .padding(.horizontal, 12)

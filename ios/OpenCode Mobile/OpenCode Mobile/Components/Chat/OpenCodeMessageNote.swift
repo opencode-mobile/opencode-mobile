@@ -32,7 +32,7 @@ struct OpenCodeMessageNote: View {
             OpenCodeIconImage(icon: variant.icon, size: Self.iconSize)
                 .fixedSize()
             Text(variant.label)
-                .font(OpenCodeTypography.caption)
+                .openCodeFont(.caption)
         }
         .foregroundStyle(OpenCodeColors.textWeak)
         .frame(maxWidth: .infinity, alignment: .leading)

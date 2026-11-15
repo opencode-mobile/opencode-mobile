@@ -67,13 +67,13 @@ struct OpenCodeSectionHeader: View {
         switch variant {
         case .label:
             Text(verbatim: title.resolved.uppercased())
-                .font(OpenCodeTypography.caption.weight(.semibold))
+                .openCodeFont(.caption, weight: .semibold)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .tracking(sectionHeaderLabelTracking)
                 .lineLimit(1)
         case .plain:
             Text(openCode: title)
-                .font(OpenCodeTypography.caption)
+                .openCodeFont(.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -85,13 +85,13 @@ struct OpenCodeSectionHeader: View {
         switch trailing {
         case let .count(count):
             Text("\(count)")
-                .font(OpenCodeTypography.caption)
+                .openCodeFont(.caption)
                 .foregroundStyle(OpenCodeColors.textWeak)
                 .monospacedDigit()
         case let .action(label, action):
             Button(action: action) {
                 Text(openCode: label)
-                    .font(OpenCodeTypography.caption.weight(.medium))
+                    .openCodeFont(.caption, weight: .medium)
                     .foregroundStyle(OpenCodeColors.interactive)
             }
             .buttonStyle(.plain)

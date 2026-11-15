@@ -42,7 +42,7 @@ struct OpenCodeWorkingIndicator: View {
         HStack(alignment: .center, spacing: 8) {
             OpenCodeWorkingStatusMark(isIdle: markIsIdle)
             Text(label)
-                .font(OpenCodeTypography.body)
+                .openCodeFont(.body)
                 .foregroundStyle(OpenCodeColors.textWeak)
             Spacer(minLength: 0)
         }

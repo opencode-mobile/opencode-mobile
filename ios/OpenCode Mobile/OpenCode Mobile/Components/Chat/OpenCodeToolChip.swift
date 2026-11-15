@@ -34,6 +34,7 @@ struct OpenCodeToolChip: View {
     let action: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openCodeTextScale) private var textScale
     /// Set once the chip has been running for `runningRevealDelay`; until then
     /// a running chip looks idle, so commands that finish quickly never flash.
     @State private var runningRevealed = false
@@ -114,7 +115,7 @@ struct OpenCodeToolChip: View {
 
             if case .agent(_, let brief?) = variant, !brief.isEmpty {
                 Text(brief)
-                    .font(Self.briefFont)
+                    .font(Self.briefFont(textScale))
                     .foregroundStyle(OpenCodeColors.textBase)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -124,7 +125,7 @@ struct OpenCodeToolChip: View {
 
             if let diffCounts {
                 diffCounts
-                    .font(Self.diffFont)
+                    .font(Self.diffFont(textScale))
                     .lineLimit(1)
                     .fixedSize()
             }
@@ -133,7 +134,7 @@ struct OpenCodeToolChip: View {
 
             if let trailingText, !trailingText.isEmpty, !isMore {
                 Text(trailingText)
-                    .font(Self.trailingFont.monospacedDigit())
+                    .font(Self.trailingFont(textScale).monospacedDigit())
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .lineLimit(1)
                     .fixedSize()
@@ -339,11 +340,11 @@ struct OpenCodeToolChip: View {
     private var labelFont: Font {
         switch variant {
         case .file, .command, .skill:
-            Self.monoLabelFont
+            Self.monoLabelFont(textScale)
         case .agent:
-            Self.agentLabelFont
+            Self.agentLabelFont(textScale)
         case .more, .explore:
-            Self.systemLabelFont
+            Self.systemLabelFont(textScale)
         }
     }
 
@@ -457,12 +458,15 @@ struct OpenCodeToolChip: View {
     private static let agentTileCornerRadius: CGFloat = 5
     private static let stateBorderOpacity = 0.4
     private static let agentBorderOpacity = 0.35
-    private static let monoLabelFont = Font.system(size: 13, weight: .regular, design: .monospaced)
-    private static let systemLabelFont = Font.system(size: 13, weight: .regular)
-    private static let agentLabelFont = Font.system(size: 13, weight: .semibold)
-    private static let briefFont = Font.system(size: 12, weight: .regular)
-    private static let diffFont = Font.system(size: 12, weight: .semibold)
-    private static let trailingFont = Font.system(size: 12, weight: .regular)
+    // Sizes follow the Session Chat text scale (#1044).
+    private static func monoLabelFont(_ scale: CGFloat) -> Font {
+        Font.system(size: 13 * scale, weight: .regular, design: .monospaced)
+    }
+    private static func systemLabelFont(_ scale: CGFloat) -> Font { Font.system(size: 13 * scale, weight: .regular) }
+    private static func agentLabelFont(_ scale: CGFloat) -> Font { Font.system(size: 13 * scale, weight: .semibold) }
+    private static func briefFont(_ scale: CGFloat) -> Font { Font.system(size: 12 * scale, weight: .regular) }
+    private static func diffFont(_ scale: CGFloat) -> Font { Font.system(size: 12 * scale, weight: .semibold) }
+    private static func trailingFont(_ scale: CGFloat) -> Font { Font.system(size: 12 * scale, weight: .regular) }
 }
 
 /// Hit region that grows vertically to `minHeight` around the chip's bounds

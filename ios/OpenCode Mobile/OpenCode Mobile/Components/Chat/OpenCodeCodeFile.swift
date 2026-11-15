@@ -33,6 +33,8 @@ struct OpenCodeCodeFile: View {
 
     /// The top line this file last scrolled to, so a `topLine` it reported is not scrolled back.
     @State private var shownTopLine: Int?
+    /// Code text scale (#1044): type, the gutter and line widths follow it.
+    @Environment(\.openCodeTextScale) private var textScale
 
     init(
         lines: [String],
@@ -53,7 +55,7 @@ struct OpenCodeCodeFile: View {
     }
 
     private var gutterWidth: CGFloat {
-        CGFloat(max(2, String(lines.count).count)) * OpenCodeCodeFileMetrics.characterWidth
+        CGFloat(max(2, String(lines.count).count)) * OpenCodeCodeFileMetrics.characterWidth * textScale
     }
 
     /// Unwrapped content width, so the horizontal extent does not change as lazy rows load.
@@ -61,7 +63,7 @@ struct OpenCodeCodeFile: View {
         OpenCodeCodeFileMetrics.horizontalPadding * 2
             + gutterWidth
             + OpenCodeCodeFileMetrics.gutterSpacing
-            + CGFloat(maxLineLength + 1) * OpenCodeCodeFileMetrics.characterWidth
+            + CGFloat(maxLineLength + 1) * OpenCodeCodeFileMetrics.characterWidth * textScale
     }
 
     var body: some View {
@@ -129,7 +131,7 @@ struct OpenCodeCodeFile: View {
     private func row(_ index: Int) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: OpenCodeCodeFileMetrics.gutterSpacing) {
             Text(String(index + 1))
-                .font(OpenCodeTypography.code)
+                .openCodeFont(.code)
                 .foregroundStyle(OpenCodeColors.textWeaker)
                 .frame(width: gutterWidth, alignment: .trailing)
                 .accessibilityHidden(true)
@@ -139,7 +141,7 @@ struct OpenCodeCodeFile: View {
                 .frame(maxWidth: wrapsLines ? .infinity : nil, alignment: .leading)
         }
         .padding(.horizontal, OpenCodeCodeFileMetrics.horizontalPadding)
-        .frame(minHeight: OpenCodeCodeFileMetrics.lineMinHeight, alignment: .leading)
+        .frame(minHeight: OpenCodeCodeFileMetrics.lineMinHeight * textScale, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(LocalizedStringResource(
             "component.code_file.line_label",
@@ -152,15 +154,21 @@ struct OpenCodeCodeFile: View {
     private func lineText(_ index: Int) -> some View {
         let line = lines[index]
         if let marks = lineMarks[index], !marks.isEmpty {
-            Text(Self.marked(line, spans: lineSpans[index] ?? [], marks: marks))
-                .font(OpenCodeTypography.code)
+            Text(NativeMarkdownAttributedString.scaledCode(
+                Self.marked(line, spans: lineSpans[index] ?? [], marks: marks),
+                scale: textScale
+            ))
+            .openCodeFont(.code)
         } else if let spans = lineSpans[index], !spans.isEmpty {
             // Colored text carries its own foreground; do not stack `.foregroundStyle`.
-            Text(NativeMarkdownAttributedString.code(line, spans: spans))
-                .font(OpenCodeTypography.code)
+            Text(NativeMarkdownAttributedString.scaledCode(
+                NativeMarkdownAttributedString.code(line, spans: spans),
+                scale: textScale
+            ))
+            .openCodeFont(.code)
         } else {
             Text(line.isEmpty ? " " : line)
-                .font(OpenCodeTypography.code)
+                .openCodeFont(.code)
                 .foregroundStyle(OpenCodeColors.codeText)
         }
     }

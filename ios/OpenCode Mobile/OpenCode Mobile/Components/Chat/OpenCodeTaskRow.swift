@@ -94,7 +94,7 @@ struct OpenCodeTaskRow: View {
             VStack(alignment: .leading, spacing: Self.textStackSpacing) {
                 HStack(alignment: .center, spacing: Self.titleRowSpacing) {
                     Text(title)
-                        .font(OpenCodeTypography.heading)
+                        .openCodeFont(.heading)
                         .foregroundStyle(OpenCodeColors.textStrong)
                         .lineLimit(1)
                     if let tag, !tag.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -104,7 +104,7 @@ struct OpenCodeTaskRow: View {
                 }
                 if let detail, !detail.isEmpty {
                     Text(detail)
-                        .font(OpenCodeTypography.caption)
+                        .openCodeFont(.caption)
                         .foregroundStyle(state.detailColor)
                         .lineLimit(1)
                 }
@@ -116,12 +116,12 @@ struct OpenCodeTaskRow: View {
                     VStack(alignment: .trailing, spacing: Self.textStackSpacing) {
                         if let time, !time.isEmpty {
                             Text(time)
-                                .font(OpenCodeTypography.caption.monospacedDigit())
+                                .openCodeFont(.caption).monospacedDigit()
                                 .foregroundStyle(OpenCodeColors.textWeaker)
                         }
                         if let detailCaption, !detailCaption.isEmpty {
                             Text(detailCaption)
-                                .font(OpenCodeTypography.caption)
+                                .openCodeFont(.caption)
                                 .foregroundStyle(OpenCodeColors.textWeaker)
                         }
                     }

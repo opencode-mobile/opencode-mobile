@@ -281,7 +281,7 @@ private struct StepRailRow: View {
         case .fold(let count, _):
             HStack(spacing: 4) {
                 Text(Self.earlierSteps(count))
-                    .font(OpenCodeTypography.bodySecondary)
+                    .openCodeFont(.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textWeaker)
                     .lineLimit(1)
                 OpenCodeIconImage(icon: .chevronRight, size: StepRailMetrics.chevronSize)
@@ -291,7 +291,7 @@ private struct StepRailRow: View {
             .accessibilityLabel(Text(Self.expandsLabel(count)))
         case .thinking:
             Text(OpenCodeActivityText.thinkingEllipsis)
-                .font(OpenCodeTypography.bodySecondary)
+                .openCodeFont(.bodySecondary)
                 .italic()
                 .foregroundStyle(OpenCodeColors.textWeak)
                 .accessibilityLabel(Text(OpenCodeActivityText.thinking))
@@ -440,7 +440,7 @@ private struct StepRailStepLine: View {
             mainLine(elapsed: elapsed)
             if let note, !note.isEmpty {
                 Text(note)
-                    .font(OpenCodeTypography.caption)
+                    .openCodeFont(.caption)
                     .foregroundStyle(OpenCodeColors.textWeaker)
                     .lineLimit(2)
                     .truncationMode(.tail)
@@ -457,14 +457,14 @@ private struct StepRailStepLine: View {
         HStack(spacing: StepRailMetrics.contentSpacing) {
             HStack(spacing: 6) {
                 Text(title)
-                    .font(OpenCodeTypography.bodySecondary)
+                    .openCodeFont(.bodySecondary)
                     .foregroundStyle(isRunning ? OpenCodeColors.textStrong : OpenCodeColors.textWeak)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .layoutPriority(1)
                 if let detail, !detail.isEmpty {
                     Text(detail)
-                        .font(OpenCodeTypography.caption)
+                        .openCodeFont(.caption)
                         .foregroundStyle(OpenCodeColors.textWeaker)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -474,24 +474,24 @@ private struct StepRailStepLine: View {
 
             if let diff = diffText {
                 diff
-                    .font(OpenCodeTypography.caption.monospacedDigit())
+                    .openCodeFont(.caption).monospacedDigit()
                     .lineLimit(1)
                     .fixedSize()
             }
             if status == .failed {
                 Text("component.activity_status.failed")
-                    .font(OpenCodeTypography.caption)
+                    .openCodeFont(.caption)
                     .foregroundStyle(OpenCodeColors.error)
                     .fixedSize()
             } else if status == .interrupted {
                 Text("component.activity_status.stopped")
-                    .font(OpenCodeTypography.caption)
+                    .openCodeFont(.caption)
                     .foregroundStyle(OpenCodeColors.textWeaker)
                     .fixedSize()
             }
             if let elapsed {
                 Text(elapsed)
-                    .font(OpenCodeTypography.caption.monospacedDigit())
+                    .openCodeFont(.caption).monospacedDigit()
                     .foregroundStyle(OpenCodeColors.textWeaker)
                     .fixedSize()
             }
@@ -539,13 +539,13 @@ private struct StepRailChildSessionCard: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 Text(agent)
-                    .font(OpenCodeTypography.bodySecondary.weight(.semibold))
+                    .openCodeFont(.bodySecondary, weight: .semibold)
                     .foregroundStyle(OpenCodeColors.info)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if let elapsed {
                     Text(elapsed)
-                        .font(OpenCodeTypography.caption.monospacedDigit())
+                        .openCodeFont(.caption).monospacedDigit()
                         .foregroundStyle(OpenCodeColors.textWeaker)
                         .fixedSize()
                 }
@@ -556,7 +556,7 @@ private struct StepRailChildSessionCard: View {
             }
             if let line, !line.isEmpty {
                 Text(line)
-                    .font(OpenCodeTypography.caption)
+                    .openCodeFont(.caption)
                     .foregroundStyle(status == .failed ? OpenCodeColors.error : OpenCodeColors.textWeak)
                     .lineLimit(1)
                     .truncationMode(.tail)

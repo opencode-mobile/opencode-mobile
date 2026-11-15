@@ -103,6 +103,7 @@ struct TerminalView: View {
                     viewModel.resize(cols: cols, rows: rows)
                 }
             )
+            .openCodeTextScale(.code)
             TerminalControlStrip(onSend: emit)
         }
     }
