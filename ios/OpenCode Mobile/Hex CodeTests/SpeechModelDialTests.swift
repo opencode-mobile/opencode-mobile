@@ -68,6 +68,13 @@ struct SpeechLineTests {
         #expect(quiet.next(.loading) == .hidden)
     }
 
+    @Test func theReadyMomentStaysReady() {
+        // "Speech ready" for its 1.6 s even if the model starts loading again meanwhile.
+        #expect(SpeechLineView.status(.loading, show: .ready) == .ready)
+        #expect(SpeechLineView.status(.failed, show: .ready) == .ready)
+        #expect(SpeechLineView.status(.loading, show: .gettingReady) == .loading)
+    }
+
     @Test func theDialGoesGreyWhileTheConnectionIsDown() {
         let flowing = ModelDownload(done: 320, total: 640)
         #expect(HexSpeechDial.Look(.downloading(flowing)) == .downloading(0.5))
@@ -82,12 +89,15 @@ struct SpeechLineTests {
 
 struct SpeechSheetCopyTests {
     private let details = SpeechDetails.placeholder
+    private let posix = Locale(identifier: "en_US_POSIX")
 
     @Test func theHeroWhileDownloading() {
         let measuring = SpeechSheetCopy.hero(.downloading(ModelDownload(done: 120_000_000, total: 640_000_000)), details: details)
         #expect(measuring == .init(title: "Downloading", tone: .plain, line: "120 of 640 MB", detail: "measuring speed…"))
         let known = ModelDownload(done: 120_000_000, total: 640_000_000, bytesPerSecond: 8_400_000, secondsLeft: 62)
-        #expect(SpeechSheetCopy.hero(.downloading(known), details: details).detail == "8.4 MB/s · about 2 min left")
+        #expect(SpeechSheetCopy.hero(.downloading(known), details: details, locale: posix).detail == "8.4 MB/s · about 2 min left")
+        // The speed's decimal follows the phone's region.
+        #expect(SpeechSheetCopy.speed(known, locale: Locale(identifier: "de_DE")) == "8,4 MB/s · about 2 min left")
         var dropped = known
         dropped.connection = .retrying
         let hero = SpeechSheetCopy.hero(.downloading(dropped), details: details)

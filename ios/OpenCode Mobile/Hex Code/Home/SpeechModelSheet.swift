@@ -40,7 +40,8 @@ enum SpeechSheetCopy {
         return download.done >= total
     }
 
-    static func hero(_ status: SpeechStatus, details: SpeechDetails) -> Hero {
+    /// `locale` formats the speed's decimal ("8.4" or "8,4"); tests pin it.
+    static func hero(_ status: SpeechStatus, details: SpeechDetails, locale: Locale = .current) -> Hero {
         switch status {
         case .notOnPhone:
             return Hero(
@@ -60,7 +61,7 @@ enum SpeechSheetCopy {
                 line: progressText(download) ?? String(localized: "speech.sheet.starting", defaultValue: "Starting the download"),
                 detail: dropped
                     ? String(localized: "speech.sheet.picks_up", defaultValue: "picks up where it stopped")
-                    : speed(download)
+                    : speed(download, locale: locale)
             )
         case .loading:
             return Hero(
@@ -102,11 +103,11 @@ enum SpeechSheetCopy {
     }
 
     /// "8.4 MB/s · about 2 min left", "8.4 MB/s · under a minute left", or "measuring speed…" for the first 3 s.
-    static func speed(_ download: ModelDownload) -> String {
+    static func speed(_ download: ModelDownload, locale: Locale = .current) -> String {
         guard let speed = download.bytesPerSecond else {
             return String(localized: "speech.sheet.measuring", defaultValue: "measuring speed…")
         }
-        let rate = (speed / 1_000_000).formatted(.number.precision(.fractionLength(1)))
+        let rate = (speed / 1_000_000).formatted(.number.precision(.fractionLength(1)).locale(locale))
         switch download.secondsLeft.map(SpeechLine.minutesLeft) {
         case 0?:
             return String(localized: "speech.sheet.speed_soon", defaultValue: "\(rate) MB/s · under a minute left")
