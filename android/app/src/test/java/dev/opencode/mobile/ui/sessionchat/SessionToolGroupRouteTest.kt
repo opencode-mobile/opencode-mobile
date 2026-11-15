@@ -68,6 +68,18 @@ class SessionToolGroupRouteTest {
     }
 
     @Test
+    fun members_resolveAcrossTheStepMessagesOfTheRun() {
+        // OpenCode emits each tool step as its own assistant message; the timeline merges the run
+        // into one group under one message id, so its members live in several messages.
+        val whole = message(outputChars = 10)
+        val steps =
+            whole.parts.mapIndexed { index, part -> whole.copy(id = "msg-step-$index", parts = listOf(part)) }
+        val route = route(whole).copy(messageId = steps.first().id)
+
+        assertEquals(group(whole).members, SessionToolGroupMembers.resolve(route, steps))
+    }
+
+    @Test
     fun members_goneWhenTheMessageOrEveryMemberIsGone() {
         val message = message(outputChars = 10)
         val route = route(message)

@@ -89,19 +89,24 @@ internal fun SessionToolGroup.toTarget(members: List<SessionChatTimelineBlock.To
 internal object SessionToolGroupMembers {
     /**
      * The member cards, projected from their tool parts as the timeline projects them, in the
-     * route's order. Null when the group's message or every member is gone (a revert or a
-     * compaction moved the session on); members that are gone are left out.
+     * route's order. A group spans every consecutive tool-only assistant message of its run
+     * (one per step), so members are looked up across the transcript, not only in the message
+     * the route names. Null when every member is gone (a revert or a compaction moved the
+     * session on); members that are gone are left out.
      */
     fun resolve(
         route: SessionToolGroup,
         messages: List<Message>,
     ): List<SessionChatTimelineBlock.ToolCard>? {
-        val message = messages.lastOrNull { it.id == route.messageId } ?: return null
-        val toolsByBlockID =
-            message.parts
-                .filterIsInstance<MessagePart.Tool>()
-                .mapNotNull { tool -> tool.id?.let { PresentationBlockId.direct(it) to tool } }
-                .toMap()
+        val wanted = route.memberBlockIDs.toHashSet()
+        val toolsByBlockID = HashMap<String, MessagePart.Tool>(wanted.size)
+        for (message in messages) {
+            for (part in message.parts) {
+                if (part !is MessagePart.Tool) continue
+                val blockID = part.id?.let(PresentationBlockId::direct) ?: continue
+                if (blockID in wanted) toolsByBlockID[blockID] = part
+            }
+        }
         val members = route.memberBlockIDs.mapNotNull { id -> toolsByBlockID[id]?.let(SessionChatTimelineBlocks::toolCard) }
         return members.takeIf { it.isNotEmpty() }
     }
