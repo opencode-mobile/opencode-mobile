@@ -342,7 +342,7 @@
     <string name="speech_phase_ready">Ready</string>
     <string name="speech_retry_in">Retrying in %1$d s</string>
     <string name="speech_retry_trying">Trying again…</string>
-    <string name="speech_retry_rule">Retries after 1, 2, 4 and 8 s, then it stops.</string>
+    <string name="speech_retry_rule">Retries a few times, picking up where it stopped.</string>
     <string name="speech_try_now">Try now</string>
     <string name="speech_failed_download">The download kept failing.</string>
     <string name="speech_failed_download_sub">Try again picks up at %1$d MB.</string>

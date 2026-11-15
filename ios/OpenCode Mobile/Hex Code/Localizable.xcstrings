@@ -6434,7 +6434,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retries after 1, 2, 4 and 8 s, then it stops."
+            "value": "Retries a few times, picking up where it stopped."
           }
         }
       }

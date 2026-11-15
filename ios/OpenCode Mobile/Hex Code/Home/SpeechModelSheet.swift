@@ -297,14 +297,14 @@ struct SpeechModelSheet: View {
             let words = SpeechLine.of(status, now: now)
             statusBox(
                 tone: .amber,
-                icon: .refresh,
+                icon: .wifi,
                 title: {
                     if case let .retrying(seconds) = words {
                         return String(localized: "speech.sheet.retrying", defaultValue: "Retrying in \(seconds) s")
                     }
                     return String(localized: "speech.sheet.trying", defaultValue: "Trying again…")
                 }(),
-                detail: String(localized: "speech.sheet.retries", defaultValue: "Retries after 1, 2, 4 and 8 s, then it stops."),
+                detail: String(localized: "speech.sheet.retries", defaultValue: "Retries a few times, picking up where it stopped."),
                 action: words == .tryingAgain ? nil : AnyView(HexButton(LocalizedStringResource("speech.sheet.try_now", defaultValue: "Try now")) { speech.retryNow() })
             )
         }
