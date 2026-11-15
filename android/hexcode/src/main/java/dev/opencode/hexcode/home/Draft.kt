@@ -378,8 +378,8 @@ sealed interface DraftLabel {
         companion object {
             fun of(download: SpeechDownload): SpeechDownloading =
                 SpeechDownloading(
-                    doneMb = download.done / SpeechDownload.MB,
-                    totalMb = download.total / SpeechDownload.MB,
+                    doneMb = SpeechDownload.megabytes(download.done),
+                    totalMb = SpeechDownload.megabytes(download.total),
                     minutesLeft = download.secondsLeft?.let(SpeechDownload::minutesLeft),
                 )
         }
@@ -475,6 +475,9 @@ data class SpeechDownload(
     companion object {
         /** Megabytes as the label counts them, as the model list does: 1,000,000 bytes. */
         const val MB = 1_000_000L
+
+        /** Whole megabytes, rounded down, for every MB the app shows. */
+        fun megabytes(bytes: Long): Long = bytes / MB
 
         /** Whole minutes rounded up, and 0 for "under a minute left". */
         fun minutesLeft(seconds: Long): Long = if (seconds < 60) 0 else (seconds + 59) / 60

@@ -2281,14 +2281,14 @@ class HomeViewModel(
      * once it is, then gone for the rest of the process.
      */
     private fun showSpeechLine(speech: SpeechStatus) {
+        // "Speech ready" finishes its 1.6 s whatever the model does next; after it the line is gone for good.
+        if (speechReadyShown?.isActive == true) return
         val show = speechLine.next(speech)
-        if (show != SpeechLineShow.Ready) speechReadyShown?.cancel()
         state.update { it.copy(speechLine = show) }
-        if (show == SpeechLineShow.Ready && speechReadyShown?.isActive != true) {
+        if (show == SpeechLineShow.Ready) {
             speechReadyShown =
                 viewModelScope.launch {
                     delay(SpeechLineMemory.READY_MS)
-                    speechLine.gone = true
                     state.update { it.copy(speechLine = SpeechLineShow.Hidden) }
                 }
         }

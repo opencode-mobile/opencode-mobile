@@ -289,6 +289,11 @@ class SpeechWaitTest {
             engine.speech.value = SpeechStatus.Ready
             dispatcher.scheduler.runCurrent()
             assertEquals(SpeechLineShow.Ready, vm.uiState.value.speechLine)
+            // A home made while it says so (the last one cleared mid-way) doesn't say it again.
+            val during =
+                HomeViewModel(Engine().apply { speech.value = SpeechStatus.Ready }, takes = MemoryTakeStore(), speechLine = memory) { 0 }
+            dispatcher.scheduler.runCurrent()
+            assertEquals(SpeechLineShow.Hidden, during.uiState.value.speechLine)
             dispatcher.scheduler.advanceTimeBy(SpeechLineMemory.READY_MS + 1)
             assertEquals(SpeechLineShow.Hidden, vm.uiState.value.speechLine)
             // It doesn't come back in this process, on this home or the next.

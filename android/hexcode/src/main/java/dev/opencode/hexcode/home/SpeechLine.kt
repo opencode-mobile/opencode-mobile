@@ -57,7 +57,8 @@ internal fun SpeechLine(
         HexSpeechDial(dial.mode, dial.progress, HexDialSize.Line)
         Text(
             speechLineWords(shown),
-            style = HexTheme.type.footnote,
+            // The waiting line's size, so the two rows match.
+            style = HexTheme.type.small,
             color = colors.text2,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -88,8 +89,8 @@ internal fun speechLineWords(speech: SpeechStatus): String =
                         else ->
                             stringResource(
                                 R.string.home_speech_downloading,
-                                download.done / SpeechDownload.MB,
-                                download.total / SpeechDownload.MB,
+                                SpeechDownload.megabytes(download.done),
+                                SpeechDownload.megabytes(download.total),
                             )
                     }
                 SpeechStage.Load, SpeechStage.WarmUp -> stringResource(R.string.home_speech_loading)

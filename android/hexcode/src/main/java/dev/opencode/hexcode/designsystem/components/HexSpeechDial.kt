@@ -81,21 +81,23 @@ fun HexSpeechDial(
     val turn = if (mode == HexDialMode.Loading && !still) rememberLoop(0f, 360f, 900, LinearEasing, RepeatMode.Restart) else null
     val breath =
         if (mode == HexDialMode.WarmingUp && !still) rememberLoop(0.45f, 1f, 700, HexTheme.motion.easing, RepeatMode.Reverse) else null
+    // Thinner when large, as the prototype's 60 pt dial (app-plan.md, Speech line and dial).
+    val width = if (size >= 40.dp) WIDTH_LARGE else WIDTH
     Canvas(modifier.size(size)) {
         scale(this.size.width / GRID, pivot = Offset.Zero) {
-            drawCircle(track, radius = RADIUS, center = CENTRE, style = Stroke(WIDTH))
+            drawCircle(track, radius = RADIUS, center = CENTRE, style = Stroke(width))
             when (mode) {
                 HexDialMode.Loading ->
                     if (turn == null) {
-                        arc(color, 1f)
+                        arc(width, color, 1f)
                     } else {
-                        rotate(turn.value, CENTRE) { arc(color, SPIN_SHARE) }
+                        rotate(turn.value, CENTRE) { arc(width, color, SPIN_SHARE) }
                     }
-                HexDialMode.WarmingUp -> arc(color.copy(alpha = breath?.value ?: 1f), 1f)
-                HexDialMode.Ready -> arc(color, 1f)
+                HexDialMode.WarmingUp -> arc(width, color.copy(alpha = breath?.value ?: 1f), 1f)
+                HexDialMode.Ready -> arc(width, color, 1f)
                 // Not on the phone yet: the track alone.
-                HexDialMode.Stalled -> if (progress > 0f) arc(color, shown.coerceAtLeast(MIN_SHARE))
-                HexDialMode.Downloading, HexDialMode.Failed -> arc(color, shown.coerceAtLeast(MIN_SHARE))
+                HexDialMode.Stalled -> if (progress > 0f) arc(width, color, shown.coerceAtLeast(MIN_SHARE))
+                HexDialMode.Downloading, HexDialMode.Failed -> arc(width, color, shown.coerceAtLeast(MIN_SHARE))
             }
             when (mode) {
                 HexDialMode.Ready -> drawPath(Check, color, style = glyph(2.2f))
@@ -129,6 +131,7 @@ private fun rememberLoop(
     ).animateFloat(from, to, infiniteRepeatable(tween(ms, easing = easing), repeat), label = "dial-loop")
 
 private fun DrawScope.arc(
+    width: Float,
     color: Color,
     share: Float,
 ) = drawArc(
@@ -138,7 +141,7 @@ private fun DrawScope.arc(
     useCenter = false,
     topLeft = Offset(CENTRE.x - RADIUS, CENTRE.y - RADIUS),
     size = Size(2 * RADIUS, 2 * RADIUS),
-    style = Stroke(WIDTH, cap = StrokeCap.Round),
+    style = Stroke(width, cap = StrokeCap.Round),
 )
 
 private fun glyph(width: Float) = Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -148,6 +151,7 @@ private fun path(vararg data: String): Path = Path().apply { data.forEach { addP
 private const val GRID = 24f
 private const val RADIUS = 10f
 private const val WIDTH = 2f
+private const val WIDTH_LARGE = 1.6f
 private const val SPIN_SHARE = 0.28f
 
 /** A sliver shows from the start, so a download that has just begun still reads as one. */

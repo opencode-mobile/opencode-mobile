@@ -76,8 +76,8 @@ internal fun BoxScope.SpeechModelSheet(
                     AnnotatedString(model.name),
                     leading = { RowIcon(HexIcons.cpu) },
                     detail =
-                        model.variant?.let { stringResource(R.string.speech_model_detail, it, megabytes(model.bytes)) }
-                            ?: stringResource(R.string.speech_line_on_phone, megabytes(model.bytes)),
+                        model.variant?.let { stringResource(R.string.speech_model_detail, it, SpeechDownload.megabytes(model.bytes)) }
+                            ?: stringResource(R.string.speech_line_on_phone, SpeechDownload.megabytes(model.bytes)),
                 )
                 HexDetailRow(
                     AnnotatedString(model.runtime),
@@ -94,7 +94,9 @@ internal fun BoxScope.SpeechModelSheet(
             }
             HexDetailsSection(stringResource(R.string.speech_pauses)) {
                 HexDetailRow(
-                    AnnotatedString(stringResource(R.string.speech_pauses_title, model.pausesName, megabytes(model.pausesBytes))),
+                    AnnotatedString(
+                        stringResource(R.string.speech_pauses_title, model.pausesName, SpeechDownload.megabytes(model.pausesBytes)),
+                    ),
                     leading = { RowIcon(HexIcons.pause) },
                     detail = stringResource(R.string.speech_pauses_sub),
                     action = { PausesState(model.pauses) },
@@ -134,15 +136,27 @@ private fun Hero(
     val bytes = model?.bytes ?: 0
     val line =
         when (hero) {
-            SpeechHero.NotOnPhone -> stringResource(R.string.speech_line_to_download, megabytes(model?.toDownload ?: 0))
+            SpeechHero.NotOnPhone -> stringResource(R.string.speech_line_to_download, SpeechDownload.megabytes(model?.toDownload ?: 0))
             SpeechHero.Downloading, SpeechHero.ConnectionDropped ->
-                stringResource(R.string.speech_line_of, megabytes(download?.done ?: 0), megabytes(download?.total ?: 0))
+                stringResource(
+                    R.string.speech_line_of,
+                    SpeechDownload.megabytes(download?.done ?: 0),
+                    SpeechDownload.megabytes(
+                        download?.total ?: 0,
+                    ),
+                )
             SpeechHero.Loading -> stringResource(R.string.speech_line_loading)
             SpeechHero.WarmingUp -> stringResource(R.string.speech_line_warming)
-            SpeechHero.Ready -> stringResource(R.string.speech_line_on_phone, megabytes(bytes))
+            SpeechHero.Ready -> stringResource(R.string.speech_line_on_phone, SpeechDownload.megabytes(bytes))
             SpeechHero.Failed ->
-                model?.stopped?.let { stringResource(R.string.speech_line_stopped, megabytes(it.done), megabytes(it.total)) }
-                    ?: stringResource(R.string.speech_line_on_phone, megabytes(bytes))
+                model?.stopped?.let {
+                    stringResource(
+                        R.string.speech_line_stopped,
+                        SpeechDownload.megabytes(it.done),
+                        SpeechDownload.megabytes(it.total),
+                    )
+                }
+                    ?: stringResource(R.string.speech_line_on_phone, SpeechDownload.megabytes(bytes))
         }
     val note =
         when (hero) {
@@ -293,7 +307,7 @@ private fun StatusLines(
             colors.red.copy(alpha = 0.30f),
             stringResource(if (stopped != null) R.string.speech_failed_download else R.string.speech_failed_load),
             if (stopped != null) {
-                stringResource(R.string.speech_failed_download_sub, megabytes(stopped.done))
+                stringResource(R.string.speech_failed_download_sub, SpeechDownload.megabytes(stopped.done))
             } else {
                 stringResource(R.string.speech_failed_load_sub)
             },
@@ -310,7 +324,7 @@ private fun StatusLines(
             colors.text3,
             colors.panel2,
             colors.line,
-            pluralStringResource(R.plurals.speech_waiting, waiting.size, waiting.size, takeClock(waiting.sumOf { it.durationMs })),
+            pluralStringResource(R.plurals.speech_waiting, waiting.size, waiting.size, clock(waiting.sumOf { it.durationMs })),
             stringResource(R.string.speech_waiting_sub),
         )
     }
@@ -380,13 +394,4 @@ private fun PausesState(state: VoiceEngine.PausesState) {
             overflow = TextOverflow.Ellipsis,
         )
     }
-}
-
-/** Megabytes as the model list counts them: 1,000,000 bytes. */
-private fun megabytes(bytes: Long): Int = (bytes / SpeechDownload.MB).toInt()
-
-/** "0:06". */
-private fun takeClock(ms: Long): String {
-    val seconds = ms / 1_000
-    return "%d:%02d".format(seconds / 60, seconds % 60)
 }

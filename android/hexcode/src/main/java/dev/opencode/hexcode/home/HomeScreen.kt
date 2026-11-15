@@ -1659,7 +1659,7 @@ private fun Modifier.bleed(each: Dp): Modifier =
     }
 
 /** 0:04, 1:12. */
-private fun clock(ms: Long): String {
+internal fun clock(ms: Long): String {
     val seconds = (ms.coerceAtLeast(0) / 1000).toInt()
     return "%d:%02d".format(seconds / 60, seconds % 60)
 }

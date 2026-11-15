@@ -166,9 +166,6 @@ class HexServices(
         appScope.launch { prepareSpeech() }
     }
 
-    /** The speech model sheet's Try now: a download waiting to retry after a dropped connection tries again at once. */
-    fun speechTryNow() = voice.tryNow()
-
     /**
      * Downloads the model if needed, loads it, and warms it up with half a second of silence, so the first real take is
      * as fast as the rest ([VoiceEngine.prepare]: the model counts as ready after the warm-up).

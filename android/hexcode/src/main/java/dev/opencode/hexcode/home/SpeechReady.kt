@@ -202,7 +202,7 @@ class SpeechLineMemory {
     var sawGettingReady = false
     var gone = false
 
-    /** What the line shows next for [status]; [Ready] is the cue to hide it after [READY_MS]. */
+    /** What the line shows next for [status]; [Ready], said once per process, is the cue to hide it after [READY_MS]. */
     fun next(status: SpeechStatus): SpeechLineShow =
         when {
             gone -> SpeechLineShow.Hidden
@@ -210,7 +210,11 @@ class SpeechLineMemory {
                 sawGettingReady = true
                 SpeechLineShow.GettingReady
             }
-            sawGettingReady -> SpeechLineShow.Ready
+            sawGettingReady -> {
+                // Gone from now on, so a home made during the 1.6 s (or after it) doesn't say it again.
+                gone = true
+                SpeechLineShow.Ready
+            }
             else -> {
                 // Ready before the line ever showed: nothing to say.
                 gone = true
