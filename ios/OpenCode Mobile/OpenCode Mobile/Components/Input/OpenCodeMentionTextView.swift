@@ -145,6 +145,7 @@ private struct Representable: UIViewRepresentable {
         view.backgroundColor = .clear
         let font = OpenCodeMentionTextViewLayout.font(scale: context.environment.openCodeTextScale)
         view.font = font
+        view.textScale = context.environment.openCodeTextScale
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
         // Keep scroll on. Toggling it from `sizeThatFits` while measuring the
@@ -170,6 +171,7 @@ private struct Representable: UIViewRepresentable {
             uiView.font = font
             uiView.placeholderLabel.font = font
         }
+        uiView.textScale = scale
         context.coordinator.onFocusChange = onFocusChange
         uiView.onDeleteBackwardWhenEmpty = onDeleteBackwardWhenEmpty
         uiView.onPasteAttachments = onPasteAttachments
@@ -384,6 +386,8 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput, OpenCode
     var onDeleteBackwardWhenEmpty: (() -> Void)?
     var onPasteAttachments: (([NSItemProvider]) -> Void)?
     var returnKey: OpenCodeHardwareReturnKey?
+    /// Session Chat text scale, so caret-follow uses the same line cap as the field (#1044).
+    var textScale: CGFloat = 1
     /// Tab or Shift+Tab (`backward`) left the field; nil just stops editing.
     var onTabOut: ((_ backward: Bool) -> Void)?
     var onHistoryKey: ((OpenCodePromptHistoryDirection, String, OpenCodePromptCaret) -> Bool)?
@@ -656,9 +660,10 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput, OpenCode
         }
         let contentHeight = OpenCodeMentionTextViewLayout.contentHeight(
             for: attributedText ?? NSAttributedString(),
-            width: bounds.width
+            width: bounds.width,
+            scale: textScale
         )
-        guard OpenCodeMentionTextViewLayout.shouldScroll(contentHeight: contentHeight) else {
+        guard OpenCodeMentionTextViewLayout.shouldScroll(contentHeight: contentHeight, scale: textScale) else {
             pendingCaretScroll = false
             return
         }
