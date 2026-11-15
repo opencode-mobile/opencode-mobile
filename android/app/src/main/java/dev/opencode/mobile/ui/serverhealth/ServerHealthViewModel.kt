@@ -8,16 +8,16 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.serverhealth.ServerHealthClock
 import dev.opencode.mobile.domain.serverhealth.ServerHealthConnectionState
-import dev.opencode.mobile.domain.serverhealth.ServerHealthEvent
 import dev.opencode.mobile.domain.serverhealth.ServerHealthLiveStatus
 import dev.opencode.mobile.domain.serverhealth.ServerHealthMonitor
-import dev.opencode.mobile.domain.serverhealth.ServerHealthPing
 import dev.opencode.mobile.domain.serverhealth.ServerHealthRange
 import dev.opencode.mobile.domain.serverhealth.ServerHealthReport
 import dev.opencode.mobile.domain.serverhealth.ServerHealthReportBuilder
 import dev.opencode.mobile.domain.serverhealth.ServerHealthStore
 import dev.opencode.mobile.domain.text.UiText
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class ServerHealthUiState(
@@ -57,18 +58,29 @@ class ServerHealthViewModel
         private val _uiState = MutableStateFlow(ServerHealthUiState())
         val uiState: StateFlow<ServerHealthUiState> = _uiState.asStateFlow()
 
+        /** Reads and report building: up to a week of pings, too much for Main during the page's transition. */
+        internal var workDispatcher: CoroutineDispatcher = Dispatchers.Default
+
         private var profileId: String? = null
         private var activeProfileId: String? = null
         private var bindJobs: List<Job> = emptyList()
         private val loadMutex = Mutex()
-        private var loaded: Pair<List<ServerHealthPing>, List<ServerHealthEvent>>? = null
+        private var built: BuiltHealth? = null
         private var liveStatus = ServerHealthLiveStatus()
+
+        /** What [reload] computes off Main; [publish] lays the live status over it. */
+        private class BuiltHealth(
+            val report: ServerHealthReport,
+            val recentPings: List<Int?>,
+            val recentP95Ms: Int?,
+            val storedVersion: String?,
+        )
 
         fun bind(profileId: String) {
             if (this.profileId == profileId) return
             this.profileId = profileId
             bindJobs.forEach { it.cancel() }
-            loaded = null
+            built = null
             _uiState.value = ServerHealthUiState()
             bindJobs =
                 listOf(
@@ -96,9 +108,10 @@ class ServerHealthViewModel
         }
 
         private suspend fun loadProfile(profileId: String) {
-            val profiles = runCatching { profileStore.listProfiles() }.getOrDefault(emptyList())
-            val profile = profiles.firstOrNull { it.id == profileId }
-            activeProfileId = runCatching { profileStore.activeProfile()?.id }.getOrNull()
+            // Only the name, protocol and active id are shown: never decrypt passwords here.
+            val catalog = runCatching { profileStore.catalogWithoutPasswords() }.getOrNull()
+            val profile = catalog?.profiles?.firstOrNull { it.id == profileId }
+            activeProfileId = catalog?.activeId
             _uiState.update {
                 it.copy(
                     profileName = profile?.displayName.orEmpty(),
@@ -115,41 +128,52 @@ class ServerHealthViewModel
 
         private suspend fun reload(profileId: String) {
             loadMutex.withLock {
-                val now = clock.nowMs()
-                val since = now - ServerHealthStore.RETENTION_MS
-                val data =
+                val range = _uiState.value.range
+                val next =
                     try {
-                        store.pings(profileId, since) to store.events(profileId, since)
+                        withContext(workDispatcher) { build(profileId, range) }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
                         return
                     }
                 if (this.profileId != profileId) return
-                loaded = data
+                built = next
             }
             publish(profileId)
         }
 
+        private suspend fun build(
+            profileId: String,
+            range: ServerHealthRange,
+        ): BuiltHealth {
+            val now = clock.nowMs()
+            val since = now - ServerHealthStore.RETENTION_MS
+            val pings = store.pings(profileId, since)
+            val events = store.events(profileId, since)
+            val recent = ServerHealthReportBuilder.recentPings(pings, now)
+            return BuiltHealth(
+                report = ServerHealthReportBuilder.build(pings, events, now, range),
+                recentPings = recent,
+                recentP95Ms = ServerHealthReportBuilder.percentile(recent.filterNotNull(), 0.95),
+                storedVersion = pings.lastOrNull { it.version != null }?.version,
+            )
+        }
+
         private fun publish(profileId: String) {
             if (this.profileId != profileId) return
-            val now = clock.nowMs()
-            val data = loaded
+            val data = built
             val isActive = liveStatus.profileId == profileId || activeProfileId == profileId
             val isLive = liveStatus.profileId == profileId
             _uiState.update { state ->
-                val pings = data?.first.orEmpty()
-                val recent = if (data == null) emptyList() else ServerHealthReportBuilder.recentPings(pings, now)
-                val report = data?.let { ServerHealthReportBuilder.build(it.first, it.second, now, state.range) }
+                // A report for another range stays up until the reload for the new one lands.
                 state.copy(
                     status = if (isLive) liveStatus.state else ServerHealthConnectionState.Stopped,
                     currentPingMs = if (isLive) liveStatus.lastPingMs else null,
-                    recentPings = recent,
-                    recentP95Ms = ServerHealthReportBuilder.percentile(recent.filterNotNull(), 0.95),
-                    report = report,
-                    serverVersion =
-                        (if (isLive) liveStatus.lastVersion else null)
-                            ?: pings.lastOrNull { it.version != null }?.version,
+                    recentPings = data?.recentPings.orEmpty(),
+                    recentP95Ms = data?.recentP95Ms,
+                    report = data?.report,
+                    serverVersion = (if (isLive) liveStatus.lastVersion else null) ?: data?.storedVersion,
                     liveTargets = if (isLive) liveStatus.liveTargets else 0,
                     requiredTargets = if (isLive) liveStatus.requiredTargets else 0,
                     isActiveProfile = isActive,

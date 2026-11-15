@@ -71,7 +71,7 @@ class ServersHealthQuickViewTest {
             serverHealthMonitor = harness.monitor,
             serverHealthStore = store,
             clock = ServerHealthClock { HEALTH_EPOCH + testScheduler.currentTime },
-        )
+        ).also { it.workDispatcher = testDispatcher }
     }
 
     @Test
