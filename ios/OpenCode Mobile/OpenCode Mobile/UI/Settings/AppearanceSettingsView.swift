@@ -182,7 +182,7 @@ struct AppearanceSettingsView: View {
             OpenCodeOverflowMenuEntry(
                 id: "resetTextSizes",
                 title: "appearance.reset_text_sizes",
-                icon: .undo,
+                icon: .restart,
                 enabled: appearance.canResetTextSizes,
                 accessibilityIdentifier: "appearanceResetTextSizes",
                 action: {
@@ -193,7 +193,7 @@ struct AppearanceSettingsView: View {
             OpenCodeOverflowMenuEntry(
                 id: "resetAll",
                 title: "appearance.reset_all",
-                icon: .restart,
+                icon: .undo,
                 enabled: appearance.canResetAll,
                 destructive: true,
                 accessibilityIdentifier: "appearanceResetAll",

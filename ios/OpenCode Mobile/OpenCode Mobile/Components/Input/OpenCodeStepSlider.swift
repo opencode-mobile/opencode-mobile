@@ -27,6 +27,7 @@ struct OpenCodeStepSlider: View {
     let onSelect: (Int) -> Void
 
     @State private var dragIndex: Int?
+    @Environment(\.colorScheme) private var colorScheme
 
     private var shownIndex: Int { dragIndex ?? selectedIndex }
 
@@ -69,18 +70,19 @@ struct OpenCodeStepSlider: View {
                     .frame(height: stepSliderTrackHeight)
                     .padding(.horizontal, stepSliderKnobSize / 2)
                 Capsule()
-                    .fill(OpenCodeColors.interactive)
+                    .fill(OpenCodeColors.textStrong)
                     .frame(width: max(0, x(shownIndex) - stepSliderKnobSize / 2), height: stepSliderTrackHeight)
                     .offset(x: stepSliderKnobSize / 2)
                 ForEach(0 ..< stepCount, id: \.self) { index in
                     let size = index == defaultIndex ? stepSliderDefaultTickSize : stepSliderTickSize
                     Circle()
-                        .fill(index <= shownIndex ? OpenCodeColors.interactive : OpenCodeColors.borderWeakBase)
+                        .fill(index <= shownIndex ? OpenCodeColors.textStrong : OpenCodeColors.borderWeakBase)
                         .frame(width: size, height: size)
                         .position(x: x(index), y: geometry.size.height / 2)
                 }
+                // A surface-coloured knob disappears on a dark card, so dark mode uses the strong ink.
                 Circle()
-                    .fill(OpenCodeColors.backgroundBase)
+                    .fill(colorScheme == .dark ? OpenCodeColors.textStrong : OpenCodeColors.backgroundBase)
                     .overlay(Circle().stroke(OpenCodeColors.borderWeakBase, lineWidth: 1))
                     .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
                     .frame(width: stepSliderKnobSize, height: stepSliderKnobSize)
