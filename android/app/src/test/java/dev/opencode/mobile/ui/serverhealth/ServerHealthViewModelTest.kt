@@ -173,6 +173,32 @@ class ServerHealthViewModelTest {
         }
 
     @Test
+    fun selectRange_retriesTheStoreWhenTheFirstReadFailed() =
+        runTest(testDispatcher) {
+            val seeded = InMemoryServerHealthStore()
+            seedHealthHistory(seeded, "a")
+            var failing = true
+            val store =
+                object : ServerHealthStore by seeded {
+                    override suspend fun pings(
+                        profileId: String,
+                        sinceMs: Long,
+                    ): List<ServerHealthPing> = if (failing) error("store closed") else seeded.pings(profileId, sinceMs)
+                }
+            val harness = MonitorHarness(backgroundScope, store) { HEALTH_EPOCH + testScheduler.currentTime }
+            val viewModel = viewModel(store, harness, activeId = "b")
+            viewModel.bind("a")
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.report)
+            failing = false
+
+            viewModel.selectRange(ServerHealthRange.Week)
+            advanceUntilIdle()
+
+            assertEquals(ServerHealthRange.Week, viewModel.uiState.value.report?.range)
+        }
+
+    @Test
     fun liveStatus_showsOnlyForTheActiveProfile() =
         runTest(testDispatcher) {
             val store = InMemoryServerHealthStore()

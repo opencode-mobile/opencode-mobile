@@ -115,7 +115,9 @@ class ServerHealthViewModel
             _uiState.update { it.copy(range = range) }
             val id = profileId ?: return
             // Built from the week already read, so a store failure cannot strand the old range's chart.
+            // Nothing read yet (the first read failed): retry the store instead.
             viewModelScope.launch {
+                if (record == null) return@launch reload(id)
                 loadMutex.withLock { rebuildLocked(id) }
                 publish(id)
             }
