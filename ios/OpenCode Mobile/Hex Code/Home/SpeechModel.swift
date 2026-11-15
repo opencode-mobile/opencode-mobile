@@ -3,43 +3,89 @@ import Observation
 import os
 import VoiceEngineKit
 
-/// Where the speech model is, as the draft shows it.
+/// Where the speech model is (app plan, "The speech model" and "Speech line and dial").
 enum SpeechStatus: Equatable, Sendable {
-    /// Not loaded yet, or loading.
+    /// Not on the phone, and its download hasn't started in this process.
+    case notOnPhone
+    /// The first download, this far along (also while the connection is down).
+    case downloading(ModelDownload)
+    /// Reading the model into memory; also before the load has begun when the model is on the phone.
     case loading
-    /// The first download, this far along.
-    case downloading(percent: Int)
+    /// One silent take through the engine, so the first real take is as fast as the rest. Takes wait for it.
+    case warmingUp
     case ready
     case failed
+}
+
+/// What the speech model's details sheet says about the model and the pause detector, besides its status.
+struct SpeechDetails: Equatable, Sendable {
+    var modelName: String
+    var runtimeName: String
+    var runtimeDetail: String
+    /// Bytes of the model on the phone; the download's total while it isn't all there yet.
+    var modelBytes: Int64?
+    /// The download as it last stood, for "Stopped at 120 of 640 MB" after a failure.
+    var lastDownload: ModelDownload?
+    var pauseDetectorName: String
+    var pauseDetectorBytes: Int64?
+    var pauseDetector: VoiceEngine.PauseDetectorState
+
+    static let placeholder = SpeechDetails(
+        modelName: "Parakeet V2",
+        runtimeName: VoiceEngine.runtimeName,
+        runtimeDetail: VoiceEngine.runtimeDetail,
+        pauseDetectorName: "Silero VAD",
+        pauseDetector: .notOnPhone
+    )
 }
 
 /// Turns finished takes into text. Recording never waits for it; only transcription does.
 @MainActor
 protocol SpeechTranscribing: AnyObject {
     var status: SpeechStatus { get }
+    /// When the model last became ready (system uptime); nil while it isn't.
+    var readySince: TimeInterval? { get }
+    /// The model and the pause detector, for the details sheet (reads the files on the phone).
+    var details: SpeechDetails { get }
+    /// The download as it last stood, kept after it stopped.
+    var lastDownload: ModelDownload? { get }
     /// Downloads (if needed) and loads the model, once per process; later calls do nothing.
     func start()
     /// Waits until the model is ready (true) or has failed (false).
     func waitUntilReady() async -> Bool
-    /// After a failure: load the model again.
+    /// After a failure: load the model again (the download carries on where it stopped).
     func reload()
+    /// The connection dropped: try again now instead of waiting.
+    func retryNow()
     /// The take's text; "" when it held no speech.
     func transcribe(_ take: RecordedTake) async throws -> String
     /// One part of a locked take; "" when it held no speech.
     func transcribe(part: TakePart) async throws -> String
 }
 
+extension SpeechTranscribing {
+    var readySince: TimeInterval? { status == .ready ? 0 : nil }
+    var details: SpeechDetails { .placeholder }
+    var lastDownload: ModelDownload? { nil }
+    func retryNow() {}
+}
+
 /// The speech model on this phone (Parakeet V2 through `VoiceEngine`). It starts loading after the
 /// first frame (`start()`, once; see `SpeechLoadTrigger`), and after loading transcribes one short take of silence so
-/// the first real take is as fast as the rest. Debug builds can hold readiness back
-/// (`-HexCodeSpeechDelay <seconds>`) or fail the first load (`-HexCodeSpeechFail YES`).
+/// the first real take is as fast as the rest; it counts as ready only after that. Debug builds can hold readiness
+/// back (`-HexCodeSpeechDelay <seconds>`) or fail the first load (`-HexCodeSpeechFail YES`).
 @MainActor
 @Observable
 final class SpeechModel: SpeechTranscribing {
     let voice: VoiceEngine
 
-    @ObservationIgnored private var started = false
+    private var started = false
+    /// The model was on the phone when the process started: before the load begins it reads Loading.
+    @ObservationIgnored private let wasOnPhone: Bool
     @ObservationIgnored private var loadTask: Task<Void, Never>?
+    /// Loaded, and the silent take is being transcribed.
+    private var warmingUp = false
+    private(set) var readySince: TimeInterval?
     /// Debug: readiness is held back for a while after loading.
     private var heldUntilReady = false
     /// Debug: the next load fails.
@@ -49,6 +95,7 @@ final class SpeechModel: SpeechTranscribing {
 
     init(voice: VoiceEngine) {
         self.voice = voice
+        wasOnPhone = VoiceEngine.hasDownloadedModel
         #if DEBUG
         heldUntilReady = UserDefaults.standard.double(forKey: "HexCodeSpeechDelay") > 0
         forcedFailure = UserDefaults.standard.bool(forKey: "HexCodeSpeechFail")
@@ -59,14 +106,38 @@ final class SpeechModel: SpeechTranscribing {
         if debugFailed { return .failed }
         switch voice.modelState {
         case .notLoaded:
+            return started || wasOnPhone ? .loading : .notOnPhone
+        case let .downloading(download):
+            return .downloading(download)
+        case .loading:
             return .loading
-        case let .preparing(fraction, detail):
-            return detail.hasPrefix("Downloading") ? .downloading(percent: Int((fraction * 100).rounded(.down))) : .loading
         case .ready:
-            return heldUntilReady ? .loading : .ready
+            return warmingUp || heldUntilReady || readySince == nil ? .warmingUp : .ready
         case .failed:
             return .failed
         }
+    }
+
+    var details: SpeechDetails {
+        let ready = status == .ready
+        let onPhone = VoiceEngine.hasDownloadedModel
+        let pauseBytes = VoiceEngine.hasDownloadedPauseDetector ? VoiceEngine.pauseDetectorBytesOnPhone : nil
+        return SpeechDetails(
+            modelName: voice.modelName,
+            runtimeName: VoiceEngine.runtimeName,
+            runtimeDetail: VoiceEngine.runtimeDetail,
+            modelBytes: ready || onPhone ? VoiceEngine.modelBytesOnPhone : (voice.lastDownload?.total ?? voice.knownDownloadTotal),
+            lastDownload: voice.lastDownload,
+            pauseDetectorName: VoiceEngine.pauseDetectorName,
+            pauseDetectorBytes: pauseBytes,
+            pauseDetector: voice.pauseDetector
+        )
+    }
+
+    var lastDownload: ModelDownload? { voice.lastDownload }
+
+    func retryNow() {
+        voice.retryNow()
     }
 
     /// Downloads (if needed) and loads the model, once per process.
@@ -103,8 +174,12 @@ final class SpeechModel: SpeechTranscribing {
                 return
             }
             HexLog.dictation.info("speech: model loaded in \(hexMilliseconds(from: begun, to: loaded)) ms")
-            await self.warmUp()
-            HexLog.dictation.info("speech: warm-up took \(hexMilliseconds(from: loaded, to: ProcessInfo.processInfo.systemUptime)) ms")
+            if self.readySince == nil {
+                self.warmingUp = true
+                await self.warmUp()
+                self.warmingUp = false
+                HexLog.dictation.info("speech: warm-up took \(hexMilliseconds(from: loaded, to: ProcessInfo.processInfo.systemUptime)) ms")
+            }
             #if DEBUG
             let delay = UserDefaults.standard.double(forKey: "HexCodeSpeechDelay")
             if delay > 0, self.heldUntilReady {
@@ -112,6 +187,7 @@ final class SpeechModel: SpeechTranscribing {
                 self.heldUntilReady = false
             }
             #endif
+            if self.readySince == nil { self.readySince = ProcessInfo.processInfo.systemUptime }
         }
     }
 
@@ -128,7 +204,7 @@ final class SpeechModel: SpeechTranscribing {
             switch status {
             case .ready: return true
             case .failed: return false
-            case .loading, .downloading: await nextChange()
+            case .notOnPhone, .downloading, .loading, .warmingUp: await nextChange()
             }
         }
     }

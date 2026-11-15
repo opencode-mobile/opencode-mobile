@@ -2,7 +2,8 @@
 import PackageDescription
 
 // Hex Code's on-device speech engine on iOS: Parakeet V2 through FluidAudio (CoreML), and the 16 kHz recorder.
-// adapter/ios/VoiceEngine.swift is the only public surface the app uses.
+// adapter/ios/VoiceEngine.swift is the public surface the app uses, with ModelDownload.swift for the speech model's
+// download progress (bytes, speed, retry countdown).
 let package = Package(
     name: "VoiceEngineKit",
     platforms: [.iOS(.v18)],

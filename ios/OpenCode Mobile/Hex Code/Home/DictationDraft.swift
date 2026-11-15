@@ -92,6 +92,11 @@ struct DictationDraft: Equatable, Sendable {
     var isListening: Bool { recordingID != nil }
     var isTranscribing: Bool { chunks.contains { $0.state == .transcribing } }
     var isWaiting: Bool { chunks.contains { $0.state == .waiting } }
+    /// The takes waiting for the speech model: how many, and how long they are together.
+    var waitingTakes: (count: Int, duration: TimeInterval) {
+        let waiting = chunks.filter { $0.state == .waiting }
+        return (waiting.count, waiting.reduce(0) { $0 + $1.duration })
+    }
     var hasFailed: Bool { chunks.contains { if case .failed = $0.state { true } else { false } } }
     /// An image is still being prepared: Send reads "Preparing".
     var isPreparing: Bool { images.contains(where: \.isPreparing) }
@@ -370,27 +375,24 @@ struct DictationDraft: Equatable, Sendable {
     }
 }
 
-/// What the draft's label line says (app plan, "The speech model" › Showing it): the take being
-/// recorded; else, only while a take waits for speech, the model's progress; "Speech model didn't
-/// load" when it failed and takes are left without text; else Transcribing; else the summary.
+/// What the draft's label line says (app plan, "The speech model" › Showing it, and "Speech line and dial" › Draft
+/// label): the take being recorded; else, only while a take waits for speech, the model's state with the dial
+/// ("Speech model · 120 of 640 MB · 2 min left", "· retrying in 4 s", "loading…"); "Speech model didn't load" when
+/// it failed and takes are left without text; else Transcribing; else the summary.
 enum DraftStatusLine: Equatable, Sendable {
     case recording
-    case speechDownloading(percent: Int)
-    case speechLoading
-    case speechFailed
+    /// A take waits for the speech model, or failed for it. Tapping it opens the model's details.
+    case speech(SpeechLine)
     case transcribing
     case summary
 
-    static func of(isRecording: Bool, draft: DictationDraft, speech: SpeechStatus) -> DraftStatusLine {
+    static func of(isRecording: Bool, draft: DictationDraft, speech: SpeechStatus, now: Date = Date()) -> DraftStatusLine {
         if isRecording { return .recording }
         if draft.isWaiting {
-            switch speech {
-            case let .downloading(percent): return .speechDownloading(percent: percent)
-            case .failed: return .speechFailed
-            case .loading, .ready: return .speechLoading
-            }
+            // Ready with a take still waiting is the moment before it starts: it reads as loading.
+            return .speech(speech == .ready ? .loading : SpeechLine.of(speech, now: now))
         }
-        if speech == .failed, draft.hasFailed { return .speechFailed }
+        if speech == .failed, draft.hasFailed { return .speech(.failed) }
         if draft.isTranscribing { return .transcribing }
         return .summary
     }

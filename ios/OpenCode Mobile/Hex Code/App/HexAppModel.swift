@@ -138,6 +138,8 @@ final class HexAppModel {
         main.onLeaveSample = { [weak self] in self?.leaveSample() }
         self.main = main
         phase = .main
+        // The sample skips first run's scan step, which is what starts the download on a fresh install.
+        prepareSpeech()
     }
 
     /// Leave, in the sample from Welcome: it goes, and first run shows where it was.

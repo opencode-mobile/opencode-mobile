@@ -666,6 +666,8 @@ final class HomeModel {
     private(set) var lastSent: SentMessage?
     /// The reader is open on the draft.
     var showsDraftReader = false
+    /// The speech model's details sheet, from the speech line, the draft's label or Settings › Speech model.
+    var showsSpeechModel = false
 
     /// The reader's paragraphs and meta for `text` (the You line): the phone's own message when it is
     /// this one, else the text as one paragraph, with what went with it.

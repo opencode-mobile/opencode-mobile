@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import VoiceEngineKit
 @testable import Hex_Code
 
 /// The draft's chunk states: Listening → Transcribing → text, re-record, drop, delete, Clear.
@@ -485,7 +486,7 @@ struct WaitingTakeTests {
     }
 
     @Test func threeWaitingTakesComeOutInTheOrderTheyWereRecorded() async {
-        let speech = FakeSpeech(.downloading(percent: 45))
+        let speech = FakeSpeech(.downloading(ModelDownload(done: 288_000_000, total: 640_000_000)))
         let recorder = FakeRecorder()
         let (home, clock) = make(speech, recorder: recorder)
         for _ in 0 ..< 3 { await take(home, clock) }
@@ -504,7 +505,7 @@ struct WaitingTakeTests {
         speech.status = .failed
         await eventually { home.canRetryTakes }
         #expect(home.draft.chunks.map(\.state) == [.failed("Couldn’t turn this take into text")])
-        #expect(DraftStatusLine.of(isRecording: false, draft: home.draft, speech: speech.status) == .speechFailed)
+        #expect(DraftStatusLine.of(isRecording: false, draft: home.draft, speech: speech.status) == .speech(.failed))
         home.retryFailedTakes()
         #expect(speech.reloads == 1)
         #expect(home.draft.chunks.map(\.state) == [.waiting])
@@ -544,18 +545,20 @@ struct WaitingTakeTests {
     @Test func theLabelLineRules() {
         var draft = DictationDraft()
         let id = draft.beginTake()!
+        let download = ModelDownload(done: 120_400_000, total: 640_000_000, secondsLeft: 61)
         #expect(DraftStatusLine.of(isRecording: true, draft: draft, speech: .loading) == .recording)
         draft.endTake(duration: 1)
         #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .ready) == .transcribing)
         draft.markWaiting(id)
-        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .loading) == .speechLoading)
-        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .downloading(percent: 45)) == .speechDownloading(percent: 45))
-        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .failed) == .speechFailed)
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .loading) == .speech(.loading))
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .warmingUp) == .speech(.loading))
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .downloading(download)) == .speech(.downloading(doneMB: 120, totalMB: 640, minutesLeft: 2)))
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .failed) == .speech(.failed))
         _ = draft.beginTranscribing(id)
         draft.finishTranscription(id, text: "Hello")
         // Nothing waits: the model's state doesn't show.
         #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .loading) == .summary)
-        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .downloading(percent: 10)) == .summary)
+        #expect(DraftStatusLine.of(isRecording: false, draft: draft, speech: .downloading(download)) == .summary)
     }
 
     @Test func aTooShortTakeLeavesNoChunk() async {

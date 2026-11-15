@@ -3649,17 +3649,6 @@
         }
       }
     },
-    "home.speech.downloading": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Downloading the speech model · %lld%%"
-          }
-        }
-      }
-    },
     "home.speech.failed": {
       "extractionState": "manual",
       "localizations": {
@@ -6006,6 +5995,666 @@
           "stringUnit": {
             "state": "translated",
             "value": "Version"
+          }
+        }
+      }
+    },
+    "speech.line.downloading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model · %1$lld of %2$lld MB"
+          }
+        }
+      }
+    },
+    "speech.line.downloading_left": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model · %1$lld of %2$lld MB · %3$lld min left"
+          }
+        }
+      }
+    },
+    "speech.line.downloading_soon": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model · %1$lld of %2$lld MB · under a minute left"
+          }
+        }
+      }
+    },
+    "speech.line.downloading_unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model · downloading…"
+          }
+        }
+      }
+    },
+    "speech.line.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows the speech model’s details"
+          }
+        }
+      }
+    },
+    "speech.line.not_on_phone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model not on this phone yet"
+          }
+        }
+      }
+    },
+    "speech.line.ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech ready"
+          }
+        }
+      }
+    },
+    "speech.line.retrying": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model · retrying in %lld s"
+          }
+        }
+      }
+    },
+    "speech.line.trying": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model · trying again…"
+          }
+        }
+      }
+    },
+    "speech.sheet.downloading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading"
+          }
+        }
+      }
+    },
+    "speech.sheet.downloads_once": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads once, then stays on this phone"
+          }
+        }
+      }
+    },
+    "speech.sheet.dropped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection dropped"
+          }
+        }
+      }
+    },
+    "speech.sheet.kept": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "your takes are kept"
+          }
+        }
+      }
+    },
+    "speech.sheet.kept_failing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download kept failing."
+          }
+        }
+      }
+    },
+    "speech.sheet.load_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The model didn’t load."
+          }
+        }
+      }
+    },
+    "speech.sheet.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading"
+          }
+        }
+      }
+    },
+    "speech.sheet.loading.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a few seconds"
+          }
+        }
+      }
+    },
+    "speech.sheet.loading.line": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the model into memory"
+          }
+        }
+      }
+    },
+    "speech.sheet.loads_again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again loads it again."
+          }
+        }
+      }
+    },
+    "speech.sheet.mb": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld MB"
+          }
+        }
+      }
+    },
+    "speech.sheet.measuring": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "measuring speed…"
+          }
+        }
+      }
+    },
+    "speech.sheet.model_detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Core ML · %@"
+          }
+        }
+      }
+    },
+    "speech.sheet.model_detail_plain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Core ML"
+          }
+        }
+      }
+    },
+    "speech.sheet.never_leaves": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech never leaves it."
+          }
+        }
+      }
+    },
+    "speech.sheet.not_on_phone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not on this phone yet"
+          }
+        }
+      }
+    },
+    "speech.sheet.of": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld of %2$lld MB"
+          }
+        }
+      }
+    },
+    "speech.sheet.on_phone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ on this phone"
+          }
+        }
+      }
+    },
+    "speech.sheet.on_phone_plain": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On this phone"
+          }
+        }
+      }
+    },
+    "speech.sheet.on_phone_runs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs on this phone"
+          }
+        }
+      }
+    },
+    "speech.sheet.on_this_phone": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On this phone"
+          }
+        }
+      }
+    },
+    "speech.sheet.pause_detector": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause detector"
+          }
+        }
+      }
+    },
+    "speech.sheet.phase.download": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download"
+          }
+        }
+      }
+    },
+    "speech.sheet.phase.load": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load"
+          }
+        }
+      }
+    },
+    "speech.sheet.phase.ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready"
+          }
+        }
+      }
+    },
+    "speech.sheet.phase.warm": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warm up"
+          }
+        }
+      }
+    },
+    "speech.sheet.picks_up": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "picks up where it stopped"
+          }
+        }
+      }
+    },
+    "speech.sheet.picks_up_at": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again picks up at %lld MB."
+          }
+        }
+      }
+    },
+    "speech.sheet.ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready"
+          }
+        }
+      }
+    },
+    "speech.sheet.ready.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "loaded · warmed up"
+          }
+        }
+      }
+    },
+    "speech.sheet.retries": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retries after 1, 2, 4 and 8 s, then it stops."
+          }
+        }
+      }
+    },
+    "speech.sheet.retrying": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retrying in %lld s"
+          }
+        }
+      }
+    },
+    "speech.sheet.speed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ MB/s"
+          }
+        }
+      }
+    },
+    "speech.sheet.speed_left": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ MB/s · about %2$lld min left"
+          }
+        }
+      }
+    },
+    "speech.sheet.speed_soon": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ MB/s · under a minute left"
+          }
+        }
+      }
+    },
+    "speech.sheet.starting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting the download"
+          }
+        }
+      }
+    },
+    "speech.sheet.starts_soon": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "starts in a moment, in the background"
+          }
+        }
+      }
+    },
+    "speech.sheet.stopped": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped at %@"
+          }
+        }
+      }
+    },
+    "speech.sheet.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speech model"
+          }
+        }
+      }
+    },
+    "speech.sheet.to_download": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld MB to download"
+          }
+        }
+      }
+    },
+    "speech.sheet.try_now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try now"
+          }
+        }
+      }
+    },
+    "speech.sheet.trying": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trying again…"
+          }
+        }
+      }
+    },
+    "speech.sheet.vad.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuts locked takes at pauses"
+          }
+        }
+      }
+    },
+    "speech.sheet.vad.downloaded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloaded"
+          }
+        }
+      }
+    },
+    "speech.sheet.vad.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Didn’t load"
+          }
+        }
+      }
+    },
+    "speech.sheet.waiting": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld takes waiting · %2$@"
+          }
+        }
+      }
+    },
+    "speech.sheet.waiting.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It turns into text as soon as the model is ready."
+          }
+        }
+      }
+    },
+    "speech.sheet.waiting_one": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 take waiting · %@"
+          }
+        }
+      }
+    },
+    "speech.sheet.warming": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warming up"
+          }
+        }
+      }
+    },
+    "speech.sheet.warming.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "so your first take is as fast as the rest"
+          }
+        }
+      }
+    },
+    "speech.sheet.warming.line": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One silent test take"
           }
         }
       }
