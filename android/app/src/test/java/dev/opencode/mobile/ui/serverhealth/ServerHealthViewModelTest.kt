@@ -7,7 +7,10 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.serverhealth.InMemoryServerHealthStore
 import dev.opencode.mobile.domain.serverhealth.ServerHealthClock
 import dev.opencode.mobile.domain.serverhealth.ServerHealthConnectionState
+import dev.opencode.mobile.domain.serverhealth.ServerHealthEvent
+import dev.opencode.mobile.domain.serverhealth.ServerHealthPing
 import dev.opencode.mobile.domain.serverhealth.ServerHealthRange
+import dev.opencode.mobile.domain.serverhealth.ServerHealthStore
 import dev.opencode.mobile.domain.text.UiText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -41,7 +44,7 @@ class ServerHealthViewModelTest {
     }
 
     private fun TestScope.viewModel(
-        store: InMemoryServerHealthStore,
+        store: ServerHealthStore,
         harness: MonitorHarness,
         activeId: String? = "a",
         profileStore: ConnectionProfileStore = ProfilesStore(listOf(workProfile, homeProfile), activeId),
@@ -137,6 +140,36 @@ class ServerHealthViewModelTest {
                     ?.buckets
                     ?.size,
             )
+        }
+
+    @Test
+    fun selectRange_buildsTheNewRangeEvenWhenTheStoreFails() =
+        runTest(testDispatcher) {
+            val seeded = InMemoryServerHealthStore()
+            seedHealthHistory(seeded, "a")
+            var failing = false
+            val store =
+                object : ServerHealthStore by seeded {
+                    override suspend fun pings(
+                        profileId: String,
+                        sinceMs: Long,
+                    ): List<ServerHealthPing> = if (failing) error("store closed") else seeded.pings(profileId, sinceMs)
+
+                    override suspend fun events(
+                        profileId: String,
+                        sinceMs: Long,
+                    ): List<ServerHealthEvent> = if (failing) error("store closed") else seeded.events(profileId, sinceMs)
+                }
+            val harness = MonitorHarness(backgroundScope, store) { HEALTH_EPOCH + testScheduler.currentTime }
+            val viewModel = viewModel(store, harness, activeId = "b")
+            viewModel.bind("a")
+            advanceUntilIdle()
+            failing = true
+
+            viewModel.selectRange(ServerHealthRange.Week)
+            advanceUntilIdle()
+
+            assertEquals(ServerHealthRange.Week, viewModel.uiState.value.report?.range)
         }
 
     @Test
