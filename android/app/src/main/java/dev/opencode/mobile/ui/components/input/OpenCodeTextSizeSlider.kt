@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -74,7 +75,8 @@ fun OpenCodeTextSizeSlider(
     val textWeak = openCodeColor("text-weak")
     val track = openCodeColor("border-weak-base")
     val defaultTick = openCodeColor("text-weaker")
-    val thumbColor = openCodeColor("surface-raised-base")
+    // A raised-surface thumb disappears on a dark card, so dark mode uses the strong ink instead.
+    val thumbColor = if (LocalOpenCodeDarkTheme.current) textStrong else openCodeColor("surface-raised-base")
     val thumbBorder = openCodeColor("border-weak-base")
 
     Column(
