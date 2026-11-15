@@ -160,7 +160,7 @@ class VoiceEngine(
                         val pauses = SpeechModels.PAUSES.takeUnless { store.isInstalled(it) }
                         all = model.bytes + (pauses?.bytes ?: 0)
                         done = store.bytesOnPhone(model)
-                        val rate = DownloadRate()
+                        var rate = DownloadRate()
                         var retryIn: Int? = null
                         var estimate: DownloadRate.Estimate? = null
                         val report = {
@@ -178,12 +178,15 @@ class VoiceEngine(
                         }
                         val progress = { bytes: Long ->
                             done = bytes
+                            // Bytes again after a drop: the speed is measured afresh, so the wait doesn't count.
+                            if (retryIn != null) rate = DownloadRate()
                             retryIn = null
                             estimate = rate.estimate(bytes, all)
                             report()
                         }
                         val retrying = { seconds: Int ->
                             retryIn = seconds
+                            estimate = null
                             report()
                         }
                         report()
