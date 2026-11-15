@@ -269,6 +269,45 @@ struct ChangesViewModelTests {
         #expect(repository.requests == [.init(sessionID: "s", messageID: "m", directory: "/w")])
     }
 
+    @Test func emptyGitChangesReadsTheLastTurnCountFromItsSummaryWithoutFetchingTheDiff() async {
+        let store = LastTurnReviewChangesStore()
+        store.publish(
+            sessionID: "s",
+            messageID: "m",
+            summary: ReviewChangesSummary(fileCount: 60, additions: 620_000, deletions: 0, messageID: "m")
+        )
+        let repository = ChangesSessionRepository(
+            results: [.success([Self.file("format.swift")])],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "main", defaultBranch: "main"))],
+            vcsDiffResults: [.success([])]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree,
+            repository: repository, capabilities: Self.turnDiffV2, lastTurnReviewChangesStore: store
+        )
+        await viewModel.load()
+        #expect(viewModel.state.otherSourceHint == ChangesOtherSourceHint(source: .lastTurn, fileCount: 60))
+        #expect(repository.requests.isEmpty)
+    }
+
+    @Test func fileViewerStateParsesItsPatchOnlyWhenReadAndOnce() {
+        var parses = 0
+        let memo = UnifiedDiffDocumentMemo { patch, truncated in
+            parses += 1
+            return UnifiedDiffParser.parse(patch, truncated: truncated)
+        }
+        let file = FileDiff(path: "A.swift", patch: "@@ -1 +1 @@\n-old\n+new\n@@ -5 +5 @@\n-a\n+b", additions: 2, deletions: 2, status: .modified)
+        // A view rebuilds its initial state on every render; unread states never parse.
+        for _ in 0..<10 { _ = FileViewerState(file: file, memo: memo) }
+        #expect(parses == 0)
+        var state = FileViewerState(file: file, memo: memo)
+        #expect(state.hasPreview)
+        state.selectNextHunk()
+        #expect(state.canSelectPreviousHunk)
+        _ = state.document
+        #expect(parses == 1)
+    }
+
     @Test func noHintWhenBothSourcesAreEmptyOrTheLookupFails() async {
         let bothEmpty = ChangesSessionRepository(
             results: [.success([])],
@@ -812,4 +851,175 @@ private final class ChangesSessionRepository: SessionRepository, @unchecked Send
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool { false }
     func unrevertSession(id: String) async throws -> Bool { false }
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?, message: String?) async throws -> Bool { false }
+}
+
+struct UnifiedDiffVisibilityTests {
+    /// The original projection: every context row checked against every changed row.
+    private func quadraticCollapsedRows(_ rows: [UnifiedDiffRow], contextLines: Int) -> [UnifiedDiffRow] {
+        let changed = rows.indices.filter { rows[$0].kind == .addition || rows[$0].kind == .deletion }
+        return rows.enumerated().compactMap { index, row in
+            guard row.kind == .context else { return row }
+            return changed.contains { abs(index - $0) <= contextLines } ? row : nil
+        }
+    }
+
+    /// One hunk of `lines` rows with a change every 50 rows.
+    private func sparsePatch(_ lines: Int) -> String {
+        var body = ""
+        var old = 0
+        var new = 0
+        for index in 0..<lines {
+            if index % 50 == 25 {
+                body += "-gone \(index)\n"; old += 1
+            } else if index % 50 == 26 {
+                body += "+added \(index)\n"; new += 1
+            } else {
+                body += " line \(index)\n"; old += 1; new += 1
+            }
+        }
+        return "@@ -1,\(old) +1,\(new) @@\n" + body
+    }
+
+    private var fixtures: [(String, String)] {
+        let context = (1...7).map { " c\($0)" }.joined(separator: "\n")
+        return [
+            ("existing two hunks", "@@ -2,3 +2,3 @@\n same\n-old\n+new\n next\n@@ -20 +20 @@\n-before\n+after"),
+            ("existing collapse", "@@ -1,17 +1,17 @@\n" + (1...8).map { " before \($0)" }.joined(separator: "\n")
+                + "\n-old\n+new\n" + (1...8).map { " after \($0)" }.joined(separator: "\n")),
+            ("change at start", "@@ -1,8 +1,8 @@\n-a\n+b\n" + context),
+            ("change at end", "@@ -1,8 +1,8 @@\n" + context + "\n-a\n+b"),
+            ("adjacent hunks", "@@ -1,3 +1,3 @@\n c1\n-a\n+b\n c2\n@@ -5,3 +5,3 @@\n c3\n-d\n+e\n c4"),
+            ("no context", "@@ -1,2 +1,2 @@\n-a\n-b\n+c\n+d"),
+            ("context only", "@@ -1,3 +1,3 @@\n a\n b\n c"),
+            ("sparse", sparsePatch(400)),
+        ]
+    }
+
+    @Test func collapsedRowsMatchTheQuadraticDefinitionOnEveryFixture() {
+        for (name, patch) in fixtures {
+            let document = UnifiedDiffParser.parse(patch)
+            for contextLines in [0, 1, 3, 5] {
+                #expect(
+                    document.visibleRows(contextMode: .collapsed, contextLines: contextLines)
+                        == quadraticCollapsedRows(document.rows, contextLines: contextLines),
+                    "\(name), context \(contextLines)"
+                )
+            }
+            #expect(document.visibleRows(contextMode: .expanded) == document.rows, "\(name)")
+        }
+    }
+
+    @Test func collapsedRowsTakeLinearWorkInTheRowCount() {
+        for lines in [10_000, 40_000] {
+            let rows = UnifiedDiffParser.parse(sparsePatch(lines)).rows
+            var steps = 0
+            _ = UnifiedDiffVisibility.collapsedRows(rows, contextLines: 3) { steps += 1 }
+            #expect(steps == 2 * rows.count)
+        }
+    }
+
+    @Test func memoParsesAPatchOncePerPatchValue() {
+        var parses = 0
+        let memo = UnifiedDiffDocumentMemo { patch, truncated in
+            parses += 1
+            return UnifiedDiffParser.parse(patch, truncated: truncated)
+        }
+        let patch = sparsePatch(500)
+        let first = memo.document(for: patch)
+        for _ in 0..<10 { #expect(memo.document(for: patch) == first) }
+        #expect(parses == 1)
+        _ = memo.document(for: "@@ -1 +1 @@\n-a\n+b")
+        #expect(parses == 2)
+    }
+
+    @Test func truncatedPatchKeepsItsCutLastHunk() {
+        let cut = "@@ -1 +1 @@\n-a\n+b\n@@ -10,5 +10,5 @@\n same\n-old"
+        #expect(UnifiedDiffParser.parse(cut).hunks.isEmpty)
+        let document = UnifiedDiffParser.parse(cut, truncated: true)
+        #expect(document.hunks.count == 2)
+        #expect(document.hunks[1].rows.map(\.text) == ["same", "old"])
+        #expect(UnifiedDiffParser.parse("@@ -1,2 +1 @@\n-a\n+b\n@@ -10 +10 @@\n-c\n+d", truncated: true).hunks.isEmpty)
+    }
+
+    @Test func widestRowsPickTheRowsWithMostColumns() {
+        let rows = UnifiedDiffParser.parse(sparsePatch(200)).rows
+        let wide = UnifiedDiffParser.parse("@@ -0,0 +1,2 @@\n+" + String(repeating: "x", count: 300) + "\n+" + String(repeating: "界", count: 200)).rows
+        let widest = UnifiedDiffVisibility.widestRows(rows + wide, limit: 2)
+        #expect(Set(widest.map(\.text)) == [String(repeating: "x", count: 300), String(repeating: "界", count: 200)])
+        #expect(UnifiedDiffVisibility.displayColumns(String(repeating: "界", count: 200)) == 400)
+    }
+
+    @Test func rowWindowCoversTheShownRowsPlusOverscanInBlocks() {
+        let window = UnifiedDiffRowWindow.rows(shownTop: 2_000, shownBottom: 3_000, rowHeight: 20, overscan: 1_000, rowCount: 10_000)
+        #expect(window.lowerBound == 32)
+        #expect(window.upperBound >= 200)
+        #expect(window.upperBound % UnifiedDiffRowWindow.blockRows == 0)
+        #expect(UnifiedDiffRowWindow.rows(shownTop: 0, shownBottom: 0, rowHeight: 20, overscan: 1_000, rowCount: 10) == 0..<10)
+    }
+}
+
+struct UnifiedPatchTests {
+    /// The original builder: split both files and join prefixed lines.
+    private func splitAndJoin(_ before: String, _ after: String) -> String {
+        let oldLines = before.isEmpty ? [] : before.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let newLines = after.isEmpty ? [] : after.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var rows = ["@@ -\(oldLines.isEmpty ? 0 : 1),\(oldLines.count) +\(newLines.isEmpty ? 0 : 1),\(newLines.count) @@"]
+        rows.append(contentsOf: oldLines.map { "-" + $0 })
+        rows.append(contentsOf: newLines.map { "+" + $0 })
+        return rows.joined(separator: "\n")
+    }
+
+    @Test func buildsTheSamePatchAsSplittingAndJoiningBothFiles() {
+        let cases = [("old", "new"), ("", "hello"), ("goodbye", ""), ("a\nb\n", "a\nc\n"), ("one\r\ntwo", "one\r\nthree\n\n"), ("\n", "x"), ("a\r\n\nb", "c")]
+        for (before, after) in cases {
+            let preview = UnifiedPatch.fromContents(before: before, after: after)
+            #expect(preview?.text == splitAndJoin(before, after), "\(before) -> \(after)")
+            #expect(preview?.isTruncated == false)
+        }
+        #expect(UnifiedPatch.fromContents(before: "same", after: "same") == nil)
+        #expect(UnifiedPatch.fromContents(before: nil, after: "x") == nil)
+    }
+
+    @Test func readsEachInputByteABoundedNumberOfTimes() {
+        let text = (1...20_000).map { "line \($0)" }.joined(separator: "\n")
+        let reads = ReadCounter()
+        let before = CountingBytes(bytes: Array(text.utf8), counter: reads)
+        let after = CountingBytes(bytes: Array(text.replacingOccurrences(of: "line 7", with: "LINE 7").utf8), counter: reads)
+        let preview = UnifiedPatch.build(before: before, after: after, limit: .max)
+        // Count lines, then copy: two reads per byte.
+        #expect(reads.count <= 2 * (before.count + after.count))
+        #expect(preview.text == splitAndJoin(text, text.replacingOccurrences(of: "line 7", with: "LINE 7")))
+    }
+
+    @Test func stopsAtTheLimitOnALineEnd() {
+        let before = (1...1_000).map { "old line \($0)" }.joined(separator: "\n")
+        let after = (1...1_000).map { "new line \($0)" }.joined(separator: "\n")
+        let preview = UnifiedPatch.fromContents(before: before, after: after, limit: 5_000)!
+        #expect(preview.isTruncated)
+        #expect(preview.text.utf8.count <= 5_000)
+        #expect(splitAndJoin(before, after).hasPrefix(preview.text + "\n"))
+    }
+
+    @Test func cutsALongServerPatchAtItsLastLineEnd() {
+        let patch = "@@ -1,3 +1,3 @@\n-aaaa\n+bbbb\n cccc"
+        #expect(UnifiedPatch.preview(patch, limit: patch.utf8.count) == .init(text: patch, isTruncated: false))
+        #expect(UnifiedPatch.preview(patch, limit: 24) == .init(text: "@@ -1,3 +1,3 @@\n-aaaa", isTruncated: true))
+    }
+}
+
+private final class ReadCounter {
+    var count = 0
+}
+
+private struct CountingBytes: BidirectionalCollection {
+    let bytes: [UInt8]
+    let counter: ReadCounter
+    var startIndex: Int { bytes.startIndex }
+    var endIndex: Int { bytes.endIndex }
+    func index(after index: Int) -> Int { index + 1 }
+    func index(before index: Int) -> Int { index - 1 }
+    subscript(position: Int) -> UInt8 {
+        counter.count += 1
+        return bytes[position]
+    }
 }

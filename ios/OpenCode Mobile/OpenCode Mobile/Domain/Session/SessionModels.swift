@@ -367,6 +367,8 @@ struct FileDiff: Sendable, Equatable, Identifiable {
     let additions: Int
     let deletions: Int
     let status: FileDiffStatus
+    /// `patch` holds only the first `UnifiedPatch.previewBytes` of a larger diff, cut at a line end.
+    var isPatchTruncated = false
 }
 
 /// One uncommitted working-copy change reported by the server VCS status endpoint.

@@ -136,20 +136,29 @@ struct ChangesContentState: Equatable {
     }
 }
 
+/// One file's diff in the viewer. Parsing waits for the first read of `document`, so a view
+/// that rebuilds this state on every render (and drops it) never parses the patch.
 struct FileViewerState: Equatable {
     let file: FileDiff
-    let document: UnifiedDiffDocument
     var contextMode: UnifiedDiffContextMode = .collapsed
-    var selectedHunkID: Int?
+    private var navigatedHunkID: Int?
+    private let memo: UnifiedDiffDocumentMemo
 
-    init(file: FileDiff) {
+    init(file: FileDiff, memo: UnifiedDiffDocumentMemo = UnifiedDiffDocumentMemo()) {
         self.file = file
-        document = UnifiedDiffParser.parse(file.patch ?? "")
-        selectedHunkID = document.hunks.first?.id
+        self.memo = memo
     }
 
+    static func == (lhs: FileViewerState, rhs: FileViewerState) -> Bool {
+        lhs.file == rhs.file && lhs.contextMode == rhs.contextMode && lhs.navigatedHunkID == rhs.navigatedHunkID
+    }
+
+    var document: UnifiedDiffDocument { memo.document(for: file.patch ?? "", truncated: file.isPatchTruncated) }
+    var selectedHunkID: Int? { navigatedHunkID ?? document.hunks.first?.id }
     var hasPreview: Bool { !document.hunks.isEmpty }
-    var canExpandContext: Bool { document.visibleRows(contextMode: .collapsed).count < document.rows.count }
+    var canExpandContext: Bool { document.canExpandContext }
+    /// The diff shows only the first `UnifiedPatch.previewBytes` of this file's changes.
+    var isTruncated: Bool { file.isPatchTruncated }
     var canSelectPreviousHunk: Bool { selectedHunkIndex.map { $0 > 0 } ?? false }
     var canSelectNextHunk: Bool { selectedHunkIndex.map { $0 < document.hunks.count - 1 } ?? false }
 
@@ -161,14 +170,15 @@ struct FileViewerState: Equatable {
     }
 
     private var selectedHunkIndex: Int? {
-        document.hunks.firstIndex { $0.id == selectedHunkID }
+        let selectedHunkID = selectedHunkID
+        return document.hunks.firstIndex { $0.id == selectedHunkID }
     }
 
     private mutating func moveHunk(by offset: Int) {
         guard let selectedHunkIndex else { return }
         let target = selectedHunkIndex + offset
         guard document.hunks.indices.contains(target) else { return }
-        selectedHunkID = document.hunks[target].id
+        navigatedHunkID = document.hunks[target].id
     }
 }
 
@@ -427,7 +437,7 @@ final class ChangesViewModel {
                 count = try await repository.getVcsStatus(directory: worktree).count
             case .lastTurn:
                 guard let messageID else { return }
-                count = try await repository.getSessionDiff(id: sessionID, messageID: messageID, directory: worktree).count
+                count = try await lastTurnFileCount(messageID: messageID)
             }
         } catch {
             OpenCodeLog.changes.info("hint source=\(other.logValue) session=\(self.sessionID) result=failure")
@@ -435,6 +445,18 @@ final class ChangesViewModel {
         }
         guard count > 0, revision == loadRevision, state.phase == .noChanges, state.selectedSource == emptySource else { return }
         state.otherSourceHint = ChangesOtherSourceHint(source: other, fileCount: count)
+    }
+
+    /// The turn's file count from its published summary when Changes already loaded it; otherwise
+    /// one fetch, published as the summary so the next look needs none. The files are not kept.
+    private func lastTurnFileCount(messageID: String) async throws -> Int {
+        if let snapshot = lastTurnReviewChangesStore.snapshot(sessionID: sessionID),
+           snapshot.messageID == messageID, let summary = snapshot.summary {
+            return summary.fileCount
+        }
+        let files = try await repository.getSessionDiff(id: sessionID, messageID: messageID, directory: worktree)
+        publishLastTurnSummary(source: .lastTurn, files: files, failed: false)
+        return files.count
     }
 
     private func preferredSource(from requested: ChangeSource) -> ChangeSource {

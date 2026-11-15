@@ -38,13 +38,37 @@ object ProjectFileContentDecoder {
             return ProjectFileContent.Binary(mimeType = mimeType, byteCount = bytes?.size?.toLong())
         }
         if (content.isEmpty()) return ProjectFileContent.Empty
-        val bytes = content.encodeToByteArray()
-        if (bytes.size <= ProjectFileLimits.TEXT_PREVIEW_BYTES) {
-            return ProjectFileContent.Text(content, isTruncated = false, totalBytes = bytes.size.toLong())
+        // Count the UTF-8 size first; only text past the limit is encoded to be cut.
+        val byteCount = utf8Length(content)
+        if (byteCount <= ProjectFileLimits.TEXT_PREVIEW_BYTES) {
+            return ProjectFileContent.Text(content, isTruncated = false, totalBytes = byteCount)
         }
+        val bytes = content.encodeToByteArray()
         val prefix =
             truncatedText(bytes, ProjectFileLimits.TEXT_PREVIEW_BYTES) ?: return ProjectFileContent.Binary(mimeType, bytes.size.toLong())
         return ProjectFileContent.Text(prefix, isTruncated = true, totalBytes = bytes.size.toLong())
+    }
+
+    /** UTF-8 bytes [text] encodes to, without encoding it; an unpaired surrogate counts as the one `?` byte the encoder writes. */
+    internal fun utf8Length(text: String): Long {
+        var bytes = 0L
+        var index = 0
+        while (index < text.length) {
+            val char = text[index]
+            bytes +=
+                when {
+                    char.code < 0x80 -> 1
+                    char.code < 0x800 -> 2
+                    char.isHighSurrogate() && index + 1 < text.length && text[index + 1].isLowSurrogate() -> {
+                        index++
+                        4
+                    }
+                    char.isSurrogate() -> 1
+                    else -> 3
+                }
+            index++
+        }
+        return bytes
     }
 
     /** v1 body that went past [ProjectFileLimits.V1_BODY_BYTES]; the file size is unknown. */

@@ -482,6 +482,31 @@ class FilesViewModelTest {
             assertTrue(lines.all { it.spans.isNotEmpty() })
         }
 
+    @Test
+    fun progressiveSession_aFileLongerThanTheColorLimitKeepsColorsOnlyAroundTheVisibleLines() =
+        runTest(dispatcher) {
+            val highlighter = SessionHighlighter()
+            val viewModel = viewModel(FakeFilesRepository(), highlighter)
+            viewModel.bind("/repo")
+            advanceUntilIdle()
+
+            viewModel.openFile("huge.kt")
+            advanceUntilIdle()
+            var lines = viewModel.activeText().lines
+            assertEquals(25_000, lines.size)
+            assertEquals(FilesViewModel.MAX_COLORED_LINES, lines.count { it.spans.isNotEmpty() })
+            assertTrue(lines[0].spans.isNotEmpty())
+            assertTrue(lines[24_999].spans.isEmpty())
+
+            viewModel.onVisibleLinesChange("huge.kt", 24_000, 24_040)
+            advanceUntilIdle()
+            lines = viewModel.activeText().lines
+            assertTrue(lines[24_999].spans.isNotEmpty())
+            assertTrue(lines[0].spans.isEmpty())
+            assertEquals("fun f1() {}", lines[0].text)
+            assertEquals(FilesViewModel.MAX_COLORED_LINES, lines.count { it.spans.isNotEmpty() })
+        }
+
     private fun FilesViewModel.activeText(): FilesViewerContent.Text {
         val viewer = requireNotNull(uiState.value.activeViewer)
         return viewer.content as FilesViewerContent.Text
@@ -549,6 +574,7 @@ private class FakeFilesRepository(
         return when (relativePath) {
             "src/main.kt" -> ProjectFileContent.Text("fun main() {\n}\n")
             "long.kt" -> ProjectFileContent.Text((1..5_000).joinToString("\n", postfix = "\n") { "fun f$it() {}" })
+            "huge.kt" -> ProjectFileContent.Text((1..25_000).joinToString("\n", postfix = "\n") { "fun f$it() {}" })
             "README.md" -> ProjectFileContent.Text("# Demo\n\nHello **world**.")
             "app.bin" -> ProjectFileContent.Binary(mimeType = "application/octet-stream", byteCount = 10)
             "logo.png" -> ProjectFileContent.Image(byteArrayOf(1, 2, 3), "image/png")

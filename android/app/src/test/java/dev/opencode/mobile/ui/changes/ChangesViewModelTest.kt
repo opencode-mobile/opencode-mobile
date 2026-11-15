@@ -21,6 +21,8 @@ import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.session.VcsInfo
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
+import dev.opencode.mobile.ui.components.UnifiedDiffDocument
+import dev.opencode.mobile.ui.components.UnifiedDiffRow
 import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
@@ -359,6 +361,34 @@ class ChangesViewModelTest {
             assertEquals("The last turn changed 1 file.", hint?.message?.english())
             assertEquals(listOf(Request("s", "m", "/w")), repository.requests)
         }
+
+    @Test fun emptyGitChangesReadsTheLastTurnCountFromItsSummaryWithoutFetchingTheDiff() =
+        runTest(dispatcher) {
+            val store = LastTurnReviewChangesStore()
+            store.publish("s", "m", ReviewChangesSummary(fileCount = 60, additions = 620_000, deletions = 0, messageId = "m"))
+            val repository =
+                FakeRepository(
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("main", "main")))),
+                    vcsDiffResults = ArrayDeque(listOf(Result.success(emptyList()))),
+                )
+            val viewModel = ChangesViewModel(repository, { turnDiffV2 }, store)
+            viewModel.bind("s", "/w", "m", ChangeSource.WorkingTree)
+            advanceUntilIdle()
+
+            assertEquals(ChangesOtherSourceHint(ChangeSource.LastTurn, 60), viewModel.uiState.value.otherSourceHint)
+            assertTrue(repository.requests.isEmpty())
+        }
+
+    @Test fun contentStateHoldsFilesButNoParsedDiffRows() {
+        val heldTypes =
+            ChangesContentState::class.java.declaredFields
+                .map { it.type }
+        assertTrue(heldTypes.none { UnifiedDiffDocument::class.java.isAssignableFrom(it) })
+        assertTrue(heldTypes.none { UnifiedDiffRow::class.java.isAssignableFrom(it) })
+        // Only an opened file parses its patch, and only once per viewer.
+        val viewer = FileViewerState(file("A.kt"))
+        assertTrue(viewer.document === viewer.selectNextHunk().document)
+    }
 
     @Test fun noHintWhenBothSourcesAreEmptyOrTheLookupFails() =
         runTest(dispatcher) {

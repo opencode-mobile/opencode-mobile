@@ -144,12 +144,15 @@ nonisolated struct SessionDomainAdapter: Sendable {
                 status = .modified
             }
         }
+        let preview = dto.patch?.nilIfEmpty.map { UnifiedPatch.preview($0) }
+            ?? UnifiedPatch.fromContents(before: dto.before, after: dto.after)
         return FileDiff(
             path: dto.file,
-            patch: dto.patch?.nilIfEmpty ?? UnifiedPatchBuilder.patch(before: dto.before, after: dto.after),
+            patch: preview?.text,
             additions: dto.additions,
             deletions: dto.deletions,
-            status: status
+            status: status,
+            isPatchTruncated: preview?.isTruncated == true
         )
     }
 
@@ -314,20 +317,6 @@ nonisolated struct SessionDomainAdapter: Sendable {
             return .decoding(error.localizedDescription)
         }
         return .transport(error.localizedDescription)
-    }
-}
-
-private enum UnifiedPatchBuilder {
-    static func patch(before: String?, after: String?) -> String? {
-        guard let before, let after, before != after else { return nil }
-        let oldLines = before.isEmpty ? [] : before.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        let newLines = after.isEmpty ? [] : after.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        let oldStart = oldLines.isEmpty ? 0 : 1
-        let newStart = newLines.isEmpty ? 0 : 1
-        var rows = ["@@ -\(oldStart),\(oldLines.count) +\(newStart),\(newLines.count) @@"]
-        rows.append(contentsOf: oldLines.map { "-" + $0 })
-        rows.append(contentsOf: newLines.map { "+" + $0 })
-        return rows.joined(separator: "\n")
     }
 }
 

@@ -174,10 +174,12 @@ class SessionDomainAdapter {
         }
     }
 
-    fun toFileDiff(dto: FileDiffDto): FileDiff =
-        FileDiff(
+    fun toFileDiff(dto: FileDiffDto): FileDiff {
+        val preview = dto.patch?.takeIf(String::isNotEmpty)?.let(UnifiedPatch::preview) ?: UnifiedPatch.fromContents(dto.before, dto.after)
+        return FileDiff(
             path = dto.resolvedPath,
-            patch = dto.patch?.takeIf(String::isNotEmpty) ?: unifiedPatch(dto.before, dto.after),
+            patch = preview?.text,
+            isPatchTruncated = preview?.isTruncated == true,
             additions = dto.additions,
             deletions = dto.deletions,
             status =
@@ -192,6 +194,7 @@ class SessionDomainAdapter {
                         }
                 },
         )
+    }
 
     fun toVcsInfo(dto: VcsInfoDto) = VcsInfo(dto.branch, dto.defaultBranch)
 
@@ -361,22 +364,6 @@ class SessionDomainAdapter {
             .ofEpochMilli(epochMs)
             .atZone(ZoneId.systemDefault())
             .format(updatedAtFormatter)
-
-    private fun unifiedPatch(
-        before: String?,
-        after: String?,
-    ): String? {
-        if (before == null || after == null || before == after) return null
-        val oldLines = before.takeIf(String::isNotEmpty)?.split("\n").orEmpty()
-        val newLines = after.takeIf(String::isNotEmpty)?.split("\n").orEmpty()
-        val oldStart = if (oldLines.isEmpty()) 0 else 1
-        val newStart = if (newLines.isEmpty()) 0 else 1
-        return buildList {
-            add("@@ -$oldStart,${oldLines.size} +$newStart,${newLines.size} @@")
-            addAll(oldLines.map { "-$it" })
-            addAll(newLines.map { "+$it" })
-        }.joinToString("\n")
-    }
 
     private companion object {
         val updatedAtFormatter: DateTimeFormatter =
