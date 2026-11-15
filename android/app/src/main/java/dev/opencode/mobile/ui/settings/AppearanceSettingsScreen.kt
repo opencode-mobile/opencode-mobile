@@ -372,7 +372,7 @@ private val AppearanceSampleDiff =
     FileDiff(
         path = "src/auth/redirect.ts",
         patch =
-            "@@ -18,4 +18,5 @@ export async function signIn(form: Credentials) {\n" +
+            "@@ -18,3 +18,4 @@ export async function signIn(form: Credentials) {\n" +
                 "   const session = await login(form)\n" +
                 "-  return redirect(\"/home\")\n" +
                 "+  await session.persist()\n" +
