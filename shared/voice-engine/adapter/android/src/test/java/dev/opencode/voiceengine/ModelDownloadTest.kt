@@ -67,9 +67,52 @@ class ModelDownloadTest {
         }
     }
 
-    private val sleeps = mutableListOf<Long>()
+    /** A wait that returns at once, unless [ModelDownload.tryNow] came first: then it reports it was cut short. */
+    private class FakePause : ModelDownload.Pause() {
+        val waits = mutableListOf<Long>()
+        var woken = false
 
-    private fun download(server: Server) = ModelDownload(open = server::open, sleep = { sleeps += it }, now = { 0L })
+        override fun wait(ms: Long): Boolean {
+            waits += ms
+            return woken.also { woken = false }
+        }
+
+        override fun wake() {
+            woken = true
+        }
+
+        override fun clear() {
+            woken = false
+        }
+    }
+
+    private val pause = FakePause()
+
+    /** Each wait before a retry, in ms, from the seconds the countdown started at. */
+    private val retries = mutableListOf<Int>()
+    private val sleeps get() = countdowns().map { it.first() * 1_000L }
+
+    /** The countdowns [ModelDownload.fetch] reported, one list per wait: "4, 3, 2, 1" then 0 as it tries again. */
+    private fun countdowns(): List<List<Int>> =
+        buildList {
+            var current = mutableListOf<Int>()
+            for (seconds in retries) {
+                current += seconds
+                if (seconds == 0) {
+                    add(current)
+                    current = mutableListOf()
+                }
+            }
+        }
+
+    private fun download(server: Server) = ModelDownload(open = server::open, pause = pause, now = { 0L })
+
+    /** [ModelDownload.fetch], noting the countdowns in [retries]. */
+    private fun ModelDownload.fetchCounting(
+        file: ModelFile,
+        target: File,
+        progress: (Long) -> Unit,
+    ) = fetch(file, target, progress) { retries += it }
 
     @Test
     fun aDroppedConnectionResumesWhereItStopped() {
@@ -77,7 +120,7 @@ class ModelDownloadTest {
         val target = File(folder.root, "model.onnx")
         val seen = mutableListOf<Long>()
 
-        download(server).fetch(file, target) { seen += it }
+        download(server).fetchCounting(file, target) { seen += it }
 
         assertArrayEquals(content, target.readBytes())
         assertEquals(listOf(0L, 100_000L, 200_000L), server.asked)
@@ -93,7 +136,7 @@ class ModelDownloadTest {
         File(target.path + ".part").writeBytes(content.copyOfRange(0, 120_000))
         val server = Server(content)
 
-        download(server).fetch(file, target) {}
+        download(server).fetchCounting(file, target) {}
 
         assertArrayEquals(content, target.readBytes())
         assertEquals(listOf(120_000L), server.asked)
@@ -105,7 +148,7 @@ class ModelDownloadTest {
         File(target.path + ".part").writeBytes(content.copyOfRange(0, 120_000))
         val server = Server(content, honoursRange = false)
 
-        download(server).fetch(file, target) {}
+        download(server).fetchCounting(file, target) {}
 
         assertArrayEquals(content, target.readBytes())
     }
@@ -115,12 +158,56 @@ class ModelDownloadTest {
         val server = Server(content, drops = Int.MAX_VALUE, dropAfter = 0)
         val target = File(folder.root, "model.onnx")
 
-        val error = runCatching { download(server).fetch(file, target) {} }.exceptionOrNull()
+        val error = runCatching { download(server).fetchCounting(file, target) {} }.exceptionOrNull()
 
         assertTrue(error is IOException)
         assertEquals(listOf(1_000L, 2_000L, 4_000L, 8_000L), sleeps)
         assertEquals(5, server.asked.size)
         assertFalse(target.exists())
+    }
+
+    @Test
+    fun theWaitBeforeARetryCountsDownTheSeconds() {
+        val server = Server(content, drops = 3, dropAfter = 0)
+        val target = File(folder.root, "model.onnx")
+
+        download(server).fetchCounting(file, target) {}
+
+        assertArrayEquals(content, target.readBytes())
+        assertEquals(listOf(listOf(1, 0), listOf(2, 1, 0), listOf(4, 3, 2, 1, 0)), countdowns())
+        // Waited a second at a time, so each second can be shown.
+        assertEquals(List(7) { 1_000L }, pause.waits)
+    }
+
+    @Test
+    fun tryNowEndsTheWaitAndTriesAgainAtOnce() {
+        val server = Server(content, drops = 3, dropAfter = 0)
+        val target = File(folder.root, "model.onnx")
+        val download = download(server)
+        var asked = 0
+
+        download.fetch(file, target, {}) { seconds ->
+            retries += seconds
+            // Try now while the third wait (4 s) shows 3 s left.
+            if (seconds == 3 && ++asked == 1) download.tryNow()
+        }
+
+        assertArrayEquals(content, target.readBytes())
+        assertEquals(listOf(listOf(1, 0), listOf(2, 1, 0), listOf(4, 3, 0)), countdowns())
+        assertEquals(4, server.asked.size)
+    }
+
+    @Test
+    fun aTryNowWhileNothingWaitsDoesNotCutTheNextWaitShort() {
+        val server = Server(content, drops = 1, dropAfter = 0)
+        val target = File(folder.root, "model.onnx")
+        val download = download(server)
+        download.tryNow()
+
+        download.fetchCounting(file, target) {}
+
+        assertEquals(listOf(listOf(1, 0)), countdowns())
+        assertEquals(listOf(1_000L), pause.waits)
     }
 
     @Test
@@ -130,7 +217,7 @@ class ModelDownloadTest {
         File(target.path + ".part").writeBytes(ByteArray(content.size))
         val server = Server(content)
 
-        download(server).fetch(file, target) {}
+        download(server).fetchCounting(file, target) {}
 
         assertArrayEquals(content, target.readBytes())
         assertEquals(listOf(0L), server.asked)
@@ -147,7 +234,7 @@ class ModelDownloadTest {
             rate.secondsLeft(500_000_000L + step * 5_000_000L, 1_000_000_000)
         }
         // 10 MB/s with 470 MB to go.
-        assertEquals(47L, rate.secondsLeft(530_000_000, 1_000_000_000))
+        assertEquals(DownloadRate.Estimate(10_000_000, 47), rate.estimate(530_000_000, 1_000_000_000))
     }
 
     private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

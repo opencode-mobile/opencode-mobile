@@ -162,6 +162,16 @@ class ModelStore(
 
     fun isInstalled(model: SpeechModel) = model.files.all { file(model, it.name).length() == it.bytes }
 
+    /** What's on the phone of [model] so far, whole files and `.part`s, for "Stopped at 120 of 640 MB". */
+    fun bytesOnPhone(model: SpeechModel): Long =
+        model.files.sumOf { f ->
+            val whole = file(model, f.name).length()
+            if (whole == f.bytes) whole else File(dir(model), f.name + ".part").length().coerceAtMost(f.bytes)
+        }
+
+    /** A download waiting to retry tries again now ([ModelDownload.tryNow]). */
+    fun tryNow() = downloader.tryNow()
+
     fun delete(model: SpeechModel) {
         dir(model).deleteRecursively()
     }
@@ -183,17 +193,19 @@ class ModelStore(
 
     /**
      * Downloads the files that are missing, carrying on a `.part` an earlier attempt left ([ModelDownload]).
-     * [progress] gets bytes on the phone and bytes in all.
+     * [progress] gets bytes on the phone and bytes in all; while the connection is down, [retrying] gets the seconds
+     * to the next attempt ([ModelDownload.fetch]).
      */
     fun download(
         model: SpeechModel,
+        retrying: (Int) -> Unit = {},
         progress: (Long, Long) -> Unit,
     ) {
         dir(model).mkdirs()
         var before = 0L
         for (f in model.files) {
             val target = file(model, f.name)
-            if (target.length() != f.bytes) downloader.fetch(f, target) { progress(before + it, model.bytes) }
+            if (target.length() != f.bytes) downloader.fetch(f, target, { progress(before + it, model.bytes) }, retrying)
             before += f.bytes
             progress(before, model.bytes)
         }

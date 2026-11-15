@@ -8,6 +8,8 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 
 /**
  * Fetches one model file into `<target>.part`, then checks its SHA-256 and moves it into place. A dropped connection
@@ -16,12 +18,33 @@ import java.security.MessageDigest
  * event stream reconnects), and an attempt that got more of the file onto the phone starts that count again, so a
  * long download on a flaky network keeps going as long as it moves. A stalled connection times out instead of
  * hanging. A damaged file is deleted and fetched once more from the start.
+ *
+ * While it waits to retry it counts down the seconds to the next attempt, and [tryNow] (the speech model sheet's
+ * Try now, app-plan.md, Speech line and dial) cuts the wait short.
  */
 class ModelDownload(
     private val open: (url: String, from: Long) -> Response = ::openHttp,
-    private val sleep: (Long) -> Unit = Thread::sleep,
+    private val pause: Pause = Pause(),
     private val now: () -> Long = System::currentTimeMillis,
 ) {
+    /** The wait between attempts, which [wake] cuts short. Tests give one that doesn't really wait. */
+    open class Pause {
+        private val woken = Semaphore(0)
+
+        /** Waits [ms], or less when [wake] comes meanwhile: then true. */
+        open fun wait(ms: Long): Boolean = woken.tryAcquire(ms, TimeUnit.MILLISECONDS)
+
+        open fun wake() = woken.release()
+
+        /** Forgets a [wake] that came while nothing waited, so it doesn't cut the next wait short. */
+        open fun clear() {
+            woken.drainPermits()
+        }
+    }
+
+    /** Ends the wait before the next attempt now, if the download is waiting to retry. */
+    fun tryNow() = pause.wake()
+
     /** What the server sent: its HTTP [status] (206 when it honoured the range) and the [body] from there. */
     class Response(
         val status: Int,
@@ -63,16 +86,21 @@ class ModelDownload(
         fun sha256(): String = digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    /** Fetches [file] into [target]. [progress] gets the bytes of it on the phone, at most every 250 ms. */
+    /**
+     * Fetches [file] into [target]. [progress] gets the bytes of it on the phone, at most every 250 ms. While the
+     * connection is down, [retrying] gets the whole seconds until the next attempt, each second, then 0 as it's made;
+     * the next [progress] means it's going again.
+     */
     fun fetch(
         file: ModelFile,
         target: File,
         progress: (Long) -> Unit,
+        retrying: (Int) -> Unit = {},
     ) {
         val part = Part(File(target.path + ".part"))
         var damaged = 0
         while (true) {
-            download(file, part, progress)
+            download(file, part, progress, retrying)
             part.catchUp()
             if (part.sha256() == file.sha256) break
             part.restart()
@@ -86,6 +114,7 @@ class ModelDownload(
         file: ModelFile,
         part: Part,
         progress: (Long) -> Unit,
+        retrying: (Int) -> Unit,
     ) {
         var failures = 0
         while (true) {
@@ -99,9 +128,25 @@ class ModelDownload(
             } catch (error: IOException) {
                 if (part.file.length() > before) failures = 0
                 if (failures >= BACKOFF_MS.size) throw error
-                sleep(BACKOFF_MS[failures++])
+                backOff(BACKOFF_MS[failures++], retrying)
             }
         }
+    }
+
+    /** Waits [ms] a second at a time, telling [retrying] the seconds left, unless [tryNow] ends it sooner. */
+    private fun backOff(
+        ms: Long,
+        retrying: (Int) -> Unit,
+    ) {
+        pause.clear()
+        var left = ms
+        while (left > 0) {
+            retrying(((left + 999) / 1_000).toInt())
+            val step = minOf(left, 1_000)
+            if (pause.wait(step)) break
+            left -= step
+        }
+        retrying(0)
     }
 
     /** One request: the rest of the file from what the part holds, or all of it when the server ignores the range. */
