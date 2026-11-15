@@ -59,7 +59,8 @@ actor ParakeetTranscriber {
     ///
     /// FluidAudio reports a fraction, not bytes: during a repo download it is half the share of the bytes
     /// (0.5 × done / total; the other half is compiling, which `download` doesn't do). The bytes done are the
-    /// model folder's size, read on the thread that has just written them; the total follows from the two.
+    /// model folder's size, read on the thread that has just written them; the total follows from the two, once 2%
+    /// of it is in.
     nonisolated static func download(progress: @escaping @Sendable (Bytes) -> Void, alive: @escaping @Sendable () -> Void) async throws {
         let folder = AsrModels.defaultCacheDirectory(for: .v2)
         let lastReport = OSAllocatedUnfairLock(initialState: 0.0)
@@ -75,7 +76,10 @@ actor ParakeetTranscriber {
             guard due else { return }
             let done = folderBytes(folder)
             let share = min(1, update.fractionCompleted / repoDownloadShare)
-            progress(Bytes(done: done, total: max(done, Int64((Double(done) / share).rounded()))))
+            // Below a sliver the fraction is too coarse to divide by (and the folder may already hold more than it
+            // counts), so the total would come out far too big, and the first one seen is kept for a later launch.
+            let total = share >= minimumShareForTotal ? max(done, Int64((Double(done) / share).rounded())) : nil
+            progress(Bytes(done: done, total: total))
         }
         excludeModelFromBackup()
     }
@@ -84,6 +88,8 @@ actor ParakeetTranscriber {
     /// 0.15.5's `ModelHub.download`).
     private static let repoDownloadShare = 0.5
     private static let progressInterval: TimeInterval = 0.25
+    /// The share of the download that has to be in before its total is worked out from the fraction.
+    private static let minimumShareForTotal = 0.02
 
     /// Bytes of the model on the phone, partial downloads included.
     nonisolated static var bytesOnPhone: Int64 { folderBytes(AsrModels.defaultCacheDirectory(for: .v2)) }

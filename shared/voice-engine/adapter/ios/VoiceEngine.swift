@@ -181,6 +181,11 @@ public final class VoiceEngine {
             modelState = .failed(failure.localizedDescription)
             return false
         }
+        // Progress is sampled, so the last update can fall short of the end. The download got all of it: say so, so a
+        // load that fails after it reads as a failed load, not a download that stopped short.
+        let finished = await Task.detached(priority: .utility) { ParakeetTranscriber.bytesOnPhone }.value
+        lastDownload = ModelDownload(done: finished, total: finished)
+        rememberTotal(finished)
         return true
     }
 
