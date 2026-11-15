@@ -179,6 +179,24 @@ data class SpeechDialLook(
                         SpeechStage.WarmUp -> SpeechDialLook(HexDialMode.WarmingUp, 1f)
                     }
             }
+
+        /**
+         * The dial beside the draft's label [label], so the two agree: a take still waits for a model that has just
+         * become ready (or failed) under "Speech model loading…", which keeps the loading dial rather than the green or
+         * red one, as on iOS. A failed label shows where the download [stopped].
+         */
+        fun of(
+            label: DraftLabel,
+            status: SpeechStatus,
+            stopped: SpeechDownload?,
+        ): SpeechDialLook =
+            when (label) {
+                DraftLabel.SpeechFailed -> of(SpeechStatus.Failed, stopped)
+                DraftLabel.SpeechNotOnPhone -> SpeechDialLook(HexDialMode.Stalled, 0f)
+                DraftLabel.SpeechLoading, is DraftLabel.SpeechDownloading, is DraftLabel.SpeechRetrying ->
+                    if (status is SpeechStatus.Loading) of(status) else SpeechDialLook(HexDialMode.Loading, 1f)
+                else -> of(status, stopped)
+            }
     }
 }
 

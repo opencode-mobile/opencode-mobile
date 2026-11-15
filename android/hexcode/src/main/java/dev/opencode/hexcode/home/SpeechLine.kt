@@ -28,19 +28,20 @@ import dev.opencode.hexcode.designsystem.components.HexSpeechDial
 /**
  * The speech line (app-plan.md, Speech line and dial › Speech line): a quiet row above the dock in the waiting line's
  * slot and style, with the dial at 16 pt, the words, and a chevron. "Speech ready" ([ready]) has the green dial and no
- * chevron. It opens the speech model sheet.
+ * chevron. A failed download's dial fills to where it [stopped]. It opens the speech model sheet.
  */
 @Composable
 internal fun SpeechLine(
     speech: SpeechStatus,
     ready: Boolean,
+    stopped: SpeechDownload?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = HexTheme.colors
     val shape = RoundedCornerShape(HexTheme.radius.m)
     val shown = if (ready) SpeechStatus.Ready else speech
-    val dial = SpeechDialLook.of(shown)
+    val dial = SpeechDialLook.of(shown, stopped)
     val open = stringResource(R.string.home_speech_a11y_open)
     Row(
         verticalAlignment = Alignment.CenterVertically,

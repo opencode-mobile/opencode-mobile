@@ -351,6 +351,7 @@ fun HomeScreen(
                                     SpeechLine(
                                         state.speech,
                                         ready = state.speechLine == SpeechLineShow.Ready,
+                                        stopped = state.speechModel?.stopped,
                                         onClick = vm::openSpeechSheet,
                                         modifier = Modifier.padding(bottom = if (waitingShown) 8.dp else 0.dp),
                                     )
@@ -1208,7 +1209,7 @@ private fun DraftLabel(
                     .semantics { liveRegion = LiveRegionMode.Polite },
         ) {
             if (kind.isSpeech) {
-                val dial = SpeechDialLook.of(state.speech, state.speechModel?.stopped)
+                val dial = SpeechDialLook.of(kind, state.speech, state.speechModel?.stopped)
                 HexSpeechDial(dial.mode, dial.progress, HexDialSize.Label)
             }
             when (kind) {

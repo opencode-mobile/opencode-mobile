@@ -9,6 +9,7 @@ import dev.opencode.voiceengine.VoiceEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.util.Locale
 
 /** app-plan.md, Speech line and dial: the dial, the sheet's top, its phases and what it says about the model. */
 class SpeechReadyTest {
@@ -26,6 +27,26 @@ class SpeechReadyTest {
         // Failed shows where the download stopped, or the full ring when it failed to load.
         assertEquals(SpeechDialLook(HexDialMode.Failed, 0.5f), SpeechDialLook.of(SpeechStatus.Failed, SpeechDownload(320, 640)))
         assertEquals(SpeechDialLook(HexDialMode.Failed, 1f), SpeechDialLook.of(SpeechStatus.Failed))
+    }
+
+    @Test
+    fun theDraftLabelsDialAgreesWithItsWords() {
+        val loading = DraftLabel.SpeechLoading
+        // A take still waits while the model has just become ready: "loading" keeps the loading dial, not the green one.
+        assertEquals(HexDialMode.Loading, SpeechDialLook.of(loading, SpeechStatus.Ready, null).mode)
+        assertEquals(HexDialMode.Loading, SpeechDialLook.of(loading, SpeechStatus.Failed, null).mode)
+        assertEquals(HexDialMode.WarmingUp, SpeechDialLook.of(loading, SpeechStatus.Loading(stage = SpeechStage.WarmUp), null).mode)
+        assertEquals(SpeechDialLook(HexDialMode.Stalled, 0.25f), SpeechDialLook.of(DraftLabel.SpeechRetrying(4), dropped, null))
+        // Failed fills to where the download stopped.
+        val stopped = SpeechDownload(160, 640)
+        assertEquals(SpeechDialLook(HexDialMode.Failed, 0.25f), SpeechDialLook.of(DraftLabel.SpeechFailed, SpeechStatus.Failed, stopped))
+        assertEquals(SpeechDialLook(HexDialMode.Failed, 1f), SpeechDialLook.of(DraftLabel.SpeechFailed, SpeechStatus.Failed, null))
+    }
+
+    @Test
+    fun theSpeedFollowsTheRegion() {
+        assertEquals("8.4", megabytesPerSecond(8_400_000, Locale.US))
+        assertEquals("8,4", megabytesPerSecond(8_400_000, Locale.GERMANY))
     }
 
     @Test

@@ -196,12 +196,18 @@ private fun speed(download: SpeechDownload?): String {
     val rate = download?.bytesPerSecond
     val left = download?.secondsLeft
     if (rate == null || left == null) return stringResource(R.string.speech_note_measuring)
-    val perSecond = String.format(Locale.getDefault(), "%.1f", rate.toDouble() / SpeechDownload.MB)
+    val perSecond = megabytesPerSecond(rate)
     return when (val minutes = SpeechDownload.minutesLeft(left)) {
         0L -> stringResource(R.string.speech_note_speed_soon, perSecond)
         else -> stringResource(R.string.speech_note_speed_left, perSecond, minutes)
     }
 }
+
+/** The speed's "8.4" in megabytes a second, with the decimal separator of [locale] ("8,4" in Germany). */
+internal fun megabytesPerSecond(
+    bytesPerSecond: Long,
+    locale: Locale = Locale.getDefault(),
+): String = String.format(locale, "%.1f", bytesPerSecond.toDouble() / SpeechDownload.MB)
 
 /** Download → Load → Warm up → Ready (`.phases`): done ones with a check, the current one highlighted. */
 @Composable
