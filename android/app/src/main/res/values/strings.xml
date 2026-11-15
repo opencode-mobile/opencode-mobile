@@ -875,6 +875,9 @@
     <string name="session_chat_sheet_message_actions_select_text">Select text</string>
     <string name="session_chat_sheet_select_text_title">Select text</string>
     <string name="session_chat_sheet_select_text_copy_all">Copy all</string>
+    <string name="session_chat_sheet_select_text_full_message_title">Full message</string>
+    <!-- Android only: the system clipboard rejects a text of a few MB. -->
+    <string name="session_chat_copy_too_long">Too long to copy. Select a part of it instead.</string>
     <!-- Android clipboard label for a copied code block. -->
     <string name="session_chat_sheet_message_actions_clip_label_code">Code</string>
     <string name="session_chat_sheet_mcp_loading_title">Checking MCP servers</string>
@@ -1663,6 +1666,9 @@
     <!-- %1$s is the download progress, such as 40%. -->
     <string name="dictation_downloading_model_progress">Downloading speech model, %1$s</string>
     <string name="component_branch_pill_copy_branch_name">Copy branch name</string>
+    <string name="component_truncation_row_full_message_title">Show full message</string>
+    <string name="component_truncation_row_full_message_caption">%1$s of %2$s characters shown</string>
+    <string name="component_truncation_row_full_message_hint">Opens the whole message</string>
     <string name="component_outgoing_message_label">Outgoing message</string>
     <string name="session_list_status_stopped">Stopped</string>
     <!-- %1$s is the file name. -->

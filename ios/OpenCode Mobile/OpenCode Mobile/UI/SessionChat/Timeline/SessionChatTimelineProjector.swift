@@ -197,7 +197,7 @@ nonisolated enum SessionChatTimelineProjector {
             }
             return paragraphTexts.count > 1 ? paragraphTexts.joined(separator: "\n\n") : message.text
         }()
-        let contentRevision = ContentRevision.of(displayText)
+        let contentRevision = ContentRevision.of(displayText, blocks: body.blocks)
         let bridgeMarkdown = bridgeRenderedMarkdown(body: body, previous: previous)
 
         if let previous,
@@ -525,6 +525,8 @@ nonisolated enum SessionChatTimelineProjector {
             switch block {
             case .text(let id, _, let doc):
                 "t:\(id):\(doc != nil)"
+            case .limitedText(let id, _, let limit):
+                "lt:\(id):\(limit.shownCharacters)"
             case .attachment(let id, let file):
                 "a:\(id):\(file.id):\(file.previewData != nil)"
             case .toolCard(let id, let card):
@@ -589,6 +591,8 @@ nonisolated enum SessionChatTimelineProjector {
             switch block {
             case .text(let id, _, _):
                 "t:\(id)"
+            case .limitedText(let id, _, _):
+                "lt:\(id)"
             case .attachment(let id, let file):
                 "a:\(id):\(file.id)"
             case .toolCard(let id, _):

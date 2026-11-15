@@ -253,6 +253,8 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
         textMateEngine: any TextMateHighlighting,
         highlightRevisions: TextMateHighlightRevisionSource
     ) async -> DisplayMessage {
+        // A cut user message is detected and parsed from its shown part only (#1043).
+        let source = message.markdownSourceText
         let isStreaming = messageIsStreaming(message)
         if mode == .historyPlainFirst {
             if let reusable = reusableDocument(
@@ -266,17 +268,17 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
                     awaitingTextMateUpgrade: previous?.awaitingTextMateUpgrade == true
                 )
             }
-            guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else {
+            guard OpenCodeRenderedMarkdownDetector.shouldRender(source) else {
                 return DisplayMessage(message: message, renderedMarkdown: nil)
             }
-            let document = OpenCodeRenderedMarkdownParser.parse(message.text, structureOnly: true)
+            let document = OpenCodeRenderedMarkdownParser.parse(source, structureOnly: true)
             return DisplayMessage(
                 message: message,
                 renderedMarkdown: document,
                 awaitingTextMateUpgrade: true
             )
         }
-        guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else {
+        guard OpenCodeRenderedMarkdownDetector.shouldRender(source) else {
             return DisplayMessage(message: message, renderedMarkdown: nil)
         }
         let reused = reusableDocument(
@@ -296,7 +298,7 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
             document = await parseDocumentSafely(
                 sessionKey: sessionKey,
                 blockID: blockID,
-                text: message.text,
+                text: source,
                 isStreaming: isStreaming,
                 intent: mode.textMateHighlightIntent,
                 documentCache: documentCache,

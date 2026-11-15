@@ -65,7 +65,8 @@ struct SessionChatRow: Identifiable, Equatable {
               lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash,
               lhs.renderedMarkdown?.renderTreeVersion == rhs.renderedMarkdown?.renderTreeVersion,
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
-              lhs.text.count == rhs.text.count,
+              // UTF-8 length is O(1); a grapheme count walks the whole text (#1043).
+              lhs.text.utf8.count == rhs.text.utf8.count,
               lhs.metadataLabel == rhs.metadataLabel,
               lhs.sentAtEpochMs == rhs.sentAtEpochMs,
               lhs.steer == rhs.steer,
@@ -104,9 +105,22 @@ extension SessionChatRow: MessageListTimelineHeightEstimating {
                 .compact
             }
         return MessageListTimelineRowHeightEstimate.fallback(
-            characterCount: text.count,
+            characterCount: role == .user ? userCharacterCountEstimate : text.count,
             style: style
         )
+    }
+}
+
+private extension SessionChatRow {
+    /// A cut user message lays out only its shown part, plus the Show full message row.
+    var userCharacterCountEstimate: Int {
+        var limitedCount = 0
+        var isLimited = false
+        for case let .limitedText(_, text, _) in blocks {
+            isLimited = true
+            limitedCount += text.count + MessageTextLimit.charactersPerLine * 2
+        }
+        return isLimited ? limitedCount : text.count
     }
 }
 

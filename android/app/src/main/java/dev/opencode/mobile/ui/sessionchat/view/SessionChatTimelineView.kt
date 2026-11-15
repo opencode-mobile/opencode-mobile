@@ -110,6 +110,7 @@ import dev.opencode.mobile.ui.components.OpenCodeMessageNoteVariant
 import dev.opencode.mobile.ui.components.OpenCodeChatActivityState
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
+import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageLimit
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeActivityAgentRow
 import dev.opencode.mobile.ui.components.OpenCodeActivityCard
@@ -184,6 +185,9 @@ private val LocalNoticeModelNames = staticCompositionLocalOf { SessionChatNotice
 /** Opens the image viewer on a timeline gallery block and page; null in previews without a host. */
 private val LocalOpenImageViewer = staticCompositionLocalOf<((galleryId: String, index: Int) -> Unit)?> { null }
 
+/** Opens the Select text sheet over a cut message's whole text (#1043); null in previews without a host. */
+private val LocalOpenFullMessage = staticCompositionLocalOf<((SessionChatMessageActionsTarget) -> Unit)?> { null }
+
 internal data class SessionChatTimelineViewProps(
     val timeline: SessionChatTimelineState,
     val messages: List<SessionChatMessageItem>,
@@ -253,6 +257,8 @@ internal data class SessionChatTimelineViewProps(
     /** Gallery open in the full-screen image viewer, and its page; owned by the Session Chat screen model. */
     val imageViewer: SessionChatImageViewerState? = null,
     val onOpenImageViewer: (galleryId: String, index: Int) -> Unit = { _, _ -> },
+    /** Show full message on a cut user message: the whole text for the Select text sheet. */
+    val onShowFullMessage: ((SessionChatMessageActionsTarget) -> Unit)? = null,
     val onImageViewerPageChange: (index: Int) -> Unit = {},
     val onDismissImageViewer: () -> Unit = {},
     /** The session's `/goal`: the first context pill, its timeline rows and status row (#1007). */
@@ -372,6 +378,7 @@ private fun SessionChatTimelineStateContent(
                 LocalNoticeModelNames provides props.noticeModelNames,
                 LocalOpenCodeGalleryImageLoader provides galleryLoader,
                 LocalOpenImageViewer provides props.onOpenImageViewer,
+                LocalOpenFullMessage provides props.onShowFullMessage,
             ) {
             SessionChatTimelineReadyView(
                 messages = timelineMessages,
@@ -982,14 +989,7 @@ private fun SessionChatMessageRowContent(
         showsRevertMessage: Boolean,
         codeBlock: String? = null,
     ) {
-        onMessageActionsTap(
-            SessionChatMessageActionsTarget(
-                id = message.id,
-                text = message.text,
-                showsRevertMessage = showsRevertMessage,
-                codeBlock = codeBlock,
-            ),
-        )
+        onMessageActionsTap(message.messageActionsTarget(showsRevertMessage = showsRevertMessage, codeBlock = codeBlock))
     }
 
     Column(
@@ -1014,7 +1014,7 @@ private fun SessionChatMessageRowContent(
                     renderedMarkdown = message.renderedMarkdown,
                     metadataLabel = message.metadataLabel,
                     sentAtEpochMs = message.sentAtEpochMs,
-                    content = message.outgoingContent(),
+                    content = message.outgoingContent(onShowFullMessage = LocalOpenFullMessage.current),
                     steering = message.outgoingSteering(),
                     modifier = Modifier.fillMaxWidth(),
                     // A pending steer has no message actions; the Up next sheet owns it.
@@ -1084,7 +1084,33 @@ private fun SessionChatMessageItem.outgoingSteering(): OpenCodeOutgoingMessageSt
         }
     }
 
-private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessageContent> {
+/**
+ * The Message sheet acts on the whole message: Copy message and Select text never see the part a
+ * cut message shows (#1043).
+ */
+internal fun SessionChatMessageItem.messageActionsTarget(
+    showsRevertMessage: Boolean,
+    codeBlock: String? = null,
+): SessionChatMessageActionsTarget =
+    SessionChatMessageActionsTarget(
+        id = id,
+        text = text,
+        showsRevertMessage = showsRevertMessage,
+        codeBlock = codeBlock,
+    )
+
+/** What Show full message opens: the whole text, titled Full message. */
+internal fun SessionChatMessageItem.fullMessageTarget(): SessionChatMessageActionsTarget =
+    SessionChatMessageActionsTarget(
+        id = id,
+        text = text,
+        showsRevertMessage = false,
+        isFullMessage = true,
+    )
+
+private fun SessionChatMessageItem.outgoingContent(
+    onShowFullMessage: ((SessionChatMessageActionsTarget) -> Unit)?,
+): List<OpenCodeOutgoingMessageContent> {
     val textBlockCount = blocks.count { it is SessionChatTimelineBlock.Text }
     // A gallery of sent images sits above the text it came with.
     val (galleries, rest) = blocks.partition { it is SessionChatTimelineBlock.ImageGallery }
@@ -1095,8 +1121,20 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
                 OpenCodeOutgoingMessageContent.Text(
                     text = block.text,
                     renderedMarkdown =
-                        block.renderedMarkdown
-                            ?: renderedMarkdown.takeIf { textBlockCount == 1 },
+                        if (block.limit != null) {
+                            // Only a document parsed from the shown part rides on a cut text.
+                            block.renderedMarkdown
+                        } else {
+                            block.renderedMarkdown ?: renderedMarkdown.takeIf { textBlockCount == 1 }
+                        },
+                    limit =
+                        block.limit?.let { limit ->
+                            OpenCodeOutgoingMessageLimit(
+                                shownCharacters = limit.shownCharacters,
+                                totalCharacters = limit.totalCharacters,
+                                onShowFull = onShowFullMessage?.let { open -> { open(fullMessageTarget()) } },
+                            )
+                        },
                 )
             is SessionChatTimelineBlock.Attachment ->
                 OpenCodeOutgoingMessageContent.Attachment(AttachmentPresentationMapper.from(block.attachment), id = block.blockID)
