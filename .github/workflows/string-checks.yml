@@ -3,27 +3,8 @@ name: String Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "android/app/src/main/**"
-      - "ios/OpenCode Mobile/OpenCode Mobile/**"
-      # Shared with Hex Code; its text and keys come from OpenCode Mobile's catalog.
-      - "ios/OpenCodeKit/**"
-      # Hex Code's key pair, reported (not failing) by check-string-keys.mjs.
-      - "android/hexcode/src/main/res/**"
-      - "ios/OpenCode Mobile/Hex Code/**"
-      - "scripts/check-string-keys.mjs"
-      - "scripts/check-hardcoded-text.mjs"
-      - "scripts/check-theme-presets.mjs"
-      - "scripts/check-icons.mjs"
-      - "scripts/lib/**"
-      - "shared/theme-presets/**"
-      - "shared/syntax-presets/**"
-      - "icons/**"
-      - "release-notes/**"
-      - "scripts/release-notes.mjs"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/string-checks.yml"
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
   workflow_dispatch:
@@ -33,11 +14,56 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    # Path filters live here, not under `on:`: a merge queue ignores `paths`, and
+    # a workflow that never starts leaves a required check pending. A job
+    # skipped by `if:` reports as skipped, which counts as passing.
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.match.outputs.relevant }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Match changed paths
+        id: match
+        env:
+          EVENT: ${{ github.event_name }}
+          MERGE_BASE: ${{ github.event.merge_group.base_sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PATTERNS: |
+            android/app/src/main/**
+            ios/OpenCode Mobile/OpenCode Mobile/**
+            # Shared with Hex Code; its text and keys come from OpenCode Mobile's catalog.
+            ios/OpenCodeKit/**
+            # Hex Code's key pair, reported (not failing) by check-string-keys.mjs.
+            android/hexcode/src/main/res/**
+            ios/OpenCode Mobile/Hex Code/**
+            scripts/check-string-keys.mjs
+            scripts/check-hardcoded-text.mjs
+            scripts/check-theme-presets.mjs
+            scripts/check-icons.mjs
+            scripts/lib/**
+            shared/theme-presets/**
+            shared/syntax-presets/**
+            icons/**
+            release-notes/**
+            scripts/release-notes.mjs
+            package.json
+            package-lock.json
+            .github/workflows/string-checks.yml
+            .github/scripts/changed-paths.py
+        run: python3 .github/scripts/changed-paths.py
+
   strings:
     # GitHub-hosted on purpose: plain Node scripts with no dependencies or secrets.
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.relevant != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -67,6 +93,8 @@ jobs:
   generated-assets:
     # Theme presets and icons are generated from shared sources; fail when the
     # committed platform copies drift from them.
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.relevant != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
