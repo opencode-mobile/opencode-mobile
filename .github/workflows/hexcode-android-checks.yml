@@ -6,24 +6,8 @@ name: Hex Code Android Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "android/hexcode/**"
-      - "android/opencode-kit/**"
-      - "shared/voice-engine/**"
-      # The iOS speech engine (VoiceEngineKit) is not part of the Gradle build.
-      - "!shared/voice-engine/adapter/ios/**"
-      - "!shared/voice-engine/Package.swift"
-      - "!shared/voice-engine/Package.resolved"
-      # Gradle root files, and every module's build script: Gradle configures
-      # all of them on every build.
-      - "android/*.gradle.kts"
-      - "android/gradle.properties"
-      - "android/gradlew"
-      - "android/gradle/**"
-      - "android/**/*.gradle.kts"
-      - "shared/**/*.gradle.kts"
-      - "scripts/ensure-android-platform.sh"
-      - ".github/workflows/hexcode-android-checks.yml"
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
@@ -31,12 +15,53 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    # Path filters live here, not under `on:`: a merge queue ignores `paths`, and
+    # a workflow that never starts leaves a required check pending. A job
+    # skipped by `if:` reports as skipped, which counts as passing.
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.match.outputs.relevant }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Match changed paths
+        id: match
+        env:
+          EVENT: ${{ github.event_name }}
+          MERGE_BASE: ${{ github.event.merge_group.base_sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PATTERNS: |
+            android/hexcode/**
+            android/opencode-kit/**
+            shared/voice-engine/**
+            # The iOS speech engine (VoiceEngineKit) is not part of the Gradle build.
+            !shared/voice-engine/adapter/ios/**
+            !shared/voice-engine/Package.swift
+            !shared/voice-engine/Package.resolved
+            # Gradle root files, and every module's build script: Gradle configures
+            # all of them on every build.
+            android/*.gradle.kts
+            android/gradle.properties
+            android/gradlew
+            android/gradle/**
+            android/**/*.gradle.kts
+            shared/**/*.gradle.kts
+            scripts/ensure-android-platform.sh
+            .github/workflows/hexcode-android-checks.yml
+            .github/scripts/changed-paths.py
+        run: python3 .github/scripts/changed-paths.py
+
   hexcode-android-checks:
     # Self-hosted runner: never run pull requests from forks.
-    if: github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository))
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.relevant != 'false' && (github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository))) }}
     runs-on: [self-hosted, Linux, X64, android]
     defaults:
       run:

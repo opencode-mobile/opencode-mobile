@@ -420,6 +420,12 @@ private fun ButtonSample() {
                 HexButton(onClick = {}, text = "Clear", style = HexButtonStyle.Danger, size = HexButtonSize.Regular)
             }
         }
+        StateSample("large: full width, under a primary button") {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                HexPrimaryButton("Scan the code", onClick = {})
+                HexButton(onClick = {}, Modifier.fillMaxWidth(), text = "Try a sample session", size = HexButtonSize.Large)
+            }
+        }
         StateSample("icon after the label: Send") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HexButton(onClick = {}, text = "Send", icon = HexIcons.send, style = HexButtonStyle.Primary, iconAfter = true)

@@ -43,7 +43,7 @@ struct HexPrimaryButton: View {
     }
 }
 
-/// A 30 pt (small) or 38 pt (regular) button with an optional leading icon, or an icon alone.
+/// A 30 pt (small), 38 pt (regular) or 50 pt (large) button with an optional leading icon, or an icon alone.
 /// While `loading`, a spinner takes the icon's place and taps do nothing.
 struct HexButton: View {
     enum Size {
@@ -53,6 +53,9 @@ struct HexButton: View {
         case regular
         /// 44 pt, radius `l`, beside a `HexTextField` (`.pk-up`). Not in the spec yet: proposed.
         case field
+        /// 50 pt, radius `l`, `bodyStrong` type: the full-width height, for a secondary action stacked with a
+        /// `HexPrimaryButton`.
+        case large
     }
 
     enum Style {
@@ -129,7 +132,7 @@ struct HexButton: View {
                 if !iconAfter { mark }
                 if let title {
                     title
-                        .hexFont(size == .small ? .small : .button)
+                        .hexFont(font)
                         .lineLimit(1)
                 }
                 if iconAfter { mark }
@@ -158,11 +161,20 @@ struct HexButton: View {
         }
     }
 
+    private var font: HexTextStyle {
+        switch size {
+        case .small: .small
+        case .regular, .field: .button
+        case .large: .bodyStrong
+        }
+    }
+
     private var height: CGFloat {
         switch size {
         case .small: 30
         case .regular: 38
         case .field: HexSize.touch
+        case .large: 50
         }
     }
 
@@ -170,7 +182,7 @@ struct HexButton: View {
         let radius = switch size {
         case .small: HexRadius.s
         case .regular: HexRadius.m
-        case .field: HexRadius.l
+        case .field, .large: HexRadius.l
         }
         return RoundedRectangle(cornerRadius: radius, style: .continuous)
     }
