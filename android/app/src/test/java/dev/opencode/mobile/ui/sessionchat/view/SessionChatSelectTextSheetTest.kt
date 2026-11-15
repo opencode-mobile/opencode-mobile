@@ -50,6 +50,17 @@ class SessionChatSelectTextSheetTest {
     }
 
     @Test
+    fun chunks_endBeforeACrlf() {
+        val text = (1..100).joinToString("\r\n") { "line $it" }
+
+        val chunks = selectTextChunks(text)
+
+        assertEquals(3, chunks.size)
+        assertTrue(chunks.none { text[it.last] == '\r' })
+        assertEquals(text, chunks.joinToString("\r\n") { text.substring(it.first, it.last + 1) })
+    }
+
+    @Test
     fun chunks_splitALongLineWithoutSplittingASurrogatePair() {
         val text = "a".repeat(SELECT_TEXT_CHUNK_CHARACTERS - 1) + "😀" + "b".repeat(10)
 

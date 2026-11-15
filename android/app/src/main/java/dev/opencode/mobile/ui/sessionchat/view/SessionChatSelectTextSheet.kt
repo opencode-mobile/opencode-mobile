@@ -108,8 +108,9 @@ internal fun SessionChatSelectTextSheet(
                 variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.session_chat_sheet_select_text_copy_all)),
                 onClick = {
                     logSelectTextAction(ProductAnalytics.Action.SELECT_TEXT_COPY_ALL)
-                    target?.text?.let { text -> context.copyToClipboard(label = clipLabel, text = text) }
-                    onDismiss()
+                    // A text too long to copy keeps the sheet open, so the user can select a part.
+                    val copied = target?.text?.let { text -> context.copyToClipboard(label = clipLabel, text = text) } ?: true
+                    if (copied) onDismiss()
                 },
             )
         },
@@ -167,7 +168,8 @@ private fun SessionChatScrollingSelectTextBody(
 /**
  * Splits [text] into pieces of at most [SELECT_TEXT_CHUNK_LINES] source lines, a long line into
  * pieces of at most [SELECT_TEXT_CHUNK_CHARACTERS] characters (never between a surrogate pair).
- * Each range leaves out the line break that ends it, so the pieces stack as the text's lines.
+ * Each range leaves out the line break (LF or CRLF) that ends it, so the pieces stack as the
+ * text's lines.
  */
 internal fun selectTextChunks(text: String): List<IntRange> {
     val chunks = ArrayList<IntRange>()
@@ -179,7 +181,9 @@ internal fun selectTextChunks(text: String): List<IntRange> {
         if (character == '\n') {
             lines += 1
             if (lines == SELECT_TEXT_CHUNK_LINES) {
-                chunks += start until index
+                // A CRLF ends the chunk as a whole: no stray CR at its end.
+                val end = if (index > start && text[index - 1] == '\r') index - 1 else index
+                chunks += start until end
                 start = index + 1
                 lines = 0
             }

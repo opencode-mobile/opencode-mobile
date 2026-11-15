@@ -108,17 +108,20 @@ internal fun SessionChatMessageActionsSheet(
     }
 }
 
+/** Copies [text]; false when it was too long to copy, after telling the user so. */
 internal fun Context.copyToClipboard(
     label: String,
     text: String,
-) {
+): Boolean {
     val clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    try {
+    return try {
         clipboardManager.setPrimaryClip(ClipData.newPlainText(label, text))
+        true
     } catch (error: RuntimeException) {
         // A clip goes to the system in one Binder call; a text of a few MB (a pasted log) exceeds
         // its buffer and throws TransactionTooLargeException wrapped in a RuntimeException (#1043).
         Toast.makeText(this, R.string.session_chat_copy_too_long, Toast.LENGTH_LONG).show()
+        false
     }
 }
 

@@ -24,6 +24,11 @@ nonisolated enum MessageTextLimit {
     /// A word boundary closer than this to the start of the cut line is not used.
     private static let minimumWordCut = charactersPerLine / 2
 
+    /// How far past the decision pass the search for the first line with content reads. A text
+    /// with no content that soon (a multi-MB blank paste) keeps its blank shown part rather than
+    /// being read in full; the whole of it is still behind Show full message.
+    static let maximumBlankSkip = 64 * 1024
+
     /// The shown prefix of `text`, or nil when it shows in full.
     ///
     /// One pass that stops as soon as the message is known to be over `tolerance`: it reads at
@@ -56,7 +61,9 @@ nonisolated enum MessageTextLimit {
             var blankCount = lineStart
             var pending = Array(consumed[lineStart...])
             var found = false
-            while let character = iterator.next() {
+            var searched = 0
+            while searched < maximumBlankSkip, let character = iterator.next() {
+                searched += 1
                 if character == "\n" || character == "\r\n" {
                     blankCount += pending.count + 1
                     pending.removeAll(keepingCapacity: true)

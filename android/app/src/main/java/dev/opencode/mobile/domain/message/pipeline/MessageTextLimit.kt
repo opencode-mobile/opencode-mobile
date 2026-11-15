@@ -34,6 +34,13 @@ object MessageTextLimit {
     private const val MINIMUM_WORD_CUT = CHARACTERS_PER_LINE / 2
 
     /**
+     * How far past the decision pass the search for the first line with content reads. A text
+     * with no content that soon (a multi-MB blank paste) keeps its blank shown part rather than
+     * being read in full; the whole of it is still behind Show full message.
+     */
+    internal const val MAXIMUM_BLANK_SKIP = 64 * 1024
+
+    /**
      * The shown prefix of [text], or null when it shows in full.
      *
      * One pass that stops as soon as the message is known to be over [TOLERANCE]: it reads at
@@ -154,7 +161,10 @@ object MessageTextLimit {
         return Scan(cut, contentLineStart, read)
     }
 
-    /** Start of the first line of [text] with a non-blank character, looking from [from]; the length if none. */
+    /**
+     * Start of the first line of [text] with a non-blank character, looking from [from] for at
+     * most [MAXIMUM_BLANK_SKIP] characters; the length if none.
+     */
     private fun contentLineStart(
         text: CharSequence,
         from: Int,
@@ -162,7 +172,8 @@ object MessageTextLimit {
         var lineStart = from
         while (lineStart > 0 && text[lineStart - 1] != '\n') lineStart -= 1
         var index = from
-        while (index < text.length) {
+        val end = minOf(text.length, from + MAXIMUM_BLANK_SKIP)
+        while (index < end) {
             val character = text[index]
             if (character == '\n') {
                 lineStart = index + 1

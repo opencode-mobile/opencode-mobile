@@ -89,6 +89,13 @@ import Testing
         #expect(MessageTextLimit.cut(String(repeating: "\n", count: 100)) == MessageTextCut(visibleText: "", shownCharacters: 0))
     }
 
+    @Test func multiMegabyteBlankPaste_stopsLookingForContent() {
+        let counted = CountingCharacters(String(repeating: "\n", count: 3_000_000) + "late")
+
+        #expect(MessageTextLimit.cut(counted) == MessageTextCut(visibleText: "", shownCharacters: 0))
+        #expect(counted.counter.read <= Self.maximumRead + MessageTextLimit.maximumBlankSkip + 1)
+    }
+
     @Test func unbrokenLineAtTheTolerance_showsInFull() {
         #expect(MessageTextLimit.cut(String(repeating: "a", count: 1_200)) == nil)
     }

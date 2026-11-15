@@ -85,6 +85,14 @@ class MessageTextLimitTest {
     }
 
     @Test
+    fun multiMegabyteBlankPaste_stopsLookingForContent() {
+        val text = CountingText("\n".repeat(3_000_000) + "late")
+
+        assertEquals(MessageTextCut("", 0), MessageTextLimit.cut(text))
+        assertTrue("read ${text.reads}", text.reads <= MAXIMUM_READS + MessageTextLimit.MAXIMUM_BLANK_SKIP + 1)
+    }
+
+    @Test
     fun unbrokenLineAtTheTolerance_showsInFull() {
         assertNull(MessageTextLimit.cut("a".repeat(1_200)))
     }
