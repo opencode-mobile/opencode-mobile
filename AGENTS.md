@@ -89,33 +89,30 @@ deleting something later does not undo a leak.
 
 ## Code Practices
 
-Each rule comes from a defect found in this codebase. Apply them to new and
-changed code on both platforms.
+General rules for new and changed code on both platforms.
 
-- **Failures surface.** A failed decode, encode, or IO is logged or returned
-  to the caller. Tell "missing" apart from "unreadable", and keep stored user
-  data intact after a failed read. Use `try?` and `runCatching` only where
-  the failure is expected and the fallback loses nothing.
-- **Cancellation propagates.** Rethrow `CancellationException` before mapping
-  an error on Android. On iOS, use `try await Task.sleep` and return when it
-  throws.
-- **The creator closes.** Whatever creates a thread, executor, coroutine
-  scope, task, or `URLSession` owns its release, in `onCleared`, `close()`,
-  or teardown, with a test that proves it.
-- **Fix a crash where it starts.** Catch a failure in the code that owns the
-  request. A process-wide handler or rejection policy stays narrow and
-  forwards everything it does not own.
-- **Safety checks match across platforms and apps.** A transport, credential,
-  or privacy check on one platform or app also runs on the other, before the
-  first network call.
-- **A timeout holds at every layer.** When a request needs a longer budget,
-  confirm the client or session it runs on does not cap it lower.
-- **Logs carry ids.** Keep paths, session titles, URLs, usernames, and
-  message content out of logs and backups.
-- **Locks are scoped.** Use `withLock`, `defer`, or `synchronized` so every
-  exit releases the lock.
-- **Tests wait on signals.** Await an emission, an expectation, or an
-  injected clock; a wall-clock sleep makes the test flaky.
+- **Failures surface.** Every error is handled, returned to the caller, or
+  logged. A fallback value is used only where the failure is expected and
+  nothing is lost by it.
+- **Cancellation propagates.** Cancelled work stops and is reported as
+  cancelled, separately from errors.
+- **The creator releases.** Whatever creates a long-lived resource owns its
+  lifetime and releases it at a defined point. Caches and stores are bounded.
+- **Fix the cause where it starts.** A failure is handled in the code that
+  owns the operation. Process-wide mechanisms stay narrow and pass on
+  everything they do not own.
+- **Platforms and apps stay in parity.** A rule, safety check, limit, or
+  behaviour on one platform or app holds on the others, behind shared kit
+  code where possible.
+- **Private data stays on the device.** Logs, backups, analytics, and
+  exports carry identifiers, with user and server content left out.
+- **The compiler checks concurrency.** Shared state is protected by
+  structured, scoped constructs the compiler or runtime can verify, and the
+  main thread stays free of blocking work.
+- **Checks are deterministic and binding.** Tests wait on signals and
+  injected clocks. Lint and analysis results gate the merge.
+- **Units stay small.** A function, view, or Screen Model does one job and
+  can be tested alone. Split a unit as it grows, before adding to it.
 
 ## Xcode And Simulator Tooling
 
