@@ -80,6 +80,14 @@ class UnifiedDiffDocumentTest {
         assertEquals(400, UnifiedDiffVisibility.displayColumns("界".repeat(200)))
     }
 
+    @Test fun lineNumberColumnsAreSizedForTheLargestLineNumber() {
+        assertEquals(1, UnifiedDiffVisibility.lineNumberDigits(UnifiedDiffParser.parse("@@ -1,1 +1,1 @@\n-a\n+b").rows))
+        val long = UnifiedDiffParser.parse("@@ -9998,2 +9998,3 @@\n a\n-b\n+c\n+d").rows
+        // New line numbers reach 10000, five digits; one shared row height must never wrap them.
+        assertEquals(5, UnifiedDiffVisibility.lineNumberDigits(long))
+        assertEquals(1, UnifiedDiffVisibility.lineNumberDigits(UnifiedDiffParser.parse("").rows))
+    }
+
     @Test fun rowWindowCoversTheShownRowsPlusOverscanInBlocks() {
         val window =
             UnifiedDiffRowWindow.rows(
