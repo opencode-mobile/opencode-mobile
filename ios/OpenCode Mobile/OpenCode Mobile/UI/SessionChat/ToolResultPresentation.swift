@@ -253,6 +253,44 @@ nonisolated enum ToolResultInspector {
         )
     }
 
+    /// Whether `classify` returns a presentation for `request`, without building one: the
+    /// timeline asks this for every card, so it reads the output only up to its first non-blank
+    /// character and never splits or copies it (#1033).
+    static func hasResult(_ request: ToolResultRequest) -> Bool {
+        if let output = request.output, !isBlankText(output) { return true }
+        if let error = request.error, !isBlankText(error) { return true }
+        switch request.toolName.lowercased() {
+        case "write":
+            guard let content = request.content, !content.isEmpty else { return false }
+            return nonBlank(request.path) != nil
+        case "edit", "apply_patch", "patch":
+            if request.patch?.contains("@@") == true { return true }
+            return linesDiffer(request.oldString, request.newString)
+        default:
+            return false
+        }
+    }
+
+    /// Whether `syntheticPatch` builds a patch from `old` and `new`, without splitting them.
+    private static func linesDiffer(_ old: String?, _ new: String?) -> Bool {
+        if old == nil, new == nil { return false }
+        let oldText = old ?? ""
+        let newText = new ?? ""
+        // splitLines drops one trailing empty line, and maps "" to no lines at all.
+        if oldText.isEmpty || newText.isEmpty { return oldText.isEmpty != newText.isEmpty }
+        return droppingTrailingNewline(oldText) != droppingTrailingNewline(newText)
+    }
+
+    private static func droppingTrailingNewline(_ text: String) -> Substring {
+        text.last == "\n" ? text.dropLast() : Substring(text)
+    }
+
+    /// Blank as `trimmingCharacters(in: .whitespacesAndNewlines)` sees it, stopping at the first
+    /// other character instead of building the trimmed copy.
+    static func isBlankText(_ value: String) -> Bool {
+        !value.unicodeScalars.contains { !CharacterSet.whitespacesAndNewlines.contains($0) }
+    }
+
     static func classify(_ request: ToolResultRequest) -> ToolResultPresentation? {
         let name = request.toolName.lowercased()
         let output = nonBlank(request.output)
@@ -713,7 +751,7 @@ nonisolated enum ToolResultInspector {
     }
 
     private static func isBlank(_ value: String) -> Bool {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        isBlankText(value)
     }
 
     /// Path in the header of a patch built from old and new text when the tool sent no path.

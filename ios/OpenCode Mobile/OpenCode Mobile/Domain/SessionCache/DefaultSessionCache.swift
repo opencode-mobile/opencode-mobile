@@ -353,7 +353,9 @@ private nonisolated final class DefaultSessionMessageCacheHandle: SessionMessage
         guard let record = await store.load(key: key), !record.value.payloadJSON.isEmpty else {
             return nil
         }
-        guard let timeline = SessionCacheCodec.decodeMessageTimeline(record.value.payloadJSON) else { return nil }
+        // A timeline that kept no messages (its newest was over the budget) is a miss.
+        guard let timeline = SessionCacheCodec.decodeMessageTimeline(record.value.payloadJSON),
+              !timeline.messages.isEmpty else { return nil }
         guard let thumbnails, !timeline.thumbnailImageIDs.isEmpty else { return timeline.messages }
         return await thumbnails.attach(
             connectionID: key.connectionId,

@@ -18,6 +18,11 @@ class RoomSessionCacheStore
         private val dao: SessionCacheDao,
     ) : SessionCacheStore {
         override suspend fun load(key: SessionCacheKey): SessionCacheRecord? {
+            val meta = dao.meta(key.cacheKey) ?: return null
+            if (meta.payloadBytes == 0L) return null
+            // An older build wrote whole transcripts; a row that cannot fit a cursor window would
+            // throw on read. Skip it: the next commit replaces it with one that fits (#1033).
+            if (meta.payloadBytes > MAX_READABLE_PAYLOAD_BYTES) return null
             val row = dao.get(key.cacheKey) ?: return null
             if (row.payloadJson.isBlank()) return null
             return SessionCacheRecord(
@@ -36,7 +41,8 @@ class RoomSessionCacheStore
             value: SessionCacheValue,
             meta: SessionCacheCommitMeta,
         ) {
-            val existing = dao.get(key.cacheKey)
+            // Reads no payload, so an oversized row left by an older build is still replaced (#1033).
+            val existing = dao.meta(key.cacheKey)
             dao.upsert(
                 SessionCacheSnapshotEntity(
                     cacheKey = key.cacheKey,
@@ -57,7 +63,7 @@ class RoomSessionCacheStore
             reason: SessionCacheRetainReason,
             atEpochMs: Long,
         ) {
-            val existing = dao.get(key.cacheKey)
+            val existing = dao.meta(key.cacheKey)
             if (existing == null) {
                 dao.upsert(
                     SessionCacheSnapshotEntity(
@@ -73,7 +79,7 @@ class RoomSessionCacheStore
                     ),
                 )
             } else if (existing.retainedAtEpochMs == null || existing.retainedAtEpochMs == 0L) {
-                dao.upsert(existing.copy(retainedAtEpochMs = atEpochMs))
+                dao.setRetainedAt(key.cacheKey, atEpochMs)
             }
         }
 
@@ -100,6 +106,15 @@ class RoomSessionCacheStore
                         dao.deleteForConnection(selector.connectionIdOrUrlPrefix)
                     }
             }
+        }
+
+        companion object {
+            /**
+             * The largest payload [load] reads, in UTF-8 bytes: Android's cursor window holds 2 MB,
+             * and the row's other columns share it. [SessionCacheCodec.MESSAGE_TIMELINE_BUDGET_BYTES]
+             * keeps message timelines under it.
+             */
+            const val MAX_READABLE_PAYLOAD_BYTES: Long = 1_950_000L
         }
 
         override suspend fun messageTimelineEntries(): List<Pair<String, String>> =

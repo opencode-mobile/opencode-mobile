@@ -65,6 +65,34 @@ class MessageSyncWindowedHistoryTest {
         }
 
     @Test
+    fun seedThatThrows_stillLoadsTheSessionFromTheServer() =
+        runTest(testDispatcher) {
+            // #1033: a legacy cache row too big to decode must not abort the live load.
+            for (failure in listOf(OutOfMemoryError("test: decode"), IllegalStateException("test: load"))) {
+                val tailCalls = mutableListOf<String>()
+                val sync =
+                    createSync(
+                        listMessageTail = { _, _ ->
+                            tailCalls += "tail"
+                            MessagePage(messages = listOf(user("live")), olderCursor = null, hasOlder = false)
+                        },
+                        sessionCache = SeededSessionCache { throw failure },
+                    )
+
+                val updates = mutableListOf<MessageListUpdate>()
+                sync
+                    .observeMessages("ses-1", "/repo")
+                    .onEach { updates += it }
+                    .first { update -> update is MessageListUpdate.Messages && !update.isFromCache }
+
+                val messages = updates.filterIsInstance<MessageListUpdate.Messages>()
+                assertEquals(listOf("tail"), tailCalls)
+                assertFalse(messages.any { it.isFromCache })
+                assertEquals(listOf("live"), messages.last().messages.map { it.id })
+            }
+        }
+
+    @Test
     fun noOverlapTail_resetsInsteadOfConcatenating() =
         runTest(testDispatcher) {
             val cache = SeededSessionCache(listOf(user("a"), user("b")))
@@ -970,8 +998,10 @@ class MessageSyncWindowedHistoryTest {
 }
 
 private class SeededSessionCache(
-    private val seed: List<Message>,
+    private val seedMessages: suspend () -> List<Message>?,
 ) : dev.opencode.mobile.domain.sessioncache.SessionCache {
+    constructor(seed: List<Message>) : this({ seed })
+
     override suspend fun seedSessions(worktree: String) = null
 
     override suspend fun rememberSessions(
@@ -990,7 +1020,7 @@ private class SeededSessionCache(
         sessionId: String,
         worktree: String,
     ) = object : dev.opencode.mobile.domain.sessioncache.SessionMessageCacheHandle {
-        override suspend fun seed(): List<Message> = seed
+        override suspend fun seed(): List<Message>? = seedMessages()
 
         override fun note(messages: List<Message>) = Unit
 

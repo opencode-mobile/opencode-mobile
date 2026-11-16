@@ -133,8 +133,10 @@ struct SessionChatToolGroupView: View {
                 changesTarget = makeChangesTarget(target.messageID, card.changesInitialFilePath)
             }
         }
-        if let target = SessionChatStepTapActions.detailTarget(for: card) {
+        // Checked without building it; the detail and its inspector are built on tap (#1033).
+        if card.opensDetail {
             return {
+                guard let target = SessionChatStepTapActions.detailTarget(for: card) else { return }
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.sessionChat,
                     actionId: ProductAnalytics.Action.chatOpenToolDetail

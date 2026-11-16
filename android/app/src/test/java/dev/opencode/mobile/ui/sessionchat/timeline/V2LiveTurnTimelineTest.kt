@@ -643,7 +643,8 @@ class V2LiveTurnTimelineTest {
         assertEquals(ToolStatus.Completed, done.status)
         assertFalse(done.isReceivingArguments)
         assertEquals("ls -la /tmp", done.subtitle?.english())
-        assertEquals("ok", done.detailText)
+        assertEquals("ok", SessionChatTimelineBlocks.toolDetail(liveTool("a1"))?.text)
+        assertTrue(done.opensToolDetail)
     }
 
     @Test

@@ -19,7 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.SessionToolGroup
-import dev.opencode.mobile.SessionToolGroupMember
+import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessagePart
+import dev.opencode.mobile.domain.message.PresentationBlockId
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.components.LocalOpenCodeAttachmentImageLoader
@@ -30,11 +32,11 @@ import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
-import dev.opencode.mobile.ui.sessionchat.SessionChatAttachmentItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatGalleryImageLoader
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageGalleries
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageViewerState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.text.resolve
 
 internal data class SessionChatToolGroupTarget(
@@ -46,54 +48,13 @@ internal data class SessionChatToolGroupTarget(
 )
 
 /**
- * Tool images for the tool group route, by group. The route key is saved state, so it never
- * carries image data; the Session Chat that opens a group leaves its members' images here
- * (references to the timeline's items, not copies). After process death the route shows its
- * cards without images.
+ * The route key for this group. It names the members by block id only (#1033); the route
+ * resolves them from the transcript loaded under [transcriptWorktree] ([SessionToolGroupMembers]).
  */
-internal object SessionToolGroupImages {
-    private const val MAX_GROUPS = 8
-
-    private val byGroup =
-        object : LinkedHashMap<String, Map<String, List<SessionChatAttachmentItem>>>(MAX_GROUPS, 0.75f, true) {
-            override fun removeEldestEntry(
-                eldest: MutableMap.MutableEntry<String, Map<String, List<SessionChatAttachmentItem>>>?,
-            ): Boolean = size > MAX_GROUPS
-        }
-
-    fun put(
-        sessionId: String,
-        target: SessionChatToolGroupTarget,
-    ) {
-        val images = target.members.filter { it.images.isNotEmpty() }.associate { it.blockID to it.images }
-        synchronized(byGroup) {
-            if (images.isEmpty()) byGroup.remove(key(sessionId, target.blockID)) else byGroup[key(sessionId, target.blockID)] = images
-        }
-    }
-
-    /** Member block id to that tool's images; empty when none were left for this group. */
-    fun get(
-        sessionId: String,
-        blockID: String,
-    ): Map<String, List<SessionChatAttachmentItem>> = synchronized(byGroup) { byGroup[key(sessionId, blockID)].orEmpty() }
-
-    private fun key(
-        sessionId: String,
-        blockID: String,
-    ): String = "$sessionId\u0000$blockID"
-}
-
-/** The route's target with the members' images put back from [SessionToolGroupImages]. */
-internal fun SessionToolGroup.toTargetWithImages(): SessionChatToolGroupTarget {
-    val target = toTarget()
-    val images = SessionToolGroupImages.get(sessionId, blockID)
-    if (images.isEmpty()) return target
-    return target.copy(members = target.members.map { card -> images[card.blockID]?.let { card.copy(images = it) } ?: card })
-}
-
 internal fun SessionChatToolGroupTarget.toRoute(
     sessionId: String,
     worktree: String,
+    transcriptWorktree: String,
     parentId: String?,
     owningTurnMessageId: String?,
     supportsSessionMessageDiff: Boolean,
@@ -102,6 +63,7 @@ internal fun SessionChatToolGroupTarget.toRoute(
     SessionToolGroup(
         sessionId = sessionId,
         worktree = worktree,
+        transcriptWorktree = transcriptWorktree,
         parentId = parentId,
         blockID = blockID,
         title = title,
@@ -110,51 +72,45 @@ internal fun SessionChatToolGroupTarget.toRoute(
         owningTurnMessageId = owningTurnMessageId,
         supportsSessionMessageDiff = supportsSessionMessageDiff,
         lastTurnDiffUnavailable = lastTurnDiffUnavailable,
-        members = members.map { it.toRouteMember() },
+        memberBlockIDs = members.map { it.blockID },
     )
 
-internal fun SessionToolGroup.toTarget(): SessionChatToolGroupTarget =
+/** The route's target with [members] resolved from the transcript. */
+internal fun SessionToolGroup.toTarget(members: List<SessionChatTimelineBlock.ToolCard>): SessionChatToolGroupTarget =
     SessionChatToolGroupTarget(
         blockID = blockID,
         title = title,
         subtitle = subtitle,
-        members = members.map { it.toToolCard() },
+        members = members,
         messageId = messageId,
     )
 
-private fun SessionChatTimelineBlock.ToolCard.toRouteMember(): SessionToolGroupMember =
-    SessionToolGroupMember(
-        blockID = blockID,
-        toolName = toolName,
-        status = status.name,
-        title = title,
-        subtitle = subtitle,
-        errorText = errorText,
-        additions = additions,
-        deletions = deletions,
-        detailText = detailText,
-        presentation = presentation,
-        childSessionId = childSessionId,
-        opensChangesReview = opensChangesReview,
-        changesInitialFilePath = changesInitialFilePath,
-    )
-
-private fun SessionToolGroupMember.toToolCard(): SessionChatTimelineBlock.ToolCard =
-    SessionChatTimelineBlock.ToolCard(
-        blockID = blockID,
-        toolName = toolName,
-        status = ToolStatus.entries.firstOrNull { it.name == status } ?: ToolStatus.Completed,
-        title = title,
-        subtitle = subtitle,
-        errorText = errorText,
-        additions = additions,
-        deletions = deletions,
-        detailText = detailText,
-        presentation = presentation,
-        childSessionId = childSessionId,
-        opensChangesReview = opensChangesReview,
-        changesInitialFilePath = changesInitialFilePath,
-    )
+/** Resolves a [SessionToolGroup] route's members from its session's messages. */
+internal object SessionToolGroupMembers {
+    /**
+     * The member cards, projected from their tool parts as the timeline projects them, in the
+     * route's order. A group spans every consecutive tool-only assistant message of its run
+     * (one per step), so members are looked up across the transcript, not only in the message
+     * the route names. Null when every member is gone (a revert or a compaction moved the
+     * session on); members that are gone are left out.
+     */
+    fun resolve(
+        route: SessionToolGroup,
+        messages: List<Message>,
+    ): List<SessionChatTimelineBlock.ToolCard>? {
+        val wanted = route.memberBlockIDs.toHashSet()
+        val toolsByBlockID = HashMap<String, MessagePart.Tool>(wanted.size)
+        for (message in messages) {
+            for (part in message.parts) {
+                if (part !is MessagePart.Tool) continue
+                val blockID = part.id?.let(PresentationBlockId::direct) ?: continue
+                if (blockID in wanted) toolsByBlockID[blockID] = part
+            }
+        }
+        val members = route.memberBlockIDs.mapNotNull { id -> toolsByBlockID[id]?.let(SessionChatTimelineBlocks::toolCard) }
+        return members.takeIf { it.isNotEmpty() }
+    }
+}
 
 @Composable
 internal fun SessionChatToolGroupScreen(
@@ -174,6 +130,7 @@ internal fun SessionChatToolGroupScreen(
     }
     // This route has no screen model; the viewer is local to it (a card's gallery and page).
     var imageViewer by remember { mutableStateOf<SessionChatImageViewerState?>(null) }
+    val toolDetails = LocalSessionChatToolDetailResolver.current
     val serverImageLoader = LocalOpenCodeAttachmentImageLoader.current
     val galleryLoader = remember(serverImageLoader) { SessionChatGalleryImageLoader(serverLoader = serverImageLoader) }
     galleryLoader.update(messages = emptyList(), extra = target.members.flatMap { it.images }, extraMessageId = target.messageId)
@@ -222,6 +179,7 @@ internal fun SessionChatToolGroupScreen(
                                 onToolDetailTap = onToolDetailTap,
                                 onChildSessionTap = onChildSessionTap,
                                 onChangesReviewTap = onChangesReviewTap,
+                                toolDetails = toolDetails,
                             ),
                     )
                     if (card.images.isNotEmpty()) {
@@ -254,6 +212,7 @@ private fun toolGroupMemberOnClick(
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
+    toolDetails: SessionChatToolDetailResolver,
 ): (() -> Unit)? =
     when {
         card.childSessionId != null -> {
@@ -262,16 +221,8 @@ private fun toolGroupMemberOnClick(
         card.opensChangesReview && supportsSessionMessageDiff -> {
             { onChangesReviewTap(messageId, card.changesInitialFilePath) }
         }
-        card.detailText != null || card.presentation != null -> {
-            {
-                onToolDetailTap(
-                    SessionChatToolDetailTarget(
-                        title = card.presentation?.title ?: card.title,
-                        body = card.detailText ?: card.presentation?.raw.orEmpty(),
-                        presentation = card.presentation,
-                    ),
-                )
-            }
+        SessionChatToolDetails.opensDetail(card) -> {
+            { toolDetails.detail(card)?.let(onToolDetailTap) }
         }
         else -> null
     }

@@ -1271,8 +1271,11 @@ struct SessionChatStepTapActions {
         if card.opensChangesReview, supportsSessionMessageDiff {
             return { onChangesReviewTap(messageID, card.changesInitialFilePath) }
         }
-        if let target = Self.detailTarget(for: card) {
-            return { onToolDetailTap(target) }
+        // Checked without building it; the detail and its inspector are built on tap (#1033).
+        if card.opensDetail {
+            return {
+                if let target = Self.detailTarget(for: card) { onToolDetailTap(target) }
+            }
         }
         return nil
     }

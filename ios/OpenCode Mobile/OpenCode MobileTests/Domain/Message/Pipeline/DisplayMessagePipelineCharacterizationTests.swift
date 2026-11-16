@@ -13,12 +13,14 @@ struct DisplayMessagePipelineCharacterizationTests {
         }
 
         await harness.source.emit(.messages([plainAssistant("hi")], isFromCache: false))
-        let published = await waitUntil { collector.emissions.count == 1 }
+        // The first test in the run also pays the test host's cold start, so it waits longer,
+        // and reads with `first` so a slow runner fails the expectation instead of crashing.
+        let published = await waitUntil(timeout: .seconds(10)) { collector.emissions.count == 1 }
         #expect(published)
         #expect(collector.emissions.count == 1)
-        #expect(collector.emissions[0].first?.text == "hi")
+        #expect(collector.emissions.first?.first?.text == "hi")
         #expect(harness.preparer.prepareMessagesInvocations.count == 1)
-        #expect(harness.preparer.prepareMessagesInvocations[0].mode == .final)
+        #expect(harness.preparer.prepareMessagesInvocations.first?.mode == .final)
 
         task.cancel()
         _ = await waitUntil { collector.isFinished }

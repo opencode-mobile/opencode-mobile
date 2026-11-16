@@ -84,9 +84,16 @@ import kotlinx.serialization.Serializable
     val worktree: String,
 ) : NavKey
 
+/**
+ * A collapsed tool group opened from Session Chat. It names the group's tools by block id only;
+ * the route resolves them from the session's transcript, so this key (saved state, and printed
+ * by Navigation3) stays small however large the tools' output is (#1033).
+ */
 @Serializable data class SessionToolGroup(
     val sessionId: String,
     val worktree: String,
+    /** The directory the session's transcript is loaded under; differs from [worktree] after a move. */
+    val transcriptWorktree: String = worktree,
     val parentId: String? = null,
     val blockID: String,
     /** App text or server content, resolved when the route is shown so it follows the app language. */
@@ -96,21 +103,6 @@ import kotlinx.serialization.Serializable
     val owningTurnMessageId: String? = null,
     val supportsSessionMessageDiff: Boolean,
     val lastTurnDiffUnavailable: Boolean = false,
-    val members: List<SessionToolGroupMember>,
+    /** The members' tool card block ids ([dev.opencode.mobile.domain.message.PresentationBlockId.direct]), in call order. */
+    val memberBlockIDs: List<String>,
 ) : NavKey
-
-@Serializable data class SessionToolGroupMember(
-    val blockID: String,
-    val toolName: String,
-    val status: String,
-    val title: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.domain.text.UiText,
-    val subtitle: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.domain.text.UiText? = null,
-    val errorText: @Serializable(with = dev.opencode.mobile.ui.sessionchat.UiTextSerializer::class) dev.opencode.mobile.domain.text.UiText? = null,
-    val additions: Int? = null,
-    val deletions: Int? = null,
-    val detailText: String? = null,
-    val presentation: dev.opencode.mobile.ui.sessionchat.ToolResultPresentation? = null,
-    val childSessionId: String? = null,
-    val opensChangesReview: Boolean = false,
-    val changesInitialFilePath: String? = null,
-)
