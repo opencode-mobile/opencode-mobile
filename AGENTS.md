@@ -87,6 +87,36 @@ deleting something later does not undo a leak.
 - Connection Profile secrets live in iOS Keychain and Android Keystore-backed
   storage. SwiftData and Room are the default structured persistence choices.
 
+## Code Practices
+
+Each rule comes from a defect found in this codebase. Apply them to new and
+changed code on both platforms.
+
+- **Failures surface.** A failed decode, encode, or IO is logged or returned
+  to the caller. Tell "missing" apart from "unreadable", and keep stored user
+  data intact after a failed read. Use `try?` and `runCatching` only where
+  the failure is expected and the fallback loses nothing.
+- **Cancellation propagates.** Rethrow `CancellationException` before mapping
+  an error on Android. On iOS, use `try await Task.sleep` and return when it
+  throws.
+- **The creator closes.** Whatever creates a thread, executor, coroutine
+  scope, task, or `URLSession` owns its release, in `onCleared`, `close()`,
+  or teardown, with a test that proves it.
+- **Fix a crash where it starts.** Catch a failure in the code that owns the
+  request. A process-wide handler or rejection policy stays narrow and
+  forwards everything it does not own.
+- **Safety checks match across platforms and apps.** A transport, credential,
+  or privacy check on one platform or app also runs on the other, before the
+  first network call.
+- **A timeout holds at every layer.** When a request needs a longer budget,
+  confirm the client or session it runs on does not cap it lower.
+- **Logs carry ids.** Keep paths, session titles, URLs, usernames, and
+  message content out of logs and backups.
+- **Locks are scoped.** Use `withLock`, `defer`, or `synchronized` so every
+  exit releases the lock.
+- **Tests wait on signals.** Await an emission, an expectation, or an
+  injected clock; a wall-clock sleep makes the test flaky.
+
 ## Xcode And Simulator Tooling
 
 Which Xcode tooling is available depends on the harness (Xcode's MCP bridge,
