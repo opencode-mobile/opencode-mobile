@@ -142,6 +142,13 @@ enum UnifiedDiffVisibility {
         return best.map(\.row)
     }
 
+    /// Digits in the largest line number of `rows`; the line-number columns are sized for it.
+    static func lineNumberDigits(_ rows: [UnifiedDiffRow]) -> Int {
+        var largest = 0
+        for row in rows { largest = max(largest, row.oldLine ?? 0, row.newLine ?? 0) }
+        return String(largest).count
+    }
+
     static func displayColumns(_ text: String) -> Int {
         var columns = 0
         for scalar in text.unicodeScalars {
@@ -373,18 +380,21 @@ struct OpenCodeUnifiedDiff: View {
         let rows = document.visibleRows(contextMode: contextMode)
         let layout = document.layout(contextMode: contextMode)
         let rowHeight = rowHeight
+        // Two digits fit the base width; each further digit widens the column, so a number is
+        // never cut to fit the one shared row height.
+        let gutterWidth = (24 + 9 * CGFloat(max(0, UnifiedDiffVisibility.lineNumberDigits(rows) - 2))) * textScale
         ScrollView(.horizontal) {
             ZStack(alignment: .topLeading) {
                 // The widest rows, laid out but never shown, give the scroll its full width
                 // without laying out every row.
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(layout.widestRows) { row in rowView(row) }
+                    ForEach(layout.widestRows) { row in rowView(row, gutterWidth: gutterWidth) }
                 }
                 .fixedSize()
                 .frame(height: 0, alignment: .top)
                 .hidden()
                 .accessibilityHidden(true)
-                rowView(UnifiedDiffRow(id: -1, kind: .context, oldLine: 1, newLine: 1, text: ""))
+                rowView(UnifiedDiffRow(id: -1, kind: .context, oldLine: 1, newLine: 1, text: ""), gutterWidth: gutterWidth)
                     .fixedSize()
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                         if abs(height - measuredRowHeight) > 0.5 { measuredRowHeight = height }
@@ -392,7 +402,7 @@ struct OpenCodeUnifiedDiff: View {
                     .frame(height: 0, alignment: .top)
                     .hidden()
                     .accessibilityHidden(true)
-                drawnRowsView(rows, rowHeight: rowHeight)
+                drawnRowsView(rows, rowHeight: rowHeight, gutterWidth: gutterWidth)
             }
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -420,11 +430,11 @@ struct OpenCodeUnifiedDiff: View {
     /// All rows' height, with only the rows near what the enclosing vertical scroll view shows
     /// drawn, so a long diff stays lazy inside a scrolling screen or sheet. Without a vertical
     /// scroll view every row is drawn.
-    private func drawnRowsView(_ rows: [UnifiedDiffRow], rowHeight: CGFloat) -> some View {
+    private func drawnRowsView(_ rows: [UnifiedDiffRow], rowHeight: CGFloat, gutterWidth: CGFloat) -> some View {
         let range = drawnRange(rowCount: rows.count, rowHeight: rowHeight)
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(rows[range]) { row in
-                rowView(row)
+                rowView(row, gutterWidth: gutterWidth)
                     .frame(height: rowHeight, alignment: .leading)
                     .clipped()
             }
@@ -462,12 +472,14 @@ struct OpenCodeUnifiedDiff: View {
         return min(range.lowerBound, rowCount)..<min(range.upperBound, rowCount)
     }
 
-    private func rowView(_ row: UnifiedDiffRow) -> some View {
+    private func rowView(_ row: UnifiedDiffRow, gutterWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
             Text(row.oldLine.map(String.init) ?? "")
-                .frame(width: 24 * textScale, alignment: .trailing)
+                .lineLimit(1)
+                .frame(width: gutterWidth, alignment: .trailing)
             Text(row.newLine.map(String.init) ?? "")
-                .frame(width: 24 * textScale, alignment: .trailing)
+                .lineLimit(1)
+                .frame(width: gutterWidth, alignment: .trailing)
             Text(marker(row.kind)).frame(width: 20 * textScale)
             Text(row.text)
                 .lineLimit(1)

@@ -150,6 +150,13 @@ internal object UnifiedDiffVisibility {
         return best.map { it.second }
     }
 
+    /** Digits in the largest line number of [rows]; the line-number columns are sized for it. */
+    fun lineNumberDigits(rows: List<UnifiedDiffRow>): Int {
+        var largest = 0
+        for (row in rows) largest = maxOf(largest, row.oldLine ?: 0, row.newLine ?: 0)
+        return largest.toString().length
+    }
+
     internal fun displayColumns(text: String): Int {
         var columns = 0
         var index = 0
@@ -405,6 +412,7 @@ private fun UnifiedDiffVirtualRows(
     // Written during measure, read after layout; it never drives composition.
     val rowHeight = remember { IntArray(1) }
     var window by remember { mutableStateOf<IntRange?>(null) }
+    val gutterDigits = remember(rows) { UnifiedDiffVisibility.lineNumberDigits(rows) }
     val selectedIndex =
         remember(rows, selectedHunkId) {
             if (selectedHunkId == null) -1 else rows.indexOfFirst { it.id == selectedHunkId && it.kind == UnifiedDiffRowKind.Hunk }
@@ -436,7 +444,7 @@ private fun UnifiedDiffVirtualRows(
             },
     ) { constraints ->
         val height =
-            subcompose(UnifiedDiffSlot.Probe) { UnifiedDiffRowView(UnifiedDiffProbeRow, selected = false) }
+            subcompose(UnifiedDiffSlot.Probe) { UnifiedDiffRowView(UnifiedDiffProbeRow, selected = false, gutterDigits = gutterDigits) }
                 .first()
                 .measure(Constraints())
                 .height
@@ -446,7 +454,7 @@ private fun UnifiedDiffVirtualRows(
         val rowCount = minOf(rows.size, MAX_DIFF_LAYOUT_HEIGHT / height)
         val widest =
             widestRows.withIndex().maxOfOrNull { (index, row) ->
-                subcompose(UnifiedDiffSlot.Width(index)) { UnifiedDiffRowView(row, selected = false) }
+                subcompose(UnifiedDiffSlot.Width(index)) { UnifiedDiffRowView(row, selected = false, gutterDigits = gutterDigits) }
                     .first()
                     .measure(Constraints())
                     .width
@@ -459,7 +467,7 @@ private fun UnifiedDiffVirtualRows(
             (first until last).map { index ->
                 val row = rows[index]
                 val selected = row.id == selectedHunkId && row.kind == UnifiedDiffRowKind.Hunk
-                subcompose(row.id) { UnifiedDiffRowView(row, selected = selected) }
+                subcompose(row.id) { UnifiedDiffRowView(row, selected = selected, gutterDigits = gutterDigits) }
                     .first()
                     .measure(rowConstraints)
             }
@@ -498,6 +506,9 @@ private sealed interface UnifiedDiffSlot {
 }
 
 /** Measures the row height every row shares: one line of code text. */
+/** One code digit at 14 sp monospace, rounded up. */
+private val LINE_NUMBER_DIGIT_WIDTH = 9.dp
+
 private val UnifiedDiffProbeRow = UnifiedDiffRow(-1, UnifiedDiffRowKind.Context, 1, 1, "")
 
 /** Compose's largest layout dimension. */
@@ -507,8 +518,12 @@ private const val MAX_DIFF_LAYOUT_HEIGHT = (1 shl 24) - 1
 private fun UnifiedDiffRowView(
     row: UnifiedDiffRow,
     selected: Boolean,
+    gutterDigits: Int,
     modifier: Modifier = Modifier,
 ) {
+    // Two digits fit the base width; each further digit widens the column, so a number never wraps
+    // into the second line that the one shared row height would clip.
+    val gutterWidth = openCodeTextScaled(24.dp + LINE_NUMBER_DIGIT_WIDTH * maxOf(0, gutterDigits - 2))
     val background =
         when (row.kind) {
             UnifiedDiffRowKind.Addition -> openCodeColor("diff-add").copy(alpha = 0.18f)
@@ -535,8 +550,8 @@ private fun UnifiedDiffRowView(
                 .heightIn(min = 20.dp)
                 .clearAndSetSemantics { contentDescription = row.accessibilityLabel() },
     ) {
-        Text(row.oldLine?.toString().orEmpty(), Modifier.width(openCodeTextScaled(24.dp)), style = CodeTextStyle)
-        Text(row.newLine?.toString().orEmpty(), Modifier.width(openCodeTextScaled(24.dp)), style = CodeTextStyle)
+        Text(row.oldLine?.toString().orEmpty(), Modifier.width(gutterWidth), maxLines = 1, softWrap = false, style = CodeTextStyle)
+        Text(row.newLine?.toString().orEmpty(), Modifier.width(gutterWidth), maxLines = 1, softWrap = false, style = CodeTextStyle)
         Text(row.kind.marker(), Modifier.width(openCodeTextScaled(20.dp)), color = foreground, style = CodeTextStyle)
         Text(
             text = row.text,

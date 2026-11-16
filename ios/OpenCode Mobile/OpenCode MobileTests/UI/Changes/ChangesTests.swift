@@ -949,6 +949,14 @@ struct UnifiedDiffVisibilityTests {
         #expect(UnifiedDiffVisibility.displayColumns(String(repeating: "界", count: 200)) == 400)
     }
 
+    @Test func lineNumberColumnsAreSizedForTheLargestLineNumber() {
+        #expect(UnifiedDiffVisibility.lineNumberDigits(UnifiedDiffParser.parse("@@ -1,1 +1,1 @@\n-a\n+b").rows) == 1)
+        // New line numbers reach 10000, five digits; one shared row height must never cut them.
+        let long = UnifiedDiffParser.parse("@@ -9998,2 +9998,3 @@\n a\n-b\n+c\n+d").rows
+        #expect(UnifiedDiffVisibility.lineNumberDigits(long) == 5)
+        #expect(UnifiedDiffVisibility.lineNumberDigits([]) == 1)
+    }
+
     @Test func rowWindowCoversTheShownRowsPlusOverscanInBlocks() {
         let window = UnifiedDiffRowWindow.rows(shownTop: 2_000, shownBottom: 3_000, rowHeight: 20, overscan: 1_000, rowCount: 10_000)
         #expect(window.lowerBound == 32)
