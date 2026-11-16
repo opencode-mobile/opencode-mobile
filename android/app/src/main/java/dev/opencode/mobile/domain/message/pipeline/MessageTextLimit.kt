@@ -4,6 +4,7 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.markdown.OpenCodeStructureOnlyHighlighter
+import java.util.regex.Pattern
 
 /** The part of a long message the timeline shows, and how many of its characters that is. */
 data class MessageTextCut(
@@ -14,7 +15,23 @@ data class MessageTextCut(
      * lines the shown part skips count as shown.
      */
     val shownCharacters: Int,
-)
+    /** Whether the last shown line was cut part way, so [visibleText] ends with the cut's "…". */
+    val endsMidLine: Boolean = false,
+) {
+    /**
+     * [visibleText] as markdown detection and parsing read it: a cut line has the inline markers
+     * the cut left open closed before its "…", so it renders as the whole message does up to the
+     * cut (#1043). The plain shown text, Copy message, Select text and Full message keep
+     * [visibleText] and the whole text.
+     */
+    val markdownSource: String
+        get() =
+            if (endsMidLine) {
+                OpenCodeMarkdownParser.closeMarkersLeftOpen(visibleText.dropLast(1)) + "…"
+            } else {
+                visibleText
+            }
+}
 
 /**
  * How much of a user's own message the timeline lays out (#1043).
@@ -23,7 +40,14 @@ data class MessageTextCut(
  * [CHARACTERS_PER_LINE] characters of a line are one more, so a line costs
  * `max(1, ceil(length / CHARACTERS_PER_LINE))`. A message costing at most [TOLERANCE] shows in
  * full; a longer one shows the prefix costing at most [LIMIT]. iOS has the same rule, constants
- * and test vectors. Characters are UTF-16 units; a cut never splits a surrogate pair.
+ * and test vectors.
+ *
+ * Characters are UTF-16 units on both platforms, so the same text is cut at the same place and
+ * shows the same counts. A UTF-16 unit is what a Kotlin `String` and a Swift `String.utf16`
+ * view read one at a time without decoding, so the pass stays cheap and stops early; grapheme
+ * clusters would need segmenting every character read. A cut never ends inside a grapheme
+ * cluster (an emoji sequence, a flag, a letter and its combining marks): only the cut line up to
+ * the cut is segmented, with the platform's own rules (`\X` here, `Character` on iOS).
  */
 object MessageTextLimit {
     const val CHARACTERS_PER_LINE = 40
@@ -117,7 +141,7 @@ object MessageTextLimit {
                 lineStart = read
                 lineLength = 0
             } else {
-                if (contentLineStart < 0 && !character.isWhitespace()) contentLineStart = lineStart
+                if (contentLineStart < 0 && !isBlank(character)) contentLineStart = lineStart
                 read += 1
                 lineLength += 1
                 val cost = lineCost(lineLength)
@@ -140,15 +164,13 @@ object MessageTextLimit {
             partialStart = overflowStart
             val end = overflowStart + overflowBudget * CHARACTERS_PER_LINE
             partialEnd = minOf(end, read)
-            val nextIsSpace = end < read && text[end].isWhitespace()
+            val nextIsSpace = end < read && isBlank(text[end])
             if (!nextIsSpace) {
                 var space = partialEnd - 1
-                while (space >= partialStart && !text[space].isWhitespace()) space -= 1
+                while (space >= partialStart && !isBlank(text[space])) space -= 1
                 if (space - partialStart > MINIMUM_WORD_CUT) partialEnd = space
             }
-            if (partialEnd > partialStart && partialEnd < length && Character.isHighSurrogate(text[partialEnd - 1])) {
-                partialEnd -= 1
-            }
+            partialEnd = graphemeFloor(text, partialStart, partialEnd)
             partialEnd = trimmedEnd(text, partialStart, partialEnd)
         }
         val cut =
@@ -156,7 +178,11 @@ object MessageTextLimit {
                 val visibleEnd = trimmedEnd(text, start, wholeEnd)
                 MessageTextCut(visibleText = text.substring(start, visibleEnd), shownCharacters = visibleEnd)
             } else {
-                MessageTextCut(visibleText = text.substring(start, partialEnd) + "…", shownCharacters = partialEnd)
+                MessageTextCut(
+                    visibleText = text.substring(start, partialEnd) + "…",
+                    shownCharacters = partialEnd,
+                    endsMidLine = true,
+                )
             }
         return Scan(cut, contentLineStart, read)
     }
@@ -177,7 +203,7 @@ object MessageTextLimit {
             val character = text[index]
             if (character == '\n') {
                 lineStart = index + 1
-            } else if (!character.isWhitespace()) {
+            } else if (!isBlank(character)) {
                 return lineStart
             }
             index += 1
@@ -191,18 +217,53 @@ object MessageTextLimit {
         end: Int,
     ): Int {
         var trimmed = end
-        while (trimmed > start && text[trimmed - 1].isWhitespace()) trimmed -= 1
+        while (trimmed > start && isBlank(text[trimmed - 1])) trimmed -= 1
         return trimmed
     }
+
+    private val graphemeCluster: Pattern = Pattern.compile("\\X")
+
+    /**
+     * The last grapheme cluster boundary at or before [end] in the line starting at [lineStart]
+     * (a boundary, since a line break ends every cluster). Reads only from [lineStart] to one
+     * code point past [end]: whether [end] is a boundary depends on what comes before it and the
+     * code point at it.
+     */
+    private fun graphemeFloor(
+        text: CharSequence,
+        lineStart: Int,
+        end: Int,
+    ): Int {
+        if (end <= lineStart || end >= text.length) return end
+        val window = text.subSequence(lineStart, minOf(text.length, end + 2)).toString()
+        val matcher = graphemeCluster.matcher(window)
+        val target = end - lineStart
+        var boundary = 0
+        while (matcher.find()) {
+            if (matcher.end() > target) break
+            boundary = matcher.end()
+        }
+        return lineStart + boundary
+    }
+
+    /**
+     * Blank characters, spelt out so iOS counts the same ones: Kotlin's `Char.isWhitespace()`
+     * set (Java whitespace plus space separators).
+     */
+    internal fun isBlank(character: Char): Boolean =
+        when (character.code) {
+            in 0x09..0x0D, in 0x1C..0x20, 0xA0, 0x1680, in 0x2000..0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000 -> true
+            else -> false
+        }
 }
 
 /**
  * The text markdown detection, parsing and highlighting read for a message: the shown part of a
- * cut user message, so none of them ever sees the hidden rest (#1043); the whole text otherwise.
- * A cut bubble then renders like an uncut one up to the cut.
+ * cut user message ([MessageTextCut.markdownSource]), so none of them ever sees the hidden rest
+ * (#1043); the whole text otherwise. A cut bubble then renders like an uncut one up to the cut.
  */
 val Message.markdownSourceText: String
-    get() = if (role == MessageRole.User) MessageTextLimit.cut(text)?.visibleText ?: text else text
+    get() = if (role == MessageRole.User) MessageTextLimit.cut(text)?.markdownSource ?: text else text
 
 /**
  * Every markdown detection and parse in the message pipeline goes through here. It also lets a

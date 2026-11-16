@@ -30,6 +30,19 @@ import XCTest
         #expect(limit.shownCharacters < limit.totalCharacters)
     }
 
+    @Test func emojiUserMessage_showsTheSameCountsAsAndroid() throws {
+        // Same vector as Android: the row counts UTF-16 units, and the cut keeps whole emoji.
+        let text = "a" + String(repeating: "😀", count: 700)
+        let blocks = SessionChatTimelineBlocks.present(message: Self.message(.user, text), commands: [])
+
+        guard case let .limitedText(_, shown, limit) = try #require(blocks.first) else {
+            Issue.record("expected a limited text block, got \(blocks)")
+            return
+        }
+        #expect(shown == "a" + String(repeating: "😀", count: 499) + "…")
+        #expect(limit == SessionChatTextLimit(shownCharacters: 999, totalCharacters: 1_401))
+    }
+
     @Test func shortUserMessage_keepsItsText() {
         let blocks = SessionChatTimelineBlocks.present(message: Self.message(.user, "Run the tests"), commands: [])
 

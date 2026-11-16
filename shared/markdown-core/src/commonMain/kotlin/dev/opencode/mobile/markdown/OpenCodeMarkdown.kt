@@ -373,6 +373,205 @@ object OpenCodeMarkdownParser {
         )
     }
 
+    /**
+     * [prefix], the start of a longer text cut part way through its last line, with the inline
+     * markers that line leaves open closed, so [parse] renders it as it renders the whole text up
+     * to the cut: bold, italic, inline code, and link and image text or destinations (#1043).
+     *
+     * A marker is open when this parser finds no closer for it in the prefix; the whole text is
+     * taken to close it after the cut. Its closer goes at the end of the prefix, inner markers
+     * first, so the caller can put "…" after it. Where a closer cannot give the same rendering
+     * the opener is dropped instead: a link whose text or destination was cut shows its text
+     * plain, since its destination is unknown or incomplete.
+     *
+     * Only the last line's inline markers are repaired, and only as this parser reads them: a
+     * last line inside a code fence, a fence line or a table row is returned unchanged; markers
+     * in inline code are not markers; an opener after a backslash (`\*`), after a letter or
+     * digit (`snake_case`), or before a space is literal text. Strikethrough is not parsed, so
+     * `~~` stays as it is. An opener on an earlier line of the same paragraph is not closed.
+     */
+    fun closeMarkersLeftOpen(prefix: String): String {
+        val lineStart = prefix.lastIndexOf('\n') + 1
+        if (isInFence(prefix, lineStart)) return prefix
+        val line = prefix.substring(lineStart)
+        val contentStart = inlineContentStart(line) ?: return prefix
+        return prefix.substring(0, lineStart + contentStart) +
+            closeInlines(line.substring(contentStart), closing = true)
+    }
+
+    /** Whether the line at [lineStart] is a fence line or inside a fence, as [parse] reads fences. */
+    private fun isInFence(
+        text: String,
+        lineStart: Int,
+    ): Boolean {
+        var fence: String? = null
+        var start = 0
+        while (true) {
+            val end = text.indexOf('\n', start).let { if (it < 0) text.length else it }
+            val line = text.substring(start, end)
+            val opened = fence
+            if (opened != null) {
+                if (start == lineStart) return true
+                if (line.closesFence(opened)) fence = null
+            } else {
+                val match = fenceRegex.find(line)
+                if (match != null) {
+                    if (start == lineStart) return true
+                    fence = match.groupValues[1]
+                }
+            }
+            if (start >= lineStart || end >= text.length) return false
+            start = end + 1
+        }
+    }
+
+    /** Where [parse] starts reading inlines in [line], or null when it reads none to repair. */
+    private fun inlineContentStart(line: String): Int? {
+        if (line.isBlank() || thematicBreakRegex.matches(line.trim())) return null
+        if (line.trimStart().startsWith("|")) return null
+        headingRegex.find(line)?.let { return it.groups[2]?.range?.first }
+        val trimmed = line.length - line.trimStart().length
+        if (line.startsWith(">", trimmed)) {
+            var start = trimmed + 1
+            while (start < line.length && line[start].isWhitespace()) start += 1
+            return start
+        }
+        unorderedRegex.find(line)?.let { return it.groups[1]?.range?.first }
+        orderedRegex.find(line)?.let { return it.groups[2]?.range?.first }
+        return 0
+    }
+
+    /**
+     * Walks [text] as [parseInlines] does. At the first marker it finds no closer for, closes it
+     * when [closing], else drops it.
+     */
+    private fun closeInlines(
+        text: String,
+        closing: Boolean,
+    ): String {
+        var index = 0
+        while (index < text.length) {
+            when {
+                text[index] == '`' -> {
+                    val end = text.indexOf('`', index + 1)
+                    if (end > index) {
+                        index = end + 1
+                    } else if (isLiteralOpener(text, index, 1)) {
+                        index += 1
+                    } else {
+                        // Code is not markdown: nothing in it is repaired.
+                        return closeOrDrop(text, index, "`", closing) { it }
+                    }
+                }
+                text.startsWith("![", index) -> {
+                    val closeLabel = text.indexOf("](", index + 2)
+                    val closeUrl = if (closeLabel >= 0) text.indexOf(')', closeLabel + 2) else -1
+                    if (closeUrl >= 0) {
+                        index = closeUrl + 1
+                    } else {
+                        val alt = if (closeLabel >= 0) text.substring(index + 2, closeLabel) else text.substring(index + 2)
+                        val before = text.substring(0, index)
+                        // Only the alt text shows and the image is never loaded, so a cut
+                        // destination still gives the same image.
+                        return when {
+                            alt.isBlank() -> before.trimEnd()
+                            !closing -> before + alt
+                            closeLabel >= 0 -> "$text)"
+                            else -> "$text]()"
+                        }
+                    }
+                }
+                text[index] == '<' && looksLikeAngleAutolink(text, index) -> {
+                    val close = text.indexOf('>', index + 1)
+                    index = if (close > index + 1) close + 1 else index + 1
+                }
+                text[index] == '[' -> {
+                    val closeLabel = text.indexOf("](", index + 1)
+                    val closeUrl = if (closeLabel >= 0) text.indexOf(')', closeLabel + 2) else -1
+                    if (closeUrl >= 0) {
+                        index = closeUrl + 1
+                    } else {
+                        // A cut link has no destination to keep: its text shows plain.
+                        val before = text.substring(0, index)
+                        return if (closeLabel >= 0) {
+                            before + text.substring(index + 1, closeLabel)
+                        } else {
+                            before + closeInlines(text.substring(index + 1), closing)
+                        }
+                    }
+                }
+                looksLikeBareAutolink(text, index) -> {
+                    index = matchBareAutolink(text, index)?.endIndex ?: (index + 1)
+                }
+                text.startsWith("**", index) || text.startsWith("__", index) -> {
+                    val marker = text.substring(index, index + 2)
+                    val end = text.indexOf(marker, index + 2)
+                    if (end > index) {
+                        index = end + 2
+                    } else if (isLiteralOpener(text, index, 2)) {
+                        index += 2
+                    } else {
+                        return closeOrDrop(text, index, marker, closing) { closeInlines(it, closing = true) }
+                    }
+                }
+                text[index] == '*' || text[index] == '_' -> {
+                    val marker = text.substring(index, index + 1)
+                    val end = text.indexOf(marker, index + 1)
+                    if (end > index + 1) {
+                        index = end + 1
+                    } else if (isLiteralOpener(text, index, 1)) {
+                        index += 1
+                    } else {
+                        return closeOrDrop(text, index, marker, closing) { closeInlines(it, closing = true) }
+                    }
+                }
+                else -> index += 1
+            }
+        }
+        return text
+    }
+
+    /**
+     * An opener with no closer that is read as text rather than as cut: escaped, or for
+     * emphasis, inside a word or followed by a space.
+     */
+    private fun isLiteralOpener(
+        text: String,
+        index: Int,
+        length: Int,
+    ): Boolean {
+        val previous = text.getOrNull(index - 1)
+        val next = text.getOrNull(index + length)
+        if (previous == '\\') return true
+        if (text[index] == '`') return false
+        if (previous != null && previous.isLetterOrDigit()) return true
+        return next != null && next.isWhitespace()
+    }
+
+    /**
+     * Closes the [marker] at [index] at the end of [text], after [closeInner] closed what it
+     * contains, when [parseInlines] then pairs the two; else drops the inner openers, then the
+     * marker itself.
+     */
+    private fun closeOrDrop(
+        text: String,
+        index: Int,
+        marker: String,
+        closing: Boolean,
+        closeInner: (String) -> String,
+    ): String {
+        val before = text.substring(0, index)
+        val inner = text.substring(index + marker.length)
+        if (inner.isBlank()) return before.trimEnd()
+        if (!closing) return before + closeInlines(inner, closing = false)
+        val closedInner = closeInner(inner)
+        for (candidateInner in listOf(closedInner, closeInlines(inner, closing = false))) {
+            val candidate = before + marker + candidateInner + marker
+            if (candidate.indexOf(marker, index + marker.length) == candidate.length - marker.length) return candidate
+        }
+        return before + closedInner
+    }
+
     private fun startsBlock(
         lines: List<String>,
         index: Int,
