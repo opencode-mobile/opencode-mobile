@@ -40,6 +40,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.delay
@@ -56,6 +57,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sin
@@ -113,6 +115,46 @@ interface Dictation {
      * for it as for any load.
      */
     fun loadNow() = Unit
+
+    /**
+     * Its [HomeViewModel] is gone: drops any take, and lets go of the microphone, threads and scopes. Nothing runs
+     * after it; calling it again does nothing. The shared [VoiceEngine] stays open.
+     */
+    fun close() = Unit
+}
+
+/**
+ * Dictation's two threads, `hex-audio` and `hex-vad`, and a scope on each. [close] cancels both scopes and shuts both
+ * threads down, once.
+ */
+internal class DictationThreads {
+    internal val audioExecutor: ExecutorService = Executors.newSingleThreadExecutor { Thread(it, "hex-audio") }
+    internal val vadExecutor: ExecutorService = Executors.newSingleThreadExecutor { Thread(it, "hex-vad") }
+    val audio = audioExecutor.asCoroutineDispatcher()
+    val scope = CoroutineScope(SupervisorJob() + audio)
+    private val vad = vadExecutor.asCoroutineDispatcher()
+    val vadScope = CoroutineScope(SupervisorJob() + vad)
+    private val closed = AtomicBoolean(false)
+
+    /**
+     * [last] runs on `hex-audio` after the block running there now and the ones already queued, so it never races
+     * them; nothing runs there after it. Only the first call does anything.
+     */
+    fun close(last: () -> Unit = {}) {
+        if (!closed.compareAndSet(false, true)) return
+        scope.cancel()
+        vadScope.cancel()
+        audioExecutor.execute {
+            try {
+                last()
+            } catch (error: Throwable) {
+                Log.w(TalkLog.TAG, "couldn't let go of the microphone", error)
+            }
+        }
+        // shutdown(), not shutdownNow(): queued work, the cancelled coroutines' last steps and [last], still runs.
+        audio.close()
+        vad.close()
+    }
 }
 
 /**
@@ -157,11 +199,11 @@ class VoiceEngineDictation(
     /** A talk press: the speech model downloads if needed and loads now, if that hasn't started. */
     private val startLoad: () -> Unit = {},
 ) : Dictation {
-    private val audio = Executors.newSingleThreadExecutor { Thread(it, "hex-audio") }.asCoroutineDispatcher()
-    private val scope = CoroutineScope(SupervisorJob() + audio)
+    private val threads = DictationThreads()
+    private val audio = threads.audio
+    private val scope = threads.scope
     private val gate = SpeechGate(engine, loadModel, holdMs, failOnce, scope)
-    private val vad = Executors.newSingleThreadExecutor { Thread(it, "hex-vad") }.asCoroutineDispatcher()
-    private val vadScope = CoroutineScope(SupervisorJob() + vad)
+    private val vadScope = threads.vadScope
 
     /** The locked take being cut at pauses: its job on `hex-vad`, and whether it has ended. Audio thread only. */
     private class Splitting(
@@ -305,6 +347,15 @@ class VoiceEngineDictation(
     }
 
     override suspend fun transcribe(samples: FloatArray): String = transcribeWith(engine, samples)
+
+    override fun close() {
+        warm = false
+        threads.close {
+            mic.end()
+            splitting = null
+            mic.release()
+        }
+    }
 }
 
 /** [VoiceEngine.transcribe], with "no speech" as empty text rather than a failure. */
@@ -659,6 +710,7 @@ data class HomeUiState(
  * attached. Releasing never sends; Send does.
  */
 class HomeViewModel(
+    /** This model's own: it is closed when the model is cleared, so it must not be shared with another. */
     private val dictation: Dictation,
     makeSession: ((CoroutineScope) -> TodaySession)? = null,
     /** Keeps a take's audio until it has text. */
@@ -2367,6 +2419,7 @@ class HomeViewModel(
     override fun onCleared() {
         stopSplit()
         if (state.value.draft.isListening) dictation.drop()
+        dictation.close()
     }
 }
 
@@ -2455,7 +2508,9 @@ class ClipDictation(
 
     override suspend fun transcribe(samples: FloatArray): String = transcribeWith(engine, samples)
 
-    private val gate = SpeechGate(engine, loadModel, holdMs, failOnce, CoroutineScope(SupervisorJob()))
+    private val scope = CoroutineScope(SupervisorJob())
+
+    private val gate = SpeechGate(engine, loadModel, holdMs, failOnce, scope)
 
     override val speech: StateFlow<SpeechStatus> get() = gate.speech
 
@@ -2466,4 +2521,9 @@ class ClipDictation(
     override fun tryNow() = engine.tryNow()
 
     override val model: StateFlow<SpeechModelInfo?> get() = gate.model
+
+    override fun close() {
+        take = null
+        scope.cancel()
+    }
 }

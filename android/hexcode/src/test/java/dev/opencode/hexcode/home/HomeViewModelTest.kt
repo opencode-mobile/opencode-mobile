@@ -1,5 +1,8 @@
 package dev.opencode.hexcode.home
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
 import dev.opencode.hexcode.session.ArtifactTile
 import dev.opencode.hexcode.session.ArtifactsState
@@ -59,6 +62,12 @@ class HomeViewModelTest {
         override fun drop() {
             recording = false
             drops += 1
+        }
+
+        var closes = 0
+
+        override fun close() {
+            closes += 1
         }
 
         var failure: Exception? = null
@@ -355,6 +364,26 @@ class HomeViewModelTest {
             assertEquals(TalkMode.Idle, vm.uiState.value.talk)
             assertEquals(1, dictation.drops)
             assertTrue(vm.uiState.value.draft.isEmpty)
+        }
+
+    @Test
+    fun clearingTheModelDropsTheTakeAndClosesItsDictation() =
+        runTest(dispatcher) {
+            val dictation = FakeDictation()
+            val store = ViewModelStore()
+            val vm =
+                ViewModelProvider(
+                    store,
+                    object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T = HomeViewModel(dictation) { now } as T
+                    },
+                )[HomeViewModel::class.java]
+            vm.press()
+            assertEquals(0, dictation.closes)
+            store.clear()
+            assertEquals(1, dictation.drops)
+            assertEquals(1, dictation.closes)
         }
 
     @Test
