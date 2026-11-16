@@ -89,30 +89,34 @@ deleting something later does not undo a leak.
 
 ## Code Practices
 
-General rules for new and changed code on both platforms.
+Strong defaults for new and changed code on both platforms. Follow them
+unless a case clearly calls for something else; then take the exception
+deliberately, keep it narrow, and say why in a comment or the pull request.
 
-- **Failures surface.** Every error is handled, returned to the caller, or
-  logged. A fallback value is used only where the failure is expected and
-  nothing is lost by it.
-- **Cancellation propagates.** Cancelled work stops and is reported as
+- **Failures surface.** Prefer to handle an error, return it to the caller,
+  or log it. A fallback value fits where the failure is expected and little
+  is lost by it.
+- **Cancellation propagates.** Cancelled work should stop and be reported as
   cancelled, separately from errors.
-- **The creator releases.** Whatever creates a long-lived resource owns its
-  lifetime and releases it at a defined point. Caches and stores are bounded.
-- **Fix the cause where it starts.** A failure is handled in the code that
-  owns the operation. Process-wide mechanisms stay narrow and pass on
-  everything they do not own.
+- **The creator releases.** Whatever creates a long-lived resource normally
+  owns its lifetime and releases it at a defined point. Give caches and
+  stores a bound.
+- **Fix the cause where it starts.** Handle a failure in the code that owns
+  the operation first. Keep a process-wide mechanism narrow, passing on what
+  it does not own.
 - **Platforms and apps stay in parity.** A rule, safety check, limit, or
-  behaviour on one platform or app holds on the others, behind shared kit
-  code where possible.
+  behaviour on one platform or app should hold on the others, behind shared
+  kit code where practical. Record a deliberate gap in the issue.
 - **Private data stays on the device.** Logs, backups, analytics, and
-  exports carry identifiers, with user and server content left out.
-- **The compiler checks concurrency.** Shared state is protected by
-  structured, scoped constructs the compiler or runtime can verify, and the
-  main thread stays free of blocking work.
-- **Checks are deterministic and binding.** Tests wait on signals and
-  injected clocks. Lint and analysis results gate the merge.
-- **Units stay small.** A function, view, or Screen Model does one job and
-  can be tested alone. Split a unit as it grows, before adding to it.
+  exports should carry identifiers, with user and server content left out.
+- **The compiler checks concurrency.** Prefer structured, scoped constructs
+  the compiler or runtime can verify for shared state, and keep blocking
+  work off the main thread.
+- **Checks are deterministic.** Tests should wait on signals and injected
+  clocks. Treat new lint and analysis warnings as things to fix.
+- **Units stay small.** Aim for functions, views, and Screen Models that do
+  one job and can be tested alone. Consider splitting a large unit before
+  adding to it.
 
 ## Xcode And Simulator Tooling
 
