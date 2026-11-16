@@ -806,16 +806,10 @@ private struct SessionChatMessageRow: View {
     @Environment(\.attachmentImageLoading) private var imageLoader
     @Environment(\.attachmentImageDirectory) private var imageDirectory
     @Environment(\.openImageViewer) private var openImageViewer
+    @Environment(\.openFullMessage) private var openFullMessage
 
     private func openMessageActions(showsRevertMessage: Bool, codeBlock: String? = nil) {
-        onMessageActionsTap(
-            SessionChatMessageActionsTarget(
-                id: message.id,
-                text: message.text,
-                showsRevertMessage: showsRevertMessage,
-                codeBlock: codeBlock
-            )
-        )
+        onMessageActionsTap(message.messageActionsTarget(showsRevertMessage: showsRevertMessage, codeBlock: codeBlock))
     }
 
     var body: some View {
@@ -905,6 +899,24 @@ private extension SessionChatMessageRow {
     }
 }
 
+extension SessionChatRow {
+    /// The Message sheet acts on the whole message: Copy message and Select text never see the
+    /// part a cut message shows (#1043).
+    func messageActionsTarget(showsRevertMessage: Bool, codeBlock: String? = nil) -> SessionChatMessageActionsTarget {
+        SessionChatMessageActionsTarget(
+            id: id,
+            text: text,
+            showsRevertMessage: showsRevertMessage,
+            codeBlock: codeBlock
+        )
+    }
+
+    /// What Show full message opens: the whole text, titled Full message.
+    var fullMessageTarget: SessionChatSelectTextTarget {
+        .fullMessage(id: id, text: text)
+    }
+}
+
 private extension SessionChatRow {
     var outgoingSteering: OpenCodeOutgoingMessageSteering? {
         guard let steer else { return nil }
@@ -921,6 +933,8 @@ private extension SessionChatMessageRow {
             switch block {
             case .text(let blockID, let text, _):
                 texts.append(.text(id: blockID, text: text))
+            case .limitedText(let blockID, let text, let limit):
+                texts.append(.text(id: blockID, text: text, limit: outgoingLimit(limit)))
             case .attachment(let blockID, let file):
                 media.append(
                     file.isViewableImage ? images(id: blockID, [file]) : .attachment(file.attachmentPresentation)
@@ -937,6 +951,15 @@ private extension SessionChatMessageRow {
         return content.isEmpty
             ? [.text(id: PresentationBlockId.messageFallback(message.id), text: message.text)]
             : content
+    }
+
+    /// The row under a cut message opens its whole text, the text Copy message copies.
+    private func outgoingLimit(_ limit: SessionChatTextLimit) -> OpenCodeOutgoingMessageLimit {
+        OpenCodeOutgoingMessageLimit(
+            shownCharacters: limit.shownCharacters,
+            totalCharacters: limit.totalCharacters,
+            onShowFull: openFullMessage.map { open in { open(message.fullMessageTarget) } }
+        )
     }
 
     private func images(id: String, _ files: [FilePart]) -> OpenCodeOutgoingMessageContent {
@@ -1040,6 +1063,9 @@ private struct AssistantMessageContent: View {
                             onOpenMessageActions: onOpenMessageActions
                         )
                     )
+                case .limitedText(_, let text, _):
+                    // Only user messages are cut; shown as plain text if one ever reaches here.
+                    AssistantMessageBubble(text: text, renderedMarkdown: nil, isStreaming: message.isStreaming)
                 case .attachment(_, let file):
                     if file.isViewableImage {
                         SessionChatImageGalleryView(images: [file], messageID: message.id)
@@ -1245,8 +1271,11 @@ struct SessionChatStepTapActions {
         if card.opensChangesReview, supportsSessionMessageDiff {
             return { onChangesReviewTap(messageID, card.changesInitialFilePath) }
         }
-        if let target = Self.detailTarget(for: card) {
-            return { onToolDetailTap(target) }
+        // Checked without building it; the detail and its inspector are built on tap (#1033).
+        if card.opensDetail {
+            return {
+                if let target = Self.detailTarget(for: card) { onToolDetailTap(target) }
+            }
         }
         return nil
     }

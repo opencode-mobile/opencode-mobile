@@ -177,9 +177,10 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatBackgroundWorkSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatShellOutputSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
+import dev.opencode.mobile.ui.sessionchat.view.LocalSessionChatToolDetailResolver
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailResolver
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
-import dev.opencode.mobile.ui.sessionchat.view.SessionToolGroupImages
 import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
@@ -243,9 +244,11 @@ fun SessionChatScreen(
             val loader: suspend (String, String) -> ByteArray = { messageId, imageId -> viewModel.loadFullImage(messageId, imageId) }
             loader
         }
+    val toolDetails = remember(viewModel) { SessionChatToolDetailResolver(viewModel::toolDetail) }
     CompositionLocalProvider(
         LocalOpenCodeAttachmentImageLoader provides attachmentImageLoader,
         LocalSessionChatFullImageLoader provides fullImageLoader,
+        LocalSessionChatToolDetailResolver provides toolDetails,
     ) {
         SessionChatScreenBody(
             sessionId = sessionId,
@@ -1175,11 +1178,11 @@ private fun SessionChatScreenBody(
                                 },
                                 onToolGroupTap = { target ->
                                     logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_GROUP)
-                                    SessionToolGroupImages.put(sessionId, target)
                                     onToolGroupClick(
                                         target.toRoute(
                                             sessionId = sessionId,
                                             worktree = currentWorktree,
+                                            transcriptWorktree = viewModel.transcriptDirectory() ?: currentWorktree,
                                             parentId = parentId ?: uiState.sessionParentId,
                                             owningTurnMessageId = uiState.owningTurnMessageId(target.messageId),
                                             supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
@@ -1236,6 +1239,10 @@ private fun SessionChatScreenBody(
                                 onCloseActivityCardStep = viewModel::closeActivityCardStep,
                                 imageViewer = uiState.imageViewer,
                                 onOpenImageViewer = viewModel::openImageViewer,
+                                onShowFullMessage = { target ->
+                                    logChatAction(ProductAnalytics.Action.CHAT_SHOW_FULL_MESSAGE)
+                                    selectTextTarget = target
+                                },
                                 onImageViewerPageChange = viewModel::showImageViewerPage,
                                 onDismissImageViewer = viewModel::dismissImageViewer,
                                 goal = uiState.goal,

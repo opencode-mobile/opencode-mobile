@@ -1,0 +1,19 @@
+name: Merge Queue CLA
+
+# `license/cla` is a required check, but the CLA service only reports it on
+# pull request commits, never on the commits a merge queue builds. A pull
+# request needs the real status before it can join the queue, so the queue's
+# commits report it here.
+on:
+  merge_group:
+    types: [checks_requested]
+
+permissions: {}
+
+jobs:
+  license-cla:
+    name: license/cla
+    runs-on: ubuntu-latest
+    steps:
+      - name: Signed on the pull request
+        run: echo "The CLA status was required before this pull request could join the queue."

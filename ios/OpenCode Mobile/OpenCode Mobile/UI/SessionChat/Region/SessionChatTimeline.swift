@@ -1015,7 +1015,7 @@ final class SessionChatTimeline {
                 rows.append(timelineRow.toSessionChatRow())
             }
             let shouldYield =
-                timelineRow.text.count >= 4_000
+                timelineRow.text.utf8.count >= 4_000
                 || rebuiltCount > 0 && rebuiltCount % 2 == 0
                 || (index > 0 && index % 4 == 0)
             if shouldYield {

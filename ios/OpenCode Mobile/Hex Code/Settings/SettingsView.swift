@@ -62,8 +62,7 @@ struct SettingsView: View {
                         LocalizedStringResource("settings.speech_model", defaultValue: "Speech model"),
                         subtitle: String(localized: "settings.speech_model.sub", defaultValue: "Runs on this phone"),
                         value: voice.modelName
-                    ) { main.showPlaceholder() }
-                    .placeholder()
+                    ) { main.home.showsSpeechModel = true }
                     HexRow(
                         icon: .book,
                         LocalizedStringResource("settings.language", defaultValue: "Language"),
@@ -264,6 +263,10 @@ struct HexMainView: View {
             ArtifactsSheet(artifacts: main.artifacts, toasts: main.toasts)
         }
         .onChange(of: main.artifacts.sheetShown) { _, up in main.toasts.inSheet = up }
+        // The speech model's details: from home's speech line or draft label, or Settings › Speech model.
+        .hexFittedSheet(isPresented: Binding(get: { main.home.showsSpeechModel }, set: { main.home.showsSpeechModel = $0 })) {
+            SpeechModelSheet(home: main.home) { main.home.showsSpeechModel = false }
+        }
         .fullScreenCover(item: $main.pairAgain) { model in
             PairAgainView(model: model, onCancel: { main.cancelPairAgain() })
         }

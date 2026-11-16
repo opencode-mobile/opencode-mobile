@@ -201,7 +201,7 @@ object TimelineProjector {
         item: SessionChatMessageItem,
         previous: TimelineRow? = null,
     ): TimelineRow {
-        val contentRevision = ContentRevision.of(item.text)
+        val contentRevision = ContentRevision.of(item.text, item.blocks)
         val draft =
             TimelineRow(
                 id = item.id,
@@ -334,7 +334,7 @@ object TimelineProjector {
                 sentAtEpochMs = message.sentAtEpochMs,
                 // Carried so an unchanged row stays the same instance; [markSteers] decides.
                 steer = previous?.steer,
-                contentRevision = ContentRevision.of(displayText),
+                contentRevision = ContentRevision.of(displayText, body.blocks),
                 layoutRevision = 0L,
                 goalKickoffId =
                     message.parts
@@ -397,7 +397,7 @@ object TimelineProjector {
         when (block) {
             // Presence only. Streaming text/markdown growth is GrowBottom or Content.
             is SessionChatTimelineBlock.Text ->
-                "t:${block.blockID}:${block.renderedMarkdown != null}"
+                "t:${block.blockID}:${block.renderedMarkdown != null}:${block.limit?.shownCharacters ?: -1}"
             is SessionChatTimelineBlock.Attachment ->
                 "a:${block.blockID}:${block.attachment.filename}"
             is SessionChatTimelineBlock.ImageGallery ->

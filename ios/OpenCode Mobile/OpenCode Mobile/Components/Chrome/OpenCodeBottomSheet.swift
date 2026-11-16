@@ -70,6 +70,21 @@ enum OpenCodeBottomSheetKeyboard: Equatable {
     case expand
 }
 
+private struct OpenCodeBottomSheetBodyHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+extension EnvironmentValues {
+    /// Height of a scrollable sheet's body viewport, for body content that scrolls itself
+    /// (a very long text) and so fills exactly that height instead of growing the body. Nil
+    /// outside a sheet and while the card wraps its content. Stable only for `.half`, whose
+    /// height does not follow the content.
+    var openCodeBottomSheetBodyHeight: CGFloat? {
+        get { self[OpenCodeBottomSheetBodyHeightKey.self] }
+        set { self[OpenCodeBottomSheetBodyHeightKey.self] = newValue }
+    }
+}
+
 /// Card height math for `.openCodeBottomSheet`, kept pure so it can be tested.
 enum OpenCodeBottomSheetLayoutMath {
     /// Gap kept between the top safe area and an expanded card, matching the
@@ -1595,6 +1610,7 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
         VStack(spacing: 0) {
             content()
         }
+        .environment(\.openCodeBottomSheetBodyHeight, mode == .scrollable ? scrollAreaHeight : nil)
         .openCodeFocusGroup(.vertical)
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)

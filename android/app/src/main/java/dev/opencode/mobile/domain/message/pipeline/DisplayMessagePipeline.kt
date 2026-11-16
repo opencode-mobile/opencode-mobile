@@ -3,7 +3,6 @@ package dev.opencode.mobile.domain.message
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.MarkdownBlock
 import dev.opencode.mobile.markdown.MarkdownDocument
-import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -131,7 +130,7 @@ class DisplayMessagePipeline(
                     }
                     val target = resolveStreamingDecorationTarget(message)
                     val parsed =
-                        if (target != null && OpenCodeMarkdownDetector.shouldRender(target.plain)) {
+                        if (target != null && MarkdownInputProbe.shouldRender(target.plain)) {
                             contentPreparer.prepareStructureOnlyTextBlock(
                                 blockID = target.blockID,
                                 plain = target.plain,
@@ -210,7 +209,7 @@ class DisplayMessagePipeline(
                     messages.mapNotNull { message ->
                         if (!messageHasStreamingText(message)) return@mapNotNull null
                         val target = resolveStreamingDecorationTarget(message) ?: return@mapNotNull null
-                        if (!OpenCodeMarkdownDetector.shouldRender(target.plain)) return@mapNotNull null
+                        if (!MarkdownInputProbe.shouldRender(target.plain)) return@mapNotNull null
                         if (streamingDocs[message.id]?.hasCodeFence() != true) return@mapNotNull null
                         message.id to target
                     }
@@ -373,7 +372,8 @@ class DisplayMessagePipeline(
                         for (message in messages.asReversed()) {
                             ensureActive()
                             if (!isCurrent(generation)) return@launch
-                            if (!OpenCodeMarkdownDetector.shouldRender(message.text)) continue
+                            val markdownSource = message.markdownSourceText
+                            if (!MarkdownInputProbe.shouldRender(markdownSource)) continue
                             val cached = byId[message.id]
                             if (cached?.renderedMarkdown != null &&
                                 cached.text == message.text &&
@@ -394,7 +394,7 @@ class DisplayMessagePipeline(
 
                             if (!publishedViewport) {
                                 viewportEnrichedCount += 1
-                                viewportCharactersRemaining -= message.text.length
+                                viewportCharactersRemaining -= markdownSource.length
                                 val viewportReady =
                                     holdReady ||
                                         viewportEnrichedCount >=
@@ -484,7 +484,7 @@ class DisplayMessagePipeline(
                         // viewport shows — then publish before older history.
                         val newestMarkdown =
                             messages.asReversed().firstOrNull {
-                                OpenCodeMarkdownDetector.shouldRender(it.text)
+                                MarkdownInputProbe.shouldRender(it.markdownSourceText)
                             }
                         if (newestMarkdown != null) {
                             val prepared =
@@ -800,8 +800,10 @@ internal fun shouldPlainFirstHistoryPublish(
     if (previousById.values.any { it.renderedMarkdown != null }) return false
     var markdownChars = 0
     for (message in messages) {
-        if (!OpenCodeMarkdownDetector.shouldRender(message.text)) continue
-        markdownChars += message.text.length
+        // A cut user message counts, and is detected, by its shown part only (#1043).
+        val source = message.markdownSourceText
+        if (!MarkdownInputProbe.shouldRender(source)) continue
+        markdownChars += source.length
         if (markdownChars >= MessageContentPreparer.HISTORY_PLAIN_FIRST_MARKDOWN_CHARACTER_THRESHOLD) {
             return true
         }
@@ -819,9 +821,10 @@ internal fun newestMarkdownViewportIds(
     val ids = LinkedHashSet<String>()
     var remainingChars = charBudget
     for (message in messages.asReversed()) {
-        if (!OpenCodeMarkdownDetector.shouldRender(message.text)) continue
+        val source = message.markdownSourceText
+        if (!MarkdownInputProbe.shouldRender(source)) continue
         ids += message.id
-        remainingChars -= message.text.length
+        remainingChars -= source.length
         if (ids.size >= maxCount || remainingChars <= 0) break
     }
     return ids

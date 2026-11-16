@@ -115,4 +115,5 @@ dependencies {
     // Google's LiteRT (Apache-2.0), the third engine the lab compares, with its GPU accelerator
     implementation(libs.litert)
     implementation(libs.litert.gpu)
+    testImplementation(libs.junit)
 }

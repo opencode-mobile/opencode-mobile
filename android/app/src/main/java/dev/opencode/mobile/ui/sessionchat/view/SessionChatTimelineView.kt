@@ -110,6 +110,7 @@ import dev.opencode.mobile.ui.components.OpenCodeMessageNoteVariant
 import dev.opencode.mobile.ui.components.OpenCodeChatActivityState
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
+import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageLimit
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeActivityAgentRow
 import dev.opencode.mobile.ui.components.OpenCodeActivityCard
@@ -184,6 +185,9 @@ private val LocalNoticeModelNames = staticCompositionLocalOf { SessionChatNotice
 /** Opens the image viewer on a timeline gallery block and page; null in previews without a host. */
 private val LocalOpenImageViewer = staticCompositionLocalOf<((galleryId: String, index: Int) -> Unit)?> { null }
 
+/** Opens the Select text sheet over a cut message's whole text (#1043); null in previews without a host. */
+private val LocalOpenFullMessage = staticCompositionLocalOf<((SessionChatMessageActionsTarget) -> Unit)?> { null }
+
 internal data class SessionChatTimelineViewProps(
     val timeline: SessionChatTimelineState,
     val messages: List<SessionChatMessageItem>,
@@ -253,6 +257,8 @@ internal data class SessionChatTimelineViewProps(
     /** Gallery open in the full-screen image viewer, and its page; owned by the Session Chat screen model. */
     val imageViewer: SessionChatImageViewerState? = null,
     val onOpenImageViewer: (galleryId: String, index: Int) -> Unit = { _, _ -> },
+    /** Show full message on a cut user message: the whole text for the Select text sheet. */
+    val onShowFullMessage: ((SessionChatMessageActionsTarget) -> Unit)? = null,
     val onImageViewerPageChange: (index: Int) -> Unit = {},
     val onDismissImageViewer: () -> Unit = {},
     /** The session's `/goal`: the first context pill, its timeline rows and status row (#1007). */
@@ -372,6 +378,7 @@ private fun SessionChatTimelineStateContent(
                 LocalNoticeModelNames provides props.noticeModelNames,
                 LocalOpenCodeGalleryImageLoader provides galleryLoader,
                 LocalOpenImageViewer provides props.onOpenImageViewer,
+                LocalOpenFullMessage provides props.onShowFullMessage,
             ) {
             SessionChatTimelineReadyView(
                 messages = timelineMessages,
@@ -982,14 +989,7 @@ private fun SessionChatMessageRowContent(
         showsRevertMessage: Boolean,
         codeBlock: String? = null,
     ) {
-        onMessageActionsTap(
-            SessionChatMessageActionsTarget(
-                id = message.id,
-                text = message.text,
-                showsRevertMessage = showsRevertMessage,
-                codeBlock = codeBlock,
-            ),
-        )
+        onMessageActionsTap(message.messageActionsTarget(showsRevertMessage = showsRevertMessage, codeBlock = codeBlock))
     }
 
     Column(
@@ -1014,7 +1014,7 @@ private fun SessionChatMessageRowContent(
                     renderedMarkdown = message.renderedMarkdown,
                     metadataLabel = message.metadataLabel,
                     sentAtEpochMs = message.sentAtEpochMs,
-                    content = message.outgoingContent(),
+                    content = message.outgoingContent(onShowFullMessage = LocalOpenFullMessage.current),
                     steering = message.outgoingSteering(),
                     modifier = Modifier.fillMaxWidth(),
                     // A pending steer has no message actions; the Up next sheet owns it.
@@ -1084,7 +1084,33 @@ private fun SessionChatMessageItem.outgoingSteering(): OpenCodeOutgoingMessageSt
         }
     }
 
-private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessageContent> {
+/**
+ * The Message sheet acts on the whole message: Copy message and Select text never see the part a
+ * cut message shows (#1043).
+ */
+internal fun SessionChatMessageItem.messageActionsTarget(
+    showsRevertMessage: Boolean,
+    codeBlock: String? = null,
+): SessionChatMessageActionsTarget =
+    SessionChatMessageActionsTarget(
+        id = id,
+        text = text,
+        showsRevertMessage = showsRevertMessage,
+        codeBlock = codeBlock,
+    )
+
+/** What Show full message opens: the whole text, titled Full message. */
+internal fun SessionChatMessageItem.fullMessageTarget(): SessionChatMessageActionsTarget =
+    SessionChatMessageActionsTarget(
+        id = id,
+        text = text,
+        showsRevertMessage = false,
+        isFullMessage = true,
+    )
+
+private fun SessionChatMessageItem.outgoingContent(
+    onShowFullMessage: ((SessionChatMessageActionsTarget) -> Unit)?,
+): List<OpenCodeOutgoingMessageContent> {
     val textBlockCount = blocks.count { it is SessionChatTimelineBlock.Text }
     // A gallery of sent images sits above the text it came with.
     val (galleries, rest) = blocks.partition { it is SessionChatTimelineBlock.ImageGallery }
@@ -1095,8 +1121,20 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
                 OpenCodeOutgoingMessageContent.Text(
                     text = block.text,
                     renderedMarkdown =
-                        block.renderedMarkdown
-                            ?: renderedMarkdown.takeIf { textBlockCount == 1 },
+                        if (block.limit != null) {
+                            // Only a document parsed from the shown part rides on a cut text.
+                            block.renderedMarkdown
+                        } else {
+                            block.renderedMarkdown ?: renderedMarkdown.takeIf { textBlockCount == 1 }
+                        },
+                    limit =
+                        block.limit?.let { limit ->
+                            OpenCodeOutgoingMessageLimit(
+                                shownCharacters = limit.shownCharacters,
+                                totalCharacters = limit.totalCharacters,
+                                onShowFull = onShowFullMessage?.let { open -> { open(fullMessageTarget()) } },
+                            )
+                        },
                 )
             is SessionChatTimelineBlock.Attachment ->
                 OpenCodeOutgoingMessageContent.Attachment(AttachmentPresentationMapper.from(block.attachment), id = block.blockID)
@@ -1155,6 +1193,7 @@ private fun AssistantMessageContent(
             onChildSessionTap = onChildSessionTap,
             onChangesReviewTap = onChangesReviewTap,
             onToolDetailTap = onToolDetailTap,
+            toolDetails = LocalSessionChatToolDetailResolver.current,
         )
 
     fun toolCardAction(block: SessionChatTimelineBlock.ToolCard): (() -> Unit)? = toolTaps.toolCardAction(block)
@@ -1404,6 +1443,7 @@ private class ToolTapTargets(
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    val toolDetails: SessionChatToolDetailResolver,
 ) {
     fun toolCardAction(block: SessionChatTimelineBlock.ToolCard): (() -> Unit)? =
         when {
@@ -1417,7 +1457,11 @@ private class ToolTapTargets(
                     onChangesReviewTap(messageId, block.changesInitialFilePath)
                 }
             }
-            else -> sessionChatToolCardDetail(block)?.let { target -> { onToolDetailTap(target) } }
+            // Built on tap from the tool part, not carried by the card (#1033).
+            SessionChatToolDetails.opensDetail(block) -> {
+                { toolDetails.detail(block)?.let(onToolDetailTap) }
+            }
+            else -> null
         }
 
     // A rail or activity card step opens what the standard timeline opens for its tool card.
@@ -1425,7 +1469,10 @@ private class ToolTapTargets(
         val card = step.card
         return when {
             card != null -> toolCardAction(card)
-            else -> sessionChatStepDetail(step, supportsSessionMessageDiff)?.let { target -> { onToolDetailTap(target) } }
+            stepOpensDetail(step, supportsSessionMessageDiff) -> {
+                { sessionChatStepDetail(step, supportsSessionMessageDiff, toolDetails)?.let(onToolDetailTap) }
+            }
+            else -> null
         }
     }
 }
@@ -1449,18 +1496,6 @@ private fun stepThoughtDuration(step: SessionChatStep): String? {
     return SessionChatTimelineBlocks.thoughtDurationLabel(end - start)
 }
 
-private fun sessionChatToolCardDetail(block: SessionChatTimelineBlock.ToolCard): SessionChatToolDetailTarget? {
-    val presentation = block.presentation?.takeUnless { block.detailIsMarkdown }
-    val text = block.detailText
-    if (presentation == null && text == null) return null
-    return SessionChatToolDetailTarget(
-        title = presentation?.title ?: block.title,
-        body = text ?: presentation?.raw.orEmpty(),
-        bodyIsMarkdown = block.detailIsMarkdown,
-        presentation = presentation,
-    )
-}
-
 /** A child session card's title is its agent name, which is server content. */
 internal val SessionChatTimelineBlock.ToolCard.childSessionTitle: String
     get() = (title as? UiText.Verbatim)?.value.orEmpty()
@@ -1473,18 +1508,33 @@ internal val SessionChatTimelineBlock.ToolCard.childSessionTitle: String
 internal fun sessionChatStepDetail(
     step: SessionChatStep,
     supportsSessionMessageDiff: Boolean,
+    toolDetails: SessionChatToolDetailResolver,
 ): SessionChatToolDetailTarget? {
+    if (!stepOpensDetail(step, supportsSessionMessageDiff)) return null
     val card = step.card
     val thoughtText = step.thoughtText
     return when {
-        card != null ->
-            if (card.childSessionId != null || (card.opensChangesReview && supportsSessionMessageDiff)) {
-                null
-            } else {
-                sessionChatToolCardDetail(card)
-            }
+        card != null -> toolDetails.detail(card)
         thoughtText != null -> thoughtDetailTarget(thoughtText, stepThoughtDuration(step))
         else -> null
+    }
+}
+
+/**
+ * Whether [sessionChatStepDetail] has a detail to show, checked without building it: a step's
+ * card opens one only when its tool part is still there when the detail is built.
+ */
+internal fun stepOpensDetail(
+    step: SessionChatStep,
+    supportsSessionMessageDiff: Boolean,
+): Boolean {
+    val card = step.card
+    return when {
+        card != null ->
+            card.childSessionId == null &&
+                !(card.opensChangesReview && supportsSessionMessageDiff) &&
+                SessionChatToolDetails.opensDetail(card)
+        else -> step.thoughtText != null
     }
 }
 
@@ -1596,6 +1646,7 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
     if (resolved != null) lastContent.value = resolved
     val visible = resolved != null
     val content = resolved ?: lastContent.value
+    val toolDetails = LocalSessionChatToolDetailResolver.current
     val taps =
         content?.let {
             ToolTapTargets(
@@ -1604,16 +1655,17 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
                 onToolDetailTap = props.onToolDetailTap,
+                toolDetails = toolDetails,
             )
         }
     val stepsById = content?.let { sheet -> (sheet.steps + sheet.agents.map { it.step }).associateBy { it.id } }.orEmpty()
 
-    fun detailOf(step: SessionChatStep): SessionChatToolDetailTarget? =
-        if (step.kind == SessionChatStepKind.ChildSession) null else sessionChatStepDetail(step, props.supportsSessionMessageDiff)
+    fun opensDetail(step: SessionChatStep): Boolean =
+        step.kind != SessionChatStepKind.ChildSession && stepOpensDetail(step, props.supportsSessionMessageDiff)
 
     fun tap(id: String) {
         val step = stepsById[id] ?: return
-        if (detailOf(step) != null) {
+        if (opensDetail(step)) {
             props.onOpenActivityCardStep(id)
             return
         }
@@ -1623,7 +1675,12 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
     }
     // Resolved live too: a running tool's output grows while its detail shows.
     val detailStepId = props.activityCardDetailStepId
-    val detailTarget = detailStepId?.let { id -> stepsById[id]?.let(::detailOf) }
+    val detailStep = detailStepId?.let(stepsById::get)?.takeIf(::opensDetail)
+    // Built from the tool part only for the open step, again when the timeline changes.
+    val detailTarget =
+        remember(detailStep, props.messages, toolDetails) {
+            detailStep?.let { sessionChatStepDetail(it, props.supportsSessionMessageDiff, toolDetails) }
+        }
     val detail = detailTarget?.let { target -> detailStepId?.let { OpenCodeActivitySheetDetail(stepId = it, title = target.title.resolve()) } }
     OpenCodeActivitySheet(
         visible = visible,

@@ -5,6 +5,9 @@ import Foundation
 /// Every block carries a stable `blockID` derived from server part IDs.
 nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case text(blockID: String, text: String, renderedMarkdown: NativeMarkdownDocument?)
+    /// The shown part of a user's own message that is too long to lay out in full (#1043).
+    /// `text` is the cut prefix; the message keeps the whole text for copy and Select text.
+    case limitedText(blockID: String, text: String, limit: SessionChatTextLimit)
     case attachment(blockID: String, file: FilePart)
     case toolCard(blockID: String, card: SessionChatToolCardBlock)
     case toolGroup(blockID: String, group: SessionChatToolGroupBlock)
@@ -40,6 +43,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     var blockID: String {
         switch self {
         case .text(let blockID, _, _):
+            blockID
+        case .limitedText(let blockID, _, _):
             blockID
         case .attachment(let blockID, _):
             blockID
@@ -84,8 +89,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(_, let paragraph):
             guard let textBlockID = paragraph.textBlockID, let text = paragraph.text else { return nil }
             return (textBlockID, text, paragraph.renderedMarkdown)
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
-             .failureLine, .notice, .imageGallery:
+        case .limitedText, .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard,
+             .stopNote, .failureLine, .notice, .imageGallery:
             return nil
         }
     }
@@ -97,8 +102,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             return .text(blockID: blockID, text: text, renderedMarkdown: document)
         case .stepParagraph(let blockID, let paragraph):
             return .stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(document))
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
-             .failureLine, .notice, .imageGallery:
+        case .limitedText, .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard,
+             .stopNote, .failureLine, .notice, .imageGallery:
             return self
         }
     }
@@ -126,6 +131,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
                 && lText == rText
                 && lDoc?.sourceHash == rDoc?.sourceHash
                 && lDoc?.renderTreeVersion == rDoc?.renderTreeVersion
+        case let (.limitedText(lID, lText, lLimit), .limitedText(rID, rText, rLimit)):
+            lID == rID && lLimit == rLimit && lText == rText
         case let (.attachment(lID, lFile), .attachment(rID, rFile)):
             lID == rID && lFile == rFile
         case let (.toolCard(lID, lCard), .toolCard(rID, rCard)):
@@ -160,6 +167,12 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     }
 }
 
+/// How much of a limited user message the timeline shows.
+nonisolated struct SessionChatTextLimit: Equatable, Sendable {
+    let shownCharacters: Int
+    let totalCharacters: Int
+}
+
 nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     let toolName: String
     let status: ToolStatus
@@ -187,8 +200,10 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     /// v2 is still streaming this tool's arguments: `subtitle` is the value
     /// read so far from the partial input, or a placeholder until one appears.
     let isReceivingArguments: Bool
-    /// Inspector body for the tool-result sheet. Nil when there is nothing to classify.
-    let presentation: ToolResultPresentation?
+    /// What the inspector classifies when the detail opens (#1033); nil when it has nothing to
+    /// classify. It holds the tool part's own strings, which share their storage, so the card
+    /// copies no output and projection splits no body into lines.
+    let resultRequest: ToolResultRequest?
     /// Images the tool returned; the timeline shows them as a gallery under the card.
     let images: [FilePart]
 
@@ -209,7 +224,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         declineNote: TimelineText? = nil,
         isMalformed: Bool = false,
         isReceivingArguments: Bool = false,
-        presentation: ToolResultPresentation? = nil,
+        resultRequest: ToolResultRequest? = nil,
         images: [FilePart] = []
     ) {
         self.toolName = toolName
@@ -228,8 +243,19 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.declineNote = declineNote
         self.isMalformed = isMalformed
         self.isReceivingArguments = isReceivingArguments
-        self.presentation = presentation
+        self.resultRequest = resultRequest
         self.images = images
+    }
+
+    /// Inspector body for the tool-result sheet, classified now: read it only when the detail
+    /// opens, never while projecting or drawing the timeline.
+    var presentation: ToolResultPresentation? {
+        resultRequest.flatMap(ToolResultInspector.classify)
+    }
+
+    /// Whether a tap opens the detail sheet, checked without building the detail.
+    var opensDetail: Bool {
+        detailText != nil || resultRequest != nil
     }
 
     /// The card's caption: `errorText`, then a declined call's note as a second line. Both are
@@ -256,7 +282,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
             isInterrupted: isInterrupted,
             declineNote: declineNote,
             isMalformed: isMalformed,
-            presentation: presentation,
+            resultRequest: resultRequest,
             images: images
         )
     }
@@ -955,7 +981,7 @@ nonisolated enum SessionChatTimelineBlocks {
             switch parts[index] {
             case .text(let textPart):
                 if textPart.isDisplayable {
-                    let trimmed = textPart.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let trimmed = textPart.text.trimmingWhitespaceAndNewlines
                     if !trimmed.isEmpty {
                         guard let partId = textPart.id else { return .missingPartIds }
                         pendingText.append((id: partId, text: trimmed))
@@ -1411,8 +1437,8 @@ nonisolated enum SessionChatTimelineBlocks {
         case .imageGallery(_, let gallery):
             // Tool images ride with their card, so a tool-only step still merges.
             gallery.source == .tool
-        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .activityCard, .stopNote,
-             .failureLine, .notice:
+        case .text, .limitedText, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .activityCard,
+             .stopNote, .failureLine, .notice:
             false
         }
     }
@@ -2449,7 +2475,7 @@ nonisolated enum SessionChatTimelineBlocks {
             stepRail: stepRail,
             activityCard: activityCard
         )
-        return collapseCommandInvocations(
+        let collapsed = collapseCommandInvocations(
             role: message.role,
             blocks: admitPromptSkills(
                 role: message.role,
@@ -2460,6 +2486,27 @@ nonisolated enum SessionChatTimelineBlocks {
             commands: commands,
             skillMentions: skillMentions(message.promptSkills, commands: commands)
         )
+        return limitUserText(role: message.role, blocks: collapsed)
+    }
+
+    /// Cuts each user text block that is too long to lay out (`MessageTextLimit`) to the part
+    /// the timeline shows, so the row never lays out, measures or parses the rest (#1043).
+    /// Assistant and every other role keep their text.
+    static func limitUserText(role: MessageRole, blocks: [SessionChatTimelineBlock]) -> [SessionChatTimelineBlock] {
+        guard role == .user else { return blocks }
+        return blocks.map { block in
+            guard case .text(let blockID, let text, _) = block, let cut = MessageTextLimit.cut(text) else { return block }
+            // Counted in UTF-16 units, as Android counts them: `utf16.count` does not walk the
+            // whole text the way a grapheme count does (#1043).
+            return .limitedText(
+                blockID: blockID,
+                text: cut.visibleText,
+                limit: SessionChatTextLimit(
+                    shownCharacters: text.prefix(cut.shownCharacters).utf16.count,
+                    totalCharacters: text.utf16.count
+                )
+            )
+        }
     }
 
     /// The `/name` spans a user prompt carries, for `[/name]` collapse. A skill sent without
@@ -2886,20 +2933,21 @@ nonisolated enum SessionChatTimelineBlocks {
                 declineNote: interrupted ? declineNoteText(tool.decline) : nil,
                 isMalformed: tool.isMalformed,
                 isReceivingArguments: receivingArguments,
-                presentation: toolResultPresentation(tool, fallbackTitle: chrome.title),
+                resultRequest: toolResultRequest(tool, fallbackTitle: chrome.title),
                 images: tool.images.map(AttachmentPreviewCache.shared.resolved)
             )
         )
     }
 
-    /// Classifies the part for the inspector sheet. Duration is omitted: a tool
-    /// part has a start but no end, and an exit is taken only from metadata.
-    private static func toolResultPresentation(
+    /// The inputs the inspector sheet classifies when it opens; nil when it would show nothing.
+    /// Duration is omitted: a tool part has a start but no end, and an exit is taken only from
+    /// metadata. Reads no further into the output than its first non-blank character (#1033).
+    private static func toolResultRequest(
         _ tool: ToolPart,
         fallbackTitle: TimelineText
-    ) -> ToolResultPresentation? {
+    ) -> ToolResultRequest? {
         let fields = tool.resultFields
-        return ToolResultInspector.classify(
+        let request =
             ToolResultRequest(
                 toolName: tool.toolName,
                 fallbackTitle: fallbackTitle,
@@ -2917,11 +2965,11 @@ nonisolated enum SessionChatTimelineBlocks {
                 oldString: fields.oldString,
                 newString: fields.newString
             )
-        )
+        return ToolResultInspector.hasResult(request) ? request : nil
     }
 
     private static func nonBlank(_ value: String?) -> String? {
-        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        guard let value, !ToolResultInspector.isBlankText(value) else { return nil }
         return value
     }
 
@@ -3095,11 +3143,16 @@ nonisolated enum SessionChatTimelineBlocks {
         return lineCount(content)
     }
 
-    /// Lines in a file body; a trailing newline does not start another line.
+    /// Lines in a file body; a trailing newline does not start another line. Counts newline
+    /// bytes instead of splitting, so projecting a large write allocates nothing per line (#1033).
     private static func lineCount(_ content: String) -> Int {
         guard !content.isEmpty else { return 0 }
-        let lines = content.components(separatedBy: "\n")
-        return lines.last?.isEmpty == true ? lines.count - 1 : lines.count
+        let newline = UInt8(ascii: "\n")
+        var newlines = 0
+        for byte in content.utf8 where byte == newline {
+            newlines += 1
+        }
+        return content.utf8.last == newline ? newlines : newlines + 1
     }
 
     private static func canOpenChangesReview(_ status: ToolStatus) -> Bool {
@@ -3238,6 +3291,8 @@ nonisolated enum SessionChatTimelineBlocks {
                 tool.status == .error ? nonEmpty(tool.error) : nil,
                 nonEmpty(tool.output),
             ].compactMap { $0 }
+            // One part is returned as is, so the card shares the output's storage.
+            if parts.count == 1 { return parts[0] }
             return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
         case .pending, .running:
             return nil

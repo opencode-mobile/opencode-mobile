@@ -101,18 +101,41 @@ interface Dictation {
     /** Try again: loads the speech model again. */
     fun reload()
 
+    /** The speech model sheet's Try now: a download waiting to retry tries again at once. */
+    fun tryNow() = Unit
+
+    /** The model and pause detector, for the speech model sheet; null when there's nothing to describe. */
+    val model: StateFlow<SpeechModelInfo?> get() = SpeechModelInfo.None
+
     /**
      * The talk button was pressed: the speech model starts loading now if it hasn't yet, instead of about 1 s after
-     * the first frame (app-plan.md, Dictation › Load). The take waits for it as for any load.
+     * the first frame (app-plan.md, Dictation › Load), and downloads first if it isn't on the phone. The take waits
+     * for it as for any load.
      */
     fun loadNow() = Unit
 }
 
-/** The engine's model state as dictation sees it. */
-fun speechStatus(model: VoiceEngine.ModelState): SpeechStatus =
+/**
+ * The engine's model state as dictation sees it. Not loaded yet is "not on this phone yet" while the model isn't
+ * [installed] (the download hasn't started), and loading once it is (it loads about 1 s after the first frame).
+ */
+fun speechStatus(
+    model: VoiceEngine.ModelState,
+    installed: () -> Boolean = { true },
+): SpeechStatus =
     when (model) {
-        VoiceEngine.ModelState.NotLoaded -> SpeechStatus.Loading()
-        is VoiceEngine.ModelState.Preparing -> SpeechStatus.Loading(model.fraction.takeIf { it < 1.0 })
+        VoiceEngine.ModelState.NotLoaded ->
+            if (installed()) SpeechStatus.Loading() else SpeechStatus.Loading(stage = SpeechStage.NotOnPhone)
+        is VoiceEngine.ModelState.Preparing ->
+            when (model.stage) {
+                VoiceEngine.ModelState.Stage.Download ->
+                    SpeechStatus.Loading(
+                        SpeechDownload(model.done, model.total, model.secondsLeft, model.bytesPerSecond, model.retryIn),
+                        SpeechStage.Download,
+                    )
+                VoiceEngine.ModelState.Stage.Load -> SpeechStatus.Loading(stage = SpeechStage.Load)
+                VoiceEngine.ModelState.Stage.WarmUp -> SpeechStatus.Loading(stage = SpeechStage.WarmUp)
+            }
         VoiceEngine.ModelState.Ready -> SpeechStatus.Ready
         is VoiceEngine.ModelState.Failed -> SpeechStatus.Failed
     }
@@ -131,7 +154,7 @@ class VoiceEngineDictation(
     holdMs: Long = 0,
     /** Debug builds (`--ez HexCodeSpeechFail`): the first load counts as failed, until Try again. */
     failOnce: Boolean = false,
-    /** Starts the speech model's first load now, if it hasn't started (a talk press before its delay ran out). */
+    /** A talk press: the speech model downloads if needed and loads now, if that hasn't started. */
     private val startLoad: () -> Unit = {},
 ) : Dictation {
     private val audio = Executors.newSingleThreadExecutor { Thread(it, "hex-audio") }.asCoroutineDispatcher()
@@ -186,6 +209,10 @@ class VoiceEngineDictation(
     override fun reload() = gate.reload()
 
     override fun loadNow() = startLoad()
+
+    override fun tryNow() = engine.tryNow()
+
+    override val model: StateFlow<SpeechModelInfo?> = gate.model
 
     override fun start(onFailed: (Throwable) -> Unit) {
         val asked = SystemClock.uptimeMillis()
@@ -297,7 +324,7 @@ private suspend fun transcribeWith(
  * (`--ez HexCodeSpeechFail`).
  */
 class SpeechGate(
-    engine: VoiceEngine,
+    private val engine: VoiceEngine,
     private val loadModel: () -> Unit,
     holdMs: Long,
     failOnce: Boolean,
@@ -315,12 +342,12 @@ class SpeechGate(
             when {
                 model == VoiceEngine.ModelState.Ready && failed -> SpeechStatus.Failed
                 model == VoiceEngine.ModelState.Ready && !ready -> SpeechStatus.Loading()
-                else -> speechStatus(model)
+                else -> speechStatus(model) { engine.isInstalled }
             }
         }.stateIn(
             scope,
             SharingStarted.Eagerly,
-            speechStatus(engine.modelState.value).let {
+            speechStatus(engine.modelState.value) { engine.isInstalled }.let {
                 if (failOnce ||
                     holdMs > 0
                 ) {
@@ -336,6 +363,14 @@ class SpeechGate(
         failing.value = false
         loadModel()
     }
+
+    /** The model and pause detector, for the speech model sheet. */
+    val model: StateFlow<SpeechModelInfo?> =
+        SpeechModelInfo.of(engine).stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            SpeechModelInfo.of(engine.activeModel.value, engine.options, engine.pauses.value, engine.modelState.value),
+        )
 }
 
 /** Where attaching logs images that couldn't be prepared, and what the model's image input was. */
@@ -536,6 +571,12 @@ data class HomeUiState(
     val today: TodayState = TodayState(),
     /** Whether takes can be turned into text yet. */
     val speech: SpeechStatus = SpeechStatus.Loading(),
+    /** The speech model and pause detector, for the speech model sheet. */
+    val speechModel: SpeechModelInfo? = null,
+    /** The speech line above the dock (app-plan.md, Speech line and dial). */
+    val speechLine: SpeechLineShow = SpeechLineShow.Hidden,
+    /** The speech model sheet is open, from the speech line or the draft's label. */
+    val speechSheet: Boolean = false,
     /** The After turn / Now switch, back to After turn after every send. */
     val sendMode: SendMode = SendMode.AfterTurn,
     /** The notice's second line when it shows the message, such as "Sending now…". */
@@ -628,6 +669,8 @@ class HomeViewModel(
     private val imageInput: suspend () -> ImageInput? = { null },
     /** Copies picked files into the cache and uploads them to the computer (app-plan.md, Attach files). */
     private val files: FileAttacher = NoFileAttacher,
+    /** Whether the speech line has shown and gone, for the whole process ([SpeechLineMemory.Process]). */
+    private val speechLine: SpeechLineMemory = SpeechLineMemory.Process,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel(),
     ArtifactActions {
@@ -740,16 +783,23 @@ class HomeViewModel(
     /** Drafts being sent, which come back if sending fails. */
     private val inFlight = mutableListOf<Draft>()
 
+    /** "Speech ready" showing, until it goes for good. */
+    private var speechReadyShown: Job? = null
+
     init {
         viewModelScope.launch {
             dictation.speech.collect { speech ->
                 state.update { it.copy(speech = speech) }
+                showSpeechLine(speech)
                 when (speech) {
                     SpeechStatus.Ready -> drainWaiting()
                     SpeechStatus.Failed -> state.update { it.copy(draft = it.draft.waitingFailed()) }
                     is SpeechStatus.Loading -> Unit
                 }
             }
+        }
+        viewModelScope.launch {
+            dictation.model.collect { model -> state.update { it.copy(speechModel = model) } }
         }
         session?.let { today ->
             viewModelScope.launch {
@@ -2226,6 +2276,35 @@ class HomeViewModel(
         send()
     }
 
+    /**
+     * The speech line (app-plan.md, Speech line and dial): while the model gets ready, then "Speech ready" for 1.6 s
+     * once it is, then gone for the rest of the process.
+     */
+    private fun showSpeechLine(speech: SpeechStatus) {
+        // "Speech ready" finishes its 1.6 s whatever the model does next; after it the line is gone for good.
+        if (speechReadyShown?.isActive == true) return
+        val show = speechLine.next(speech)
+        state.update { it.copy(speechLine = show) }
+        if (show == SpeechLineShow.Ready) {
+            speechReadyShown =
+                viewModelScope.launch {
+                    delay(SpeechLineMemory.READY_MS)
+                    state.update { it.copy(speechLine = SpeechLineShow.Hidden) }
+                }
+        }
+    }
+
+    /** The speech line or the draft's label line was tapped: the speech model sheet opens. */
+    fun openSpeechSheet() = state.update { it.copy(speechSheet = true) }
+
+    fun closeSpeechSheet() = state.update { it.copy(speechSheet = false) }
+
+    /** The sheet's Try now: a download waiting to retry after a dropped connection tries again at once. */
+    fun speechTryNow() = dictation.tryNow()
+
+    /** The sheet's Try again: loads the model again, then turns the waiting takes into text ([retryTakes]). */
+    fun speechTryAgain() = retryTakes()
+
     /** Try again, on takes that couldn't be turned into text: the model loads again if it has to. */
     fun retryTakes() {
         state.update { it.copy(draft = it.draft.retryFailed()) }
@@ -2383,4 +2462,8 @@ class ClipDictation(
     override fun reload() = gate.reload()
 
     override fun loadNow() = startLoad()
+
+    override fun tryNow() = engine.tryNow()
+
+    override val model: StateFlow<SpeechModelInfo?> get() = gate.model
 }

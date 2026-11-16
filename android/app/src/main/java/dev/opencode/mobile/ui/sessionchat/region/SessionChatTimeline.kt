@@ -1225,7 +1225,12 @@ class SessionChatTimeline(
                 message = message,
                 blocks = blocksWithCache,
             )
-        val blocks = attachMarkdownBridge(blocksWithCache, renderedMarkdown, message)
+        val blocks =
+            SessionChatTimelineBlocks.attachLimitedTextMarkdown(
+                blocks = attachMarkdownBridge(blocksWithCache, renderedMarkdown, message),
+                document = renderedMarkdown,
+                messageText = message.text,
+            )
         return DisplayMessageBody(message = message, blocks = blocks)
     }
 

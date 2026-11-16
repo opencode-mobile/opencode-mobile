@@ -291,6 +291,15 @@ struct SessionChatView: View {
             .environment(\.openImageViewer, SessionChatOpenImageViewerAction { images, index, messageID in
                 viewModel.openImageViewer(images: images, index: index, messageID: messageID)
             })
+            .environment(\.openFullMessage) { target in
+                logChatAction(ProductAnalytics.Action.chatShowFullMessage)
+                ProductAnalytics.logScreenView(
+                    screenId: ProductAnalytics.Screen.sessionSelectText,
+                    presentation: ProductAnalytics.Presentation.sheet,
+                    trigger: ProductAnalytics.Trigger.present
+                )
+                selectTextTarget = target
+            }
     }
 
     private var sessionChatLayout: some View {

@@ -649,6 +649,14 @@ fun Modifier.openCodeBottomSheetScrollTarget(key: Any): Modifier =
 private val LocalBottomSheetScrollTargets = compositionLocalOf<BottomSheetScrollTargets?> { null }
 
 /**
+ * Height of a scrollable [OpenCodeBottomSheet]'s body viewport, for body content that scrolls
+ * itself (a very long text) and so fills exactly that height instead of growing the body. Null
+ * outside a sheet and while the sheet wraps its content. Stable only for
+ * [OpenCodeBottomSheetHeight.Half], whose height does not follow the content.
+ */
+val LocalOpenCodeBottomSheetBodyHeight = compositionLocalOf<Dp?> { null }
+
+/**
  * Scrolls a sheet body so the row for [targetKey] is centered, once per key, and keeps a
  * following body at its bottom ([BottomSheetFollow]).
  */
@@ -731,6 +739,7 @@ private fun BottomSheetContent(
         if (fitsAllContent) fitAllMaxHeight - BottomSheetContentBottomPadding else openCodeBottomSheetHalfHeight(windowHeight)
     val compactMaxHeight = if (fitsAllContent) fitAllMaxHeight else BottomSheetCompactMaxHeight
     var contentHeight by remember { mutableStateOf(0.dp) }
+    var bodyViewportHeight by remember { mutableStateOf(0.dp) }
     var headerHeight by remember { mutableStateOf(0.dp) }
     var pinnedTopHeight by remember { mutableStateOf(0.dp) }
     var measuredPinnedBottomHeight by remember { mutableStateOf(0.dp) }
@@ -904,13 +913,20 @@ private fun BottomSheetContent(
 
         // The body is composed once in every mode. It always sits in a scroll container, which
         // measures it at its natural height, so that height picks the layout mode directly.
-        CompositionLocalProvider(LocalBottomSheetScrollTargets provides scrollTargets) {
+        CompositionLocalProvider(
+            LocalBottomSheetScrollTargets provides scrollTargets,
+            LocalOpenCodeBottomSheetBodyHeight provides
+                bodyViewportHeight.takeIf { layoutMode == BottomSheetLayoutMode.Scrollable && it > 0.dp },
+        ) {
             Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .then(bodyHeightModifier)
-                        .onSizeChanged { scrollTargets.viewportHeightPx = it.height }
+                        .onSizeChanged {
+                            scrollTargets.viewportHeightPx = it.height
+                            bodyViewportHeight = with(density) { it.height.toDp() }
+                        }
                         // Drags on the body move the sheet first (grow) or last (shrink).
                         .nestedScroll(detents.nestedScroll)
                         .verticalScroll(scrollState, enabled = layoutMode != BottomSheetLayoutMode.Measuring),

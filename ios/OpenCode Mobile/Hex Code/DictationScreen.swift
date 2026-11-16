@@ -60,8 +60,10 @@ struct DictationScreen: View {
         .preferredColorScheme(.dark)
         .task {
             // The app's engine may already be getting ready in the background; preparing again would load it twice.
-            if case .preparing = engine.modelState { return }
-            await engine.prepare()
+            switch engine.modelState {
+            case .downloading, .loading: return
+            case .notLoaded, .ready, .failed: await engine.prepare()
+            }
             #if DEBUG
             await transcribeLaunchSample()
             await runLabClips()
@@ -100,8 +102,10 @@ struct DictationScreen: View {
         switch engine.modelState {
         case .notLoaded:
             Text("\(engine.modelName) · on this phone")
-        case let .preparing(fraction, detail):
-            Text("Getting speech ready · \(Int(fraction * 100))% · \(detail)")
+        case let .downloading(download):
+            Text("Getting speech ready · \(SpeechLine.of(.downloading(download), now: .now).text(timeLeft: true))")
+        case .loading:
+            Text("Getting speech ready · loading")
         case .ready:
             Text("\(engine.modelName) · on this phone")
         case let .failed(message):

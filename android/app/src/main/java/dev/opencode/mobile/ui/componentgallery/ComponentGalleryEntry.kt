@@ -29,6 +29,7 @@ enum class ComponentGalleryEntryId {
     Attachment,
     ImageGallery,
     OutgoingMessage,
+    TruncationRow,
     AssistantMessage,
     ToolCallCard,
     ToolChip,
@@ -404,6 +405,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.OutgoingMessage,
             title = "Outgoing Message",
             description = "Trailing prompt card that renders sent prompts at full height.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.TruncationRow,
+            title = "Truncation Row",
+            description = "Row at the cut of a long message that opens the whole text.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(

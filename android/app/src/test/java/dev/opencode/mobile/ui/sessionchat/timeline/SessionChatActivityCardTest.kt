@@ -5,7 +5,9 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.ui.sessionchat.view.openDetail
 import dev.opencode.mobile.ui.sessionchat.view.sessionChatStepDetail
+import dev.opencode.mobile.ui.sessionchat.view.toolDetailsFor
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -646,15 +648,16 @@ class SessionChatActivityCardTest {
                 tool("f1", "bash", ToolStatus.Error, input = buildJsonObject { put("command", "make") }, error = "make: no target"),
             )
         val steps = cards(parts).single().steps.associateBy { it.id }
+        val details = toolDetailsFor(parts)
 
-        val thought = sessionChatStepDetail(steps.getValue("r1"), supportsSessionMessageDiff = true)
+        val thought = sessionChatStepDetail(steps.getValue("r1"), supportsSessionMessageDiff = true, details)
         assertEquals("Thought", thought?.title?.english())
         assertEquals("Plan the fix", thought?.body)
 
-        val shell = sessionChatStepDetail(steps.getValue("b1"), supportsSessionMessageDiff = true)
+        val shell = sessionChatStepDetail(steps.getValue("b1"), supportsSessionMessageDiff = true, details)
         assertTrue(shell?.body.orEmpty().contains("a.txt"))
 
-        val failed = sessionChatStepDetail(steps.getValue("f1"), supportsSessionMessageDiff = true)
+        val failed = sessionChatStepDetail(steps.getValue("f1"), supportsSessionMessageDiff = true, details)
         assertTrue(failed?.body.orEmpty().contains("make: no target"))
 
         val questions = buildJsonArray { add(buildJsonObject { put("question", "Where?") }) }
@@ -666,18 +669,24 @@ class SessionChatActivityCardTest {
                 input = buildJsonObject { put("questions", questions) },
                 metadata = buildJsonObject { put("answers", answers) },
             )
-        val answered = sessionChatStepDetail(cards(listOf(question)).single().steps.single(), supportsSessionMessageDiff = true)
+        val answered =
+            sessionChatStepDetail(
+                cards(listOf(question)).single().steps.single(),
+                supportsSessionMessageDiff = true,
+                toolDetailsFor(listOf(question)),
+            )
         assertTrue(answered?.body.orEmpty().contains("Invoice field"))
 
         // Without session diffs an edit shows its own detail, as in the standard timeline.
-        val editCard = steps.getValue("e1").card
-        if (editCard?.detailText != null) {
-            assertEquals(editCard.detailText, sessionChatStepDetail(steps.getValue("e1"), supportsSessionMessageDiff = false)?.body)
-        }
+        val editCard = steps.getValue("e1").card!!
+        assertEquals(
+            editCard.openDetail(parts)?.body,
+            sessionChatStepDetail(steps.getValue("e1"), supportsSessionMessageDiff = false, details)?.body,
+        )
 
         // A child session and an edit with Changes navigate instead.
-        assertEquals(null, sessionChatStepDetail(steps.getValue("c1"), supportsSessionMessageDiff = true))
-        assertEquals(null, sessionChatStepDetail(steps.getValue("e1"), supportsSessionMessageDiff = true))
+        assertEquals(null, sessionChatStepDetail(steps.getValue("c1"), supportsSessionMessageDiff = true, details))
+        assertEquals(null, sessionChatStepDetail(steps.getValue("e1"), supportsSessionMessageDiff = true, details))
     }
 
     @Test

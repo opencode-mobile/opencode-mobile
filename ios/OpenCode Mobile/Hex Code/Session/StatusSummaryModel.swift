@@ -189,7 +189,11 @@ final class StatusSummaryModel {
     func showWorkingOnMessage() {
         guard showsEmpty else { return }
         showsEmpty = false
-        summary = .card(.sent(on: now(), timeZone: timeZone))
+        var sent = StatusCard.sent(on: now(), timeZone: timeZone)
+        // The empty card's date stays (as on Android): `showEmpty` may have been given another time zone, and
+        // a send just after midnight still belongs to the session it went to.
+        if case let .card(empty)? = summary { sent.title = empty.title }
+        summary = .card(sent)
         updatedAt = now()
     }
 
