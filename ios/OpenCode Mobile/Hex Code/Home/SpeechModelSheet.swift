@@ -326,7 +326,7 @@ struct SpeechModelSheet: View {
                 action: AnyView(HexButton(LocalizedStringResource("common.try_again", defaultValue: "Try again"), style: .primary) { home.speechTryAgain() })
             )
         }
-        let waiting = home.draft.waitingTakes
+        let waiting = home.takesWaitingForSpeech
         if waiting.count > 0, status != .ready {
             statusBox(
                 tone: .plain,

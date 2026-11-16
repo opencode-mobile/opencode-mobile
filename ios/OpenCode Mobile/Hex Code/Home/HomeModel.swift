@@ -552,6 +552,13 @@ final class HomeModel {
     }
 
     /// Some failed take can be tried again.
+    /// The takes the speech model sheet says wait for it: waiting ones, and once the model failed, the failed takes
+    /// whose audio is kept for Try again.
+    var takesWaitingForSpeech: (count: Int, duration: TimeInterval) {
+        let failed = speech.status == .failed
+        return draft.waitingTakes { failed && audio[$0.id] != nil }
+    }
+
     var canRetryTakes: Bool {
         draft.chunks.contains { if case .failed = $0.state { audio[$0.id] != nil } else { false } }
     }

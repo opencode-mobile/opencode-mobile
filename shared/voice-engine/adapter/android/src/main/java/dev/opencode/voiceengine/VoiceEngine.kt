@@ -204,10 +204,18 @@ class VoiceEngine(
                     state.value = ModelState.Preparing(1.0, "Loading the model", stage = ModelState.Stage.Load)
                     val started = SystemClock.elapsedRealtime()
                     val opened = openEngine(appContext, store, model, options, cores)
-                    engine = opened
                     val loaded = SystemClock.elapsedRealtime()
                     state.value = ModelState.Preparing(1.0, "Warming up", stage = ModelState.Stage.WarmUp)
-                    warmUp(opened)
+                    try {
+                        warmUp(opened)
+                    } catch (e: Throwable) {
+                        // An Error while warming up (out of memory, say): let the engine go, so Try again loads it
+                        // once more instead of finding it kept and leaving speech failed.
+                        runCatching { opened.close() }
+                        throw e
+                    }
+                    // Kept only once warmed up, so a failure on the way never leaves an engine behind.
+                    engine = opened
                     Log.i(TAG, "${model.id} loaded in ${loaded - started} ms, warmed up in ${SystemClock.elapsedRealtime() - loaded} ms")
                     state.value = ModelState.Ready
                 } catch (e: Exception) {

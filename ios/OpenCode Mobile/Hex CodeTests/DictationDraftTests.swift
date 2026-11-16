@@ -546,6 +546,9 @@ struct WaitingTakeTests {
         await eventually { home.canRetryTakes }
         #expect(home.draft.chunks.map(\.state) == [.failed("Couldn’t turn this take into text")])
         #expect(DraftStatusLine.of(isRecording: false, draft: home.draft, speech: speech.status) == .speech(.failed))
+        // The sheet still counts it as waiting for the model, next to Try again (as on Android).
+        #expect(home.takesWaitingForSpeech.count == 1)
+        #expect(home.draft.waitingTakes.count == 0)
         home.retryFailedTakes()
         #expect(speech.reloads == 1)
         #expect(home.draft.chunks.map(\.state) == [.waiting])

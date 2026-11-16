@@ -93,8 +93,15 @@ struct DictationDraft: Equatable, Sendable {
     var isTranscribing: Bool { chunks.contains { $0.state == .transcribing } }
     var isWaiting: Bool { chunks.contains { $0.state == .waiting } }
     /// The takes waiting for the speech model: how many, and how long they are together.
-    var waitingTakes: (count: Int, duration: TimeInterval) {
-        let waiting = chunks.filter { $0.state == .waiting }
+    var waitingTakes: (count: Int, duration: TimeInterval) { waitingTakes(orFailed: { _ in false }) }
+
+    /// The takes waiting for the speech model, with the failed ones `retryable` says Try again turns into text (as
+    /// Android's sheet counts them once the model failed).
+    func waitingTakes(orFailed retryable: (DraftChunk) -> Bool) -> (count: Int, duration: TimeInterval) {
+        let waiting = chunks.filter {
+            if case .failed = $0.state { return retryable($0) }
+            return $0.state == .waiting
+        }
         return (waiting.count, waiting.reduce(0) { $0 + $1.duration })
     }
     var hasFailed: Bool { chunks.contains { if case .failed = $0.state { true } else { false } } }
