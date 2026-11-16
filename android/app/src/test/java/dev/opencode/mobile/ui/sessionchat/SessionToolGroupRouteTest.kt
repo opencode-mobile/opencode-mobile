@@ -163,6 +163,13 @@ class SessionToolGroupRouteTest {
         failed.updates.tryEmit(partial)
         failed.updates.tryEmit(MessageListUpdate.LoadFailed(IllegalStateException("test: offline")))
         assertEquals(steps.size - 1, (failedModel.members.value as SessionToolGroupMembersState.Ready).members.size)
+
+        // The live load failed and the cache holds none of the group: go back, not load forever.
+        val empty = FakeTranscriptRepository()
+        val emptyModel = SessionToolGroupViewModel(empty).also { it.bind(route) }
+        empty.updates.tryEmit(MessageListUpdate.Messages(emptyList(), isFromCache = true))
+        empty.updates.tryEmit(MessageListUpdate.LoadFailed(IllegalStateException("test: offline")))
+        assertEquals(SessionToolGroupMembersState.Gone, emptyModel.members.value)
     }
 
     private fun route(message: Message): SessionToolGroup {

@@ -80,13 +80,10 @@ class SessionToolGroupViewModel
                     }
                 // The live load confirmed the cached frame is current: settle on what it holds.
                 is MessageListUpdate.CacheSyncConfirmed -> members.readyOrGone()
-                // Without a live load, show what the cache holds rather than wait forever.
+                // Without a live load, show what the cache holds rather than wait forever, or go
+                // back when it holds none of the group.
                 is MessageListUpdate.LoadFailed ->
-                    if (current == SessionToolGroupMembersState.Loading && members != null) {
-                        SessionToolGroupMembersState.Ready(members)
-                    } else {
-                        current
-                    }
+                    if (current == SessionToolGroupMembersState.Loading) members.readyOrGone() else current
             }
         }
 
