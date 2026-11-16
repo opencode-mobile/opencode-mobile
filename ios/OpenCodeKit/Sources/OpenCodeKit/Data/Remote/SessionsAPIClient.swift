@@ -9,15 +9,30 @@ public nonisolated enum SessionsAPIError: Error {
 public nonisolated struct SessionsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let resolveURLSession: @Sendable () -> URLSession
+    private let resolveLongOperationURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
+    /// `longOperationURLSession` carries compaction and generate; without it they use `urlSession`
+    /// when one is injected, otherwise `OpenCodeURLSessions.longOperation`.
     public init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession? = nil
+        urlSession: URLSession? = nil,
+        longOperationURLSession: URLSession? = nil
     ) {
         self.connectionProvider = connectionProvider
         self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
+        self.resolveLongOperationURLSession = OpenCodeURLSessions.longOperationResolver(
+            injected: longOperationURLSession ?? urlSession
+        )
+    }
+
+    public func resolvedURLSession() -> URLSession {
+        resolveURLSession()
+    }
+
+    public func resolvedLongOperationURLSession() -> URLSession {
+        resolveLongOperationURLSession()
     }
 
     private func requireConnection() throws -> ServerConnection {
@@ -223,7 +238,7 @@ public nonisolated struct SessionsAPIClient: Sendable {
         request.httpBody = try encoder.encode(body)
         // Compaction can run longer than OpenCodeURLSessions.rest's 15s request timeout.
         request.timeoutInterval = .infinity
-        let data = try await data(for: request)
+        let data = try await data(for: request, in: resolveLongOperationURLSession())
         if let value = try? decoder.decode(Bool.self, from: data) {
             return value
         }
@@ -481,7 +496,7 @@ public nonisolated struct SessionsAPIClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(V2SessionGenerateRequestDTO(prompt: prompt))
         request.timeoutInterval = timeout
-        let data = try await data(for: request)
+        let data = try await data(for: request, in: resolveLongOperationURLSession())
         return try decoder.decode(APIDataEnvelope<V2SessionGenerateResponseDTO>.self, from: data).data.text
     }
 
@@ -492,7 +507,7 @@ public nonisolated struct SessionsAPIClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(V2CompactSessionRequestDTO())
         request.timeoutInterval = .infinity
-        let data = try await data(for: request)
+        let data = try await data(for: request, in: resolveLongOperationURLSession())
         if let value = try? decoder.decode(Bool.self, from: data) {
             return value
         }
@@ -631,12 +646,12 @@ public nonisolated struct SessionsAPIClient: Sendable {
         return try decoder.decode(T.self, from: data)
     }
 
-    private func data(for request: URLRequest) async throws -> Data {
+    private func data(for request: URLRequest, in session: URLSession? = nil) async throws -> Data {
         let startedAt = OpenCodeAPITrace.start(request)
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await resolveURLSession().data(for: request)
+            (data, response) = try await (session ?? resolveURLSession()).data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error
