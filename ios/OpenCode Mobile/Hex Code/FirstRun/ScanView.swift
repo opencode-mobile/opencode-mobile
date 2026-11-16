@@ -163,6 +163,8 @@ enum PairingFailureCopy {
             LocalizedStringResource("pairing.not_a_code.title", defaultValue: "That isn’t a pairing code")
         case .onlyLocalAddresses:
             LocalizedStringResource("pairing.local_only.title", defaultValue: "Your computer isn’t reachable yet")
+        case .notEncrypted:
+            LocalizedStringResource("pairing.not_encrypted.title", defaultValue: "This address isn’t encrypted")
         case .unreachable:
             LocalizedStringResource("pairing.unreachable.title", defaultValue: "Can’t reach your computer")
         case .codeExpired:
@@ -184,6 +186,11 @@ enum PairingFailureCopy {
             LocalizedStringResource(
                 "pairing.local_only.body",
                 defaultValue: "Run `opencode service set hostname 0.0.0.0` on your computer, then `opencode pair` again."
+            )
+        case .notEncrypted:
+            LocalizedStringResource(
+                "pairing.not_encrypted.body",
+                defaultValue: "It isn’t on your network or Tailscale. Use `opencode pair --remote` for an encrypted link."
             )
         case .unreachable:
             LocalizedStringResource(

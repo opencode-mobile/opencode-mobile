@@ -35,6 +35,8 @@ enum PairingFailure: Error, Equatable, Sendable {
     case notAPairingCode
     /// The code only lists addresses on the computer itself.
     case onlyLocalAddresses
+    /// Every address is plain `http` outside the LAN, Tailscale and loopback.
+    case notEncrypted(host: String)
     /// None of the code's addresses answered.
     case unreachable
     /// The code was already used or is older than 5 minutes.
@@ -73,7 +75,12 @@ struct OpenCodeServerPairing: ServerPairing {
         case .failure(.invalidPayload):
             return .failure(.notAPairingCode)
         }
-        let urls = ConnectionProfileIdentity.normalizedAddressList(credentials.urls)
+        let candidates = ConnectionProfileIdentity.normalizedAddressList(credentials.urls)
+        // Hex Code has no "connect anyway": plain http goes only where CleartextPolicy trusts it.
+        let urls = candidates.filter { CleartextPolicy.verdict(for: $0) != .untrustedCleartext }
+        guard !urls.isEmpty else {
+            return .failure(.notEncrypted(host: ServerHost.name(candidates.first ?? credentials.baseURL)))
+        }
         let resolution = await ServerAddressProbe.resolve(
             urls: urls,
             username: credentials.username,

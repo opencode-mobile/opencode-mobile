@@ -4851,6 +4851,28 @@
         }
       }
     },
+    "pairing.not_encrypted.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It isn’t on your network or Tailscale. Use `opencode pair --remote` for an encrypted link."
+          }
+        }
+      }
+    },
+    "pairing.not_encrypted.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This address isn’t encrypted"
+          }
+        }
+      }
+    },
     "pairing.not_v2.body": {
       "extractionState": "manual",
       "localizations": {
