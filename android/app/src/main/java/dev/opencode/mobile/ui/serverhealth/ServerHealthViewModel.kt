@@ -8,8 +8,10 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.serverhealth.ServerHealthClock
 import dev.opencode.mobile.domain.serverhealth.ServerHealthConnectionState
+import dev.opencode.mobile.domain.serverhealth.ServerHealthEvent
 import dev.opencode.mobile.domain.serverhealth.ServerHealthLiveStatus
 import dev.opencode.mobile.domain.serverhealth.ServerHealthMonitor
+import dev.opencode.mobile.domain.serverhealth.ServerHealthPing
 import dev.opencode.mobile.domain.serverhealth.ServerHealthRange
 import dev.opencode.mobile.domain.serverhealth.ServerHealthReport
 import dev.opencode.mobile.domain.serverhealth.ServerHealthReportBuilder
@@ -65,10 +67,17 @@ class ServerHealthViewModel
         private var activeProfileId: String? = null
         private var bindJobs: List<Job> = emptyList()
         private val loadMutex = Mutex()
+        private var record: HealthRecord? = null
         private var built: BuiltHealth? = null
         private var liveStatus = ServerHealthLiveStatus()
 
-        /** What [reload] computes off Main; [publish] lays the live status over it. */
+        /** The retained week of pings and events [reload] reads; every range is built from it. */
+        private class HealthRecord(
+            val pings: List<ServerHealthPing>,
+            val events: List<ServerHealthEvent>,
+        )
+
+        /** What [rebuildLocked] computes off Main; [publish] lays the live status over it. */
         private class BuiltHealth(
             val report: ServerHealthReport,
             val recentPings: List<Int?>,
@@ -80,6 +89,7 @@ class ServerHealthViewModel
             if (this.profileId == profileId) return
             this.profileId = profileId
             bindJobs.forEach { it.cancel() }
+            record = null
             built = null
             _uiState.value = ServerHealthUiState()
             bindJobs =
@@ -104,7 +114,13 @@ class ServerHealthViewModel
             if (_uiState.value.range == range) return
             _uiState.update { it.copy(range = range) }
             val id = profileId ?: return
-            viewModelScope.launch { reload(id) }
+            // Built from the week already read, so a store failure cannot strand the old range's chart.
+            // Nothing read yet (the first read failed): retry the store instead.
+            viewModelScope.launch {
+                if (record == null) return@launch reload(id)
+                loadMutex.withLock { rebuildLocked(id) }
+                publish(id)
+            }
         }
 
         private suspend fun loadProfile(profileId: String) {
@@ -128,35 +144,45 @@ class ServerHealthViewModel
 
         private suspend fun reload(profileId: String) {
             loadMutex.withLock {
-                val range = _uiState.value.range
+                val since = clock.nowMs() - ServerHealthStore.RETENTION_MS
                 val next =
                     try {
-                        withContext(workDispatcher) { build(profileId, range) }
+                        withContext(workDispatcher) {
+                            HealthRecord(store.pings(profileId, since), store.events(profileId, since))
+                        }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
                         return
                     }
                 if (this.profileId != profileId) return
-                built = next
+                record = next
+                rebuildLocked(profileId)
             }
             publish(profileId)
         }
 
-        private suspend fun build(
-            profileId: String,
+        /** Builds the selected range from [record]; call with [loadMutex] held so builds apply in order. */
+        private suspend fun rebuildLocked(profileId: String) {
+            val data = record ?: return
+            val range = _uiState.value.range
+            val next = withContext(workDispatcher) { build(data, clock.nowMs(), range) }
+            // A range picked while this one was building wins; its own rebuild applies it.
+            if (this.profileId != profileId || _uiState.value.range != range) return
+            built = next
+        }
+
+        private fun build(
+            data: HealthRecord,
+            now: Long,
             range: ServerHealthRange,
         ): BuiltHealth {
-            val now = clock.nowMs()
-            val since = now - ServerHealthStore.RETENTION_MS
-            val pings = store.pings(profileId, since)
-            val events = store.events(profileId, since)
-            val recent = ServerHealthReportBuilder.recentPings(pings, now)
+            val recent = ServerHealthReportBuilder.recentPings(data.pings, now)
             return BuiltHealth(
-                report = ServerHealthReportBuilder.build(pings, events, now, range),
+                report = ServerHealthReportBuilder.build(data.pings, data.events, now, range),
                 recentPings = recent,
                 recentP95Ms = ServerHealthReportBuilder.percentile(recent.filterNotNull(), 0.95),
-                storedVersion = pings.lastOrNull { it.version != null }?.version,
+                storedVersion = data.pings.lastOrNull { it.version != null }?.version,
             )
         }
 
