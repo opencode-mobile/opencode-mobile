@@ -87,6 +87,37 @@ deleting something later does not undo a leak.
 - Connection Profile secrets live in iOS Keychain and Android Keystore-backed
   storage. SwiftData and Room are the default structured persistence choices.
 
+## Code Practices
+
+Strong defaults for new and changed code on both platforms. Follow them
+unless a case clearly calls for something else; then take the exception
+deliberately, keep it narrow, and say why in a comment or the pull request.
+
+- **Failures surface.** Prefer to handle an error, return it to the caller,
+  or log it. A fallback value fits where the failure is expected and little
+  is lost by it.
+- **Cancellation propagates.** Cancelled work should stop and be reported as
+  cancelled, separately from errors.
+- **The creator releases.** Whatever creates a long-lived resource normally
+  owns its lifetime and releases it at a defined point. Give caches and
+  stores a bound.
+- **Fix the cause where it starts.** Handle a failure in the code that owns
+  the operation first. Keep a process-wide mechanism narrow, passing on what
+  it does not own.
+- **Platforms and apps stay in parity.** A rule, safety check, limit, or
+  behaviour on one platform or app should hold on the others, behind shared
+  kit code where practical. Record a deliberate gap in the issue.
+- **Private data stays on the device.** Logs, backups, analytics, and
+  exports should carry identifiers, with user and server content left out.
+- **The compiler checks concurrency.** Prefer structured, scoped constructs
+  the compiler or runtime can verify for shared state, and keep blocking
+  work off the main thread.
+- **Checks are deterministic.** Tests should wait on signals and injected
+  clocks. Treat new lint and analysis warnings as things to fix.
+- **Units stay small.** Aim for functions, views, and Screen Models that do
+  one job and can be tested alone. Consider splitting a large unit before
+  adding to it.
+
 ## Xcode And Simulator Tooling
 
 Which Xcode tooling is available depends on the harness (Xcode's MCP bridge,
