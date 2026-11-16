@@ -11,7 +11,7 @@ let package = Package(
         .library(name: "VoiceEngineKit", targets: ["VoiceEngineKit"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.15.5"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.18.3"),
     ],
     targets: [
         .target(
