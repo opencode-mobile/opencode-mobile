@@ -88,6 +88,40 @@ private struct StoredConnectionProfile: Codable {
     }
 }
 
+/// Reads the catalog one record at a time, so a record this build cannot read is skipped
+/// instead of failing the whole list. Writing still uses `StoredConnectionProfiles`.
+private struct ReadableStoredConnectionProfiles: Decodable {
+    var activeId: String?
+    var profiles: [ReadableStoredConnectionProfile]
+}
+
+private struct ReadableStoredConnectionProfile: Decodable {
+    let record: StoredConnectionProfile?
+    /// Which record failed and why, without any of its contents.
+    let failure: String?
+
+    init(from decoder: Decoder) throws {
+        do {
+            record = try StoredConnectionProfile(from: decoder)
+            failure = nil
+        } catch {
+            record = nil
+            let index = decoder.codingPath.last?.intValue.map(String.init) ?? "?"
+            failure = "record \(index): \(Self.kind(of: error))"
+        }
+    }
+
+    private static func kind(of error: Error) -> String {
+        switch error {
+        case let DecodingError.keyNotFound(key, _): "missing \(key.stringValue)"
+        case let DecodingError.valueNotFound(_, context): "null \(context.codingPath.last?.stringValue ?? "value")"
+        case let DecodingError.typeMismatch(_, context): "wrong type for \(context.codingPath.last?.stringValue ?? "value")"
+        case DecodingError.dataCorrupted: "corrupted"
+        default: String(describing: type(of: error))
+        }
+    }
+}
+
 public struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {
     private let defaults: UserDefaults
     private let secureCredentialStore: SecureCredentialStore
@@ -96,6 +130,7 @@ public struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unche
     private let worktreePrefix = "addedProjectWorktrees."
     private let worktreeIdPrefix = "worktrees."
     private let catalogKey = "connection_profiles_v2"
+    private let unreadableCatalogBackupKey = "connection_profiles_v2.unreadable"
     private let activeBaseURLKey = "active_profile_base_url"
     private let activeUsernameKey = "active_profile_username"
     private let activeProtocolKey = "active_profile_protocol"
@@ -210,6 +245,7 @@ public struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unche
         lock.lock()
         defer { lock.unlock() }
         defaults.removeObject(forKey: catalogKey)
+        defaults.removeObject(forKey: unreadableCatalogBackupKey)
         defaults.removeObject(forKey: activeBaseURLKey)
         defaults.removeObject(forKey: activeUsernameKey)
         defaults.removeObject(forKey: activeProtocolKey)
@@ -223,7 +259,7 @@ public struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unche
     }
 
     private func migratedCatalog() -> ConnectionProfileCatalog {
-        if defaults.data(forKey: catalogKey) != nil {
+        if defaults.object(forKey: catalogKey) != nil {
             return loadCatalog()
         }
         guard let baseURL = defaults.string(forKey: activeBaseURLKey)?
@@ -265,25 +301,52 @@ public struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unche
     }
 
     private func loadCatalog() -> ConnectionProfileCatalog {
-        guard let data = defaults.data(forKey: catalogKey),
-              let stored = try? JSONDecoder().decode(StoredConnectionProfiles.self, from: data)
-        else {
+        guard let raw = defaults.object(forKey: catalogKey) else {
             return ConnectionProfileCatalog()
         }
-        return ConnectionProfileCatalog(
-            profiles: stored.profiles.map { record in
-                ConnectionProfile(
-                    baseURL: record.baseURL,
-                    serverURLs: record.serverURLs,
-                    username: record.username,
-                    password: "",
-                    serverProtocol: record.serverProtocol.flatMap(ServerProtocol.init(rawValue:)),
-                    id: record.id,
-                    name: record.name
-                )
-            },
-            activeId: stored.activeId
-        )
+        let stored: ReadableStoredConnectionProfiles
+        do {
+            guard let data = raw as? Data else { throw CocoaError(.coderReadCorrupt) }
+            stored = try JSONDecoder().decode(ReadableStoredConnectionProfiles.self, from: data)
+        } catch {
+            // The next save replaces this blob, so keep the original bytes first.
+            if backUpUnreadableCatalog(raw) {
+                DiagnosticLog.error(.connection, "Saved servers could not be read; the original data is kept aside")
+            }
+            return ConnectionProfileCatalog()
+        }
+        let failures = stored.profiles.compactMap(\.failure)
+        if !failures.isEmpty, backUpUnreadableCatalog(raw) {
+            DiagnosticLog.warning(
+                .connection,
+                "Skipped \(failures.count) unreadable saved server(s): \(failures.joined(separator: ", "))"
+            )
+        }
+        let profiles = stored.profiles.compactMap(\.record).map { record in
+            ConnectionProfile(
+                baseURL: record.baseURL,
+                serverURLs: record.serverURLs,
+                username: record.username,
+                password: "",
+                serverProtocol: record.serverProtocol.flatMap(ServerProtocol.init(rawValue:)),
+                id: record.id,
+                name: record.name
+            )
+        }
+        var activeId = stored.activeId
+        if !failures.isEmpty, let id = activeId, !profiles.contains(where: { $0.id == id }) {
+            // The active server was one of the skipped records: fall back as removing it would.
+            activeId = profiles.first?.id
+        }
+        return ConnectionProfileCatalog(profiles: profiles, activeId: activeId)
+    }
+
+    /// Keeps only the first unreadable catalog: a later one must not replace the original.
+    /// True when `raw` was stored now, so each case is logged once rather than on every read.
+    private func backUpUnreadableCatalog(_ raw: Any) -> Bool {
+        guard defaults.object(forKey: unreadableCatalogBackupKey) == nil else { return false }
+        defaults.set(raw, forKey: unreadableCatalogBackupKey)
+        return true
     }
 
     private func writeCatalog(_ catalog: ConnectionProfileCatalog) {
@@ -300,8 +363,11 @@ public struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unche
                 )
             }
         )
-        if let data = try? JSONEncoder().encode(stored) {
-            defaults.set(data, forKey: catalogKey)
+        do {
+            defaults.set(try JSONEncoder().encode(stored), forKey: catalogKey)
+        } catch {
+            // The error can quote a value; log only its type.
+            DiagnosticLog.error(.connection, "Saved servers could not be written (\(type(of: error)))")
         }
     }
 
