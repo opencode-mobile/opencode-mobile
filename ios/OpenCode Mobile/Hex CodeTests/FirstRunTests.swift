@@ -11,6 +11,8 @@ final class FakeProbing: ConnectionProbing, @unchecked Sendable {
     /// Unauthenticated health answers per host: the live server challenges with 401.
     var silentHosts: Set<String> = []
     private(set) var passwordsSent: [String] = []
+    /// Every request, in order: the address and the password it carried.
+    private(set) var requests: [(url: String, password: String)] = []
 
     func probe(connection: ServerConnection) async throws -> ServerProtocol {
         try await probeServer(connection: connection).serverProtocol
@@ -18,6 +20,7 @@ final class FakeProbing: ConnectionProbing, @unchecked Sendable {
 
     func probeServer(connection: ServerConnection) async throws -> ServerProbeOutcome {
         passwordsSent.append(connection.password ?? "")
+        requests.append((connection.baseURL.absoluteString, connection.password ?? ""))
         if silentHosts.contains(connection.baseURL.host() ?? "") { throw ServerProbeError.transport("down") }
         if connection.password == nil { throw ServerProbeError.http(statusCode: 401, message: nil) }
         return try outcome.get()
@@ -174,6 +177,56 @@ struct ServerPairingTests {
         probing.outcome = .success(ServerProbeOutcome(serverProtocol: .v2, serverVersion: "2.3.0"))
         probing.features = V2ServerFeatures(sessionGenerate: false)
         #expect(await pairing.pair(payload: Self.payload) == .failure(.missingRoutes))
+    }
+
+    @Test func pairingAppliesTheCleartextPolicyBeforeAnyRequest() async {
+        let probing = FakeProbing()
+        let redeemer = FakeRedeemer()
+        let pairing = OpenCodeServerPairing(probing: probing, redeemer: redeemer)
+        let payload = #"{"code":"Abc123_-","urls":["http://203.0.113.10:4096","http://example.com:4096"]}"#
+        #expect(await pairing.pair(payload: payload) == .failure(.notEncrypted(host: "203.0.113.10")))
+        #expect(probing.requests.isEmpty)
+        #expect(redeemer.redeemed.isEmpty)
+    }
+
+    @Test func pairingKeepsOnlyEncryptedAddressesBesideUntrustedCleartext() async throws {
+        let probing = FakeProbing()
+        let redeemer = FakeRedeemer()
+        var pairing = OpenCodeServerPairing(probing: probing, redeemer: redeemer)
+        pairing.hostname = { _ in nil }
+        let payload = #"{"code":"Abc123_-","urls":["http://203.0.113.10:4096","https://example.com"]}"#
+        let server = try await pairing.pair(payload: payload).get()
+        #expect(Set(probing.requests.map(\.url)) == ["https://example.com/"])
+        #expect(redeemer.redeemed.map(\.baseURL) == ["https://example.com/"])
+        #expect(server.profile.baseURL == "https://example.com/")
+        #expect(server.profile.serverURLs == ["https://example.com/"])
+    }
+
+    @Test func pairingKeepsTrustedCleartextAddresses() async throws {
+        var pairing = OpenCodeServerPairing(probing: FakeProbing(), redeemer: FakeRedeemer())
+        pairing.hostname = { _ in nil }
+        let payload = #"{"code":"Abc123_-","urls":["http://192.168.1.2:4096","http://example.tail1234.ts.net:4096","http://203.0.113.10:4096"]}"#
+        let server = try await pairing.pair(payload: payload).get()
+        #expect(server.profile.baseURL == "http://example.tail1234.ts.net:4096/")
+        #expect(server.profile.serverURLs == ["http://192.168.1.2:4096/", "http://example.tail1234.ts.net:4096/"])
+    }
+
+    @Test func pairingSendsAPayloadPasswordOnlyToAddressesThePolicyKeeps() async throws {
+        let probing = FakeProbing()
+        let redeemer = FakeRedeemer()
+        var pairing = OpenCodeServerPairing(probing: probing, redeemer: redeemer)
+        pairing.hostname = { _ in nil }
+        let payload = #"{"urls":["http://203.0.113.10:4096","http://192.168.1.2:4096"],"username":"opencode","password":"test-password"}"#
+        let server = try await pairing.pair(payload: payload).get()
+        #expect(!probing.requests.isEmpty)
+        #expect(probing.requests.allSatisfy { $0.url == "http://192.168.1.2:4096/" })
+        #expect(redeemer.redeemed.isEmpty)
+        #expect(server.profile.password == "test-password")
+        #expect(server.profile.serverURLs == ["http://192.168.1.2:4096/"])
+
+        let untrustedOnly = #"{"urls":["http://203.0.113.10:4096"],"username":"opencode","password":"test-password"}"#
+        #expect(await pairing.pair(payload: untrustedOnly) == .failure(.notEncrypted(host: "203.0.113.10")))
+        #expect(probing.requests.allSatisfy { $0.url == "http://192.168.1.2:4096/" })
     }
 
     @Test func versionComparison() {

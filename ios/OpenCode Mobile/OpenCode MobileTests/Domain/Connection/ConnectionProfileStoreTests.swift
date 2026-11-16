@@ -145,6 +145,124 @@ struct ConnectionProfileStoreTests {
         #expect(await store.addedWorktrees(serverBaseURL: server) == [])
     }
 
+    @Test func load_skipsAnUnreadableRecordAndASaveKeepsTheRest() async throws {
+        let defaults = isolatedDefaults()
+        let json = """
+        {"activeId":"a","profiles":[\
+        {"id":"a","name":"Home","baseURL":"http://10.0.0.1:4096/","username":"opencode"},\
+        {"id":"broken","baseURL":"http://10.0.0.2:4096/"},\
+        {"id":"b","name":"Work","baseURL":"https://example.com/","username":"opencode","serverProtocol":"v2"}]}
+        """
+        defaults.set(Data(json.utf8), forKey: catalogKey)
+        let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
+
+        #expect(await store.listProfiles().map(\.id) == ["a", "b"])
+        #expect(await store.activeProfile()?.id == "a")
+
+        try await store.saveProfile(ConnectionProfile(baseURL: "http://10.0.0.3:4096/", username: "opencode", password: "test-password", id: "c", name: "Lab"))
+        #expect(await store.listProfiles().map(\.id) == ["a", "b", "c"])
+        #expect(await store.listProfiles().first { $0.id == "b" }?.serverProtocol == .v2)
+        // The skipped record stays recoverable.
+        #expect(defaults.data(forKey: backupKey) == Data(json.utf8))
+    }
+
+    @Test func load_activeIdOnASkippedRecordFallsBackToAReadableOne() async {
+        let defaults = isolatedDefaults()
+        let json = """
+        {"activeId":"broken","profiles":[\
+        {"id":"broken","name":"Home"},\
+        {"id":"b","name":"Work","baseURL":"https://example.com/","username":"opencode"}]}
+        """
+        defaults.set(Data(json.utf8), forKey: catalogKey)
+        let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
+
+        #expect(await store.activeProfile()?.id == "b")
+        #expect(await store.listProfiles().map(\.id) == ["b"])
+    }
+
+    @Test func saveProfile_afterAnUnreadableCatalog_keepsTheOriginalBytes() async throws {
+        let defaults = isolatedDefaults()
+        let original = Data("{not json".utf8)
+        defaults.set(original, forKey: catalogKey)
+        let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
+
+        #expect(await store.listProfiles().isEmpty)
+        try await store.saveProfile(ConnectionProfile(baseURL: "http://10.0.0.1:4096/", username: "opencode", password: "test-password", name: "Home"))
+        #expect(await store.listProfiles().map(\.name) == ["Home"])
+        #expect(defaults.data(forKey: backupKey) == original)
+
+        // A second unreadable catalog does not replace the first backup.
+        defaults.set(Data("[]".utf8), forKey: catalogKey)
+        try await store.saveProfile(ConnectionProfile(baseURL: "http://10.0.0.2:4096/", username: "opencode", password: "test-password", name: "Work"))
+        #expect(defaults.data(forKey: backupKey) == original)
+        #expect(await store.listProfiles().map(\.name) == ["Work"])
+    }
+
+    @Test func load_aCatalogStoredAsTheWrongTypeIsKeptAndNotMigratedOver() async throws {
+        let defaults = isolatedDefaults()
+        defaults.set("not data", forKey: catalogKey)
+        defaults.set("http://10.0.0.9:4096/", forKey: "active_profile_base_url")
+        let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
+
+        #expect(await store.listProfiles().isEmpty)
+        #expect(defaults.string(forKey: backupKey) == "not data")
+    }
+
+    @Test func clearAll_removesTheUnreadableCatalogBackup() async {
+        let defaults = isolatedDefaults()
+        defaults.set(Data("{not json".utf8), forKey: catalogKey)
+        let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
+        _ = await store.listProfiles()
+        #expect(defaults.object(forKey: backupKey) != nil)
+        await store.clearAll()
+        #expect(defaults.object(forKey: backupKey) == nil)
+    }
+
+    @Test func writtenCatalogStillDecodesWithTheStrictPreviousReader() async throws {
+        let defaults = isolatedDefaults()
+        let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
+        try await store.saveProfile(
+            ConnectionProfile(
+                baseURL: "http://192.168.1.2:4096/",
+                serverURLs: ["http://192.168.1.2:4096/", "http://100.64.0.3:4096/"],
+                username: "opencode",
+                password: "test-password",
+                serverProtocol: .v2,
+                id: "p",
+                name: "Mac"
+            )
+        )
+        try await store.saveProfile(ConnectionProfile(baseURL: "https://example.com/", username: "opencode", password: "test-password", id: "q", name: "Remote"))
+        await store.applyProfile(id: "p")
+
+        let data = try #require(defaults.data(forKey: catalogKey))
+        let decoded = try JSONDecoder().decode(PreviousStoredProfiles.self, from: data)
+        #expect(decoded.activeId == "p")
+        #expect(decoded.profiles.map(\.id) == ["p", "q"])
+        #expect(decoded.profiles.first?.serverProtocol == "v2")
+        #expect(decoded.profiles.first?.serverURLs == ["http://192.168.1.2:4096/", "http://100.64.0.3:4096/"])
+        #expect(decoded.profiles.last?.serverProtocol == nil)
+        #expect(defaults.object(forKey: backupKey) == nil)
+    }
+
+    private let catalogKey = "connection_profiles_v2"
+    private let backupKey = "connection_profiles_v2.unreadable"
+
+    /// The catalog reader before per-record tolerance: every field required except the two optional ones.
+    private struct PreviousStoredProfiles: Decodable {
+        var activeId: String?
+        var profiles: [Record]
+
+        struct Record: Decodable {
+            var id: String
+            var name: String
+            var baseURL: String
+            var username: String
+            var serverProtocol: String?
+            var serverURLs: [String]
+        }
+    }
+
     private func isolatedDefaults() -> UserDefaults {
         let suite = "ConnectionProfileStoreTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
