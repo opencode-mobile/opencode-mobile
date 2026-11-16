@@ -7,7 +7,7 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -66,7 +66,8 @@ class DisplayMessagePipelineOlderLoadTest {
                     messageSync = sync,
                 )
 
-            sync.observeMessages("ses-1", "/repo").first()
+            // The screen stays open while it loads older pages.
+            val screen = launch { sync.observeMessages("ses-1", "/repo").collect { } }
             advanceUntilIdle()
 
             val overlap = pipeline.loadOlderDisplayMessages("ses-1", "/repo")
@@ -78,6 +79,7 @@ class DisplayMessagePipelineOlderLoadTest {
             assertEquals(listOf("a", "b", "c", "d"), added.messages.map { it.id })
             assertEquals(1, preparer.prepareCount)
             assertEquals(MessagePreparationMode.Final, preparer.lastMode)
+            screen.cancel()
         }
 
     private fun user(id: String) = Message(id = id, role = MessageRole.User, text = id)

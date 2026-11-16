@@ -44,6 +44,17 @@ nonisolated final class MessageSync: @unchecked Sendable {
     private var olderCursorBySlot: [String: String] = [:]
     private var hasOlderBySlot: [String: Bool] = [:]
     private var olderLoadInFlight: Set<String> = []
+    /// Live screens per observed session; see ``TranscriptRetentionPolicy``.
+    private var observerCounts: [MessageSessionKey: Int] = [:]
+    /// Order in which each closed (unobserved) session lost its last observer.
+    private var closedOrder: [MessageSessionKey: UInt64] = [:]
+    private var closedCounter: UInt64 = 0
+    private var graceTasks: [MessageSessionKey: Task<Void, Never>] = [:]
+    /// The message loop that currently owns each session; a released or replaced loop
+    /// must not commit a late REST page.
+    private var runTokenByKey: [MessageSessionKey: UUID] = [:]
+    private var transcriptReleaseHandlers: [@Sendable (MessageSessionKey) -> Void] = []
+    private let retentionSleep: @Sendable (Int) async -> Void
 
     init(
         listMessages: @escaping MessageListFetcher,
@@ -63,8 +74,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
             Int64(Date().timeIntervalSince1970 * 1000)
         },
         sessionCache: any SessionCache = NoOpSessionCache.shared,
-        syncCoordinator: (any SyncCoordinator)? = nil
+        syncCoordinator: (any SyncCoordinator)? = nil,
+        retentionSleep: @escaping @Sendable (Int) async -> Void = { ms in
+            try? await Task.sleep(for: .milliseconds(ms))
+        }
     ) {
+        self.retentionSleep = retentionSleep
         self.listMessages = listMessages
         self.listMessagePage = listMessagePage ?? { sessionID, directory, query in
             switch query {
@@ -109,7 +124,10 @@ nonisolated final class MessageSync: @unchecked Sendable {
             Int64(Date().timeIntervalSince1970 * 1000)
         },
         sessionCache: any SessionCache = NoOpSessionCache.shared,
-        syncCoordinator: (any SyncCoordinator)? = nil
+        syncCoordinator: (any SyncCoordinator)? = nil,
+        retentionSleep: @escaping @Sendable (Int) async -> Void = { ms in
+            try? await Task.sleep(for: .milliseconds(ms))
+        }
     ) {
         self.init(
             listMessages: listMessages,
@@ -125,7 +143,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
             recoveryDelay: recoveryDelay,
             nowMs: nowMs,
             sessionCache: sessionCache,
-            syncCoordinator: syncCoordinator
+            syncCoordinator: syncCoordinator,
+            retentionSleep: retentionSleep
         )
     }
 
@@ -143,9 +162,14 @@ nonisolated final class MessageSync: @unchecked Sendable {
             }
         }
         let observation = observationCache[key]!
+        // Counted with the cache entry under one lock, so a release cannot slip in between.
+        observerCounts[key, default: 0] += 1
+        closedOrder.removeValue(forKey: key)
+        let grace = graceTasks.removeValue(forKey: key)
         let published = lastPublishedFrame[key.storeSlot]
         let fromCache = awaitingCacheSyncConfirm.contains(key.storeSlot)
         lock.unlock()
+        grace?.cancel()
         let snapshot = published.map { MessageListUpdate.messages($0, isFromCache: fromCache) }
         return AsyncStream { continuation in
             // lastValue may be cacheSyncConfirmed or a Messages frame from before
@@ -161,8 +185,104 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 }
                 continuation.finish()
             }
-            continuation.onTermination = { _ in task.cancel() }
+            continuation.onTermination = { [weak self] _ in
+                task.cancel()
+                self?.releaseObserver(key: key, observation: observation)
+            }
         }
+    }
+
+    /// Releases every session nothing observes, ignoring the grace period and the warm cap.
+    /// Called on a memory warning; open sessions are untouched.
+    func releaseClosedSessions() {
+        lock.lock()
+        let closed = observationCache.keys.filter { (observerCounts[$0] ?? 0) == 0 }
+        lock.unlock()
+        closed.forEach { releaseTranscript(key: $0, onlyIfClosed: true) }
+    }
+
+    /// True while `sessionID` holds an in-memory transcript or its observation.
+    func retainsTranscript(sessionID: String, directory: String?) -> Bool {
+        let key = sessionKey(sessionID: sessionID, directory: directory)
+        lock.lock()
+        let held = observationCache[key] != nil || lastPublishedFrame[key.storeSlot] != nil ||
+            hasOlderBySlot[key.storeSlot] != nil || olderCursorBySlot[key.storeSlot] != nil
+        lock.unlock()
+        return held || store.retains(sessionID: key.storeSlot)
+    }
+
+    /// Called after a session's transcript is released, so caches derived from it can drop
+    /// their copy (the prepared history in ``DisplayMessagePipeline``).
+    func onTranscriptReleased(_ handler: @escaping @Sendable (MessageSessionKey) -> Void) {
+        lock.lock()
+        transcriptReleaseHandlers.append(handler)
+        lock.unlock()
+    }
+
+    private func releaseObserver(key: MessageSessionKey, observation: SharedLiveObservation<MessageListUpdate>) {
+        lock.lock()
+        guard observationCache[key] === observation, let count = observerCounts[key] else {
+            lock.unlock()
+            return
+        }
+        if count > 1 {
+            observerCounts[key] = count - 1
+            lock.unlock()
+            return
+        }
+        observerCounts.removeValue(forKey: key)
+        closedCounter &+= 1
+        closedOrder[key] = closedCounter
+        let sleep = retentionSleep
+        graceTasks[key]?.cancel()
+        graceTasks[key] = Task.detached { [weak self] in
+            await sleep(TranscriptRetentionPolicy.closedSessionGraceMs)
+            guard !Task.isCancelled else { return }
+            self?.releaseTranscript(key: key, onlyIfClosed: true)
+        }
+        let overCap = closedOrder
+            .sorted { $0.value > $1.value }
+            .dropFirst(TranscriptRetentionPolicy.maxWarmClosedSessions)
+            .map(\.key)
+        lock.unlock()
+        overCap.forEach { releaseTranscript(key: $0, onlyIfClosed: true) }
+    }
+
+    /// Stops the session's shared observation and drops everything held for it, so the next
+    /// open loads like a first open (session cache paint, then the server).
+    private func releaseTranscript(key: MessageSessionKey, onlyIfClosed: Bool) {
+        let slot = key.storeSlot
+        lock.lock()
+        if onlyIfClosed, (observerCounts[key] ?? 0) > 0 {
+            lock.unlock()
+            return
+        }
+        let observation = observationCache.removeValue(forKey: key)
+        observerCounts.removeValue(forKey: key)
+        closedOrder.removeValue(forKey: key)
+        let grace = graceTasks.removeValue(forKey: key)
+        runTokenByKey.removeValue(forKey: key)
+        startedGenerationByKey.removeValue(forKey: key)
+        terminalSessionKeys.remove(key)
+        lastIdentity.removeValue(forKey: slot)
+        lastPublishedFrame.removeValue(forKey: slot)
+        lastPublishedRevision.removeValue(forKey: slot)
+        healthByKey.removeValue(forKey: key)
+        catchUpSlots.remove(slot)
+        awaitingCacheSyncConfirm.remove(slot)
+        quietRefreshDepth.removeValue(forKey: slot)
+        lastMessageEventAtMs.removeValue(forKey: slot)
+        lastLoadErrorBySlot.removeValue(forKey: slot)
+        olderCursorBySlot.removeValue(forKey: slot)
+        hasOlderBySlot.removeValue(forKey: slot)
+        let handlers = transcriptReleaseHandlers
+        lock.unlock()
+        grace?.cancel()
+        observation?.finish()
+        closeMessageCacheHandle(for: key)
+        store.release(sessionID: slot)
+        publishCatchUpChrome()
+        handlers.forEach { $0(key) }
     }
 
     func refreshMessages(
@@ -240,7 +360,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
         olderCursorBySlot.removeAll()
         hasOlderBySlot.removeAll()
         olderLoadInFlight.removeAll()
+        observerCounts.removeAll()
+        closedOrder.removeAll()
+        runTokenByKey.removeAll()
+        let graces = Array(graceTasks.values)
+        graceTasks.removeAll()
         lock.unlock()
+        graces.forEach { $0.cancel() }
         stale.forEach { $0.finish() }
         store.clear()
         syncCoordinator.invalidate(nil)
@@ -550,6 +676,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.unlock()
     }
 
+    private func setRunToken(_ run: UUID, for key: MessageSessionKey) {
+        lock.lock()
+        runTokenByKey[key] = run
+        lock.unlock()
+    }
+
     private func noteMessageActivity(for storeSlot: String) {
         let timestamp = nowMs()
         lock.lock()
@@ -563,6 +695,14 @@ nonisolated final class MessageSync: @unchecked Sendable {
     ) async {
         let startedGeneration = nextObservationGeneration()
         registerObservation(key: key, generation: startedGeneration)
+        let run = UUID()
+        setRunToken(run, for: key)
+        @Sendable func runIsCurrent() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return runTokenByKey[key] == run && startedGenerationByKey[key] == startedGeneration &&
+                observationGeneration == startedGeneration
+        }
         noteMessageActivity(for: key.storeSlot)
         let staging = MessageEventStaging(
             capacity: eventStagingCapacity,
@@ -588,7 +728,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
 
         let publishMessages: @Sendable ([Message], Bool) -> Void = { [weak self] messages, isFromCache in
             guard let self else { return }
-            guard self.observationStillCurrent(key: key, startedGeneration: startedGeneration) else { return }
+            guard runIsCurrent() else { return }
             self.setPublishedFrame(
                 messages,
                 revision: self.store.revision(sessionID: key.storeSlot),
@@ -628,7 +768,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     directory: key.directory.isEmpty ? nil : key.directory,
                     reason: StoreRefreshReason.initialSubscribe
                 )
-                guard syncCoordinator.profileGeneration == generation else {
+                // A released or replaced loop must not refill the store with a late page.
+                guard syncCoordinator.profileGeneration == generation, runIsCurrent() else {
                     _ = staging.completeAuthorityWindow(.accepted)
                     return
                 }
@@ -658,7 +799,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
                             .chat,
                             "fullReload session=\(key.sessionID) reason=\(StoreRefreshReason.initialSubscribe) count=\(cached.count) ms=\(elapsedMs(since: started)) confirm=tail-identity"
                         )
-                        await backfillSplitTurnIfNeeded(key: key, publishMessages: { publishMessages($0, false) })
+                        await backfillSplitTurnIfNeeded(
+                            key: key,
+                            stillCurrent: runIsCurrent,
+                            publishMessages: { publishMessages($0, false) }
+                        )
                         _ = staging.completeAuthorityWindow(.accepted)
                         lock.lock()
                         lastLoadErrorBySlot.removeValue(forKey: key.storeSlot)
@@ -720,7 +865,11 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 } else {
                     publishMessages(merged, false)
                 }
-                await backfillSplitTurnIfNeeded(key: key, publishMessages: { publishMessages($0, false) })
+                await backfillSplitTurnIfNeeded(
+                    key: key,
+                    stillCurrent: runIsCurrent,
+                    publishMessages: { publishMessages($0, false) }
+                )
                 _ = staging.completeAuthorityWindow(.accepted)
                 lock.lock()
                 lastLoadErrorBySlot.removeValue(forKey: key.storeSlot)
@@ -751,7 +900,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             staging.finish()
             syncCoordinator.visible(projection, false)
             syncCoordinator.unregister(registration)
-            if observationStillCurrent(key: key, startedGeneration: startedGeneration) {
+            if runIsCurrent() {
                 closeMessageCacheHandle(for: key)
             }
         }
@@ -847,6 +996,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
 
     private func backfillSplitTurnIfNeeded(
         key: MessageSessionKey,
+        stillCurrent: @Sendable () -> Bool = { true },
         publishMessages: @escaping @Sendable ([Message]) -> Void
     ) async {
         let directory = key.directory.isEmpty ? nil : key.directory
@@ -866,7 +1016,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     query: .older(cursor: cursor, limit: MessageHistoryPaging.splitTurnPageLimit),
                     reason: "split-turn"
                 )
-                if older.messages.isEmpty { return }
+                if older.messages.isEmpty || !stillCurrent() { return }
                 var applied = false
                 while !applied {
                     applied = store.prependOlderIfRevision(
@@ -1046,7 +1196,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         projection: ProjectionKey
     ) async {
         while let item = await staging.dequeue() {
-            guard observationStillCurrent(key: key) else { return }
+            guard observationStillCurrent(key: key), !Task.isCancelled else { return }
             switch item {
             case .overflow, .recoveryRequired:
                 await resyncTranscript(key)

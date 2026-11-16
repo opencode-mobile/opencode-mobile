@@ -37,6 +37,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         self.decorationCache = decorationCache
         self.codeHighlighter = codeHighlighter
         observeMemoryPressure()
+        observeTranscriptReleases()
     }
 
     init(
@@ -56,6 +57,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         self.preparedHistoryCache = preparedHistoryCache ?? PreparedHistoryCache()
         self.decorationCache = decorationCache
         self.codeHighlighter = nil
+        observeTranscriptReleases()
     }
 
     deinit {
@@ -96,6 +98,18 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         )
     }
 
+    /// A released transcript takes its prepared rows with it, so a closed session holds nothing.
+    private func observeTranscriptReleases() {
+        let preparedHistoryCache = self.preparedHistoryCache
+        messageSync?.onTranscriptReleased { key in
+            preparedHistoryCache.remove(key: PreparedHistoryCacheKey(
+                connectionProfileID: key.connectionProfileID,
+                directory: key.directory,
+                sessionID: key.sessionID
+            ))
+        }
+    }
+
     private func observeMemoryPressure() {
         memoryPressureObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
@@ -103,6 +117,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
             queue: .main
         ) { [weak self] _ in
             self?.preparedHistoryCache.handleMemoryPressure()
+            self?.messageSync?.releaseClosedSessions()
             guard let codeHighlighter = self?.codeHighlighter else { return }
             Task {
                 await codeHighlighter.trim(.critical)

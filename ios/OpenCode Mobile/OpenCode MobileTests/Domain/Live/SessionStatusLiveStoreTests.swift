@@ -26,6 +26,44 @@ struct SessionStatusLiveStoreTests {
         #expect(running.statusLabel(for: "ses-1") == "Working")
     }
 
+    @Test func observeActivity_keepsUpdatingForSessionWhoseTranscriptWasReleased() async throws {
+        let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+        let messageSync = MessageSync(
+            listMessages: { _, _ in
+                [Message(id: "m1", role: .user, text: "hi", model: nil, mode: nil, sentAtEpochMs: nil)]
+            },
+            store: InMemoryMessageStore(),
+            eventStream: eventStream,
+            recoveryDelay: { _ in }
+        )
+        let collector = ActivityCollector(store: store, directory: "/repo")
+        _ = try await collector.awaitEmission { $0.seeded }
+        let chat = Task {
+            for await _ in messageSync.observeMessages(sessionID: "ses-1", directory: "/repo") {}
+        }
+        let deadline = ContinuousClock.now + .seconds(2)
+        while messageSync.peekStoreMessages(sessionID: "ses-1", directory: "/repo").isEmpty,
+              ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        chat.cancel()
+        try await Task.sleep(for: .milliseconds(50))
+        messageSync.releaseClosedSessions()
+        #expect(!messageSync.retainsTranscript(sessionID: "ses-1", directory: "/repo"))
+
+        eventStream.emit(busyStatusEvent("ses-1"))
+        let running = try await collector.awaitEmission { $0.entries["ses-1"]?.activity == .running }
+        collector.cancel()
+
+        #expect(running.entries["ses-1"]?.activity == .running)
+        #expect(!messageSync.retainsTranscript(sessionID: "ses-1", directory: "/repo"))
+    }
+
     @Test func observeActivity_appliesStatusEventLocallyWithoutWaitingForGet() async throws {
         let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
         let eventStream = FakeForegroundEventStream()
