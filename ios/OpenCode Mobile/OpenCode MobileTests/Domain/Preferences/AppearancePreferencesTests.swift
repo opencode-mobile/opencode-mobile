@@ -114,12 +114,12 @@ struct AppearancePreferencesTests {
         #expect(defaults.object(forKey: "homeListTextSize") == nil)
     }
 
-    @Test func stepsRunFromExtraSmallToExtraLargeWithDefaultInTheMiddle() {
-        #expect(AppTextSize.allCases.map(\.factor) == [0.85, 0.92, 1.0, 1.12, 1.26])
-        #expect(AppTextSize.default.stepIndex == 2)
-        #expect(AppTextSize.fromStepIndex(0) == .extraSmall)
-        #expect(AppTextSize.fromStepIndex(4) == .extraLarge)
-        #expect(AppTextSize.fromStepIndex(-1) == .extraSmall)
+    @Test func stepsRunFromSmallestToExtraLargeWithDefaultAtStepThree() {
+        #expect(AppTextSize.allCases.map(\.factor) == [0.78, 0.85, 0.92, 1.0, 1.12, 1.26])
+        #expect(AppTextSize.default.stepIndex == 3)
+        #expect(AppTextSize.fromStepIndex(0) == .smallest)
+        #expect(AppTextSize.fromStepIndex(5) == .extraLarge)
+        #expect(AppTextSize.fromStepIndex(-1) == .smallest)
         #expect(AppTextSize.fromStepIndex(9) == .extraLarge)
     }
 

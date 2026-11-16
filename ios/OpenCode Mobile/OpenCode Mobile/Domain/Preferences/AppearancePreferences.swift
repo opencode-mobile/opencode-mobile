@@ -19,6 +19,7 @@ nonisolated enum AppearanceMode: String, CaseIterable, Sendable {
 
 /// One step of an app-level text size (#1044). The factor multiplies the phone's own text size.
 nonisolated enum AppTextSize: String, CaseIterable, Sendable {
+    case smallest
     case extraSmall = "extra_small"
     case small
     case `default`
@@ -29,6 +30,7 @@ nonisolated enum AppTextSize: String, CaseIterable, Sendable {
 
     var factor: Double {
         switch self {
+        case .smallest: 0.78
         case .extraSmall: 0.85
         case .small: 0.92
         case .default: 1.0
@@ -37,8 +39,8 @@ nonisolated enum AppTextSize: String, CaseIterable, Sendable {
         }
     }
 
-    /// Position on the five-step slider, 0 ... 4; Default is the middle step.
-    var stepIndex: Int { Self.allCases.firstIndex(of: self) ?? 2 }
+    /// Position on the six-step slider, 0 ... 5; Default is step 3.
+    var stepIndex: Int { Self.allCases.firstIndex(of: self) ?? 3 }
 
     static func fromStepIndex(_ index: Int) -> AppTextSize {
         allCases[min(max(index, 0), allCases.count - 1)]

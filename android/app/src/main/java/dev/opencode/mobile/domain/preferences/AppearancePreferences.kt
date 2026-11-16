@@ -38,6 +38,7 @@ enum class AppearanceTextSize(
     val wireValue: String,
     val multiplier: Float,
 ) {
+    Smallest("smallest", 0.78f),
     ExtraSmall("extra_small", 0.85f),
     Small("small", 0.92f),
     Default("default", 1.0f),

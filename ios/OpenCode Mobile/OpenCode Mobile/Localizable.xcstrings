@@ -751,6 +751,17 @@
         }
       }
     },
+    "appearance.text_size_smallest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Smallest"
+          }
+        }
+      }
+    },
     "appearance.theme.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -1249,6 +1249,7 @@
     <string name="appearance_text_code_title">Code text</string>
     <string name="appearance_text_size_label">Size</string>
     <string name="appearance_text_size_accessibility">%1$s size</string>
+    <string name="appearance_text_size_smallest">Smallest</string>
     <string name="appearance_text_size_extra_small">Extra small</string>
     <string name="appearance_text_size_small">Small</string>
     <string name="appearance_text_size_default">Default</string>
