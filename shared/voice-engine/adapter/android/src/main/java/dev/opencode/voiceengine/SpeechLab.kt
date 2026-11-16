@@ -264,7 +264,12 @@ class SpeechLab(
         referenceWords = Wer.words(reference).size,
         wordErrors = Wer.errors(reference, text),
         memoryMb = memoryMb(),
-        thermal = (appContext.getSystemService(Context.POWER_SERVICE) as PowerManager).currentThermalStatus,
+        thermal =
+            if (Build.VERSION.SDK_INT >= 29) {
+                (appContext.getSystemService(Context.POWER_SERVICE) as PowerManager).currentThermalStatus
+            } else {
+                -1
+            },
     )
 
     private suspend fun transcribeLikeATake(

@@ -29,17 +29,43 @@ class VoiceEngine(
     sealed interface ModelState {
         data object NotLoaded : ModelState
 
+        /**
+         * Getting ready, in [stage]. Downloading: [done] of [total] bytes on the phone, at [bytesPerSecond] with about
+         * [secondsLeft] to go once the speed is known, and while the connection is down [retryIn], the seconds to the
+         * next attempt (0 while it's made). Loading and warming up: [fraction] 1.
+         */
         data class Preparing(
             val fraction: Double,
             val detail: String,
+            val done: Long = 0,
+            val total: Long = 0,
+            val secondsLeft: Long? = null,
+            val bytesPerSecond: Long? = null,
+            val retryIn: Int? = null,
+            val stage: Stage = if (total > 0) Stage.Download else Stage.Load,
         ) : ModelState
 
         data object Ready : ModelState
 
+        /**
+         * The model didn't download or load. [done] of [total] bytes were on the phone when it stopped: less than
+         * [total] when the download failed.
+         */
         data class Failed(
             val message: String,
+            val done: Long = 0,
+            val total: Long = 0,
         ) : ModelState
+
+        /**
+         * The steps to ready (app-plan.md, Speech line and dial): download (once per install), load, then one short
+         * take of silence so the first real take is as fast as the rest.
+         */
+        enum class Stage { Download, Load, WarmUp }
     }
+
+    /** The pause detector's own state, for the speech model sheet: not on the phone, downloaded, loading or ready. */
+    enum class PausesState { NotOnPhone, Downloaded, Loading, Ready }
 
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
@@ -63,6 +89,12 @@ class VoiceEngine(
 
     private val state = MutableStateFlow<ModelState>(ModelState.NotLoaded)
     val modelState: StateFlow<ModelState> = state.asStateFlow()
+
+    /** The chosen model's files are all on the phone. */
+    val isInstalled: Boolean get() = store.isInstalled(active.value)
+
+    /** A download waiting to retry after the connection dropped tries again now. */
+    fun tryNow() = store.tryNow()
 
     private var engine: SpeechEngine? = null
     private val lock = Mutex()
@@ -95,17 +127,23 @@ class VoiceEngine(
                 "${cores.count} cores, ${cores.fastCount} fast",
             ).joinToString(" · ")
 
+    private val pausesState =
+        MutableStateFlow(if (store.isInstalled(SpeechModels.PAUSES)) PausesState.Downloaded else PausesState.NotOnPhone)
+
+    /** The pause detector's state ([PausesState]), for the speech model sheet. */
+    val pauses: StateFlow<PausesState> = pausesState.asStateFlow()
+
     /**
      * Whether locked takes can be cut at pauses: the pause detector ([SpeechModels.PAUSES]) is on the phone and loads.
      * It comes with the speech model, but never holds it back: without it a locked take is turned into text whole.
      */
-    @Volatile var pausesReady: Boolean = false
-        private set
+    val pausesReady: Boolean get() = pausesState.value == PausesState.Ready
 
     /**
-     * Downloads the chosen model if needed and loads it, with the pause detector. Safe to call again. A first download
-     * fetches the detector alongside the model, in the same progress; on a phone that already has the model, the
-     * detector is fetched once the model is ready.
+     * Downloads the chosen model if needed, loads it and warms it up, with the pause detector. Safe to call again. A
+     * first download fetches the detector alongside the model, in the same progress; on a phone that already has the
+     * model, the detector is fetched once the model is ready. Warming up turns half a second of silence into text,
+     * so the first real take is as fast as the rest (app-plan.md, The speech model › Load); the model is ready after.
      */
     suspend fun prepare() {
         lock.withLock {
@@ -115,34 +153,89 @@ class VoiceEngine(
             }
             val model = active.value
             withContext(Dispatchers.IO) {
+                var done = model.bytes
+                var all = model.bytes
                 try {
                     if (!store.isInstalled(model)) {
                         val pauses = SpeechModels.PAUSES.takeUnless { store.isInstalled(it) }
-                        val all = model.bytes + (pauses?.bytes ?: 0)
-                        val progress = { done: Long ->
-                            state.value = ModelState.Preparing(done.toDouble() / all, "Downloading · ${done / 1_000_000} MB")
+                        all = model.bytes + (pauses?.bytes ?: 0)
+                        done = store.bytesOnPhone(model)
+                        var rate = DownloadRate()
+                        var retryIn: Int? = null
+                        var estimate: DownloadRate.Estimate? = null
+                        val report = {
+                            state.value =
+                                ModelState.Preparing(
+                                    fraction = done.toDouble() / all,
+                                    detail = "Downloading · ${done / 1_000_000} of ${all / 1_000_000} MB",
+                                    done = done,
+                                    total = all,
+                                    secondsLeft = estimate?.secondsLeft,
+                                    bytesPerSecond = estimate?.bytesPerSecond,
+                                    retryIn = retryIn,
+                                    stage = ModelState.Stage.Download,
+                                )
                         }
-                        store.download(model) { done, _ -> progress(done) }
+                        val progress = { bytes: Long ->
+                            done = bytes
+                            // Bytes again after a drop: the speed is measured afresh, so the wait doesn't count.
+                            if (retryIn != null) rate = DownloadRate()
+                            retryIn = null
+                            estimate = rate.estimate(bytes, all)
+                            report()
+                        }
+                        val retrying = { seconds: Int ->
+                            retryIn = seconds
+                            estimate = null
+                            report()
+                        }
+                        report()
+                        store.download(model, retrying) { bytes, _ -> progress(bytes) }
                         if (pauses != null) {
                             try {
-                                store.download(pauses) { done, _ -> progress(model.bytes + done) }
+                                store.download(pauses, retrying) { bytes, _ -> progress(model.bytes + bytes) }
+                                pausesState.value = PausesState.Downloaded
                             } catch (e: Exception) {
                                 Log.w(TAG, "the pause detector didn't download: ${e.message}")
                             }
                         }
+                        done = all
                     }
-                    state.value = ModelState.Preparing(1.0, "Loading the model")
-                    engine = openEngine(appContext, store, model, options, cores)
+                    state.value = ModelState.Preparing(1.0, "Loading the model", stage = ModelState.Stage.Load)
+                    val started = SystemClock.elapsedRealtime()
+                    val opened = openEngine(appContext, store, model, options, cores)
+                    val loaded = SystemClock.elapsedRealtime()
+                    state.value = ModelState.Preparing(1.0, "Warming up", stage = ModelState.Stage.WarmUp)
+                    try {
+                        warmUp(opened)
+                    } catch (e: Throwable) {
+                        // An Error while warming up (out of memory, say): let the engine go, so Try again loads it
+                        // once more instead of finding it kept and leaving speech failed.
+                        runCatching { opened.close() }
+                        throw e
+                    }
+                    // Kept only once warmed up, so a failure on the way never leaves an engine behind.
+                    engine = opened
+                    Log.i(TAG, "${model.id} loaded in ${loaded - started} ms, warmed up in ${SystemClock.elapsedRealtime() - loaded} ms")
                     state.value = ModelState.Ready
                 } catch (e: Exception) {
-                    state.value = ModelState.Failed(e.message ?: "Could not get speech ready")
+                    state.value = ModelState.Failed(e.message ?: "Could not get speech ready", done, all)
                 } catch (e: Error) {
                     // An OutOfMemoryError or a missing native library while loading: speech isn't available, rather
                     // than "Getting speech ready" for good.
-                    state.value = ModelState.Failed(e.message ?: "Could not get speech ready")
+                    state.value = ModelState.Failed(e.message ?: "Could not get speech ready", done, all)
                 }
                 if (state.value == ModelState.Ready) preparePauses()
             }
+        }
+    }
+
+    /** One short take of silence; a failure only means the first real take is a little slower. */
+    private suspend fun warmUp(engine: SpeechEngine) {
+        try {
+            engine.transcribe(FloatArray(SAMPLE_RATE / 2))
+        } catch (e: Exception) {
+            Log.w(TAG, "warming the model up failed: ${e.message}")
         }
     }
 
@@ -152,15 +245,22 @@ class VoiceEngine(
         val pauses = SpeechModels.PAUSES
         try {
             if (!store.isInstalled(pauses)) store.download(pauses) { _, _ -> }
+            pausesState.value = PausesState.Loading
             val started = SystemClock.elapsedRealtime()
             PauseDetector(store.file(pauses, pauses.files.single().name).path).close()
-            pausesReady = true
+            pausesState.value = PausesState.Ready
             Log.i(TAG, "pause detector loaded in ${SystemClock.elapsedRealtime() - started} ms")
         } catch (e: Exception) {
+            settlePauses()
             Log.w(TAG, "the pause detector isn't ready, so locked takes are transcribed whole: ${e.message}", e)
         } catch (e: Error) {
+            settlePauses()
             Log.w(TAG, "the pause detector didn't load, so locked takes are transcribed whole: ${e.message}", e)
         }
+    }
+
+    private fun settlePauses() {
+        pausesState.value = if (store.isInstalled(SpeechModels.PAUSES)) PausesState.Downloaded else PausesState.NotOnPhone
     }
 
     /**

@@ -113,6 +113,10 @@ object HexIcons {
     }
     val scan by icon { path("M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3") }
     val alert by icon { path("M12 3 2 20h20z", "M12 10v4M12 17h.01") }
+    val wifi by icon {
+        path("M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0")
+        path("M12 19.5h.01", width = 2.4f)
+    }
     val moon by icon { path("M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z") }
     val sun by icon {
         circle(12f, 12f, 4f)

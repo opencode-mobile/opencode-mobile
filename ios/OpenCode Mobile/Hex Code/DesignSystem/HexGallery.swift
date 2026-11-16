@@ -67,6 +67,7 @@ private struct HexGalleryContent: View {
             topBars
             buttons
             marks
+            speechDials
             rows
             fields
             draft
@@ -273,6 +274,29 @@ private struct HexGalleryContent: View {
             HexStatusLine(.waiting, verbatim: "Asking Claude Sonnet 5.5 to reply…")
             HexStatusLine(.ok, verbatim: "Works · replied in 1.2 s")
             HexStatusLine(.warning, verbatim: "The provider has no API key in OpenCode. Add one, then test again.")
+        }
+    }
+
+    /// Each of the speech model dial's states, at the sheet's, the speech line's and the label's sizes.
+    private var speechDials: some View {
+        let looks: [(String, HexSpeechDial.Look)] = [
+            ("not on the phone yet", .stalled(0)),
+            ("downloading", .downloading(0.19)),
+            ("connection dropped", .stalled(0.19)),
+            ("loading", .loading),
+            ("warming up", .warmingUp),
+            ("ready", .ready),
+            ("failed", .failed(0.19)),
+        ]
+        return section("Speech dial") {
+            ForEach(looks, id: \.0) { name, look in
+                HStack(spacing: 16) {
+                    HexSpeechDial(look: look, size: .sheet)
+                    HexSpeechDial(look: look, size: .line)
+                    HexSpeechDial(look: look, size: .label)
+                    caption(name)
+                }
+            }
         }
     }
 
