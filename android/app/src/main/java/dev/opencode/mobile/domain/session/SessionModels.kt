@@ -291,6 +291,8 @@ data class FileDiff(
     val additions: Int,
     val deletions: Int,
     val status: FileDiffStatus,
+    /** [patch] holds only the first [UnifiedPatch.PREVIEW_CHARS] of a larger diff, cut at a line end. */
+    val isPatchTruncated: Boolean = false,
 )
 
 /** One uncommitted working-copy change reported by the server VCS status endpoint. */

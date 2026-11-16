@@ -1422,6 +1422,7 @@
     <string name="changes_select_file_message">Choose a changed file to see the diff.</string>
     <string name="changes_preview_unavailable_title">Preview unavailable</string>
     <string name="changes_preview_unavailable_message">A text preview is unavailable for this file.</string>
+    <string name="changes_file_viewer_truncated">Showing the first 1 MB of this file\'s changes.</string>
     <plurals name="changes_summary_changed_files">
         <item quantity="one">%1$d changed file</item>
         <item quantity="other">%1$d changed files</item>

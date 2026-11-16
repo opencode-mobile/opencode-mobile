@@ -124,6 +124,8 @@ final class FileHighlightCorePass {
         var chunkLines = 2_000
         var visibleDeadlineMilliseconds = 16.0
         var chunkDeadlineMilliseconds = 8.0
+        /// Most lines that keep their colors; a longer file keeps them around the visible rows only.
+        var maxColoredLines = 10_000
         /// Starts with the background fill held; tests release it with `holdsBackgroundFill`.
         var holdsBackgroundFill = false
 
@@ -147,6 +149,9 @@ final class FileHighlightCorePass {
     private(set) var session: HighlightCoreFileSession?
     let configuration: Configuration
     private let apply: @MainActor ([Int: [NativeCodeSpan]]) -> Void
+    /// Lines whose colors were dropped because they moved out of the kept window.
+    private let release: @MainActor (IndexSet) -> Void
+    private var lastVisibleLine = 0
     private var colored = IndexSet()
     private var visibleRequests: [Int] = []
     private var fillLine = 0
@@ -169,11 +174,13 @@ final class FileHighlightCorePass {
     init(
         session: HighlightCoreFileSession,
         configuration: Configuration = .standard,
-        apply: @escaping @MainActor ([Int: [NativeCodeSpan]]) -> Void
+        apply: @escaping @MainActor ([Int: [NativeCodeSpan]]) -> Void,
+        release: @escaping @MainActor (IndexSet) -> Void = { _ in }
     ) {
         self.session = session
         self.configuration = configuration
         self.apply = apply
+        self.release = release
         holdsBackgroundFill = configuration.holdsBackgroundFill
     }
 
@@ -199,7 +206,13 @@ final class FileHighlightCorePass {
 
     /// A row appeared in the lazy stack; an uncolored one is colored before the next chunk.
     func lineAppeared(_ line: Int) {
-        guard !isFinished, !colored.contains(line) else { return }
+        guard !isFinished else { return }
+        if let lineCount = session?.lineCount, lineCount > configuration.maxColoredLines {
+            let kept = keptLines(lineCount: lineCount)
+            lastVisibleLine = line
+            if keptLines(lineCount: lineCount) != kept { wake() }
+        }
+        guard !colored.contains(line) else { return }
         visibleRequests.append(line)
         if visibleRequests.count > 256 { visibleRequests.removeFirst(visibleRequests.count - 256) }
         wake()
@@ -230,6 +243,27 @@ final class FileHighlightCorePass {
                 if !colored.contains(line) { visibleRequests.append(line) }
             } else if holdsBackgroundFill {
                 await withCheckedContinuation { idle = $0 }
+            } else if lineCount > configuration.maxColoredLines {
+                // Keep colors only for the lines around the visible rows; color those, then wait
+                // for a scroll that moves them.
+                let kept = keptLines(lineCount: lineCount)
+                let released = IndexSet(integersIn: 0..<lineCount).subtracting(IndexSet(integersIn: kept)).intersection(colored)
+                if !released.isEmpty {
+                    colored.subtract(released)
+                    release(released)
+                }
+                guard let next = IndexSet(integersIn: kept).subtracting(colored).first else {
+                    await withCheckedContinuation { idle = $0 }
+                    continue
+                }
+                let lines = next..<min(kept.upperBound, next + configuration.chunkLines)
+                let chunk = await session.highlight(
+                    lines,
+                    deadlineMilliseconds: configuration.chunkDeadlineMilliseconds,
+                    qos: .utility
+                )
+                guard record(chunk, kind: .background, lines: lines) else { return }
+                await Task.yield()
             } else {
                 while colored.contains(fillLine) { fillLine += 1 }
                 let lines = fillLine..<min(lineCount, fillLine + configuration.chunkLines)
@@ -273,6 +307,12 @@ final class FileHighlightCorePass {
             )
         }
         return true
+    }
+
+    /// The `maxColoredLines` lines centered on the last visible row, inside the file.
+    func keptLines(lineCount: Int) -> Range<Int> {
+        let first = min(max(0, lastVisibleLine - configuration.maxColoredLines / 2), max(0, lineCount - configuration.maxColoredLines))
+        return first..<min(lineCount, first + configuration.maxColoredLines)
     }
 
     private func nextVisibleRequest() -> Int? {

@@ -452,6 +452,11 @@ private struct FileViewerView: View {
                 ZStack(alignment: .bottom) {
                     ScrollView {
                         VStack(spacing: 0) {
+                            if state.isTruncated {
+                                OpenCodeInlineNotice(message: "changes.file_viewer.truncated", variant: .banner)
+                                    .padding(.horizontal, 16)
+                                    .padding(.bottom, 12)
+                            }
                             OpenCodeUnifiedDiff(
                                 file: state.file,
                                 document: state.document,

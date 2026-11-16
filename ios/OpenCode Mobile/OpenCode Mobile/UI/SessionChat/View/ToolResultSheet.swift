@@ -386,6 +386,8 @@ private struct GrepBody: View {
 
 private struct EditBody: View {
     let presentation: ToolResultPresentation.Edit
+    /// Parses each patch once across renders.
+    @State private var memo = UnifiedDiffDocumentMemo()
 
     var body: some View {
         OpenCodeUnifiedDiff(
@@ -396,7 +398,7 @@ private struct EditBody: View {
                 deletions: presentation.deletions,
                 status: .modified
             ),
-            document: UnifiedDiffParser.parse(presentation.patch),
+            document: memo.document(for: presentation.patch),
             contextMode: .expanded
         )
     }

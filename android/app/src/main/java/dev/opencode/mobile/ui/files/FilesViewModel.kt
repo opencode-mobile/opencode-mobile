@@ -28,6 +28,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -309,6 +310,10 @@ class FilesViewModel internal constructor(
      * Colors the visible lines (plus a margin) first, then the rest from the top in chunks with a
      * deadline each, publishing after every call. A scroll far down is picked up before the next
      * chunk; the session computes the line states it needs to get there.
+     *
+     * A file longer than [MAX_COLORED_LINES] keeps colors only for that many lines around the
+     * visible ones: lines further away go back to their plain form (and their spans are freed),
+     * and color again when the user scrolls back to them.
      */
     private suspend fun colorProgressively(
         path: String,
@@ -319,8 +324,10 @@ class FilesViewModel internal constructor(
         val source = shown.source
         val lineCount = shown.lines.size
         val starts = withContext(workDispatcher) { lineStarts(source, lineCount) }
-        val lines = ArrayList(shown.lines)
+        val plainLines = shown.lines
+        val lines = ArrayList(plainLines)
         val colored = BooleanArray(lineCount)
+        val retainsAll = lineCount <= MAX_COLORED_LINES
         val visible = visibleLinesOf(path)
         var published = shown
         var frontier = 0
@@ -337,7 +344,7 @@ class FilesViewModel internal constructor(
                 start = firstVisible
                 end = window.last { !colored[it] } + 1
                 deadline = VISIBLE_DEADLINE_MILLIS
-            } else {
+            } else if (retainsAll) {
                 while (frontier < lineCount && colored[frontier]) frontier++
                 if (frontier >= lineCount) {
                     DiagnosticLog.info(
@@ -349,6 +356,20 @@ class FilesViewModel internal constructor(
                 }
                 start = frontier
                 end = minOf(lineCount, frontier + CHUNK_LINES)
+                deadline = CHUNK_DEADLINE_MILLIS
+            } else {
+                val retained = retainedLines(range, lineCount)
+                if (withContext(workDispatcher) { releaseColors(retained, plainLines, lines, colored) }) {
+                    published = publish(path, published, lines) ?: return
+                }
+                val next = retained.firstOrNull { !colored[it] }
+                if (next == null) {
+                    // Everything kept is colored; wait for a scroll that moves what is kept.
+                    visible.first { retainedLines(it, lineCount) != retained }
+                    continue
+                }
+                start = next
+                end = minOf(retained.last + 1, next + CHUNK_LINES)
                 deadline = CHUNK_DEADLINE_MILLIS
             }
             val changed =
@@ -373,6 +394,25 @@ class FilesViewModel internal constructor(
             }
             yield()
         }
+    }
+
+    /** Publishes [lines] in place of [published]; null when the viewer moved on to other content. */
+    private fun publish(
+        path: String,
+        published: FilesViewerContent.Text,
+        lines: List<OpenCodeCodeLine>,
+    ): FilesViewerContent.Text? {
+        val next = published.copy(lines = ArrayList(lines))
+        var current = false
+        updateViewer(path) { viewer ->
+            if (viewer.content === published) {
+                current = true
+                viewer.copy(content = next)
+            } else {
+                viewer
+            }
+        }
+        return next.takeIf { current }
     }
 
     private fun visibleLinesOf(path: String): MutableStateFlow<IntRange> =
@@ -418,6 +458,37 @@ class FilesViewModel internal constructor(
 
         /** Lines per background call, each stopped by [CHUNK_DEADLINE_MILLIS]. */
         internal const val CHUNK_LINES = 2_000
+
+        /** Most lines that keep their colors; a longer file keeps them around the visible lines only. */
+        internal const val MAX_COLORED_LINES = 10_000
+
+        /** The [MAX_COLORED_LINES] lines centered on [visible], inside the file. */
+        internal fun retainedLines(
+            visible: IntRange,
+            lineCount: Int,
+        ): IntRange {
+            val center = (visible.first + visible.last) / 2
+            val first = (center - MAX_COLORED_LINES / 2).coerceIn(0, maxOf(0, lineCount - MAX_COLORED_LINES))
+            return first until minOf(lineCount, first + MAX_COLORED_LINES)
+        }
+
+        /** Puts colored lines outside [retained] back to [plainLines]; true when any changed. */
+        private fun releaseColors(
+            retained: IntRange,
+            plainLines: List<OpenCodeCodeLine>,
+            lines: MutableList<OpenCodeCodeLine>,
+            colored: BooleanArray,
+        ): Boolean {
+            var changed = false
+            for (line in colored.indices) {
+                if (colored[line] && line !in retained) {
+                    lines[line] = plainLines[line]
+                    colored[line] = false
+                    changed = true
+                }
+            }
+            return changed
+        }
 
         private const val VISIBLE_DEADLINE_MILLIS = 16.0
         private const val CHUNK_DEADLINE_MILLIS = 8.0

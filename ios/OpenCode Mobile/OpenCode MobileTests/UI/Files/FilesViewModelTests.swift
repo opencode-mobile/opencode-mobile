@@ -394,7 +394,8 @@ struct FilesViewModelTests {
     private func makeHighlightCoreViewModel(
         _ repository: FakeProjectFilesRepository,
         holdsBackgroundFill: Bool,
-        chunkLines: Int = 250
+        chunkLines: Int = 250,
+        maxColoredLines: Int = FileHighlightCorePass.Configuration().maxColoredLines
     ) -> FilesViewModel {
         let viewModel = makeViewModel(repository)
         var configuration = FileHighlightCorePass.Configuration()
@@ -402,6 +403,7 @@ struct FilesViewModelTests {
         configuration.visibleLinesAround = 20
         configuration.chunkLines = chunkLines
         configuration.holdsBackgroundFill = holdsBackgroundFill
+        configuration.maxColoredLines = maxColoredLines
         viewModel.highlightCoreConfiguration = configuration
         return viewModel
     }
@@ -456,6 +458,28 @@ struct FilesViewModelTests {
         #expect(session == nil)
         // The tab keeps its colors.
         #expect(viewModel.state.viewers["big.ts"]?.lineSpans.count == 3_000)
+    }
+
+    @Test func aFileLongerThanTheColorLimitKeepsColorsOnlyAroundTheVisibleRows() async {
+        let repository = FakeProjectFilesRepository()
+        let source = Self.longTypeScript
+        repository.contents["big.ts"] = .text(source, isTruncated: false, totalBytes: source.utf8.count)
+        let viewModel = makeHighlightCoreViewModel(repository, holdsBackgroundFill: false, maxColoredLines: 1_000)
+        viewModel.openFile("big.ts")
+        await waitUntil(iterations: 1_000) { viewModel.state.viewers["big.ts"]?.lineSpans.count == 1_000 }
+        #expect(viewModel.state.viewers["big.ts"]?.lineSpans[0] != nil)
+        #expect(viewModel.state.viewers["big.ts"]?.lineSpans[2999] == nil)
+
+        // Rows near the end appear after a scroll to the bottom; the top lines give up their colors.
+        for line in 2980..<3000 { viewModel.lineAppeared("big.ts", line: line) }
+        await waitUntil(iterations: 1_000) {
+            let spans = viewModel.state.viewers["big.ts"]?.lineSpans ?? [:]
+            return spans[2999] != nil && spans[0] == nil && spans.count == 1_000
+        }
+        let spans = viewModel.state.viewers["big.ts"]?.lineSpans ?? [:]
+        #expect(spans.count == 1_000)
+        #expect(spans[0] == nil)
+        #expect(spans[2_000] != nil)
     }
 
     @Test func highlightCoreColorsTheFirstScreenFirstThenFillsTheRestInChunks() async {

@@ -50,8 +50,8 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeSelectionContainer
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
-import dev.opencode.mobile.ui.components.UnifiedDiffParser
 import dev.opencode.mobile.ui.components.codeColors
+import dev.opencode.mobile.ui.components.rememberUnifiedDiffDocument
 import dev.opencode.mobile.ui.sessionchat.ToolResultPresentation
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.Dispatchers
@@ -403,7 +403,7 @@ private fun GrepBody(presentation: ToolResultPresentation.Grep) {
 
 @Composable
 private fun EditBody(presentation: ToolResultPresentation.Edit) {
-    val document = UnifiedDiffParser.parse(presentation.patch)
+    val document = rememberUnifiedDiffDocument(presentation.patch)
     OpenCodeUnifiedDiff(
         file =
             FileDiff(

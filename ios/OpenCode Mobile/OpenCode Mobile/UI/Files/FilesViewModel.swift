@@ -456,10 +456,22 @@ final class FilesViewModel {
         guard let language = document.language,
               let session = HighlightCoreFileSession(document: document, language: language.id)
         else { return }
-        let pass = FileHighlightCorePass(session: session, configuration: highlightCoreConfiguration) { [weak self] spans in
-            guard let self, self.state.viewers[path]?.textDocument == document else { return }
-            self.state.viewers[path]?.lineSpans.merge(spans) { _, new in new }
-        }
+        let pass = FileHighlightCorePass(
+            session: session,
+            configuration: highlightCoreConfiguration,
+            apply: { [weak self] spans in
+                guard let self, self.state.viewers[path]?.textDocument == document else { return }
+                self.state.viewers[path]?.lineSpans.merge(spans) { _, new in new }
+            },
+            release: { [weak self] lines in
+                guard let self, self.state.viewers[path]?.textDocument == document else { return }
+                // Take the spans out so they are edited in place, then put them back once.
+                guard var spans = self.state.viewers[path]?.lineSpans else { return }
+                self.state.viewers[path]?.lineSpans = [:]
+                for line in lines { spans[line] = nil }
+                self.state.viewers[path]?.lineSpans = spans
+            }
+        )
         highlightCorePasses[path] = pass
         pass.start()
     }

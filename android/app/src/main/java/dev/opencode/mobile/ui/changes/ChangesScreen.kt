@@ -58,6 +58,7 @@ import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeAction
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
 import dev.opencode.mobile.ui.components.openCodeDiffStatAnnotatedString
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
@@ -519,6 +520,13 @@ private fun FileViewerScreen(
                             .verticalScroll(scrollState)
                             .padding(start = 16.dp, top = 16.dp, end = 16.dp),
                     ) {
+                        if (viewer.isTruncated) {
+                            OpenCodeInlineNotice(
+                                message = stringResource(R.string.changes_file_viewer_truncated),
+                                variant = OpenCodeInlineNoticeVariant.Banner,
+                                modifier = Modifier.padding(bottom = 12.dp),
+                            )
+                        }
                         // Code text size (#1044).
                         OpenCodeTextRegion(AppearanceTextRegion.Code) {
                             OpenCodeUnifiedDiff(

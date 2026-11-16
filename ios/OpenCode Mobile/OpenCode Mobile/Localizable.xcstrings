@@ -1198,6 +1198,17 @@
         }
       }
     },
+    "changes.file_viewer.truncated" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Showing the first 1 MB of this file's changes."
+          }
+        }
+      }
+    },
     "changes.filter.accessibility_label" : {
       "extractionState" : "manual",
       "localizations" : {

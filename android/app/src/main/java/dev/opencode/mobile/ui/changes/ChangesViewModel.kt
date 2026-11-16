@@ -114,14 +114,19 @@ data class ChangesContentState(
     val files: List<FileDiff>,
     val filter: String = "",
 ) {
-    val filteredFiles: List<FileDiff>
-        get() {
-            val query = filter.trim()
-            return if (query.isEmpty()) files else files.filter { it.path.contains(query, ignoreCase = true) }
-        }
+    // Derived once per state rather than on every read: rows read these once per file.
+    val filteredFiles: List<FileDiff> by lazy(LazyThreadSafetyMode.NONE) {
+        val query = filter.trim()
+        if (query.isEmpty()) files else files.filter { it.path.contains(query, ignoreCase = true) }
+    }
 
-    val fileGroups: List<ChangedFileGroup>
-        get() = groupChangedFiles(filteredFiles, files)
+    val fileGroups: List<ChangedFileGroup> by lazy(LazyThreadSafetyMode.NONE) { groupChangedFiles(filteredFiles, files) }
+
+    private val filePositions: Map<String, Int> by lazy(LazyThreadSafetyMode.NONE) {
+        HashMap<String, Int>(filteredFiles.size).also { positions ->
+            filteredFiles.forEachIndexed { index, file -> positions.putIfAbsent(file.path, index) }
+        }
+    }
 
     val additions: Int get() = filteredFiles.sumOf(FileDiff::additions)
     val deletions: Int get() = filteredFiles.sumOf(FileDiff::deletions)
@@ -137,7 +142,7 @@ data class ChangesContentState(
             )
 
     fun fileAccessibilityLabel(file: FileDiff): UiText {
-        val position = filteredFiles.indexOfFirst { it.path == file.path }.coerceAtLeast(0)
+        val position = filePositions[file.path] ?: 0
         return UiText.resource(
             R.string.changes_accessibility_file,
             UiText.verbatim(file.path),
@@ -152,13 +157,15 @@ data class ChangesContentState(
 
 data class FileViewerState(
     val file: FileDiff,
-    val document: UnifiedDiffDocument = UnifiedDiffParser.parse(file.patch.orEmpty()),
+    val document: UnifiedDiffDocument = UnifiedDiffParser.parse(file.patch.orEmpty(), truncated = file.isPatchTruncated),
     val contextMode: UnifiedDiffContextMode = UnifiedDiffContextMode.Collapsed,
     val selectedHunkId: Int? = document.hunks.firstOrNull()?.id,
 ) {
     val hasPreview: Boolean get() = document.hunks.isNotEmpty()
-    val canExpandContext: Boolean
-        get() = document.visibleRows(UnifiedDiffContextMode.Collapsed).size < document.rows.size
+    val canExpandContext: Boolean get() = document.canExpandContext
+
+    /** The diff shows only the first [dev.opencode.mobile.domain.session.UnifiedPatch.PREVIEW_CHARS] of this file's changes. */
+    val isTruncated: Boolean get() = file.isPatchTruncated
     private val selectedHunkIndex: Int get() = document.hunks.indexOfFirst { it.id == selectedHunkId }
     val canSelectPreviousHunk: Boolean get() = selectedHunkIndex > 0
     val canSelectNextHunk: Boolean get() = selectedHunkIndex >= 0 && selectedHunkIndex < document.hunks.lastIndex
@@ -475,8 +482,7 @@ class ChangesViewModel(
             try {
                 when (other) {
                     ChangeSource.WorkingTree -> repository.getVcsStatus(target.worktree).size
-                    ChangeSource.LastTurn ->
-                        target.messageId?.let { repository.getSessionDiff(target.sessionId, it, target.worktree).size } ?: 0
+                    ChangeSource.LastTurn -> lastTurnFileCount(target)
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -488,6 +494,20 @@ class ChangesViewModel(
         val current = _uiState.value
         if (current.phase != ChangesPhase.NoChanges || current.selectedSource != emptySource) return
         _uiState.value = current.copy(otherSourceHint = ChangesOtherSourceHint(other, count))
+    }
+
+    /**
+     * The turn's file count from its published summary when Changes already loaded it; otherwise
+     * one fetch, published as the summary so the next look needs none. The files are not kept.
+     */
+    private suspend fun lastTurnFileCount(target: Target): Int {
+        val messageId = target.messageId ?: return 0
+        val published = lastTurnReviewChangesStore.snapshot(target.sessionId)
+        val summary = published?.summary
+        if (published?.messageId == messageId && summary != null) return summary.fileCount
+        val files = repository.getSessionDiff(target.sessionId, messageId, target.worktree)
+        publishLastTurnSummary(target, ChangeSource.LastTurn, files, failed = false)
+        return files.size
     }
 
     private fun preferredSource(requested: ChangeSource): ChangeSource =
