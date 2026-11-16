@@ -99,7 +99,7 @@ class MessageTextLimitTest {
 
     @Test
     fun unbrokenLinePastTheTolerance_isCutAtTheLimit() {
-        val expected = MessageTextCut("a".repeat(1_000) + "…", 1_000)
+        val expected = MessageTextCut("a".repeat(1_000) + "…", 1_000, endsMidLine = true)
         assertEquals(expected, MessageTextLimit.cut("a".repeat(1_201)))
         assertEquals(expected, MessageTextLimit.cut("a".repeat(5_000)))
     }
@@ -119,14 +119,14 @@ class MessageTextLimitTest {
     @Test
     fun wordEndingExactlyAtTheCut_isKeptWhole() {
         // Character 1,000 is a space, so the first 1,000 characters end on a whole word.
-        assertEquals(MessageTextCut(words(1_000) + "…", 1_000), MessageTextLimit.cut(words(2_000)))
+        assertEquals(MessageTextCut(words(1_000) + "…", 1_000, endsMidLine = true), MessageTextLimit.cut(words(2_000)))
     }
 
     @Test
     fun wordBoundaryNearTheLineStart_isIgnored() {
         val text = "a".repeat(10) + " " + "b".repeat(2_000)
         val kept = "a".repeat(10) + " " + "b".repeat(989)
-        assertEquals(MessageTextCut("$kept…", 1_000), MessageTextLimit.cut(text))
+        assertEquals(MessageTextCut("$kept…", 1_000, endsMidLine = true), MessageTextLimit.cut(text))
     }
 
     @Test
@@ -147,6 +147,78 @@ class MessageTextLimitTest {
         val cut = MessageTextLimit.cut(text)
         assertEquals("a".repeat(999) + "…", cut?.visibleText)
         assertEquals(999, cut?.shownCharacters)
+    }
+
+    // Shared vectors with iOS `MessageTextLimitTests`: the cut, the shown count and the total
+    // count are the same on both platforms (UTF-16 units), and no cut ends inside a grapheme
+    // cluster. Both platforms segment these sequences alike; their grapheme rules can differ for
+    // rarer ones (an Indic conjunct, say), where the cut may then land one cluster apart.
+
+    /** Asserts the shown part of [text] and the two counts its row shows. */
+    private fun assertCut(
+        text: String,
+        visibleText: String,
+        shownCharacters: Int,
+        totalCharacters: Int,
+    ) {
+        val cut = MessageTextLimit.cut(text)
+        assertEquals(visibleText, cut?.visibleText)
+        assertEquals(shownCharacters, cut?.shownCharacters)
+        assertEquals(totalCharacters, text.length)
+    }
+
+    @Test
+    fun emojiOnlyLines_costTheirUtf16Units() {
+        val line = "😀".repeat(10)
+        assertCut(List(40) { line }.joinToString("\n"), List(25) { line }.joinToString("\n"), 524, 839)
+    }
+
+    @Test
+    fun emojiOnlyLine_isCutAtTheLimitOfUnits() {
+        assertCut("😀".repeat(700), "😀".repeat(500) + "…", 1_000, 1_400)
+        // The 1,000th unit is the first half of an emoji: the cut keeps the emoji before it.
+        assertCut("a" + "😀".repeat(700), "a" + "😀".repeat(499) + "…", 999, 1_401)
+    }
+
+    @Test
+    fun mixedTextAndEmoji_cutsAtAWord() {
+        // 20 short lines (cost 20) and an 800-unit line (cost 20): 5 lines left = 200 units.
+        val text = lines(20) + "\n" + "word 😀 ".repeat(100)
+        assertCut(text, lines(20) + "\n" + "word 😀 ".repeat(24) + "word 😀…", 350, 951)
+    }
+
+    @Test
+    fun zwjFamilyAtTheCut_isKeptWhole() {
+        val family = "👨‍👩‍👧‍👦"
+        assertEquals(11, family.length)
+        assertCut("a".repeat(995) + family + "b".repeat(300), "a".repeat(995) + "…", 995, 1_306)
+    }
+
+    @Test
+    fun flagsAtTheCut_areKeptWhole() {
+        // The cut falls between the two regional indicators of the first flag.
+        assertCut("a".repeat(998) + "🇺🇸🇫🇷" + "b".repeat(300), "a".repeat(998) + "…", 998, 1_306)
+        // The cut falls between the two flags.
+        assertCut("a".repeat(996) + "🇺🇸🇫🇷" + "b".repeat(300), "a".repeat(996) + "🇺🇸…", 1_000, 1_304)
+    }
+
+    @Test
+    fun skinToneAndVariationSelectorAtTheCut_stayWithTheirEmoji() {
+        assertCut("a".repeat(998) + "👍🏻" + "b".repeat(300), "a".repeat(998) + "…", 998, 1_302)
+        assertCut("a".repeat(999) + "❤\uFE0F" + "b".repeat(300), "a".repeat(999) + "…", 999, 1_301)
+    }
+
+    @Test
+    fun combiningMarkAtTheCut_staysWithItsLetter() {
+        assertCut("a".repeat(999) + "e\u0301" + "b".repeat(300), "a".repeat(999) + "…", 999, 1_301)
+    }
+
+    @Test
+    fun cjkText_countsOneUnitPerCharacter() {
+        assertCut("中文".repeat(700), "中文".repeat(500) + "…", 1_000, 1_400)
+        // 50-character lines cost 2: twelve whole lines, then 40 characters of the 13th.
+        val line = "中".repeat(50)
+        assertCut(List(40) { line }.joinToString("\n"), List(12) { line }.joinToString("\n") + "\n" + "中".repeat(40) + "…", 652, 2_039)
     }
 
     @Test

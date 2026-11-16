@@ -48,6 +48,17 @@ class SessionChatMessageLimitPresentationTest {
     }
 
     @Test
+    fun emojiUserMessage_showsTheSameCountsAsIos() {
+        // Same vector as iOS: the row counts UTF-16 units, and the cut keeps whole emoji.
+        val text = "a" + "😀".repeat(700)
+        val blocks = SessionChatTimelineBlocks.present(message(MessageRole.User, text), commands = emptyList())
+
+        val block = blocks.single() as SessionChatTimelineBlock.Text
+        assertEquals("a" + "😀".repeat(499) + "…", block.text)
+        assertEquals(SessionChatTextLimit(shownCharacters = 999, totalCharacters = 1_401), block.limit)
+    }
+
+    @Test
     fun shortUserMessage_keepsItsText() {
         val blocks = SessionChatTimelineBlocks.present(message(MessageRole.User, "Run the tests"), commands = emptyList())
 
