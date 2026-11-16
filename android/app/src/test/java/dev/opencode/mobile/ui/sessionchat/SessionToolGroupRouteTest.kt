@@ -124,6 +124,47 @@ class SessionToolGroupRouteTest {
         assertNull(viewModel.toolDetail(members.first()))
     }
 
+    @Test
+    fun viewModel_waitsForTheLiveLoadWhenTheCacheHoldsOnlyPartOfTheGroup() {
+        // The cached timeline keeps only the newest messages that fit, so it can cut a run.
+        val whole = message(outputChars = 10)
+        val steps =
+            whole.parts.mapIndexed { index, part -> whole.copy(id = "msg-step-$index", parts = listOf(part)) }
+        val route = route(whole).copy(messageId = steps.first().id)
+        val repository = FakeTranscriptRepository()
+        val viewModel = SessionToolGroupViewModel(repository)
+        viewModel.bind(route)
+
+        repository.updates.tryEmit(MessageListUpdate.Messages(steps.drop(1), isFromCache = true))
+        assertEquals(SessionToolGroupMembersState.Loading, viewModel.members.value)
+
+        repository.updates.tryEmit(MessageListUpdate.Messages(steps, isFromCache = true))
+        assertEquals(group(whole).members, (viewModel.members.value as SessionToolGroupMembersState.Ready).members)
+    }
+
+    @Test
+    fun viewModel_settlesOnAPartialCachedGroupWhenTheLiveLoadConfirmsOrFails() {
+        val whole = message(outputChars = 10)
+        val steps =
+            whole.parts.mapIndexed { index, part -> whole.copy(id = "msg-step-$index", parts = listOf(part)) }
+        val route = route(whole).copy(messageId = steps.first().id)
+        val partial = MessageListUpdate.Messages(steps.drop(1), isFromCache = true)
+
+        // The live load confirmed the cached frame without a second one: show what it holds.
+        val confirmed = FakeTranscriptRepository()
+        val confirmedModel = SessionToolGroupViewModel(confirmed).also { it.bind(route) }
+        confirmed.updates.tryEmit(partial)
+        confirmed.updates.tryEmit(MessageListUpdate.CacheSyncConfirmed())
+        assertEquals(steps.size - 1, (confirmedModel.members.value as SessionToolGroupMembersState.Ready).members.size)
+
+        // The live load failed: show the cached members rather than load forever.
+        val failed = FakeTranscriptRepository()
+        val failedModel = SessionToolGroupViewModel(failed).also { it.bind(route) }
+        failed.updates.tryEmit(partial)
+        failed.updates.tryEmit(MessageListUpdate.LoadFailed(IllegalStateException("test: offline")))
+        assertEquals(steps.size - 1, (failedModel.members.value as SessionToolGroupMembersState.Ready).members.size)
+    }
+
     private fun route(message: Message): SessionToolGroup {
         val group = group(message)
         return SessionChatToolGroupTarget(

@@ -22,7 +22,11 @@ import dev.opencode.mobile.domain.session.SessionRevert
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 object SessionCacheCodec {
     const val SCHEMA_VERSION: Int = 1
@@ -130,15 +134,26 @@ object SessionCacheCodec {
         for (part in parts) {
             chars +=
                 when (part) {
-                    is MessagePart.Text -> part.text.length
-                    is MessagePart.Tool -> (part.output?.length ?: 0) + (part.error?.length ?: 0) + (part.title?.length ?: 0)
-                    is MessagePart.Reasoning -> part.text.length
-                    is MessagePart.Compaction -> part.summary?.length ?: 0
-                    else -> 0
+                    is MessagePart.Text -> part.text.length.toLong()
+                    is MessagePart.Tool ->
+                        (part.output?.length ?: 0).toLong() + (part.error?.length ?: 0) + (part.title?.length ?: 0) +
+                            minEncodedChars(part.input) + minEncodedChars(part.metadata)
+                    is MessagePart.Reasoning -> part.text.length.toLong()
+                    is MessagePart.Compaction -> (part.summary?.length ?: 0).toLong()
+                    else -> 0L
                 }
         }
         return chars
     }
+
+    /** A floor on [element]'s encoded JSON size: its keys and string or number contents. */
+    private fun minEncodedChars(element: JsonElement?): Long =
+        when (element) {
+            null, JsonNull -> 0L
+            is JsonPrimitive -> element.content.length.toLong()
+            is JsonObject -> element.entries.sumOf { (key, value) -> key.length + minEncodedChars(value) }
+            is JsonArray -> element.sumOf { minEncodedChars(it) }
+        }
 
     /** [text]'s size in UTF-8, counted without encoding it. */
     private fun utf8Length(text: String): Int {

@@ -83,6 +83,34 @@ class SessionCacheMessageBudgetTest {
     }
 
     @Test
+    fun encodeMessages_doesNotEncodeAMessageWhoseToolInputAloneIsOverTheBudget() {
+        // A large write carries its content in the input, not the output.
+        val write =
+            Message(
+                id = "msg-write",
+                role = MessageRole.Assistant,
+                text = "",
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "write",
+                            status = ToolStatus.Completed,
+                            id = "prt-write",
+                            input =
+                                buildJsonObject {
+                                    put("filePath", JsonPrimitive("src/Big.kt"))
+                                    put("content", JsonPrimitive("x".repeat(50_000)))
+                                },
+                        ),
+                    ),
+            )
+        val pieces = mutableListOf<Int>()
+        val payload = SessionCacheCodec.encodeMessages(listOf(write), json, budgetBytes = 40_000, onMessageEncoded = { pieces += it })
+        assertEquals(emptyList<Int>(), pieces)
+        assertEquals(emptyList<Message>(), SessionCacheCodec.decodeMessages(payload, json))
+    }
+
+    @Test
     fun encodeMessages_keepsNoMessagesWhenTheNewestIsOverTheBudget() {
         // The floor is under the budget, the encoded JSON over it: still not kept.
         val messages = transcript(count = 3, outputChars = 50_000)
