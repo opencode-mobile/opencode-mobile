@@ -41,6 +41,15 @@ struct HomeView: View {
 
     private var drafting: Bool { home.isRecording || !home.draft.isEmpty }
 
+    /// The speech line shows while the model gets ready and for 1.6 s once it is (home's `speechLine`); while you
+    /// talk or have a draft the draft's label line carries it instead.
+    private var showsSpeechLine: Bool { home.speechLine != .hidden }
+
+    private var speechLine: some View {
+        SpeechLineView(speech: home.speech, show: home.speechLine) { home.showsSpeechModel = true }
+            .transition(.opacity)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HomeTopBar(session: session, onSettings: onSettings)
@@ -99,14 +108,24 @@ struct HomeView: View {
             if !drafting {
                 // Waiting messages open Details, where they can be cancelled. With none (or before
                 // they are read) its height stays, so nothing moves when it fills in.
+                // The speech line takes the slot while the speech model isn't ready, and sits directly above the
+                // waiting line (or the playground's suggestion) when that shows too.
                 Group {
                     if session.waitingCount > 0 {
-                        WaitingLine(count: session.waitingCount, idle: session.agentState == .idle) { session.openDetails() }
-                            .transition(.opacity)
+                        VStack(spacing: 8) {
+                            if showsSpeechLine { speechLine }
+                            WaitingLine(count: session.waitingCount, idle: session.agentState == .idle) { session.openDetails() }
+                        }
+                        .transition(.opacity)
                     } else if onLeaveSample != nil, session.agentState == .idle {
                         // The playground's take with no speech model or microphone.
-                        SampleSuggestion(take: PlaygroundScript.suggestion) { home.sendSuggestion(PlaygroundScript.suggestion) }
-                            .transition(.opacity)
+                        VStack(spacing: 8) {
+                            if showsSpeechLine { speechLine }
+                            SampleSuggestion(take: PlaygroundScript.suggestion) { home.sendSuggestion(PlaygroundScript.suggestion) }
+                        }
+                        .transition(.opacity)
+                    } else if showsSpeechLine {
+                        speechLine
                     } else {
                         WaitingLine(count: 1) {}
                             .hidden()
@@ -181,6 +200,8 @@ struct HomeView: View {
         }
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: drafting)
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
+        // "Speech ready" for 1.6 s, then the speech line fades out for good.
+        .hexAnimation(HexMotion.ease(HexMotion.fade), value: showsSpeechLine)
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.goalLine)
         .hexAnimation(HexMotion.ease(HexMotion.fade), value: session.ask.shown?.id)
         // The draft's ⋯ menu opens above its button; a tap anywhere else closes it.
@@ -552,34 +573,47 @@ struct DraftView: View {
                     }
                 }
             } else {
-                switch DraftStatusLine.of(isRecording: false, draft: draft, speech: home.speech.status) {
-                case let .speechDownloading(percent):
-                    HStack(spacing: 6) {
-                        HexSpinner(size: HexIconSize.small)
-                        Text(verbatim: String(localized: "home.speech.downloading", defaultValue: "Downloading the speech model · \(percent)%"))
-                    }
-                case .speechLoading:
-                    HStack(spacing: 6) {
-                        HexSpinner(size: HexIconSize.small)
-                        Text(LocalizedStringResource("home.speech.loading", defaultValue: "Speech model loading…"))
-                    }
-                case .speechFailed:
-                    Text(LocalizedStringResource("home.speech.failed", defaultValue: "Speech model didn’t load"))
-                        .foregroundStyle(HexColor.red)
-                case .transcribing:
-                    HStack(spacing: 6) {
-                        HexSpinner(size: HexIconSize.small)
-                        Text(LocalizedStringResource("draft.transcribing", defaultValue: "Transcribing on this phone…"))
-                    }
-                case .recording, .summary:
-                    // The draft, then what Send will do (the prototype's mode caption).
-                    Text(verbatim: summary + " · ") + modeCaption
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let line = DraftStatusLine.of(isRecording: false, draft: draft, speech: home.speech.status, now: context.date)
+                    statusLine(line)
                 }
             }
         }
         .hexFont(HexTextStyle.caption.weight(.medium))
         .foregroundStyle(HexColor.text3)
         .lineLimit(1)
+    }
+
+    @ViewBuilder
+    private func statusLine(_ line: DraftStatusLine) -> some View {
+        switch line {
+        case let .speech(words):
+            // The dial at 14 pt and the shorter words; tapping opens the speech model's details.
+            Button { home.showsSpeechModel = true } label: {
+                HStack(spacing: 6) {
+                    HexSpeechDial(look: dialLook, size: .label)
+                    Text(verbatim: words.text(timeLeft: true))
+                        .foregroundStyle(words == .failed ? HexColor.red : HexColor.text3)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(Text(LocalizedStringResource("speech.line.hint", defaultValue: "Shows the speech model’s details")))
+        case .transcribing:
+            HStack(spacing: 6) {
+                HexSpinner(size: HexIconSize.small)
+                Text(LocalizedStringResource("draft.transcribing", defaultValue: "Transcribing on this phone…"))
+            }
+        case .recording, .summary:
+            // The draft, then what Send will do (the prototype's mode caption).
+            Text(verbatim: summary + " · ") + modeCaption
+        }
+    }
+
+    /// The label's dial: as the model, but a take about to start (ready, still waiting) spins as loading.
+    private var dialLook: HexSpeechDial.Look {
+        let status = home.speech.status
+        return status == .ready ? .loading : HexSpeechDial.Look(status, lastFraction: home.speech.lastDownload?.fraction ?? 1)
     }
 
     private var recordingLabel: String {

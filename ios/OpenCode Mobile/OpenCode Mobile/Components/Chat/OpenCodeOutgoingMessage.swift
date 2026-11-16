@@ -5,15 +5,24 @@ private let outgoingMessagePaddingVertical: CGFloat = 8
 
 private let outgoingMessageMaxWidthFraction: CGFloat = 0.8
 
+/// A text cut to the part the timeline shows; the bubble ends with a row that opens the rest.
+struct OpenCodeOutgoingMessageLimit {
+    let shownCharacters: Int
+    let totalCharacters: Int
+    /// Opens the whole text. Nil: the row is not drawn.
+    let onShowFull: (() -> Void)?
+}
+
 enum OpenCodeOutgoingMessageContent: Identifiable {
-    case text(id: String, text: String)
+    /// `limit`: the text is the shown part of a longer message.
+    case text(id: String, text: String, limit: OpenCodeOutgoingMessageLimit? = nil)
     case attachment(OpenCodeAttachmentPresentation)
     /// Attached images as one gallery; `onOpen` receives the tapped index.
     case images(id: String, items: [OpenCodeImageGalleryItem], onOpen: ((Int) -> Void)?)
 
     var id: String {
         switch self {
-        case .text(let id, _): "text-\(id)"
+        case .text(let id, _, _): "text-\(id)"
         case .attachment(let attachment): "attachment-\(attachment.id)"
         case .images(let id, _, _): "images-\(id)"
         }
@@ -157,8 +166,10 @@ struct OpenCodeOutgoingMessage: View {
                 }
                 ForEach(content) { item in
                     switch item {
-                    case .text(_, let text):
-                        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    case .text(_, let text, let limit):
+                        if let limit, let onShowFull = limit.onShowFull {
+                            interactiveTextPill(text: text, limit: limit, onShowFull: onShowFull)
+                        } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             interactiveTextPill(text: text)
                         }
                     case .attachment(let attachment):
@@ -199,8 +210,24 @@ struct OpenCodeOutgoingMessage: View {
 
     private var pendingOpacity: Double { 0.6 }
 
-    private func textPill(text: String) -> some View {
-        pillContent(text: text)
+    private func textPill(text: String, limit: OpenCodeOutgoingMessageLimit? = nil, onShowFull: (() -> Void)? = nil) -> some View {
+        // A cut bubble is as wide as the wider of its text and the row, like an uncut bubble
+        // hugs its text; the row alone would stretch it to the full width. Rendered markdown
+        // takes the full width as in an uncut bubble, so it keeps the plain stack.
+        let layout = limit == nil || rendersMarkdown
+            ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 8))
+            : AnyLayout(OutgoingLimitedTextLayout(spacing: 8))
+        return layout {
+            if !text.isEmpty {
+                pillContent(text: text)
+            }
+            if let limit, let onShowFull {
+                OpenCodeTruncationRow(
+                    variant: .fullMessage(shownCharacters: limit.shownCharacters, totalCharacters: limit.totalCharacters),
+                    action: onShowFull
+                )
+            }
+        }
             .padding(.horizontal, outgoingMessagePaddingHorizontal)
             .padding(.vertical, outgoingMessagePaddingVertical)
             .background(
@@ -218,6 +245,33 @@ struct OpenCodeOutgoingMessage: View {
                         )
                 }
             }
+    }
+
+    /// A cut text: the bubble stays one VoiceOver element with the message actions, and the
+    /// row is also a named action on it.
+    private func interactiveTextPill(
+        text: String,
+        limit: OpenCodeOutgoingMessageLimit,
+        onShowFull: @escaping () -> Void
+    ) -> some View {
+        let open = onTap ?? onLongPress
+        let variant = OpenCodeTruncationRowVariant.fullMessage(
+            shownCharacters: limit.shownCharacters,
+            totalCharacters: limit.totalCharacters
+        )
+        return textPill(text: text, limit: limit, onShowFull: onShowFull)
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .gesture(TapGesture().onEnded { onTap?() }, including: onTap == nil ? .subviews : .all)
+            .gesture(LongPressGesture().onEnded { _ in onLongPress?() }, including: onLongPress == nil ? .subviews : .all)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text("component.outgoing_message.label"))
+            .accessibilityValue([variant.caption, accessibilityValue].filter { !$0.isEmpty }.joined(separator: ", "))
+            .accessibilityHint(open == nil ? Text(verbatim: "") : Text("component.outgoing_message.shows_actions_hint"))
+            // Combined, the row's button would take the bubble's activation; keep it on the bubble.
+            .accessibilityAction { open?() }
+            .accessibilityAction(named: Text(variant.title), onShowFull)
+            .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), enabled: open != nil, activate: open)
+            .openCodeSecondaryClick(onLongPress)
     }
 
     @ViewBuilder
@@ -253,12 +307,18 @@ struct OpenCodeOutgoingMessage: View {
         }
     }
 
-    @ViewBuilder
-    private func pillContent(text: String) -> some View {
-        if let renderedMarkdown, content.lazy.filter({
+    /// The text renders as markdown: one text in the bubble and a document for it. A cut text's
+    /// document is parsed from its shown part, so it renders like an uncut one (#1043).
+    private var rendersMarkdown: Bool {
+        renderedMarkdown != nil && content.lazy.filter({
             if case .text = $0 { return true }
             return false
-        }).count == 1 {
+        }).count == 1
+    }
+
+    @ViewBuilder
+    private func pillContent(text: String) -> some View {
+        if rendersMarkdown, let renderedMarkdown {
             OpenCodeRenderedMarkdown(
                 document: renderedMarkdown,
                 variant: .outgoingMessage
@@ -271,6 +331,43 @@ struct OpenCodeOutgoingMessage: View {
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+/// Stacks a cut text and its truncation row at one width: the wider of the text (wrapped to the
+/// offered width) and the row's natural width, never more than offered.
+private struct OutgoingLimitedTextLayout: Layout {
+    let spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = sharedWidth(proposal: proposal, subviews: subviews)
+        let heights = subviews.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        let gaps = spacing * CGFloat(max(0, subviews.count - 1))
+        return CGSize(width: width, height: heights.reduce(0, +) + gaps)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        // Trailing, as the bubble's text sits when the row is the wider of the two.
+        var y = bounds.minY
+        for subview in subviews {
+            let size = subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            subview.place(
+                at: CGPoint(x: bounds.maxX, y: y),
+                anchor: .topTrailing,
+                proposal: ProposedViewSize(width: bounds.width, height: size.height)
+            )
+            y += size.height + spacing
+        }
+    }
+
+    private func sharedWidth(proposal: ProposedViewSize, subviews: Subviews) -> CGFloat {
+        let widths = subviews.map { subview in
+            let natural = subview.sizeThatFits(.unspecified).width
+            guard let offered = proposal.width else { return natural }
+            return min(natural, subview.sizeThatFits(ProposedViewSize(width: offered, height: nil)).width)
+        }
+        let width = widths.max() ?? 0
+        return proposal.width.map { min(width, $0) } ?? width
     }
 }
 

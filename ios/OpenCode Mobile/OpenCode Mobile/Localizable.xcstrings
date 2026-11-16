@@ -3305,6 +3305,39 @@
         }
       }
     },
+    "component.truncation_row.full_message.caption" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ of %2$@ characters shown"
+          }
+        }
+      }
+    },
+    "component.truncation_row.full_message.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the whole message"
+          }
+        }
+      }
+    },
+    "component.truncation_row.full_message.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show full message"
+          }
+        }
+      }
+    },
     "component.unified_diff.summary_added" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11110,6 +11143,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copy all"
+          }
+        }
+      }
+    },
+    "session_chat_sheet.select_text.full_message_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full message"
           }
         }
       }

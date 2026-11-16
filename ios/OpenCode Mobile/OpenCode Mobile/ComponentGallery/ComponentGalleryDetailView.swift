@@ -112,6 +112,8 @@ struct ComponentGalleryDetailView: View {
             ImageViewerGalleryView()
         case .outgoingMessage:
             OutgoingMessageGalleryView()
+        case .truncationRow:
+            TruncationRowGalleryView()
         case .sessionBranchPill:
             SessionBranchPillGalleryView()
         case .assistantMessage:

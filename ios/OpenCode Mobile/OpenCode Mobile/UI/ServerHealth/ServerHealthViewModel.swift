@@ -56,6 +56,8 @@ final class ServerHealthViewModel {
     @ObservationIgnored private var storedVersion: String?
     @ObservationIgnored private var loadedRevision: Int?
     @ObservationIgnored private var lastReload: ContinuousClock.Instant?
+    /// Bumped by every rebuild; only the newest one applies its report.
+    @ObservationIgnored private var rebuildGeneration = 0
 
     init(
         route: ServerHealthRoute,
@@ -137,10 +139,12 @@ final class ServerHealthViewModel {
     }
 
     private func rebuild() async {
+        rebuildGeneration += 1
+        let generation = rebuildGeneration
         let range = state.range
         let built = await Self.buildReport(pings: pings, events: events, nowMs: now(), range: range)
-        // A range picked while this one was building wins; its own rebuild applies it.
-        guard range == state.range, !Task.isCancelled else { return }
+        // A rebuild started while this one ran (new range or newer pings) wins; it applies its own.
+        guard generation == rebuildGeneration, range == state.range, !Task.isCancelled else { return }
         state.recentPings = built.recentPings
         state.recentP95Ms = built.recentP95Ms
         state.report = built.report

@@ -58,6 +58,7 @@ const STRUCTURED_KEY = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
 /** Android-only resources: platform plumbing with no iOS screen text. */
 const ANDROID_ONLY = new Set([
   "app_name", // launcher label; iOS uses CFBundleDisplayName
+  "session_chat_copy_too_long", // Android's clipboard rejects a clip of a few MB; iOS copies any length
 ]);
 
 /** iOS-only catalog keys, by iOS key. */

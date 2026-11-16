@@ -542,7 +542,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
 
                         // Phase 1: newest markdown message only, then publish.
                         if let newest = messages.reversed().first(where: {
-                            OpenCodeRenderedMarkdownDetector.shouldRender($0.text)
+                            OpenCodeRenderedMarkdownDetector.shouldRender($0.markdownSourceText)
                         }) {
                             let prepared = await contentPreparer.prepareMessage(
                                 newest,
@@ -672,7 +672,8 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
 
                         for message in messages.reversed() {
                             guard !Task.isCancelled, isCurrent(generation) else { return }
-                            guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
+                            let markdownSource = message.markdownSourceText
+                            guard OpenCodeRenderedMarkdownDetector.shouldRender(markdownSource) else { continue }
                             if let cached = byID[message.id],
                                cached.renderedMarkdown != nil,
                                cached.text == message.text,
@@ -695,7 +696,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
 
                             if !publishedViewport {
                                 viewportEnrichedCount += 1
-                                viewportCharactersRemaining -= message.text.count
+                                viewportCharactersRemaining -= markdownSource.count
                                 let viewportReady =
                                     holdReady
                                     || viewportEnrichedCount
@@ -924,8 +925,10 @@ nonisolated func shouldPlainFirstHistoryPublish(
     }
     var markdownChars = 0
     for message in messages {
-        guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
-        markdownChars += message.text.count
+        // A cut user message counts, and is detected, by its shown part only (#1043).
+        let source = message.markdownSourceText
+        guard OpenCodeRenderedMarkdownDetector.shouldRender(source) else { continue }
+        markdownChars += source.count
         if markdownChars >= MessageContentPreparer.historyPlainFirstMarkdownCharacterThreshold {
             return true
         }
@@ -943,9 +946,10 @@ nonisolated func newestMarkdownViewportIDs(
     var ids = Set<String>()
     var remainingChars = charBudget
     for message in messages.reversed() {
-        guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
+        let source = message.markdownSourceText
+        guard OpenCodeRenderedMarkdownDetector.shouldRender(source) else { continue }
         ids.insert(message.id)
-        remainingChars -= message.text.count
+        remainingChars -= source.count
         if ids.count >= maxCount || remainingChars <= 0 { break }
     }
     return ids
@@ -957,7 +961,7 @@ nonisolated func hasCompletePreparedMarkdownCache(
 ) -> Bool {
     var sawMarkdownCandidate = false
     for message in messages {
-        guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
+        guard OpenCodeRenderedMarkdownDetector.shouldRender(message.markdownSourceText) else { continue }
         sawMarkdownCandidate = true
         guard let cached = previousByID[message.id],
               cached.renderedMarkdown != nil,

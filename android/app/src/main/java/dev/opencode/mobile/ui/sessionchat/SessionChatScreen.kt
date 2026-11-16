@@ -1239,6 +1239,10 @@ private fun SessionChatScreenBody(
                                 onCloseActivityCardStep = viewModel::closeActivityCardStep,
                                 imageViewer = uiState.imageViewer,
                                 onOpenImageViewer = viewModel::openImageViewer,
+                                onShowFullMessage = { target ->
+                                    logChatAction(ProductAnalytics.Action.CHAT_SHOW_FULL_MESSAGE)
+                                    selectTextTarget = target
+                                },
                                 onImageViewerPageChange = viewModel::showImageViewerPage,
                                 onDismissImageViewer = viewModel::dismissImageViewer,
                                 goal = uiState.goal,

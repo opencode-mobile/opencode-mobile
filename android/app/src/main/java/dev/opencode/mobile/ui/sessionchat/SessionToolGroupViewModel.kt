@@ -55,19 +55,40 @@ class SessionToolGroupViewModel
             observation =
                 viewModelScope.launch {
                     messageRepository.observeMessages(route.sessionId, route.transcriptWorktree).collect { update ->
-                        if (update !is MessageListUpdate.Messages) return@collect
-                        messages = update.messages
-                        val members = SessionToolGroupMembers.resolve(route, update.messages)
-                        _members.value =
-                            when {
-                                members != null -> SessionToolGroupMembersState.Ready(members)
-                                // A cached first paint can predate the group; wait for the live load.
-                                update.isFromCache -> _members.value
-                                else -> SessionToolGroupMembersState.Gone
-                            }
+                        _members.value = next(route, update, _members.value)
                     }
                 }
         }
+
+        private fun next(
+            route: SessionToolGroup,
+            update: MessageListUpdate,
+            current: SessionToolGroupMembersState,
+        ): SessionToolGroupMembersState {
+            if (update is MessageListUpdate.Messages) messages = update.messages
+            val members = SessionToolGroupMembers.resolve(route, messages)
+            return when (update) {
+                is MessageListUpdate.Messages ->
+                    when {
+                        !update.isFromCache -> members.readyOrGone()
+                        // A cached first paint keeps only the newest messages that fit its budget,
+                        // so it can hold part of a group or predate it: only a whole group paints
+                        // from cache; otherwise wait for the live load.
+                        members != null && members.size == route.memberBlockIDs.size ->
+                            SessionToolGroupMembersState.Ready(members)
+                        else -> current
+                    }
+                // The live load confirmed the cached frame is current: settle on what it holds.
+                is MessageListUpdate.CacheSyncConfirmed -> members.readyOrGone()
+                // Without a live load, show what the cache holds rather than wait forever, or go
+                // back when it holds none of the group.
+                is MessageListUpdate.LoadFailed ->
+                    if (current == SessionToolGroupMembersState.Loading) members.readyOrGone() else current
+            }
+        }
+
+        private fun List<SessionChatTimelineBlock.ToolCard>?.readyOrGone(): SessionToolGroupMembersState =
+            this?.let(SessionToolGroupMembersState::Ready) ?: SessionToolGroupMembersState.Gone
 
         /** The detail sheet [card] opens, built now from its tool part. Null once the part is gone. */
         internal fun toolDetail(card: SessionChatTimelineBlock.ToolCard): SessionChatToolDetailTarget? =

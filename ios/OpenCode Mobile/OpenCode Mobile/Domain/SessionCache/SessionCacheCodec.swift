@@ -51,10 +51,12 @@ nonisolated enum SessionCacheCodec {
     /// is stored as metadata only (no data URL, no thumbnail bytes).
     ///
     /// Encodes one message at a time, newest first, and keeps the newest messages whose JSON fits
-    /// in `budgetBytes` (always the newest one), so no flush builds the whole transcript as one
-    /// block (#1033). Kept messages are whole: nothing inside a message is trimmed, so a cached
-    /// first paint never shows a cut output as the complete one. `onMessageEncoded` sees each
-    /// message's JSON size, for tests.
+    /// in `budgetBytes`, so no flush builds the whole transcript as one block (#1033). A message
+    /// whose text alone is over what is left is not encoded at all, so one huge tool output or
+    /// write does not build that block either; when the newest message does not fit, the timeline
+    /// keeps no messages, which a seed reads as a miss. Kept messages are whole: nothing inside a
+    /// message is trimmed, so a cached first paint never shows a cut output as the complete one.
+    /// `onMessageEncoded` sees each encoded message's JSON size, for tests.
     static func encodeMessages(
         _ messages: [Message],
         thumbnailImageIDs: Set<String> = [],
@@ -64,9 +66,10 @@ nonisolated enum SessionCacheCodec {
         var kept: [Data] = []
         var keptBytes = 0
         for message in messages.reversed() {
+            if keptBytes + message.minEncodedBytes + 1 > budgetBytes { break }
             let piece = try encoder.encode(message.toCachePayload(thumbnailImageIDs: thumbnailImageIDs))
             onMessageEncoded(piece.count)
-            if !kept.isEmpty, keptBytes + piece.count + 1 > budgetBytes { break }
+            if keptBytes + piece.count + 1 > budgetBytes { break }
             kept.append(piece)
             keptBytes += piece.count + 1
         }
@@ -1020,6 +1023,44 @@ private extension CachedMessagePartPayload {
             return .notice(TimelineNotice(id: id, kind: kind))
         default:
             return nil
+        }
+    }
+}
+
+private extension Message {
+    /// A floor on this message's encoded JSON size, read from its large text fields without
+    /// encoding it: JSON escaping only adds to each string's UTF-8 bytes.
+    var minEncodedBytes: Int {
+        var bytes = text.utf8.count + (failure?.message.utf8.count ?? 0) + (failure?.providerBody?.utf8.count ?? 0)
+        for part in parts {
+            switch part {
+            case let .text(text):
+                bytes += text.text.utf8.count
+            case let .tool(tool):
+                bytes += (tool.output?.utf8.count ?? 0) + (tool.error?.utf8.count ?? 0) + (tool.title?.utf8.count ?? 0)
+                bytes += Self.minEncodedBytes(tool.input) + Self.minEncodedBytes(tool.metadata)
+            case let .reasoning(reasoning):
+                bytes += reasoning.text.utf8.count
+            case let .compaction(compaction):
+                bytes += compaction.summary?.utf8.count ?? 0
+            case .file, .notice:
+                break
+            }
+        }
+        return bytes
+    }
+
+    static func minEncodedBytes(_ object: [String: AnyCodable]?) -> Int {
+        guard let object else { return 0 }
+        return object.reduce(0) { $0 + $1.key.utf8.count + minEncodedBytes($1.value) }
+    }
+
+    static func minEncodedBytes(_ value: AnyCodable) -> Int {
+        switch value {
+        case let .string(string): string.utf8.count
+        case let .dictionary(object): minEncodedBytes(object)
+        case let .array(array): array.reduce(0) { $0 + minEncodedBytes($1) }
+        case .int, .double, .bool, .null: 0
         }
     }
 }

@@ -114,6 +114,10 @@ fun SettingsScreen(
     artifactActions: ArtifactActions? = null,
     /** The computer's home folder, for shorter paths in the artifacts sheet. */
     serverHome: String? = null,
+    /** Dictation › Speech model's value: the model's name, from the model list. */
+    speechModelName: String? = null,
+    /** The speech model sheet (app-plan.md, Speech line and dial › After ready), which Speech model opens. */
+    speechSheet: (@Composable BoxScope.(visible: Boolean, onDone: () -> Unit) -> Unit)? = null,
 ) {
     var sheet by remember { mutableStateOf<SettingsSheet?>(null) }
     var working by remember { mutableStateOf(false) }
@@ -153,10 +157,9 @@ fun SettingsScreen(
                 Row(
                     HexIcons.mic,
                     stringResource(R.string.settings_speech_model),
-                    stringResource(R.string.settings_speech_model_value),
+                    speechModelName,
                     stringResource(R.string.settings_speech_model_sub),
-                    placeholder,
-                    soon,
+                    { if (speechSheet != null) sheet = SettingsSheet.Speech },
                 )
                 Row(
                     HexIcons.book,
@@ -273,6 +276,7 @@ fun SettingsScreen(
             danger = true,
             loading = working && sheet == SettingsSheet.Forget,
         )
+        speechSheet?.invoke(this, sheet == SettingsSheet.Speech) { sheet = null }
         if (artifactActions != null) {
             ArtifactSheets(
                 artifacts,
@@ -353,7 +357,7 @@ private fun ArtifactsRow(
 }
 
 /** The sheet open over Settings. */
-private enum class SettingsSheet { NewSession, Server, Forget }
+private enum class SettingsSheet { NewSession, Server, Forget, Speech }
 
 /**
  * Server details (app-plan.md, Settings and finish (M6) › Server): the name, "<hostname> · OpenCode <version>", every

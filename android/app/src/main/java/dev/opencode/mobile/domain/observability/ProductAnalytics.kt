@@ -301,6 +301,7 @@ object ProductAnalytics {
         const val MESSAGE_ACTIONS_SELECT_TEXT = "message_actions_select_text"
         const val SELECT_TEXT_DISMISS = "select_text_dismiss"
         const val SELECT_TEXT_COPY_ALL = "select_text_copy_all"
+        const val CHAT_SHOW_FULL_MESSAGE = "chat_show_full_message"
         const val CHAT_STEER_PENDING_PROMPT = "chat_steer_pending_prompt"
         const val CHAT_QUEUE_PENDING_PROMPT = "chat_queue_pending_prompt"
         const val CHAT_CANCEL_PENDING_PROMPT = "chat_cancel_pending_prompt"

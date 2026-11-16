@@ -107,6 +107,7 @@ import dev.opencode.hexcode.designsystem.components.HexChunkItem
 import dev.opencode.hexcode.designsystem.components.HexChunkKind
 import dev.opencode.hexcode.designsystem.components.HexChunkRow
 import dev.opencode.hexcode.designsystem.components.HexChunkRowState
+import dev.opencode.hexcode.designsystem.components.HexDialSize
 import dev.opencode.hexcode.designsystem.components.HexDot
 import dev.opencode.hexcode.designsystem.components.HexDotTone
 import dev.opencode.hexcode.designsystem.components.HexFileThumbnail
@@ -124,6 +125,7 @@ import dev.opencode.hexcode.designsystem.components.HexSegmented
 import dev.opencode.hexcode.designsystem.components.HexSegmentedSize
 import dev.opencode.hexcode.designsystem.components.HexSheet
 import dev.opencode.hexcode.designsystem.components.HexSheetAction
+import dev.opencode.hexcode.designsystem.components.HexSpeechDial
 import dev.opencode.hexcode.designsystem.components.HexSpinner
 import dev.opencode.hexcode.designsystem.components.HexStopEdge
 import dev.opencode.hexcode.designsystem.components.HexStopWarning
@@ -228,6 +230,7 @@ fun HomeScreen(
             val covered =
                 attachOpen ||
                     state.detailsOpen ||
+                    state.speechSheet ||
                     state.needs != null ||
                     state.goalSheet != null ||
                     browser != null ||
@@ -333,19 +336,37 @@ fun HomeScreen(
                             if (ask != null) AskMessageView(ask, vm, Modifier.padding(start = edge, end = edge, top = 10.dp))
                         }
                         // The waiting line's height is always held, so the card above doesn't move when it fills in
-                        // (app-plan.md, Home › Cold start).
-                        Box(Modifier.padding(start = edge, end = edge, top = 10.dp)) {
+                        // (app-plan.md, Home › Cold start). The speech line takes the same slot, and sits directly above
+                        // the waiting line when both show (Speech line and dial); it's hidden while a take records and
+                        // while there's a draft, whose label line then carries it.
+                        Box(Modifier.padding(start = edge, end = edge, top = 10.dp), contentAlignment = Alignment.BottomStart) {
                             WaitingLine(1, idle = false, onClick = {}, modifier = Modifier.alpha(0f).clearAndSetSemantics {})
-                            androidx.compose.animation.AnimatedVisibility(
-                                state.draft.isEmpty && today.waiting > 0,
-                                enter = fadeIn(HexTheme.motion.fade()),
-                                exit = fadeOut(HexTheme.motion.fade()),
-                            ) {
-                                WaitingLine(
-                                    today.waiting.coerceAtLeast(1),
-                                    idle = today.busySince == null && today.pendingInput == null,
-                                    onClick = vm::openDetails,
-                                )
+                            val waitingShown = state.draft.isEmpty && today.waiting > 0
+                            Column {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    state.speechLine != SpeechLineShow.Hidden && state.draft.isEmpty && !state.recording,
+                                    enter = fadeIn(HexTheme.motion.fade()),
+                                    exit = fadeOut(HexTheme.motion.fade()),
+                                ) {
+                                    SpeechLine(
+                                        state.speech,
+                                        ready = state.speechLine == SpeechLineShow.Ready,
+                                        stopped = state.speechModel?.stopped,
+                                        onClick = vm::openSpeechSheet,
+                                        modifier = Modifier.padding(bottom = if (waitingShown) 8.dp else 0.dp),
+                                    )
+                                }
+                                androidx.compose.animation.AnimatedVisibility(
+                                    waitingShown,
+                                    enter = fadeIn(HexTheme.motion.fade()),
+                                    exit = fadeOut(HexTheme.motion.fade()),
+                                ) {
+                                    WaitingLine(
+                                        today.waiting.coerceAtLeast(1),
+                                        idle = today.busySince == null && today.pendingInput == null,
+                                        onClick = vm::openDetails,
+                                    )
+                                }
                             }
                         }
                         // The sample's suggestion, a take with no speech model or microphone, while the agent is idle and
@@ -603,6 +624,15 @@ fun HomeScreen(
                 onClose = { attachOpen = false },
             )
             DetailsSheet(state, vm)
+            SpeechModelSheet(
+                visible = state.speechSheet,
+                speech = state.speech,
+                model = state.speechModel,
+                draft = state.draft,
+                onDone = vm::closeSpeechSheet,
+                onTryNow = vm::speechTryNow,
+                onTryAgain = vm::speechTryAgain,
+            )
             DraftReader(reader, state, vm, onClose = { reader = null })
             NeedsSheets(state, vm, micReady)
             GoalSheetView(state, vm, micReady)
@@ -934,7 +964,7 @@ private fun ColumnScope.DraftView(
     onReadAll: () -> Unit,
 ) {
     val draft = state.draft
-    DraftLabel(state)
+    DraftLabel(state, onSpeech = vm::openSpeechSheet)
     if (draft.images.isNotEmpty() || draft.files.isNotEmpty()) {
         AttachRow(draft, state.seesImages, state.imageInput?.model.orEmpty(), vm::removeImage, vm::removeFile)
     }
@@ -1124,9 +1154,28 @@ private fun DraftWindow(
     }
 }
 
-/** "● Recording 0:04", "Transcribing on this phone…", or "Draft · 2 chunks · 0:12". */
+/** "Speech model · 120 of 640 MB", then "· 2 min left" (or "under a minute left") once the speed is known. */
 @Composable
-private fun DraftLabel(state: HomeUiState) {
+private fun speechDownloading(label: DraftLabel.SpeechDownloading?): String {
+    val done = label?.doneMb ?: 0
+    val total = label?.totalMb ?: 0
+    return when (val minutes = label?.minutesLeft) {
+        null -> stringResource(R.string.home_speech_downloading, done, total)
+        0L -> stringResource(R.string.home_speech_downloading_soon, done, total)
+        else -> stringResource(R.string.home_speech_downloading_left, done, total, minutes)
+    }
+}
+
+/**
+ * "● Recording 0:04", "Transcribing on this phone…", or "Draft · 2 chunks · 0:12". While a take waits for the speech
+ * model, the dial at 14 pt in front of shorter words (app-plan.md, Speech line and dial › Draft label); tapping it
+ * opens the speech model sheet ([onSpeech]).
+ */
+@Composable
+private fun DraftLabel(
+    state: HomeUiState,
+    onSpeech: () -> Unit,
+) {
     val draft = state.draft
     val color = HexTheme.colors.text3
     val style = HexTheme.type.caption
@@ -1138,17 +1187,31 @@ private fun DraftLabel(state: HomeUiState) {
         }
     }
     val label = DraftLabel.of(draft, state.speech)
+    val open = stringResource(R.string.home_speech_a11y_open)
     AnimatedContent(
-        // The download's share changes without animating the whole line.
-        targetState = if (label is DraftLabel.SpeechDownloading) DraftLabel.SpeechDownloading(0) else label,
+        // The download's progress and the retry's countdown change without animating the whole line.
+        targetState =
+            when (label) {
+                is DraftLabel.SpeechDownloading -> DraftLabel.SpeechDownloading(0, 0)
+                is DraftLabel.SpeechRetrying -> DraftLabel.SpeechRetrying(1)
+                else -> label
+            },
         transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) },
         label = "draft-label",
     ) { kind ->
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.heightIn(min = 18.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            modifier =
+                Modifier
+                    .heightIn(min = 18.dp)
+                    .then(if (kind.isSpeech) Modifier.clickable(onClickLabel = open, role = Role.Button, onClick = onSpeech) else Modifier)
+                    .semantics { liveRegion = LiveRegionMode.Polite },
         ) {
+            if (kind.isSpeech) {
+                val dial = SpeechDialLook.of(kind, state.speech, state.speechModel?.stopped)
+                HexSpeechDial(dial.mode, dial.progress, HexDialSize.Label)
+            }
             when (kind) {
                 DraftLabel.Recording -> {
                     HexDot(HexDotTone.Red)
@@ -1164,17 +1227,16 @@ private fun DraftLabel(state: HomeUiState) {
                     HexSpinner(size = HexTheme.size.iconSmall)
                     Text(stringResource(R.string.draft_transcribing), style = style, color = color)
                 }
-                DraftLabel.SpeechLoading -> {
-                    HexSpinner(size = HexTheme.size.iconSmall)
-                    Text(stringResource(R.string.home_speech_loading), style = style, color = color)
-                }
-                is DraftLabel.SpeechDownloading -> {
-                    HexSpinner(size = HexTheme.size.iconSmall)
-                    val percent = (label as? DraftLabel.SpeechDownloading)?.percent ?: 0
-                    Text(stringResource(R.string.home_speech_downloading, percent), style = style, color = color)
-                }
+                DraftLabel.SpeechLoading ->
+                    Text(stringResource(R.string.home_speech_loading), style = style, color = color, maxLines = 1)
+                DraftLabel.SpeechNotOnPhone ->
+                    Text(stringResource(R.string.home_speech_not_on_phone), style = style, color = color, maxLines = 1)
+                is DraftLabel.SpeechDownloading ->
+                    Text(speechDownloading(label as? DraftLabel.SpeechDownloading), style = style, color = color, maxLines = 1)
+                is DraftLabel.SpeechRetrying ->
+                    Text(retrying((label as? DraftLabel.SpeechRetrying)?.seconds ?: 0), style = style, color = color, maxLines = 1)
                 DraftLabel.SpeechFailed ->
-                    Text(stringResource(R.string.home_speech_failed), style = style, color = HexTheme.colors.amber)
+                    Text(stringResource(R.string.home_speech_failed), style = style, color = HexTheme.colors.red, maxLines = 1)
                 DraftLabel.Summary -> {
                     // What Send will do, at the end of the line: queue, steer (amber) or send now.
                     val steer = state.busy && state.sendMode == SendMode.Now
@@ -1598,7 +1660,7 @@ private fun Modifier.bleed(each: Dp): Modifier =
     }
 
 /** 0:04, 1:12. */
-private fun clock(ms: Long): String {
+internal fun clock(ms: Long): String {
     val seconds = (ms.coerceAtLeast(0) / 1000).toInt()
     return "%d:%02d".format(seconds / 60, seconds % 60)
 }

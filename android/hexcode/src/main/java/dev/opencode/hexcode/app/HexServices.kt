@@ -47,7 +47,6 @@ import dev.opencode.mobile.network.KtorClientFactory
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.network.ServerConnection
-import dev.opencode.voiceengine.NoSpeechException
 import dev.opencode.voiceengine.VoiceEngine
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -132,20 +131,29 @@ class HexServices(
 
     /**
      * The speech model's first load in this process (app-plan.md, Dictation › Load): about 1 s after the first frame
-     * ([DeferredLoad.afterFirstFrame], from the activity), or at once when the talk button is pressed before then
-     * ([DeferredLoad.now]), so it doesn't compete with start-up.
+     * ([DeferredLoad.afterFirstFrame], from the activity), so it doesn't compete with start-up. A talk press before
+     * then loads it at once ([loadSpeechNow]).
      */
     val speechLaunch = DeferredLoad(appScope, ColdStart.SPEECH_DELAY_MS, ::loadSpeechAtLaunch)
 
     /**
      * Loads the speech model, once per process, when it's on the phone or first run is done ([speechLaunch] calls
-     * it). Before that, first run's scan step starts the download ([loadSpeech]).
+     * it). Before that, first run's scan step, Try a sample session or a talk press starts the download ([loadSpeech]).
      */
     private fun loadSpeechAtLaunch() {
         appScope.launch {
             val installed = voice.store.isInstalled(voice.activeModel.value)
             if (installed || settings.current().firstRunDone) loadSpeech()
         }
+    }
+
+    /**
+     * The talk button was pressed: the model downloads if needed and loads now, whatever first run's state. A take is
+     * waiting for it, as in Try a sample session on a fresh install, which skips first run's scan step.
+     */
+    fun loadSpeechNow() {
+        speechLaunch.now()
+        loadSpeech()
     }
 
     /** Downloads the speech model if needed and loads it, once per process; then warms it up. */
@@ -158,23 +166,21 @@ class HexServices(
         appScope.launch { prepareSpeech() }
     }
 
-    /** Loads the model, then turns half a second of silence into text so the first real take is as fast as the rest. */
+    /**
+     * Downloads the model if needed, loads it, and warms it up with half a second of silence, so the first real take is
+     * as fast as the rest ([VoiceEngine.prepare]: the model counts as ready after the warm-up).
+     */
     private suspend fun prepareSpeech() {
         val started = SystemClock.elapsedRealtime()
         voice.prepare()
-        val loaded = SystemClock.elapsedRealtime()
         if (voice.modelState.value != VoiceEngine.ModelState.Ready) {
-            Log.w(TalkLog.TAG, "speech model didn't load after ${loaded - started} ms: ${voice.modelState.value}")
-            return
+            Log.w(
+                TalkLog.TAG,
+                "speech model didn't get ready after ${SystemClock.elapsedRealtime() - started} ms: ${voice.modelState.value}",
+            )
+        } else {
+            Log.i(TalkLog.TAG, "speech model ready in ${SystemClock.elapsedRealtime() - started} ms")
         }
-        try {
-            voice.transcribe(FloatArray(VoiceEngine.SAMPLE_RATE / 2))
-        } catch (_: NoSpeechException) {
-            // Silence has no text; the engine has run once, which is the point.
-        } catch (error: Exception) {
-            Log.w(TalkLog.TAG, "speech warm-up failed", error)
-        }
-        Log.i(TalkLog.TAG, "speech model loaded in ${loaded - started} ms, warmed up in ${SystemClock.elapsedRealtime() - loaded} ms")
     }
 
     /**
@@ -192,6 +198,8 @@ class HexServices(
      * computer, project and model laid over what's saved. Nothing of it is written; [leavePlayground] ends it.
      */
     fun openPlayground() {
+        // The sample is for talking to: its first take shouldn't wait for a download that hasn't started.
+        loadSpeech()
         playgroundVisit += 1
         sampleSession.value = TodaySessionDemo.Playground
     }

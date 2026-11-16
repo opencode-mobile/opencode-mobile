@@ -63,7 +63,8 @@ nonisolated final class PreparedHistoryCache: @unchecked Sendable {
     func setMessages(_ messagesByID: [String: DisplayMessage], for key: PreparedHistoryCacheKey) {
         lock.lock()
         defer { lock.unlock() }
-        let cost = messagesByID.values.reduce(0) { $0 + $1.text.count }
+        // UTF-8 length is O(1); a grapheme count walks every text on every commit (#1043).
+        let cost = messagesByID.values.reduce(0) { $0 + $1.text.utf8.count }
         entries[key] = Entry(
             messagesByID: messagesByID,
             characterCost: cost,

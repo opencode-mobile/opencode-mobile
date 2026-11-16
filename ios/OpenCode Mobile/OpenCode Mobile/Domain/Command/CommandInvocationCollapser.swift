@@ -90,7 +90,7 @@ enum CommandInvocationCollapser {
     }
 
     static func collapse(text: String, commands: [ServerCommand]) -> Display? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = text.trimmingWhitespaceAndNewlines
         guard !trimmed.isEmpty, !commands.isEmpty else { return nil }
 
         if let slash = fromSlashForm(trimmed, commandNames: Set(commands.map(\.name))) {
