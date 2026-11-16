@@ -27,6 +27,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -82,10 +85,58 @@ data class OpenCodeOutgoingMessageLabel(
     val icon: ImageVector? = null,
 )
 
+private const val OutgoingTruncationRowLayoutId = "truncation-row"
+
+/**
+ * A cut text and its truncation row at one width: the wider of the text and the row's natural
+ * width, never more than offered, both at the trailing edge, like an uncut bubble hugs its text
+ * (the row alone would fill the full width). The text is measured once and never asked for an
+ * intrinsic size, which rendered markdown (a table) cannot give. Uncut content goes straight into
+ * the bubble's column.
+ */
+@Composable
+private fun OutgoingLimitedTextLayout(
+    isLimited: Boolean,
+    content: @Composable () -> Unit,
+) {
+    if (!isLimited) {
+        content()
+        return
+    }
+    Layout(content = content) { measurables, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val rowMeasurable = measurables.firstOrNull { it.layoutId == OutgoingTruncationRowLayoutId }
+        val texts = measurables.filter { it !== rowMeasurable }.map { it.measure(loose) }
+        val textWidth = texts.maxOfOrNull { it.width } ?: 0
+        val rowNaturalWidth = rowMeasurable?.maxIntrinsicWidth(Constraints.Infinity) ?: 0
+        val width = maxOf(textWidth, minOf(rowNaturalWidth, constraints.maxWidth)).coerceIn(constraints.minWidth, constraints.maxWidth)
+        val row = rowMeasurable?.measure(Constraints.fixedWidth(width))
+        val height = texts.sumOf { it.height } + (row?.height ?: 0)
+        layout(width, height) {
+            var y = 0
+            texts.forEach { text ->
+                text.place(width - text.width, y)
+                y += text.height
+            }
+            row?.place(0, y)
+        }
+    }
+}
+
+/** A text cut to the part the timeline shows; the bubble ends with a row that opens the rest. */
+data class OpenCodeOutgoingMessageLimit(
+    val shownCharacters: Int,
+    val totalCharacters: Int,
+    /** Opens the whole text. Null: the row is not drawn. */
+    val onShowFull: (() -> Unit)?,
+)
+
 sealed interface OpenCodeOutgoingMessageContent {
+    /** [limit]: [text] is the shown part of a longer message. */
     data class Text(
         val text: String,
         val renderedMarkdown: MarkdownDocument? = null,
+        val limit: OpenCodeOutgoingMessageLimit? = null,
     ) : OpenCodeOutgoingMessageContent
 
     /** [id] names this attachment to [OpenCodeOutgoingMessage]'s `onImageClick`. */
@@ -201,36 +252,56 @@ fun OpenCodeOutgoingMessage(
                                         ),
                                     horizontalAlignment = Alignment.End,
                                 ) {
-                                    if (part.renderedMarkdown != null) {
-                                        OpenCodeRenderedMarkdown(
-                                            document = part.renderedMarkdown,
-                                            variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
-                                            modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
-                                        )
-                                    } else {
-                                        val highlights = commandTokenHighlightRanges(part.text)
-                                        val highlightColor = openCodeColor("syntax-type")
-                                        Text(
-                                            text =
-                                                if (highlights.isEmpty()) {
-                                                    AnnotatedString(part.text)
-                                                } else {
-                                                    buildAnnotatedString {
-                                                        append(part.text)
-                                                        highlights.forEach { highlight ->
-                                                            addStyle(
-                                                                SpanStyle(color = highlightColor),
-                                                                highlight.first,
-                                                                highlight.last + 1,
-                                                            )
+                                    OutgoingLimitedTextLayout(isLimited = part.limit != null) {
+                                        if (part.limit != null && part.text.isEmpty()) {
+                                            // Nothing shown before the cut: the bubble holds the row only.
+                                        } else if (part.renderedMarkdown != null) {
+                                            OpenCodeRenderedMarkdown(
+                                                document = part.renderedMarkdown,
+                                                variant = OpenCodeRenderedMarkdownVariant.OutgoingMessage,
+                                                modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
+                                            )
+                                        } else {
+                                            val highlights = commandTokenHighlightRanges(part.text)
+                                            val highlightColor = openCodeColor("syntax-type")
+                                            Text(
+                                                text =
+                                                    if (highlights.isEmpty()) {
+                                                        AnnotatedString(part.text)
+                                                    } else {
+                                                        buildAnnotatedString {
+                                                            append(part.text)
+                                                            highlights.forEach { highlight ->
+                                                                addStyle(
+                                                                    SpanStyle(color = highlightColor),
+                                                                    highlight.first,
+                                                                    highlight.last + 1,
+                                                                )
+                                                            }
                                                         }
-                                                    }
-                                                },
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = bubbleTextColor,
-                                            overflow = TextOverflow.Clip,
-                                            modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
-                                        )
+                                                    },
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = bubbleTextColor,
+                                                overflow = TextOverflow.Clip,
+                                                modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
+                                            )
+                                        }
+                                        val onShowFull = part.limit?.onShowFull
+                                        if (part.limit != null && onShowFull != null) {
+                                            OpenCodeTruncationRow(
+                                                variant =
+                                                    OpenCodeTruncationRowVariant.FullMessage(
+                                                        shownCharacters = part.limit.shownCharacters,
+                                                        totalCharacters = part.limit.totalCharacters,
+                                                    ),
+                                                onClick = onShowFull,
+                                                modifier =
+                                                    Modifier
+                                                        .layoutId(OutgoingTruncationRowLayoutId)
+                                                        .widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2)
+                                                        .padding(top = if (part.text.isEmpty()) 0.dp else 8.dp),
+                                            )
+                                        }
                                     }
                                 }
                             }

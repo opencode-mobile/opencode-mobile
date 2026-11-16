@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageTextLimit
 import dev.opencode.mobile.domain.message.PresentationBlockId
 import dev.opencode.mobile.domain.message.TimelineSegment
 import dev.opencode.mobile.domain.message.TimelineSegments
@@ -56,6 +57,12 @@ import dev.opencode.mobile.domain.message.writeContent
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
 
+/** How much of a limited user message the timeline shows. */
+data class SessionChatTextLimit(
+    val shownCharacters: Int,
+    val totalCharacters: Int,
+)
+
 /**
  * Session Chat presentation units inside one message timeline item.
  * Built from structured parts with hide rules and lightweight tool chrome.
@@ -68,6 +75,11 @@ sealed class SessionChatTimelineBlock {
         override val blockID: String,
         val text: String,
         val renderedMarkdown: MarkdownDocument? = null,
+        /**
+         * Set on a user's own message too long to lay out in full (#1043): [text] is the shown
+         * part, and the message keeps the whole text for copy and Select text.
+         */
+        val limit: SessionChatTextLimit? = null,
     ) : SessionChatTimelineBlock()
 
     data class Attachment(
@@ -337,11 +349,14 @@ sealed class SessionChatTimelineBlock {
                 else -> true
             }
 
-    /** Narration a block carries for message-level markdown: text or a paragraph with text. */
+    /**
+     * Narration a block carries for message-level markdown: text or a paragraph with text. A
+     * cut user text has none, so the row keeps the whole message text and no markdown.
+     */
     val markdownText: String?
         get() =
             when (this) {
-                is Text -> text
+                is Text -> text.takeIf { limit == null }
                 is StepParagraph -> text
                 else -> null
             }
@@ -1687,12 +1702,54 @@ object SessionChatTimelineBlocks {
                 stepRail = stepRail,
                 activityCard = activityCard,
             )
-        return collapseCommandInvocations(
-            role = message.role,
-            blocks = admitPromptSkills(message.role, built, message.promptSkills, commands),
-            commands = commands,
-            skillMentions = skillMentions(message.promptSkills, commands),
-        )
+        val collapsed =
+            collapseCommandInvocations(
+                role = message.role,
+                blocks = admitPromptSkills(message.role, built, message.promptSkills, commands),
+                commands = commands,
+                skillMentions = skillMentions(message.promptSkills, commands),
+            )
+        return limitUserText(message.role, collapsed)
+    }
+
+    /**
+     * Puts [document], parsed from the shown part of [messageText] (`Message.markdownSourceText`), on the
+     * sole cut user text when that text is the same shown part, so a cut bubble renders like an
+     * uncut one up to the cut (#1043). Any other blocks are returned as they are.
+     */
+    fun attachLimitedTextMarkdown(
+        blocks: List<SessionChatTimelineBlock>,
+        document: MarkdownDocument?,
+        messageText: String,
+    ): List<SessionChatTimelineBlock> {
+        if (document == null) return blocks
+        if (blocks.count { it is SessionChatTimelineBlock.Text } != 1) return blocks
+        val index = blocks.indexOfFirst { it is SessionChatTimelineBlock.Text && it.limit != null }
+        if (index < 0) return blocks
+        val block = blocks[index] as SessionChatTimelineBlock.Text
+        if (block.renderedMarkdown != null || MessageTextLimit.cut(messageText)?.visibleText != block.text) return blocks
+        return blocks.toMutableList().also { it[index] = block.copy(renderedMarkdown = document) }
+    }
+
+    /**
+     * Cuts each user text block that is too long to lay out ([MessageTextLimit]) to the part the
+     * timeline shows, so the row never lays out, measures or parses the rest (#1043). Assistant
+     * and every other role keep their text.
+     */
+    fun limitUserText(
+        role: MessageRole,
+        blocks: List<SessionChatTimelineBlock>,
+    ): List<SessionChatTimelineBlock> {
+        if (role != MessageRole.User) return blocks
+        return blocks.map { block ->
+            if (block !is SessionChatTimelineBlock.Text || block.limit != null) return@map block
+            val cut = MessageTextLimit.cut(block.text) ?: return@map block
+            block.copy(
+                text = cut.visibleText,
+                renderedMarkdown = null,
+                limit = SessionChatTextLimit(shownCharacters = cut.shownCharacters, totalCharacters = block.text.length),
+            )
+        }
     }
 
     /**

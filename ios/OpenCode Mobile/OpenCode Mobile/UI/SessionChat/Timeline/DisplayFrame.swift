@@ -14,6 +14,22 @@ nonisolated struct ContentRevision: Hashable, Sendable, Equatable {
     }
 }
 
+nonisolated extension ContentRevision {
+    /// A row's revision. A cut user message (#1043) is neither hashed nor counted whole: it does
+    /// not change once sent, so its shown parts and its whole UTF-8 length (O(1)) stand for it.
+    static func of(_ text: String, blocks: [SessionChatTimelineBlock]) -> ContentRevision {
+        var shown: [String] = []
+        for case .limitedText(_, let part, _) in blocks {
+            shown.append(part)
+        }
+        guard !shown.isEmpty else { return of(text) }
+        return ContentRevision(
+            textHash: stableMarkdownSourceHash(shown.joined(separator: "\u{0}")),
+            textLength: text.utf8.count
+        )
+    }
+}
+
 /// One message inside an internal display frame, with presentation blocks.
 nonisolated struct DisplayMessageBody: Sendable {
     let message: Message
@@ -173,6 +189,19 @@ nonisolated enum DisplayFrameBuilder {
         blocks: [SessionChatTimelineBlock]
     ) -> NativeMarkdownDocument? {
         guard let markdown else { return nil }
+        var limitedTexts: [String] = []
+        for case .limitedText(_, let text, _) in blocks {
+            limitedTexts.append(text)
+        }
+        if !limitedTexts.isEmpty {
+            // A cut user message's document is parsed from its shown part (#1043): it fits only
+            // a sole text that is that same shown part.
+            guard limitedTexts.count == 1,
+                  !blocks.contains(where: { $0.textContent != nil }),
+                  MessageTextLimit.cut(message.text)?.visibleText == limitedTexts[0]
+            else { return nil }
+            return markdown
+        }
         let texts = blocks.compactMap { $0.textContent?.text }
         guard texts.count == 1, let text = texts.first else { return markdown }
         return isCollapsedAwayFromMessageText(message: message, soleText: text) ? nil : markdown

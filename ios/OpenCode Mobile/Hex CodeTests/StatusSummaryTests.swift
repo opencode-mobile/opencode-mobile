@@ -374,6 +374,28 @@ struct StatusSummaryModelTests {
         }
         #expect(card.now == "New session. Nothing running yet.")
     }
+
+    @Test func aSendJustAfterMidnightKeepsTheEmptyCardsDate() {
+        // 23:32 UTC on 15 November is 00:32 on the 16th in Berlin: the empty card was dated in UTC, the
+        // model's own zone is Berlin. "Working on your message." stays under the empty card's date.
+        let model = StatusSummaryModel(
+            timeZone: TimeZone(identifier: "Europe/Berlin")!,
+            now: { Date(timeIntervalSince1970: 1_794_785_520) }
+        )
+        model.showEmpty(timeZone: TimeZone(identifier: "UTC")!)
+        guard case let .card(empty) = model.summary else {
+            Issue.record("expected the empty card")
+            return
+        }
+        #expect(empty.title == "Sunday 15 November")
+        model.showWorkingOnMessage()
+        guard case let .card(sent) = model.summary else {
+            Issue.record("expected the sent card")
+            return
+        }
+        #expect(sent.now == "Working on your message.")
+        #expect(sent.title == "Sunday 15 November")
+    }
 }
 
 /// The Now sentence's size by length, then down to nowFit while the card doesn't fit (app plan,

@@ -1299,18 +1299,28 @@ class SessionChatComposer(
                             renderedMarkdown = optimisticMarkdown,
                             attachments = attachmentItems,
                             blocks =
-                                buildList {
-                                    if (display.text.isNotBlank()) {
-                                        add(
-                                            SessionChatTimelineBlock.Text(
-                                                blockID = PresentationBlockId.messageFallback(display.id),
-                                                text = display.text,
-                                                renderedMarkdown = optimisticMarkdown,
-                                            ),
-                                        )
-                                    }
-                                    addAll(SessionChatTimelineBlocks.attachmentBlocks(attachmentItems))
-                                },
+                                SessionChatTimelineBlocks.attachLimitedTextMarkdown(
+                                    blocks =
+                                        SessionChatTimelineBlocks.limitUserText(
+                                            role = dev.opencode.mobile.domain.message.MessageRole.User,
+                                            blocks =
+                                                buildList {
+                                                    if (display.text.isNotBlank()) {
+                                                        add(
+                                                            SessionChatTimelineBlock.Text(
+                                                                blockID = PresentationBlockId.messageFallback(display.id),
+                                                                text = display.text,
+                                                                renderedMarkdown = optimisticMarkdown,
+                                                            ),
+                                                        )
+                                                    }
+                                                    addAll(SessionChatTimelineBlocks.attachmentBlocks(attachmentItems))
+                                                },
+                                        ),
+                                    // The optimistic document is parsed from the same shown part (#1043).
+                                    document = optimisticMarkdown,
+                                    messageText = display.text,
+                                ),
                         ),
                     )
                 }

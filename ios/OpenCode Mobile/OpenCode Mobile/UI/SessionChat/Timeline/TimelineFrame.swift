@@ -144,7 +144,8 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
               lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash,
               lhs.renderedMarkdown?.renderTreeVersion == rhs.renderedMarkdown?.renderTreeVersion,
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
-              lhs.text.count == rhs.text.count,
+              // UTF-8 length is O(1); a grapheme count walks the whole text (#1043).
+              lhs.text.utf8.count == rhs.text.utf8.count,
               lhs.metadataLabel == rhs.metadataLabel,
               lhs.sentAtEpochMs == rhs.sentAtEpochMs,
               lhs.steer == rhs.steer,
@@ -634,7 +635,7 @@ extension TimelineRow {
             contextInputTokens: row.contextInputTokens,
             sentAtEpochMs: row.sentAtEpochMs,
             steer: row.steer,
-            contentRevision: ContentRevision.of(row.text),
+            contentRevision: ContentRevision.of(row.text, blocks: row.blocks),
             layoutRevision: layoutRevision
         )
     }

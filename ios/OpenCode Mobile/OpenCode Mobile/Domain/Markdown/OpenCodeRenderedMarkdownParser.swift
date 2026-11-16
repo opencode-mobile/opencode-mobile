@@ -14,6 +14,7 @@ enum OpenCodeRenderedMarkdownParser {
         variant: OpenCodeRenderedMarkdownVariant = .standalone,
         structureOnly: Bool = false
     ) -> NativeMarkdownDocument {
+        MarkdownInputProbe.record(.parse, markdown)
         do {
             let request = NativeMarkdownParseRequest(
                 markdown: markdown,

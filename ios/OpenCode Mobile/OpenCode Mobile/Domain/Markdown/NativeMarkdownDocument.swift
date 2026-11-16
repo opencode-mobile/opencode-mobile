@@ -12,7 +12,46 @@ enum OpenCodeRenderedMarkdownVariant: String, CaseIterable, Sendable {
 
 enum OpenCodeRenderedMarkdownDetector: Sendable {
     nonisolated static func shouldRender(_ text: String) -> Bool {
-        OpenCodeMarkdownDetector.shared.shouldRender(text: text)
+        MarkdownInputProbe.record(.detect, text)
+        return OpenCodeMarkdownDetector.shared.shouldRender(text: text)
+    }
+}
+
+/// Test seam: sees every text handed to the markdown detector and parser, so a test can check
+/// that the hidden part of a cut message never reaches them (#1043). Nothing observes outside
+/// tests.
+nonisolated enum MarkdownInputProbe {
+    enum Stage: Sendable {
+        case detect
+        case parse
+    }
+
+    typealias Observer = @Sendable (Stage, String) -> Void
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var observers: [UUID: Observer] = [:]
+
+    static func observe(_ observer: @escaping Observer) -> UUID {
+        let id = UUID()
+        lock.lock()
+        observers[id] = observer
+        lock.unlock()
+        return id
+    }
+
+    static func stopObserving(_ id: UUID) {
+        lock.lock()
+        observers[id] = nil
+        lock.unlock()
+    }
+
+    static func record(_ stage: Stage, _ text: String) {
+        lock.lock()
+        let current = observers.isEmpty ? [] : Array(observers.values)
+        lock.unlock()
+        for observer in current {
+            observer(stage, text)
+        }
     }
 }
 

@@ -41,13 +41,13 @@ nonisolated enum MessageSnapshotAuthority {
         for message in messages {
             partCount += message.parts.count
             if message.parts.isEmpty {
-                textCharacters += message.text.count
+                textCharacters += message.text.utf8.count
                 continue
             }
             for part in message.parts {
                 switch part {
                 case .text(let text):
-                    textCharacters += text.text.count
+                    textCharacters += text.text.utf8.count
                     if text.isStreaming {
                         streamingCount += 1
                     }
