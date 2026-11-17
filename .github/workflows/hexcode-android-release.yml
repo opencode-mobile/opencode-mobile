@@ -1,0 +1,189 @@
+name: Hex Code Android Release
+
+# Publishes Hex Code (hexcode/README.md) to the Play internal testing track. Promotion to
+# closed testing or production is a human step in Play Console. Test builds for the Firebase
+# tester group are hexcode-app-distribution.yml. Same runner, release environment and upload
+# key as android-release.yml; Hex Code has no Firebase SDK, so no google-services.json.
+#
+# Hex Code has no What's new sheet, so there is no release-notes.json gate here.
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Semantic version: MAJOR.MINOR.PATCH[-PRERELEASE]. Leave empty to use versionName in android/hexcode/build.gradle.kts."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hexcode-android-release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    # GitHub-hosted on purpose: a plain check with no secrets.
+    if: github.repository == 'opencode-mobile/opencode-mobile' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version_name }}
+        run: |
+          set -euo pipefail
+          version="$INPUT_VERSION"
+          if [[ -z "$version" ]]; then
+            version="$(
+              sed -nE 's/^[[:space:]]*versionName = .*"([0-9]+\.[0-9]+\.[0-9]+)"[[:space:]]*$/\1/p' android/hexcode/build.gradle.kts
+            )"
+          fi
+          version_pattern='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'
+          if [[ ! "$version" =~ $version_pattern ]]; then
+            echo "Version must match MAJOR.MINOR.PATCH[-PRERELEASE]. Got: '$version'" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  release:
+    if: github.repository == 'opencode-mobile/opencode-mobile' && github.ref == 'refs/heads/main'
+    needs: version
+    runs-on: [self-hosted, Linux, X64, android]
+    environment: android-release
+    defaults:
+      run:
+        working-directory: android
+    env:
+      ANDROID_VERSION_CODE: ${{ github.run_number }}
+      ANDROID_VERSION_NAME: ${{ needs.version.outputs.version }}
+      EXPECTED_UPLOAD_CERT_SHA256: 9E:FB:99:19:6B:2D:F6:56:FD:FA:1D:88:3D:33:00:7E:0F:E0:DA:28:AB:FF:A6:F8:BC:C3:3D:42:0F:CA:E1:37
+      AAB_PATH: hexcode/build/outputs/bundle/release/hexcode-release.aab
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$ANDROID_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
+            echo "GitHub run number did not produce a positive versionCode." >&2
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Install Android compile SDK 37
+        working-directory: .
+        run: ./scripts/ensure-android-platform.sh 37
+
+      - name: Ensure Android NDK and CMake for voice-engine
+        # :voice-engine builds a small native library (shared/voice-engine/adapter/android).
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_version="27.2.12479018"
+          cmake_version="3.31.6"
+          packages=()
+          if [[ ! -d "${ANDROID_HOME:-}/ndk/${ndk_version}" ]]; then
+            packages+=("ndk;${ndk_version}")
+          fi
+          if [[ ! -d "${ANDROID_HOME:-}/cmake/${cmake_version}" ]]; then
+            packages+=("cmake;${cmake_version}")
+          fi
+          if [[ ${#packages[@]} -eq 0 ]]; then
+            echo "NDK ${ndk_version} and CMake ${cmake_version} already installed."
+            exit 0
+          fi
+          sdkmanager_bin=""
+          if [[ -x "${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager" ]]; then
+            sdkmanager_bin="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          elif command -v sdkmanager >/dev/null 2>&1; then
+            sdkmanager_bin="$(command -v sdkmanager)"
+          else
+            echo "sdkmanager not found; cannot install ${packages[*]}." >&2
+            exit 1
+          fi
+          yes | "$sdkmanager_bin" "${packages[@]}"
+
+      - name: Prepare upload keystore
+        shell: bash
+        env:
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ANDROID_UPLOAD_KEYSTORE_BASE64:-}" ]]; then
+            echo "ANDROID_UPLOAD_KEYSTORE_BASE64 is required in the android-release environment." >&2
+            exit 1
+          fi
+          keystore_path="$RUNNER_TEMP/hexcode-upload.jks"
+          printf '%s' "$ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          chmod 600 "$keystore_path"
+          echo "ANDROID_UPLOAD_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+
+      - name: Build signed release bundle
+        env:
+          ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: ./gradlew :hexcode:bundleRelease --stacktrace
+
+      - name: Verify AAB signature
+        working-directory: .
+        run: |
+          .github/scripts/verify-android-aab-signature.sh \
+            "android/$AAB_PATH" \
+            "$EXPECTED_UPLOAD_CERT_SHA256"
+
+      - name: Publish to Play internal testing
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: dev.opencode.hexcode
+          releaseFiles: android/${{ env.AAB_PATH }}
+          tracks: internal
+          status: completed
+          releaseName: Hex Code ${{ env.ANDROID_VERSION_NAME }} (${{ github.run_number }})
+
+      - name: Remove temporary keystore
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/hexcode-upload.jks"
+
+  tag:
+    # Record the release: hexcode-android-v<version> points at the commit this run shipped.
+    # A rebuild of the same version moves the tag. The prefix keeps it out of the
+    # android-v* tags that release-notes.mjs reads for OpenCode Mobile.
+    needs: [version, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Tag the shipped commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: hexcode-android-v${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+            echo "Moved $TAG to $GITHUB_SHA"
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null
+            echo "Created $TAG at $GITHUB_SHA"
+          fi
+          echo "- Release tag: \`$TAG\` at \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
