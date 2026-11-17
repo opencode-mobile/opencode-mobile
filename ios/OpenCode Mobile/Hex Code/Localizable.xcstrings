@@ -444,6 +444,17 @@
         }
       }
     },
+    "app.privacy_policy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy policy"
+          }
+        }
+      }
+    },
     "artifacts.approval.from": {
       "extractionState": "manual",
       "localizations": {

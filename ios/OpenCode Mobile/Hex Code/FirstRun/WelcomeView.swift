@@ -5,6 +5,7 @@ import SwiftUI
 struct WelcomeView: View {
     let onScan: () -> Void
     var onSample: () -> Void = {}
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -52,11 +53,26 @@ struct WelcomeView: View {
                 .frame(maxWidth: .infinity)
                 .multilineTextAlignment(.center)
                 .padding(.top, 10)
+            privacyLink
                 .padding(.bottom, 6)
         }
         .padding(.horizontal, HexSpacing.screen)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .hexScreenBackground()
+    }
+
+    /// Settings is only reachable once paired, so first run links the privacy policy too. A quiet
+    /// text link, no Hex component draws one; it opens the system browser.
+    private var privacyLink: some View {
+        Button { openURL(HexPrivacyPolicy.url) } label: {
+            Text(LocalizedStringResource("app.privacy_policy", defaultValue: "Privacy policy"))
+                .hexFont(.footnote)
+                .foregroundStyle(HexColor.text2)
+                .underline()
+                .frame(maxWidth: .infinity, minHeight: HexSize.touch)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var howToConnect: some View {

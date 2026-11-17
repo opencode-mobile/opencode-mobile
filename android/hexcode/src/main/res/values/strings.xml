@@ -29,6 +29,8 @@
     <string name="welcome_scan">Scan the code</string>
     <string name="welcome_footer">Needs OpenCode 2.2.5+</string>
     <string name="welcome_sample">Try a sample session</string>
+    <!-- Welcome and Settings › App: opens Hex Code's privacy policy in the browser. -->
+    <string name="app_privacy_policy">Privacy policy</string>
 
     <!-- first run: scan and connect -->
     <string name="scan_point_title">Point at the code</string>
