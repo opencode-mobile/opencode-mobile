@@ -265,7 +265,7 @@ struct HexSectionLabel: View {
     }
 }
 
-/// A small bordered label: `experiment`, `default`, `in use`; the mono form is the `git` tag.
+/// A small bordered label: `default`, `in use`; the mono form is the `git` tag.
 struct HexBadge: View {
     let text: Text
     var mono = false

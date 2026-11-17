@@ -625,7 +625,7 @@ private fun AfterFirstRun(
                             services.sampleSession.value =
                                 sample.let { if (it == null) presets.first() else presets.getOrNull(presets.indexOf(it) + 1) }
                         },
-                        onDropStream = if (BuildConfig.DEBUG) homeModel::dropStream else null,
+                        onDropStream = homeModel::dropStream,
                         onBack = { page = Page.Home },
                         newSession =
                             prefs.project

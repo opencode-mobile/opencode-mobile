@@ -33,6 +33,8 @@ final class HexAppModel {
         self.defaults = defaults
         // Prepared images live only as long as their draft; any left from an earlier run go.
         ImagePreparer.emptyCache()
+        // So do takes a crash or a kill left before they were transcribed.
+        StaleTakes.removeInBackground()
         let voice = VoiceEngine()
         self.voice = voice
         speech = SpeechModel(voice: voice)

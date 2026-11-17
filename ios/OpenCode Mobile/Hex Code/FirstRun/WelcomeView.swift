@@ -11,13 +11,10 @@ struct WelcomeView: View {
             HexIconView(.mark, size: HexSize.mark)
                 .foregroundStyle(HexColor.text1)
                 .padding(.top, 40)
-            HStack(spacing: 10) {
-                Text(LocalizedStringResource("welcome.title", defaultValue: "Hex Code"))
-                    .hexFont(.display)
-                    .foregroundStyle(HexColor.text1)
-                HexBadge(LocalizedStringResource("welcome.badge", defaultValue: "experiment"))
-            }
-            .padding(.top, 22)
+            Text(LocalizedStringResource("welcome.title", defaultValue: "Hex Code"))
+                .hexFont(.display)
+                .foregroundStyle(HexColor.text1)
+                .padding(.top, 22)
             Text(LocalizedStringResource("welcome.tagline", defaultValue: "Talk to the coding agent on your computer, from your phone."))
                 .hexFont(.body)
                 .foregroundStyle(HexColor.text2)

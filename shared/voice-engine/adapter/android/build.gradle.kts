@@ -112,8 +112,10 @@ androidComponents {
 dependencies {
     api(libs.kotlinx.coroutines.android)
     implementation(files(fetchSherpaOnnx.flatMap { it.classesJar }))
-    // Google's LiteRT (Apache-2.0), the third engine the lab compares, with its GPU accelerator
-    implementation(libs.litert)
-    implementation(libs.litert.gpu)
+    // Google's LiteRT (Apache-2.0), the third engine the lab compares, with its GPU accelerator. The lab opens model
+    // files from disk, so it leaves out Play AI delivery: only LiteRT's AiPackModelProvider uses it, and it would merge
+    // WorkManager, asset-pack services and foreground-service permissions into the app.
+    implementation(libs.litert) { exclude(group = "com.google.android.play") }
+    implementation(libs.litert.gpu) { exclude(group = "com.google.android.play") }
     testImplementation(libs.junit)
 }

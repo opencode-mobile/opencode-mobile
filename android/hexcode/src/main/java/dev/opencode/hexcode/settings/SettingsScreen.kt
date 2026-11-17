@@ -78,7 +78,8 @@ data class NewSessionInfo(
 /**
  * Settings, the prototype's plain list (app-plan.md, Settings and finish (M6)). Project, Model, Reasoning, Appearance,
  * Start a new session and Server work; the three dictation rows are placeholders for now. Version does nothing when
- * tapped; the Developer section always follows it, for whoever builds and tests the app.
+ * tapped; in debug builds the Developer section follows it, for whoever builds and tests the app. Release builds,
+ * App Distribution's included, leave it out.
  */
 @Composable
 fun SettingsScreen(
@@ -97,8 +98,8 @@ fun SettingsScreen(
     onSampleSession: () -> Unit,
     /** App › Sample session, in every build: home on the `playground` sample, with Leave back to this session. */
     onTrySample: () -> Unit,
-    /** Debug builds only: "Drop event stream". */
-    onDropStream: (() -> Unit)?,
+    /** Developer › Drop event stream. */
+    onDropStream: () -> Unit,
     onBack: () -> Unit,
     /** Today's session, for Start a new session's confirmation; null while it isn't open. */
     newSession: NewSessionInfo? = null,
@@ -204,14 +205,16 @@ fun SettingsScreen(
                     icon = HexIcons.info,
                     value = "${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE})",
                 )
-                DeveloperSection(
-                    onGallery,
-                    onSpeechLab,
-                    sampleSession,
-                    onSampleSession,
-                    onDropStream,
-                    { notYet = HexToastMessage(DeveloperCopy.BUILD_COPIED, HexToastTone.Steer) },
-                )
+                if (BuildConfig.DEBUG) {
+                    DeveloperSection(
+                        onGallery,
+                        onSpeechLab,
+                        sampleSession,
+                        onSampleSession,
+                        onDropStream,
+                        { notYet = HexToastMessage(DeveloperCopy.BUILD_COPIED, HexToastTone.Steer) },
+                    )
+                }
             }
         }
         // Start a new session (app-plan.md, Settings and finish (M6) › Start a new session).
@@ -440,14 +443,14 @@ private fun BoxScope.ServerSheet(
     }
 }
 
-/** Settings › Developer, after App once unlocked. */
+/** Settings › Developer, after App, in debug builds only: its rows are the only way to the gallery and the speech lab. */
 @Composable
 private fun DeveloperSection(
     onGallery: () -> Unit,
     onSpeechLab: () -> Unit,
     sampleSession: String,
     onSampleSession: () -> Unit,
-    onDropStream: (() -> Unit)?,
+    onDropStream: () -> Unit,
     onBuildCopied: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -461,14 +464,12 @@ private fun DeveloperSection(
         subtitle = DeveloperCopy.SAMPLE_SESSION_SUBTITLE,
         onClick = onSampleSession,
     )
-    if (onDropStream != null) {
-        HexRow(
-            title = DeveloperCopy.DROP_STREAM,
-            icon = HexIcons.server,
-            subtitle = DeveloperCopy.DROP_STREAM_SUBTITLE,
-            onClick = onDropStream,
-        )
-    }
+    HexRow(
+        title = DeveloperCopy.DROP_STREAM,
+        icon = HexIcons.server,
+        subtitle = DeveloperCopy.DROP_STREAM_SUBTITLE,
+        onClick = onDropStream,
+    )
     HexRow(
         title = DeveloperCopy.BUILD,
         icon = HexIcons.term,
@@ -500,7 +501,7 @@ private object DeveloperCopy {
     const val SAMPLE_SESSION = "Sample session"
     const val SAMPLE_SESSION_SUBTITLE = "Home with a fake session, or Off for the real one. Tap for the next."
     const val DROP_STREAM = "Drop event stream"
-    const val DROP_STREAM_SUBTITLE = "As if the network dropped, for 10 s. Debug builds only."
+    const val DROP_STREAM_SUBTITLE = "As if the network dropped, for 10 s."
     const val BUILD = "Build"
     const val BUILD_COPIED = "Build copied"
 }

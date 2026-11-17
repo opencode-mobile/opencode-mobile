@@ -102,7 +102,7 @@ enum TodaySessionDemo: String, CaseIterable {
         + "`packages/mobile-voice` (iOS `Info.plist`) and Capacitor-style Android/iOS icon sets under "
         + "`packages/desktop/icons`. No mobile app source in…\n"
         + "Next: Finish sweeping branches, then publish the findings page.\n"
-        + "Link: Prototype | http://Studio-Mac.local:8787/2026-11-06/mobile-apps/"
+        + "Link: Prototype | http://192.168.1.2:8787/prototypes/mobile-apps/"
 
     static let artifactReply = "## Login screen rewrite\nNow: Sign-in is 2.6 times faster with the new token refresh, "
         + "and all 48 auth tests pass.\nNext: Say if the report looks right, then I'll open a PR."

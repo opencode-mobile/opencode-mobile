@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Every piece of Hex's design system in its states: the colours, type steps and icons, and each
-/// component in `DesignSystem/Components/`. Settings' Developer section pushes it, in every build;
+/// component in `DesignSystem/Components/`. Settings' Developer section pushes it in debug builds;
 /// `-HexCodeGallery YES` opens it on its own (debug builds). The Light / Dark switch applies to this
 /// page only. Developer-only, so its text is English and written here.
 struct HexGallery: View {
@@ -266,7 +266,7 @@ private struct HexGalleryContent: View {
                 HexSpinner(size: HexIconSize.large)
             }
             HStack(spacing: 8) {
-                HexBadge("experiment")
+                HexBadge("default")
                 HexBadge("in use")
                 HexBadge(text: Text(verbatim: "git"), mono: true)
             }

@@ -18,7 +18,6 @@
 
     <!-- first run: welcome -->
     <string name="welcome_title">Hex Code</string>
-    <string name="welcome_badge">experiment</string>
     <string name="welcome_tagline">Talk to the coding agent on your computer, from your phone.</string>
     <string name="welcome_rule_title">There are no rules.</string>
     <string name="welcome_rule_body">Talk to it however you like. Try things, see where it goes.</string>
