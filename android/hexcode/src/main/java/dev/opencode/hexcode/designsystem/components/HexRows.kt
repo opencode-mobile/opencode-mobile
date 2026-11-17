@@ -222,7 +222,7 @@ fun HexSectionLabel(
     )
 }
 
-/** A small bordered label (`.rbadge`, `experiment`); [mono] is the `git` and `default` tag (`.git`). */
+/** A small bordered label (`.rbadge`, `default`); [mono] is the `git` and `default` tag (`.git`). */
 @Composable
 fun HexBadge(
     text: String,

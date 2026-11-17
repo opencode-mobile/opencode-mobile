@@ -275,7 +275,7 @@ struct PairAgainTests {
     private let setup = HexSetup(
         profile: ConnectionProfile(baseURL: "http://192.168.1.47:4196/", serverURLs: ["http://192.168.1.47:4196/"], username: "opencode", password: "tok_old", serverProtocol: .v2),
         serverVersion: "2.2.4",
-        serverHostname: "Studio-Mac.local",
+        serverHostname: "My-Mac.local",
         project: ChosenProject(name: "hexcode", path: "/p"),
         model: ModelChoice(providerID: "opencode", modelID: "big-pickle", variant: nil)
     )
@@ -289,14 +289,14 @@ struct PairAgainTests {
     }
 
     @Test func theSameHostnameIsTheSameComputer() {
-        #expect(PairAgain.isSameComputer(paired("studio-mac"), as: setup))
-        #expect(PairAgain.isSameComputer(paired("Studio-Mac.local"), as: setup))
+        #expect(PairAgain.isSameComputer(paired("my-mac"), as: setup))
+        #expect(PairAgain.isSameComputer(paired("My-Mac.local"), as: setup))
         #expect(!PairAgain.isSameComputer(paired("mbp.local"), as: setup))
     }
 
     @Test func theSameComputerKeepsProjectModelAndReplacesTheRest() {
         let now = Date(timeIntervalSince1970: 1_793_966_400)
-        let next = PairAgain.replacing(setup, with: paired("Studio-Mac.local"), now: now)
+        let next = PairAgain.replacing(setup, with: paired("My-Mac.local"), now: now)
         #expect(next.profile.password == "tok_new")
         #expect(next.profile.serverURLs == ["http://100.64.0.1:4196/"])
         #expect(next.project == setup.project && next.model == setup.model)
@@ -314,17 +314,17 @@ struct PairAgainTests {
         var switched: PairedServer?
         let model = PairAgainModel(
             current: setup,
-            pairing: Pairing(server: paired("studio.local")),
+            pairing: Pairing(server: paired("other-mac.local")),
             connectedPause: .zero,
             onSameComputer: { same = $0 },
             onSwitch: { switched = $0 }
         )
         model.scanned("opencode://pair")
         for _ in 0 ..< 100 where model.switchCandidate == nil { try? await Task.sleep(for: .milliseconds(5)) }
-        #expect(model.switchCandidate?.hostname == "studio.local")
+        #expect(model.switchCandidate?.hostname == "other-mac.local")
         #expect(same == nil && switched == nil)
         model.confirmSwitch()
-        #expect(switched?.hostname == "studio.local")
+        #expect(switched?.hostname == "other-mac.local")
     }
 
     @Test @MainActor func theSameComputerDoesntAsk() async {
@@ -335,7 +335,7 @@ struct PairAgainTests {
         var same: PairedServer?
         let model = PairAgainModel(
             current: setup,
-            pairing: Pairing(server: paired("studio-mac.local")),
+            pairing: Pairing(server: paired("my-mac.local")),
             connectedPause: .zero,
             onSameComputer: { same = $0 },
             onSwitch: { _ in }

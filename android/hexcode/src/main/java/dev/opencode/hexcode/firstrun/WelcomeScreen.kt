@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexTheme
-import dev.opencode.hexcode.designsystem.components.HexBadge
 import dev.opencode.hexcode.designsystem.components.HexButton
 import dev.opencode.hexcode.designsystem.components.HexButtonSize
 import dev.opencode.hexcode.designsystem.components.HexPrimaryButton
@@ -60,19 +59,15 @@ fun WelcomeScreen(
         ) {
             Spacer(Modifier.height(40.dp))
             Icon(HexIcons.mark, null, tint = colors.text1, modifier = Modifier.size(52.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(top = 22.dp),
-            ) {
-                Text(
-                    stringResource(R.string.welcome_title),
-                    style = type.display,
-                    color = colors.text1,
-                    modifier = Modifier.semantics { heading() },
-                )
-                HexBadge(stringResource(R.string.welcome_badge))
-            }
+            Text(
+                stringResource(R.string.welcome_title),
+                style = type.display,
+                color = colors.text1,
+                modifier =
+                    Modifier
+                        .padding(top = 22.dp)
+                        .semantics { heading() },
+            )
             Text(
                 stringResource(R.string.welcome_tagline),
                 style = type.body,

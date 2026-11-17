@@ -25,7 +25,7 @@ struct HexCodeApp: App {
     }
 
     /// `-HexCodeGallery YES` opens the design system gallery on its own. Developer settings open it in
-    /// every build.
+    /// debug builds too.
     private static var showsGallery: Bool {
         #if DEBUG
         return UserDefaults.standard.bool(forKey: "HexCodeGallery")
@@ -35,7 +35,7 @@ struct HexCodeApp: App {
     }
 
     /// `-HexCodeLab <folder>` and `-HexCodeSample <file>` open the dictation lab screen, which runs
-    /// the speech model lab clip sets on the phone. Developer settings open it in every build as the
+    /// the speech model lab clip sets on the phone. Developer settings open it in debug builds as the
     /// Speech lab.
     private static var runsSpeechLab: Bool {
         #if DEBUG

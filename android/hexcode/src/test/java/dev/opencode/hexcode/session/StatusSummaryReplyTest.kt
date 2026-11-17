@@ -28,7 +28,7 @@ class StatusSummaryReplyTest {
                 - Source: `dialog.prototype.html` (untracked, next to `dialog.tsx`)
                 - Published to this laptop only; Mac mini and Tailscale are down
                 Next: Fold variant A into `dialog.tsx`
-                Link: Open prototype | http://Studio-Mac.local:8787/2026-11-06/1343-command-palette--session-date-improvements/
+                Link: Open prototype | http://192.168.1.2:8787/prototypes/palette-dates/
                 """,
             )
         assertEquals("Prototype: palette session dates", card.title)

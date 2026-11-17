@@ -3,8 +3,9 @@ import SwiftUI
 import VoiceEngineKit
 
 /// Settings: a plain list for now. Project, model and appearance work; the rest are placeholders.
-/// Version ends App and does nothing when tapped; the Developer section always follows it. Sample
-/// session, in App, opens the playground over today's session in every build.
+/// Version ends App and does nothing when tapped; in debug builds the Developer section follows it.
+/// Release builds, App Distribution's included, leave it out. Sample session, in App, opens the
+/// playground over today's session in every build.
 struct SettingsView: View {
     @Bindable var main: HexMainModel
     let voice: VoiceEngine
@@ -98,7 +99,9 @@ struct SettingsView: View {
                         trailing: .none
                     )
 
+                    #if DEBUG
                     developerSection
+                    #endif
                 }
                 .padding(.bottom, 24)
             }
@@ -126,13 +129,17 @@ struct SettingsView: View {
             NewSessionSheet(main: main)
         }
         .onChange(of: main.showsNewSession) { _, up in main.toasts.inSheet = up }
+        #if DEBUG
         .fullScreenCover(isPresented: $showsSpeechLab) {
             DictationScreen(engine: voice, onClose: { showsSpeechLab = false })
         }
+        #endif
     }
 
-    /// For whoever builds and tests the app. Developer-only, so English and written here, like
-    /// OpenCode Mobile's Developer Tools.
+    #if DEBUG
+    /// For whoever builds and tests the app, in debug builds only: its rows are the only way to the
+    /// gallery, the speech lab and the sample presets. English and written here, like OpenCode
+    /// Mobile's Developer Tools.
     @ViewBuilder
     private var developerSection: some View {
         HexSectionLabel(verbatim: "Developer")
@@ -156,12 +163,11 @@ struct SettingsView: View {
             value: main.samplePreset?.rawValue ?? "Off",
             trailing: .none
         ) { main.cycleSampleSession() }
-        #if DEBUG
         HexRow(icon: .refresh, verbatim: "Drop event stream", subtitle: "Down for 10 s, then it reconnects and reads the state again", trailing: .none) {
             main.realSession.dropStream()
         }
-        #endif
     }
+    #endif
 
     /// The hostname and OpenCode version, under the server's name.
     private var serverDetail: String {

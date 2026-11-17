@@ -47,15 +47,15 @@ struct FeedbackLogRedactorTests {
     @Test func masksTheActiveProfileHostUsernameAndName() {
         let redactor = FeedbackLogRedactor(
             profile: ConnectionProfile(
-                baseURL: "http://studio-mac.example:4096/",
-                serverURLs: ["https://studio.tailnet.ts.net/"],
+                baseURL: "http://my-mac.example:4096/",
+                serverURLs: ["https://my-mac.tail1234.ts.net/"],
                 username: "walrus",
                 password: "secret",
-                name: "Studio Mac"
+                name: "My Mac"
             )
         )
 
-        let line = redactor.redact("profile Studio Mac user walrus host studio-mac.example via studio.tailnet.ts.net")
+        let line = redactor.redact("profile My Mac user walrus host my-mac.example via my-mac.tail1234.ts.net")
 
         #expect(line == "profile [REDACTED] user [REDACTED] host [REDACTED] via [REDACTED]")
     }

@@ -6923,17 +6923,6 @@
         }
       }
     },
-    "welcome.badge": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "experiment"
-          }
-        }
-      }
-    },
     "welcome.connect.remote": {
       "extractionState": "manual",
       "localizations": {
