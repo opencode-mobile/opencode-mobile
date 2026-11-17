@@ -1,7 +1,7 @@
 # opencode-mobile context
 
-`opencode-mobile` is a native iOS and Android client for controlling sessions
-on a user-managed opencode server.
+`opencode-mobile` holds native iOS and Android clients for controlling
+sessions on a user-managed opencode server: OpenCode Mobile and Hex Code.
 
 This file defines stable product vocabulary. It does not describe current
 implementation status, feature plans, or detailed UI behavior.
@@ -13,6 +13,16 @@ reaches it through a user-managed LAN, VPN, HTTPS endpoint, or tunnel. Requests
 can target an added project by sending its worktree path as `directory`.
 
 ## Glossary
+
+### OpenCode Mobile
+
+The primary client app in this repository, for iOS and Android.
+
+### Hex Code
+
+A second, experimental, voice-first client app in this repository. It shares
+the network and data layer with OpenCode Mobile and has its own screens and
+design. `hexcode` is its code and module name.
 
 ### opencode server
 

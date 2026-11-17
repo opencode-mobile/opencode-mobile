@@ -3,9 +3,8 @@
 > [!IMPORTANT]
 > **Hex Code is an experiment, and it is not an official opencode app.** It is
 > an independent community project, not made by, affiliated with, or endorsed
-> by the [opencode](https://github.com/sst/opencode) project. It lives on the
-> `feature/hex-experiment` branch, is not in the app stores, and may change or
-> break at any time.
+> by the [opencode](https://github.com/sst/opencode) project. It is not in
+> the app stores and may change or break at any time.
 
 Talk to the coding agent on your computer, from your phone.
 
@@ -128,12 +127,11 @@ not to opencode, and say it is about Hex Code.
 ## Install the app
 
 Hex Code is not in the App Store or on Google Play. You build it from the
-`feature/hex-experiment` branch:
+`main` branch:
 
 ```bash
 git clone https://github.com/opencode-mobile/opencode-mobile.git
 cd opencode-mobile
-git checkout feature/hex-experiment
 ```
 
 ### Android
@@ -178,10 +176,11 @@ network and data code with OpenCode Mobile and has its own screens and design.
 | `ios/OpenCodeKit/`, `android/opencode-kit/` | Network and data code shared with OpenCode Mobile |
 | `shared/voice-engine/` | On-device dictation for both platforms; see its [README](../shared/voice-engine/README.md) |
 
-This `hexcode/` folder gathers it all in one place. Besides this README and
-its screenshots, it has symlinks to the code above: `ios`, `android`,
-`opencode-kit-ios`, `opencode-kit-android` and `voice-engine`. They work in a
-clone; on GitHub, use the paths in the table.
+This `hexcode/` folder gathers it all in one place. Besides this README, its
+screenshots, the store screenshots in `store-listing/` and the guide for AI
+coding agents in [AGENTS.md](AGENTS.md), it has symlinks to the code above:
+`ios`, `android`, `opencode-kit-ios`, `opencode-kit-android` and
+`voice-engine`. They work in a clone; on GitHub, use the paths in the table.
 
 To retake the screenshots, run a debug build on the simulator with
 `-HexCodeDemoSetup YES -HexCodeDemoSession <preset>` (presets are in
@@ -209,17 +208,17 @@ gh workflow run hexcode-app-distribution.yml --ref <branch> -f platform=all
 `platform` is `all`, `android` or `ios`; `-f source_ref=<sha>` builds the
 head of an open pull request instead. On a pull request, the maintainer can
 comment `/distribute hex`, `/distribute hex android` or `/distribute hex ios`
-to send its head commit (`distribute-comment.yml`). GitHub dispatches a
-workflow only once its file is on main (the `--ref` branch then supplies the
-copy that runs), and runs nightlies and comment dispatches from main's copy,
-so none of these work until it is merged there.
-The release environments it signs in allow `main`, `feature/*` and `fix/*`
-branches.
+to send its head commit (`distribute-comment.yml`). Nightlies and comment
+dispatches run main's copy of the workflow; with `--ref`, that branch
+supplies the copy that runs. The release environments it signs in allow
+`main`, `feature/*` and `fix/*` branches.
 
-Progress, what was tested and what is still open are tracked in the draft pull
-request [#980](https://github.com/opencode-mobile/opencode-mobile/pull/980).
-For the repository's rules, read [CONTRIBUTING.md](../CONTRIBUTING.md) and
-[AGENTS.md](../AGENTS.md).
+Hex Code came into main with pull request
+[#980](https://github.com/opencode-mobile/opencode-mobile/pull/980). Current
+work is tracked in this repository's issues and pull requests. Fixes and
+features go as branches and pull requests off `main`. For the repository's
+rules, read [CONTRIBUTING.md](../CONTRIBUTING.md), [AGENTS.md](../AGENTS.md)
+and, for agents working on Hex Code, [hexcode/AGENTS.md](AGENTS.md).
 
 ## License
 
