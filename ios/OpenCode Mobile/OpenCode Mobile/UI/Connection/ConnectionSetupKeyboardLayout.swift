@@ -19,6 +19,14 @@ enum ConnectionSetupKeyboardLayout {
         !keyboardVisible
     }
 
+    /// Re-scroll whenever the keyboard appears or changes height while up. Moving
+    /// into the password field swaps to a keyboard of another height (no predictive
+    /// bar, a Passwords bar instead) after focus has already scrolled, which left
+    /// Connect behind the keys.
+    static func needsRescroll(oldOverlap: Double, newOverlap: Double) -> Bool {
+        newOverlap > 0 && abs(newOverlap - oldOverlap) > 0.5
+    }
+
     struct ScrollTarget: Equatable {
         let id: String
         /// `UnitPoint` y. `1` keeps the target at the bottom of the visible scroll area.

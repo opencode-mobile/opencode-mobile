@@ -76,8 +76,11 @@ struct ConnectionSetupView: View {
                             .onChange(of: focusToken) { _, token in
                                 scrollFocusedField(proxy, token: token)
                             }
-                            .onChange(of: isKeyboardVisible) { _, visible in
-                                guard visible else { return }
+                            .onChange(of: keyboardOverlap) { old, new in
+                                guard ConnectionSetupKeyboardLayout.needsRescroll(
+                                    oldOverlap: Double(old),
+                                    newOverlap: Double(new)
+                                ) else { return }
                                 scrollFocusedField(proxy, token: focusToken)
                             }
                         }
