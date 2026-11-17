@@ -12,6 +12,9 @@ Native iOS and Android apps for driving opencode sessions from your phone.
 Start a session, follow it live, answer permission prompts and questions, and
 review changes while opencode runs on your own machine.
 
+This repository also holds [Hex Code](hexcode/README.md), a separate,
+experimental voice-first app that is not in the app stores.
+
 | Android | iOS |
 |:---:|:---:|
 | <img src="test-screenshots/android_1_1.jpg" height="480" alt="OpenCode Mobile on Android"> | <img src="test-screenshots/ios_1_1.jpg" height="480" alt="OpenCode Mobile on iOS"> |
@@ -100,6 +103,7 @@ npm run api:sync        # fetch the OpenAPI spec and regenerate the API clients
 | `android/` | Kotlin, Jetpack Compose, Material 3 app |
 | `ios/OpenCode Mobile/` | SwiftUI app |
 | `shared/` | Code and assets both apps use (Markdown core, themes, terminal) |
+| `hexcode/` | Hex Code, a separate experimental voice-first app, with links to its code in `android/hexcode/` and `ios/OpenCode Mobile/Hex Code/`; see [hexcode/README.md](hexcode/README.md) |
 | `docs/` | Architecture and design-system reference |
 | `scripts/` | Icon, theme, and OpenAPI tooling |
 | `.agents/skills/` | Skills for AI coding agents |

@@ -4,8 +4,27 @@
 opencode sessions through an opencode server.
 
 The implementations live under `android/` (Kotlin, Jetpack Compose, Material 3)
-and `ios/OpenCode Mobile/` (SwiftUI). Both apps, API generation, CI, and private
-release distribution are active. Product vocabulary lives in `CONTEXT.md`.
+and `ios/OpenCode Mobile/` (SwiftUI). The iOS and Android apps, API generation,
+CI, and private release distribution are active. Product vocabulary lives in
+`CONTEXT.md`.
+
+## Two Apps In This Repo
+
+- **OpenCode Mobile**, the store app: `android/app/` (Gradle module `:app`)
+  and `ios/OpenCode Mobile/OpenCode Mobile/` (`OpenCode Mobile.xcodeproj`).
+  `play-listing/`, `release-notes/`, and the store release workflows belong
+  to it.
+- **Hex Code**, an experimental voice-first app. "Hex Code", "hexcode", and
+  "Hex" all mean this app. Start with `hexcode/README.md` and
+  `hexcode/AGENTS.md`. Its code is in `android/hexcode/`,
+  `ios/OpenCode Mobile/Hex Code/` (own `Hex Code.xcodeproj` next to it), and
+  `shared/voice-engine/`. It ships only to Firebase App Distribution tester
+  groups through `.github/workflows/hexcode-app-distribution.yml`, never to
+  the stores.
+- Both apps share the network and data layer in `android/opencode-kit/` and
+  `ios/OpenCodeKit/`. A change there affects both apps; build and test both.
+- The rules in this file apply to both apps unless `hexcode/AGENTS.md` says
+  otherwise.
 
 ## Public Repository And Sensitive Data
 
