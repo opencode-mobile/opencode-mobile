@@ -274,6 +274,7 @@ private fun AppearanceTextSizeSection(
 
 private fun AppearanceTextSize.labelRes(): Int =
     when (this) {
+        AppearanceTextSize.Smallest -> R.string.appearance_text_size_smallest
         AppearanceTextSize.ExtraSmall -> R.string.appearance_text_size_extra_small
         AppearanceTextSize.Small -> R.string.appearance_text_size_small
         AppearanceTextSize.Default -> R.string.appearance_text_size_default

@@ -114,13 +114,13 @@ class AppearancePreferencesTest {
     }
 
     @Test
-    fun `five steps from extra small to extra large with Default in the middle`() {
+    fun `six steps from smallest to extra large with Default third from the bottom`() {
         assertEquals(
-            listOf(0.85f, 0.92f, 1.0f, 1.12f, 1.26f),
+            listOf(0.78f, 0.85f, 0.92f, 1.0f, 1.12f, 1.26f),
             AppearanceTextSize.entries.map { it.multiplier },
         )
-        assertEquals(AppearanceTextSize.Default, AppearanceTextSize.entries[AppearanceTextSize.entries.size / 2])
-        assertEquals(AppearanceTextSize.ExtraSmall, AppearanceTextSize.atIndex(-3))
+        assertEquals(AppearanceTextSize.Default, AppearanceTextSize.atIndex(3))
+        assertEquals(AppearanceTextSize.Smallest, AppearanceTextSize.atIndex(-3))
         assertEquals(AppearanceTextSize.ExtraLarge, AppearanceTextSize.atIndex(9))
     }
 }

@@ -248,6 +248,7 @@ extension AppearanceMode {
 extension AppTextSize {
     var title: OpenCodeText {
         switch self {
+        case .smallest: "appearance.text_size_smallest"
         case .extraSmall: "appearance.text_size_extra_small"
         case .small: "appearance.text_size_small"
         case .default: "appearance.text_size_default"
