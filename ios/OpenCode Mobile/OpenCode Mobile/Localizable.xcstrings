@@ -4032,6 +4032,17 @@
         }
       }
     },
+    "connection.setup.scan_qr_instead_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From opencode pair"
+          }
+        }
+      }
+    },
     "connection.setup.segment.pairing_code" : {
       "extractionState" : "manual",
       "localizations" : {

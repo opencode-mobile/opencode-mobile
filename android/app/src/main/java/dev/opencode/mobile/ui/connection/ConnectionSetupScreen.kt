@@ -7,12 +7,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -45,7 +42,6 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.resolve
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ConnectionSetupScreen(
     uiState: ConnectionSetupUiState,
@@ -161,6 +157,7 @@ fun ConnectionSetupScreen(
                             onPairingCodeChanged = onPairingCodeChanged,
                             onPasswordFocusConsumed = onPasswordFocusConsumed,
                             showManualForm = uiState.showsManualForm,
+                            onScanInstead = onShowScanInstructions,
                         )
                     }
                     Column(
@@ -179,7 +176,6 @@ fun ConnectionSetupScreen(
                             onScan = { openPairingScanner() },
                             onEnterPairingCode = onShowPairingCodeForm,
                             onUseHostAndPassword = onShowHostPasswordForm,
-                            onScanInstead = onShowScanInstructions,
                             onSubmit = onSubmit,
                         )
                     }
@@ -253,7 +249,6 @@ fun ConnectionSetupScreen(
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ConnectionSetupActions(
     uiState: ConnectionSetupUiState,
@@ -263,7 +258,6 @@ private fun ConnectionSetupActions(
     onScan: () -> Unit,
     onEnterPairingCode: () -> Unit,
     onUseHostAndPassword: () -> Unit,
-    onScanInstead: () -> Unit,
     onSubmit: () -> Unit,
 ) {
     when {
@@ -286,15 +280,6 @@ private fun ConnectionSetupActions(
             }
         }
         manualFormVisible -> {
-            if (!WindowInsets.isImeVisible) {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    OpenCodeButton(
-                        variant = OpenCodeButtonVariant.Link(stringResource(R.string.connection_setup_action_scan_qr_instead)),
-                        enabled = !uiState.isBusy,
-                        onClick = onScanInstead,
-                    )
-                }
-            }
             if (uiState.showsPrimaryAction) {
                 OpenCodeButton(
                     variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel.resolve()),
