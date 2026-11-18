@@ -41,10 +41,15 @@ import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeCodeSnippet
+import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
+import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeServerAddressInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.components.OpenCodeTextInputSubmitAction
+import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.resolve
 
 internal fun qrAddressHint(urls: List<String>): UiText {
@@ -109,6 +114,7 @@ fun ConnectionSetupFields(
     onPairingCodeChanged: (String) -> Unit,
     onPasswordFocusConsumed: () -> Unit,
     showManualForm: Boolean,
+    onScanInstead: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val passwordFocusRequester = remember { FocusRequester() }
@@ -165,6 +171,18 @@ fun ConnectionSetupFields(
             PairingInstructions()
             return@Column
         }
+        // Always shown on the manual form, keyboard up or not, so the IME never adds or
+        // removes it and the fields never move (#1084).
+        OpenCodeListItem(
+            title = stringResource(R.string.connection_setup_action_scan_qr_instead),
+            subtitle = stringResource(R.string.connection_setup_scan_qr_instead_hint),
+            enabled = !uiState.isBusy,
+            style = OpenCodeListItemStyle.Card,
+            startDecorator = StartDecorator.Icon(imageVector = OpenCodeIcons.QrCode, contentDescription = null),
+            accessory = OpenCodeListItemAccessory.Disclosure,
+            onClick = onScanInstead,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
         OpenCodeServerAddressInput(
             value = uiState.baseUrl,
             onValueChange = onBaseUrlChanged,

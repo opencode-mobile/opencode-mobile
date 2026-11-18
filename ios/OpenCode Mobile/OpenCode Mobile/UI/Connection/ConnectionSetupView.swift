@@ -57,6 +57,9 @@ struct ConnectionSetupView: View {
                                         } else if viewModel.showsInstructionEssay {
                                             instructionEssay
                                         } else {
+                                            if viewModel.showsManualForm {
+                                                scanQRInsteadRow
+                                            }
                                             manualHostField
                                             connectionNameField
                                             manualCredentials
@@ -238,6 +241,20 @@ struct ConnectionSetupView: View {
         }
     }
 
+    /// Always shown on the manual form, keyboard up or not, so a keyboard
+    /// report never adds or removes it and the fields never move (#1084).
+    private var scanQRInsteadRow: some View {
+        OpenCodeListItem(
+            title: "connection.setup.action.scan_qr_instead",
+            subtitle: "connection.setup.scan_qr_instead_hint",
+            enabled: !viewModel.isBusy,
+            style: .card,
+            startDecorator: .icon(.qrCode),
+            accessory: .disclosure,
+            action: { viewModel.showScanInstructions() }
+        )
+    }
+
     private var manualHostField: some View {
         VStack(alignment: .leading, spacing: 12) {
             OpenCodeServerAddressInput(
@@ -359,13 +376,6 @@ struct ConnectionSetupView: View {
                     action: { viewModel.showHostPasswordForm() }
                 )
             } else {
-                if !isKeyboardVisible, viewModel.showsManualForm {
-                    OpenCodeButton(
-                        variant: .link(title: "connection.setup.action.scan_qr_instead"),
-                        enabled: !viewModel.isBusy,
-                        action: { viewModel.showScanInstructions() }
-                    )
-                }
                 if viewModel.showsPrimaryAction {
                     OpenCodeButton(
                         variant: .fullWidthText(title: viewModel.primaryActionLabel),

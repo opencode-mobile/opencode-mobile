@@ -27,6 +27,7 @@
     <string name="connection_setup_action_enter_pairing_code">Enter a pairing code</string>
     <string name="connection_setup_action_use_host_password">Use a host and password</string>
     <string name="connection_setup_action_scan_qr_instead">Scan a QR instead</string>
+    <string name="connection_setup_scan_qr_instead_hint">From opencode pair</string>
     <string name="connection_setup_remove_server">Remove server</string>
     <string name="connection_setup_remove_dialog_title_unnamed">Remove “server”?</string>
     <string name="connection_setup_instructions_run">On your computer, run this, then scan the QR.</string>
