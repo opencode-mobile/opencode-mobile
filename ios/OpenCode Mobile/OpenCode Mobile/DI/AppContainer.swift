@@ -751,7 +751,8 @@ extension Container {
                 appOnboardingPreferences: AppOnboardingPreferences.shared,
                 sessionChatDisplayPreferences: SessionChatDisplayPreferences.shared,
                 newFeatures: NewFeatureStore.shared,
-                whatsNew: WhatsNewStore.shared
+                whatsNew: WhatsNewStore.shared,
+                makeHomeViewModel: { Container.shared.projectListHomeViewModel() }
             )
         }
     }

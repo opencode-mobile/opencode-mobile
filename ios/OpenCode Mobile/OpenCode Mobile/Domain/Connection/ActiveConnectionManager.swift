@@ -451,10 +451,10 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let purgeServerHealth: @Sendable (String?) async -> Void
     private let profileChangeGate = ProfileChangeGate()
     private let lock = NSLock()
-    private var profileSwitchingHandlers: [(String) -> Void] = []
-    private var profileSavedHandlers: [() -> Void] = []
-    private var profileClearedHandlers: [() -> Void] = []
-    private var addressCheckHandlers: [(AddressCheck) -> Void] = []
+    private var profileSwitchingHandlers: [(id: UUID, handler: (String) -> Void)] = []
+    private var profileSavedHandlers: [(id: UUID, handler: () -> Void)] = []
+    private var profileClearedHandlers: [(id: UUID, handler: () -> Void)] = []
+    private var addressCheckHandlers: [(id: UUID, handler: (AddressCheck) -> Void)] = []
     private var currentAddressCheck = AddressCheck(generation: 0, state: .kept)
     private var switchGeneration: UInt64 = 0
 
@@ -513,28 +513,80 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         }
     }
 
-    func onProfileSwitching(_ handler: @escaping (String) -> Void) {
+    func onProfileSwitching(_ handler: @escaping (String) -> Void) -> Registration {
+        let id = UUID()
         lock.lock()
-        profileSwitchingHandlers.append(handler)
+        profileSwitchingHandlers.append((id, handler))
         lock.unlock()
+        return registration(removing: { coordinator in
+            coordinator.profileSwitchingHandlers.removeAll { $0.id == id }
+        })
     }
 
-    func onProfileSaved(_ handler: @escaping () -> Void) {
+    func onProfileSaved(_ handler: @escaping () -> Void) -> Registration {
+        let id = UUID()
         lock.lock()
-        profileSavedHandlers.append(handler)
+        profileSavedHandlers.append((id, handler))
         lock.unlock()
+        return registration(removing: { coordinator in
+            coordinator.profileSavedHandlers.removeAll { $0.id == id }
+        })
     }
 
-    func onProfileCleared(_ handler: @escaping () -> Void) {
+    func onProfileCleared(_ handler: @escaping () -> Void) -> Registration {
+        let id = UUID()
         lock.lock()
-        profileClearedHandlers.append(handler)
+        profileClearedHandlers.append((id, handler))
         lock.unlock()
+        return registration(removing: { coordinator in
+            coordinator.profileClearedHandlers.removeAll { $0.id == id }
+        })
     }
 
-    func onAddressCheck(_ handler: @escaping (AddressCheck) -> Void) {
+    func onAddressCheck(_ handler: @escaping (AddressCheck) -> Void) -> Registration {
+        let id = UUID()
         lock.lock()
-        addressCheckHandlers.append(handler)
+        addressCheckHandlers.append((id, handler))
         lock.unlock()
+        return registration(removing: { coordinator in
+            coordinator.addressCheckHandlers.removeAll { $0.id == id }
+        })
+    }
+
+    /// A registration removes its handler under the coordinator's lock when it is released.
+    /// The removal takes `self` weakly, so holding a registration never keeps the coordinator.
+    private func registration(
+        removing remove: @escaping (ConnectionSessionCoordinator) -> Void
+    ) -> Registration {
+        Registration { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            remove(self)
+            self.lock.unlock()
+        }
+    }
+
+    /// One handler registration. Keep it while the handler should run; releasing it, or calling
+    /// `cancel()`, stops delivery and leaves nothing behind in the coordinator.
+    final class Registration: @unchecked Sendable {
+        private let lock = NSLock()
+        private var remove: (() -> Void)?
+
+        init(remove: @escaping () -> Void) {
+            self.remove = remove
+        }
+
+        func cancel() {
+            lock.lock()
+            let remove = self.remove
+            self.remove = nil
+            lock.unlock()
+            remove?()
+        }
+
+        deinit {
+            cancel()
+        }
     }
 
     func listProfiles() async -> [ConnectionProfile] {
@@ -670,14 +722,14 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         lock.lock()
         let handlers = profileSwitchingHandlers
         lock.unlock()
-        handlers.forEach { $0(id) }
+        handlers.forEach { $0.handler(id) }
     }
 
     private func notifySaved() {
         lock.lock()
         let handlers = profileSavedHandlers
         lock.unlock()
-        handlers.forEach { $0() }
+        handlers.forEach { $0.handler() }
     }
 
     private func publishAddressCheck(_ check: AddressCheck) {
@@ -685,7 +737,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         currentAddressCheck = check
         let handlers = addressCheckHandlers
         lock.unlock()
-        handlers.forEach { $0(check) }
+        handlers.forEach { $0.handler(check) }
     }
 
     /// Ends the running check of the current profile change. A move always reports, even outside
@@ -717,7 +769,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         lock.lock()
         let handlers = profileClearedHandlers
         lock.unlock()
-        handlers.forEach { $0() }
+        handlers.forEach { $0.handler() }
     }
 }
 

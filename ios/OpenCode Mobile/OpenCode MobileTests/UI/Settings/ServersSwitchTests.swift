@@ -15,6 +15,8 @@ import Testing
         let saves: SaveCounter
         let active: ConnectionProfile
         let other: ConnectionProfile
+        /// Held so the save counter observes every profile save for the fixture's lifetime.
+        let savedRegistration: ConnectionSessionCoordinator.Registration
     }
 
     private static func scratchDefaults() -> UserDefaults {
@@ -43,14 +45,21 @@ import Testing
         let active = try #require(coordinator.currentProfile())
         let other = try #require(await coordinator.listProfiles().first { $0.id != active.id })
         let saves = SaveCounter()
-        coordinator.onProfileSaved { saves.count += 1 }
+        let savedRegistration = coordinator.onProfileSaved { saves.count += 1 }
         let viewModel = ServersViewModel(
             coordinator: coordinator,
             healthMonitor: ServerHealthFakeMonitor(),
             healthStore: InMemoryServerHealthStore()
         )
         await viewModel.refresh()
-        return Fixture(viewModel: viewModel, coordinator: coordinator, saves: saves, active: active, other: other)
+        return Fixture(
+            viewModel: viewModel,
+            coordinator: coordinator,
+            saves: saves,
+            active: active,
+            other: other,
+            savedRegistration: savedRegistration
+        )
     }
 
     @Test func tappingAnotherServerMakesItActive() async throws {

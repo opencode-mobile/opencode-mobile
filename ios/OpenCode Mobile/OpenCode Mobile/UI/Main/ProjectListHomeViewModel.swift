@@ -174,6 +174,9 @@ final class ProjectListHomeViewModel {
     let sessionSearch: SessionSearchModel
     private let foregroundEventStream: (any ForegroundEventStream)?
     @ObservationIgnored private var connectionStateObservationTask: Task<Void, Never>?
+    /// Profile-change handlers registered on `connectionSessionCoordinator`. Held so releasing the
+    /// model also removes them instead of leaving handlers behind on the shared coordinator.
+    @ObservationIgnored private var coordinatorRegistrations: [ConnectionSessionCoordinator.Registration] = []
     @ObservationIgnored private var liveConnectionStatus: SessionConnectionStatus = .offline
     @ObservationIgnored private let servers: HomeServers
     @ObservationIgnored private let worktrees: HomeWorktrees
@@ -320,7 +323,7 @@ final class ProjectListHomeViewModel {
             self?.setSnackbar(OpenCodeSnackbarMessage(text: message, variant: .error))
         }
         sessionReadyStore.bindProfile(profileID: activeConnectionManager.currentProfile()?.id)
-        connectionSessionCoordinator.onProfileSaved { [weak self] in
+        coordinatorRegistrations.append(connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
                 let completesSwitch = self.servers.pendingID != nil
@@ -336,8 +339,8 @@ final class ProjectListHomeViewModel {
                 self.projectList.stopLiveObservations()
                 await self.refresh()
             }
-        }
-        connectionSessionCoordinator.onAddressCheck { [weak self] check in
+        })
+        coordinatorRegistrations.append(connectionSessionCoordinator.onAddressCheck { [weak self] check in
             Task { @MainActor in
                 guard let self, self.servers.pendingID == nil else { return }
                 switch check.state {
@@ -357,8 +360,8 @@ final class ProjectListHomeViewModel {
                     await self.refresh()
                 }
             }
-        }
-        connectionSessionCoordinator.onProfileCleared { [weak self] in
+        })
+        coordinatorRegistrations.append(connectionSessionCoordinator.onProfileCleared { [weak self] in
             Task { @MainActor in
                 self?.projectList.clearProjectLoads()
                 self?.projectList.stopLiveObservations()
@@ -366,11 +369,17 @@ final class ProjectListHomeViewModel {
                 self?.projectList.setDisconnected()
                 self?.servers.clear()
             }
-        }
+        })
         self.homeWorktreesFeed.onRequest = { [weak self] request in
             Task { @MainActor in await self?.handleWorktreeRequest(request) }
         }
         startObservingConnectionState()
+    }
+
+    /// Ends the connection-state stream subscription the model owns; the loop itself does not
+    /// retain the model, so nothing else cancels it once the model goes away.
+    deinit {
+        connectionStateObservationTask?.cancel()
     }
 
     /// Rebuilds `uiState` from the regions; assigns only when something changed, so an
@@ -430,9 +439,13 @@ final class ProjectListHomeViewModel {
     private func startObservingConnectionState() {
         connectionStateObservationTask?.cancel()
         applyComposedConnectionStatus()
-        connectionStateObservationTask = Task {
+        // The loop holds no reference to the model: a discarded model stops updating instead of
+        // being kept alive by the stream, which never ends on its own.
+        let liveUpdates = self.liveUpdates
+        connectionStateObservationTask = Task { [weak self] in
             for await _ in liveUpdates.updates() {
-                applyComposedConnectionStatus()
+                guard let self else { return }
+                self.applyComposedConnectionStatus()
             }
         }
     }
