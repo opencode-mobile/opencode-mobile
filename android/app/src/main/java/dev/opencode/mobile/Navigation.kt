@@ -290,15 +290,13 @@ fun MainNavigation(appCovered: Boolean = false) {
                                 mode = ConnectionSetupMode.Add,
                             )
                         },
+                        onSelectProfile = { profile -> serversViewModel.switchTo(profile.id) },
                         onEditProfile = { profile ->
                             presentConnectionSetup(
                                 initialProfile = profile,
                                 mode = ConnectionSetupMode.Edit,
                             )
                         },
-                        onRequestRemove = serversViewModel::requestRemove,
-                        onConfirmRemove = serversViewModel::confirmRemove,
-                        onDismissRemove = serversViewModel::dismissRemove,
                         onOpenHealth = serversViewModel::openHealth,
                     )
                 }

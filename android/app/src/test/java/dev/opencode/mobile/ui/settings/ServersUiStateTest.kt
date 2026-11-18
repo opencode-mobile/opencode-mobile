@@ -22,19 +22,4 @@ class ServersUiStateTest {
             ServersUiState(profiles = listOf(work, home)).profileCountLabel,
         )
     }
-
-    @Test
-    fun removeDialogTitle_withoutPendingProfile_isTheGenericTitle() {
-        assertEquals(UiText.resource(R.string.servers_remove_dialog_title), ServersUiState().removeDialogTitle)
-    }
-
-    @Test
-    fun removeDialogTitle_namesThePendingProfileVerbatim() {
-        val state = ServersUiState(profiles = listOf(work), pendingRemoval = work)
-
-        assertEquals(
-            UiText.resource(R.string.servers_remove_dialog_title_named, UiText.verbatim("Work")),
-            state.removeDialogTitle,
-        )
-    }
 }

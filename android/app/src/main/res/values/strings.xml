@@ -208,8 +208,7 @@
     <string name="server_health_hero_streams">%1$d of %2$d event streams live</string>
     <string name="servers_status_active">Active</string>
     <string name="servers_add">Add server</string>
-    <string name="servers_remove_profile">Remove %1$s</string>
-    <string name="servers_remove_dialog_title">Remove server?</string>
+    <string name="servers_edit_profile">Edit %1$s</string>
     <string name="servers_remove_dialog_title_named">Remove “%1$s”?</string>
     <string name="servers_remove_dialog_message">This device forgets the Connection Profile. Sessions stay on that server. If it’s the active server, you’ll pick another — or land on Connect if none remain.</string>
     <string name="common_retry">Retry</string>

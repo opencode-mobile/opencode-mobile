@@ -6,7 +6,8 @@ import SwiftUI
 final class ServersViewModel {
     var profiles: [ConnectionProfile] = []
     var activeId: String?
-    var pendingRemoval: ConnectionProfile?
+    /// Server a tap is switching to; further taps wait until it lands.
+    private(set) var switchingID: String?
     /// Server Health summary for the active profile's card; nil without an active profile.
     private(set) var healthQuickView: ServerHealthQuickView?
     /// Set to open Server Health.
@@ -90,19 +91,18 @@ final class ServersViewModel {
         )
     }
 
-    func requestRemove(_ profile: ConnectionProfile) {
-        pendingRemoval = profile
-    }
-
-    func dismissRemove() {
-        pendingRemoval = nil
-    }
-
-    func confirmRemove() async {
-        guard let pending = pendingRemoval else { return }
-        await coordinator.removeProfile(id: pending.id)
-        pendingRemoval = nil
+    /// Makes `profileID` the active server, the same switch as a pick in the Home server sheet.
+    /// Ignores the active server and taps while an earlier switch is still running.
+    func switchTo(profileID: String) async {
+        guard switchingID == nil, profileID != activeId,
+              profiles.contains(where: { $0.id == profileID }) else { return }
+        switchingID = profileID
+        defer { switchingID = nil }
+        await coordinator.switchProfile(id: profileID)
         await refresh()
+        if activeId != profileID {
+            DiagnosticLog.warning(.connection, "servers switch did not apply id=\(profileID)")
+        }
     }
 }
 
@@ -144,18 +144,21 @@ struct ServersView: View {
                                 letterCharacter(for: profile.displayName),
                                 letterAccent(for: profile.id.isEmpty ? profile.displayName : profile.id)
                             ),
-                            action: { onEditProfile(profile) },
+                            // A tap makes the server active; Edit (and Remove inside it) is the trailing button.
+                            action: isActive ? nil : {
+                                Task { await viewModel.switchTo(profileID: profile.id) }
+                            },
                             trailing: {
                                 OpenCodeButton(
                                     variant: .iconCircle(
-                                        .close,
+                                        .edit,
                                         accessibilityLabel: OpenCodeText(LocalizedStringResource(
-                                            "servers.remove_profile",
-                                            defaultValue: "Remove \(profile.displayName)"
+                                            "servers.edit_profile",
+                                            defaultValue: "Edit \(profile.displayName)"
                                         ))
                                     ),
                                     contrast: .low,
-                                    action: { viewModel.requestRemove(profile) }
+                                    action: { onEditProfile(profile) }
                                 )
                             },
                             footer: healthFooter(isActive: isActive, profile: profile)
@@ -188,25 +191,6 @@ struct ServersView: View {
         .onChange(of: refreshToken) { _, _ in
             Task { await viewModel.refresh() }
         }
-        .openCodeDialog(
-            isPresented: Binding(
-                get: { viewModel.pendingRemoval != nil },
-                set: { if !$0 { viewModel.dismissRemove() } }
-            ),
-            title: viewModel.pendingRemoval.map { profile in
-                OpenCodeText(LocalizedStringResource(
-                    "servers.remove_dialog.title_named",
-                    defaultValue: "Remove “\(profile.displayName)”?"
-                ))
-            } ?? "servers.remove_dialog.title",
-            subtitle: "servers.remove_dialog.message",
-            primaryOption: OpenCodeDialogOption(title: "common.remove", destructive: true) {
-                Task { await viewModel.confirmRemove() }
-            },
-            secondaryOption: OpenCodeDialogOption(title: "common.cancel") {
-                viewModel.dismissRemove()
-            }
-        )
     }
 
     /// Server Health summary under the active profile; inactive profiles have none.
