@@ -20,8 +20,6 @@ import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
-import dev.opencode.mobile.ui.components.OpenCodeDialog
-import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
@@ -42,10 +40,8 @@ fun ServersScreen(
     onNavigateBack: () -> Unit,
     detailControl: OpenCodeSplitPaneDetailControl? = null,
     onAddServer: () -> Unit,
+    onSelectProfile: (ConnectionProfile) -> Unit,
     onEditProfile: (ConnectionProfile) -> Unit,
-    onRequestRemove: (ConnectionProfile) -> Unit,
-    onConfirmRemove: () -> Unit,
-    onDismissRemove: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenHealth: (String) -> Unit = {},
 ) {
@@ -82,16 +78,17 @@ fun ServersScreen(
                                         letterCharacterForProject(profile.displayName),
                                         letterAccentForWorktree(profile.id.ifBlank { profile.displayName }),
                                     ),
-                                onClick = { onEditProfile(profile) },
+                                // A tap makes the server active; Edit (and Remove inside it) is the trailing button.
+                                onClick = if (isActive) null else ({ onSelectProfile(profile) }),
                                 trailing = {
                                     OpenCodeButton(
                                         variant =
                                             OpenCodeButtonVariant.IconCircle(
-                                                OpenCodeIcons.Close,
-                                                stringResource(R.string.servers_remove_profile, profile.displayName),
+                                                OpenCodeIcons.Edit,
+                                                stringResource(R.string.servers_edit_profile, profile.displayName),
                                             ),
                                         contrast = OpenCodeButtonContrast.Low,
-                                        onClick = { onRequestRemove(profile) },
+                                        onClick = { onEditProfile(profile) },
                                     )
                                 },
                                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -114,23 +111,4 @@ fun ServersScreen(
             }
         }
     }
-
-    val pending = uiState.pendingRemoval
-    OpenCodeDialog(
-        visible = pending != null,
-        title = uiState.removeDialogTitle.resolve(),
-        subtitle = stringResource(R.string.servers_remove_dialog_message),
-        primaryOption =
-            OpenCodeDialogOption(
-                title = stringResource(R.string.common_remove),
-                destructive = true,
-                onClick = onConfirmRemove,
-            ),
-        secondaryOption =
-            OpenCodeDialogOption(
-                title = stringResource(R.string.common_cancel),
-                onClick = onDismissRemove,
-            ),
-        onDismissRequest = onDismissRemove,
-    )
 }

@@ -6,6 +6,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.serverhealth.ServerHealthClock
 import dev.opencode.mobile.domain.serverhealth.ServerHealthLiveStatus
 import dev.opencode.mobile.domain.serverhealth.ServerHealthMonitor
@@ -16,6 +18,7 @@ import dev.opencode.mobile.ui.serverhealth.ServerHealthQuickViewData
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,20 +38,12 @@ import javax.inject.Inject
 data class ServersUiState(
     val profiles: List<ConnectionProfile> = emptyList(),
     val activeId: String? = null,
-    val pendingRemoval: ConnectionProfile? = null,
     /** Health of the active profile; null until it has been read. */
     val healthQuickView: ServerHealthQuickView? = null,
 ) {
     /** Top bar subtitle, such as "2 Connection Profiles". */
     val profileCountLabel: UiText
         get() = UiText.plural(R.plurals.servers_profile_count, profiles.size)
-
-    /** Remove dialog title; the profile name is server content and stays verbatim. */
-    val removeDialogTitle: UiText
-        get() {
-            val pending = pendingRemoval ?: return UiText.resource(R.string.servers_remove_dialog_title)
-            return UiText.resource(R.string.servers_remove_dialog_title_named, UiText.verbatim(pending.displayName))
-        }
 }
 
 @HiltViewModel
@@ -71,6 +66,7 @@ class ServersViewModel
         /** Reads a day of pings and builds the quick view's report; kept off Main. */
         internal var workDispatcher: CoroutineDispatcher = Dispatchers.Default
 
+        private var switchJob: Job? = null
         private var healthData: Pair<String, ServerHealthQuickViewData>? = null
         private var liveStatus = ServerHealthLiveStatus()
 
@@ -94,33 +90,42 @@ class ServersViewModel
         }
 
         fun refresh() {
-            viewModelScope.launch {
-                val profiles = connectionSessionCoordinator.listProfiles()
-                val active = connectionSessionCoordinator.currentProfile()
-                _uiState.update { it.copy(profiles = profiles, activeId = active?.id) }
-                publishHealth()
-            }
+            viewModelScope.launch { reload() }
+        }
+
+        /**
+         * Makes [profileId] the active server, the same switch as a pick in the Home server sheet.
+         * Ignores the active server and taps while an earlier switch is still running.
+         */
+        fun switchTo(profileId: String) {
+            val state = _uiState.value
+            if (switchJob?.isActive == true) return
+            if (profileId == state.activeId || state.profiles.none { it.id == profileId }) return
+            switchJob =
+                viewModelScope.launch {
+                    try {
+                        connectionSessionCoordinator.switchProfile(profileId)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        DiagnosticLog.warning(DiagnosticLogArea.Connection, "servers switch failed id=$profileId", error)
+                    }
+                    reload()
+                    if (_uiState.value.activeId != profileId) {
+                        DiagnosticLog.warning(DiagnosticLogArea.Connection, "servers switch did not apply id=$profileId")
+                    }
+                }
+        }
+
+        private suspend fun reload() {
+            val profiles = connectionSessionCoordinator.listProfiles()
+            val active = connectionSessionCoordinator.currentProfile()
+            _uiState.update { it.copy(profiles = profiles, activeId = active?.id) }
+            publishHealth()
         }
 
         fun openHealth(profileId: String) {
             _openHealthRequests.tryEmit(profileId)
-        }
-
-        fun requestRemove(profile: ConnectionProfile) {
-            _uiState.update { it.copy(pendingRemoval = profile) }
-        }
-
-        fun dismissRemove() {
-            _uiState.update { it.copy(pendingRemoval = null) }
-        }
-
-        fun confirmRemove() {
-            val pending = _uiState.value.pendingRemoval ?: return
-            viewModelScope.launch {
-                connectionSessionCoordinator.removeProfile(pending.id)
-                _uiState.update { it.copy(pendingRemoval = null) }
-                refresh()
-            }
         }
 
         private suspend fun reloadHealth(activeId: String?) {

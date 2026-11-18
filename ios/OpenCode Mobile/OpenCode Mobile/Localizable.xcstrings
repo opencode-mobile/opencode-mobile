@@ -8285,6 +8285,17 @@
         }
       }
     },
+    "servers.edit_profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit %@"
+          }
+        }
+      }
+    },
     "servers.profile_count" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8319,17 +8330,6 @@
         }
       }
     },
-    "servers.remove_dialog.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remove server?"
-          }
-        }
-      }
-    },
     "servers.remove_dialog.title_named" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8337,17 +8337,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remove “%@”?"
-          }
-        }
-      }
-    },
-    "servers.remove_profile" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remove %@"
           }
         }
       }
