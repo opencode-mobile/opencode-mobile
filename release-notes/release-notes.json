@@ -2,12 +2,124 @@
   "releases": [
     {
       "android": {
-        "version": "1.5.0",
+        "version": "1.5.1",
         "released": null
       },
       "ios": {
-        "version": "1.4.0",
+        "version": "1.4.1",
         "released": null
+      },
+      "items": [
+        {
+          "kind": "new",
+          "icon": "sparkle",
+          "title": "Light, dark and text size",
+          "body": "Choose light or dark whatever your phone uses, and set the text size for Home, Session Chat and code separately.",
+          "prs": [
+            1046,
+            1048,
+            1077
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "image",
+          "title": "Images from tools",
+          "body": "See images that tools return in Session Chat, and tap one to open it in full.",
+          "prs": [
+            1040
+          ]
+        },
+        {
+          "kind": "new",
+          "icon": "server",
+          "title": "Server Health",
+          "body": "Check ping, uptime, reconnects and errors for your server from the Servers page.",
+          "prs": [
+            1041,
+            1055,
+            1059
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "chat",
+          "title": "Long messages",
+          "body": "Long messages you send are cut short in the timeline. Tap to read them in full.",
+          "prs": [
+            1049,
+            1072
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "code",
+          "title": "Big changes and files",
+          "body": "Large diffs, Changes and files open faster and use less memory. Long diffs show full line numbers.",
+          "prs": [
+            1061,
+            1074,
+            1060,
+            1051
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "list",
+          "title": "Faster Home on launch",
+          "body": "Home shows your sessions right away, without jumping or flashing “Loading”.",
+          "prs": [
+            1036
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "fix",
+          "title": "Text selection crash",
+          "body": "Fixed a crash after rotating while text was selected.",
+          "platforms": [
+            "android"
+          ],
+          "prs": [
+            1045
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "sheet",
+          "title": "Sheets and keyboard",
+          "body": "Connect stays above the keyboard, and long sheets like Worktrees scroll instead of overflowing.",
+          "platforms": [
+            "ios"
+          ],
+          "prs": [
+            1078,
+            1031,
+            1032
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "server",
+          "title": "Long operations and saved servers",
+          "body": "Summarize and compact no longer stop after a minute, and one damaged saved server no longer empties the list.",
+          "platforms": [
+            "ios"
+          ],
+          "prs": [
+            1075
+          ]
+        }
+      ]
+    },
+    {
+      "android": {
+        "version": "1.5.0",
+        "released": "2026-11-11"
+      },
+      "ios": {
+        "version": "1.4.0",
+        "released": "2026-11-11"
       },
       "items": [
         {
