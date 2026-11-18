@@ -3,7 +3,7 @@ import SwiftUI
 import VoiceEngineKit
 
 /// Settings: a plain list for now. Project, model and appearance work; the rest are placeholders.
-/// Version ends App and does nothing when tapped; in debug builds the Developer section follows it.
+/// Privacy policy opens in the system browser. Version ends App and does nothing when tapped; in debug builds the Developer section follows it.
 /// Release builds, App Distribution's included, leave it out. Sample session, in App, opens the
 /// playground over today's session in every build.
 struct SettingsView: View {
@@ -16,6 +16,7 @@ struct SettingsView: View {
     /// Pair again was tapped in Server details: the scan cover opens once the sheet has gone.
     @State private var pairsAgain = false
     @State private var showsSpeechLab = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(spacing: 0) {
@@ -92,6 +93,9 @@ struct SettingsView: View {
                         LocalizedStringResource("settings.sample", defaultValue: "Sample session"),
                         subtitle: String(localized: "settings.sample.sub", defaultValue: "Try it with a made-up project. Your session waits.")
                     ) { main.openSample() }
+                    HexRow(icon: .lock, LocalizedStringResource("app.privacy_policy", defaultValue: "Privacy policy")) {
+                        openURL(HexPrivacyPolicy.url)
+                    }
                     HexRow(
                         icon: .info,
                         LocalizedStringResource("settings.version", defaultValue: "Version"),

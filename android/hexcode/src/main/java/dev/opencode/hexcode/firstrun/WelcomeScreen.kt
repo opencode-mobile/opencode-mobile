@@ -2,6 +2,7 @@ package dev.opencode.hexcode.firstrun
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -23,12 +25,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.R
+import dev.opencode.hexcode.app.HexPrivacyPolicy
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.designsystem.components.HexButton
@@ -130,6 +136,31 @@ fun WelcomeScreen(
                 Modifier
                     .fillMaxWidth()
                     .padding(top = 10.dp),
+        )
+        PrivacyLink()
+    }
+}
+
+/**
+ * Privacy policy, under the footer: Settings is only reachable once paired, so first run links it too. A quiet text
+ * link, no Hex component draws one; it opens the system browser.
+ */
+@Composable
+private fun PrivacyLink() {
+    val context = LocalContext.current
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = HexTheme.size.row)
+                .clickable(role = Role.Button) { HexPrivacyPolicy.open(context) },
+    ) {
+        Text(
+            stringResource(R.string.app_privacy_policy),
+            style = HexTheme.type.footnote,
+            color = HexTheme.colors.text2,
+            textDecoration = TextDecoration.Underline,
         )
     }
 }

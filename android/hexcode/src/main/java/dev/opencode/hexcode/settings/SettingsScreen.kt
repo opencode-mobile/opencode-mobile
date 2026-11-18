@@ -37,6 +37,7 @@ import dev.opencode.hexcode.BuildConfig
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.HexPrefs
+import dev.opencode.hexcode.app.HexPrivacyPolicy
 import dev.opencode.hexcode.app.ServerAddresses
 import dev.opencode.hexcode.designsystem.HexIcons
 import dev.opencode.hexcode.designsystem.HexTheme
@@ -77,7 +78,8 @@ data class NewSessionInfo(
 
 /**
  * Settings, the prototype's plain list (app-plan.md, Settings and finish (M6)). Project, Model, Reasoning, Appearance,
- * Start a new session and Server work; the three dictation rows are placeholders for now. Version does nothing when
+ * Start a new session and Server work; the three dictation rows are placeholders for now. Privacy policy opens in the
+ * system browser. Version does nothing when
  * tapped; in debug builds the Developer section follows it, for whoever builds and tests the app. Release builds,
  * App Distribution's included, leave it out.
  */
@@ -200,6 +202,8 @@ fun SettingsScreen(
                     server?.let { serverDetails(it) },
                     { if (server != null) sheet = SettingsSheet.Server },
                 )
+                val context = LocalContext.current
+                Row(HexIcons.lock, stringResource(R.string.app_privacy_policy), null, null, { HexPrivacyPolicy.open(context) })
                 HexRow(
                     title = stringResource(R.string.settings_version),
                     icon = HexIcons.info,
