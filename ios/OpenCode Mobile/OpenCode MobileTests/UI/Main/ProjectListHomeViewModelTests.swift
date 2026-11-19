@@ -2658,6 +2658,14 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.uiState.projectLoadStates.isEmpty)
     }
 
+    @Test func viewModel_deallocatesAfterItsOwnerDropsIt() async throws {
+        let reference = WeakViewModelReference()
+        try await makeAndDropViewModel(into: reference)
+        // A discarded Home model must not keep itself alive through the live-update stream; a
+        // leaked model keeps refreshing on every profile save.
+        #expect(await waitUntil { reference.viewModel == nil })
+    }
+
     @Test func homeChromeProjects_carryLoadIntoScopeTabs() {
         let section = ProjectSectionItem(
             id: "/two",
@@ -2685,6 +2693,21 @@ struct ProjectListHomeViewModelTests {
 private func homeSession(_ viewModel: ProjectListHomeViewModel, id: String) -> SessionListItem? {
     guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else { return nil }
     return sections.flatMap(\.allSessions).first { $0.id == id }
+}
+
+@MainActor
+private final class WeakViewModelReference {
+    weak var viewModel: ProjectListHomeViewModel?
+}
+
+/// Builds a Home model, lets its connection-state loop subscribe, then drops it.
+@MainActor
+private func makeAndDropViewModel(into reference: WeakViewModelReference) async throws {
+    let viewModel = makeViewModel(projectRepository: FakeProjectRepository())
+    reference.viewModel = viewModel
+    // The loop starts on the next suspension; the model must still be alive while it runs.
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(reference.viewModel != nil)
 }
 
 @MainActor

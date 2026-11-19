@@ -161,6 +161,36 @@ import Testing
         #expect(manager.connection?.baseURL.absoluteString == lan)
     }
 
+    @Test @MainActor func registration_stopsDeliveringProfileSavesWhenCancelledOrReleased() async throws {
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: ActiveConnectionManager(),
+            connectionProfileStore: InMemoryConnectionProfileStore(),
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore(),
+            composerDraftStore: InMemoryComposerDraftStore()
+        )
+        var cancelledSaves = 0
+        var releasedSaves = 0
+        let cancelled = coordinator.onProfileSaved { cancelledSaves += 1 }
+        var released: ConnectionSessionCoordinator.Registration? = coordinator.onProfileSaved { releasedSaves += 1 }
+
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "test-password", name: "A")
+        )
+        #expect(cancelledSaves == 1)
+        #expect(releasedSaves == 1)
+
+        cancelled.cancel()
+        #expect(released != nil)
+        released = nil
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://127.0.0.1:4097/", username: "opencode", password: "test-password", name: "B")
+        )
+        // Neither a cancelled registration nor a released one leaves its handler behind.
+        #expect(cancelledSaves == 1)
+        #expect(releasedSaves == 1)
+    }
+
     @Test @MainActor func applyProfileChange_ordersStopCachesRebindSignalStart() async throws {
         let log = TransactionLog()
         let store = CatalogConnectionProfileStore()
@@ -186,10 +216,11 @@ import Testing
             hasActiveConnection: { manager.connection != nil || manager.currentProfile() != nil }
         )
         var savedCount = 0
-        coordinator.onProfileSaved {
+        let savedRegistration = coordinator.onProfileSaved {
             log.append("uiSaved")
             savedCount += 1
         }
+        defer { withExtendedLifetime(savedRegistration) {} }
         try await coordinator.saveProfile(
             ConnectionProfile(baseURL: "http://10.0.0.1:4096/", username: "opencode", password: "a", name: "A")
         )
@@ -320,7 +351,8 @@ private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked S
             sessionModelSelectionStore: InMemorySessionModelSelectionStore()
         )
         var savedCount = 0
-        coordinator.onProfileSaved { savedCount += 1 }
+        let savedRegistration = coordinator.onProfileSaved { savedCount += 1 }
+        defer { withExtendedLifetime(savedRegistration) {} }
 
         try await coordinator.saveProfile(
             ConnectionProfile(baseURL: "http://10.0.0.1:4096/", username: "opencode", password: "secret", name: "Home")

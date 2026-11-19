@@ -22,6 +22,12 @@ final class AppRootViewModel {
     private let sessionChatDisplayPreferences: SessionChatDisplayPreferences
     private let newFeatures: NewFeatureStore
     private let whatsNew: WhatsNewStore
+    /// Home's model, built the first time Home opens and kept for the app's life, so a profile
+    /// switch reuses it instead of leaving a discarded model behind.
+    private(set) var homeViewModel: ProjectListHomeViewModel?
+    private let makeHomeViewModel: @MainActor () -> ProjectListHomeViewModel
+    /// Kept so the registration can be cancelled; it is not a property the view observes.
+    @ObservationIgnored private var profileSavedRegistration: ConnectionSessionCoordinator.Registration?
 
     init(
         connectionProfileStore: any ConnectionProfileStore,
@@ -31,7 +37,8 @@ final class AppRootViewModel {
         appOnboardingPreferences: AppOnboardingPreferences,
         sessionChatDisplayPreferences: SessionChatDisplayPreferences,
         newFeatures: NewFeatureStore,
-        whatsNew: WhatsNewStore
+        whatsNew: WhatsNewStore,
+        makeHomeViewModel: @escaping @MainActor () -> ProjectListHomeViewModel
     ) {
         self.connectionProfileStore = connectionProfileStore
         self.activeConnectionManager = activeConnectionManager
@@ -41,8 +48,9 @@ final class AppRootViewModel {
         self.sessionChatDisplayPreferences = sessionChatDisplayPreferences
         self.newFeatures = newFeatures
         self.whatsNew = whatsNew
+        self.makeHomeViewModel = makeHomeViewModel
 
-        connectionSessionCoordinator.onProfileSaved { [weak self] in
+        profileSavedRegistration = connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 self?.enterHome()
             }
@@ -78,6 +86,9 @@ final class AppRootViewModel {
     }
 
     func enterHome() {
+        if homeViewModel == nil {
+            homeViewModel = makeHomeViewModel()
+        }
         state = .home
         worldSignals.onForeground()
     }
@@ -110,8 +121,10 @@ struct AppRootView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .home:
-                AppRootHomeHost(rootViewModel: rootViewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if let homeViewModel = rootViewModel.homeViewModel {
+                    AppRootHomeHost(rootViewModel: rootViewModel, homeViewModel: homeViewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
         .background(OpenCodeColors.backgroundBase)
@@ -242,10 +255,12 @@ extension AppRootView {
 /// Isolates one-shot Connect→setup so SwiftUI body re-renders cannot consume the flag twice.
 private struct AppRootHomeHost: View {
     let rootViewModel: AppRootViewModel
+    let homeViewModel: ProjectListHomeViewModel
     @State private var presentConnectionSetupOnAppear: Bool
 
-    init(rootViewModel: AppRootViewModel) {
+    init(rootViewModel: AppRootViewModel, homeViewModel: ProjectListHomeViewModel) {
         self.rootViewModel = rootViewModel
+        self.homeViewModel = homeViewModel
         _presentConnectionSetupOnAppear = State(
             initialValue: rootViewModel.consumePresentConnectionSetup()
         )
@@ -253,7 +268,7 @@ private struct AppRootHomeHost: View {
 
     var body: some View {
         ProjectListHomeView(
-            viewModel: Container.makeProjectListHomeViewModel(),
+            viewModel: homeViewModel,
             presentConnectionSetupOnAppear: $presentConnectionSetupOnAppear
         )
     }
