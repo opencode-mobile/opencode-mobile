@@ -918,11 +918,6 @@ extension Container {
     }
 
     @MainActor
-    static func makeProjectListHomeViewModel() -> ProjectListHomeViewModel {
-        shared.projectListHomeViewModel()
-    }
-
-    @MainActor
     static func makeSessionChatViewModel(sessionID: String, sessionTitle: String, worktree: String) -> SessionChatViewModel {
         shared.sessionChatViewModel((sessionID: sessionID, sessionTitle: sessionTitle, worktree: worktree))
     }
