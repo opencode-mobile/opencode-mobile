@@ -203,6 +203,13 @@ fun OpenCodeListItem(
      * click does not cover it.
      */
     footer: (@Composable () -> Unit)? = null,
+    /**
+     * Lines the title may take before it truncates. Rows that carry a sentence, such as a question
+     * option, raise it so the words survive on a phone.
+     */
+    titleMaxLines: Int = 1,
+    /** Lines the subtitle may take before it truncates, for the same rows as [titleMaxLines]. */
+    subtitleMaxLines: Int = 1,
 ) {
     require(subtitle == null || subtitleSegments == null) {
         "List Item accepts either a plain subtitle or semantic segments"
@@ -373,7 +380,7 @@ fun OpenCodeListItem(
                                     text = listItemTitleText(title, titleHighlight),
                                     color = if (enabled) textStrong else textWeaker,
                                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                                    maxLines = 1,
+                                    maxLines = titleMaxLines,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = titleModifier,
                                 )
@@ -403,7 +410,7 @@ fun OpenCodeListItem(
                                     text = subtitle,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = if (enabled) textBase else textWeaker,
-                                    maxLines = 1,
+                                    maxLines = subtitleMaxLines,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }

@@ -158,6 +158,11 @@ struct OpenCodeListItem<Trailing: View>: View {
     /// Content under the row inside the same card, below a divider. It takes its own taps;
     /// the row action stays on the row above it.
     let footer: AnyView?
+    /// Lines the title may take before it truncates. Rows that show a sentence, such as a question
+    /// option, raise it so the words survive on a phone.
+    let titleLineLimit: Int
+    /// Lines the subtitle may take before it truncates, for the same rows as `titleLineLimit`.
+    let subtitleLineLimit: Int
 
     @State private var isPressing = false
     @State private var popScale: CGFloat = 1
@@ -185,7 +190,9 @@ struct OpenCodeListItem<Trailing: View>: View {
         action: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil,
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() },
-        footer: AnyView? = nil
+        footer: AnyView? = nil,
+        titleLineLimit: Int = 1,
+        subtitleLineLimit: Int = 1
     ) {
         precondition(subtitle == nil || subtitleSegments == nil, "List Item accepts either a plain subtitle or semantic segments")
         self.variant = variant
@@ -209,6 +216,8 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.onLongPress = onLongPress
         self.trailing = trailing
         self.footer = footer
+        self.titleLineLimit = max(1, titleLineLimit)
+        self.subtitleLineLimit = max(1, subtitleLineLimit)
     }
 
     var body: some View {
@@ -464,7 +473,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                     titleText
                         .font(OpenCodeTypography.Style.body.font(scale: textScale).weight(.semibold))
                         .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
-                        .lineLimit(1)
+                        .lineLimit(titleLineLimit)
                     if let titleTag {
                         OpenCodeTag(titleTag, size: .small)
                     }
@@ -481,7 +490,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                     Text(openCode: subtitle)
                         .font(OpenCodeTypography.Style.caption.font(scale: textScale))
                         .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
-                        .lineLimit(1)
+                        .lineLimit(subtitleLineLimit)
                 }
 
                 if let detailSegments {

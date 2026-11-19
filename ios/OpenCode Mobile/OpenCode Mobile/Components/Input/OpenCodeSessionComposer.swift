@@ -1365,6 +1365,12 @@ struct OpenCodeSessionComposer: View {
 
     private static let questionCustomAnswerID = "questionCustomAnswer"
 
+    /// A question option carries a sentence on a phone: the label and its description wrap instead
+    /// of ending in an ellipsis. The question body scrolls when the cards grow, so the cap only
+    /// keeps one long option from crowding out the rest.
+    private static let questionOptionTitleLineLimit = 3
+    private static let questionOptionSubtitleLineLimit = 5
+
     private func revealQuestionCustomAnswer(
         _ question: OpenCodeSessionComposerState.Question,
         proxy: ScrollViewProxy
@@ -1425,7 +1431,9 @@ struct OpenCodeSessionComposer: View {
                                     label: option.label
                                 )
                             )
-                        }
+                        },
+                        titleLineLimit: Self.questionOptionTitleLineLimit,
+                        subtitleLineLimit: Self.questionOptionSubtitleLineLimit
                     )
                     .openCodeFocusKey(OpenCodePromptFocusTarget.option(index))
                 }

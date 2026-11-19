@@ -470,6 +470,14 @@ private const val PromptMaxVisibleLines = 5
 private const val QuestionCustomMinLines = 3
 private const val QuestionCustomMaxLines = 5
 
+/**
+ * A question option carries a sentence on a phone: the label and its description wrap instead of
+ * ending in an ellipsis. The question body scrolls when the cards grow, so the cap only keeps one
+ * long option from crowding out the rest.
+ */
+private const val QuestionOptionTitleMaxLines = 3
+private const val QuestionOptionSubtitleMaxLines = 5
+
 /** The Session Chat composer, at the Session Chat text size (#1044). */
 @Composable
 fun OpenCodeSessionComposer(
@@ -1902,6 +1910,8 @@ private fun ColumnScope.QuestionRequestContent(
                         enabled = !state.submitting,
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = questionSelectionDecorator(selected = optionSelected),
+                        titleMaxLines = QuestionOptionTitleMaxLines,
+                        subtitleMaxLines = QuestionOptionSubtitleMaxLines,
                         onClick = {
                             onAction(
                                 OpenCodeSessionComposerAction.ToggleQuestionOption(
