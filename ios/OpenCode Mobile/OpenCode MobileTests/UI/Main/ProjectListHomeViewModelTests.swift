@@ -2660,7 +2660,7 @@ struct ProjectListHomeViewModelTests {
 
     @Test func viewModel_deallocatesAfterItsOwnerDropsIt() async throws {
         let reference = WeakViewModelReference()
-        try await makeAndDropViewModel(into: reference)
+        makeAndDropViewModel(into: reference)
         // A discarded Home model must not keep itself alive through the live-update stream; a
         // leaked model keeps refreshing on every profile save.
         #expect(await waitUntil { reference.viewModel == nil })
@@ -2700,14 +2700,10 @@ private final class WeakViewModelReference {
     weak var viewModel: ProjectListHomeViewModel?
 }
 
-/// Builds a Home model, lets its connection-state loop subscribe, then drops it.
+/// Builds a Home model and drops it. A strong capture in its observation task would keep it alive.
 @MainActor
-private func makeAndDropViewModel(into reference: WeakViewModelReference) async throws {
-    let viewModel = makeViewModel(projectRepository: FakeProjectRepository())
-    reference.viewModel = viewModel
-    // The loop starts on the next suspension; the model must still be alive while it runs.
-    try await Task.sleep(for: .milliseconds(200))
-    #expect(reference.viewModel != nil)
+private func makeAndDropViewModel(into reference: WeakViewModelReference) {
+    reference.viewModel = makeViewModel(projectRepository: FakeProjectRepository())
 }
 
 @MainActor
@@ -3695,4 +3691,88 @@ private final class VcsCallCounter: @unchecked Sendable {
     func count(_ directory: String) -> Int {
         lock.withLock { counts[directory] ?? 0 }
     }
+}
+
+/// Home is owned by the root model, so a profile save must not build another one (#1088).
+@MainActor
+@Suite struct AppRootHomeOwnershipTests {
+    @Test func homeModelIsBuiltOnceAcrossProfileSaves() async throws {
+        let defaults = UserDefaults(suiteName: "AppRootHomeOwnershipTests.\(UUID().uuidString)")!
+        let profileStore = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: RootTestCredentialStore()
+        )
+        let manager = ActiveConnectionManager(profileStore: profileStore)
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: profileStore,
+            secureCredentialStore: RootTestCredentialStore(),
+            sessionModelSelectionStore: UserDefaultsSessionModelSelectionStore(defaults: defaults),
+            composerDraftStore: UserDefaultsComposerDraftStore(defaults: defaults)
+        )
+        var made = 0
+        let foregroundChecks = RootTestCounter()
+        let root = AppRootViewModel(
+            connectionProfileStore: profileStore,
+            activeConnectionManager: manager,
+            connectionSessionCoordinator: coordinator,
+            worldSignals: SceneWorldSignals(
+                stream: FakeForegroundEventStream(),
+                deviceNetworkPath: FakeDeviceNetworkPath(),
+                hasActiveConnection: {
+                    foregroundChecks.increment()
+                    return false
+                }
+            ),
+            appOnboardingPreferences: AppOnboardingPreferences(defaults: defaults),
+            sessionChatDisplayPreferences: SessionChatDisplayPreferences(defaults: defaults),
+            newFeatures: NewFeatureStore(defaults: defaults),
+            whatsNew: WhatsNewStore(defaults: defaults),
+            makeHomeViewModel: {
+                made += 1
+                return makeViewModel(projectRepository: FakeProjectRepository())
+            }
+        )
+        #expect(made == 0)
+
+        root.enterHome()
+        let first = root.homeViewModel
+        #expect(made == 1)
+
+        // Every profile save re-enters Home; it must reuse the model, not build a second one.
+        root.enterHome()
+        let checksBeforeSave = foregroundChecks.value
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "test-password", name: "A")
+        )
+        // The save handler runs in a MainActor task; its enterHome() calls onForeground(), which
+        // reaches hasActiveConnection() through startIfConnected. Wait for that before counting.
+        #expect(await waitUntil { foregroundChecks.value > checksBeforeSave })
+        #expect(made == 1)
+        #expect(root.homeViewModel === first)
+    }
+}
+
+private final class RootTestCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func increment() {
+        lock.lock()
+        count += 1
+        lock.unlock()
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+}
+
+private struct RootTestCredentialStore: SecureCredentialStore {
+    func readPassword(serverBaseURL: String) -> String? { nil }
+    func writePassword(serverBaseURL: String, password: String) {}
+    func deletePassword(serverBaseURL: String) {}
+    func clearAll() {}
 }

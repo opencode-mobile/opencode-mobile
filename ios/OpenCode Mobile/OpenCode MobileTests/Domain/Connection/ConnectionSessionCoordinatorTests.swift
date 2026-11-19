@@ -191,6 +191,28 @@ import Testing
         #expect(releasedSaves == 1)
     }
 
+    @Test @MainActor func profileSavesDeliverHandlersOnTheMainActor() async throws {
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: ActiveConnectionManager(),
+            connectionProfileStore: InMemoryConnectionProfileStore(),
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore(),
+            composerDraftStore: InMemoryComposerDraftStore()
+        )
+        var delivered = false
+        let registration = coordinator.onProfileSaved {
+            // Traps if profile-change work runs off the main thread, which UI handlers assume.
+            MainActor.assertIsolated()
+            delivered = true
+        }
+        defer { withExtendedLifetime(registration) {} }
+
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "test-password", name: "A")
+        )
+        #expect(delivered)
+    }
+
     @Test @MainActor func applyProfileChange_ordersStopCachesRebindSignalStart() async throws {
         let log = TransactionLog()
         let store = CatalogConnectionProfileStore()

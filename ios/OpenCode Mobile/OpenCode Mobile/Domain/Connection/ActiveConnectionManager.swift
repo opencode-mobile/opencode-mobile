@@ -451,10 +451,12 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let purgeServerHealth: @Sendable (String?) async -> Void
     private let profileChangeGate = ProfileChangeGate()
     private let lock = NSLock()
-    private var profileSwitchingHandlers: [(id: UUID, handler: (String) -> Void)] = []
-    private var profileSavedHandlers: [(id: UUID, handler: () -> Void)] = []
-    private var profileClearedHandlers: [(id: UUID, handler: () -> Void)] = []
-    private var addressCheckHandlers: [(id: UUID, handler: (AddressCheck) -> Void)] = []
+    /// Lock-guarded handler storage. `nonisolated(unsafe)` lets a released registration remove
+    /// its entry from the registration token's nonisolated context; the lock is the only access.
+    nonisolated(unsafe) private var profileSwitchingHandlers: [(id: UUID, handler: (String) -> Void)] = []
+    nonisolated(unsafe) private var profileSavedHandlers: [(id: UUID, handler: () -> Void)] = []
+    nonisolated(unsafe) private var profileClearedHandlers: [(id: UUID, handler: () -> Void)] = []
+    nonisolated(unsafe) private var addressCheckHandlers: [(id: UUID, handler: (AddressCheck) -> Void)] = []
     private var currentAddressCheck = AddressCheck(generation: 0, state: .kept)
     private var switchGeneration: UInt64 = 0
 
@@ -519,7 +521,9 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         profileSwitchingHandlers.append((id, handler))
         lock.unlock()
         return registration(removing: { coordinator in
+            let removed = coordinator.profileSwitchingHandlers.filter { $0.id == id }
             coordinator.profileSwitchingHandlers.removeAll { $0.id == id }
+            return removed
         })
     }
 
@@ -529,7 +533,9 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         profileSavedHandlers.append((id, handler))
         lock.unlock()
         return registration(removing: { coordinator in
+            let removed = coordinator.profileSavedHandlers.filter { $0.id == id }
             coordinator.profileSavedHandlers.removeAll { $0.id == id }
+            return removed
         })
     }
 
@@ -539,7 +545,9 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         profileClearedHandlers.append((id, handler))
         lock.unlock()
         return registration(removing: { coordinator in
+            let removed = coordinator.profileClearedHandlers.filter { $0.id == id }
             coordinator.profileClearedHandlers.removeAll { $0.id == id }
+            return removed
         })
     }
 
@@ -549,30 +557,37 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         addressCheckHandlers.append((id, handler))
         lock.unlock()
         return registration(removing: { coordinator in
+            let removed = coordinator.addressCheckHandlers.filter { $0.id == id }
             coordinator.addressCheckHandlers.removeAll { $0.id == id }
+            return removed
         })
     }
 
-    /// A registration removes its handler under the coordinator's lock when it is released.
-    /// The removal takes `self` weakly, so holding a registration never keeps the coordinator.
-    private func registration(
-        removing remove: @escaping (ConnectionSessionCoordinator) -> Void
+    /// A registration stops future deliveries and removes its handler once released. The removal
+    /// takes `self` weakly, so holding a registration never keeps the coordinator. Nonisolated so a
+    /// released token can run from any thread; the returned entries only delay their release.
+    private nonisolated func registration(
+        removing remove: @escaping @Sendable (ConnectionSessionCoordinator) -> [Any]
     ) -> Registration {
         Registration { [weak self] in
             guard let self else { return }
             self.lock.lock()
-            remove(self)
+            let removed = remove(self)
             self.lock.unlock()
+            // Release the handlers after the unlock: one whose deinit cancels another
+            // registration must not re-enter this coordinator's non-recursive lock.
+            withExtendedLifetime(removed) {}
         }
     }
 
-    /// One handler registration. Keep it while the handler should run; releasing it, or calling
-    /// `cancel()`, stops delivery and leaves nothing behind in the coordinator.
-    final class Registration: @unchecked Sendable {
+    /// One handler registration. Keep it while the handler should run; calling `cancel()`, or
+    /// releasing it, stops future deliveries and leaves nothing behind in the coordinator.
+    /// A notification already in flight still reaches the handler once.
+    nonisolated final class Registration: @unchecked Sendable {
         private let lock = NSLock()
-        private var remove: (() -> Void)?
+        private var remove: (@Sendable () -> Void)?
 
-        init(remove: @escaping () -> Void) {
+        init(remove: @escaping @Sendable () -> Void) {
             self.remove = remove
         }
 
