@@ -1416,6 +1416,7 @@ struct OpenCodeSessionComposer: View {
                         selected: optionSelected,
                         enabled: !question.submitting,
                         style: .card,
+                        textFlow: .wrapped,
                         startDecorator: Self.questionSelectionDecorator(selected: optionSelected),
                         action: {
                             onAction(
