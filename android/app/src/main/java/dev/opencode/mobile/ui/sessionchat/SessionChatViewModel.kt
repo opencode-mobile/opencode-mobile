@@ -2171,6 +2171,7 @@ class SessionChatViewModel
                     inboxState = inboxSnapshot,
                     infoState = infoState,
                     previousSubagents = _uiState.value.subagents,
+                    usesTurnStatusPill = SessionChatDisplayPreferences.activityCardTimeline,
                 )
             val syncingIndicatorLabel =
                 if (timelineState.isSyncingMessages) {

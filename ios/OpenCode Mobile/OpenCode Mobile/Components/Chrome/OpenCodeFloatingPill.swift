@@ -54,7 +54,7 @@ enum OpenCodeFloatingPillState: CaseIterable, Equatable {
     case needsAttention
     /// Something failed.
     case error
-    /// Finished: a green check.
+    /// Finished: a check in the content color.
     case done
 
     /// Spoken after the label.
@@ -342,7 +342,7 @@ struct OpenCodeFloatingPill: View {
         case let .icon(icon):
             OpenCodeIconImage(icon: icon, size: Self.iconSize)
         case .spinner:
-            OpenCodeFloatingPillSpinner(color: contentColor)
+            OpenCodeArcSpinner(color: contentColor)
         case .pulsingDot:
             OpenCodeFloatingPillPulsingDot(color: contentColor)
         case let .glyph(text):
@@ -351,7 +351,6 @@ struct OpenCodeFloatingPill: View {
                 .frame(width: Self.iconSize, height: Self.iconSize)
         case .doneCheck:
             OpenCodeIconImage(icon: .check, size: Self.iconSize)
-                .foregroundStyle(OpenCodeColors.success)
         case .stateDot:
             Circle()
                 .fill(contentColor)
@@ -387,27 +386,6 @@ struct OpenCodeFloatingPill: View {
     private static let ringWidth: CGFloat = 1
     fileprivate static let dotSize: CGFloat = 8
     private static let closeTouchTarget: CGFloat = 44
-}
-
-/// The btw pill spinner; a still arc when Reduce Motion is on.
-private struct OpenCodeFloatingPillSpinner: View {
-    let color: Color
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        if reduceMotion {
-            Circle()
-                .trim(from: 0, to: 0.75)
-                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .frame(width: 14, height: 14)
-                .frame(width: 16, height: 16)
-        } else {
-            ProgressView()
-                .controlSize(.small)
-                .tint(color)
-        }
-    }
 }
 
 /// Amber dot that pulses while an item waits for the user; still under Reduce Motion.

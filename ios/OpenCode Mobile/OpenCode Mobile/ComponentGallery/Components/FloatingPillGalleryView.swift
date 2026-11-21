@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FloatingPillGalleryView: View {
     @State private var log = "Tap a pill"
+    @State private var turnDone = false
 
     private static let layouts: [(title: String, layout: OpenCodeFloatingPillLayout)] = [
         ("Icon + label", .iconLabel(icon: .callSplit, label: "+128 −14")),
@@ -15,7 +16,7 @@ struct FloatingPillGalleryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Every layout in every state, then compact. Needs attention adds an amber ring; a waiting counter swaps its spinner for a pulsing dot; done shows a green check.")
+            Text("Every layout in every state, then compact. Needs attention adds an amber ring; a waiting counter swaps its spinner for a pulsing dot; done shows a check.")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .fixedSize(horizontal: false, vertical: true)
@@ -68,6 +69,21 @@ struct FloatingPillGalleryView: View {
                         }
                     }
                 }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Turn status")
+                    .font(OpenCodeTypography.heading)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                Text("One pill: the spinner bends into the check, full and round.")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                HStack(spacing: 8) {
+                    OpenCodeTurnStatusPill(phase: turnDone ? .done : .working(label: "Working"))
+                    OpenCodeTurnStatusPill(phase: turnDone ? .done : .working(label: "Working"), compact: true)
+                }
+                Button(turnDone ? "Back to Working" : "Finish turn") { turnDone.toggle() }
+                    .font(OpenCodeTypography.button)
             }
 
             Text(log)

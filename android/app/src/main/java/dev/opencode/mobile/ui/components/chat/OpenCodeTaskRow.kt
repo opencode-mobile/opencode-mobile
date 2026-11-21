@@ -217,7 +217,7 @@ private fun TaskRowGlyph(state: OpenCodeTaskRowState) {
                     imageVector = OpenCodeIcons.Check,
                     contentDescription = null,
                     modifier = Modifier.size(TaskRowIconSize),
-                    tint = openCodeColor("success"),
+                    tint = openCodeColor("text-strong"),
                 )
             OpenCodeTaskRowState.Failed, OpenCodeTaskRowState.Stopped -> {
                 val color = MaterialTheme.colorScheme.error

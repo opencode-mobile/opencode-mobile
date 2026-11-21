@@ -4,6 +4,8 @@ import SwiftUI
 /// Away from the end the whole slot is one round pill that opens the stack of every item.
 struct SessionChatActivitySlotView: View {
     let slot: SessionChatActivitySlot
+    /// Leads the row in the Activity Card style; never part of the stack.
+    var turnStatus: SessionChatTurnStatusSlot?
     @Binding var stackOpen: Bool
     let onTap: (SessionChatActivityItem) -> Void
     let onClose: (SessionChatActivityItem) -> Void
@@ -34,6 +36,17 @@ struct SessionChatActivitySlotView: View {
                 }
             }
             HStack(spacing: 0) {
+                if let turnStatus {
+                    // One identity across Working and Done, so the spinner can morph.
+                    OpenCodeTurnStatusPill(
+                        phase: turnStatus.phase,
+                        compact: turnStatus.compact,
+                        leaving: turnStatus.leaving
+                    )
+                    .id(Self.turnStatusID)
+                    .padding(.trailing, Self.spacing)
+                    .transition(rowTransition)
+                }
                 if let primary = slot.primary {
                     // One pill whether collapsed or not, so folding to round shrinks it in place.
                     primaryPill(primary)
@@ -55,6 +68,7 @@ struct SessionChatActivitySlotView: View {
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.78), value: stackOpen)
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : OpenCodeFloatingPill.widthAnimation, value: slot)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : OpenCodeFloatingPill.widthAnimation, value: turnStatus == nil)
         .onChange(of: slot.showsOverflowButton) { _, shows in
             if !shows, !slot.isCollapsed { stackOpen = false }
         }
@@ -110,6 +124,7 @@ struct SessionChatActivitySlotView: View {
     }
 
     static let spacing: CGFloat = 8
+    private static let turnStatusID = "turn-status"
 
     static func layout(_ item: SessionChatActivityItem) -> OpenCodeFloatingPillLayout {
         switch item {

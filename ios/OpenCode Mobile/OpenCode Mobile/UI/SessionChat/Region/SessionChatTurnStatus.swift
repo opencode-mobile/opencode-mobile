@@ -25,6 +25,8 @@ struct SessionChatTurnStatusInputs {
     var previousSubagents: [SessionChatSubagent]
     var inboxState: SessionChatInboxRegionState
     var infoState: SessionInfoRegionState
+    /// The Activity Card style shows the turn on a floating pill, with a shorter Done hold and a fade.
+    var usesTurnStatusPill = false
 }
 
 /// The open session's turn: the working footer (label, collapse, fade, hold and its wake), the
@@ -104,7 +106,11 @@ final class SessionChatTurnStatus {
             hideImmediately: awaitingUser || !inputs.isSessionBound,
             previous: workingChrome,
             hold: workingHold,
-            nowMs: clock.nowMs()
+            nowMs: clock.nowMs(),
+            holdMilliseconds: inputs.usesTurnStatusPill
+                ? WorkingTurnIndicator.turnPillHoldMilliseconds
+                : WorkingTurnIndicator.idleHoldMilliseconds,
+            fadeMilliseconds: inputs.usesTurnStatusPill ? WorkingTurnIndicator.turnPillFadeMilliseconds : 0
         )
         workingChrome = workingResolution.chrome
         workingHold = workingResolution.hold

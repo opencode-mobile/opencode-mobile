@@ -33,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -174,8 +176,8 @@ fun OpenCodeActivityCard(
         modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(openCodeColor("surface-base"))
-            .border(1.dp, openCodeColor("border-weak-base"), shape)
+            .background(openCodeColor("surface-raised-base"))
+            .border(1.dp, openCodeColor("icon-weak-base"), shape)
     when (state) {
         is OpenCodeActivityCardState.Settled ->
             if (agents.isEmpty()) {
@@ -198,7 +200,7 @@ fun OpenCodeActivityCard(
                 Text(
                     text = summary,
                     style = MaterialTheme.typography.bodySmall,
-                    color = openCodeColor("text-weak"),
+                    color = openCodeColor("text-base"),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(start = ActivityCardPaddingHorizontal, end = ActivityCardPaddingHorizontal, bottom = 8.dp),
@@ -240,10 +242,15 @@ private fun Header(
                 }.padding(start = ActivityCardPaddingHorizontal, end = ActivityCardPaddingHorizontal, top = 10.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OpenCodeActivityWorkingLabel(text = working, shimmer = shimmer, style = MaterialTheme.typography.bodyMedium)
+        OpenCodeActivityWorkingLabel(
+            text = working,
+            shimmer = shimmer,
+            style = MaterialTheme.typography.bodyMedium,
+            emphasis = OpenCodeActivityEmphasis.Card,
+        )
         Box(modifier = Modifier.weight(1f))
         if (elapsed != null) {
-            Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
+            Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-base"), maxLines = 1)
         }
     }
 }
@@ -258,6 +265,7 @@ private fun AgentSection(
         ActivityHairline()
         OpenCodeActivitySectionLabel(
             text = openCodeActivityAgentSectionLabel(agents.size),
+            emphasis = OpenCodeActivityEmphasis.Card,
             modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
         )
         agents.forEachIndexed { index, agent ->
@@ -306,15 +314,15 @@ private fun AgentRow(
         Text(
             text = agent.action,
             style = MaterialTheme.typography.bodyMedium,
-            color = openCodeColor("text-weak"),
+            color = openCodeColor("text-base"),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (elapsed != null) {
-            Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
+            Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-base"), maxLines = 1)
         }
-        ActivityChevron()
+        ActivityChevron(placement = ActivityChevronPlacement.Card)
     }
 }
 
@@ -341,13 +349,17 @@ private fun FooterBand(
             idleText.orEmpty()
         }
     val opensActivity = stringResource(R.string.component_activity_card_opens_activity, label)
+    val divider = openCodeColor("border-weak-base")
     Box(
         modifier =
             Modifier
                 .padding(top = 6.dp)
                 .fillMaxWidth()
-                .background(openCodeColor("surface-raised-base"))
-                .openCodeFocusRing()
+                .background(openCodeColor("surface-base-hover"))
+                // Drawn inside the band's height, so the divider adds no layout.
+                .drawBehind {
+                    drawRect(color = divider, size = Size(size.width, 1.dp.toPx()))
+                }.openCodeFocusRing()
                 .clickable(onClick = onTap)
                 .semantics(mergeDescendants = true) {
                     contentDescription = opensActivity
@@ -405,13 +417,13 @@ private fun FooterRow(
             Text(
                 text = content.idleText.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
-                color = openCodeColor("text-weaker"),
+                color = openCodeColor("text-base"),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
         }
-        ActivityChevron()
+        ActivityChevron(placement = ActivityChevronPlacement.CardFooter)
     }
 }
 
@@ -425,12 +437,12 @@ private fun RowScope.CurrentTool(
         imageVector = current.icon.vector(),
         contentDescription = null,
         modifier = Modifier.size(ActivityIconSize),
-        tint = openCodeColor("icon-base"),
+        tint = openCodeColor("text-base"),
     )
     Text(
         text = current.title,
         style = MaterialTheme.typography.bodyMedium,
-        color = openCodeColor("text-base"),
+        color = openCodeColor("text-strong"),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.weight(1f),
@@ -440,13 +452,13 @@ private fun RowScope.CurrentTool(
         Text(
             text = "+${current.extraRunning}",
             style = MaterialTheme.typography.bodySmall,
-            color = openCodeColor("text-weak"),
+            color = openCodeColor("text-base"),
             maxLines = 1,
         )
     }
     val elapsed = SessionChatChildSessionElapsed.format(current.startedAtMs, nowMs)
     if (elapsed != null) {
-        Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
+        Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-base"), maxLines = 1)
     }
 }
 
@@ -476,7 +488,7 @@ private fun SettledLine(
         horizontalArrangement = Arrangement.spacedBy(ActivitySpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OpenCodeActivityStatusDot(status = state.worstStatus, pulses = false)
+        OpenCodeActivityStatusDot(status = state.worstStatus, pulses = false, emphasis = OpenCodeActivityEmphasis.Card)
         Text(
             text =
                 buildAnnotatedString {
@@ -491,7 +503,7 @@ private fun SettledLine(
                         }
                     }
                     if (names.isNotEmpty()) {
-                        withStyle(SpanStyle(color = openCodeColor("text-weak"))) { append(" · $names") }
+                        withStyle(SpanStyle(color = openCodeColor("text-base"))) { append(" · $names") }
                     }
                 },
             style = MaterialTheme.typography.bodyMedium,
@@ -499,11 +511,19 @@ private fun SettledLine(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        ActivityChevron()
+        ActivityChevron(placement = ActivityChevronPlacement.Card)
     }
 }
 
 // Pieces shared with OpenCodeActivitySheet.
+
+/**
+ * How strongly a piece shared by the card and the activity sheet reads. The Activity Card sits
+ * among message text and uses the stronger tones; the sheet keeps the quieter ones.
+ */
+internal enum class OpenCodeActivityEmphasis { Standard, Card }
+
+internal enum class ActivityChevronPlacement { Sheet, Card, CardFooter }
 
 /** `Working` with the running text shimmer; static text-base with animations off. */
 @Composable
@@ -511,11 +531,13 @@ internal fun OpenCodeActivityWorkingLabel(
     text: String,
     shimmer: Boolean,
     style: TextStyle,
+    emphasis: OpenCodeActivityEmphasis = OpenCodeActivityEmphasis.Standard,
 ) {
     val semiBold = style.copy(fontWeight = FontWeight.SemiBold)
     if (shimmer) {
         val phase = rememberRunningPhase()
-        Text(text = text, style = semiBold.copy(brush = runningShimmerBrush(phase.value)), maxLines = 1)
+        val highlight = if (emphasis == OpenCodeActivityEmphasis.Card) "text-strong" else "warning"
+        Text(text = text, style = semiBold.copy(brush = runningShimmerBrush(phase.value, highlight)), maxLines = 1)
     } else {
         Text(text = text, style = semiBold, color = openCodeColor("text-base"), maxLines = 1)
     }
@@ -526,11 +548,12 @@ internal fun OpenCodeActivityWorkingLabel(
 internal fun OpenCodeActivitySectionLabel(
     text: String,
     modifier: Modifier = Modifier,
+    emphasis: OpenCodeActivityEmphasis = OpenCodeActivityEmphasis.Standard,
 ) {
     Text(
         text = text.uppercase(),
         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp, letterSpacing = 0.08.em),
-        color = openCodeColor("text-weak"),
+        color = openCodeColor(if (emphasis == OpenCodeActivityEmphasis.Card) "text-base" else "text-weak"),
         maxLines = 1,
         modifier = modifier,
     )
@@ -579,6 +602,7 @@ internal fun OpenCodeActivityStatusDot(
     status: OpenCodeActivityStatus,
     pulses: Boolean,
     size: Dp = ActivityDotSize,
+    emphasis: OpenCodeActivityEmphasis = OpenCodeActivityEmphasis.Standard,
 ) {
     when (status) {
         OpenCodeActivityStatus.Pending, OpenCodeActivityStatus.Running ->
@@ -587,7 +611,8 @@ internal fun OpenCodeActivityStatusDot(
             val color =
                 when (status) {
                     OpenCodeActivityStatus.Failed -> openCodeColor("error")
-                    OpenCodeActivityStatus.Interrupted -> openCodeColor("text-weaker")
+                    OpenCodeActivityStatus.Interrupted ->
+                        openCodeColor(if (emphasis == OpenCodeActivityEmphasis.Card) "text-weak" else "text-weaker")
                     else -> openCodeColor("success")
                 }
             Box(modifier = Modifier.size(size).background(color, CircleShape))
@@ -601,12 +626,19 @@ internal fun ActivityHairline(modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun ActivityChevron() {
+internal fun ActivityChevron(placement: ActivityChevronPlacement = ActivityChevronPlacement.Sheet) {
     Icon(
         imageVector = OpenCodeIcons.ChevronRight,
         contentDescription = null,
         modifier = Modifier.size(ActivityChevronSize),
-        tint = openCodeColor("text-weaker"),
+        tint =
+            openCodeColor(
+                when (placement) {
+                    ActivityChevronPlacement.Sheet -> "text-weaker"
+                    ActivityChevronPlacement.Card -> "icon-base"
+                    ActivityChevronPlacement.CardFooter -> "text-base"
+                },
+            ),
     )
 }
 

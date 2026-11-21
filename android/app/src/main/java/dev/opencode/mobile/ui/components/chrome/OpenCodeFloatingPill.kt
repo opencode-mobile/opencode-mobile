@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -71,7 +70,7 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private val FloatingPillShape = RoundedCornerShape(percent = 50)
+internal val FloatingPillShape = RoundedCornerShape(percent = 50)
 private val FloatingPillPaddingHorizontal = 14.dp
 private val FloatingPillPaddingVertical = 8.dp
 
@@ -82,7 +81,6 @@ private val FloatingPillCompactPaddingHorizontal = 10.dp
 private const val FloatingPillMorphMs = 260
 internal val FloatingPillMinHeight = 36.dp
 private val FloatingPillIconSize = 16.dp
-private val FloatingPillSpinnerSize = 14.dp
 private val FloatingPillDotSize = 8.dp
 private val FloatingPillIconSpacing = 6.dp
 private val FloatingPillShadowElevation = 4.dp
@@ -147,7 +145,7 @@ enum class OpenCodeFloatingPillState(
     /** Something failed. */
     Error("Error"),
 
-    /** Finished: a green check. */
+    /** Finished: a check in the content color. */
     Done("Done"),
 }
 
@@ -448,40 +446,14 @@ private fun FloatingPillLeadingMark(
         OpenCodeFloatingPillLeading.None -> Unit
         is OpenCodeFloatingPillLeading.Icon ->
             Icon(leading.icon, contentDescription = null, modifier = Modifier.size(FloatingPillIconSize))
-        OpenCodeFloatingPillLeading.Spinner -> FloatingPillSpinner(contentColor)
+        OpenCodeFloatingPillLeading.Spinner -> OpenCodeArcSpinner(contentColor)
         OpenCodeFloatingPillLeading.PulsingDot -> FloatingPillPulsingDot()
         OpenCodeFloatingPillLeading.DoneCheck ->
-            Icon(
-                OpenCodeIcons.Check,
-                contentDescription = null,
-                tint = openCodeColor("success"),
-                modifier = Modifier.size(FloatingPillIconSize),
-            )
+            Icon(OpenCodeIcons.Check, contentDescription = null, modifier = Modifier.size(FloatingPillIconSize))
         OpenCodeFloatingPillLeading.StateDot ->
             Box(modifier = Modifier.size(FloatingPillIconSize), contentAlignment = Alignment.Center) {
                 Box(modifier = Modifier.size(FloatingPillDotSize).background(contentColor, CircleShape))
             }
-    }
-}
-
-/** The btw pill spinner; a still arc when animations are off. */
-@Composable
-private fun FloatingPillSpinner(color: Color) {
-    if (rememberFloatingPillAnimationsOn()) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(FloatingPillSpinnerSize),
-            strokeWidth = 2.dp,
-            color = color,
-            trackColor = color.copy(alpha = 0.25f),
-        )
-    } else {
-        CircularProgressIndicator(
-            progress = { 0.75f },
-            modifier = Modifier.size(FloatingPillSpinnerSize),
-            strokeWidth = 2.dp,
-            color = color,
-            trackColor = color.copy(alpha = 0.25f),
-        )
     }
 }
 
@@ -513,7 +485,7 @@ private fun FloatingPillPulsingDot() {
 
 /** False with the system animator scale at 0 (Remove animations); follows the setting while shown. */
 @Composable
-private fun rememberFloatingPillAnimationsOn(): Boolean {
+internal fun rememberFloatingPillAnimationsOn(): Boolean {
     val resolver = LocalContext.current.contentResolver
     var animationsOn by remember(resolver) { mutableStateOf(floatingPillAnimationsOn(resolver)) }
     DisposableEffect(resolver) {

@@ -201,7 +201,7 @@ private struct OpenCodeTaskRowGlyph: View {
                 }
         case .done:
             OpenCodeIconImage(icon: .check, size: Self.iconSize)
-                .foregroundStyle(OpenCodeColors.success)
+                .foregroundStyle(OpenCodeColors.textStrong)
         case .failed, .stopped:
             Text("!")
                 .font(.system(size: 11, weight: .bold))

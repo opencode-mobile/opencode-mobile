@@ -35,6 +35,8 @@ struct OpenCodeMessageNote: View {
                 .openCodeFont(.caption)
         }
         .foregroundStyle(OpenCodeColors.textWeak)
+        .padding(.horizontal, Self.paddingHorizontal)
+        .padding(.vertical, Self.paddingVertical)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(variant.label)
@@ -42,6 +44,8 @@ struct OpenCodeMessageNote: View {
 
     private static let iconSize: CGFloat = 14
     private static let spacing: CGFloat = 6
+    private static let paddingHorizontal: CGFloat = 4
+    private static let paddingVertical: CGFloat = 2
 }
 
 #if DEBUG

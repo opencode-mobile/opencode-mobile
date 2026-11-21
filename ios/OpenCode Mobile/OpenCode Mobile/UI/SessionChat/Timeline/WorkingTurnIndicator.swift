@@ -12,6 +12,9 @@ enum WorkingTurnIndicator {
     static let idleLabel = "Idle"
     static let thinkingLabel = "Thinking"
     static let idleHoldMilliseconds: Int64 = 5_000
+    /// The Activity Card style's status pill holds Done this long, then fades.
+    static let turnPillHoldMilliseconds = Int64(SessionChatPillSlots.finishedFadeSeconds * 1_000)
+    static let turnPillFadeMilliseconds: Int64 = 240
 
     struct Chrome: Equatable {
         var label: String?
@@ -93,7 +96,9 @@ enum WorkingTurnIndicator {
         hideImmediately: Bool,
         previous: Chrome,
         hold: Hold?,
-        nowMs: Int64
+        nowMs: Int64,
+        holdMilliseconds: Int64 = idleHoldMilliseconds,
+        fadeMilliseconds: Int64 = 0
     ) -> Resolution {
         if hideImmediately {
             return Resolution(chrome: .unmounted, hold: nil)
@@ -112,12 +117,19 @@ enum WorkingTurnIndicator {
             return Resolution(chrome: .unmounted, hold: nil)
         }
         let nextHold = hold ?? Hold(startedAtMs: nowMs)
-        let remainingMs = idleHoldMilliseconds - (nowMs - nextHold.startedAtMs)
+        let remainingMs = holdMilliseconds - (nowMs - nextHold.startedAtMs)
         if remainingMs > 0 {
             return Resolution(
                 chrome: Chrome(label: idleLabel, collapsed: false, fading: false),
                 hold: nextHold,
                 wakeAfterMs: remainingMs
+            )
+        }
+        if remainingMs + fadeMilliseconds > 0 {
+            return Resolution(
+                chrome: Chrome(label: idleLabel, collapsed: false, fading: true),
+                hold: nextHold,
+                wakeAfterMs: remainingMs + fadeMilliseconds
             )
         }
         return Resolution(

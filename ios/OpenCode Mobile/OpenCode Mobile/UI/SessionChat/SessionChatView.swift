@@ -592,6 +592,7 @@ struct SessionChatView: View {
                     ? OpenCodeSessionComposer.morphAnimation
                     : keyboardGlideAnimation,
                 activityItems: sessionChatActivityItems,
+                usesTurnStatusPill: SessionChatDisplayPreferences.shared.activityCardTimeline,
                 keyboardVisible: keyboardOverlap > 0,
                 onActivityTap: handleActivityTap,
                 onActivityClose: handleActivityClose,

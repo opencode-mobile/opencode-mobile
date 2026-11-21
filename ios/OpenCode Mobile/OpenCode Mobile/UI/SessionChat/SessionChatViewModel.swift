@@ -1865,7 +1865,8 @@ final class SessionChatViewModel {
                 ),
                 previousSubagents: uiState.subagents,
                 inboxState: inboxState,
-                infoState: infoState
+                infoState: infoState,
+                usesTurnStatusPill: SessionChatDisplayPreferences.shared.activityCardTimeline
             )
         )
         let subagents = turnStatusResolution.subagents

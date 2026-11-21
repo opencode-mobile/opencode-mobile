@@ -35,6 +35,7 @@ import dev.opencode.mobile.ui.components.OpenCodeFloatingPill
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
+import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPill
 import dev.opencode.mobile.ui.components.sessionTodosPillAccessibilityLabel
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.SessionChatActivityItem
@@ -42,6 +43,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatActivityPriority
 import dev.opencode.mobile.ui.sessionchat.SessionChatActivitySlot
 import dev.opencode.mobile.ui.sessionchat.SessionChatContextItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatNavigationPill
+import dev.opencode.mobile.ui.sessionchat.SessionChatTurnStatusSlot
 import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 import dev.opencode.mobile.ui.text.resolve
 
@@ -103,13 +105,15 @@ internal fun SessionChatActivitySlotView(
     onClick: (SessionChatActivityItem) -> Unit,
     onClose: (SessionChatActivityItem) -> Unit,
     modifier: Modifier = Modifier,
+    turnStatus: SessionChatTurnStatusSlot? = null,
 ) {
     val stackAvailable = slot.showsOverflowButton || slot.collapsed
     LaunchedEffect(stackAvailable, slot.collapsed) { onStackOpenChange(false) }
-    val primary = slot.primary ?: return
+    val primary = slot.primary
+    if (primary == null && turnStatus == null) return
     // Collapsed, the stack lists everything with the primary nearest the circle. Otherwise it
     // lists the overflow with the next most urgent nearest the primary pill.
-    val stackItems = if (slot.collapsed) listOf(primary) + slot.overflow else slot.overflow
+    val stackItems = if (slot.collapsed) listOfNotNull(primary) + slot.overflow else slot.overflow
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(SessionChatCornerSlotsLayout.Spacing),
@@ -143,29 +147,39 @@ internal fun SessionChatActivitySlotView(
             horizontalArrangement = Arrangement.spacedBy(SessionChatCornerSlotsLayout.Spacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // One call site across Working and Done, so the spinner can morph into the check.
+            if (turnStatus != null) {
+                OpenCodeTurnStatusPill(
+                    phase = turnStatus.phase,
+                    compact = turnStatus.compact,
+                    leaving = turnStatus.leaving,
+                )
+            }
             // One call site for both forms, so collapsing folds this pill's width instead of
             // swapping in a second pill.
             val collapsed = slot.collapsed
-            SessionChatActivityPill(
-                item = primary,
-                compact = collapsed || slot.primaryCompact,
-                badgeCount = if (collapsed) slot.itemCount else 0,
-                accessibilityLabel =
-                    if (collapsed) {
-                        SessionChatActivityPillCopy.collapsedAccessibilityLabel(primary, slot.itemCount, stackOpen)
-                    } else {
-                        SessionChatActivityPillCopy.accessibilityLabel(primary)
-                    }.resolve(),
-                onClick = {
-                    if (collapsed) {
-                        onStackOpenChange(!stackOpen)
-                    } else {
-                        onStackOpenChange(false)
-                        onClick(primary)
-                    }
-                },
-                onClose = { if (!collapsed) onClose(primary) },
-            )
+            if (primary != null) {
+                SessionChatActivityPill(
+                    item = primary,
+                    compact = collapsed || slot.primaryCompact,
+                    badgeCount = if (collapsed) slot.itemCount else 0,
+                    accessibilityLabel =
+                        if (collapsed) {
+                            SessionChatActivityPillCopy.collapsedAccessibilityLabel(primary, slot.itemCount, stackOpen)
+                        } else {
+                            SessionChatActivityPillCopy.accessibilityLabel(primary)
+                        }.resolve(),
+                    onClick = {
+                        if (collapsed) {
+                            onStackOpenChange(!stackOpen)
+                        } else {
+                            onStackOpenChange(false)
+                            onClick(primary)
+                        }
+                    },
+                    onClose = { if (!collapsed) onClose(primary) },
+                )
+            }
             SessionChatPillReveal(visible = slot.showsOverflowButton) {
                 val more = slot.overflow.size
                 OpenCodeFloatingPill(

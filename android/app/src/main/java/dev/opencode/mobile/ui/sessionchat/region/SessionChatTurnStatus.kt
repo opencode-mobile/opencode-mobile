@@ -99,6 +99,8 @@ class SessionChatTurnStatus(
      *
      * @param messages the presented (live-marked) timeline rows.
      * @param previousSubagents the rows the last publish showed.
+     * @param usesTurnStatusPill the Activity Card style shows the turn on a floating pill, with
+     *   a shorter Done hold and a fade.
      */
     fun resolve(
         sessionStatusLabel: String?,
@@ -112,6 +114,7 @@ class SessionChatTurnStatus(
         inboxState: SessionChatInboxRegionState,
         infoState: SessionInfoRegionState,
         previousSubagents: List<SessionChatSubagent>,
+        usesTurnStatusPill: Boolean = false,
     ): SessionChatTurnStatusResolution {
         val awaitingUser =
             inboxState.permissionRequests.isNotEmpty() || inboxState.questionRequests.isNotEmpty()
@@ -134,6 +137,8 @@ class SessionChatTurnStatus(
                 previous = workingChrome,
                 hold = workingHold,
                 nowMs = nowMs(),
+                holdMs = if (usesTurnStatusPill) WorkingTurnIndicator.TURN_PILL_HOLD_MS else WorkingTurnIndicator.IDLE_HOLD_MS,
+                fadeMs = if (usesTurnStatusPill) WorkingTurnIndicator.TURN_PILL_FADE_MS else 0L,
             )
         workingChrome = workingResolution.chrome
         workingHold = workingResolution.hold
