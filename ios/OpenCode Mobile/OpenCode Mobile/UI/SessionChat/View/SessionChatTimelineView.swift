@@ -33,6 +33,8 @@ struct SessionChatTimelineViewProps {
     let bottomOverlayAnimation: Animation?
     /// Bottom-left live activity from the screen (btw, queued). The timeline adds request failed.
     let activityItems: [SessionChatActivityItem]
+    /// Activity Card style: the turn shows as a floating pill instead of the Working row.
+    let usesTurnStatusPill: Bool
     /// The keyboard is up: the activity pill goes compact and the other corners hide.
     let keyboardVisible: Bool
     let onActivityTap: (SessionChatActivityItem) -> Void
@@ -102,6 +104,7 @@ struct SessionChatTimelineViewProps {
         bottomOverlayInset: CGFloat = 0,
         bottomOverlayAnimation: Animation? = nil,
         activityItems: [SessionChatActivityItem] = [],
+        usesTurnStatusPill: Bool = false,
         keyboardVisible: Bool = false,
         onActivityTap: @escaping (SessionChatActivityItem) -> Void = { _ in },
         onActivityClose: @escaping (SessionChatActivityItem) -> Void = { _ in },
@@ -159,6 +162,7 @@ struct SessionChatTimelineViewProps {
         self.bottomOverlayInset = bottomOverlayInset
         self.bottomOverlayAnimation = bottomOverlayAnimation
         self.activityItems = activityItems
+        self.usesTurnStatusPill = usesTurnStatusPill
         self.keyboardVisible = keyboardVisible
         self.onActivityTap = onActivityTap
         self.onActivityClose = onActivityClose
@@ -336,6 +340,20 @@ private struct SessionChatTimelineReadyView: View {
         )
     }
 
+    private var turnStatusSlot: SessionChatTurnStatusSlot? {
+        guard props.usesTurnStatusPill, liveStepRailID == nil else { return nil }
+        return SessionChatPillSlots.turnStatus(
+            label: props.workingIndicatorLabel,
+            collapsed: props.workingIndicatorCollapsed,
+            fading: props.workingIndicatorFading,
+            isAwaitingUser: props.isAwaitingUser,
+            items: activityItems,
+            keyboardVisible: props.keyboardVisible,
+            awayFromEnd: showScrollToEnd,
+            now: activityClock
+        )
+    }
+
     private var trailingSlotState: SessionChatTrailingSlotState {
         SessionChatTrailingSlotState(
             syncingLabel: displayedSyncingLabel,
@@ -361,7 +379,9 @@ private struct SessionChatTimelineReadyView: View {
 
     /// Scroll clearance under the composer plus the bottom pill row, so no pill covers the last message.
     private var listBottomInset: CGFloat {
-        props.bottomOverlayInset + SessionChatCornerSlotsLayout.reservedHeight(hasActivity: activitySlot.primary != nil)
+        props.bottomOverlayInset + SessionChatCornerSlotsLayout.reservedHeight(
+            hasActivity: activitySlot.primary != nil || turnStatusSlot?.reservesRow == true
+        )
     }
 
     /// The step rail or activity card that carries live status. While one
@@ -401,7 +421,7 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     private var mountedWorkingLabel: String? {
-        guard liveStepRailID == nil else { return nil }
+        guard liveStepRailID == nil, !props.usesTurnStatusPill else { return nil }
         return WorkingTurnIndicator.mountedLabel(
             label: props.workingIndicatorLabel,
             collapsed: props.workingIndicatorCollapsed
@@ -641,6 +661,7 @@ private struct SessionChatTimelineReadyView: View {
         HStack(alignment: .bottom, spacing: 0) {
             SessionChatActivitySlotView(
                 slot: activitySlot,
+                turnStatus: turnStatusSlot,
                 stackOpen: $activityStackOpen,
                 onTap: handleActivityTap,
                 onClose: handleActivityClose

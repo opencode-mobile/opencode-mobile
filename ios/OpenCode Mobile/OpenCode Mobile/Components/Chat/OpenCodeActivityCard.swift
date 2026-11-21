@@ -136,7 +136,7 @@ struct OpenCodeActivityCard: View {
                 .fill(OpenCodeColors.surfaceRaisedBase)
                 .overlay(
                     RoundedRectangle(cornerRadius: ActivityCardMetrics.cornerRadius, style: .continuous)
-                        .strokeBorder(OpenCodeColors.borderWeakBase, lineWidth: 1)
+                        .strokeBorder(OpenCodeColors.iconWeakBase, lineWidth: 1)
                 )
         }
     }
@@ -148,15 +148,15 @@ struct OpenCodeActivityCard: View {
             Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        OpenCodeRunningShimmerText(text: OpenCodeActivityText.working, font: OpenCodeTypography.Style.bodySecondary.font(scale: textScale).weight(.semibold))
+                        OpenCodeRunningShimmerText(text: OpenCodeActivityText.working, font: OpenCodeTypography.Style.bodySecondary.font(scale: textScale).weight(.semibold), emphasis: .card)
                         Spacer(minLength: 0)
                         if let startedAtMs {
-                            OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
+                            OpenCodeLiveElapsedText(startedAtMs: startedAtMs, emphasis: .card)
                         }
                     }
                     Text(summary)
                         .openCodeFont(.caption)
-                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .foregroundStyle(OpenCodeColors.textBase)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -194,7 +194,7 @@ struct OpenCodeActivityCard: View {
     private var agentSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             OpenCodeHairline()
-            OpenCodeActivitySectionLabel(count: agents.count)
+            OpenCodeActivitySectionLabel(count: agents.count, emphasis: .card)
                 .padding(.top, 6)
                 .padding(.bottom, 2)
                 .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
@@ -231,7 +231,9 @@ struct OpenCodeActivityCard: View {
             .padding(.top, ActivityCardMetrics.footerPaddingTop)
             .padding(.bottom, ActivityCardMetrics.footerPaddingBottom)
             .frame(maxWidth: .infinity, minHeight: ActivityCardMetrics.tapRowMinHeight, alignment: .leading)
-            .background(OpenCodeColors.surfaceRaisedBaseHover)
+            .background(OpenCodeColors.surfaceBaseHover)
+            // Inside the band's height, so the divider adds no layout.
+            .overlay(alignment: .top) { OpenCodeHairline() }
             .clipShape(
                 UnevenRoundedRectangle(
                     bottomLeadingRadius: ActivityCardMetrics.cornerRadius - 1,
@@ -255,33 +257,33 @@ struct OpenCodeActivityCard: View {
         HStack(spacing: 8) {
             if let current {
                 OpenCodeIconImage(icon: current.icon.icon, size: ActivityCardMetrics.iconSize)
-                    .foregroundStyle(OpenCodeColors.iconWeakBase)
+                    .foregroundStyle(OpenCodeColors.textBase)
                     .frame(width: ActivityCardMetrics.iconSize)
                     .accessibilityHidden(true)
                 Text(current.title)
                     .openCodeFont(.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.textBase)
+                    .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if current.running, current.extraRunning > 0 {
                     Text("+\(current.extraRunning)")
                         .openCodeFont(.caption)
-                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .foregroundStyle(OpenCodeColors.textBase)
                         .fixedSize()
                 }
                 if current.running, let startedAtMs = current.startedAtMs {
-                    OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
+                    OpenCodeLiveElapsedText(startedAtMs: startedAtMs, emphasis: .card)
                 }
             } else {
                 Text(idleText ?? OpenCodeActivityText.thinkingEllipsis)
                     .openCodeFont(.bodySecondary)
                     .italic()
-                    .foregroundStyle(OpenCodeColors.textWeaker)
+                    .foregroundStyle(OpenCodeColors.textBase)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            OpenCodeActivityChevron()
+            OpenCodeActivityChevron(placement: .cardFooter)
         }
     }
 
@@ -311,13 +313,13 @@ struct OpenCodeActivityCard: View {
     private func settledLine(worstStatus: OpenCodeActivityLineStatus, stepCount: Int) -> some View {
         Button(action: onOpen) {
             HStack(spacing: 8) {
-                OpenCodeActivityStatusDot(status: worstStatus)
+                OpenCodeActivityStatusDot(status: worstStatus, emphasis: .card)
                 settledText(stepCount: stepCount)
                     .openCodeFont(.bodySecondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                OpenCodeActivityChevron()
+                OpenCodeActivityChevron(placement: .card)
             }
             .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
             .padding(.vertical, ActivityCardMetrics.settledPaddingVertical)
@@ -348,14 +350,14 @@ struct OpenCodeActivityCard: View {
         let number = "\(stepCount)"
         let head: Text
         if let range = label.range(of: number) {
-            head = Text(verbatim: String(label[..<range.lowerBound])).foregroundColor(OpenCodeColors.textWeak)
+            head = Text(verbatim: String(label[..<range.lowerBound])).foregroundColor(OpenCodeColors.textBase)
                 + Text(verbatim: number).fontWeight(.semibold).foregroundColor(OpenCodeColors.textStrong)
-                + Text(verbatim: String(label[range.upperBound...])).foregroundColor(OpenCodeColors.textWeak)
+                + Text(verbatim: String(label[range.upperBound...])).foregroundColor(OpenCodeColors.textBase)
         } else {
-            head = Text(verbatim: label).foregroundColor(OpenCodeColors.textWeak)
+            head = Text(verbatim: label).foregroundColor(OpenCodeColors.textBase)
         }
         guard !summary.isEmpty else { return head }
-        return head + Text(" \u{00B7} \(summary)").foregroundColor(OpenCodeColors.textWeak)
+        return head + Text(" \u{00B7} \(summary)").foregroundColor(OpenCodeColors.textBase)
     }
 
     /// "1 step" / "3 steps": the settled line and the settled sheet header.
@@ -394,14 +396,14 @@ private struct ActivityCardAgentRow: View {
                 .fixedSize()
             Text(agent.action ?? "")
                 .openCodeFont(.bodySecondary)
-                .foregroundStyle(OpenCodeColors.textWeak)
+                .foregroundStyle(OpenCodeColors.textBase)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let startedAtMs = agent.startedAtMs {
-                OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
+                OpenCodeLiveElapsedText(startedAtMs: startedAtMs, emphasis: .card)
             }
-            OpenCodeActivityChevron()
+            OpenCodeActivityChevron(placement: .card)
         }
         .padding(.vertical, 9)
         .frame(minHeight: 44)
@@ -424,16 +426,26 @@ enum OpenCodeActivityText {
     static var thinkingEllipsis: String { String(localized: "component.thinking_ellipsis", defaultValue: "Thinking\u{2026}") }
 }
 
-/// "AGENT" / "2 AGENTS": uppercase, tracked, in the weak text tone.
+/// How strongly a piece shared by the card and the activity sheet reads. The Activity Card
+/// sits among message text and uses the stronger tones; the sheet keeps the quieter ones.
+enum OpenCodeActivityEmphasis: Equatable, Sendable {
+    case standard
+    case card
+}
+
+/// "AGENT" / "2 AGENTS": uppercase, tracked, in the weak text tone (`text-base` on the card).
 struct OpenCodeActivitySectionLabel: View {
     let text: String
+    var emphasis: OpenCodeActivityEmphasis = .standard
 
-    init(text: String) {
+    init(text: String, emphasis: OpenCodeActivityEmphasis = .standard) {
         self.text = text
+        self.emphasis = emphasis
     }
 
     /// The Agent section's label for `count` child sessions.
-    init(count: Int) {
+    init(count: Int, emphasis: OpenCodeActivityEmphasis = .standard) {
+        self.emphasis = emphasis
         self.text = count == 1
             ? String(localized: "component.activity_card.agent", defaultValue: "Agent")
             : String(localized: LocalizedStringResource("component.activity_card.agent_count", defaultValue: "\(count) agents"))
@@ -443,7 +455,7 @@ struct OpenCodeActivitySectionLabel: View {
         Text(text.uppercased())
             .font(.system(size: 10.5, weight: .medium))
             .tracking(0.8)
-            .foregroundStyle(OpenCodeColors.textWeak)
+            .foregroundStyle(emphasis == .card ? OpenCodeColors.textBase : OpenCodeColors.textWeak)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityAddTraits(.isHeader)
     }
@@ -485,6 +497,7 @@ struct OpenCodeActivityStatusDot: View {
     let status: OpenCodeActivityLineStatus
     var size: CGFloat = 8
     var pulsing = false
+    var emphasis: OpenCodeActivityEmphasis = .standard
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -512,7 +525,7 @@ struct OpenCodeActivityStatusDot: View {
         case .completed: OpenCodeColors.success
         case .failed: OpenCodeColors.error
         case .running, .pending: OpenCodeColors.warning
-        case .interrupted: OpenCodeColors.textWeaker
+        case .interrupted: emphasis == .card ? OpenCodeColors.textWeak : OpenCodeColors.textWeaker
         }
     }
 
@@ -525,10 +538,26 @@ struct OpenCodeActivityStatusDot: View {
 }
 
 struct OpenCodeActivityChevron: View {
+    enum Placement {
+        case sheet
+        case card
+        case cardFooter
+    }
+
+    var placement: Placement = .sheet
+
     var body: some View {
         OpenCodeIconImage(icon: .chevronRight, size: 14)
-            .foregroundStyle(OpenCodeColors.textWeaker)
+            .foregroundStyle(color)
             .accessibilityHidden(true)
+    }
+
+    private var color: Color {
+        switch placement {
+        case .sheet: OpenCodeColors.textWeaker
+        case .card: OpenCodeColors.iconBase
+        case .cardFooter: OpenCodeColors.textBase
+        }
     }
 }
 
@@ -537,6 +566,7 @@ struct OpenCodeActivityChevron: View {
 struct OpenCodeLiveElapsedText: View {
     let startedAtMs: Int64
     var endedAtMs: Int64?
+    var emphasis: OpenCodeActivityEmphasis = .standard
 
     var body: some View {
         if let endedAtMs {
@@ -554,7 +584,7 @@ struct OpenCodeLiveElapsedText: View {
     private func label(_ text: String) -> some View {
         Text(text)
             .openCodeFont(.caption).monospacedDigit()
-            .foregroundStyle(OpenCodeColors.textWeaker)
+            .foregroundStyle(emphasis == .card ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
             .fixedSize()
             .accessibilityHidden(true)
     }
@@ -565,6 +595,7 @@ struct OpenCodeLiveElapsedText: View {
 struct OpenCodeRunningShimmerText: View {
     let text: String
     let font: Font
+    var emphasis: OpenCodeActivityEmphasis = .standard
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -573,7 +604,7 @@ struct OpenCodeRunningShimmerText: View {
             label.foregroundStyle(OpenCodeColors.textStrong)
         } else {
             TimelineView(.animation) { context in
-                label.foregroundStyle(Self.shimmer(at: context.date))
+                label.foregroundStyle(Self.shimmer(at: context.date, emphasis: emphasis))
             }
         }
     }
@@ -587,11 +618,12 @@ struct OpenCodeRunningShimmerText: View {
     private static let cycle = 1.6
     private static let halfWidth = 0.3
 
-    private static func shimmer(at date: Date) -> LinearGradient {
+    private static func shimmer(at date: Date, emphasis: OpenCodeActivityEmphasis) -> LinearGradient {
         let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
         let center = -halfWidth + phase * (1 + 2 * halfWidth)
+        let low = emphasis == .card ? OpenCodeColors.textBase : OpenCodeColors.textWeak
         return LinearGradient(
-            colors: [OpenCodeColors.textWeak, OpenCodeColors.textStrong, OpenCodeColors.textWeak],
+            colors: [low, OpenCodeColors.textStrong, low],
             startPoint: UnitPoint(x: center - halfWidth, y: 0.5),
             endPoint: UnitPoint(x: center + halfWidth, y: 0.5)
         )

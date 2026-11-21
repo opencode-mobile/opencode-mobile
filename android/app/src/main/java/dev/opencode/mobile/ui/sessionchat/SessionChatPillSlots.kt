@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
 
 /** Which bottom-left activity pill wins. Earlier entries come first. */
 enum class SessionChatActivityPriority {
@@ -120,6 +121,20 @@ data class SessionChatActivitySlot(
     val itemCount: Int get() = if (primary == null) 0 else 1 + overflow.size
 }
 
+/**
+ * The turn status pill that leads the bottom-left row in the Activity Card style. It is not an
+ * activity item: it never counts toward "+N" and is never in the stack.
+ */
+internal data class SessionChatTurnStatusSlot(
+    val phase: OpenCodeTurnStatusPillPhase,
+    /** Folded to its round mark: beside another pill, away from the end, or with the keyboard up. */
+    val compact: Boolean,
+    /** Fading out. The timeline already gives its row back, so the list glides down. */
+    val leaving: Boolean,
+) {
+    val reservesRow: Boolean get() = !leaving
+}
+
 /** A top-left context pill. */
 sealed interface SessionChatContextItem {
     /** The session's `/goal` (#1007); always first. */
@@ -171,6 +186,41 @@ object SessionChatPillSlots {
             primaryCompact = keyboardVisible && primary.priority != SessionChatActivityPriority.NeedsInput,
             overflow = if (keyboardVisible) emptyList() else overflow,
             showsOverflowButton = !keyboardVisible && overflow.isNotEmpty(),
+        )
+    }
+
+    /**
+     * The turn status pill, from the same label that drives the Working row. Hidden while a
+     * permission or question waits (even with its dock collapsed) and after a shown failure.
+     */
+    internal fun turnStatus(
+        label: String?,
+        collapsed: Boolean,
+        fading: Boolean,
+        isAwaitingUser: Boolean,
+        items: List<SessionChatActivityItem>,
+        keyboardVisible: Boolean,
+        awayFromEnd: Boolean,
+        nowEpochMs: Long,
+    ): SessionChatTurnStatusSlot? {
+        if (label == null || collapsed || isAwaitingUser) return null
+        val live = items.filterNot { isFaded(it, nowEpochMs) }
+        val blocked =
+            live.any {
+                it is SessionChatActivityItem.ReviewPermission ||
+                    it is SessionChatActivityItem.AnswerQuestion ||
+                    it is SessionChatActivityItem.RequestFailed
+            }
+        if (blocked) return null
+        return SessionChatTurnStatusSlot(
+            phase =
+                if (WorkingTurnIndicator.showsIdleMark(label)) {
+                    OpenCodeTurnStatusPillPhase.Done
+                } else {
+                    OpenCodeTurnStatusPillPhase.Working(label)
+                },
+            compact = live.isNotEmpty() || awayFromEnd || keyboardVisible,
+            leaving = fading,
         )
     }
 

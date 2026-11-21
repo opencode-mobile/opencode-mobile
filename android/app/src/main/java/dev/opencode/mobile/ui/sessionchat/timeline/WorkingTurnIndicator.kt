@@ -18,6 +18,10 @@ object WorkingTurnIndicator {
     const val THINKING_LABEL = "Thinking"
     const val IDLE_HOLD_MS = 5_000L
 
+    /** The Activity Card style's status pill holds Done this long, then fades. */
+    const val TURN_PILL_HOLD_MS = SessionChatPillSlots.FINISHED_FADE_MS
+    const val TURN_PILL_FADE_MS = 240L
+
     data class Chrome(
         val label: String?,
         val collapsed: Boolean,
@@ -83,6 +87,8 @@ object WorkingTurnIndicator {
         previous: Chrome,
         hold: Hold?,
         nowMs: Long,
+        holdMs: Long = IDLE_HOLD_MS,
+        fadeMs: Long = 0L,
     ): Resolution {
         if (hideImmediately) {
             return Resolution(chrome = Chrome.Unmounted, hold = null)
@@ -102,7 +108,7 @@ object WorkingTurnIndicator {
             return Resolution(chrome = Chrome.Unmounted, hold = null)
         }
         val nextHold = hold ?: Hold(startedAtMs = nowMs)
-        val remainingMs = IDLE_HOLD_MS - (nowMs - nextHold.startedAtMs)
+        val remainingMs = holdMs - (nowMs - nextHold.startedAtMs)
         return if (remainingMs > 0) {
             Resolution(
                 chrome =
@@ -113,6 +119,17 @@ object WorkingTurnIndicator {
                     ),
                 hold = nextHold,
                 wakeAfterMs = remainingMs,
+            )
+        } else if (remainingMs + fadeMs > 0) {
+            Resolution(
+                chrome =
+                    Chrome(
+                        label = IDLE_LABEL,
+                        collapsed = false,
+                        fading = true,
+                    ),
+                hold = nextHold,
+                wakeAfterMs = remainingMs + fadeMs,
             )
         } else {
             Resolution(

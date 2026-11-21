@@ -375,9 +375,12 @@ internal fun rememberRunningPhase(): State<Float> {
  * sweeping left to right across `text-base` text.
  */
 @Composable
-internal fun runningShimmerBrush(phase: Float): ShaderBrush {
+internal fun runningShimmerBrush(
+    phase: Float,
+    highlightToken: String = "warning",
+): ShaderBrush {
     val base = openCodeColor("text-base")
-    val highlight = openCodeColor("warning")
+    val highlight = openCodeColor(highlightToken)
     val half = TOOL_CHIP_SHIMMER_HALF_WIDTH
     val center = -half + phase * (1 + 2 * half)
     return object : ShaderBrush() {

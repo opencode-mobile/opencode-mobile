@@ -22,6 +22,8 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val MessageNoteIconSize = 14.dp
 private val MessageNoteSpacing = 6.dp
+private val MessageNotePaddingHorizontal = 4.dp
+private val MessageNotePaddingVertical = 2.dp
 
 /** Why an assistant reply is incomplete; each variant owns its copy and glyph. */
 enum class OpenCodeMessageNoteVariant(
@@ -45,7 +47,10 @@ fun OpenCodeMessageNote(
 ) {
     val color = openCodeColor("text-weak")
     Row(
-        modifier = modifier.clearAndSetSemantics { contentDescription = variant.label },
+        modifier =
+            modifier
+                .clearAndSetSemantics { contentDescription = variant.label }
+                .padding(horizontal = MessageNotePaddingHorizontal, vertical = MessageNotePaddingVertical),
         horizontalArrangement = Arrangement.spacedBy(MessageNoteSpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {

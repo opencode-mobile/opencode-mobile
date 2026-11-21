@@ -88,6 +88,7 @@ import dev.opencode.mobile.ui.sessionchat.view.RunSessionInCard
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.session.SideQuestion
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -1128,6 +1129,8 @@ private fun SessionChatScreenBody(
                                                 hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
                                             ),
                                     ),
+                                usesTurnStatusPill = SessionChatDisplayPreferences.activityCardTimeline,
+                                isAwaitingUser = uiState.permissionRequest != null || uiState.questionRequest != null,
                                 keyboardVisible = WindowInsets.isImeVisible,
                                 onActivityClick = { item ->
                                     when (item) {

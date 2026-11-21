@@ -216,6 +216,10 @@ internal data class SessionChatTimelineViewProps(
     val bottomOverlayInset: Dp = 0.dp,
     /** Bottom-left live activity from the screen (requests, btw, queued). The timeline adds syncing and request failed. */
     val activityItems: List<SessionChatActivityItem> = emptyList(),
+    /** Activity Card style: the turn shows as a floating pill instead of the Working row. */
+    val usesTurnStatusPill: Boolean = false,
+    /** A permission or question waits, even with its dock collapsed: the turn status pill hides. */
+    val isAwaitingUser: Boolean = false,
     /** The keyboard is up: the activity pill goes compact and the other corners hide. */
     val keyboardVisible: Boolean = false,
     val onActivityClick: (SessionChatActivityItem) -> Unit = {},
@@ -398,6 +402,8 @@ private fun SessionChatTimelineStateContent(
                 hideFloatStack = props.hideFloatStack,
                 bottomOverlayInset = props.bottomOverlayInset,
                 activityItems = props.activityItems,
+                usesTurnStatusPill = props.usesTurnStatusPill,
+                isAwaitingUser = props.isAwaitingUser,
                 keyboardVisible = props.keyboardVisible,
                 isRetrying = props.hideRetryCountdown,
                 onActivityClick = props.onActivityClick,
@@ -459,6 +465,8 @@ private fun SessionChatTimelineReadyView(
     hideFloatStack: Boolean,
     bottomOverlayInset: Dp,
     activityItems: List<SessionChatActivityItem>,
+    usesTurnStatusPill: Boolean,
+    isAwaitingUser: Boolean,
     keyboardVisible: Boolean,
     isRetrying: Boolean,
     onActivityClick: (SessionChatActivityItem) -> Unit,
@@ -514,7 +522,22 @@ private fun SessionChatTimelineReadyView(
     // Whether the list reserves the activity pill row. It follows the pill only at the end
     // of the chat: with reverseLayout the reserve is before-content padding, so changing it
     // while scrolled away would move every visible row.
-    var reservesActivityRow by remember { mutableStateOf(activitySlot.primary != null) }
+    // The status pill's fold does not change whether it holds the row, so "away" is irrelevant here.
+    val turnStatusHoldsRow =
+        usesTurnStatusPill &&
+            SessionChatPillSlots
+                .turnStatus(
+                    label = workingIndicatorLabel,
+                    collapsed = workingIndicatorCollapsed,
+                    fading = workingIndicatorFading,
+                    isAwaitingUser = isAwaitingUser,
+                    items = allActivityItems,
+                    keyboardVisible = keyboardVisible,
+                    awayFromEnd = false,
+                    nowEpochMs = activityClockMs,
+                )?.reservesRow == true
+    val hasActivityRow = activitySlot.primary != null || turnStatusHoldsRow
+    var reservesActivityRow by remember { mutableStateOf(hasActivityRow) }
     // Springs to the new reserve so a pinned list glides instead of jumping. Away from the end
     // the reserve never changes (reservesActivityRow), so nothing moves.
     val animatedReserve by animateDpAsState(
@@ -569,6 +592,8 @@ private fun SessionChatTimelineReadyView(
         }
     }
 
+    // The Activity Card style shows the turn on a pill, so the timeline has no Working row.
+    val timelineWorkingLabel = committedWorkingLabel.takeUnless { usesTurnStatusPill }
     val apply = committedFrame?.let(TimelineApply::classify)
     val layoutAffectingRevision = apply?.layoutAffectingRevision ?: 0L
     val structureAffectingRevision = apply?.structureAffectingRevision ?: 0L
@@ -590,11 +615,11 @@ private fun SessionChatTimelineReadyView(
             userScroll = userScroll,
         )
 
-    LaunchedEffect(activitySlot.primary != null, timeline.isPinnedToEnd) {
+    LaunchedEffect(hasActivityRow, timeline.isPinnedToEnd) {
         reservesActivityRow =
             SessionChatPillSlots.reservesActivityRow(
                 reserved = reservesActivityRow,
-                hasActivity = activitySlot.primary != null,
+                hasActivity = hasActivityRow,
                 pinnedToEnd = timeline.isPinnedToEnd,
             )
     }
@@ -693,14 +718,14 @@ private fun SessionChatTimelineReadyView(
                     // A server echo keeps the item slot of the optimistic row it replaced.
                     key = { message -> committedFrame?.listKey(message.id) ?: message.id },
                     statusIndicatorKey =
-                        if (committedWorkingLabel != null) {
+                        if (timelineWorkingLabel != null) {
                             SESSION_CHAT_STATUS_INDICATOR_KEY
                         } else {
                             null
                         },
                     statusIndicatorCollapsed = committedWorkingCollapsed,
                     statusIndicatorContent =
-                        committedWorkingLabel?.let { label ->
+                        timelineWorkingLabel?.let { label ->
                             {
                                 OpenCodeWorkingIndicator(
                                     label = label,
@@ -810,6 +835,21 @@ private fun SessionChatTimelineReadyView(
         val awayFromEnd = timeline.showScrollToEnd
         val displayedActivitySlot =
             SessionChatPillSlots.activity(allActivityItems, keyboardVisible, activityClockMs, awayFromEnd = awayFromEnd)
+        val turnStatusSlot =
+            if (usesTurnStatusPill) {
+                SessionChatPillSlots.turnStatus(
+                    label = workingIndicatorLabel,
+                    collapsed = workingIndicatorCollapsed,
+                    fading = workingIndicatorFading,
+                    isAwaitingUser = isAwaitingUser,
+                    items = allActivityItems,
+                    keyboardVisible = keyboardVisible,
+                    awayFromEnd = awayFromEnd,
+                    nowEpochMs = activityClockMs,
+                )
+            } else {
+                null
+            }
         // Kept while Syncing animates out, so it does not flash the default text on exit.
         val syncingText = rememberLastNonNull(displayedSyncingLabel, stringResource(R.string.timeline_syncing))
         val navigationText = rememberLastNonNull(navigationPill, SessionChatNavigationPill(0))
@@ -825,6 +865,7 @@ private fun SessionChatTimelineReadyView(
         ) {
             SessionChatActivitySlotView(
                 slot = displayedActivitySlot,
+                turnStatus = turnStatusSlot,
                 stackOpen = activityStackOpen,
                 onStackOpenChange = { activityStackOpen = it },
                 onClick = { item ->
@@ -832,7 +873,7 @@ private fun SessionChatTimelineReadyView(
                         val chronological = committedMessages.indexOfFirst { it.id == item.messageId }
                         if (chronological >= 0) {
                             // Lazy order: bottom anchor, optional status row, then messages newest first.
-                            val statusRows = if (committedWorkingLabel != null) 1 else 0
+                            val statusRows = if (timelineWorkingLabel != null) 1 else 0
                             timeline.scrollController.revealItem(
                                 index = 1 + statusRows + (committedMessages.size - 1 - chronological),
                                 messageCount = timeline.messageCount,

@@ -19,6 +19,8 @@ import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPill
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
+import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPill
+import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val floatingPillGalleryLayouts =
@@ -38,7 +40,7 @@ fun FloatingPillGalleryScreen(modifier: Modifier = Modifier) {
         Text(
             text =
                 "Every layout in every state, then compact. Needs attention adds an amber ring; a waiting counter swaps its " +
-                    "spinner for a pulsing dot; done shows a green check.",
+                    "spinner for a pulsing dot; done shows a check.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -62,6 +64,21 @@ fun FloatingPillGalleryScreen(modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
+        var turnDone by remember { mutableStateOf(false) }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(text = "Turn status", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "One pill: the spinner bends into the check, full and round.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val turnPhase = if (turnDone) OpenCodeTurnStatusPillPhase.Done else OpenCodeTurnStatusPillPhase.Working("Working")
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OpenCodeTurnStatusPill(phase = turnPhase)
+                OpenCodeTurnStatusPill(phase = turnPhase, compact = true)
+            }
+            OpenCodeChoiceBadge(label = "Done", selected = turnDone, onClick = { turnDone = !turnDone })
         }
         var folded by remember { mutableStateOf(false) }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

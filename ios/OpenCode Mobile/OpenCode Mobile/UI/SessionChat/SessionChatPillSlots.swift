@@ -82,6 +82,18 @@ struct SessionChatActivitySlot: Equatable {
     static let empty = SessionChatActivitySlot(primary: nil, primaryCompact: false, overflow: [], showsOverflowButton: false)
 }
 
+/// The turn status pill that leads the bottom-left row in the Activity Card style. It is not
+/// an activity item: it never counts toward "+N" and is never in the stack.
+struct SessionChatTurnStatusSlot: Equatable {
+    var phase: OpenCodeTurnStatusPillPhase
+    /// Folded to its round mark: beside another pill, away from the end, or with the keyboard up.
+    var compact: Bool
+    /// Fading out. The timeline already gives its row back, so the list glides down.
+    var leaving: Bool
+
+    var reservesRow: Bool { !leaving }
+}
+
 /// A top-left context pill.
 enum SessionChatContextItem: Equatable {
     /// The session's `/goal`; first in the row.
@@ -154,6 +166,34 @@ enum SessionChatPillSlots {
             showsOverflowButton: !keyboardVisible && !collapsed && !overflow.isEmpty,
             isCollapsed: collapsed,
             allItems: sorted
+        )
+    }
+
+    /// The turn status pill, from the same label that drives the Working row. Hidden while a
+    /// permission or question waits (even with its dock collapsed) and after a shown failure.
+    static func turnStatus(
+        label: String?,
+        collapsed: Bool,
+        fading: Bool,
+        isAwaitingUser: Bool,
+        items: [SessionChatActivityItem],
+        keyboardVisible: Bool,
+        awayFromEnd: Bool,
+        now: Date
+    ) -> SessionChatTurnStatusSlot? {
+        guard let label, !collapsed, !isAwaitingUser else { return nil }
+        let live = items.filter { !isFaded($0, now: now) }
+        let blocked = live.contains { item in
+            switch item {
+            case .reviewPermission, .answerQuestion, .requestFailed: true
+            default: false
+            }
+        }
+        guard !blocked else { return nil }
+        return SessionChatTurnStatusSlot(
+            phase: WorkingTurnIndicator.showsIdleMark(label: label) ? .done : .working(label: label),
+            compact: !live.isEmpty || awayFromEnd || keyboardVisible,
+            leaving: fading
         )
     }
 
