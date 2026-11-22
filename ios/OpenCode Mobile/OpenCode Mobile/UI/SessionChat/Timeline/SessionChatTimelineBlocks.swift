@@ -990,27 +990,9 @@ nonisolated enum SessionChatTimelineBlocks {
                 index += 1
             case .file(let file):
                 flushText()
-                let run = imageRun(in: parts, from: index)
-                if run.images.count >= 2 {
-                    blocks.append(
-                        .imageGallery(
-                            blockID: PresentationBlockId.imageGallery(run.images.map(\.id)),
-                            gallery: SessionChatImageGalleryBlock(
-                                source: role == .user ? .user : .assistant,
-                                images: run.images.map(AttachmentPreviewCache.shared.resolved)
-                            )
-                        )
-                    )
-                    index = run.end
-                } else {
-                    blocks.append(
-                        .attachment(
-                            blockID: PresentationBlockId.direct(file.id),
-                            file: AttachmentPreviewCache.shared.resolved(file)
-                        )
-                    )
-                    index += 1
-                }
+                let placed = fileBlock(file, in: parts, at: index, role: role)
+                blocks.append(placed.block)
+                index = placed.end
             case .notice(let notice):
                 flushText()
                 blocks.append(noticeBlock(notice))
@@ -2694,6 +2676,50 @@ nonisolated enum SessionChatTimelineBlocks {
 
     private static func isVisibleTool(_ tool: ToolPart) -> Bool {
         ToolPartIdentity.isVisibleOnTimeline(tool)
+    }
+
+    /// Blocks for files a user just sent, grouped as the server's copy of the message will be,
+    /// so the bubble keeps its layout when that copy replaces the optimistic row.
+    static func userAttachmentBlocks(_ files: [FilePart]) -> [SessionChatTimelineBlock] {
+        let parts = files.map(MessagePart.file)
+        var blocks: [SessionChatTimelineBlock] = []
+        var index = 0
+        while index < files.count {
+            let placed = fileBlock(files[index], in: parts, at: index, role: .user)
+            blocks.append(placed.block)
+            index = placed.end
+        }
+        return blocks
+    }
+
+    /// The block for the file at `index`: a gallery of the image run starting there, or a lone
+    /// attachment. `end` is the index of the next part to place.
+    private static func fileBlock(
+        _ file: FilePart,
+        in parts: [MessagePart],
+        at index: Int,
+        role: MessageRole
+    ) -> (block: SessionChatTimelineBlock, end: Int) {
+        let run = imageRun(in: parts, from: index)
+        guard run.images.count >= 2 else {
+            return (
+                .attachment(
+                    blockID: PresentationBlockId.direct(file.id),
+                    file: AttachmentPreviewCache.shared.resolved(file)
+                ),
+                index + 1
+            )
+        }
+        return (
+            .imageGallery(
+                blockID: PresentationBlockId.imageGallery(run.images.map(\.id)),
+                gallery: SessionChatImageGalleryBlock(
+                    source: role == .user ? .user : .assistant,
+                    images: run.images.map(AttachmentPreviewCache.shared.resolved)
+                )
+            ),
+            run.end
+        )
     }
 
     /// Consecutive image files from `start`, looking through parts that draw nothing.
