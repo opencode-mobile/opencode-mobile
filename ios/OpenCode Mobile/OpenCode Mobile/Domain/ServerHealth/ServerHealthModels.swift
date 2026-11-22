@@ -184,6 +184,21 @@ nonisolated struct ServerHealthRestart: Equatable, Sendable {
     let previousVersion: String?
 }
 
+/// Where a logged failure was seen.
+nonisolated enum ServerHealthErrorSource: String, Equatable, Sendable {
+    case check
+    case stream
+}
+
+/// One line of the error log. Consecutive failed checks of one category share a line, with their `count`.
+nonisolated struct ServerHealthErrorLogEntry: Equatable, Sendable {
+    let firstAtMs: Int64
+    let lastAtMs: Int64
+    let category: ServerHealthFailureCategory
+    let source: ServerHealthErrorSource
+    let count: Int
+}
+
 nonisolated struct ServerHealthReport: Equatable, Sendable {
     let range: ServerHealthRange
     let rangeStartMs: Int64
@@ -203,6 +218,12 @@ nonisolated struct ServerHealthReport: Equatable, Sendable {
     let restarts: [ServerHealthRestart]
     let lastRestartAtMs: Int64?
     let buckets: [ServerHealthBucket]
+    /// `buckets` without closed-app time: none at the ends, and one unobserved bucket per gap between.
+    let openBuckets: [ServerHealthBucket]
+    /// Newest first, at most `ServerHealthReportBuilder.errorLogLimit` lines.
+    let errorLog: [ServerHealthErrorLogEntry]
+    /// Lines in the range before the limit.
+    let errorLogTotal: Int
     /// No checks and no events in the whole loaded window.
     let isEmpty: Bool
 }

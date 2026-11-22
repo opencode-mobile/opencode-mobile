@@ -288,6 +288,76 @@ class ServerHealthReportBuilderTest {
         assertEquals(listOf(30, null, 12), ServerHealthReportBuilder.recentPings(pings, now))
     }
 
+    @Test
+    fun openBuckets_dropClosedEndsAndShrinkGapsToOne() {
+        val report =
+            hour(
+                listOf(
+                    state(start + 10 * MINUTE, Live),
+                    state(start + 12 * MINUTE, Stopped),
+                    state(start + 30 * MINUTE, Live),
+                    state(start + 32 * MINUTE, Stopped),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                ServerHealthBucketCondition.Live,
+                ServerHealthBucketCondition.Live,
+                ServerHealthBucketCondition.Unobserved,
+                ServerHealthBucketCondition.Live,
+                ServerHealthBucketCondition.Live,
+            ),
+            report.openBuckets.map { it.condition },
+        )
+        assertEquals(start + 10 * MINUTE, report.openBuckets.first().startMs)
+    }
+
+    @Test
+    fun openBuckets_emptyWhenAppWasNeverOpen() {
+        assertTrue(hour(listOf(state(start + MINUTE, Stopped))).openBuckets.isEmpty())
+    }
+
+    @Test
+    fun errorLog_mergesConsecutiveFailedChecksNewestFirst() {
+        val report =
+            hour(
+                listOf(ServerHealthEvent.failure(PROFILE, start + 20 * MINUTE, ServerHealthFailureCategory.Heartbeat)),
+                listOf(
+                    ping(start + 10 * MINUTE, null, ServerHealthFailureCategory.Network),
+                    ping(start + 10 * MINUTE + 30_000, null, ServerHealthFailureCategory.Network),
+                    ping(start + 11 * MINUTE, 20),
+                    ping(start + 11 * MINUTE + 30_000, null, ServerHealthFailureCategory.Network),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                ServerHealthErrorSource.Stream to 1,
+                ServerHealthErrorSource.Check to 1,
+                ServerHealthErrorSource.Check to 2,
+            ),
+            report.errorLog.map { it.source to it.count },
+        )
+        assertEquals(start + 10 * MINUTE, report.errorLog.last().firstAtMs)
+        assertEquals(start + 10 * MINUTE + 30_000, report.errorLog.last().lastAtMs)
+        assertEquals(3, report.errorLogTotal)
+    }
+
+    @Test
+    fun errorLog_splitsFailuresAcrossAClosedAppGap() {
+        val report =
+            hour(
+                emptyList(),
+                listOf(
+                    ping(start + 10 * MINUTE, null, ServerHealthFailureCategory.Timeout),
+                    ping(start + 30 * MINUTE, null, ServerHealthFailureCategory.Timeout),
+                ),
+            )
+
+        assertEquals(listOf(1, 1), report.errorLog.map { it.count })
+    }
+
     private companion object {
         const val PROFILE = "profile-a"
         const val MINUTE = 60_000L

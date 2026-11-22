@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.serverhealth
 
+import android.text.format.DateUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,8 +16,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -26,14 +31,19 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.serverhealth.ServerHealthBucketCondition
+import dev.opencode.mobile.domain.serverhealth.ServerHealthErrorLogEntry
+import dev.opencode.mobile.domain.serverhealth.ServerHealthErrorSource
 import dev.opencode.mobile.domain.serverhealth.ServerHealthFailureCategory
 import dev.opencode.mobile.domain.serverhealth.ServerHealthRange
 import dev.opencode.mobile.domain.serverhealth.ServerHealthReport
+import dev.opencode.mobile.domain.serverhealth.ServerHealthReportBuilder
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBandChart
 import dev.opencode.mobile.ui.components.OpenCodeBandChartBackground
 import dev.opencode.mobile.ui.components.OpenCodeBandChartPoint
 import dev.opencode.mobile.ui.components.OpenCodeBarChart
+import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChartAxisLabels
 import dev.opencode.mobile.ui.components.OpenCodeChartCard
 import dev.opencode.mobile.ui.components.OpenCodeChartLegendItem
@@ -120,6 +130,7 @@ fun ServerHealthContent(
                     ServerHealthTiles(report)
                     ServerHealthCharts(report)
                     ServerHealthErrors(report)
+                    ServerHealthErrorLog(report)
                     ServerHealthServerCard(uiState, report)
                 }
                 Text(
@@ -240,16 +251,45 @@ private fun ServerHealthTiles(report: ServerHealthReport) {
     }
 }
 
+/** When the first and last shown stretch of open-app time happened. */
 @Composable
-private fun rangeAxisLabels(range: ServerHealthRange): OpenCodeChartAxisLabels =
-    OpenCodeChartAxisLabels(
-        start = stringResource(R.string.server_health_axis_ago, stringResource(ServerHealthFormat.rangeLabel(range))),
-        end = stringResource(R.string.server_health_now),
+private fun openAxisLabels(report: ServerHealthReport): OpenCodeChartAxisLabels {
+    val first = report.openBuckets.firstOrNull()?.startMs ?: report.rangeStartMs
+    val last = report.openBuckets.lastOrNull()?.endMs ?: report.nowMs
+    return OpenCodeChartAxisLabels(
+        start = stringResource(R.string.server_health_axis_ago, ServerHealthFormat.duration(report.nowMs - first)),
+        end =
+            if (last >= report.nowMs) {
+                stringResource(R.string.server_health_now)
+            } else {
+                stringResource(R.string.server_health_axis_ago, ServerHealthFormat.duration(report.nowMs - last))
+            },
     )
+}
+
+/** The closed-app legend entry, only when a chart actually shows a gap. */
+@Composable
+private fun closedLegend(report: ServerHealthReport): List<OpenCodeChartLegendItem> =
+    if (report.openBuckets.any { it.condition == ServerHealthBucketCondition.Unobserved }) {
+        listOf(OpenCodeChartLegendItem(stringResource(R.string.server_health_legend_app_closed), OpenCodeChartLegendSwatch.Unobserved))
+    } else {
+        emptyList()
+    }
 
 @Composable
 private fun ServerHealthCharts(report: ServerHealthReport) {
-    val axis = rangeAxisLabels(report.range)
+    if (report.openBuckets.isEmpty()) {
+        OpenCodeChartCard(title = stringResource(R.string.server_health_connection)) {
+            Text(
+                text = stringResource(R.string.server_health_no_open_time),
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-base"),
+            )
+        }
+        return
+    }
+    val axis = openAxisLabels(report)
+    val closed = closedLegend(report)
     val latencySummary =
         if (report.p50LatencyMs != null && report.p95LatencyMs != null) {
             stringResource(
@@ -269,12 +309,11 @@ private fun ServerHealthCharts(report: ServerHealthReport) {
                 OpenCodeChartLegendItem(stringResource(R.string.server_health_legend_median), OpenCodeChartLegendSwatch.Interactive),
                 OpenCodeChartLegendItem(stringResource(R.string.server_health_legend_p95), OpenCodeChartLegendSwatch.InteractiveWeak),
                 OpenCodeChartLegendItem(stringResource(R.string.server_health_legend_offline), OpenCodeChartLegendSwatch.Error),
-                OpenCodeChartLegendItem(stringResource(R.string.server_health_legend_not_measured), OpenCodeChartLegendSwatch.Unobserved),
-            ),
+            ) + closed,
     ) {
         OpenCodeBandChart(
             points =
-                report.buckets.map { bucket ->
+                report.openBuckets.map { bucket ->
                     OpenCodeBandChartPoint(
                         median = bucket.medianMs?.toDouble(),
                         upper = bucket.p95Ms?.toDouble(),
@@ -305,12 +344,11 @@ private fun ServerHealthCharts(report: ServerHealthReport) {
                 OpenCodeChartLegendItem(stringResource(R.string.server_health_legend_live), OpenCodeChartLegendSwatch.Success),
                 OpenCodeChartLegendItem(stringResource(R.string.server_health_legend_unsteady), OpenCodeChartLegendSwatch.Warning),
                 OpenCodeChartLegendItem(stringResource(R.string.server_health_legend_down), OpenCodeChartLegendSwatch.Error),
-                OpenCodeChartLegendItem(stringResource(R.string.server_health_legend_not_measured), OpenCodeChartLegendSwatch.Unobserved),
-            ),
+            ) + closed,
     ) {
         OpenCodeStatusStrip(
             segments =
-                report.buckets.map { bucket ->
+                report.openBuckets.map { bucket ->
                     when (bucket.condition) {
                         ServerHealthBucketCondition.Live -> OpenCodeStatusStripSegment.Success
                         ServerHealthBucketCondition.Degraded -> OpenCodeStatusStripSegment.Warning
@@ -328,7 +366,7 @@ private fun ServerHealthCharts(report: ServerHealthReport) {
         axisLabels = axis,
     ) {
         OpenCodeBarChart(
-            values = report.buckets.map { it.drops.toDouble() },
+            values = report.openBuckets.map { it.drops.toDouble() },
             tone = OpenCodeChartTone.Warning,
             contentDescription = reconnectsSummary,
             modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -368,6 +406,80 @@ private fun ServerHealthErrors(report: ServerHealthReport) {
                 }
             }
         }
+    }
+}
+
+private const val ERROR_LOG_PREVIEW = 8
+
+@Composable
+private fun ServerHealthErrorLog(report: ServerHealthReport) {
+    if (report.errorLog.isEmpty()) return
+    var showsAll by rememberSaveable(report.range) { mutableStateOf(false) }
+    val visible = if (showsAll) report.errorLog else report.errorLog.take(ERROR_LOG_PREVIEW)
+    val summary =
+        if (report.errorLogTotal > ServerHealthReportBuilder.ERROR_LOG_LIMIT) {
+            stringResource(R.string.server_health_error_log_capped, report.errorLog.size, report.errorLogTotal)
+        } else {
+            null
+        }
+    OpenCodeChartCard(title = stringResource(R.string.server_health_error_log), summary = summary) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            visible.forEach { entry -> ServerHealthErrorLogRow(entry) }
+            if (report.errorLog.size > ERROR_LOG_PREVIEW) {
+                val title =
+                    if (showsAll) {
+                        stringResource(R.string.server_health_error_log_show_less)
+                    } else {
+                        stringResource(R.string.server_health_error_log_show_all, report.errorLog.size)
+                    }
+                OpenCodeButton(variant = OpenCodeButtonVariant.Link(title), onClick = { showsAll = !showsAll })
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServerHealthErrorLogRow(entry: ServerHealthErrorLogEntry) {
+    val source =
+        stringResource(
+            when (entry.source) {
+                ServerHealthErrorSource.Check -> R.string.server_health_error_log_check
+                ServerHealthErrorSource.Stream -> R.string.server_health_error_log_stream
+            },
+        )
+    val detail =
+        if (entry.count > 1) {
+            val repeated =
+                stringResource(
+                    R.string.server_health_error_log_repeated,
+                    entry.count,
+                    ServerHealthFormat.duration(entry.lastAtMs - entry.firstAtMs),
+                )
+            "$source · $repeated"
+        } else {
+            source
+        }
+    val context = LocalContext.current
+    val flags =
+        if (DateUtils.isToday(entry.lastAtMs)) {
+            DateUtils.FORMAT_SHOW_TIME
+        } else {
+            DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH
+        }
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(ServerHealthFormat.categoryLabel(entry.category)),
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-strong"),
+            )
+            Text(text = detail, style = MaterialTheme.typography.labelSmall, color = openCodeColor("text-weaker"))
+        }
+        Text(
+            text = DateUtils.formatDateTime(context, entry.lastAtMs, flags),
+            style = MaterialTheme.typography.labelSmall,
+            color = openCodeColor("text-base"),
+        )
     }
 }
 

@@ -157,7 +157,8 @@
     <string name="server_health_legend_median">Median</string>
     <string name="server_health_legend_p95">p95</string>
     <string name="server_health_legend_offline">Offline</string>
-    <string name="server_health_legend_not_measured">Not measured</string>
+    <string name="server_health_legend_app_closed">App closed</string>
+    <string name="server_health_no_open_time">The app wasn\'t open in this range.</string>
     <string name="server_health_connection">Connection</string>
     <string name="server_health_connection_summary">%1$s live</string>
     <string name="server_health_legend_live">Live</string>
@@ -169,6 +170,13 @@
     </plurals>
     <string name="server_health_errors">Errors</string>
     <string name="server_health_errors_empty">No errors in this range.</string>
+    <string name="server_health_error_log">Error log</string>
+    <string name="server_health_error_log_check">Health check</string>
+    <string name="server_health_error_log_stream">Live connection</string>
+    <string name="server_health_error_log_repeated">%1$d in a row over %2$s</string>
+    <string name="server_health_error_log_show_all">Show all %1$d</string>
+    <string name="server_health_error_log_show_less">Show less</string>
+    <string name="server_health_error_log_capped">Latest %1$d of %2$d</string>
     <string name="server_health_category_network">Network</string>
     <string name="server_health_category_timeout">Timeout</string>
     <string name="server_health_category_heartbeat">Heartbeat stall</string>
