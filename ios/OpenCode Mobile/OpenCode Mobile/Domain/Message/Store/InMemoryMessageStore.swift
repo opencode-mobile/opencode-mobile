@@ -424,6 +424,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             // REST-seeded rows have no cached info; carry their times into the first live info.
             merged["time"] = time
         }
+        let priorError = infoCache[sessionID]?[messageID]?.dictionaryValue?["error"]
         infoCache[sessionID]?[messageID] = .dictionary(merged)
 
         if partsCache[sessionID]?[messageID] == nil {
@@ -443,6 +444,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         // v2 `inbox.delivered` carries no parts; publish it so the prompt leaves the
         // pending strip and shows as a bubble before the first step starts.
         let pickupChanged = !inserted && isUserInfo && wasWaiting != waiting
+        // A reply that fails before any part has only this info to show the failure.
+        let failureChanged = !isUserInfo && Self.reportedError(priorError) != Self.reportedError(merged["error"])
         if inserted && isUserInfo && waiting {
             messageOrder[sessionID]?.append(messageID)
         } else if inserted {
@@ -466,8 +469,15 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             insertedMessageIDs: inserted ? [messageID] : [],
             changedMessageIDs: inserted ? [] : [messageID],
             pickupStateChangedIDs: pickupChanged ? [messageID] : [],
+            failureChangedIDs: failureChanged ? [messageID] : [],
             structuralChange: inserted || delivered
         )
+    }
+
+    /// An explicit null clears a failure, so it reads the same as no error.
+    private static func reportedError(_ value: AnySendable?) -> AnySendable? {
+        if case .null = value { return nil }
+        return value
     }
 
     /// A user info that has its own agent/model advances the running value (v1, REST); a v2

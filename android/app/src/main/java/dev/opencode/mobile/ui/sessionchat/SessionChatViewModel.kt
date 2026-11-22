@@ -2171,7 +2171,6 @@ class SessionChatViewModel
                     inboxState = inboxSnapshot,
                     infoState = infoState,
                     previousSubagents = _uiState.value.subagents,
-                    usesTurnStatusPill = SessionChatDisplayPreferences.activityCardTimeline,
                 )
             val syncingIndicatorLabel =
                 if (timelineState.isSyncingMessages) {
@@ -2204,7 +2203,6 @@ class SessionChatViewModel
                 workingIndicatorLabel = turn.workingIndicatorLabel,
                 retryCard = infoState.retryCard,
                 isRetrying = infoState.isRetrying,
-                workingIndicatorCollapsed = turn.workingIndicatorCollapsed,
                 workingIndicatorFading = turn.workingIndicatorFading,
                 syncingIndicatorLabel = syncingIndicatorLabel,
                 sessionTodos = inboxSnapshot.sessionTodos,
@@ -2216,7 +2214,11 @@ class SessionChatViewModel
                 subagents = subagents,
                 shells = shellsState.shells,
                 shellOutput = shellsState.output,
-                backgroundWorkPill = SessionChatBackgroundWork.pill(subagents, shellsState.shells),
+                backgroundWorkPill =
+                    SessionChatBackgroundWork.pill(
+                        subagents,
+                        SessionChatBackgroundWork.backgroundShells(shellsState.shells, timeline.loadedMessages()),
+                    ),
                 backgroundWorkDoneUnseen = turn.backgroundWorkDoneUnseen,
                 connectionStatus = infoState.connectionStatus,
                 canMutate = infoState.canMutate,

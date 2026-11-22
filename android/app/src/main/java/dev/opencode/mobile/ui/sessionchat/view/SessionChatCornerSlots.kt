@@ -20,22 +20,29 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.domain.text.resolve
+import dev.opencode.mobile.ui.components.FloatingPillCompactWidth
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPill
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPill
+import dev.opencode.mobile.ui.components.floatingPillChromeWidth
+import dev.opencode.mobile.ui.components.label
+import dev.opencode.mobile.ui.components.openCodeTurnStatusPillChromeWidth
 import dev.opencode.mobile.ui.components.sessionTodosPillAccessibilityLabel
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.SessionChatActivityItem
@@ -43,6 +50,9 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatActivityPriority
 import dev.opencode.mobile.ui.sessionchat.SessionChatActivitySlot
 import dev.opencode.mobile.ui.sessionchat.SessionChatContextItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatNavigationPill
+import dev.opencode.mobile.ui.sessionchat.SessionChatPillRowFold
+import dev.opencode.mobile.ui.sessionchat.SessionChatPillRowWidths
+import dev.opencode.mobile.ui.sessionchat.SessionChatPillSlots
 import dev.opencode.mobile.ui.sessionchat.SessionChatTurnStatusSlot
 import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 import dev.opencode.mobile.ui.text.resolve
@@ -110,6 +120,7 @@ internal fun SessionChatActivitySlotView(
     onClose: (SessionChatActivityItem) -> Unit,
     modifier: Modifier = Modifier,
     turnStatus: SessionChatTurnStatusSlot? = null,
+    fold: SessionChatPillRowFold = SessionChatPillRowFold(),
 ) {
     val stackAvailable = slot.showsOverflowButton || slot.collapsed
     LaunchedEffect(stackAvailable, slot.collapsed) { onStackOpenChange(false) }
@@ -151,12 +162,24 @@ internal fun SessionChatActivitySlotView(
             horizontalArrangement = Arrangement.spacedBy(SessionChatCornerSlotsLayout.Spacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // One call site across Working and Done, so the spinner can morph into the check.
+            // One call site across every phase, so label and width change in place and the
+            // spinner can morph into the check.
             if (turnStatus != null) {
+                val turnItem = turnStatus.item
                 OpenCodeTurnStatusPill(
                     phase = turnStatus.phase,
-                    compact = turnStatus.compact,
+                    compact = turnStatus.compact || (turnStatus.canFold && fold.turnCompact),
+                    maxWidthPx = fold.turnMaxWidth,
                     leaving = turnStatus.leaving,
+                    accessibilityLabel = turnItem?.let { SessionChatActivityPillCopy.accessibilityLabel(it).resolve() },
+                    onClick =
+                        turnItem?.let { item ->
+                            {
+                                onStackOpenChange(false)
+                                onClick(item)
+                            }
+                        },
+                    onClose = turnItem?.takeIf { turnStatus.isClosable }?.let { item -> { onClose(item) } },
                 )
             }
             // One call site for both forms, so collapsing folds this pill's width instead of
@@ -165,7 +188,7 @@ internal fun SessionChatActivitySlotView(
             if (primary != null) {
                 SessionChatActivityPill(
                     item = primary,
-                    compact = collapsed || slot.primaryCompact,
+                    compact = collapsed || slot.primaryCompact || fold.secondaryCompact,
                     badgeCount = if (collapsed) slot.itemCount else 0,
                     accessibilityLabel =
                         if (collapsed) {
@@ -199,6 +222,75 @@ internal fun SessionChatActivitySlotView(
             }
         }
     }
+}
+
+/**
+ * Measures the row's real label widths, so the fold holds under font scaling and long
+ * translations, and asks [SessionChatPillSlots.pillRowFold] what has to give way.
+ * [trailing] is each bottom-right pill with whether it is compact.
+ */
+@Composable
+internal fun rememberSessionChatPillRowFold(
+    turnStatus: SessionChatTurnStatusSlot?,
+    slot: SessionChatActivitySlot,
+    trailing: List<Pair<OpenCodeFloatingPillLayout, Boolean>>,
+    availablePx: Int,
+): SessionChatPillRowFold {
+    if (availablePx <= 0) return SessionChatPillRowFold()
+    val measurer = rememberTextMeasurer(cacheSize = 16)
+    val style = MaterialTheme.typography.labelLarge
+    val density = LocalDensity.current
+    val lookup = ResourcesUiTextLookup(LocalResources.current)
+    val doneLabel = stringResource(R.string.common_done)
+
+    fun textPx(text: String) = measurer.measure(text, style, maxLines = 1, softWrap = false).size.width
+
+    fun px(dp: Dp) = with(density) { dp.roundToPx() }
+    val compactPx = px(FloatingPillCompactWidth)
+
+    fun pillPx(
+        layout: OpenCodeFloatingPillLayout,
+        state: OpenCodeFloatingPillState,
+    ) = px(floatingPillChromeWidth(layout, state)) + textPx(layout.label)
+    val turnPx =
+        when {
+            turnStatus == null -> 0
+            turnStatus.compact -> compactPx
+            else ->
+                px(openCodeTurnStatusPillChromeWidth(turnStatus.phase, turnStatus.isClosable)) +
+                    textPx(turnStatus.phase.label(doneLabel))
+        }
+    val primary = slot.primary
+    val secondaryPx =
+        when {
+            primary == null -> 0
+            slot.collapsed || slot.primaryCompact -> compactPx
+            else -> pillPx(SessionChatActivityPillCopy.layout(primary, lookup), SessionChatActivityPillCopy.state(primary))
+        }
+    val overflowPx =
+        if (slot.showsOverflowButton) {
+            pillPx(OpenCodeFloatingPillLayout.Label("+${slot.overflow.size}"), OpenCodeFloatingPillState.Ready)
+        } else {
+            0
+        }
+    val spacingPx = px(SessionChatCornerSlotsLayout.Spacing)
+    val trailingPx =
+        trailing.sumOf { (layout, compact) -> if (compact) compactPx else pillPx(layout, OpenCodeFloatingPillState.Live) } +
+            spacingPx * (trailing.size - 1).coerceAtLeast(0)
+    return SessionChatPillSlots.pillRowFold(
+        widths =
+            SessionChatPillRowWidths(
+                available = availablePx,
+                turn = turnPx,
+                turnCompact = if (turnStatus == null) 0 else compactPx,
+                secondary = secondaryPx,
+                secondaryCompact = if (primary == null) 0 else compactPx,
+                overflow = overflowPx,
+                trailing = trailingPx,
+                spacing = spacingPx,
+            ),
+        turnCanFold = turnStatus?.canFold == true,
+    )
 }
 
 @Composable
@@ -262,7 +354,6 @@ internal object SessionChatActivityPillCopy {
                 OpenCodeFloatingPillLayout.Counter(if (item.count > 1) "/btw ×${item.count}" else "/btw")
             is SessionChatActivityItem.Queued ->
                 OpenCodeFloatingPillLayout.Label(UiText.plural(R.plurals.session_chat_activity_queued, item.count).resolve(text))
-            is SessionChatActivityItem.Finished -> OpenCodeFloatingPillLayout.Label(item.label)
         }
 
     fun state(item: SessionChatActivityItem): OpenCodeFloatingPillState =
@@ -271,16 +362,10 @@ internal object SessionChatActivityPillCopy {
             SessionChatActivityPriority.Error -> OpenCodeFloatingPillState.Error
             SessionChatActivityPriority.AnswerReady, SessionChatActivityPriority.Queued -> OpenCodeFloatingPillState.Ready
             SessionChatActivityPriority.Running -> OpenCodeFloatingPillState.Live
-            SessionChatActivityPriority.Finished -> OpenCodeFloatingPillState.Done
         }
 
     fun isClickable(item: SessionChatActivityItem): Boolean =
-        when (item) {
-            is SessionChatActivityItem.SideQuestionsRunning,
-            is SessionChatActivityItem.Finished,
-            -> false
-            else -> true
-        }
+        item !is SessionChatActivityItem.SideQuestionsRunning
 
     fun isClosable(item: SessionChatActivityItem): Boolean =
         item is SessionChatActivityItem.RequestFailed || item is SessionChatActivityItem.SideQuestionsFailed
@@ -333,8 +418,6 @@ internal object SessionChatActivityPillCopy {
                     R.plurals.session_chat_activity_side_questions_running,
                 )
             is SessionChatActivityItem.Queued -> UiText.plural(R.plurals.session_chat_activity_queued_prompts, item.count)
-            is SessionChatActivityItem.Finished ->
-                UiText.resource(R.string.session_chat_activity_finished, UiText.verbatim(item.label))
         }
 
     /** What a tap does, read after the state; null when the pill does nothing. */
@@ -344,7 +427,6 @@ internal object SessionChatActivityPillCopy {
             SessionChatActivityItem.ReviewPermission,
             SessionChatActivityItem.AnswerQuestion,
             is SessionChatActivityItem.SideQuestionsRunning,
-            is SessionChatActivityItem.Finished,
             -> null
             is SessionChatActivityItem.Subagents ->
                 if (item.pill.needsInput) {

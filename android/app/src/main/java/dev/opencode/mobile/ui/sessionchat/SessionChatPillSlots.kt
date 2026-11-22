@@ -1,6 +1,11 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
+import dev.opencode.mobile.ui.components.OpenCodeTurnStatusAttentionMark
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
 
 /** Which bottom-left activity pill wins. Earlier entries come first. */
@@ -10,9 +15,6 @@ enum class SessionChatActivityPriority {
     AnswerReady,
     Running,
     Queued,
-
-    /** Fades after [SessionChatPillSlots.FINISHED_FADE_MS], so beside other work it only shows in the stack. */
-    Finished,
 }
 
 /**
@@ -87,16 +89,6 @@ sealed interface SessionChatActivityItem {
         override val id = "queued"
         override val priority = SessionChatActivityPriority.Queued
     }
-
-    /** Work that just finished, shown until it fades. */
-    data class Finished(
-        val key: String,
-        val label: String,
-        val finishedAtEpochMs: Long,
-    ) : SessionChatActivityItem {
-        override val id = "finished:$key"
-        override val priority = SessionChatActivityPriority.Finished
-    }
 }
 
 /**
@@ -122,18 +114,50 @@ data class SessionChatActivitySlot(
 }
 
 /**
- * The turn status pill that leads the bottom-left row in the Activity Card style. It is not an
- * activity item: it never counts toward "+N" and is never in the stack.
+ * The one permanent turn pill that leads the bottom-left row in every timeline style. It is not
+ * an activity item: it never counts toward "+N" and is never in the stack.
  */
 internal data class SessionChatTurnStatusSlot(
     val phase: OpenCodeTurnStatusPillPhase,
-    /** Folded to its round mark: beside another pill, away from the end, or with the keyboard up. */
+    /** Folded to its round mark. Attention and Failed never fold. */
     val compact: Boolean,
     /** Fading out. The timeline already gives its row back, so the list glides down. */
     val leaving: Boolean,
+    /** What a tap acts on; null when the pill is a plain status. */
+    val item: SessionChatActivityItem? = null,
 ) {
     val reservesRow: Boolean get() = !leaving
+
+    /** Only the Working family and Done may fold. */
+    val canFold: Boolean get() = canFold(phase)
+
+    val isClosable: Boolean get() = item is SessionChatActivityItem.RequestFailed
+
+    companion object {
+        fun canFold(phase: OpenCodeTurnStatusPillPhase): Boolean =
+            phase is OpenCodeTurnStatusPillPhase.Working || phase == OpenCodeTurnStatusPillPhase.Done
+    }
 }
+
+/** Measured pixel widths of the bottom pill row; 0 for a pill that is not shown. */
+internal data class SessionChatPillRowWidths(
+    val available: Int,
+    val turn: Int,
+    val turnCompact: Int,
+    val secondary: Int,
+    val secondaryCompact: Int,
+    val overflow: Int,
+    val trailing: Int,
+    val spacing: Int,
+)
+
+/** Which pills the row has to fold so everything fits. */
+internal data class SessionChatPillRowFold(
+    val turnCompact: Boolean = false,
+    val secondaryCompact: Boolean = false,
+    /** Set when a turn pill that cannot fold still does not fit: its label truncates to this width. */
+    val turnMaxWidth: Int? = null,
+)
 
 /** A top-left context pill. */
 sealed interface SessionChatContextItem {
@@ -159,23 +183,21 @@ data class SessionChatNavigationPill(
 
 /** Pure rules for the three Session Chat corner slots. */
 object SessionChatPillSlots {
-    const val FINISHED_FADE_MS = 3_000L
     const val MAX_CONTEXT_PILLS = 3
 
     /**
-     * Bottom left: highest priority first, the rest behind "+N". Finished items
-     * older than the fade drop out. With the keyboard up the pill goes compact
-     * unless it needs input, and "+N" hides. Away from the end (the scroll-to-end pill shows,
-     * keyboard down) everything folds into one round pill ([SessionChatActivitySlot.collapsed]).
+     * Bottom left, beside the turn pill: highest priority first, the rest behind "+N". Requests
+     * and failures belong to the turn pill and never appear here. With the keyboard up the pill
+     * goes compact and "+N" hides. Away from the end (the scroll-to-end pill shows, keyboard
+     * down) everything folds into one round pill ([SessionChatActivitySlot.collapsed]).
      */
     fun activity(
         items: List<SessionChatActivityItem>,
         keyboardVisible: Boolean,
-        nowEpochMs: Long,
         awayFromEnd: Boolean = false,
     ): SessionChatActivitySlot {
         // sortedBy is stable: equal priorities keep the caller's order.
-        val sorted = items.filterNot { isFaded(it, nowEpochMs) }.sortedBy { it.priority }
+        val sorted = secondaryItems(items).sortedBy { it.priority }
         val primary = sorted.firstOrNull() ?: return SessionChatActivitySlot()
         val overflow = sorted.drop(1)
         if (collapsesActivity(awayFromEnd, keyboardVisible)) {
@@ -183,45 +205,108 @@ object SessionChatPillSlots {
         }
         return SessionChatActivitySlot(
             primary = primary,
-            primaryCompact = keyboardVisible && primary.priority != SessionChatActivityPriority.NeedsInput,
+            primaryCompact = keyboardVisible,
             overflow = if (keyboardVisible) emptyList() else overflow,
             showsOverflowButton = !keyboardVisible && overflow.isNotEmpty(),
         )
     }
 
     /**
-     * The turn status pill, from the same label that drives the Working row. Hidden while a
-     * permission or question waits (even with its dock collapsed) and after a shown failure.
+     * What stays a separate pill. Requests and failures merge into the turn pill; a subagent
+     * that needs input gives its blocker to the turn pill and leaves only its running count.
+     */
+    fun secondaryItems(items: List<SessionChatActivityItem>): List<SessionChatActivityItem> =
+        items.mapNotNull { item ->
+            when (item) {
+                SessionChatActivityItem.ReviewPermission,
+                SessionChatActivityItem.AnswerQuestion,
+                is SessionChatActivityItem.RequestFailed,
+                -> null
+                is SessionChatActivityItem.Subagents ->
+                    if (item.pill.needsInput) item.pill.stillRunning?.let(SessionChatActivityItem::Subagents) else item
+                else -> item
+            }
+        }
+
+    /**
+     * The turn pill's state, highest priority first: failed, a collapsed request, an open
+     * request, a subagent's request, then the active label or Done. Null with no turn to show.
      */
     internal fun turnStatus(
         label: String?,
-        collapsed: Boolean,
         fading: Boolean,
         isAwaitingUser: Boolean,
         items: List<SessionChatActivityItem>,
         keyboardVisible: Boolean,
         awayFromEnd: Boolean,
-        nowEpochMs: Long,
+        text: UiTextLookup,
     ): SessionChatTurnStatusSlot? {
-        if (label == null || collapsed || isAwaitingUser) return null
-        val live = items.filterNot { isFaded(it, nowEpochMs) }
-        val blocked =
-            live.any {
-                it is SessionChatActivityItem.ReviewPermission ||
-                    it is SessionChatActivityItem.AnswerQuestion ||
-                    it is SessionChatActivityItem.RequestFailed
+        fun attention(
+            label: UiText,
+            mark: OpenCodeTurnStatusAttentionMark,
+        ) = OpenCodeTurnStatusPillPhase.Attention(label.resolve(text), mark)
+        val failure = items.firstOrNull { it is SessionChatActivityItem.RequestFailed }
+        val blockedSubagent =
+            items.firstNotNullOfOrNull { item -> (item as? SessionChatActivityItem.Subagents)?.pill?.takeIf { it.needsInput } }
+        val (phase, item) =
+            when {
+                failure != null ->
+                    OpenCodeTurnStatusPillPhase.Failed(UiText.resource(R.string.session_chat_activity_request_failed).resolve(text)) to failure
+                SessionChatActivityItem.ReviewPermission in items ->
+                    attention(UiText.resource(R.string.session_chat_activity_review_permission), OpenCodeTurnStatusAttentionMark.Reopen) to
+                        SessionChatActivityItem.ReviewPermission
+                SessionChatActivityItem.AnswerQuestion in items ->
+                    attention(UiText.resource(R.string.session_chat_activity_answer_question), OpenCodeTurnStatusAttentionMark.Reopen) to
+                        SessionChatActivityItem.AnswerQuestion
+                isAwaitingUser ->
+                    attention(UiText.resource(R.string.timeline_activity_waiting_for_you), OpenCodeTurnStatusAttentionMark.PulsingDot) to null
+                blockedSubagent != null ->
+                    attention(blockedSubagent.blocker.labelText, OpenCodeTurnStatusAttentionMark.PulsingDot) to
+                        SessionChatActivityItem.Subagents(blockedSubagent.blocker)
+                label == null -> return null
+                WorkingTurnIndicator.showsIdleMark(label) -> OpenCodeTurnStatusPillPhase.Done to null
+                else -> OpenCodeTurnStatusPillPhase.Working(label) to null
             }
-        if (blocked) return null
+        val canFold = SessionChatTurnStatusSlot.canFold(phase)
         return SessionChatTurnStatusSlot(
-            phase =
-                if (WorkingTurnIndicator.showsIdleMark(label)) {
-                    OpenCodeTurnStatusPillPhase.Done
-                } else {
-                    OpenCodeTurnStatusPillPhase.Working(label)
-                },
-            compact = live.isNotEmpty() || awayFromEnd || keyboardVisible,
-            leaving = fading,
+            phase = phase,
+            compact = canFold && (awayFromEnd || keyboardVisible),
+            leaving = canFold && fading,
+            item = item,
         )
+    }
+
+    /**
+     * Folds the row to fit its measured widths. A Working or Done pill folds first; Attention
+     * and Failed never fold, so the secondary pill gives way instead. A secondary pill that fits
+     * never folds the turn pill.
+     */
+    internal fun pillRowFold(
+        widths: SessionChatPillRowWidths,
+        turnCanFold: Boolean,
+    ): SessionChatPillRowFold {
+        fun total(
+            turn: Int,
+            secondary: Int,
+        ): Int {
+            val shown = listOf(turn, secondary, widths.overflow, widths.trailing).filter { it > 0 }
+            return shown.sum() + widths.spacing * (shown.size - 1).coerceAtLeast(0)
+        }
+
+        fun fits(
+            turn: Int,
+            secondary: Int,
+        ): Boolean = total(turn, secondary) <= widths.available
+        if (fits(widths.turn, widths.secondary)) return SessionChatPillRowFold()
+        if (!turnCanFold) {
+            val excess = total(widths.turn, minOf(widths.secondary, widths.secondaryCompact)) - widths.available
+            return SessionChatPillRowFold(
+                secondaryCompact = widths.secondary > 0,
+                turnMaxWidth = if (excess > 0 && widths.turn > 0) maxOf(widths.turnCompact, widths.turn - excess) else null,
+            )
+        }
+        if (fits(widths.turnCompact, widths.secondary)) return SessionChatPillRowFold(turnCompact = true)
+        return SessionChatPillRowFold(turnCompact = true, secondaryCompact = widths.secondary > 0)
     }
 
     /** Away from the end with the keyboard down, the left side folds into one round pill. */
@@ -238,22 +323,6 @@ object SessionChatPillSlots {
         awayFromEnd: Boolean,
         keyboardVisible: Boolean,
     ): Boolean = awayFromEnd || keyboardVisible
-
-    fun isFaded(
-        item: SessionChatActivityItem,
-        nowEpochMs: Long,
-    ): Boolean = item is SessionChatActivityItem.Finished && nowEpochMs - item.finishedAtEpochMs >= FINISHED_FADE_MS
-
-    /** When the next finished item fades, so the host can resolve the slot again then. */
-    fun nextFadeEpochMs(
-        items: List<SessionChatActivityItem>,
-        nowEpochMs: Long,
-    ): Long? =
-        items
-            .filterIsInstance<SessionChatActivityItem.Finished>()
-            .map { it.finishedAtEpochMs + FINISHED_FADE_MS }
-            .filter { it > nowEpochMs }
-            .minOrNull()
 
     /** Top left: the goal in the corner, then the branch, then todos, at most three. */
     fun context(

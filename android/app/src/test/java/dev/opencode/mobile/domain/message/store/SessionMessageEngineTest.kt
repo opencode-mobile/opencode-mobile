@@ -57,6 +57,34 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun infoOnlyFailure_isLivePublishableOnce() {
+        val base =
+            buildJsonObject {
+                put("id", "msg-2")
+                put("role", "assistant")
+                put("sessionID", "ses-1")
+            }
+        engine.apply("ses-1", MessagePatch.InfoUpdated(base))
+        val failed =
+            buildJsonObject {
+                base.forEach { (key, value) -> put(key, value) }
+                put(
+                    "error",
+                    buildJsonObject {
+                        put("name", "APIError")
+                        put("data", buildJsonObject { put("message", "Request failed") })
+                    },
+                )
+            }
+        val first = (engine.apply("ses-1", MessagePatch.InfoUpdated(failed)) as MessageStoreApplyResult.Changed).changeSet
+        assertEquals(setOf("msg-2"), first.failureChangedIds)
+        assertTrue(engine.shouldPublishLive(first))
+        assertTrue(engine.frameAfterChange("ses-1", first, emptyList()).last().failure != null)
+        val repeated = (engine.apply("ses-1", MessagePatch.InfoUpdated(failed)) as MessageStoreApplyResult.Changed).changeSet
+        assertFalse(engine.shouldPublishLive(repeated))
+    }
+
+    @Test
     fun deliveredPrompt_infoOnlyUpdate_isLivePublishable() {
         val waitingInfo =
             buildJsonObject {

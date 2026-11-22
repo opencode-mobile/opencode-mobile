@@ -375,6 +375,15 @@ struct OpenCodeFloatingPill: View {
     }
 
     static let minHeight: CGFloat = 36
+
+    /// A full pill's width around a measured label, for fitting a row of pills.
+    static func fullWidth(textWidth: CGFloat, hasMark: Bool, hasClose: Bool) -> CGFloat {
+        var width = textWidth + paddingHorizontal * 2
+        if hasMark { width += iconSize + iconSpacing }
+        if hasClose { width += minHeight - paddingHorizontal / 2 }
+        return width
+    }
+
     private static let paddingHorizontal: CGFloat = 14
     /// Closes the round body to `minHeight` around a 16 pt mark.
     private static let compactPaddingHorizontal: CGFloat = 10
@@ -389,7 +398,7 @@ struct OpenCodeFloatingPill: View {
 }
 
 /// Amber dot that pulses while an item waits for the user; still under Reduce Motion.
-private struct OpenCodeFloatingPillPulsingDot: View {
+struct OpenCodeFloatingPillPulsingDot: View {
     let color: Color
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dim = false

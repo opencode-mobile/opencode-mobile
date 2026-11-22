@@ -421,6 +421,9 @@ private struct ActivityCardAgentRow: View {
 
 /// Activity text shared by the card, the step rail and the sheet.
 enum OpenCodeActivityText {
+    static var waitingForYou: String {
+        String(localized: "timeline.activity.waiting_for_you", defaultValue: "Waiting for you")
+    }
     static var working: String { String(localized: "component.activity_card.working", defaultValue: "Working") }
     static var thinking: String { String(localized: "component.thinking", defaultValue: "Thinking") }
     static var thinkingEllipsis: String { String(localized: "component.thinking_ellipsis", defaultValue: "Thinking\u{2026}") }

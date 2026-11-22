@@ -124,6 +124,23 @@ nonisolated struct SessionChatBackgroundWorkPill: Equatable, Sendable {
     /// A subagent waits for input: amber pill with a pulsing dot.
     let needsInput: Bool
     let accessibilityLabel: String
+    /// While a subagent waits: what the turn pill says, with no running count.
+    var askingLabel: String? = nil
+    /// While a subagent waits: the work still running, which stays a normal count pill.
+    var stillRunning: StillRunning? = nil
+
+    struct StillRunning: Equatable, Sendable {
+        let label: String
+        let accessibilityLabel: String
+    }
+
+    /// The count pill left once the turn pill carries the waiting subagent; nil when nothing else runs.
+    var secondary: SessionChatBackgroundWorkPill? {
+        guard needsInput else { return self }
+        return stillRunning.map {
+            SessionChatBackgroundWorkPill(label: $0.label, needsInput: false, accessibilityLabel: $0.accessibilityLabel)
+        }
+    }
 }
 
 /// The waiting request the background work pill opens when a subagent needs input.
@@ -352,7 +369,12 @@ nonisolated enum SessionChatBackgroundWork {
         }
         let asking = askingLabel(waiting: waiting.count, firstAgent: firstWaiting.agentName)
         guard running > 0 else {
-            return SessionChatBackgroundWorkPill(label: asking, needsInput: true, accessibilityLabel: asking)
+            return SessionChatBackgroundWorkPill(
+                label: asking,
+                needsInput: true,
+                accessibilityLabel: asking,
+                askingLabel: asking
+            )
         }
         let spoken = spokenCount(subagents: runningSubagents, shells: runningShells)
         let label = String(
@@ -363,7 +385,19 @@ nonisolated enum SessionChatBackgroundWork {
             localized: "timeline.background_work.needs_input_running_spoken",
             defaultValue: "\(asking), \(spoken) running"
         )
-        return SessionChatBackgroundWorkPill(label: label, needsInput: true, accessibilityLabel: accessibilityLabel)
+        return SessionChatBackgroundWorkPill(
+            label: label,
+            needsInput: true,
+            accessibilityLabel: accessibilityLabel,
+            askingLabel: asking,
+            stillRunning: SessionChatBackgroundWorkPill.StillRunning(
+                label: countLabel(subagents: runningSubagents, shells: runningShells),
+                accessibilityLabel: String(
+                    localized: "timeline.background_work.running_spoken",
+                    defaultValue: "\(spoken) running"
+                )
+            )
+        )
     }
 
     /// "general needs input" (the agent name is server content), or "2 subagents need input".
@@ -390,6 +424,33 @@ nonisolated enum SessionChatBackgroundWork {
                 return left == right ? lhs.offset < rhs.offset : left < right
             }
             .map(\.element)
+    }
+
+    /// Running shells that are real background commands, for the pill count. The server has no
+    /// lasting background flag, so a shell counts when a finished tool part recorded its id in
+    /// `metadata.shellID` (the call returned while the command kept running), or when it started
+    /// before the earliest loaded message (its call is outside loaded history). On v1 a shell is
+    /// a running bash part, so it never counts.
+    static func backgroundShells(_ shells: [AgentShell], messages: [Message]) -> [AgentShell] {
+        var returnedShellIDs: Set<String> = []
+        for message in messages {
+            for part in message.parts {
+                guard case .tool(let tool) = part,
+                      tool.status != .pending, tool.status != .running,
+                      case let .string(shellID)? = tool.metadata?["shellID"]
+                else { continue }
+                returnedShellIDs.insert(shellID)
+            }
+        }
+        let earliestLoaded = messages.compactMap { ToolStartTime.normalizeEpochMs($0.sentAtEpochMs) }.min()
+        return shells.filter { shell in
+            guard shell.status.isRunning else { return false }
+            if returnedShellIDs.contains(shell.id) { return true }
+            guard let started = ToolStartTime.normalizeEpochMs(shell.startedAtMs), let earliestLoaded else {
+                return false
+            }
+            return started < earliestLoaded
+        }
     }
 
     /// The request the needs-input pill pages to: the first waiting subagent's permission,

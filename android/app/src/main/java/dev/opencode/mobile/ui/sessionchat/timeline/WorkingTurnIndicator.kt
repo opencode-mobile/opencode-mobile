@@ -1,39 +1,47 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.Message
-import dev.opencode.mobile.domain.message.MessagePart
+import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.PromptSendProgress
+import dev.opencode.mobile.domain.session.SessionActivity
 
 /**
- * Last-timeline-row Session Running chrome. Show iff this session's
- * status is not idle, or a large prompt body is still on the wire.
- * Optimistic busy on send is the same status. Hide when a permission
- * or question dock is waiting on the user. Streaming Thinking is the
- * same reserved footer — change the label in place. Do not collapse
- * under a thought row or the footer goes blank between labels.
- * After busy ends, show Idle for 5s, then collapse. A new send snaps back.
+ * The lifecycle of the permanent turn pill. It mounts while this session's status is not idle, a
+ * large prompt body is on the wire, or a permission or question waits. When the turn goes idle
+ * it keeps the last active label for [TURN_SETTLE_MS], so a short idle gap never shows Done;
+ * then Done holds and fades. A stopped turn, or one that ended while disconnected, leaves
+ * quietly, and a failed turn hands the pill to its failure at once.
  */
 object WorkingTurnIndicator {
     const val IDLE_LABEL = "Idle"
-    const val THINKING_LABEL = "Thinking"
-    const val IDLE_HOLD_MS = 5_000L
+    const val TURN_SETTLE_MS = 500L
+    const val TURN_DONE_HOLD_MS = 3_000L
+    const val TURN_FADE_MS = 240L
 
-    /** The Activity Card style's status pill holds Done this long, then fades. */
-    const val TURN_PILL_HOLD_MS = SessionChatPillSlots.FINISHED_FADE_MS
-    const val TURN_PILL_FADE_MS = 240L
+    /**
+     * How long after a reconnect an idle status still counts as "ended while disconnected".
+     * The status refresh that follows a reconnect lands inside this window.
+     */
+    const val RECONNECT_CONFIRM_MS = 5_000L
 
     data class Chrome(
         val label: String?,
-        val collapsed: Boolean,
         val fading: Boolean,
     ) {
         companion object {
-            val Unmounted = Chrome(label = null, collapsed = false, fading = false)
+            val Unmounted = Chrome(label = null, fading = false)
         }
     }
 
+    /**
+     * The turn went idle at [startedAtMs] showing [label]. [quietFadeAtMs] is when a quiet
+     * ending started to fade; null while the turn is on its way to Done.
+     */
     data class Hold(
         val startedAtMs: Long,
+        val label: String,
+        val quietFadeAtMs: Long? = null,
     )
 
     data class Resolution(
@@ -42,105 +50,101 @@ object WorkingTurnIndicator {
         val wakeAfterMs: Long? = null,
     )
 
-    fun lastIsThinking(messages: List<SessionChatMessageItem>): Boolean =
-        messages.any { message ->
-            message.blocks.any { block ->
-                block is SessionChatTimelineBlock.Reasoning && block.isStreaming
-            }
-        }
+    /** How the turn that just went idle ended. */
+    enum class Ending {
+        /** Finished normally: settle, then Done. */
+        Completed,
 
-    fun isStreamingThinking(messages: List<Message>): Boolean =
-        messages.any { message ->
-            message.parts.any { part ->
-                part is MessagePart.Reasoning && part.isStreaming
-            }
-        }
+        /** Stopped by the user, or ended while disconnected: settle, then leave with no Done. */
+        Quiet,
 
-    @Suppress("UNUSED_PARAMETER")
-    fun shouldCollapseReservedRow(
-        lastIsThinking: Boolean,
-        label: String?,
-    ): Boolean = false
+        /** Failed: the failure state replaces the pill immediately. */
+        Failed,
+    }
 
     fun showsIdleMark(label: String): Boolean = label == IDLE_LABEL
 
+    /**
+     * The active label, highest priority first: Retrying or Compacting, Sending, Working. A
+     * pending request keeps the turn active even if the status is momentarily null.
+     */
     fun labelForActiveTurn(
         statusLabel: String?,
         isCompacting: Boolean = false,
-        isAwaitingUser: Boolean = false,
+        isRetrying: Boolean = false,
+        hasPendingRequest: Boolean = false,
         sendProgressPercent: Int? = null,
-        isThinking: Boolean = false,
     ): String? {
-        if (isAwaitingUser) return null
         if (isCompacting) return SessionCompactChrome.STATUS_LABEL
+        if (isRetrying && statusLabel != null) return statusLabel
         if (sendProgressPercent != null) {
             return PromptSendProgress.label(sendProgressPercent)
         }
-        if (isThinking && statusLabel != null) return THINKING_LABEL
-        return statusLabel
+        return statusLabel ?: SessionActivity.Running.chatStatusLabel().takeIf { hasPendingRequest }
     }
 
+    /**
+     * Whether the user stopped the last turn: its newest assistant reply carries the server's
+     * interrupted stop reason, with no sent prompt after it.
+     */
+    fun lastTurnInterrupted(messages: List<Message>): Boolean {
+        for (message in messages.asReversed()) {
+            when (message.role) {
+                MessageRole.Assistant -> return message.stopReason == MessageStopReason.Interrupted
+                MessageRole.User -> if (!message.isWaitingForPickup) return false
+                else -> Unit
+            }
+        }
+        return false
+    }
+
+    /**
+     * The next pill chrome. [connectionLost] keeps the last state while the status cannot be
+     * trusted. [hideImmediately] is an unbound session.
+     */
     fun resolveFooter(
         activeLabel: String?,
-        lastIsThinking: Boolean,
+        ending: Ending,
+        connectionLost: Boolean,
         hideImmediately: Boolean,
         previous: Chrome,
         hold: Hold?,
         nowMs: Long,
-        holdMs: Long = IDLE_HOLD_MS,
-        fadeMs: Long = 0L,
     ): Resolution {
-        if (hideImmediately) {
-            return Resolution(chrome = Chrome.Unmounted, hold = null)
-        }
+        if (hideImmediately) return Resolution(Chrome.Unmounted, hold = null)
         if (activeLabel != null) {
-            return Resolution(
-                chrome =
-                    Chrome(
-                        label = activeLabel,
-                        collapsed = shouldCollapseReservedRow(lastIsThinking, activeLabel),
-                        fading = false,
-                    ),
-                hold = null,
-            )
+            return Resolution(Chrome(label = activeLabel, fading = false), hold = null)
         }
-        if (previous.label == null && hold == null) {
-            return Resolution(chrome = Chrome.Unmounted, hold = null)
+        if (hold == null && previous.label == null) return Resolution(Chrome.Unmounted, hold = null)
+        if (ending == Ending.Failed) return Resolution(Chrome.Unmounted, hold = null)
+        if (hold == null && connectionLost) return Resolution(previous, hold = null)
+        val started = hold ?: Hold(startedAtMs = nowMs, label = previous.label.orEmpty())
+        val settleEndsAt = started.startedAtMs + TURN_SETTLE_MS
+        if (nowMs < settleEndsAt) {
+            return Resolution(Chrome(started.label, fading = false), started, wakeAfterMs = settleEndsAt - nowMs)
         }
-        val nextHold = hold ?: Hold(startedAtMs = nowMs)
-        val remainingMs = holdMs - (nowMs - nextHold.startedAtMs)
-        return if (remainingMs > 0) {
-            Resolution(
-                chrome =
-                    Chrome(
-                        label = IDLE_LABEL,
-                        collapsed = false,
-                        fading = false,
-                    ),
-                hold = nextHold,
-                wakeAfterMs = remainingMs,
-            )
-        } else if (remainingMs + fadeMs > 0) {
-            Resolution(
-                chrome =
-                    Chrome(
-                        label = IDLE_LABEL,
-                        collapsed = false,
-                        fading = true,
-                    ),
-                hold = nextHold,
-                wakeAfterMs = remainingMs + fadeMs,
-            )
-        } else {
-            Resolution(
-                chrome =
-                    Chrome(
-                        label = IDLE_LABEL,
-                        collapsed = true,
-                        fading = false,
-                    ),
-                hold = nextHold,
-            )
+        val doneFadesAt = settleEndsAt + TURN_DONE_HOLD_MS
+        val next =
+            if (ending == Ending.Quiet && started.quietFadeAtMs == null && nowMs < doneFadesAt) {
+                started.copy(quietFadeAtMs = nowMs)
+            } else {
+                started
+            }
+        val quietFadeAt = next.quietFadeAtMs
+        if (quietFadeAt != null) {
+            val remainingMs = quietFadeAt + TURN_FADE_MS - nowMs
+            if (remainingMs <= 0) return Resolution(Chrome.Unmounted, hold = null)
+            // A stop reason that arrives after Done showed fades Done, not the older label.
+            val label = if (previous.label == IDLE_LABEL) IDLE_LABEL else next.label
+            return Resolution(Chrome(label, fading = true), next, wakeAfterMs = remainingMs)
         }
+        if (nowMs < doneFadesAt) {
+            return Resolution(Chrome(IDLE_LABEL, fading = false), next, wakeAfterMs = doneFadesAt - nowMs)
+        }
+        val fadeEndsAt = doneFadesAt + TURN_FADE_MS
+        if (nowMs < fadeEndsAt) {
+            return Resolution(Chrome(IDLE_LABEL, fading = true), next, wakeAfterMs = fadeEndsAt - nowMs)
+        }
+        return Resolution(Chrome.Unmounted, hold = null)
     }
 }

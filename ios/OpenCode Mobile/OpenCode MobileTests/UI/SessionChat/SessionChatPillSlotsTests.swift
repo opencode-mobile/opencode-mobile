@@ -3,39 +3,29 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct SessionChatPillSlotsTests {
-    private let now = Date(timeIntervalSinceReferenceDate: 1_000)
-
     // MARK: Activity priority and overflow
 
-    @Test func priorityOrderPicksTheMostUrgentAndStacksTheRest() {
-        let finished = SessionChatActivityItem.finished(id: "a", label: "Done", finishedAt: now)
+    @Test func priorityOrderPicksTheMostUrgentSecondaryAndStacksTheRest() {
         let slot = SessionChatPillSlots.activity(
             items: [
-                finished,
                 .queued(count: 3),
                 .sideQuestionsRunning(count: 1),
                 .sideQuestionsReady(count: 1),
+                .sideQuestionsFailed(count: 1),
                 .requestFailed(rowID: "m1", blockID: "m1:failure"),
                 .reviewPermission,
             ],
-            keyboardVisible: false,
-            now: now
+            keyboardVisible: false
         )
 
-        #expect(slot.primary == .reviewPermission)
-        #expect(slot.overflow == [
-            .requestFailed(rowID: "m1", blockID: "m1:failure"),
-            .sideQuestionsReady(count: 1),
-            .sideQuestionsRunning(count: 1),
-            .queued(count: 3),
-            finished,
-        ])
+        #expect(slot.primary == .sideQuestionsFailed(count: 1))
+        #expect(slot.overflow == [.sideQuestionsReady(count: 1), .sideQuestionsRunning(count: 1), .queued(count: 3)])
         #expect(slot.showsOverflowButton)
         #expect(!slot.primaryCompact)
     }
 
     @Test func priorityRanksMatchTheSpec() {
-        let ranks: [SessionChatActivityPriority] = [.needsInput, .error, .answerReady, .running, .queued, .finished]
+        let ranks: [SessionChatActivityPriority] = [.needsInput, .error, .answerReady, .running, .queued]
         #expect(ranks == ranks.sorted())
         #expect(SessionChatActivityItem.answerQuestion.priority == .needsInput)
         #expect(SessionChatActivityItem.sideQuestionsFailed(count: 1).priority == .error)
@@ -56,24 +46,12 @@ struct SessionChatPillSlotsTests {
     @Test func runningSubagentsRankAsRunningWork() {
         let slot = SessionChatPillSlots.activity(
             items: [.queued(count: 1), .subagents(runningSubagents), .sideQuestionsReady(count: 1)],
-            keyboardVisible: false,
-            now: now
+            keyboardVisible: false
         )
 
         #expect(SessionChatActivityItem.subagents(runningSubagents).priority == .running)
         #expect(slot.primary == .sideQuestionsReady(count: 1))
         #expect(slot.overflow == [.subagents(runningSubagents), .queued(count: 1)])
-    }
-
-    @Test func waitingSubagentNeedsInputAndStaysFullWithTheKeyboardUp() {
-        let slot = SessionChatPillSlots.activity(
-            items: [.sideQuestionsFailed(count: 1), .subagents(waitingSubagent)],
-            keyboardVisible: true,
-            now: now
-        )
-
-        #expect(slot.primary == .subagents(waitingSubagent))
-        #expect(!slot.primaryCompact)
     }
 
     @Test func subagentsPillUsesTheCounterWithThePulsingDotWhileWaiting() {
@@ -101,8 +79,7 @@ struct SessionChatPillSlotsTests {
     @Test func equalPrioritiesKeepTheCallersOrder() {
         let slot = SessionChatPillSlots.activity(
             items: [.sideQuestionsRunning(count: 2), .subagents(runningSubagents)],
-            keyboardVisible: false,
-            now: now
+            keyboardVisible: false
         )
 
         #expect(slot.primary == .sideQuestionsRunning(count: 2))
@@ -110,7 +87,7 @@ struct SessionChatPillSlotsTests {
     }
 
     @Test func singleItemHasNoOverflowButton() {
-        let slot = SessionChatPillSlots.activity(items: [.queued(count: 1)], keyboardVisible: false, now: now)
+        let slot = SessionChatPillSlots.activity(items: [.queued(count: 1)], keyboardVisible: false)
 
         #expect(slot.primary == .queued(count: 1))
         #expect(slot.overflow.isEmpty)
@@ -118,7 +95,7 @@ struct SessionChatPillSlotsTests {
     }
 
     @Test func noItemsIsEmpty() {
-        #expect(SessionChatPillSlots.activity(items: [], keyboardVisible: true, now: now) == .empty)
+        #expect(SessionChatPillSlots.activity(items: [], keyboardVisible: true) == .empty)
     }
 
     // MARK: Keyboard
@@ -126,25 +103,12 @@ struct SessionChatPillSlotsTests {
     @Test func keyboardCompactsThePillAndHidesOverflow() {
         let slot = SessionChatPillSlots.activity(
             items: [.queued(count: 2), .sideQuestionsReady(count: 1)],
-            keyboardVisible: true,
-            now: now
+            keyboardVisible: true
         )
 
         #expect(slot.primary == .sideQuestionsReady(count: 1))
         #expect(slot.primaryCompact)
         #expect(slot.overflow.isEmpty)
-        #expect(!slot.showsOverflowButton)
-    }
-
-    @Test func needsInputKeepsItsLabelWithTheKeyboardUp() {
-        let slot = SessionChatPillSlots.activity(
-            items: [.queued(count: 2), .answerQuestion],
-            keyboardVisible: true,
-            now: now
-        )
-
-        #expect(slot.primary == .answerQuestion)
-        #expect(!slot.primaryCompact)
         #expect(!slot.showsOverflowButton)
     }
 
@@ -161,40 +125,6 @@ struct SessionChatPillSlotsTests {
     }
 
     // MARK: Finished fade
-
-    @Test func finishedShowsAloneUntilItFades() {
-        let finished = SessionChatActivityItem.finished(id: "a", label: "Done", finishedAt: now)
-
-        let fresh = SessionChatPillSlots.activity(items: [finished], keyboardVisible: false, now: now.addingTimeInterval(2.9))
-        let faded = SessionChatPillSlots.activity(items: [finished], keyboardVisible: false, now: now.addingTimeInterval(3))
-
-        #expect(fresh.primary == finished)
-        #expect(faded == .empty)
-    }
-
-    @Test func finishedOnlyShowsInTheStackBesideOtherWork() {
-        let finished = SessionChatActivityItem.finished(id: "a", label: "Done", finishedAt: now)
-        let slot = SessionChatPillSlots.activity(
-            items: [finished, .sideQuestionsRunning(count: 1)],
-            keyboardVisible: false,
-            now: now.addingTimeInterval(1)
-        )
-
-        #expect(slot.primary == .sideQuestionsRunning(count: 1))
-        #expect(slot.overflow == [finished])
-    }
-
-    @Test func nextFadeIsTheEarliestUnfadedFinish() {
-        let items: [SessionChatActivityItem] = [
-            .finished(id: "old", label: "Done", finishedAt: now.addingTimeInterval(-5)),
-            .finished(id: "a", label: "Done", finishedAt: now.addingTimeInterval(-1)),
-            .finished(id: "b", label: "Done", finishedAt: now),
-            .queued(count: 1),
-        ]
-
-        #expect(SessionChatPillSlots.nextFade(items: items, now: now) == now.addingTimeInterval(2))
-        #expect(SessionChatPillSlots.nextFade(items: [.queued(count: 1)], now: now) == nil)
-    }
 
     // MARK: Context
 
@@ -232,20 +162,20 @@ struct SessionChatPillSlotsTests {
 
     // MARK: Away from the end
 
-    @Test func awayFromTheEndFoldsEveryItemIntoOneRoundPill() {
+    @Test func awayFromTheEndFoldsTheSecondariesIntoOneRoundPill() {
         let items: [SessionChatActivityItem] = [.queued(count: 1), .reviewPermission, .sideQuestionsRunning(count: 1)]
-        let slot = SessionChatPillSlots.activity(items: items, keyboardVisible: false, awayFromEnd: true, now: now)
+        let slot = SessionChatPillSlots.activity(items: items, keyboardVisible: false, awayFromEnd: true)
 
         #expect(slot.isCollapsed)
-        #expect(slot.primary == .reviewPermission)
+        #expect(slot.primary == .sideQuestionsRunning(count: 1))
         #expect(!slot.showsOverflowButton)
-        // The stack lists every item, primary first.
-        #expect(slot.allItems == [.reviewPermission, .sideQuestionsRunning(count: 1), .queued(count: 1)])
+        // The stack lists every secondary, primary first; the request is on the turn pill.
+        #expect(slot.allItems == [.sideQuestionsRunning(count: 1), .queued(count: 1)])
     }
 
     @Test func atTheEndTheSlotIsNotCollapsed() {
         let slot = SessionChatPillSlots.activity(
-            items: [.queued(count: 1), .reviewPermission], keyboardVisible: false, awayFromEnd: false, now: now
+            items: [.queued(count: 1), .sideQuestionsReady(count: 1)], keyboardVisible: false, awayFromEnd: false
         )
         #expect(!slot.isCollapsed)
         #expect(slot.showsOverflowButton)
@@ -256,7 +186,7 @@ struct SessionChatPillSlotsTests {
         #expect(SessionChatPillSlots.collapsesActivity(awayFromEnd: true, keyboardVisible: false))
         #expect(!SessionChatPillSlots.collapsesActivity(awayFromEnd: false, keyboardVisible: false))
         let slot = SessionChatPillSlots.activity(
-            items: [.queued(count: 1), .sideQuestionsReady(count: 1)], keyboardVisible: true, awayFromEnd: true, now: now
+            items: [.queued(count: 1), .sideQuestionsReady(count: 1)], keyboardVisible: true, awayFromEnd: true
         )
         #expect(!slot.isCollapsed)
         #expect(slot.primaryCompact)
@@ -264,7 +194,7 @@ struct SessionChatPillSlotsTests {
     }
 
     @Test func nothingToShowNeverCollapses() {
-        #expect(SessionChatPillSlots.activity(items: [], keyboardVisible: false, awayFromEnd: true, now: now) == .empty)
+        #expect(SessionChatPillSlots.activity(items: [], keyboardVisible: false, awayFromEnd: true) == .empty)
     }
 
     // MARK: Syncing

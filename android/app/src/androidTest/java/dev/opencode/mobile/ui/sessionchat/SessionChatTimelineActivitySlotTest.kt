@@ -48,9 +48,9 @@ class SessionChatTimelineActivitySlotTest {
             SessionChatTimelineState.Error,
         ).forEach { state ->
             composeTestRule.runOnIdle { timeline = state }
-            // Needs input wins the slot; the queued prompts sit behind "+1".
+            // The request is on the turn pill; the queued prompts stay a secondary pill beside it.
             composeTestRule.onNodeWithContentDescription("Review permission request").assertIsDisplayed().performClick()
-            composeTestRule.onNodeWithContentDescription("Show 1 more").assertIsDisplayed()
+            composeTestRule.onNodeWithContentDescription("2 queued prompts. Open Up next").assertIsDisplayed()
         }
 
         composeTestRule.runOnIdle { assertEquals(List(4) { SessionChatActivityItem.ReviewPermission }, clicked) }

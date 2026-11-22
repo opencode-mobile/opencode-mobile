@@ -234,6 +234,28 @@ internal fun floatingPillCloseDescription(
     override: String? = null,
 ): String = "Dismiss ${override ?: layout.label}"
 
+/** Width of a compact (round) floating pill. */
+internal val FloatingPillCompactWidth = FloatingPillIconSize + FloatingPillCompactPaddingHorizontal * 2
+
+/** Everything in a full pill except its label text: padding, the mark and its gap, the ✕. */
+internal fun floatingPillChromeWidth(
+    hasMark: Boolean,
+    hasClose: Boolean,
+): Dp =
+    FloatingPillPaddingHorizontal * 2 +
+        (if (hasMark) FloatingPillIconSize + FloatingPillIconSpacing else 0.dp) +
+        (if (hasClose) FloatingPillCloseSlotWidth else 0.dp)
+
+/** [floatingPillChromeWidth] for a pill with this [layout] and [state]. */
+internal fun floatingPillChromeWidth(
+    layout: OpenCodeFloatingPillLayout,
+    state: OpenCodeFloatingPillState,
+): Dp =
+    floatingPillChromeWidth(
+        hasMark = floatingPillLeading(layout, state) != OpenCodeFloatingPillLeading.None,
+        hasClose = layout is OpenCodeFloatingPillLayout.Closable,
+    )
+
 /**
  * Shared floating pill for Session Chat: one look, five layouts, five states.
  * Without [onClick] the pill is a status, not a button. [compact] shrinks it to its round
@@ -394,7 +416,7 @@ private fun FloatingPillBadge(
 
 /** The ✕: drawn in a 28 × 36 dp slot, tappable across a 48 dp square centred on it. */
 @Composable
-private fun FloatingPillClose(
+internal fun FloatingPillClose(
     description: String,
     onClose: () -> Unit,
 ) {
@@ -459,7 +481,7 @@ private fun FloatingPillLeadingMark(
 
 /** Amber dot that pulses while an item waits for the user; still when animations are off. */
 @Composable
-private fun FloatingPillPulsingDot() {
+internal fun FloatingPillPulsingDot() {
     val alpha =
         if (rememberFloatingPillAnimationsOn()) {
             val pulse by rememberInfiniteTransition(label = "floatingPillDot").animateFloat(

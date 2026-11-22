@@ -161,7 +161,7 @@ struct MessageListTimelineHostDeclaredIDTests {
         #expect(controller.lastReconfiguredIDs.isEmpty)
     }
 
-    @Test func statusChromeLabelChange_reconfiguresStableStatusRow() {
+    @Test func pendingApply_keepsALayoutDeltaWhenALaterPacketDropsIt() {
         let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
             itemContent: { Text($0.label) },
             horizontalContentPadding: 0,
@@ -173,299 +173,46 @@ struct MessageListTimelineHostDeclaredIDTests {
         controller.loadViewIfNeeded()
         controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
 
-        // Empty declared sets: only status-chrome folding should drive reconfigure
-        // when the Working label changes under a stable timeline revision.
-        let frame = TimelineFrame(
-            frameRevision: 3,
-            rows: [],
-            insertedRowIDs: [],
-            changedRowIDs: [],
-            removedRowIDs: [],
-            layoutChangedRowIDs: [],
-            grewBottomRowIDs: [],
-            decorateRowIDs: [],
-            isRequired: false
-        )
-        let workingID = SessionChatStatusChrome.workingRowID
-        let initialItems = [
-            EqualityCountingItem(id: "a", label: "A"),
-            EqualityCountingItem(id: workingID, label: "Working"),
-        ]
-        let initialPacket = MessageListTimelineApplyPacket.from(
-            frame,
-            workingIndicatorLabel: "Working",
-            previousWorkingIndicatorLabel: nil
-        )
-        controller.apply(items: initialItems, packet: initialPacket, animatingDifferences: false)
-        #expect(controller.diffableSnapshotApplyCount == 1)
-
-        let updatedItems = [
-            EqualityCountingItem(id: "a", label: "A"),
-            EqualityCountingItem(id: workingID, label: "Compacting"),
-        ]
-        let updatedPacket = MessageListTimelineApplyPacket.from(
-            frame,
-            workingIndicatorLabel: "Compacting",
-            previousWorkingIndicatorLabel: "Working"
-        )
-        #expect(updatedPacket.frameRevision != initialPacket.frameRevision)
-        #expect(updatedPacket.changedRowIDs.contains(workingID))
-        #expect(!updatedPacket.insertedRowIDs.contains(workingID))
-
-        controller.apply(items: updatedItems, packet: updatedPacket, animatingDifferences: false)
-        #expect(controller.diffableSnapshotApplyCount == 2)
-        #expect(controller.lastReconfiguredIDs == [workingID])
-
-        // Same chrome + same timeline frame must not storm.
-        controller.apply(items: updatedItems, packet: updatedPacket, animatingDifferences: false)
-        #expect(controller.diffableSnapshotApplyCount == 2)
-    }
-
-    @Test func statusChromeUnchangedLabel_doesNotReconfigureWorkingRowWhenTimelineAdvances() {
-        let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
-            itemContent: { Text($0.label) },
-            horizontalContentPadding: 0,
-            topContentPadding: 0,
-            bottomContentPadding: 0,
-            bottomOverlayInset: 0,
-            interItemSpacing: 0
-        )
-        controller.loadViewIfNeeded()
-        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
-
-        let workingID = SessionChatStatusChrome.workingRowID
-        let items = [
-            EqualityCountingItem(id: "a", label: "A"),
-            EqualityCountingItem(id: workingID, label: "Working"),
-        ]
-        let initialFrame = TimelineFrame(
-            frameRevision: 3,
-            rows: [],
-            insertedRowIDs: ["a", workingID],
-            changedRowIDs: [],
-            removedRowIDs: [],
-            layoutChangedRowIDs: ["a", workingID],
-            grewBottomRowIDs: [],
-            decorateRowIDs: [],
-            isRequired: false
-        )
-        controller.apply(
-            items: items,
-            packet: .from(
-                initialFrame,
-                workingIndicatorLabel: "Working",
-                previousWorkingIndicatorLabel: nil
-            ),
-            animatingDifferences: false
-        )
-
-        let advancedFrame = TimelineFrame(
-            frameRevision: 4,
-            rows: [],
-            insertedRowIDs: [],
-            changedRowIDs: ["a"],
-            removedRowIDs: [],
-            layoutChangedRowIDs: [],
-            grewBottomRowIDs: [],
-            decorateRowIDs: [],
-            isRequired: false
-        )
-        let advancedPacket = MessageListTimelineApplyPacket.from(
-            advancedFrame,
-            workingIndicatorLabel: "Working",
-            previousWorkingIndicatorLabel: "Working"
-        )
-        #expect(!advancedPacket.changedRowIDs.contains(workingID))
-        #expect(!advancedPacket.insertedRowIDs.contains(workingID))
-        #expect(advancedPacket.changedRowIDs.contains("a"))
-
-        controller.apply(items: items, packet: advancedPacket, animatingDifferences: false)
-        #expect(controller.lastReconfiguredIDs == ["a"])
-    }
-
-    @Test func statusChromeCollapseToggle_reconfiguresStableWorkingRowWithoutInsert() {
-        let workingID = SessionChatStatusChrome.workingRowID
-        let frame = TimelineFrame(
-            frameRevision: 5,
-            rows: [],
-            insertedRowIDs: [],
-            changedRowIDs: [],
-            removedRowIDs: [],
-            layoutChangedRowIDs: [],
-            grewBottomRowIDs: [],
-            decorateRowIDs: [],
-            isRequired: false
-        )
-        let expanded = MessageListTimelineApplyPacket.from(
-            frame,
-            workingIndicatorLabel: "Working",
-            previousWorkingIndicatorLabel: "Working",
-            workingIndicatorCollapsed: false,
-            previousWorkingIndicatorCollapsed: false
-        )
-        let collapsed = MessageListTimelineApplyPacket.from(
-            frame,
-            workingIndicatorLabel: "Working",
-            previousWorkingIndicatorLabel: "Working",
-            workingIndicatorCollapsed: true,
-            previousWorkingIndicatorCollapsed: false
-        )
-        #expect(!collapsed.insertedRowIDs.contains(workingID))
-        #expect(!collapsed.removedRowIDs.contains(workingID))
-        #expect(collapsed.changedRowIDs.contains(workingID))
-        #expect(collapsed.layoutChangedRowIDs.contains(workingID))
-        #expect(collapsed.decorateRowIDs.contains(workingID))
-        #expect(!collapsed.structureAffectingRowIDs.contains(workingID))
-        #expect(collapsed.frameRevision != expanded.frameRevision)
-    }
-
-    @Test func statusChromeExpandToggle_isStructureLayoutNotDecorate() {
-        let workingID = SessionChatStatusChrome.workingRowID
-        let frame = TimelineFrame(
-            frameRevision: 5,
-            rows: [],
-            insertedRowIDs: [],
-            changedRowIDs: [],
-            removedRowIDs: [],
-            layoutChangedRowIDs: [],
-            grewBottomRowIDs: [],
-            decorateRowIDs: [],
-            isRequired: false
-        )
-        let expanded = MessageListTimelineApplyPacket.from(
-            frame,
-            workingIndicatorLabel: "Idle",
-            previousWorkingIndicatorLabel: "Idle",
-            workingIndicatorCollapsed: false,
-            previousWorkingIndicatorCollapsed: true
-        )
-        #expect(!expanded.insertedRowIDs.contains(workingID))
-        #expect(!expanded.removedRowIDs.contains(workingID))
-        #expect(expanded.changedRowIDs.contains(workingID))
-        #expect(expanded.layoutChangedRowIDs.contains(workingID))
-        #expect(!expanded.decorateRowIDs.contains(workingID))
-        #expect(expanded.structureAffectingRowIDs.contains(workingID))
-    }
-
-    @Test func statusChromeFadeToggle_reconfiguresStableWorkingRowWithoutLayout() {
-        let workingID = SessionChatStatusChrome.workingRowID
-        let frame = TimelineFrame(
-            frameRevision: 6,
-            rows: [],
-            insertedRowIDs: [],
-            changedRowIDs: [],
-            removedRowIDs: [],
-            layoutChangedRowIDs: [],
-            grewBottomRowIDs: [],
-            decorateRowIDs: [],
-            isRequired: false
-        )
-        let opaque = MessageListTimelineApplyPacket.from(
-            frame,
-            workingIndicatorLabel: "Working",
-            previousWorkingIndicatorLabel: "Working",
-            workingIndicatorFading: false,
-            previousWorkingIndicatorFading: false
-        )
-        let fading = MessageListTimelineApplyPacket.from(
-            frame,
-            workingIndicatorLabel: "Working",
-            previousWorkingIndicatorLabel: "Working",
-            workingIndicatorFading: true,
-            previousWorkingIndicatorFading: false
-        )
-        #expect(!fading.insertedRowIDs.contains(workingID))
-        #expect(!fading.removedRowIDs.contains(workingID))
-        #expect(fading.changedRowIDs.contains(workingID))
-        #expect(!fading.layoutChangedRowIDs.contains(workingID))
-        #expect(!fading.structureAffectingRowIDs.contains(workingID))
-        #expect(fading.frameRevision != opaque.frameRevision)
-    }
-
-    @Test func pendingApply_coalescesCollapseDeltaWhenLaterPacketDropsIt() {
-        let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
-            itemContent: { Text($0.label) },
-            horizontalContentPadding: 0,
-            topContentPadding: 0,
-            bottomContentPadding: 0,
-            bottomOverlayInset: 0,
-            interItemSpacing: 0
-        )
-        controller.loadViewIfNeeded()
-        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
-
-        let workingID = SessionChatStatusChrome.workingRowID
         let items = [
             EqualityCountingItem(id: "a", label: "Thought"),
-            EqualityCountingItem(id: workingID, label: "Working"),
+            EqualityCountingItem(id: "b", label: "Reply"),
         ]
-        let idleFrame = TimelineFrame(
-            frameRevision: 8,
-            rows: [],
-            insertedRowIDs: ["a", workingID],
-            changedRowIDs: [],
-            removedRowIDs: [],
-            layoutChangedRowIDs: ["a", workingID],
-            grewBottomRowIDs: [],
-            decorateRowIDs: [],
-            isRequired: false
-        )
+        func frame(_ revision: UInt64, inserted: Set<String> = [], changed: Set<String>, layout: Set<String>) -> TimelineFrame {
+            TimelineFrame(
+                frameRevision: revision,
+                rows: [],
+                insertedRowIDs: inserted,
+                changedRowIDs: changed,
+                removedRowIDs: [],
+                layoutChangedRowIDs: layout,
+                grewBottomRowIDs: [],
+                decorateRowIDs: layout.subtracting(inserted),
+                isRequired: false
+            )
+        }
         controller.apply(
             items: items,
-            packet: .from(
-                idleFrame,
-                workingIndicatorLabel: "Working",
-                previousWorkingIndicatorLabel: nil
-            ),
+            packet: .from(frame(8, inserted: ["a", "b"], changed: [], layout: ["a", "b"])),
             animatingDifferences: false
         )
 
         let scroll = TimelineScrollController()
         controller.scrollController = scroll
         scroll.beginUserScrolling()
-
-        let collapsePacket = MessageListTimelineApplyPacket.from(
-            TimelineFrame(
-                frameRevision: 9,
-                rows: [],
-                insertedRowIDs: [],
-                changedRowIDs: ["a"],
-                removedRowIDs: [],
-                layoutChangedRowIDs: [],
-                grewBottomRowIDs: [],
-                decorateRowIDs: [],
-                isRequired: false
-            ),
-            workingIndicatorLabel: "Working",
-            previousWorkingIndicatorLabel: "Working",
-            workingIndicatorCollapsed: true,
-            previousWorkingIndicatorCollapsed: false
+        controller.apply(
+            items: items,
+            packet: .from(frame(9, changed: ["a", "b"], layout: ["b"])),
+            animatingDifferences: false
         )
-        controller.apply(items: items, packet: collapsePacket, animatingDifferences: false)
-
-        let droppedDeltaPacket = MessageListTimelineApplyPacket.from(
-            TimelineFrame(
-                frameRevision: 9,
-                rows: [],
-                insertedRowIDs: [],
-                changedRowIDs: ["a"],
-                removedRowIDs: [],
-                layoutChangedRowIDs: [],
-                grewBottomRowIDs: [],
-                decorateRowIDs: [],
-                isRequired: false
-            ),
-            workingIndicatorLabel: "Working",
-            previousWorkingIndicatorLabel: "Working",
-            workingIndicatorCollapsed: true,
-            previousWorkingIndicatorCollapsed: true
+        controller.apply(
+            items: items,
+            packet: .from(frame(10, changed: ["a"], layout: [])),
+            animatingDifferences: false
         )
-        #expect(!droppedDeltaPacket.layoutChangedRowIDs.contains(workingID))
-        controller.apply(items: items, packet: droppedDeltaPacket, animatingDifferences: false)
 
         scroll.endUserScrolling()
         controller.testFlushPendingApply()
-        #expect(controller.lastReconfiguredIDs.contains(workingID))
+        #expect(controller.lastReconfiguredIDs.contains("b"))
         #expect(controller.lastReconfiguredIDs.contains("a"))
     }
 

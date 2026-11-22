@@ -1,8 +1,15 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.Message
-import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
+import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator.Chrome
+import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator.Ending
+import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator.Hold
+import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator.IDLE_LABEL
+import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator.TURN_DONE_HOLD_MS
+import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator.TURN_FADE_MS
+import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator.TURN_SETTLE_MS
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -10,435 +17,251 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WorkingTurnIndicatorTest {
+    private val working = Chrome("Working", fading = false)
+
+    // Active label
+
     @Test
-    fun labelForActiveTurn_nullWhenIdle() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(statusLabel = null),
-        )
+    fun label_nullWhenIdle() {
+        assertNull(WorkingTurnIndicator.labelForActiveTurn(statusLabel = null))
     }
 
     @Test
-    fun labelForActiveTurn_showsWorkingWhenBusy() {
-        assertEquals(
-            "Working",
-            WorkingTurnIndicator.labelForActiveTurn(statusLabel = "Working"),
-        )
+    fun label_showsTheStatus() {
+        assertEquals("Working", WorkingTurnIndicator.labelForActiveTurn(statusLabel = "Working"))
+        assertEquals("Retrying", WorkingTurnIndicator.labelForActiveTurn(statusLabel = "Retrying", isRetrying = true))
     }
 
     @Test
-    fun labelForActiveTurn_showsSendingPercentWhileBodyIsOnTheWire() {
-        assertEquals(
-            "Sending 25%",
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                sendProgressPercent = 25,
-            ),
-        )
+    fun label_sendingBeatsWorking() {
+        assertEquals("Sending 25%", WorkingTurnIndicator.labelForActiveTurn("Working", sendProgressPercent = 25))
+        assertEquals("Sending…", WorkingTurnIndicator.labelForActiveTurn("Working", sendProgressPercent = 0))
     }
 
     @Test
-    fun labelForActiveTurn_showsSendingEllipsisAtZero() {
-        assertEquals(
-            "Sending…",
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                sendProgressPercent = 0,
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_compactingWinsOverSending() {
-        assertEquals(
-            SessionCompactChrome.STATUS_LABEL,
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                isCompacting = true,
-                sendProgressPercent = 40,
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_hidesSendingWhenAwaitingUser() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                isAwaitingUser = true,
-                sendProgressPercent = 40,
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_showsRetrying() {
+    fun label_retryingAndCompactingBeatSending() {
         assertEquals(
             "Retrying",
-            WorkingTurnIndicator.labelForActiveTurn(statusLabel = "Retrying"),
+            WorkingTurnIndicator.labelForActiveTurn("Retrying", isRetrying = true, sendProgressPercent = 40),
         )
-    }
-
-    @Test
-    fun labelForActiveTurn_hidesWhenAwaitingUser() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                isAwaitingUser = true,
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_hidesCompactingWhenAwaitingUser() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                isCompacting = true,
-                isAwaitingUser = true,
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_showsCompactingEvenWhenStatusIsWorking() {
         assertEquals(
             SessionCompactChrome.STATUS_LABEL,
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                isCompacting = true,
-            ),
+            WorkingTurnIndicator.labelForActiveTurn("Working", isCompacting = true, sendProgressPercent = 40),
         )
+        assertEquals(SessionCompactChrome.STATUS_LABEL, WorkingTurnIndicator.labelForActiveTurn(null, isCompacting = true))
     }
 
     @Test
-    fun labelForActiveTurn_showsCompactingWhenIdleStatus() {
-        assertEquals(
-            SessionCompactChrome.STATUS_LABEL,
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = null,
-                isCompacting = true,
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_ignoresThinkingWhenIdleStatus() {
-        assertNull(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = null,
-                isThinking = true,
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_showsThinkingInPlace() {
-        assertEquals(
-            WorkingTurnIndicator.THINKING_LABEL,
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                isThinking = true,
-            ),
-        )
-        assertFalse(
-            WorkingTurnIndicator.shouldCollapseReservedRow(
-                lastIsThinking = true,
-                label = WorkingTurnIndicator.THINKING_LABEL,
-            ),
-        )
-    }
-
-    @Test
-    fun labelForActiveTurn_keepsCompactingWhenLastIsThinking() {
-        assertEquals(
-            SessionCompactChrome.STATUS_LABEL,
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel = "Working",
-                isCompacting = true,
-                isThinking = true,
-            ),
-        )
-        assertFalse(
-            WorkingTurnIndicator.shouldCollapseReservedRow(
-                lastIsThinking = true,
-                label = SessionCompactChrome.STATUS_LABEL,
-            ),
-        )
-    }
-
-    @Test
-    fun shouldCollapseReservedRow_falseWhenNotThinking() {
-        assertFalse(
-            WorkingTurnIndicator.shouldCollapseReservedRow(
-                lastIsThinking = false,
-                label = "Working",
-            ),
-        )
-    }
-
-    @Test
-    fun shouldCollapseReservedRow_falseWhenLabelMissing() {
-        assertFalse(
-            WorkingTurnIndicator.shouldCollapseReservedRow(
-                lastIsThinking = true,
-                label = null,
-            ),
-        )
+    fun label_aPendingRequestKeepsTheTurnActiveWithANullStatus() {
+        assertEquals("Working", WorkingTurnIndicator.labelForActiveTurn(null, hasPendingRequest = true))
+        assertEquals("Working", WorkingTurnIndicator.labelForActiveTurn("Working", hasPendingRequest = true))
     }
 
     @Test
     fun showsIdleMark_onlyForIdleLabel() {
-        assertTrue(WorkingTurnIndicator.showsIdleMark(WorkingTurnIndicator.IDLE_LABEL))
+        assertTrue(WorkingTurnIndicator.showsIdleMark(IDLE_LABEL))
         assertFalse(WorkingTurnIndicator.showsIdleMark("Working"))
-        assertFalse(WorkingTurnIndicator.showsIdleMark(WorkingTurnIndicator.THINKING_LABEL))
         assertFalse(WorkingTurnIndicator.showsIdleMark(SessionCompactChrome.STATUS_LABEL))
     }
 
+    // Stopped signal
+
     @Test
-    fun lastIsThinking_trueWhenLastBlockIsStreamingReasoning() {
-        assertTrue(
-            WorkingTurnIndicator.lastIsThinking(
-                listOf(message(SessionChatTimelineBlock.Reasoning("r1", "hmm", isStreaming = true))),
-            ),
-        )
+    fun lastTurnInterrupted_readsTheNewestReplysStopReason() {
+        assertTrue(WorkingTurnIndicator.lastTurnInterrupted(listOf(user("u1"), assistant("a1", MessageStopReason.Interrupted))))
+        assertFalse(WorkingTurnIndicator.lastTurnInterrupted(listOf(user("u1"), assistant("a1", null))))
+        assertFalse(WorkingTurnIndicator.lastTurnInterrupted(listOf(user("u1"), assistant("a1", MessageStopReason.Length))))
+        assertFalse(WorkingTurnIndicator.lastTurnInterrupted(emptyList()))
     }
 
     @Test
-    fun lastIsThinking_falseWhenLastIsSettledThought() {
-        assertFalse(
-            WorkingTurnIndicator.lastIsThinking(
-                listOf(message(SessionChatTimelineBlock.Reasoning("r1", "hmm", isStreaming = false))),
-            ),
-        )
+    fun lastTurnInterrupted_aNewerPromptStartsAnotherTurn() {
+        val stopped = assistant("a1", MessageStopReason.Interrupted)
+
+        assertFalse(WorkingTurnIndicator.lastTurnInterrupted(listOf(stopped, user("u2"))))
+        assertTrue(WorkingTurnIndicator.lastTurnInterrupted(listOf(stopped, user("u2").copy(isWaitingForPickup = true))))
     }
 
-    @Test
-    fun lastIsThinking_trueWhenStreamingReasoningThenText() {
-        assertTrue(
-            WorkingTurnIndicator.lastIsThinking(
-                listOf(
-                    message(
-                        SessionChatTimelineBlock.Reasoning("r1", "hmm", isStreaming = true),
-                        SessionChatTimelineBlock.Text("t1", "Hello"),
-                    ),
-                ),
-            ),
-        )
-    }
+    // Mounting
 
     @Test
-    fun lastIsThinking_falseWhenEmpty() {
-        assertFalse(WorkingTurnIndicator.lastIsThinking(emptyList()))
-    }
+    fun anIdleSessionStaysUnmounted() {
+        val resolved = resolve(activeLabel = null, previous = Chrome.Unmounted)
 
-    @Test
-    fun isStreamingThinking_trueForEmptyStreamingReasoning() {
-        assertTrue(
-            WorkingTurnIndicator.isStreamingThinking(
-                listOf(
-                    Message(
-                        id = "a1",
-                        role = MessageRole.Assistant,
-                        text = "",
-                        parts =
-                            listOf(
-                                MessagePart.Reasoning(
-                                    text = "",
-                                    isStreaming = true,
-                                    id = "r1",
-                                ),
-                            ),
-                    ),
-                ),
-            ),
-        )
-    }
-
-    @Test
-    fun isStreamingThinking_falseWhenSettled() {
-        assertFalse(
-            WorkingTurnIndicator.isStreamingThinking(
-                listOf(
-                    Message(
-                        id = "a1",
-                        role = MessageRole.Assistant,
-                        text = "",
-                        parts =
-                            listOf(
-                                MessagePart.Reasoning(
-                                    text = "done",
-                                    isStreaming = false,
-                                    id = "r1",
-                                ),
-                            ),
-                    ),
-                ),
-            ),
-        )
-    }
-
-    @Test
-    fun resolveFooter_freshIdleStaysUnmounted() {
-        val resolved =
-            resolve(
-                activeLabel = null,
-                previous = WorkingTurnIndicator.Chrome.Unmounted,
-                hold = null,
-            )
-        assertEquals(WorkingTurnIndicator.Chrome.Unmounted, resolved.chrome)
+        assertEquals(Chrome.Unmounted, resolved.chrome)
         assertNull(resolved.hold)
         assertNull(resolved.wakeAfterMs)
     }
 
     @Test
-    fun resolveFooter_activeWorkingExpandedCancelsHold() {
-        val resolved =
+    fun aRunningSessionShowsItsStateImmediately() {
+        assertEquals(working, resolve(activeLabel = "Working", previous = Chrome.Unmounted).chrome)
+    }
+
+    @Test
+    fun onlyAnUnboundSessionUnmountsImmediately() {
+        val resolved = resolve(activeLabel = "Working", hideImmediately = true, previous = working)
+
+        assertEquals(Chrome.Unmounted, resolved.chrome)
+        assertNull(resolved.hold)
+    }
+
+    // Settle, Done, fade
+
+    @Test
+    fun idleKeepsTheLastLabelThroughTheSettle() {
+        val resolved = resolve(activeLabel = null, previous = Chrome("Compacting…", fading = false), nowMs = 1_000)
+
+        assertEquals(Chrome("Compacting…", fading = false), resolved.chrome)
+        assertEquals(Hold(1_000, "Compacting…"), resolved.hold)
+        assertEquals(TURN_SETTLE_MS, resolved.wakeAfterMs)
+    }
+
+    @Test
+    fun workResumingInsideTheSettleNeverShowsDone() {
+        val settling = resolve(activeLabel = null, previous = working, nowMs = 0)
+        val resumed = resolve("Working", previous = settling.chrome, hold = settling.hold, nowMs = TURN_SETTLE_MS - 1)
+
+        assertEquals(working, resumed.chrome)
+        assertNull(resumed.hold)
+        assertNull(resumed.wakeAfterMs)
+        // The next idle starts a full settle again.
+        val again = resolve(activeLabel = null, previous = resumed.chrome, hold = resumed.hold, nowMs = TURN_SETTLE_MS)
+        assertEquals(working, again.chrome)
+        assertEquals(TURN_SETTLE_MS, again.wakeAfterMs)
+    }
+
+    @Test
+    fun doneHoldsThenFadesThenUnmounts() {
+        val hold = Hold(0, "Working")
+        val doneStart = resolve(null, previous = working, hold = hold, nowMs = TURN_SETTLE_MS)
+        assertEquals(Chrome(IDLE_LABEL, fading = false), doneStart.chrome)
+        assertEquals(TURN_DONE_HOLD_MS, doneStart.wakeAfterMs)
+
+        val fadeAt = TURN_SETTLE_MS + TURN_DONE_HOLD_MS
+        assertFalse(resolve(null, previous = doneStart.chrome, hold = hold, nowMs = fadeAt - 1).chrome.fading)
+        val fading = resolve(null, previous = doneStart.chrome, hold = hold, nowMs = fadeAt)
+        assertEquals(Chrome(IDLE_LABEL, fading = true), fading.chrome)
+        assertEquals(TURN_FADE_MS, fading.wakeAfterMs)
+
+        val gone = resolve(null, previous = fading.chrome, hold = hold, nowMs = fadeAt + TURN_FADE_MS)
+        assertEquals(Chrome.Unmounted, gone.chrome)
+        assertNull(gone.hold)
+        assertNull(gone.wakeAfterMs)
+    }
+
+    @Test
+    fun workResumingDuringDoneReturnsToWorking() {
+        val resumed =
+            resolve("Working", previous = Chrome(IDLE_LABEL, fading = true), hold = Hold(0, "Working"), nowMs = 3_600)
+
+        assertEquals(working, resumed.chrome)
+        assertNull(resumed.hold)
+    }
+
+    // Stopped
+
+    @Test
+    fun aStoppedTurnLeavesQuietlyWithNoDone() {
+        val hold = Hold(0, "Working")
+        val settling = resolve(null, ending = Ending.Quiet, previous = working, hold = hold, nowMs = TURN_SETTLE_MS - 1)
+        assertEquals(working, settling.chrome)
+
+        val fading = resolve(null, ending = Ending.Quiet, previous = working, hold = hold, nowMs = TURN_SETTLE_MS)
+        assertEquals(Chrome("Working", fading = true), fading.chrome)
+        assertEquals(TURN_FADE_MS, fading.wakeAfterMs)
+
+        val gone =
             resolve(
-                activeLabel = "Working",
-                previous = fadingWorking(),
-                hold = visibleHold(),
+                null,
+                ending = Ending.Quiet,
+                previous = fading.chrome,
+                hold = fading.hold,
+                nowMs = TURN_SETTLE_MS + TURN_FADE_MS,
             )
-        assertEquals(
-            WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = false),
-            resolved.chrome,
-        )
+        assertEquals(Chrome.Unmounted, gone.chrome)
+    }
+
+    @Test
+    fun aLateWakeOfAStoppedTurnStillNeverSaysDone() {
+        val fading = resolve(null, ending = Ending.Quiet, previous = working, hold = Hold(0, "Working"), nowMs = TURN_SETTLE_MS + 7)
+
+        assertEquals(Chrome("Working", fading = true), fading.chrome)
+    }
+
+    @Test
+    fun aStopReasonArrivingDuringDoneFadesDoneAtOnce() {
+        val done = Chrome(IDLE_LABEL, fading = false)
+        val fading = resolve(null, ending = Ending.Quiet, previous = done, hold = Hold(0, "Working"), nowMs = 1_000)
+
+        assertEquals(Chrome(IDLE_LABEL, fading = true), fading.chrome)
+        assertEquals(TURN_FADE_MS, fading.wakeAfterMs)
+    }
+
+    // Failed
+
+    @Test
+    fun aFailedTurnGivesThePillToItsFailureImmediately() {
+        val resolved = resolve(null, ending = Ending.Failed, previous = working, nowMs = 1_000)
+
+        assertEquals(Chrome.Unmounted, resolved.chrome)
+        assertNull(resolved.hold)
+        assertNull(resolved.wakeAfterMs)
+    }
+
+    // Disconnected
+
+    @Test
+    fun aLostConnectionKeepsTheLastState() {
+        val resolved = resolve(null, connectionLost = true, previous = working, nowMs = 1_000)
+
+        assertEquals(working, resolved.chrome)
         assertNull(resolved.hold)
         assertNull(resolved.wakeAfterMs)
     }
 
     @Test
-    fun resolveFooter_activeThinkingStaysExpanded() {
-        val resolved =
-            resolve(
-                activeLabel = WorkingTurnIndicator.THINKING_LABEL,
-                lastIsThinking = true,
-            )
-        assertEquals(
-            WorkingTurnIndicator.Chrome(
-                label = WorkingTurnIndicator.THINKING_LABEL,
-                collapsed = false,
-                fading = false,
-            ),
-            resolved.chrome,
-        )
-        assertNull(resolved.hold)
-        assertNull(resolved.wakeAfterMs)
+    fun aTurnThatEndedWhileDisconnectedHidesWithNoDone() {
+        val held = resolve(null, connectionLost = true, previous = working, nowMs = 1_000)
+        val back = resolve(null, ending = Ending.Quiet, previous = held.chrome, hold = held.hold, nowMs = 9_000)
+        assertEquals(working, back.chrome)
+
+        val fading =
+            resolve(null, ending = Ending.Quiet, previous = back.chrome, hold = back.hold, nowMs = 9_000 + TURN_SETTLE_MS)
+        assertEquals(Chrome("Working", fading = true), fading.chrome)
     }
 
     @Test
-    fun resolveFooter_visibleWorkingIdleShowsIdle() {
-        val resolved =
-            resolve(
-                activeLabel = null,
-                previous = WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = false),
-                nowMs = 10_000L,
-            )
-        assertEquals(
-            WorkingTurnIndicator.Chrome(label = WorkingTurnIndicator.IDLE_LABEL, collapsed = false, fading = false),
-            resolved.chrome,
-        )
-        assertEquals(
-            WorkingTurnIndicator.Hold(startedAtMs = 10_000L),
-            resolved.hold,
-        )
-        assertEquals(WorkingTurnIndicator.IDLE_HOLD_MS, resolved.wakeAfterMs)
-    }
+    fun aDoneAlreadyShowingKeepsItsTimersOffline() {
+        val done = Chrome(IDLE_LABEL, fading = false)
+        val resolved = resolve(null, connectionLost = true, previous = done, hold = Hold(0, "Working"), nowMs = 1_000)
 
-    @Test
-    fun resolveFooter_visibleHoldBeforeDeadlineStillIdle() {
-        val resolved =
-            resolve(
-                activeLabel = null,
-                previous = fadingWorking(),
-                hold = visibleHold(startedAtMs = 10_000L),
-                nowMs = 14_999L,
-            )
-        assertEquals(
-            WorkingTurnIndicator.Chrome(label = WorkingTurnIndicator.IDLE_LABEL, collapsed = false, fading = false),
-            resolved.chrome,
-        )
-        assertEquals(visibleHold(startedAtMs = 10_000L), resolved.hold)
-        assertEquals(1L, resolved.wakeAfterMs)
-    }
-
-    @Test
-    fun resolveFooter_visibleHoldAtDeadlineCollapsesIdle() {
-        val resolved =
-            resolve(
-                activeLabel = null,
-                previous = fadingWorking(),
-                hold = visibleHold(startedAtMs = 10_000L),
-                nowMs = 15_000L,
-            )
-        assertEquals(
-            WorkingTurnIndicator.Chrome(label = WorkingTurnIndicator.IDLE_LABEL, collapsed = true, fading = false),
-            resolved.chrome,
-        )
-        assertEquals(visibleHold(startedAtMs = 10_000L), resolved.hold)
-        assertNull(resolved.wakeAfterMs)
-    }
-
-    @Test
-    fun resolveFooter_collapsedThinkingIdleShowsIdle() {
-        val resolved =
-            resolve(
-                activeLabel = null,
-                previous = WorkingTurnIndicator.Chrome(label = "Working", collapsed = true, fading = false),
-                nowMs = 10_000L,
-            )
-        assertEquals(
-            WorkingTurnIndicator.Chrome(label = WorkingTurnIndicator.IDLE_LABEL, collapsed = false, fading = false),
-            resolved.chrome,
-        )
-        assertEquals(
-            WorkingTurnIndicator.Hold(startedAtMs = 10_000L),
-            resolved.hold,
-        )
-        assertEquals(WorkingTurnIndicator.IDLE_HOLD_MS, resolved.wakeAfterMs)
-    }
-
-    @Test
-    fun resolveFooter_hideImmediatelyUnmountsAnyHold() {
-        val resolved =
-            resolve(
-                activeLabel = null,
-                hideImmediately = true,
-                previous = fadingWorking(),
-                hold = visibleHold(),
-            )
-        assertEquals(WorkingTurnIndicator.Chrome.Unmounted, resolved.chrome)
-        assertNull(resolved.hold)
-        assertNull(resolved.wakeAfterMs)
+        assertEquals(done, resolved.chrome)
+        assertEquals(TURN_SETTLE_MS + TURN_DONE_HOLD_MS - 1_000, resolved.wakeAfterMs)
     }
 
     private fun resolve(
         activeLabel: String?,
-        lastIsThinking: Boolean = false,
+        ending: Ending = Ending.Completed,
+        connectionLost: Boolean = false,
         hideImmediately: Boolean = false,
-        previous: WorkingTurnIndicator.Chrome = WorkingTurnIndicator.Chrome.Unmounted,
-        hold: WorkingTurnIndicator.Hold? = null,
+        previous: Chrome = Chrome.Unmounted,
+        hold: Hold? = null,
         nowMs: Long = 0L,
-    ): WorkingTurnIndicator.Resolution =
-        WorkingTurnIndicator.resolveFooter(
-            activeLabel = activeLabel,
-            lastIsThinking = lastIsThinking,
-            hideImmediately = hideImmediately,
-            previous = previous,
-            hold = hold,
-            nowMs = nowMs,
-        )
+    ) = WorkingTurnIndicator.resolveFooter(
+        activeLabel = activeLabel,
+        ending = ending,
+        connectionLost = connectionLost,
+        hideImmediately = hideImmediately,
+        previous = previous,
+        hold = hold,
+        nowMs = nowMs,
+    )
 
-    private fun fadingWorking(): WorkingTurnIndicator.Chrome =
-        WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = true)
+    private fun user(id: String) = Message(id = id, role = MessageRole.User, text = "Hi")
 
-    private fun visibleHold(startedAtMs: Long = 0L): WorkingTurnIndicator.Hold = WorkingTurnIndicator.Hold(startedAtMs = startedAtMs)
-
-    private fun message(vararg blocks: SessionChatTimelineBlock): SessionChatMessageItem =
-        SessionChatMessageItem(
-            id = "m1",
-            role = MessageRole.Assistant,
-            text = "",
-            metadataLabel = "",
-            blocks = blocks.toList(),
-        )
+    private fun assistant(
+        id: String,
+        stopReason: MessageStopReason?,
+    ) = Message(id = id, role = MessageRole.Assistant, text = "", stopReason = stopReason)
 }

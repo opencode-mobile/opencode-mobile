@@ -21,48 +21,82 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionChatPillSlotsTest {
-    private val now = 1_000_000L
-
     // Activity priority and overflow
 
     @Test
     fun priorityOrderPicksTheMostUrgentAndStacksTheRest() {
-        val finished = SessionChatActivityItem.Finished("a", "Done", now)
-        val failed = SessionChatActivityItem.RequestFailed("m1", "m1:failure")
         val slot =
             SessionChatPillSlots.activity(
                 items =
                     listOf(
-                        finished,
                         SessionChatActivityItem.Queued(3),
                         SessionChatActivityItem.SideQuestionsRunning(1),
                         SessionChatActivityItem.SideQuestionsReady(1),
-                        failed,
+                        SessionChatActivityItem.RequestFailed("m1", "m1:failure"),
                         SessionChatActivityItem.ReviewPermission,
                     ),
                 keyboardVisible = false,
-                nowEpochMs = now,
             )
 
-        assertEquals(SessionChatActivityItem.ReviewPermission, slot.primary)
-        assertEquals(
-            listOf(
-                failed,
-                SessionChatActivityItem.SideQuestionsReady(1),
-                SessionChatActivityItem.SideQuestionsRunning(1),
-                SessionChatActivityItem.Queued(3),
-                finished,
-            ),
-            slot.overflow,
-        )
+        // Requests and failures belong to the turn pill, so they are neither shown nor counted.
+        assertEquals(SessionChatActivityItem.SideQuestionsReady(1), slot.primary)
+        assertEquals(listOf(SessionChatActivityItem.SideQuestionsRunning(1), SessionChatActivityItem.Queued(3)), slot.overflow)
         assertTrue(slot.showsOverflowButton)
         assertFalse(slot.primaryCompact)
     }
 
     @Test
+    fun mergedItemsLeaveNoSecondaryPill() {
+        val slot =
+            SessionChatPillSlots.activity(
+                listOf(
+                    SessionChatActivityItem.ReviewPermission,
+                    SessionChatActivityItem.AnswerQuestion,
+                    SessionChatActivityItem.RequestFailed("m1", "m1:failure"),
+                ),
+                keyboardVisible = false,
+            )
+
+        assertEquals(SessionChatActivitySlot(), slot)
+    }
+
+    @Test
+    fun aWaitingSubagentLeavesOnlyItsRunningCount() {
+        val rows =
+            listOf(
+                subagentRow("p1", SessionChatSubagentStatus.WaitingForInput),
+                subagentRow("p2", SessionChatSubagentStatus.Running),
+            )
+        val pill = requireNotNull(SessionChatBackgroundWork.pill(rows))
+        val slot = SessionChatPillSlots.activity(listOf(SessionChatActivityItem.Subagents(pill)), keyboardVisible = false)
+
+        assertEquals("1 subagent", (slot.primary as SessionChatActivityItem.Subagents).pill.labelText.english())
+        assertFalse((slot.primary as SessionChatActivityItem.Subagents).pill.needsInput)
+
+        val alone = requireNotNull(SessionChatBackgroundWork.pill(rows.take(1)))
+        assertEquals(
+            SessionChatActivitySlot(),
+            SessionChatPillSlots.activity(listOf(SessionChatActivityItem.Subagents(alone)), keyboardVisible = false),
+        )
+    }
+
+    private fun subagentRow(
+        id: String,
+        status: SessionChatSubagentStatus,
+    ) = SessionChatSubagent(
+        id = id,
+        childSessionId = "child-$id",
+        agentName = "general",
+        title = null,
+        status = status,
+        startedAtMs = null,
+        finishedAtMs = null,
+    )
+
+    @Test
     fun priorityRanksMatchTheSpec() {
         assertEquals(
-            listOf("NeedsInput", "Error", "AnswerReady", "Running", "Queued", "Finished"),
+            listOf("NeedsInput", "Error", "AnswerReady", "Running", "Queued"),
             SessionChatActivityPriority.entries.map { it.name },
         )
         assertEquals(SessionChatActivityPriority.NeedsInput, SessionChatActivityItem.AnswerQuestion.priority)
@@ -76,7 +110,6 @@ class SessionChatPillSlotsTest {
             SessionChatPillSlots.activity(
                 listOf(SessionChatActivityItem.SideQuestionsRunning(2), SessionChatActivityItem.Subagents(verbatimPill("1 subagent", false, "1 subagent running"))),
                 keyboardVisible = false,
-                nowEpochMs = now,
             )
 
         assertEquals(SessionChatActivityItem.SideQuestionsRunning(2), slot.primary)
@@ -85,7 +118,7 @@ class SessionChatPillSlotsTest {
 
     @Test
     fun singleItemHasNoOverflowButton() {
-        val slot = SessionChatPillSlots.activity(listOf(SessionChatActivityItem.Queued(1)), keyboardVisible = false, nowEpochMs = now)
+        val slot = SessionChatPillSlots.activity(listOf(SessionChatActivityItem.Queued(1)), keyboardVisible = false)
 
         assertEquals(SessionChatActivityItem.Queued(1), slot.primary)
         assertTrue(slot.overflow.isEmpty())
@@ -94,7 +127,7 @@ class SessionChatPillSlotsTest {
 
     @Test
     fun noItemsIsEmpty() {
-        assertEquals(SessionChatActivitySlot(), SessionChatPillSlots.activity(emptyList(), keyboardVisible = true, nowEpochMs = now))
+        assertEquals(SessionChatActivitySlot(), SessionChatPillSlots.activity(emptyList(), keyboardVisible = true))
     }
 
     // Keyboard
@@ -105,26 +138,11 @@ class SessionChatPillSlotsTest {
             SessionChatPillSlots.activity(
                 listOf(SessionChatActivityItem.Queued(2), SessionChatActivityItem.SideQuestionsReady(1)),
                 keyboardVisible = true,
-                nowEpochMs = now,
             )
 
         assertEquals(SessionChatActivityItem.SideQuestionsReady(1), slot.primary)
         assertTrue(slot.primaryCompact)
         assertTrue(slot.overflow.isEmpty())
-        assertFalse(slot.showsOverflowButton)
-    }
-
-    @Test
-    fun needsInputKeepsItsLabelWithTheKeyboardUp() {
-        val slot =
-            SessionChatPillSlots.activity(
-                listOf(SessionChatActivityItem.Queued(2), SessionChatActivityItem.AnswerQuestion),
-                keyboardVisible = true,
-                nowEpochMs = now,
-            )
-
-        assertEquals(SessionChatActivityItem.AnswerQuestion, slot.primary)
-        assertFalse(slot.primaryCompact)
         assertFalse(slot.showsOverflowButton)
     }
 
@@ -138,47 +156,6 @@ class SessionChatPillSlotsTest {
         // The items stay, so the top row keeps its measured inset while hidden.
         assertEquals(2, SessionChatPillSlots.context(1, 3, branch).size)
         assertNull(SessionChatPillSlots.navigation(awayFromEnd = true, newCount = 2, keyboardVisible = true))
-    }
-
-    // Finished fade
-
-    @Test
-    fun finishedShowsAloneUntilItFades() {
-        val finished = SessionChatActivityItem.Finished("a", "Done", now)
-
-        val fresh = SessionChatPillSlots.activity(listOf(finished), keyboardVisible = false, nowEpochMs = now + 2_999)
-        val faded = SessionChatPillSlots.activity(listOf(finished), keyboardVisible = false, nowEpochMs = now + 3_000)
-
-        assertEquals(finished, fresh.primary)
-        assertEquals(SessionChatActivitySlot(), faded)
-    }
-
-    @Test
-    fun finishedOnlyShowsInTheStackBesideOtherWork() {
-        val finished = SessionChatActivityItem.Finished("a", "Done", now)
-        val slot =
-            SessionChatPillSlots.activity(
-                listOf(finished, SessionChatActivityItem.SideQuestionsRunning(1)),
-                keyboardVisible = false,
-                nowEpochMs = now + 1_000,
-            )
-
-        assertEquals(SessionChatActivityItem.SideQuestionsRunning(1), slot.primary)
-        assertEquals(listOf(finished), slot.overflow)
-    }
-
-    @Test
-    fun nextFadeIsTheEarliestUnfadedFinish() {
-        val items =
-            listOf(
-                SessionChatActivityItem.Finished("old", "Done", now - 5_000),
-                SessionChatActivityItem.Finished("a", "Done", now - 1_000),
-                SessionChatActivityItem.Finished("b", "Done", now),
-                SessionChatActivityItem.Queued(1),
-            )
-
-        assertEquals(now + 2_000, SessionChatPillSlots.nextFadeEpochMs(items, now))
-        assertNull(SessionChatPillSlots.nextFadeEpochMs(listOf(SessionChatActivityItem.Queued(1)), now))
     }
 
     // Context
@@ -217,24 +194,24 @@ class SessionChatPillSlotsTest {
     }
 
     @Test
-    fun awayFromTheEndFoldsEverythingIntoOneRoundPill() {
+    fun awayFromTheEndFoldsTheSecondaryPillsIntoOneRoundPill() {
         val items =
             listOf(SessionChatActivityItem.Queued(2), SessionChatActivityItem.ReviewPermission, SessionChatActivityItem.SideQuestionsRunning(1))
-        val slot = SessionChatPillSlots.activity(items, keyboardVisible = false, nowEpochMs = now, awayFromEnd = true)
+        val slot = SessionChatPillSlots.activity(items, keyboardVisible = false, awayFromEnd = true)
 
         assertTrue(slot.collapsed)
         assertTrue(slot.primaryCompact)
         assertFalse(slot.showsOverflowButton)
-        assertEquals(SessionChatActivityItem.ReviewPermission, slot.primary)
-        assertEquals(listOf(SessionChatActivityItem.SideQuestionsRunning(1), SessionChatActivityItem.Queued(2)), slot.overflow)
-        assertEquals(3, slot.itemCount)
+        assertEquals(SessionChatActivityItem.SideQuestionsRunning(1), slot.primary)
+        assertEquals(listOf(SessionChatActivityItem.Queued(2)), slot.overflow)
+        assertEquals(2, slot.itemCount)
     }
 
     @Test
     fun atTheEndOrWithTheKeyboardTheLeftSideDoesNotCollapse() {
         val items = listOf(SessionChatActivityItem.Queued(2), SessionChatActivityItem.ReviewPermission)
-        assertFalse(SessionChatPillSlots.activity(items, keyboardVisible = false, nowEpochMs = now).collapsed)
-        assertFalse(SessionChatPillSlots.activity(items, keyboardVisible = true, nowEpochMs = now, awayFromEnd = true).collapsed)
+        assertFalse(SessionChatPillSlots.activity(items, keyboardVisible = false).collapsed)
+        assertFalse(SessionChatPillSlots.activity(items, keyboardVisible = true, awayFromEnd = true).collapsed)
         assertTrue(SessionChatPillSlots.collapsesActivity(awayFromEnd = true, keyboardVisible = false))
         assertFalse(SessionChatPillSlots.collapsesActivity(awayFromEnd = false, keyboardVisible = false))
         assertFalse(SessionChatPillSlots.collapsesActivity(awayFromEnd = true, keyboardVisible = true))
@@ -335,26 +312,11 @@ class SessionChatPillSlotsTest {
             SessionChatPillSlots.activity(
                 items = listOf(SessionChatActivityItem.Queued(1), subagents, SessionChatActivityItem.SideQuestionsReady(1)),
                 keyboardVisible = false,
-                nowEpochMs = now,
             )
 
         assertEquals(SessionChatActivityPriority.Running, subagents.priority)
         assertEquals(SessionChatActivityItem.SideQuestionsReady(1), slot.primary)
         assertEquals(listOf(subagents, SessionChatActivityItem.Queued(1)), slot.overflow)
-    }
-
-    @Test
-    fun waitingSubagentNeedsInputAndStaysFullWithTheKeyboardUp() {
-        val subagents = SessionChatActivityItem.Subagents(waitingSubagent)
-        val slot =
-            SessionChatPillSlots.activity(
-                items = listOf(SessionChatActivityItem.SideQuestionsFailed(1), subagents),
-                keyboardVisible = true,
-                nowEpochMs = now,
-            )
-
-        assertEquals(subagents, slot.primary)
-        assertFalse(slot.primaryCompact)
     }
 
     @Test

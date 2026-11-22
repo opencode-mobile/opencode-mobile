@@ -281,72 +281,6 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         )
     }
 
-    /// Session Chat path: keep declared timeline sets, and fold Working status
-    /// chrome into revision. Label or fade *changes* land in `changedRowIDs` so
-    /// that stable row reconfigures without clearing the packet (OPE-136).
-    /// Collapse (painted → height 0) is decorate-only so Idle dismiss does not
-    /// structure-pin. Expand (height 0 → painted) stays a real layout change —
-    /// decorate-only left the reserved row stuck at 0 and hid Working / Idle.
-    /// An unchanged label+collapse+fade while the timeline publishes must not
-    /// reconfigure it. Syncing uses a top overlay pill and is not a timeline row.
-    static func from(
-        _ frame: TimelineFrame,
-        workingIndicatorLabel: String?,
-        previousWorkingIndicatorLabel: String?,
-        workingIndicatorCollapsed: Bool = false,
-        previousWorkingIndicatorCollapsed: Bool = false,
-        workingIndicatorFading: Bool = false,
-        previousWorkingIndicatorFading: Bool = false
-    ) -> MessageListTimelineApplyPacket {
-        let base = from(frame)
-        let delta = SessionChatStatusChrome.applyDelta(
-            current: workingIndicatorLabel,
-            previous: previousWorkingIndicatorLabel,
-            currentCollapsed: workingIndicatorCollapsed,
-            previousCollapsed: previousWorkingIndicatorCollapsed,
-            currentFading: workingIndicatorFading,
-            previousFading: previousWorkingIndicatorFading
-        )
-        let chrome = SessionChatStatusChrome.fingerprint(
-            workingIndicatorLabel: workingIndicatorLabel,
-            collapsed: workingIndicatorCollapsed,
-            fading: workingIndicatorFading
-        )
-        let decorateChrome: Set<String> =
-            if workingIndicatorLabel != nil,
-               workingIndicatorCollapsed,
-               !delta.layoutChanged.isEmpty
-            {
-                delta.layoutChanged
-            } else {
-                []
-            }
-        var kinds = base.kinds
-        if !delta.inserted.isEmpty
-            || !delta.removed.isEmpty
-            || !delta.layoutChanged.subtracting(decorateChrome).isEmpty
-        {
-            kinds.insert(.structure)
-        }
-        if !decorateChrome.isEmpty {
-            kinds.insert(.decorate)
-        }
-        if !delta.changed.isEmpty {
-            kinds.insert(.content)
-        }
-        return MessageListTimelineApplyPacket(
-            frameRevision: base.frameRevision &+ (chrome &* 1_000_003),
-            insertedRowIDs: base.insertedRowIDs.union(delta.inserted),
-            changedRowIDs: base.changedRowIDs.union(delta.changed),
-            removedRowIDs: base.removedRowIDs.union(delta.removed),
-            layoutChangedRowIDs: base.layoutChangedRowIDs.union(delta.layoutChanged),
-            grewBottomRowIDs: base.grewBottomRowIDs,
-            decorateRowIDs: base.decorateRowIDs.union(decorateChrome),
-            isRequired: base.isRequired,
-            kinds: kinds
-        )
-    }
-
     /// Chip timeline: a step paragraph expanded past `+N more` lives in the
     /// Screen Model, not the projected frame. Rows holding a paragraph whose
     /// expansion changed reconfigure as a layout change (the chip row grows),
@@ -524,64 +458,6 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
                 ? []
                 : [.structure, .content]
         )
-    }
-}
-
-/// Stable IDs for Session Chat working rows appended outside the projector.
-enum SessionChatStatusChrome {
-    static let workingRowID = "session-chat-working-indicator"
-
-    static func fingerprint(
-        workingIndicatorLabel: String?,
-        collapsed: Bool = false,
-        fading: Bool = false
-    ) -> UInt64 {
-        var value: UInt64 = 0
-        guard let workingIndicatorLabel else { return value }
-        value = value &* 1_000_003 &+ 2
-        if collapsed {
-            value = value &* 1_000_003 &+ 3
-        }
-        if fading {
-            value = value &* 1_000_003 &+ 5
-        }
-        for scalar in workingIndicatorLabel.unicodeScalars {
-            value = value &* 31 &+ UInt64(scalar.value)
-        }
-        return value
-    }
-
-    static func applyDelta(
-        current: String?,
-        previous: String?,
-        currentCollapsed: Bool = false,
-        previousCollapsed: Bool = false,
-        currentFading: Bool = false,
-        previousFading: Bool = false
-    ) -> (
-        inserted: Set<String>,
-        changed: Set<String>,
-        removed: Set<String>,
-        layoutChanged: Set<String>
-    ) {
-        switch (previous, current) {
-        case (nil, .some):
-            return ([workingRowID], [], [], currentCollapsed ? [workingRowID] : [])
-        case (.some, nil):
-            return ([], [], [workingRowID], [])
-        case let (previous?, current?):
-            let labelChanged = previous != current
-            let collapseChanged = previousCollapsed != currentCollapsed
-            let fadeChanged = previousFading != currentFading
-            return (
-                [],
-                (labelChanged || collapseChanged || fadeChanged) ? [workingRowID] : [],
-                [],
-                collapseChanged ? [workingRowID] : []
-            )
-        default:
-            return ([], [], [], [])
-        }
     }
 }
 

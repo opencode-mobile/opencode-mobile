@@ -14,7 +14,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionCandidate
 import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionLinker
 import dev.opencode.mobile.ui.sessionchat.SessionChatInboxRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
-import dev.opencode.mobile.ui.sessionchat.SessionChatStepRail
+import dev.opencode.mobile.ui.sessionchat.SessionChatPillSlots
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagent
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
@@ -32,7 +32,6 @@ import kotlinx.coroutines.withContext
 /** What the open session's turn shows, resolved once per publish. */
 data class SessionChatTurnStatusResolution(
     val workingIndicatorLabel: String?,
-    val workingIndicatorCollapsed: Boolean,
     val workingIndicatorFading: Boolean,
     val pendingPrompts: List<PendingPrompt>,
     val subagents: List<SessionChatSubagent>,
@@ -67,6 +66,15 @@ class SessionChatTurnStatus(
     private var workingChrome: WorkingTurnIndicator.Chrome = WorkingTurnIndicator.Chrome.Unmounted
     private var workingHold: WorkingTurnIndicator.Hold? = null
     private var workingHoldJob: Job? = null
+
+    /** This turn was on screen while the connection was down, so its end may have been missed. */
+    private var turnSpansConnectionGap = false
+
+    /** When the connection last became live; null while it is not. */
+    private var turnLiveSinceMs: Long? = null
+
+    /** The server's status confirmed this turn, so a cached busy or stale request shows no Done. */
+    private var turnStatusConfirmed = false
     private val pendingPromptsGate = PendingPromptsStripGate()
     private var pendingPromptsWakeJob: Job? = null
 
@@ -99,8 +107,6 @@ class SessionChatTurnStatus(
      *
      * @param messages the presented (live-marked) timeline rows.
      * @param previousSubagents the rows the last publish showed.
-     * @param usesTurnStatusPill the Activity Card style shows the turn on a floating pill, with
-     *   a shorter Done hold and a fade.
      */
     fun resolve(
         sessionStatusLabel: String?,
@@ -114,45 +120,52 @@ class SessionChatTurnStatus(
         inboxState: SessionChatInboxRegionState,
         infoState: SessionInfoRegionState,
         previousSubagents: List<SessionChatSubagent>,
-        usesTurnStatusPill: Boolean = false,
     ): SessionChatTurnStatusResolution {
         val awaitingUser =
             inboxState.permissionRequests.isNotEmpty() || inboxState.questionRequests.isNotEmpty()
-        val lastIsThinking =
-            WorkingTurnIndicator.isStreamingThinking(loadedMessages()) ||
-                WorkingTurnIndicator.lastIsThinking(messages)
         val activeWorkingLabel =
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = sessionStatusLabel,
                 isCompacting = isCompacting,
-                isAwaitingUser = awaitingUser,
+                isRetrying = infoState.isRetrying,
+                hasPendingRequest = awaitingUser,
                 sendProgressPercent = sendProgressPercent,
-                isThinking = lastIsThinking,
             )
+        val now = nowMs()
+        val isLive = infoState.connectionStatus == SessionConnectionStatus.Live
+        val endedAcrossGap = trackConnectionGap(isLive, activeWorkingLabel != null, now)
+        if (infoState.hasResolvedSessionStatus && (sessionStatusLabel != null || isCompacting)) {
+            turnStatusConfirmed = true
+        }
+        val ending =
+            when {
+                SessionChatPillSlots.latestFailure(messages, infoState.isRetrying) != null -> WorkingTurnIndicator.Ending.Failed
+                endedAcrossGap || !turnStatusConfirmed || WorkingTurnIndicator.lastTurnInterrupted(loadedMessages()) ->
+                    WorkingTurnIndicator.Ending.Quiet
+                else -> WorkingTurnIndicator.Ending.Completed
+            }
         val workingResolution =
             WorkingTurnIndicator.resolveFooter(
                 activeLabel = activeWorkingLabel,
-                lastIsThinking = lastIsThinking,
-                hideImmediately = awaitingUser || !isBound,
+                ending = ending,
+                // Only a connection lost during this turn holds it; first connecting is not a loss.
+                connectionLost = !isLive && turnSpansConnectionGap,
+                hideImmediately = !isBound,
                 previous = workingChrome,
                 hold = workingHold,
-                nowMs = nowMs(),
-                holdMs = if (usesTurnStatusPill) WorkingTurnIndicator.TURN_PILL_HOLD_MS else WorkingTurnIndicator.IDLE_HOLD_MS,
-                fadeMs = if (usesTurnStatusPill) WorkingTurnIndicator.TURN_PILL_FADE_MS else 0L,
+                nowMs = now,
             )
         workingChrome = workingResolution.chrome
         workingHold = workingResolution.hold
+        if (workingChrome.label == null) {
+            turnSpansConnectionGap = false
+            turnStatusConfirmed = false
+        }
         scheduleWorkingFooterWake(workingResolution.wakeAfterMs)
-        // Step rail / activity card: the live rail's or card's running or Thinking… line is the indicator (#779).
-        val workingIndicatorLabel =
-            workingResolution.chrome.label.takeUnless {
-                activeWorkingLabel != null && SessionChatStepRail.hasLiveRail(messages)
-            }
-        val workingIndicatorCollapsed = workingResolution.chrome.collapsed
+        val workingIndicatorLabel = workingResolution.chrome.label
         val workingIndicatorFading = workingResolution.chrome.fading
         val workingLampKey =
             "${workingIndicatorLabel ?: "none"}:" +
-                "${if (workingIndicatorCollapsed) 1 else 0}:" +
                 "${if (workingIndicatorFading) 1 else 0}:" +
                 "${if (workingHold != null) 1 else 0}"
         if (!loggedWorkingLamp || lastWorkingLamp != workingLampKey) {
@@ -161,12 +174,11 @@ class SessionChatTurnStatus(
             DiagnosticLog.info(
                 DiagnosticLogArea.Chat,
                 "workingLamp label=${workingIndicatorLabel ?: "none"} " +
-                    "collapsed=${if (workingIndicatorCollapsed) 1 else 0} " +
                     "fading=${if (workingIndicatorFading) 1 else 0} " +
                     "hold=${if (workingHold != null) 1 else 0} " +
                     "status=${sessionStatusLabel ?: "none"} " +
                     "awaitingUser=${if (awaitingUser) 1 else 0} " +
-                    "lastIsThinking=${if (lastIsThinking) 1 else 0}",
+                    "ending=$ending",
             )
         }
         val pendingResolution =
@@ -183,12 +195,40 @@ class SessionChatTurnStatus(
         seenDoneSubagentIds = seenDone
         return SessionChatTurnStatusResolution(
             workingIndicatorLabel = workingIndicatorLabel,
-            workingIndicatorCollapsed = workingIndicatorCollapsed,
             workingIndicatorFading = workingIndicatorFading,
             pendingPrompts = pendingResolution.prompts,
             subagents = subagents,
             backgroundWorkDoneUnseen = SessionChatBackgroundWork.hasUnseenDone(subagents, seenDone),
         )
+    }
+
+    /**
+     * Remembers that the turn on screen lived through a connection gap. Returns true while an
+     * idle status may only mean the turn ended unseen: during the gap, and for
+     * [WorkingTurnIndicator.RECONNECT_CONFIRM_MS] after it. A turn still active past that
+     * window was confirmed by the reconnect refresh, so its later end shows Done as usual.
+     */
+    private fun trackConnectionGap(
+        isLive: Boolean,
+        isActive: Boolean,
+        now: Long,
+    ): Boolean {
+        if (!isLive) {
+            // Still connecting for the first time is not a lost connection.
+            val wasLive = turnLiveSinceMs != null
+            turnLiveSinceMs = null
+            if (wasLive && (isActive || (workingChrome.label != null && workingHold == null))) {
+                turnSpansConnectionGap = true
+            }
+            return turnSpansConnectionGap
+        }
+        val liveSince = turnLiveSinceMs ?: now.also { turnLiveSinceMs = it }
+        // Not during a settle: an idle seen inside the window stays "ended while disconnected"
+        // even though the settle runs past the window's end.
+        if (workingHold == null && now - liveSince > WorkingTurnIndicator.RECONNECT_CONFIRM_MS) {
+            turnSpansConnectionGap = false
+        }
+        return turnSpansConnectionGap
     }
 
     /**
@@ -214,6 +254,9 @@ class SessionChatTurnStatus(
         workingHoldJob = null
         workingHold = null
         workingChrome = WorkingTurnIndicator.Chrome.Unmounted
+        turnSpansConnectionGap = false
+        turnLiveSinceMs = null
+        turnStatusConfirmed = false
         pendingPromptsWakeJob?.cancel()
         pendingPromptsWakeJob = null
         pendingPromptsGate.reset()

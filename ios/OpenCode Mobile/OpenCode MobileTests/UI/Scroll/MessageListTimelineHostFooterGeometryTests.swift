@@ -8,7 +8,7 @@ import UIKit
 /// remove packet; the next send re-inserts. Zero-height cells are never
 /// remasured, so expand-in-place is not a supported path.
 private enum FooterGeometryTestDefaults {
-    static let workingID = SessionChatStatusChrome.workingRowID
+    static let workingID = "footer-row"
     static let pinTolerance: CGFloat = 1.5
     static let interItemSpacing: CGFloat = 8
 }
@@ -379,7 +379,7 @@ private final class FooterGeometryHarness {
         return String(format: "%.2f", value)
     }
 
-    private static let workingID = SessionChatStatusChrome.workingRowID
+    private static let workingID = "footer-row"
     private static let pinTolerance: CGFloat = 1.5
 
     private static func makeMessages(count: Int) -> [FooterHarnessItem] {

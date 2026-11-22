@@ -4,13 +4,67 @@ import SwiftUI
 /// Away from the end the whole slot is one round pill that opens the stack of every item.
 struct SessionChatActivitySlotView: View {
     let slot: SessionChatActivitySlot
-    /// Leads the row in the Activity Card style; never part of the stack.
+    /// Leads the row in every timeline style; never part of the stack.
     var turnStatus: SessionChatTurnStatusSlot?
+    /// Width of the whole bottom row and of its bottom-right pills; zero until measured.
+    var rowWidth: CGFloat = 0
+    var trailingWidth: CGFloat = 0
     @Binding var stackOpen: Bool
     let onTap: (SessionChatActivityItem) -> Void
     let onClose: (SessionChatActivityItem) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var turnTextWidth: CGFloat = 0
+    @State private var secondaryTextWidth: CGFloat = 0
+    @State private var overflowTextWidth: CGFloat = 0
+
+    /// The fold for the real text widths, so it holds under Dynamic Type and long translations.
+    private var rowFold: SessionChatPillRowFold {
+        var widths = SessionChatPillRowWidths(available: rowWidth, trailing: trailingWidth, spacing: Self.spacing)
+        if let turnStatus {
+            widths.turn = turnStatus.compact
+                ? OpenCodeFloatingPill.minHeight
+                : OpenCodeFloatingPill.fullWidth(
+                    textWidth: turnTextWidth,
+                    hasMark: turnStatus.phase.hasMark,
+                    hasClose: turnStatus.isClosable
+                )
+        }
+        if let primary = slot.primary {
+            let layout = Self.layout(primary)
+            widths.secondary = slot.isCollapsed || slot.primaryCompact
+                ? OpenCodeFloatingPill.minHeight
+                : OpenCodeFloatingPill.fullWidth(
+                    textWidth: secondaryTextWidth,
+                    hasMark: OpenCodeFloatingPillStyle.leading(layout: layout, state: Self.state(primary)) != .none,
+                    hasClose: Self.isClosable(primary)
+                )
+        }
+        if slot.showsOverflowButton {
+            widths.overflow = OpenCodeFloatingPill.fullWidth(textWidth: overflowTextWidth, hasMark: false, hasClose: false)
+        }
+        return SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: turnStatus?.phase.folds == true)
+    }
+
+    /// Hidden copies of the labels: the pills themselves fold, so they cannot report full width.
+    private var textMeasures: some View {
+        ZStack {
+            measure(turnStatus?.phase.label) { turnTextWidth = $0 }
+            measure(slot.primary.map { Self.layout($0).label }) { secondaryTextWidth = $0 }
+            measure(slot.showsOverflowButton ? "+\(slot.overflow.count)" : nil) { overflowTextWidth = $0 }
+        }
+        .hidden()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    private func measure(_ text: String?, onChange: @escaping (CGFloat) -> Void) -> some View {
+        Text(text ?? "")
+            .font(OpenCodeTypography.button)
+            .lineLimit(1)
+            .fixedSize()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { onChange($0) }
+    }
 
     /// Items the stack lists above the row: the rest behind "+N", or every item behind the round pill.
     private var stackItems: [SessionChatActivityItem] {
@@ -37,11 +91,20 @@ struct SessionChatActivitySlotView: View {
             }
             HStack(spacing: 0) {
                 if let turnStatus {
-                    // One identity across Working and Done, so the spinner can morph.
+                    // One identity across every phase, so the label, width and mark change in place.
                     OpenCodeTurnStatusPill(
                         phase: turnStatus.phase,
-                        compact: turnStatus.compact,
-                        leaving: turnStatus.leaving
+                        compact: turnStatus.compact || rowFold.turnCompact,
+                        leaving: turnStatus.leaving,
+                        maxWidth: rowFold.turnMaxWidth,
+                        accessibilityLabel: turnStatus.accessibilityLabel,
+                        action: turnStatus.tapItem.map { item in
+                            {
+                                stackOpen = false
+                                onTap(item)
+                            }
+                        },
+                        onClose: turnStatus.isClosable ? turnStatus.tapItem.map { item in { onClose(item) } } : nil
                     )
                     .id(Self.turnStatusID)
                     .padding(.trailing, Self.spacing)
@@ -65,6 +128,7 @@ struct SessionChatActivitySlotView: View {
                     }
                 }
             }
+            .background(alignment: .leading) { textMeasures }
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.78), value: stackOpen)
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : OpenCodeFloatingPill.widthAnimation, value: slot)
@@ -89,7 +153,7 @@ struct SessionChatActivitySlotView: View {
         let pending: Bool = if case .queued = primary { true } else { false }
         return pill(
             primary,
-            compact: collapsed || slot.primaryCompact,
+            compact: collapsed || slot.primaryCompact || rowFold.secondaryCompact,
             summary: collapsed ? OpenCodeFloatingPillSummary(count: count, pending: pending) : nil,
             accessibilityLabel: collapsed
                 ? Self.collapsedAccessibilityLabel(primary, count: count, stackOpen: stackOpen)
@@ -145,8 +209,6 @@ struct SessionChatActivitySlotView: View {
             .counter(label: count > 1 ? "/btw \u{00D7}\(count)" : "/btw")
         case let .queued(count):
             .label(String(localized: "session_chat.activity.queued", defaultValue: "\(count) queued"))
-        case let .finished(_, label, _):
-            .label(label)
         }
     }
 
@@ -170,7 +232,6 @@ struct SessionChatActivitySlotView: View {
         case .error: .error
         case .answerReady, .queued: .ready
         case .running: .live
-        case .finished: .done
         }
     }
 
@@ -178,7 +239,7 @@ struct SessionChatActivitySlotView: View {
         switch item {
         case .reviewPermission, .answerQuestion, .subagents, .requestFailed, .sideQuestionsFailed, .sideQuestionsReady, .queued:
             true
-        case .sideQuestionsRunning, .finished: false
+        case .sideQuestionsRunning: false
         }
     }
 
@@ -197,6 +258,15 @@ struct SessionChatActivitySlotView: View {
         return String(
             localized: "session_chat.activity.status_action",
             defaultValue: "\(statusText). \(actionText)"
+        )
+    }
+
+    /// The turn pill for a waiting subagent: who is asking, then that a tap opens the request.
+    static func openRequestAccessibilityLabel(_ asking: String) -> String {
+        let actionText = String(localized: "session_chat.activity.action.open_request", defaultValue: "Open request")
+        return String(
+            localized: "session_chat.activity.status_action",
+            defaultValue: "\(asking). \(actionText)"
         )
     }
 
@@ -243,15 +313,13 @@ struct SessionChatActivitySlotView: View {
                 : String(localized: "session_chat.activity.side_question_running", defaultValue: "Side question running")
         case let .queued(count):
             String(localized: "session_chat.activity.queued_prompts", defaultValue: "\(count) queued prompts")
-        case let .finished(_, label, _):
-            String(localized: "session_chat.activity.finished", defaultValue: "\(label), Done")
         }
     }
 
     /// What a tap does, read after the state; nil when the pill does nothing.
     private static func action(_ item: SessionChatActivityItem) -> LocalizedStringResource? {
         switch item {
-        case .reviewPermission, .answerQuestion, .sideQuestionsRunning, .finished:
+        case .reviewPermission, .answerQuestion, .sideQuestionsRunning:
             nil
         case let .subagents(pill):
             pill.needsInput
@@ -430,8 +498,15 @@ struct SessionChatTimelineActivityOnlySlot: View {
         SessionChatActivitySlotView(
             slot: SessionChatPillSlots.activity(
                 items: props.activityItems,
+                keyboardVisible: props.keyboardVisible
+            ),
+            turnStatus: SessionChatPillSlots.turnStatus(
+                label: props.workingIndicatorLabel,
+                fading: props.workingIndicatorFading,
+                isAwaitingUser: props.isAwaitingUser,
+                items: props.activityItems,
                 keyboardVisible: props.keyboardVisible,
-                now: Date()
+                awayFromEnd: false
             ),
             stackOpen: $stackOpen,
             onTap: props.onActivityTap,

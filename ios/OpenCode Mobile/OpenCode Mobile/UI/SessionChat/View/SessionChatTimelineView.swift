@@ -12,9 +12,10 @@ struct SessionChatTimelineViewProps {
     let sessionBranchPill: SessionChatBranchPillUiState?
     let syncingIndicatorLabel: String?
     let workingIndicatorLabel: String?
-    let workingIndicatorCollapsed: Bool
     let workingIndicatorFading: Bool
-    /// The server reports the session busy (or compacting), whether or not the Working footer shows.
+    /// The turn is running and not waiting on the user: what makes a rail or card live.
+    let isTurnWorking: Bool
+    /// The server reports the session busy (or compacting), whether or not the turn waits on the user.
     let isTurnActive: Bool
     /// A permission or question waits on the user.
     let isAwaitingUser: Bool
@@ -36,8 +37,6 @@ struct SessionChatTimelineViewProps {
     let composerScrimHeight: CGFloat?
     /// Bottom-left live activity from the screen (btw, queued). The timeline adds request failed.
     let activityItems: [SessionChatActivityItem]
-    /// Activity Card style: the turn shows as a floating pill instead of the Working row.
-    let usesTurnStatusPill: Bool
     /// The keyboard is up: the activity pill goes compact and the other corners hide.
     let keyboardVisible: Bool
     let onActivityTap: (SessionChatActivityItem) -> Void
@@ -93,8 +92,8 @@ struct SessionChatTimelineViewProps {
         sessionBranchPill: SessionChatBranchPillUiState? = nil,
         syncingIndicatorLabel: String? = nil,
         workingIndicatorLabel: String? = nil,
-        workingIndicatorCollapsed: Bool = false,
         workingIndicatorFading: Bool = false,
+        isTurnWorking: Bool = false,
         isTurnActive: Bool = false,
         isAwaitingUser: Bool = false,
         sessionTodosVisible: Bool = false,
@@ -108,7 +107,6 @@ struct SessionChatTimelineViewProps {
         bottomOverlayAnimation: Animation? = nil,
         composerScrimHeight: CGFloat? = nil,
         activityItems: [SessionChatActivityItem] = [],
-        usesTurnStatusPill: Bool = false,
         keyboardVisible: Bool = false,
         onActivityTap: @escaping (SessionChatActivityItem) -> Void = { _ in },
         onActivityClose: @escaping (SessionChatActivityItem) -> Void = { _ in },
@@ -152,8 +150,8 @@ struct SessionChatTimelineViewProps {
         self.sessionBranchPill = sessionBranchPill
         self.syncingIndicatorLabel = syncingIndicatorLabel
         self.workingIndicatorLabel = workingIndicatorLabel
-        self.workingIndicatorCollapsed = workingIndicatorCollapsed
         self.workingIndicatorFading = workingIndicatorFading
+        self.isTurnWorking = isTurnWorking
         self.isTurnActive = isTurnActive
         self.isAwaitingUser = isAwaitingUser
         self.sessionTodosVisible = sessionTodosVisible
@@ -167,7 +165,6 @@ struct SessionChatTimelineViewProps {
         self.bottomOverlayAnimation = bottomOverlayAnimation
         self.composerScrimHeight = composerScrimHeight
         self.activityItems = activityItems
-        self.usesTurnStatusPill = usesTurnStatusPill
         self.keyboardVisible = keyboardVisible
         self.onActivityTap = onActivityTap
         self.onActivityClose = onActivityClose
@@ -294,10 +291,10 @@ private struct SessionChatTimelineReadyView: View {
     @State private var dismissedFailureBlockIDs: Set<String> = []
     /// Newest row when the reader left the end; rows after it count as "N new".
     @State private var newMessagesBaselineID: String?
-    /// Bumped when a finished activity item fades, so the slot resolves again.
-    @State private var activityClock = Date()
-    @State private var previousMountedWorkingLabel: String?
-    @State private var previousWorkingIndicatorFading = false
+    /// Whether the pill row was reserved when the reader left the end.
+    @State private var heldPillRowReserve = false
+    @State private var pillRowWidth: CGFloat = 0
+    @State private var trailingPillsWidth: CGFloat = 0
     @State private var previousExpandedStepParagraphs: [String: Int] = [:]
     @State private var previousStepRailState: SessionChatStepRailViewState = .empty
     @State private var previousNoticeModelNames: TimelineNoticeModelNames = .empty
@@ -346,22 +343,18 @@ private struct SessionChatTimelineReadyView: View {
         SessionChatPillSlots.activity(
             items: activityItems,
             keyboardVisible: props.keyboardVisible,
-            awayFromEnd: showScrollToEnd,
-            now: activityClock
+            awayFromEnd: showScrollToEnd
         )
     }
 
     private var turnStatusSlot: SessionChatTurnStatusSlot? {
-        guard props.usesTurnStatusPill, liveStepRailID == nil else { return nil }
-        return SessionChatPillSlots.turnStatus(
+        SessionChatPillSlots.turnStatus(
             label: props.workingIndicatorLabel,
-            collapsed: props.workingIndicatorCollapsed,
             fading: props.workingIndicatorFading,
             isAwaitingUser: props.isAwaitingUser,
             items: activityItems,
             keyboardVisible: props.keyboardVisible,
-            awayFromEnd: showScrollToEnd,
-            now: activityClock
+            awayFromEnd: showScrollToEnd
         )
     }
 
@@ -393,22 +386,25 @@ private struct SessionChatTimelineReadyView: View {
         props.bottomOverlayInset
             + (props.composerScrimHeight == nil ? 0 : OpenCodeSessionComposerScrim.restingClearance)
             + SessionChatCornerSlotsLayout.reservedHeight(
-                hasActivity: activitySlot.primary != nil || turnStatusSlot?.reservesRow == true
+                hasActivity: SessionChatPillSlots.reservesPillRow(
+                    wanted: wantsPillRowReserve,
+                    held: heldPillRowReserve,
+                    awayFromEnd: showScrollToEnd
+                )
             )
     }
 
-    /// The step rail or activity card that carries live status. While one
-    /// exists, it is the indicator and the Working footer stays away.
-    private var liveStepRailID: String? {
-        let label = props.workingIndicatorLabel
-        let working = label != nil
-            && !props.workingIndicatorCollapsed
-            && !WorkingTurnIndicator.showsIdleMark(label: label ?? "")
-        return SessionChatTimelineBlocks.liveStepRunID(in: props.messages, sessionWorking: working)
+    private var wantsPillRowReserve: Bool {
+        activitySlot.primary != nil || turnStatusSlot?.reservesRow == true
     }
 
-    /// The activity card stays live while the turn waits on the user: the
-    /// Working footer is hidden then, but the card's steps are still in flight.
+    /// The step rail or activity card that carries live status. Follows the running turn, not
+    /// the pill's label, which also holds through a settle and while waiting on the user.
+    private var liveStepRailID: String? {
+        SessionChatTimelineBlocks.liveStepRunID(in: props.messages, sessionWorking: props.isTurnWorking)
+    }
+
+    /// The activity card stays live while the turn waits on the user: its steps are still in flight.
     private var liveActivityCardID: String? {
         SessionChatTimelineBlocks.liveActivityCardID(
             in: props.messages,
@@ -433,27 +429,8 @@ private struct SessionChatTimelineReadyView: View {
         )
     }
 
-    private var mountedWorkingLabel: String? {
-        guard liveStepRailID == nil, !props.usesTurnStatusPill else { return nil }
-        return WorkingTurnIndicator.mountedLabel(
-            label: props.workingIndicatorLabel,
-            collapsed: props.workingIndicatorCollapsed
-        )
-    }
-
     private var displayMessages: [SessionChatRow] {
-        var rows = SessionChatGoalTimeline.withStatusRow(props.messages, goal: props.goal.state)
-        if let label = mountedWorkingLabel {
-            rows.append(
-                SessionChatRow(
-                    id: SessionChatStatusChrome.workingRowID,
-                    role: .assistant,
-                    text: label,
-                    metadataLabel: ""
-                )
-            )
-        }
-        return rows
+        SessionChatGoalTimeline.withStatusRow(props.messages, goal: props.goal.state)
     }
 
     /// Goal set and status rows keyed by how the goal makes them look.
@@ -491,16 +468,7 @@ private struct SessionChatTimelineReadyView: View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
                 items: listItems,
-                // Declared timeline sets stay; Working label folds into
-                // revision, and only label *changes* reconfigure that stable
-                // row without clearing the packet (OPE-136).
-                applyPacket: .from(
-                    props.timelineFrame,
-                    workingIndicatorLabel: mountedWorkingLabel,
-                    previousWorkingIndicatorLabel: previousMountedWorkingLabel,
-                    workingIndicatorFading: props.workingIndicatorFading,
-                    previousWorkingIndicatorFading: previousWorkingIndicatorFading
-                )
+                applyPacket: MessageListTimelineApplyPacket.from(props.timelineFrame)
                 .addingStepParagraphExpansion(
                     rows: props.messages,
                     expanded: props.expandedStepParagraphs,
@@ -530,7 +498,6 @@ private struct SessionChatTimelineReadyView: View {
             ) { item in
                 SessionChatTimelineHostRow(
                     message: item.row,
-                    workingIndicatorFading: props.workingIndicatorFading,
                     onMessageActionsTap: props.onMessageActionsTap,
                     onToolDetailTap: props.onToolDetailTap,
                     onToolGroupTap: props.onToolGroupTap,
@@ -599,16 +566,12 @@ private struct SessionChatTimelineReadyView: View {
         .overlay(alignment: .bottom) { bottomSlots }
         .onChange(of: showScrollToEnd, initial: true) { _, away in
             newMessagesBaselineID = away ? props.messages.last?.id : nil
+            if !away { heldPillRowReserve = wantsPillRowReserve }
         }
-        .task(id: SessionChatPillSlots.nextFade(items: activityItems, now: activityClock)) {
-            guard let fade = SessionChatPillSlots.nextFade(items: activityItems, now: activityClock) else { return }
-            try? await Task.sleep(for: .seconds(max(fade.timeIntervalSinceNow, 0)))
-            guard !Task.isCancelled else { return }
-            activityClock = Date()
+        .onChange(of: wantsPillRowReserve) { _, wanted in
+            if !showScrollToEnd { heldPillRowReserve = wanted }
         }
         .onAppear {
-            previousMountedWorkingLabel = mountedWorkingLabel
-            previousWorkingIndicatorFading = props.workingIndicatorFading
             previousExpandedStepParagraphs = props.expandedStepParagraphs
             previousStepRailState = stepRailState
             previousNoticeModelNames = props.noticeModelNames
@@ -622,12 +585,6 @@ private struct SessionChatTimelineReadyView: View {
         }
         .onDisappear {
             syncingPillTask?.cancel()
-        }
-        .onChange(of: mountedWorkingLabel) { _, newValue in
-            previousMountedWorkingLabel = newValue
-        }
-        .onChange(of: props.workingIndicatorFading) { _, newValue in
-            previousWorkingIndicatorFading = newValue
         }
         .onChange(of: props.expandedStepParagraphs) { _, newValue in
             previousExpandedStepParagraphs = newValue
@@ -680,6 +637,8 @@ private struct SessionChatTimelineReadyView: View {
             SessionChatActivitySlotView(
                 slot: activitySlot,
                 turnStatus: turnStatusSlot,
+                rowWidth: pillRowWidth,
+                trailingWidth: trailingPillsWidth,
                 stackOpen: $activityStackOpen,
                 onTap: handleActivityTap,
                 onClose: handleActivityClose
@@ -693,7 +652,9 @@ private struct SessionChatTimelineReadyView: View {
                 )
                 scrollController.scrollToEndAnimated()
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { trailingPillsWidth = $0 }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pillRowWidth = $0 }
         .padding(.horizontal, SessionChatCornerSlotsLayout.horizontalPadding)
         .padding(.bottom, SessionChatCornerSlotsLayout.rowBottom(overlayInset: props.bottomOverlayInset))
     }
@@ -754,7 +715,6 @@ private struct SessionChatTimelineReadyView: View {
 
 private struct SessionChatTimelineHostRow: View {
     let message: SessionChatRow
-    var workingIndicatorFading: Bool = false
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
@@ -775,14 +735,6 @@ private struct SessionChatTimelineHostRow: View {
             if let state = goal.state, state.hasStatusRow {
                 SessionChatGoalStatusRow(state: state, onAction: goal.onAction, onNewGoal: goal.onNewGoal)
             }
-        } else if message.id == SessionChatStatusChrome.workingRowID {
-            OpenCodeWorkingIndicator(
-                label: message.text,
-                state: message.isLayoutCollapsed
-                    ? .collapsed
-                    : (WorkingTurnIndicator.showsIdleMark(label: message.text) ? .idle : .working),
-                fading: workingIndicatorFading
-            )
         } else if message.role == .notice {
             SessionChatNoticeRow(blocks: message.blocks, modelNames: noticeModelNames, goal: goal)
         } else {

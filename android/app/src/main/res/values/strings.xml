@@ -548,7 +548,6 @@
         <item quantity="one">%1$d side question running</item>
         <item quantity="other">%1$d side questions running</item>
     </plurals>
-    <string name="session_chat_activity_finished">%1$s, Done</string>
     <string name="session_chat_activity_status_action">%1$s. %2$s</string>
     <string name="session_chat_activity_action_open_request">Open request</string>
     <string name="session_chat_activity_action_open_background_work">Open background work</string>

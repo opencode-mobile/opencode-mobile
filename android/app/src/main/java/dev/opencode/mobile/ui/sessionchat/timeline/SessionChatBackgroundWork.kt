@@ -20,6 +20,8 @@ import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.ui.text.resolve
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /** Where one subagent of the open session is. */
 enum class SessionChatSubagentStatus {
@@ -115,7 +117,14 @@ data class SessionChatBackgroundWorkPill(
     /** A subagent waits for input: amber pill with a pulsing dot. */
     val needsInput: Boolean,
     val accessibilityText: UiText,
+    /** While a subagent waits: just who is asking, with no running count. The turn pill shows it. */
+    val asking: SessionChatBackgroundWorkPill? = null,
+    /** While a subagent waits: the subagents and shells still running, as a normal count pill. */
+    val stillRunning: SessionChatBackgroundWorkPill? = null,
 ) {
+    /** What the turn pill shows for a waiting subagent. */
+    val blocker: SessionChatBackgroundWorkPill get() = asking ?: this
+
     /** [labelText] in the current language. */
     val label: String
         @Composable get() = labelText.resolve()
@@ -344,6 +353,34 @@ object SessionChatBackgroundWork {
             .sortedWith(compareBy(nullsLast()) { it.startedAtMs })
 
     /**
+     * The running shells that are real background commands, which the pill counts. The server
+     * has no permanent background flag, so a shell counts when a finished tool part in
+     * [messages] names it in `metadata.shellID` (its call returned while the command kept
+     * running), or when it started before the earliest loaded message (its call is outside
+     * loaded history). A shell with no start time and no match does not count. On v1 a shell
+     * is a running bash part, so it never counts.
+     */
+    fun backgroundShells(
+        shells: List<AgentShell>,
+        messages: List<Message>,
+    ): List<AgentShell> {
+        val returnedShellIds =
+            messages
+                .asSequence()
+                .flatMap { it.parts.asSequence() }
+                .filterIsInstance<MessagePart.Tool>()
+                .filter { it.status != ToolStatus.Pending && it.status != ToolStatus.Running }
+                .mapNotNullTo(mutableSetOf()) { (it.metadata?.get(SHELL_ID_KEY) as? JsonPrimitive)?.contentOrNull }
+        val earliestMessageMs = messages.mapNotNull { ToolStartTime.normalizeEpochMs(it.sentAtEpochMs) }.minOrNull()
+        return shells.filter { shell ->
+            if (!shell.isRunning) return@filter false
+            if (shell.id in returnedShellIds) return@filter true
+            val startedAt = ToolStartTime.normalizeEpochMs(shell.startedAtMs)
+            startedAt != null && earliestMessageMs != null && startedAt < earliestMessageMs
+        }
+    }
+
+    /**
      * The pill for these rows; null when nothing is working or waiting. Running shells count
      * beside running subagents: "1 subagent · 2 shells", "general needs input · 3 running".
      */
@@ -378,7 +415,23 @@ object SessionChatBackgroundWork {
             } else {
                 asking
             }
-        return SessionChatBackgroundWorkPill(labelText = label, needsInput = true, accessibilityText = spoken)
+        return SessionChatBackgroundWorkPill(
+            labelText = label,
+            needsInput = true,
+            accessibilityText = spoken,
+            asking = SessionChatBackgroundWorkPill(labelText = asking, needsInput = true, accessibilityText = asking),
+            stillRunning =
+                if (busy > 0) {
+                    SessionChatBackgroundWorkPill(
+                        labelText = countLabel(running, runningShells),
+                        needsInput = false,
+                        accessibilityText =
+                            UiText.resource(R.string.timeline_background_work_running_spoken, runningPhrase(running, runningShells)),
+                    )
+                } else {
+                    null
+                },
+        )
     }
 
     /**
@@ -508,6 +561,7 @@ object SessionChatBackgroundWork {
     private fun isBackground(tool: MessagePart.Tool): Boolean = tool.isBackground
 
     private const val DEFAULT_AGENT = "general"
+    private const val SHELL_ID_KEY = "shellID"
 
     private fun childSessionId(tool: MessagePart.Tool): String? = tool.subagentSessionId
 }

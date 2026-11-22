@@ -110,7 +110,9 @@ struct SessionChatBackgroundWorkTests {
         #expect(SessionChatBackgroundWork.pill(for: rows) == SessionChatBackgroundWorkPill(
             label: "general needs input · 2 running",
             needsInput: true,
-            accessibilityLabel: "general needs input, 2 subagents running"
+            accessibilityLabel: "general needs input, 2 subagents running",
+            askingLabel: "general needs input",
+            stillRunning: .init(label: "2 subagents", accessibilityLabel: "2 subagents running")
         ))
     }
 

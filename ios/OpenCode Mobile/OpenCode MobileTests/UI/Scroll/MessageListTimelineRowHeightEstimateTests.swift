@@ -20,28 +20,6 @@ struct MessageListTimelineRowHeightEstimateTests {
         #expect(abs(estimate - 64) < 0.001)
     }
 
-    @Test func workingStatusRowUsesFixedRowHeight() {
-        let row = SessionChatRow(
-            id: SessionChatStatusChrome.workingRowID,
-            role: .assistant,
-            text: "Working",
-            metadataLabel: ""
-        )
-        #expect(row.timelineRowHeightEstimate == WorkingTurnIndicator.rowHeight)
-        #expect(row.timelineRowHeightEstimate < MessageListTimelineDefaults.estimatedRowHeight)
-    }
-
-    @Test func workingStatusRowCollapsedUsesZeroEstimate() {
-        let row = SessionChatRow(
-            id: SessionChatStatusChrome.workingRowID,
-            role: .assistant,
-            text: "Working",
-            metadataLabel: "",
-            isLayoutCollapsed: true
-        )
-        #expect(row.timelineRowHeightEstimate == 0)
-    }
-
     @Test func longerAssistantTextRaisesEstimateWithinCap() {
         let short = MessageListTimelineRowHeightEstimate.fallback(
             characterCount: 20,

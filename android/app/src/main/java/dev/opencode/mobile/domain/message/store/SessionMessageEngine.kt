@@ -88,7 +88,8 @@ class SessionMessageEngine
             changeSet.changedPartIdsByMessage.isNotEmpty() ||
                 changeSet.removedMessageIds.isNotEmpty() ||
                 changeSet.streamingStateChangedIds.isNotEmpty() ||
-                changeSet.pickupStateChangedIds.isNotEmpty()
+                changeSet.pickupStateChangedIds.isNotEmpty() ||
+                changeSet.failureChangedIds.isNotEmpty()
 
         /**
          * Build the next published frame by splicing changed message IDs into
