@@ -113,6 +113,49 @@ struct SessionChatTimelineSteerTests {
         #expect(delivered.rows[2].steer == nil)
     }
 
+    @Test func steerWaitingBetweenSteps_isPendingWhileRunHasOutput() {
+        let between = [prompt("u1", "Start"), done("a1"), waiting("u2", "pr when done", .steer)]
+
+        let frame = project(between, runHasOutput: true)
+
+        #expect(frame.rows.last?.steer == SessionChatSteer(isPending: true, showsLabel: true))
+    }
+
+    @Test func steerRunTracker_idlePromptWakingARunIsNotASteer() {
+        var tracker = SteerRunTracker()
+        let idle = [prompt("u1", "Start"), done("a1")]
+        tracker.update(isBusy: false, isResolved: true, messages: idle)
+
+        let waking = idle + [waiting("u2", "Next", .steer)]
+        tracker.update(isBusy: true, isResolved: true, messages: waking)
+
+        #expect(!tracker.hasOutput(waking))
+    }
+
+    @Test func steerRunTracker_seesOutputOnceTheRunFinishesAStep() {
+        var tracker = SteerRunTracker()
+        let idle = [prompt("u1", "Start"), done("a1")]
+        tracker.update(isBusy: false, isResolved: true, messages: idle)
+        tracker.update(isBusy: true, isResolved: true, messages: idle)
+
+        let between = idle + [prompt("u2", "Next"), done("a2"), waiting("u3", "Steer", .steer)]
+
+        #expect(tracker.hasOutput(between))
+        tracker.update(isBusy: false, isResolved: true, messages: between)
+        #expect(!tracker.hasOutput(between))
+    }
+
+    @Test func steerRunTracker_openingMidRunCountsLoadedOutput() {
+        var tracker = SteerRunTracker()
+        let loaded = [prompt("u1", "Start"), done("a1"), waiting("u2", "Steer", .steer)]
+
+        tracker.update(isBusy: false, isResolved: false, messages: loaded)
+        #expect(!tracker.hasOutput(loaded))
+        tracker.update(isBusy: true, isResolved: true, messages: loaded)
+
+        #expect(tracker.hasOutput(loaded))
+    }
+
     @Test func optimisticBusySteer_handsOffToServerRowWithoutDuplicate() {
         let id = "msg_19a1b2c3d4e5AbCdEfGhIjKlMn"
         let optimisticRow = TimelineRow(
@@ -246,7 +289,8 @@ struct SessionChatTimelineSteerTests {
     private func project(
         _ messages: [Message],
         optimistic: OptimisticInputs = .none,
-        previous: TimelineFrame? = nil
+        previous: TimelineFrame? = nil,
+        runHasOutput: Bool = false
     ) -> TimelineFrame {
         let frame = DisplayFrameBuilder.build(
             sessionKey: "ses-1",
@@ -258,6 +302,7 @@ struct SessionChatTimelineSteerTests {
             frame: frame,
             optimistic: optimistic,
             previous: previous,
+            runHasOutput: runHasOutput,
             metadataLabel: { _ in "" }
         )
     }

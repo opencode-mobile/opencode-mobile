@@ -37,6 +37,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatStepRail
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
+import dev.opencode.mobile.ui.sessionchat.SteerRunTracker
 import dev.opencode.mobile.ui.sessionchat.TimelineChangeNotices
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatUiState
@@ -154,6 +155,33 @@ class SessionChatTimeline(
         }
     }
 
+    private var steerRun = SteerRunTracker()
+
+    /** Feeds the session status in; a steer already waiting gets its pending look at once. */
+    fun updateSessionRun(
+        isBusy: Boolean,
+        isResolved: Boolean,
+    ) {
+        val hadOutput = steerRun.hasOutput(lastLoadedMessages)
+        steerRun.update(isBusy, isResolved, lastLoadedMessages)
+        if (hadOutput || !steerRun.hasOutput(lastLoadedMessages)) return
+        val hasUnmarkedSteer =
+            lastTimelineFrame?.rows.orEmpty().any {
+                it.role == MessageRole.User && it.pendingDelivery == FollowUpDelivery.Steer && it.steer == null
+            }
+        if (!hasUnmarkedSteer) return
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        applyLoadedDisplayMessages(
+            displayMessages = lastLoadedDisplayMessages,
+            sourceSessionId = sessionId,
+            sourceWorktree = worktree,
+            fromQuietRefresh = true,
+            source = "session-run",
+            messagesFromCache = _state.value.messagesFromCache,
+        )
+    }
+
     fun updateCollapseConsecutiveToolCalls(enabled: Boolean) {
         if (enabled == collapseConsecutiveToolCalls) return
         collapseConsecutiveToolCalls = enabled
@@ -268,6 +296,7 @@ class SessionChatTimeline(
         pendingBaselineIds = emptySet()
         lastLoadedMessages = emptyList()
         lastLoadedDisplayMessages = emptyList()
+        steerRun = SteerRunTracker()
         resetChildSessionLookup()
         pendingPromptPatches.clear()
         lastTimelineFrame = null
@@ -298,6 +327,7 @@ class SessionChatTimeline(
         pendingBaselineIds = emptySet()
         lastLoadedMessages = emptyList()
         lastLoadedDisplayMessages = emptyList()
+        steerRun = SteerRunTracker()
         resetChildSessionLookup()
         pendingPromptPatches.clear()
         lastTimelineFrame = null
@@ -840,6 +870,7 @@ class SessionChatTimeline(
                 OptimisticInputs()
             }
         val frameRevision = nextFrameRevision++
+        val runHasOutput = steerRun.hasOutput(lastLoadedMessages)
         val structuralStartedAt = System.nanoTime()
         val projected =
             withContext(ioDispatcher) {
@@ -870,6 +901,7 @@ class SessionChatTimeline(
                         ),
                     optimisticInputs = optimisticInputs,
                     previous = previousFrame,
+                    runHasOutput = runHasOutput,
                 )
             }
         val structuralMs = (System.nanoTime() - structuralStartedAt) / 1_000_000

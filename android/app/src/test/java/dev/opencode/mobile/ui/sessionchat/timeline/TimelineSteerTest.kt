@@ -162,6 +162,53 @@ class TimelineSteerTest {
     }
 
     @Test
+    fun steerWaitingBetweenSteps_isPendingWhileRunHasOutput() {
+        val between = listOf(prompt("u1", "Start"), done("a1"), waiting("u2", "pr when done", FollowUpDelivery.Steer))
+
+        val frame = project(between, runHasOutput = true)
+
+        assertEquals(SessionChatSteer(isPending = true, showsLabel = true), frame.rows.last().steer)
+    }
+
+    @Test
+    fun steerRunTracker_idlePromptWakingARunIsNotASteer() {
+        val tracker = SteerRunTracker()
+        val idle = listOf(prompt("u1", "Start"), done("a1"))
+        tracker.update(isBusy = false, isResolved = true, messages = idle)
+
+        val waking = idle + waiting("u2", "Next", FollowUpDelivery.Steer)
+        tracker.update(isBusy = true, isResolved = true, messages = waking)
+
+        assertFalse(tracker.hasOutput(waking))
+    }
+
+    @Test
+    fun steerRunTracker_seesOutputOnceTheRunFinishesAStep() {
+        val tracker = SteerRunTracker()
+        val idle = listOf(prompt("u1", "Start"), done("a1"))
+        tracker.update(isBusy = false, isResolved = true, messages = idle)
+        tracker.update(isBusy = true, isResolved = true, messages = idle)
+
+        val between = idle + prompt("u2", "Next") + done("a2") + waiting("u3", "Steer", FollowUpDelivery.Steer)
+
+        assertTrue(tracker.hasOutput(between))
+        tracker.update(isBusy = false, isResolved = true, messages = between)
+        assertFalse(tracker.hasOutput(between))
+    }
+
+    @Test
+    fun steerRunTracker_openingMidRunCountsLoadedOutput() {
+        val tracker = SteerRunTracker()
+        val loaded = listOf(prompt("u1", "Start"), done("a1"), waiting("u2", "Steer", FollowUpDelivery.Steer))
+
+        tracker.update(isBusy = false, isResolved = false, messages = loaded)
+        assertFalse(tracker.hasOutput(loaded))
+        tracker.update(isBusy = true, isResolved = true, messages = loaded)
+
+        assertTrue(tracker.hasOutput(loaded))
+    }
+
+    @Test
     fun optimisticBusySteer_handsOffToServerRowWithoutDuplicate() {
         val optimisticRow = optimisticRow(CLIENT_ID, "Use staging", FollowUpDelivery.Steer)
         val optimistic = OptimisticInputs(pendingRows = listOf(optimisticRow), baselineIds = setOf("u1", "a1"))
@@ -301,6 +348,7 @@ class TimelineSteerTest {
         messages: List<Message>,
         optimistic: OptimisticInputs = OptimisticInputs(),
         previous: TimelineFrame? = null,
+        runHasOutput: Boolean = false,
     ): TimelineFrame {
         val revision = (previous?.frameRevision ?: 0L) + 1L
         return TimelineProjector.project(
@@ -313,6 +361,7 @@ class TimelineSteerTest {
                 ),
             optimisticInputs = optimistic,
             previous = previous,
+            runHasOutput = runHasOutput,
         )
     }
 
