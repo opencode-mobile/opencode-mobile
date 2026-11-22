@@ -431,6 +431,10 @@ struct OpenCodeSessionComposer: View {
     let attachmentDragActive: Bool
     /// "Esc again to interrupt": the first Esc armed an interrupt of the running turn.
     let interruptHintVisible: Bool
+    let style: SessionComposerStyle
+    /// Docked only: how far the fill runs below the shell, through the bottom safe area and
+    /// behind the keyboard. Paint only: the shell's layout and controls do not move.
+    let dockedBottomInset: CGFloat
     let onAction: (OpenCodeSessionComposerAction) -> Void
     private let status: AnyView?
 
@@ -455,9 +459,13 @@ struct OpenCodeSessionComposer: View {
         dictation: OpenCodeSessionComposerDictation? = nil,
         attachmentDragActive: Bool = false,
         interruptHintVisible: Bool = false,
+        style: SessionComposerStyle = .floating,
+        dockedBottomInset: CGFloat = 0,
         onAction: @escaping (OpenCodeSessionComposerAction) -> Void,
         status: AnyView? = nil
     ) {
+        self.style = style
+        self.dockedBottomInset = dockedBottomInset
         self.state = state
         self.focusRequestToken = focusRequestToken
         self.onInputFocusChange = onInputFocusChange
@@ -515,16 +523,12 @@ struct OpenCodeSessionComposer: View {
             .contentShape(Rectangle())
             .simultaneousGesture(requestPageSwipe, including: pagesRequests ? .all : .subviews)
         }
-        .clipShape(RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous))
-        .openCodeFloatingChrome(cornerRadius: Self.shellCornerRadius)
-        .overlay {
-            if let outlineColor {
-                RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous)
-                    .stroke(outlineColor, lineWidth: 1)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 4)
+        .modifier(OpenCodeSessionComposerChrome(
+            style: style,
+            floatingCornerRadius: Self.shellCornerRadius,
+            statusOutline: outlineColor,
+            dockedBottomInset: dockedBottomInset
+        ))
         .animation(Self.morphAnimation, value: contentKind)
         .animation(Self.morphAnimation, value: dictation != nil)
         .accessibilityIdentifier(composerAccessibilityIdentifier)

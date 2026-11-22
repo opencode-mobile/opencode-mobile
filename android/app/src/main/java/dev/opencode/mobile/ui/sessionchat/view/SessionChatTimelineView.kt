@@ -74,7 +74,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.featureflags.SessionComposerStyle
 import dev.opencode.mobile.domain.goal.SessionGoalAction
+import dev.opencode.mobile.ui.components.OpenCodeComposerScrim
+import dev.opencode.mobile.ui.components.openCodeComposerFadeClearance
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.domain.text.UiText
@@ -214,6 +217,10 @@ internal data class SessionChatTimelineViewProps(
     val noticeModelNames: SessionChatNoticeModelNames = SessionChatNoticeModelNames(),
     /** Extra bottom inset so the timeline can scroll under a floating composer. */
     val bottomOverlayInset: Dp = 0.dp,
+    /** Session Composer style: Outline and fade draws its scrim between the list and the pills. */
+    val composerStyle: SessionComposerStyle = SessionComposerStyle.Floating,
+    /** Measured composer height, including its bottom inset; sizes the composer scrim. */
+    val composerHeight: Dp = 0.dp,
     /** Bottom-left live activity from the screen (requests, btw, queued). The timeline adds syncing and request failed. */
     val activityItems: List<SessionChatActivityItem> = emptyList(),
     /** Activity Card style: the turn shows as a floating pill instead of the Working row. */
@@ -285,6 +292,9 @@ internal fun SessionChatTimelineView(
     // request or queued prompts must stay reachable.
     Box(modifier = modifier) {
         SessionChatTimelineStateContent(props = props, modifier = Modifier.fillMaxSize())
+        if (props.composerStyle == SessionComposerStyle.OutlineFade) {
+            OpenCodeComposerScrim(props.composerHeight, Modifier.align(Alignment.BottomCenter))
+        }
         SessionChatTimelineActivityOnlySlot(props = props, modifier = Modifier.align(Alignment.BottomStart))
     }
 }
@@ -401,6 +411,8 @@ private fun SessionChatTimelineStateContent(
                 sessionTodoActivePreview = props.sessionTodoActivePreview,
                 hideFloatStack = props.hideFloatStack,
                 bottomOverlayInset = props.bottomOverlayInset,
+                composerStyle = props.composerStyle,
+                composerHeight = props.composerHeight,
                 activityItems = props.activityItems,
                 usesTurnStatusPill = props.usesTurnStatusPill,
                 isAwaitingUser = props.isAwaitingUser,
@@ -464,6 +476,8 @@ private fun SessionChatTimelineReadyView(
     sessionTodoActivePreview: String?,
     hideFloatStack: Boolean,
     bottomOverlayInset: Dp,
+    composerStyle: SessionComposerStyle,
+    composerHeight: Dp,
     activityItems: List<SessionChatActivityItem>,
     usesTurnStatusPill: Boolean,
     isAwaitingUser: Boolean,
@@ -541,7 +555,11 @@ private fun SessionChatTimelineReadyView(
     // Springs to the new reserve so a pinned list glides instead of jumping. Away from the end
     // the reserve never changes (reservesActivityRow), so nothing moves.
     val animatedReserve by animateDpAsState(
-        targetValue = SessionChatCornerSlotsLayout.reservedHeight(hasActivity = reservesActivityRow),
+        targetValue =
+            SessionChatCornerSlotsLayout.reservedHeight(
+                hasActivity = reservesActivityRow,
+                fadeClearance = openCodeComposerFadeClearance(composerStyle),
+            ),
         animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
         label = PILL_RESERVE_ANIMATION_LABEL,
     )
@@ -783,6 +801,10 @@ private fun SessionChatTimelineReadyView(
                     )
                 }
             }
+        }
+
+        if (composerStyle == SessionComposerStyle.OutlineFade) {
+            OpenCodeComposerScrim(composerHeight, Modifier.align(Alignment.BottomCenter))
         }
 
         // Stays up while a sheet is open: the pill that opened it should not vanish,

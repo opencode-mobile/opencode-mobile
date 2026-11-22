@@ -27,6 +27,17 @@ enum OpenCodeColors {
 
     static var borderWeakBase: Color { resolve("border-weak-base") }
     static var borderWeakerBase: Color { resolve("border-weaker-base") }
+    /// Session Composer edge: `surface-raised-base` blended 20% toward `text-strong`.
+    static var sessionComposerEdge: Color {
+        Color(
+            UIColor { traits in
+                let theme = traits.userInterfaceStyle == .dark
+                    ? ThemeManager.shared.resolvedDark
+                    : ThemeManager.shared.resolvedLight
+                return UIColor(hex: ThemeResolver.mix(theme["surface-raised-base"], theme["text-strong"], 0.2))
+            }
+        )
+    }
 
     // MARK: - Icon
 

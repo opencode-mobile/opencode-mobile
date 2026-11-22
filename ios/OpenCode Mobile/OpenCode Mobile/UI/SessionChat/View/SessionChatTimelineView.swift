@@ -31,6 +31,9 @@ struct SessionChatTimelineViewProps {
     let bottomOverlayInset: CGFloat
     /// Set while the composer morphs between modes: the end-pinned list follows its edge on this curve.
     let bottomOverlayAnimation: Animation?
+    /// Solid height of the composer scrim, drawn over the list and under the floating pills.
+    /// Nil when the composer style has no scrim.
+    let composerScrimHeight: CGFloat?
     /// Bottom-left live activity from the screen (btw, queued). The timeline adds request failed.
     let activityItems: [SessionChatActivityItem]
     /// Activity Card style: the turn shows as a floating pill instead of the Working row.
@@ -103,6 +106,7 @@ struct SessionChatTimelineViewProps {
         hideRetryCountdown: Bool = false,
         bottomOverlayInset: CGFloat = 0,
         bottomOverlayAnimation: Animation? = nil,
+        composerScrimHeight: CGFloat? = nil,
         activityItems: [SessionChatActivityItem] = [],
         usesTurnStatusPill: Bool = false,
         keyboardVisible: Bool = false,
@@ -161,6 +165,7 @@ struct SessionChatTimelineViewProps {
         self.hideRetryCountdown = hideRetryCountdown
         self.bottomOverlayInset = bottomOverlayInset
         self.bottomOverlayAnimation = bottomOverlayAnimation
+        self.composerScrimHeight = composerScrimHeight
         self.activityItems = activityItems
         self.usesTurnStatusPill = usesTurnStatusPill
         self.keyboardVisible = keyboardVisible
@@ -240,6 +245,12 @@ struct SessionChatTimelineView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, props.timeline == .ready ? 0 : props.bottomOverlayInset)
+        .overlay(alignment: .bottom) {
+            // The ready timeline draws its own, under its pills.
+            if props.timeline != .ready, let height = props.composerScrimHeight {
+                OpenCodeSessionComposerScrim(solidHeight: height)
+            }
+        }
         .overlay(alignment: .bottomLeading) {
             if props.timeline != .ready {
                 SessionChatTimelineActivityOnlySlot(props: props)
@@ -379,9 +390,11 @@ private struct SessionChatTimelineReadyView: View {
 
     /// Scroll clearance under the composer plus the bottom pill row, so no pill covers the last message.
     private var listBottomInset: CGFloat {
-        props.bottomOverlayInset + SessionChatCornerSlotsLayout.reservedHeight(
-            hasActivity: activitySlot.primary != nil || turnStatusSlot?.reservesRow == true
-        )
+        props.bottomOverlayInset
+            + (props.composerScrimHeight == nil ? 0 : OpenCodeSessionComposerScrim.restingClearance)
+            + SessionChatCornerSlotsLayout.reservedHeight(
+                hasActivity: activitySlot.primary != nil || turnStatusSlot?.reservesRow == true
+            )
     }
 
     /// The step rail or activity card that carries live status. While one
@@ -578,6 +591,11 @@ private struct SessionChatTimelineReadyView: View {
         // An overlay, not a ZStack child: the row's bottom padding (composer + keyboard)
         // must not set a minimum height, or the keyboard-shrunk timeline overflows under
         // the top bar.
+        .overlay(alignment: .bottom) {
+            if let height = props.composerScrimHeight {
+                OpenCodeSessionComposerScrim(solidHeight: height)
+            }
+        }
         .overlay(alignment: .bottom) { bottomSlots }
         .onChange(of: showScrollToEnd, initial: true) { _, away in
             newMessagesBaselineID = away ? props.messages.last?.id : nil

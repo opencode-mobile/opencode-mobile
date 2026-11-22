@@ -69,6 +69,7 @@ private let sampleQuestionOptions: [OpenCodeSessionComposerState.QuestionOption]
 
 struct SessionComposerGalleryView: View {
     @State private var scenario: SessionComposerGalleryScenario = .empty
+    @State private var composerStyle: SessionComposerStyle = .floating
     @State private var draftText = "Summarize the current changes"
     @State private var mentionText = mentionGalleryText
     @State private var shellText = "!git status"
@@ -105,6 +106,15 @@ struct SessionComposerGalleryView: View {
                         }
                     }
                 }
+                HStack(spacing: 8) {
+                    ForEach(SessionComposerStyle.allCases, id: \.self) { option in
+                        OpenCodeChoiceBadge(
+                            label: .verbatim(Self.styleLabel(option)),
+                            selected: composerStyle == option,
+                            action: { composerStyle = option }
+                        )
+                    }
+                }
                 Text("Last action: \(lastAction)")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textBase)
@@ -128,10 +138,19 @@ struct SessionComposerGalleryView: View {
                 state: state,
                 focusRequestToken: focusRequest,
                 onInputFocusChange: { inputFocused = $0 },
+                style: composerStyle,
                 onAction: handle
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private static func styleLabel(_ style: SessionComposerStyle) -> String {
+        switch style {
+        case .floating: "Floating"
+        case .outlineFade: "Outline"
+        case .docked: "Docked"
+        }
     }
 
     private var inputFocusCaption: String {
