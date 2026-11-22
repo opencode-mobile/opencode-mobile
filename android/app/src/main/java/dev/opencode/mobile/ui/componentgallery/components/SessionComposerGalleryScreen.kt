@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.command.ComposerShellCommand
+import dev.opencode.mobile.domain.featureflags.SessionComposerStyle
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -100,6 +101,10 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
     var customText by rememberSaveable { mutableStateOf("") }
     var questionIndex by rememberSaveable { mutableIntStateOf(0) }
     var permissionNote by rememberSaveable { mutableStateOf<String?>(null) }
+    var composerStyleName by rememberSaveable { mutableStateOf(SessionComposerStyle.Floating.name) }
+    val composerStyle =
+        runCatching { SessionComposerStyle.valueOf(composerStyleName) }
+            .getOrDefault(SessionComposerStyle.Floating)
     val scenario =
         runCatching { SessionComposerGalleryScenario.valueOf(scenarioName) }
             .getOrDefault(SessionComposerGalleryScenario.Empty)
@@ -325,6 +330,19 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                     )
                 }
             }
+            Text("Style", style = MaterialTheme.typography.labelLarge)
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SessionComposerStyle.entries.forEach { option ->
+                    OpenCodeChoiceBadge(
+                        label = option.name,
+                        selected = option == composerStyle,
+                        onClick = { composerStyleName = option.name },
+                    )
+                }
+            }
             Text(
                 "Last action: $lastAction",
                 style = MaterialTheme.typography.bodySmall,
@@ -399,7 +417,9 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                 }
                 lastAction = action.label
             },
-            modifier = Modifier.navigationBarsPadding(),
+            style = composerStyle,
+            // Docked applies the navigation bar inset inside its fill.
+            modifier = if (composerStyle == SessionComposerStyle.Docked) Modifier else Modifier.navigationBarsPadding(),
         )
     }
 }

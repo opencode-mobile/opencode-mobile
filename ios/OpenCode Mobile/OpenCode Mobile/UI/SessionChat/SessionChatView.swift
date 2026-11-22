@@ -424,7 +424,8 @@ struct SessionChatView: View {
                     // adding the overlap again pushed the card under the header.
                     bottomInset: sessionChatTimelineBottomInset(composerOverlayHeight)
                         + snackbarOverlayHeight
-                        + composerHomeIndicatorLift,
+                        + composerHomeIndicatorLift
+                        + (composerStyle == .outlineFade ? OpenCodeSessionComposerScrim.restingClearance : 0),
                     onOpenRow: { kind in draftSheet = kind }
                 )
                 .transition(.opacity)
@@ -432,11 +433,21 @@ struct SessionChatView: View {
                 sessionChatTimeline
             }
 
-            OpenCodeBottomFade(
-                height: sessionChatTimelineBottomInset(composerOverlayHeight)
-                    + composerHomeIndicatorLift
-            )
-            .allowsHitTesting(false)
+            switch composerStyle {
+            case .floating:
+                OpenCodeBottomFade(
+                    height: sessionChatTimelineBottomInset(composerOverlayHeight)
+                        + composerHomeIndicatorLift
+                )
+                .allowsHitTesting(false)
+            case .outlineFade:
+                // The timeline draws its own scrim under its floating pills.
+                if viewModel.uiState.draft != nil {
+                    OpenCodeSessionComposerScrim(solidHeight: composerScrimSolidHeight)
+                }
+            case .docked:
+                EmptyView()
+            }
 
             OpenCodeSnackbarHost(
                 message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
@@ -591,6 +602,10 @@ struct SessionChatView: View {
                 bottomOverlayAnimation: composerMorphing
                     ? OpenCodeSessionComposer.morphAnimation
                     : keyboardGlideAnimation,
+                // Same origin as `bottomOverlayInset`, which counts the keyboard.
+                composerScrimHeight: composerStyle == .outlineFade
+                    ? composerScrimSolidHeight + keyboardOverlap
+                    : nil,
                 activityItems: sessionChatActivityItems,
                 usesTurnStatusPill: SessionChatDisplayPreferences.shared.activityCardTimeline,
                 keyboardVisible: keyboardOverlap > 0,
@@ -1346,6 +1361,21 @@ struct SessionChatView: View {
         keyboardOverlap > 0 ? 0 : bottomSafeAreaInset
     }
 
+    /// Read here so a flag changed in Settings applies on return to Session Chat.
+    private var composerStyle: SessionComposerStyle {
+        SessionComposerStyle.resolve(
+            outlineFadeEnabled: FeatureFlags.shared.isEnabled(.sessionComposerOutlineFade),
+            dockedEnabled: FeatureFlags.shared.isEnabled(.sessionComposerDocked)
+        )
+    }
+
+    /// From the bottom of the timeline area to the composer's top edge.
+    private var composerScrimSolidHeight: CGFloat {
+        sessionChatTimelineBottomInset(composerOverlayHeight)
+            - OpenCodeBottomFade.overhang
+            + composerHomeIndicatorLift
+    }
+
     /// The goal the screen shows: none in a subagent session (a goal belongs to one session).
     private var shownGoal: SessionChatGoalUiState? {
         session.parentID == nil ? viewModel.uiState.goal : nil
@@ -2078,6 +2108,11 @@ struct SessionChatView: View {
             dictation: kind == .prompt ? viewModel.uiState.dictation.map(composerDictation) : nil,
             attachmentDragActive: attachmentDropSummary != nil,
             interruptHintVisible: OpenCodeEscapeRouter.shared.interruptArmedAt != nil && keyboardInterruptAvailable,
+            style: composerStyle,
+            // The composer sits `keyboardOverlap + composerHomeIndicatorLift` above the screen
+            // bottom. The full safe area keeps the fill from falling short while the lift
+            // animates away; any excess lands off-screen.
+            dockedBottomInset: bottomSafeAreaInset + keyboardOverlap,
             onAction: { action in handleComposerAction(action) },
             status: status
         )

@@ -31,8 +31,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -111,6 +114,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.featureflags.SessionComposerStyle
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.domain.text.UiText
@@ -481,9 +485,11 @@ fun OpenCodeSessionComposer(
     dictation: ComposerDictationCardModel? = null,
     /** The first Esc armed the interrupt: shows "Esc again to interrupt" above the content. */
     interruptArmed: Boolean = false,
+    /** [SessionComposerStyle.Docked] applies the keyboard and navigation bar insets itself. */
+    style: SessionComposerStyle = SessionComposerStyle.Floating,
 ) {
     OpenCodeTextRegion(AppearanceTextRegion.SessionChat) {
-        OpenCodeSessionComposerContent(state, onAction, modifier, focus, status, dictation, interruptArmed)
+        OpenCodeSessionComposerContent(state, onAction, modifier, focus, status, dictation, interruptArmed, style)
     }
 }
 
@@ -496,21 +502,27 @@ private fun OpenCodeSessionComposerContent(
     status: (@Composable () -> Unit)?,
     dictation: ComposerDictationCardModel?,
     interruptArmed: Boolean,
+    style: SessionComposerStyle,
 ) {
     val composerFocus = focus ?: rememberOpenCodeSessionComposerFocus()
     val showsPrompt = state is OpenCodeSessionComposerState.Prompt
     SideEffect { composerFocus.updateShowsPrompt(showsPrompt) }
-    val outline =
+    val requestEdgeColor =
         when (state) {
             is OpenCodeSessionComposerState.Permission ->
-                BorderStroke(
-                    1.dp,
-                    if (state.errorMessage == null) openCodeColor("warning") else openCodeColor("error"),
-                )
+                if (state.errorMessage == null) openCodeColor("warning") else openCodeColor("error")
             is OpenCodeSessionComposerState.Question,
             is OpenCodeSessionComposerState.ChildLockout,
             is OpenCodeSessionComposerState.Prompt,
             -> null
+        }
+    val styleEdgeColor = openCodeComposerEdgeColor()
+    val docked = style == SessionComposerStyle.Docked
+    val outline =
+        when (style) {
+            SessionComposerStyle.Floating -> requestEdgeColor?.let { BorderStroke(1.dp, it) }
+            SessionComposerStyle.OutlineFade -> BorderStroke(1.dp, requestEdgeColor ?: styleEdgeColor)
+            SessionComposerStyle.Docked -> null
         }
     val announceBlocking =
         state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
@@ -535,24 +547,47 @@ private fun OpenCodeSessionComposerContent(
             inputFocusRegistry?.parkFocus?.invoke() ?: focusManager.clearFocus(force = true)
         }
     }
-    val shellShape = RoundedCornerShape(OpenCodeFloatingChromeCornerRadius)
+    val shellShape =
+        if (docked) {
+            RoundedCornerShape(
+                topStart = OpenCodeComposerDockedCornerRadius,
+                topEnd = OpenCodeComposerDockedCornerRadius,
+            )
+        } else {
+            RoundedCornerShape(OpenCodeFloatingChromeCornerRadius)
+        }
     val currentOnAction by rememberUpdatedState(onAction)
     val onSwipePage = remember { { delta: Int -> currentOnAction(OpenCodeSessionComposerAction.PageRequest(delta)) } }
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 4.dp),
+                .then(if (docked) Modifier else Modifier.padding(horizontal = 12.dp).padding(bottom = 4.dp)),
     ) {
         OpenCodeFloatingChrome(
-            modifier = Modifier.fillMaxWidth(),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .then(if (docked) Modifier.composerDockedTopEdge(requestEdgeColor ?: styleEdgeColor) else Modifier),
             shape = shellShape,
             border = outline,
+            shadowElevation = if (docked) 0.dp else 4.dp,
             // Opaque: at 95% the timeline rows behind show through as faint rectangles.
             opaque = true,
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        // Docked: the fill runs through the inset while the controls stay above it.
+                        .then(
+                            if (docked) {
+                                Modifier.windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                            } else {
+                                Modifier
+                            },
+                        ),
+            ) {
                 if (status != null) {
                     status()
                     HorizontalDivider(color = openCodeColor("border-weak-base"))

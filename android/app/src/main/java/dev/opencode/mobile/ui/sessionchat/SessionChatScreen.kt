@@ -69,6 +69,9 @@ import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.connection.ExternalLinkPolicy
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import dev.opencode.mobile.domain.featureflags.FeatureFlag
+import dev.opencode.mobile.domain.featureflags.FeatureFlags
+import dev.opencode.mobile.domain.featureflags.SessionComposerStyle
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.goal.SessionGoalDraft
 import dev.opencode.mobile.domain.goal.SessionGoalLimits
@@ -100,6 +103,8 @@ import dev.opencode.mobile.ui.components.OpenCodeActionTileGrid
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
+import dev.opencode.mobile.ui.components.OpenCodeComposerScrim
+import dev.opencode.mobile.ui.components.openCodeComposerFadeClearance
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
@@ -336,6 +341,12 @@ private fun SessionChatScreenBody(
     var holdingFinishedTodos by remember { mutableStateOf(false) }
     var sawUnfinishedTodos by remember { mutableStateOf(false) }
     var composerOverlayHeightPx by remember { mutableStateOf(0) }
+    // Flags are snapshot state, so a change in Settings applies on return without a restart.
+    val composerStyle =
+        SessionComposerStyle.resolve(
+            outlineFade = FeatureFlags.isEnabled(FeatureFlag.SessionComposerOutlineFade),
+            docked = FeatureFlags.isEnabled(FeatureFlag.SessionComposerDocked),
+        )
     val density = LocalDensity.current
     val composerOverlayHeight = with(density) { composerOverlayHeightPx.toDp() }
     val timelineBottomInset =
@@ -1078,7 +1089,7 @@ private fun SessionChatScreenBody(
                         modifier =
                             Modifier
                                 .fillMaxSize()
-                                .padding(bottom = timelineBottomInset)
+                                .padding(bottom = timelineBottomInset + openCodeComposerFadeClearance(composerStyle))
                                 .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -1087,6 +1098,9 @@ private fun SessionChatScreenBody(
                             callbacks = newSessionDraftCallbacks,
                             compact = WindowInsets.isImeVisible,
                         )
+                    }
+                    if (composerStyle == SessionComposerStyle.OutlineFade) {
+                        OpenCodeComposerScrim(composerOverlayHeight, Modifier.align(Alignment.BottomCenter))
                     }
                 } else {
                     SessionChatTimelineView(
@@ -1119,6 +1133,8 @@ private fun SessionChatScreenBody(
                                 // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
                                 // uses this as-is (no extra scrollToEndPillBottomPadding).
                                 bottomOverlayInset = timelineBottomInset + animatedSnackbarOverlayHeight,
+                                composerStyle = composerStyle,
+                                composerHeight = composerOverlayHeight,
                                 activityItems =
                                     sessionChatActivityItems(
                                         uiState = uiState,
@@ -1257,7 +1273,7 @@ private fun SessionChatScreenBody(
                     )
                 }
 
-                if (timelineBottomInset > 0.dp) {
+                if (timelineBottomInset > 0.dp && composerStyle == SessionComposerStyle.Floating) {
                     OpenCodeBottomFade(
                         height = timelineBottomInset,
                         modifier = Modifier.align(Alignment.BottomCenter),
@@ -1355,8 +1371,15 @@ private fun SessionChatScreenBody(
                                     if (height != composerOverlayHeightPx) {
                                         composerOverlayHeightPx = height
                                     }
-                                }.windowInsetsPadding(
-                                    WindowInsets.ime.union(WindowInsets.navigationBars),
+                                }.then(
+                                    // Docked applies this inset inside its fill.
+                                    if (composerStyle == SessionComposerStyle.Docked) {
+                                        Modifier
+                                    } else {
+                                        Modifier.windowInsetsPadding(
+                                            WindowInsets.ime.union(WindowInsets.navigationBars),
+                                        )
+                                    },
                                 ),
                     ) {
                         // Suggestions float above this column. Corner pills float over the
@@ -1612,6 +1635,7 @@ private fun SessionChatScreenBody(
                             focus = composerFocus,
                             dictation = dictationCard,
                             interruptArmed = interruptArmed,
+                            style = composerStyle,
                             onAction = { action ->
                                 when (action) {
                                     is OpenCodeSessionComposerAction.TextChanged ->
