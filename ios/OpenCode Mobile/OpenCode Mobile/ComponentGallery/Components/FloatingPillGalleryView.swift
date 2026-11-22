@@ -75,7 +75,7 @@ struct FloatingPillGalleryView: View {
                 Text("Turn status")
                     .font(OpenCodeTypography.heading)
                     .foregroundStyle(OpenCodeColors.textStrong)
-                Text("One pill: the spinner bends into the check, full and round.")
+                Text("One pill for the whole turn. The spinner bends into the check; attention and failed never fold.")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
                 HStack(spacing: 8) {
@@ -84,6 +84,27 @@ struct FloatingPillGalleryView: View {
                 }
                 Button(turnDone ? "Back to Working" : "Finish turn") { turnDone.toggle() }
                     .font(OpenCodeTypography.button)
+                OpenCodeTurnStatusPill(
+                    phase: .attention(label: "Review permission", mark: .arrowUp),
+                    action: { log = "Tapped Review permission" }
+                )
+                OpenCodeTurnStatusPill(
+                    phase: .attention(label: "Answer question", mark: .arrowUp),
+                    action: { log = "Tapped Answer question" }
+                )
+                OpenCodeTurnStatusPill(phase: .attention(label: "Waiting for you", mark: .pulsingDot))
+                OpenCodeTurnStatusPill(
+                    phase: .attention(label: "general needs input", mark: .pulsingDot),
+                    action: { log = "Tapped general needs input" }
+                )
+                OpenCodeTurnStatusPill(phase: .working(label: "Retrying"))
+                OpenCodeTurnStatusPill(phase: .working(label: "Compacting…"))
+                OpenCodeTurnStatusPill(phase: .working(label: "Sending 40%"))
+                OpenCodeTurnStatusPill(
+                    phase: .failed(label: "Request failed"),
+                    action: { log = "Tapped Request failed" },
+                    onClose: { log = "Closed Request failed" }
+                )
             }
 
             Text(log)

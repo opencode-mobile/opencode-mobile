@@ -1,13 +1,23 @@
 package dev.opencode.mobile.ui.components
 
 import android.content.res.Configuration
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,10 +35,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -40,13 +52,18 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -71,6 +88,15 @@ private val TurnPillWidthEasing = CubicBezierEasing(0.3f, 1.18f, 0.5f, 1f)
 private val TurnPillRollOutEasing = CubicBezierEasing(0.3f, 0f, 0.2f, 1f)
 private val TurnPillRollInEasing = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 
+/** The mark of a turn pill that waits on the user. */
+internal enum class OpenCodeTurnStatusAttentionMark {
+    /** Waiting: a pulsing dot. */
+    PulsingDot,
+
+    /** A collapsed panel: an up arrow, since a tap brings it back. */
+    Reopen,
+}
+
 /** What the turn status pill says. */
 internal sealed interface OpenCodeTurnStatusPillPhase {
     /** The turn is running; [label] is "Working", "Compacting…" and so on. */
@@ -78,9 +104,35 @@ internal sealed interface OpenCodeTurnStatusPillPhase {
         val label: String,
     ) : OpenCodeTurnStatusPillPhase
 
+    /** The turn waits on the user: amber text and ring. */
+    data class Attention(
+        val label: String,
+        val mark: OpenCodeTurnStatusAttentionMark,
+    ) : OpenCodeTurnStatusPillPhase
+
+    /** The turn failed: error text, no mark. */
+    data class Failed(
+        val label: String,
+    ) : OpenCodeTurnStatusPillPhase
+
     /** The turn just ended. */
     data object Done : OpenCodeTurnStatusPillPhase
 }
+
+/** The label a phase shows; [doneLabel] for Done. */
+internal fun OpenCodeTurnStatusPillPhase.label(doneLabel: String): String =
+    when (this) {
+        is OpenCodeTurnStatusPillPhase.Working -> label
+        is OpenCodeTurnStatusPillPhase.Attention -> label
+        is OpenCodeTurnStatusPillPhase.Failed -> label
+        OpenCodeTurnStatusPillPhase.Done -> doneLabel
+    }
+
+/** Everything in a full turn pill except its label text. */
+internal fun openCodeTurnStatusPillChromeWidth(
+    phase: OpenCodeTurnStatusPillPhase,
+    hasClose: Boolean,
+): Dp = floatingPillChromeWidth(hasMark = phase !is OpenCodeTurnStatusPillPhase.Failed, hasClose = hasClose)
 
 /**
  * The monochrome floating pill spinner: one round-capped arc in [color]. Clock-driven and read
@@ -122,9 +174,10 @@ private fun DrawScope.drawPolyline(
 }
 
 /**
- * The turn's status on floating pill chrome. Working to Done is one pill: the spinner bends
- * into the check while the width follows and the label rolls. [compact] folds it to a round
- * mark and [leaving] fades it out. With animations off it is a short crossfade.
+ * The turn's status on floating pill chrome: one pill that changes state in place. Working to
+ * Done bends the spinner into the check while the width follows and the label rolls. [compact]
+ * folds it to a round mark and [leaving] fades it out. With animations off it is a short
+ * crossfade. [onClick] makes it a button, and [onClose] adds the trailing ✕ for a failure.
  */
 @Composable
 internal fun OpenCodeTurnStatusPill(
@@ -132,13 +185,40 @@ internal fun OpenCodeTurnStatusPill(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     leaving: Boolean = false,
+    /** Caps the whole pill when the row cannot fit it: the label truncates. */
+    maxWidthPx: Int? = null,
+    accessibilityLabel: String? = null,
+    onClick: (() -> Unit)? = null,
+    onClose: (() -> Unit)? = null,
 ) {
     val animationsOn = rememberFloatingPillAnimationsOn()
+    val chromeWidthPx = with(LocalDensity.current) { openCodeTurnStatusPillChromeWidth(phase, onClose != null).roundToPx() }
+    val maxLabelPx = maxWidthPx?.let { (it - chromeWidthPx).coerceAtLeast(0) }
     val isDone = phase == OpenCodeTurnStatusPillPhase.Done
+    val isFailed = phase is OpenCodeTurnStatusPillPhase.Failed
+    val attentionMark = (phase as? OpenCodeTurnStatusPillPhase.Attention)?.mark
     val doneLabel = stringResource(R.string.common_done)
-    var workingLabel by remember { mutableStateOf((phase as? OpenCodeTurnStatusPillPhase.Working)?.label ?: "") }
-    (phase as? OpenCodeTurnStatusPillPhase.Working)?.let { workingLabel = it.label }
-    val spoken = if (isDone) doneLabel else workingLabel
+    // The last label that was not Done, so it can roll out while Done rolls in.
+    var activeLabel by remember { mutableStateOf(if (isDone) "" else phase.label(doneLabel)) }
+    if (!isDone) activeLabel = phase.label(doneLabel)
+    val shownLabel = if (isDone) doneLabel else activeLabel
+    val spoken = accessibilityLabel ?: shownLabel
+    val warning = openCodeColor("warning")
+    val activeColor by animateColorAsState(
+        targetValue =
+            when (phase) {
+                is OpenCodeTurnStatusPillPhase.Attention -> warning
+                is OpenCodeTurnStatusPillPhase.Failed -> MaterialTheme.colorScheme.error
+                else -> openCodeColor("text-base")
+            },
+        animationSpec = tween(if (animationsOn) TURN_PILL_ROLL_OUT_MS else 0),
+        label = "turnPillTone",
+    )
+    val markGap by animateDpAsState(
+        targetValue = if (isFailed) 0.dp else TurnPillIconSpacing,
+        animationSpec = if (animationsOn) tween(260, easing = FastOutSlowInEasing) else tween(0),
+        label = "turnPillMarkGap",
+    )
 
     val paddingHorizontal by animateDpAsState(
         targetValue = if (compact) TurnPillCompactPaddingHorizontal else TurnPillPaddingHorizontal,
@@ -180,7 +260,10 @@ internal fun OpenCodeTurnStatusPill(
             },
         label = "turnPillRollIn",
     )
+    val latestOnClose by rememberUpdatedState(onClose)
+    val closeSpec = tween<IntSize>(260, easing = FastOutSlowInEasing)
 
+    // The surface sits behind the content, so its clip does not cut the ✕'s 48 dp touch target.
     Box(
         modifier =
             modifier
@@ -191,35 +274,68 @@ internal fun OpenCodeTurnStatusPill(
                         scaleX = scale
                         scaleY = scale
                     }
-                }.defaultMinSize(minHeight = FloatingPillMinHeight)
-                .clearAndSetSemantics {
-                    contentDescription = spoken
-                    if (!isDone) liveRegion = LiveRegionMode.Polite
-                },
+                }.defaultMinSize(minHeight = FloatingPillMinHeight),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
             modifier = Modifier.matchParentSize(),
             shape = FloatingPillShape,
             color = OpenCodeFloatingPillStyle.fill(),
-            border = OpenCodeFloatingPillStyle.border(),
+            border = if (attentionMark != null) BorderStroke(1.dp, warning) else OpenCodeFloatingPillStyle.border(),
             tonalElevation = 2.dp,
             shadowElevation = 4.dp,
         ) {}
-        Row(
-            modifier = Modifier.padding(horizontal = paddingHorizontal),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TurnStatusMark(isDone = isDone, animationsOn = animationsOn)
-            TurnStatusLabels(
-                workingLabel = workingLabel,
-                doneLabel = doneLabel,
-                reveal = reveal,
-                swap = { swap.value },
-                rollOut = rollOut,
-                rollIn = rollIn,
-                slides = animationsOn,
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier =
+                    Modifier
+                        .clip(FloatingPillShape)
+                        .then(
+                            if (onClick != null) {
+                                Modifier
+                                    .openCodeFocusRing(FloatingPillShape)
+                                    .clickable(role = Role.Button, onClick = onClick)
+                            } else {
+                                Modifier
+                            },
+                        ).clearAndSetSemantics {
+                            contentDescription = spoken
+                            if (!isDone) liveRegion = LiveRegionMode.Polite
+                        }.defaultMinSize(minHeight = FloatingPillMinHeight)
+                        .padding(horizontal = paddingHorizontal),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // A failure has no mark, unless it is ever folded and the mark is all there is.
+                AnimatedVisibility(
+                    visible = !isFailed || compact,
+                    enter = expandHorizontally(closeSpec, expandFrom = Alignment.Start) + fadeIn(),
+                    exit = shrinkHorizontally(closeSpec, shrinkTowards = Alignment.Start) + fadeOut(),
+                ) {
+                    TurnStatusMark(isDone = isDone, attentionMark = attentionMark, tint = activeColor, animationsOn = animationsOn)
+                }
+                TurnStatusLabels(
+                    workingLabel = activeLabel,
+                    doneLabel = doneLabel,
+                    workingColor = activeColor,
+                    maxLabelPx = maxLabelPx,
+                    gap = markGap,
+                    reveal = reveal,
+                    swap = { swap.value },
+                    rollOut = rollOut,
+                    rollIn = rollIn,
+                    slides = animationsOn,
+                )
+            }
+            AnimatedVisibility(
+                visible = onClose != null && !compact,
+                enter = expandHorizontally(closeSpec, expandFrom = Alignment.Start, clip = false) + fadeIn(),
+                exit = shrinkHorizontally(closeSpec, shrinkTowards = Alignment.Start, clip = false) + fadeOut(),
+            ) {
+                FloatingPillClose(
+                    description = floatingPillCloseDescription(OpenCodeFloatingPillLayout.Closable(activeLabel)),
+                    onClose = { latestOnClose?.invoke() },
+                )
+            }
         }
     }
 }
@@ -228,6 +344,8 @@ internal fun OpenCodeTurnStatusPill(
 @Composable
 private fun TurnStatusMark(
     isDone: Boolean,
+    attentionMark: OpenCodeTurnStatusAttentionMark?,
+    tint: Color,
     animationsOn: Boolean,
 ) {
     val base = openCodeColor("text-base")
@@ -257,6 +375,9 @@ private fun TurnStatusMark(
     }
     Box(modifier = Modifier.size(TurnPillIconSize), contentAlignment = Alignment.Center) {
         when {
+            attentionMark == OpenCodeTurnStatusAttentionMark.PulsingDot -> FloatingPillPulsingDot()
+            attentionMark == OpenCodeTurnStatusAttentionMark.Reopen ->
+                Icon(OpenCodeIcons.ArrowUpward, contentDescription = null, tint = tint, modifier = Modifier.size(TurnPillIconSize))
             running != null ->
                 Canvas(
                     Modifier
@@ -286,6 +407,9 @@ private fun TurnStatusMark(
 private fun TurnStatusLabels(
     workingLabel: String,
     doneLabel: String,
+    workingColor: Color,
+    maxLabelPx: Int?,
+    gap: Dp,
     reveal: Float,
     swap: () -> Float,
     rollOut: Float,
@@ -308,14 +432,18 @@ private fun TurnStatusLabels(
             Text(
                 text = workingLabel,
                 style = style,
-                color = openCodeColor("text-base"),
+                color = workingColor,
                 maxLines = 1,
                 softWrap = false,
+                overflow = TextOverflow.Ellipsis,
                 modifier =
-                    Modifier.graphicsLayer {
-                        alpha = 1f - rollOut
-                        if (slides) translationY = -distance.toPx() * rollOut
-                    },
+                    Modifier
+                        .graphicsLayer {
+                            alpha = 1f - rollOut
+                            if (slides) translationY = -distance.toPx() * rollOut
+                        }
+                        // A new label eases the pill's width instead of snapping it.
+                        .animateContentSize(if (slides) tween(260, easing = FastOutSlowInEasing) else snap()),
             )
             Text(
                 text = doneLabel,
@@ -331,16 +459,16 @@ private fun TurnStatusLabels(
             )
         },
     ) { measurables, _ ->
-        val loose = Constraints()
+        val loose = Constraints(maxWidth = maxLabelPx ?: Constraints.Infinity)
         val placeables = measurables.map { it.measure(loose) }
-        val gap = TurnPillIconSpacing.toPx()
+        val gapPx = gap.toPx()
         val first = placeables[0].width
         val last = placeables[1].width
         val labelWidth = first + (last - first) * swap()
-        val width = ((labelWidth + gap) * reveal).roundToInt().coerceAtLeast(0)
+        val width = ((labelWidth + gapPx) * reveal).roundToInt().coerceAtLeast(0)
         val height = max(placeables[0].height, placeables[1].height)
         layout(width, height) {
-            placeables.forEach { it.placeRelative(gap.roundToInt(), (height - it.height) / 2) }
+            placeables.forEach { it.placeRelative(gapPx.roundToInt(), (height - it.height) / 2) }
         }
     }
 }
@@ -353,6 +481,9 @@ private fun OpenCodeTurnStatusPillPreview() {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OpenCodeTurnStatusPill(OpenCodeTurnStatusPillPhase.Working("Working"))
             OpenCodeTurnStatusPill(OpenCodeTurnStatusPillPhase.Done)
+            OpenCodeTurnStatusPill(OpenCodeTurnStatusPillPhase.Attention("Waiting for you", OpenCodeTurnStatusAttentionMark.PulsingDot))
+            OpenCodeTurnStatusPill(OpenCodeTurnStatusPillPhase.Attention("Review permission", OpenCodeTurnStatusAttentionMark.Reopen), onClick = {})
+            OpenCodeTurnStatusPill(OpenCodeTurnStatusPillPhase.Failed("Request failed"), onClick = {}, onClose = {})
             OpenCodeTurnStatusPill(OpenCodeTurnStatusPillPhase.Working("Working"), compact = true)
             OpenCodeTurnStatusPill(OpenCodeTurnStatusPillPhase.Done, compact = true)
         }

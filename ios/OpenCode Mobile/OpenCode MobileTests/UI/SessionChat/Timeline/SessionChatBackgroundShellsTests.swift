@@ -19,6 +19,66 @@ struct SessionChatBackgroundShellsTests {
         AgentShell(id: id, sessionID: "ses-1", command: "echo \(id)", status: status, startedAtMs: startedAtMs)
     }
 
+    // MARK: Background shells rule
+
+    private func message(sentAt: Int64?, parts: [MessagePart] = []) -> Message {
+        Message(id: "m\(sentAt ?? 0)", role: .assistant, text: "", parts: parts, model: nil, mode: nil, sentAtEpochMs: sentAt)
+    }
+
+    private func toolPart(_ status: ToolStatus, shellID: String?) -> MessagePart {
+        .tool(ToolPart(
+            id: "t1",
+            toolName: "anything",
+            status: status,
+            metadata: shellID.map { ["shellID": .string($0)] }
+        ))
+    }
+
+    private let loadedAt: Int64 = 1_700_000_000_000
+
+    @Test func aShellCountsWhenAFinishedCallRecordedIt() {
+        for status in [ToolStatus.completed, .error] {
+            let shells = [shell("a", startedAtMs: loadedAt + 10)]
+            let messages = [message(sentAt: loadedAt, parts: [toolPart(status, shellID: "a")])]
+            #expect(SessionChatBackgroundWork.backgroundShells(shells, messages: messages).map(\.id) == ["a"])
+        }
+    }
+
+    @Test func aShellWithAnUnfinishedCallDoesNotCount() {
+        for status in [ToolStatus.pending, .running] {
+            let shells = [shell("a", startedAtMs: loadedAt + 10)]
+            let messages = [message(sentAt: loadedAt, parts: [toolPart(status, shellID: "a")])]
+            #expect(SessionChatBackgroundWork.backgroundShells(shells, messages: messages).isEmpty)
+        }
+    }
+
+    @Test func aFinishedCallForAnotherShellDoesNotCount() {
+        let messages = [message(sentAt: loadedAt, parts: [toolPart(.completed, shellID: "b")])]
+        #expect(SessionChatBackgroundWork.backgroundShells([shell("a", startedAtMs: loadedAt + 10)], messages: messages).isEmpty)
+    }
+
+    @Test func aShellOlderThanLoadedHistoryCounts() {
+        let messages = [message(sentAt: loadedAt + 50), message(sentAt: loadedAt)]
+        let older = shell("old", startedAtMs: loadedAt - 1)
+        let same = shell("same", startedAtMs: loadedAt)
+        #expect(SessionChatBackgroundWork.backgroundShells([older, same], messages: messages).map(\.id) == ["old"])
+    }
+
+    @Test func aShellWithNoStartTimeAndNoMatchDoesNotCount() {
+        let messages = [message(sentAt: loadedAt)]
+        #expect(SessionChatBackgroundWork.backgroundShells([shell("a", startedAtMs: nil)], messages: messages).isEmpty)
+    }
+
+    @Test func noLoadedMessagesMeansNoOlderThanHistoryMatch() {
+        #expect(SessionChatBackgroundWork.backgroundShells([shell("a", startedAtMs: loadedAt)], messages: []).isEmpty)
+    }
+
+    @Test func anExitedShellNeverCounts() {
+        let exited = shell("a", startedAtMs: loadedAt - 1, status: .exited(code: 0))
+        let messages = [message(sentAt: loadedAt, parts: [toolPart(.completed, shellID: "a")])]
+        #expect(SessionChatBackgroundWork.backgroundShells([exited], messages: messages).isEmpty)
+    }
+
     // MARK: Pill
 
     @Test func shellsAloneShowThePill() {
@@ -55,7 +115,9 @@ struct SessionChatBackgroundShellsTests {
         #expect(pill == SessionChatBackgroundWorkPill(
             label: "general needs input · 2 running",
             needsInput: true,
-            accessibilityLabel: "general needs input, 2 shells running"
+            accessibilityLabel: "general needs input, 2 shells running",
+            askingLabel: "general needs input",
+            stillRunning: .init(label: "2 shells", accessibilityLabel: "2 shells running")
         ))
     }
 

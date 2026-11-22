@@ -49,6 +49,7 @@ import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.message.ShellCommandOptions
@@ -985,7 +986,7 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun backgroundWorkPill_countsRunningShellsAndOpensTheirOutput() =
+    fun backgroundWorkPill_skipsAForegroundShellButItsOutputStillOpens() =
         runTest(testDispatcher) {
             fun bash(
                 id: String,
@@ -1032,10 +1033,7 @@ class SessionChatViewModelTest {
 
             val state = viewModel.uiState.value
             assertEquals(listOf("prt-1"), state.shells.map { it.id })
-            assertEquals(
-                EnglishPill("1 shell", needsInput = false, accessibilityLabel = "1 shell running"),
-                state.backgroundWorkPill.english(),
-            )
+            assertNull(state.backgroundWorkPill)
 
             viewModel.openShellOutput("prt-1")
             viewModel.setShellOutputObserved(true)
@@ -7349,14 +7347,14 @@ class SessionChatViewModelTest {
                     ?.english(),
             )
             assertNull(viewModel.uiState.value.sessionStatusLabel)
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
-            assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
+            // The last active label holds through the settle, then Done.
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
-            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.IDLE_HOLD_MS)
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
             assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
-            assertTrue(viewModel.uiState.value.workingIndicatorCollapsed)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
         }
 
     @Test
@@ -7600,7 +7598,46 @@ class SessionChatViewModelTest {
         )
 
     @Test
-    fun workingFooter_holdsThroughIdleThenCollapsesAndCancelsOnBusy() =
+    fun turnPill_settlesThenShowsDoneThenFadesAndUnmounts() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
+
+            repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            runCurrent()
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS - 1)
+            runCurrent()
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+
+            testDispatcher.scheduler.advanceTimeBy(1)
+            runCurrent()
+            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
+
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_DONE_HOLD_MS)
+            runCurrent()
+            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertTrue(viewModel.uiState.value.workingIndicatorFading)
+
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_FADE_MS)
+            runCurrent()
+            assertNull(viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
+        }
+
+    @Test
+    fun turnPill_workResumingInsideTheSettleNeverShowsDone() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
             val viewModel =
@@ -7611,43 +7648,175 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
+            repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            runCurrent()
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS - 1)
+            runCurrent()
+            repository.eventStream.emit(busyStatusEvent())
+            runCurrent()
             assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
-            assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
+
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS + WorkingTurnIndicator.TURN_DONE_HOLD_MS)
+            runCurrent()
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
+        }
+
+    @Test
+    fun turnPill_aStoppedTurnLeavesWithNoDone() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeMessageRepository(
+                    messages =
+                        listOf(
+                            Message(id = "u1", role = MessageRole.User, text = "Go", sentAtEpochMs = 1),
+                            Message(
+                                id = "a1",
+                                role = MessageRole.Assistant,
+                                text = "Partial",
+                                sentAtEpochMs = 2,
+                                stopReason = MessageStopReason.Interrupted,
+                            ),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
 
             repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
             runCurrent()
-
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
-            assertFalse(viewModel.uiState.value.workingIndicatorFading)
-            assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
-            assertNull(viewModel.uiState.value.sessionStatusLabel)
-
-            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.IDLE_HOLD_MS - 1)
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
-            assertFalse(viewModel.uiState.value.workingIndicatorFading)
-            assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertTrue(viewModel.uiState.value.workingIndicatorFading)
 
-            testDispatcher.scheduler.advanceTimeBy(1)
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_FADE_MS)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
-            assertFalse(viewModel.uiState.value.workingIndicatorFading)
-            assertTrue(viewModel.uiState.value.workingIndicatorCollapsed)
-            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.workingIndicatorLabel)
+        }
 
-            repository.eventStream.emit(
-                OpencodeEvent(
-                    type = "session.status",
-                    sessionId = "ses-1",
-                    rawProperties = buildJsonObject { put("type", "busy") },
-                ),
-            )
+    private fun liveChrome(label: LiveUpdatesLabel) =
+        LiveUpdatesChrome(
+            label = label,
+            canMutate = label == LiveUpdatesLabel.Live,
+            composerEnabled = true,
+        )
+
+    @Test
+    fun turnPill_aTurnThatEndedWhileDisconnectedHidesWithNoDone() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val liveUpdates = FixedLiveUpdates(liveChrome(LiveUpdatesLabel.Live))
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
+                    liveUpdates = liveUpdates,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+
+            liveUpdates.set(liveChrome(LiveUpdatesLabel.Offline))
             runCurrent()
-
+            repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            runCurrent()
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS * 4)
+            runCurrent()
+            // Offline the pill keeps its last state.
             assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
-            assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
+
+            liveUpdates.set(liveChrome(LiveUpdatesLabel.Live))
+            runCurrent()
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
+            runCurrent()
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertTrue(viewModel.uiState.value.workingIndicatorFading)
+
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_FADE_MS)
+            runCurrent()
+            assertNull(viewModel.uiState.value.workingIndicatorLabel)
+        }
+
+    @Test
+    fun turnPill_aTurnStillRunningAfterAReconnectEndsWithDone() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val liveUpdates = FixedLiveUpdates(liveChrome(LiveUpdatesLabel.Live))
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
+                    liveUpdates = liveUpdates,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            liveUpdates.set(liveChrome(LiveUpdatesLabel.Offline))
+            runCurrent()
+            liveUpdates.set(liveChrome(LiveUpdatesLabel.Live))
+            runCurrent()
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.RECONNECT_CONFIRM_MS + 1)
+            runCurrent()
+
+            repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            runCurrent()
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
+            runCurrent()
+            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
+        }
+
+    @Test
+    fun turnPill_staysMountedThroughAPendingRequest() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val permissions = FakePermissionLiveStore(listOf(permissionRequest("permission-1", "ses-1")))
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository =
+                        FakeSessionRepository(
+                            sessions = listOf(Session(id = "ses-1", title = "Title")),
+                            sessionStatusType = "busy",
+                        ),
+                    permissionLiveStore = permissions,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+
+            // A momentarily null status with a request pending is still an active turn.
+            repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            runCurrent()
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS + WorkingTurnIndicator.TURN_DONE_HOLD_MS)
+            runCurrent()
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
+
+            permissions.requests.value = emptyList()
+            runCurrent()
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
+            runCurrent()
+            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+        }
+
+    @Test
+    fun turnPill_openingAnIdleSessionShowsNothing() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(repository = FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.workingIndicatorLabel)
         }
 
     @Test

@@ -3,8 +3,9 @@ import Foundation
 /// What the open session's turn shows, resolved inside the Screen Model's publish.
 struct SessionChatTurnStatusResolution {
     var workingIndicatorLabel: String?
-    var workingIndicatorCollapsed: Bool
     var workingIndicatorFading: Bool
+    /// The turn is running and not waiting on the user: what makes a rail or card live.
+    var isTurnWorking: Bool
     var pendingPrompts: [PendingPrompt]
     var subagents: [SessionChatSubagent]
     var backgroundWorkDoneUnseen: Bool
@@ -25,8 +26,6 @@ struct SessionChatTurnStatusInputs {
     var previousSubagents: [SessionChatSubagent]
     var inboxState: SessionChatInboxRegionState
     var infoState: SessionInfoRegionState
-    /// The Activity Card style shows the turn on a floating pill, with a shorter Done hold and a fade.
-    var usesTurnStatusPill = false
 }
 
 /// The open session's turn: the working footer (label, collapse, fade, hold and its wake), the
@@ -54,6 +53,12 @@ final class SessionChatTurnStatus {
     private var lastWorkingLamp: String?
     private var workingChrome = WorkingTurnIndicator.Chrome.unmounted
     private var workingHold: WorkingTurnIndicator.Hold?
+    /// When the connection last became live; nil while it is not.
+    private var turnLiveSinceMs: Int64?
+    /// This turn was on screen while the connection was down, so its end may have been missed.
+    private var turnSpansConnectionGap = false
+    /// The server's status confirmed this turn, so a cached busy or stale request shows no Done.
+    private var turnStatusConfirmed = false
     /// Done rows of the background work panel the user has seen (#966); nil until the first
     /// rows of the open session, which count as seen.
     private var seenDoneSubagentIDs: Set<String>?
@@ -90,41 +95,54 @@ final class SessionChatTurnStatus {
     func resolve(_ inputs: SessionChatTurnStatusInputs) -> SessionChatTurnStatusResolution {
         let inboxState = inputs.inboxState
         let awaitingUser = !inboxState.permissionRequests.isEmpty || !inboxState.questionRequests.isEmpty
-        let lastIsThinking =
-            WorkingTurnIndicator.isStreamingThinking(messages: loadedMessages())
-            || WorkingTurnIndicator.lastIsThinking(messages: inputs.messages)
+        let nowMs = clock.nowMs()
         let activeWorkingLabel = WorkingTurnIndicator.labelForActiveTurn(
             statusLabel: inputs.sessionStatusLabel,
             isCompacting: inputs.isCompacting,
+            isRetrying: inputs.infoState.isRetrying,
             isAwaitingUser: awaitingUser,
-            sendProgressPercent: inputs.sendProgressPercent,
-            isThinking: lastIsThinking
+            sendProgressPercent: inputs.sendProgressPercent
         )
+        let isLive = inputs.infoState.connectionStatus == .live
+        let endedAcrossGap = trackConnectionGap(isLive: isLive, isActive: activeWorkingLabel != nil, nowMs: nowMs)
+        if inputs.infoState.hasResolvedSessionStatus, inputs.sessionStatusLabel != nil || inputs.isCompacting {
+            turnStatusConfirmed = true
+        }
+        let ending: WorkingTurnIndicator.Ending =
+            if SessionChatPillSlots.latestFailure(in: inputs.messages, isRetrying: inputs.infoState.isRetrying) != nil {
+                .failed
+            } else if endedAcrossGap || !turnStatusConfirmed
+                || WorkingTurnIndicator.lastTurnInterrupted(loadedMessages()) {
+                .quiet
+            } else {
+                .completed
+            }
         let workingResolution = WorkingTurnIndicator.resolveFooter(
             activeLabel: activeWorkingLabel,
-            lastIsThinking: lastIsThinking,
-            hideImmediately: awaitingUser || !inputs.isSessionBound,
+            ending: ending,
+            // Only a connection lost during this turn holds it; first connecting is not a loss.
+            connectionLost: !isLive && turnSpansConnectionGap,
+            hideImmediately: !inputs.isSessionBound,
             previous: workingChrome,
             hold: workingHold,
-            nowMs: clock.nowMs(),
-            holdMilliseconds: inputs.usesTurnStatusPill
-                ? WorkingTurnIndicator.turnPillHoldMilliseconds
-                : WorkingTurnIndicator.idleHoldMilliseconds,
-            fadeMilliseconds: inputs.usesTurnStatusPill ? WorkingTurnIndicator.turnPillFadeMilliseconds : 0
+            nowMs: nowMs
         )
         workingChrome = workingResolution.chrome
         workingHold = workingResolution.hold
+        if workingChrome.label == nil {
+            turnSpansConnectionGap = false
+            turnStatusConfirmed = false
+        }
         scheduleWorkingFooterWake(workingResolution.wakeAfterMs)
         let workingIndicatorLabel = workingResolution.chrome.label
-        let workingIndicatorCollapsed = workingResolution.chrome.collapsed
         let workingIndicatorFading = workingResolution.chrome.fading
         let workingLampKey =
-            "\(workingIndicatorLabel ?? "none"):\(workingIndicatorCollapsed ? 1 : 0):\(workingIndicatorFading ? 1 : 0):\(workingHold != nil ? 1 : 0)"
+            "\(workingIndicatorLabel ?? "none"):\(workingIndicatorFading ? 1 : 0):\(workingHold != nil ? 1 : 0)"
         if !loggedWorkingLamp || lastWorkingLamp != workingLampKey {
             loggedWorkingLamp = true
             lastWorkingLamp = workingLampKey
             OpenCodeLog.sessionChat.info(
-                "workingLamp label=\(workingIndicatorLabel ?? "none") collapsed=\(workingIndicatorCollapsed ? 1 : 0) fading=\(workingIndicatorFading ? 1 : 0) hold=\(self.workingHold != nil ? 1 : 0) status=\(inputs.sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
+                "workingLamp label=\(workingIndicatorLabel ?? "none") fading=\(workingIndicatorFading ? 1 : 0) hold=\(self.workingHold != nil ? 1 : 0) status=\(inputs.sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) ending=\(String(describing: ending))"
             )
         }
         let pendingResolution = pendingPromptsGate.resolve(inputs.pendingPrompts, nowMs: clock.nowMs())
@@ -142,8 +160,8 @@ final class SessionChatTurnStatus {
         seenDoneSubagentIDs = seenDone
         return SessionChatTurnStatusResolution(
             workingIndicatorLabel: workingIndicatorLabel,
-            workingIndicatorCollapsed: workingIndicatorCollapsed,
             workingIndicatorFading: workingIndicatorFading,
+            isTurnWorking: inputs.isSessionBound && !awaitingUser && activeWorkingLabel != nil,
             pendingPrompts: pendingResolution.prompts,
             subagents: subagents,
             backgroundWorkDoneUnseen: SessionChatBackgroundWork.hasUnseenDone(subagents, seenDoneIDs: seenDone)
@@ -164,6 +182,9 @@ final class SessionChatTurnStatus {
         workingHoldTask = nil
         workingHold = nil
         workingChrome = .unmounted
+        turnLiveSinceMs = nil
+        turnSpansConnectionGap = false
+        turnStatusConfirmed = false
         pendingPromptsWakeTask?.cancel()
         pendingPromptsWakeTask = nil
         pendingPromptsGate = PendingPromptsStripGate()
@@ -193,6 +214,30 @@ final class SessionChatTurnStatus {
                 reportError(Self.pendingPromptFailure)
             }
         }
+    }
+
+    /// Remembers that the turn on screen lived through a connection gap. True while an idle
+    /// status may only mean the turn ended unseen: during the gap, and for
+    /// `reconnectConfirmMilliseconds` after it. A turn still active past that window was
+    /// confirmed by the reconnect refresh, so its later end shows Done as usual.
+    private func trackConnectionGap(isLive: Bool, isActive: Bool, nowMs: Int64) -> Bool {
+        guard isLive else {
+            // Still connecting for the first time is not a lost connection.
+            let wasLive = turnLiveSinceMs != nil
+            turnLiveSinceMs = nil
+            if wasLive, isActive || (workingChrome.label != nil && workingHold == nil) {
+                turnSpansConnectionGap = true
+            }
+            return turnSpansConnectionGap
+        }
+        let liveSince = turnLiveSinceMs ?? nowMs
+        turnLiveSinceMs = liveSince
+        // Not during a settle: an idle seen inside the window stays "ended while disconnected"
+        // even though the settle runs past the window's end.
+        if workingHold == nil, nowMs - liveSince > WorkingTurnIndicator.reconnectConfirmMilliseconds {
+            turnSpansConnectionGap = false
+        }
+        return turnSpansConnectionGap
     }
 
     /// Subagent rows from the linked timeline, live session activity and the pending

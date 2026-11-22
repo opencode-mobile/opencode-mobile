@@ -41,38 +41,9 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_hidesSendingWhenAwaitingUser() {
-        #expect(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel: "Working",
-                isAwaitingUser: true,
-                sendProgressPercent: 40
-            ) == nil
-        )
-    }
-
     @Test func labelForActiveTurn_showsRetrying() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(statusLabel: "Retrying") == "Retrying"
-        )
-    }
-
-    @Test func labelForActiveTurn_hidesWhenAwaitingUser() {
-        #expect(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel: "Working",
-                isAwaitingUser: true
-            ) == nil
-        )
-    }
-
-    @Test func labelForActiveTurn_hidesCompactingWhenAwaitingUser() {
-        #expect(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel: "Working",
-                isCompacting: true,
-                isAwaitingUser: true
-            ) == nil
         )
     }
 
@@ -94,169 +65,6 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func labelForActiveTurn_ignoresThinkingWhenIdleStatus() {
-        #expect(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel: nil,
-                isThinking: true
-            ) == nil
-        )
-    }
-
-    @Test func labelForActiveTurn_showsThinkingInPlace() {
-        #expect(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel: "Working",
-                isThinking: true
-            ) == WorkingTurnIndicator.thinkingLabel
-        )
-        #expect(
-            WorkingTurnIndicator.shouldCollapseReservedRow(
-                lastIsThinking: true,
-                label: WorkingTurnIndicator.thinkingLabel
-            ) == false
-        )
-    }
-
-    @Test func labelForActiveTurn_keepsCompactingWhenLastIsThinking() {
-        #expect(
-            WorkingTurnIndicator.labelForActiveTurn(
-                statusLabel: "Working",
-                isCompacting: true,
-                isThinking: true
-            ) == SessionCompactChrome.statusLabel
-        )
-        #expect(
-            WorkingTurnIndicator.shouldCollapseReservedRow(
-                lastIsThinking: true,
-                label: SessionCompactChrome.statusLabel
-            ) == false
-        )
-    }
-
-    @Test func shouldCollapseReservedRow_falseWhenNotThinking() {
-        #expect(
-            WorkingTurnIndicator.shouldCollapseReservedRow(
-                lastIsThinking: false,
-                label: "Working"
-            ) == false
-        )
-    }
-
-    @Test func shouldCollapseReservedRow_falseWhenLabelMissing() {
-        #expect(
-            WorkingTurnIndicator.shouldCollapseReservedRow(
-                lastIsThinking: true,
-                label: nil
-            ) == false
-        )
-    }
-
-    @Test func mountedLabel_dropsCollapsedFooter() {
-        #expect(
-            WorkingTurnIndicator.mountedLabel(label: "Idle", collapsed: true) == nil
-        )
-        #expect(
-            WorkingTurnIndicator.mountedLabel(label: "Working", collapsed: false) == "Working"
-        )
-        #expect(
-            WorkingTurnIndicator.mountedLabel(label: nil, collapsed: false) == nil
-        )
-    }
-
-    @Test func showsIdleMark_onlyForIdleLabel() {
-        #expect(WorkingTurnIndicator.showsIdleMark(label: WorkingTurnIndicator.idleLabel))
-        #expect(WorkingTurnIndicator.showsIdleMark(label: "Working") == false)
-        #expect(WorkingTurnIndicator.showsIdleMark(label: WorkingTurnIndicator.thinkingLabel) == false)
-        #expect(WorkingTurnIndicator.showsIdleMark(label: SessionCompactChrome.statusLabel) == false)
-    }
-
-    @Test func workingRowHeightEstimate_matchesFixedRowHeight() {
-        let expanded = SessionChatRow(
-            id: SessionChatStatusChrome.workingRowID,
-            role: .assistant,
-            text: "Working",
-            metadataLabel: ""
-        )
-        #expect(expanded.timelineRowHeightEstimate == WorkingTurnIndicator.rowHeight)
-
-        let collapsed = SessionChatRow(
-            id: SessionChatStatusChrome.workingRowID,
-            role: .assistant,
-            text: "Working",
-            metadataLabel: "",
-            isLayoutCollapsed: true
-        )
-        #expect(collapsed.timelineRowHeightEstimate == 0)
-    }
-
-    @Test func lastIsThinking_trueWhenLastBlockIsStreamingReasoning() {
-        #expect(
-            WorkingTurnIndicator.lastIsThinking(messages: [
-                row(.reasoning(blockID: "r1", text: "hmm", isStreaming: true, durationMs: nil)),
-            ])
-        )
-    }
-
-    @Test func lastIsThinking_falseWhenLastIsSettledThought() {
-        #expect(
-            WorkingTurnIndicator.lastIsThinking(messages: [
-                row(.reasoning(blockID: "r1", text: "hmm", isStreaming: false, durationMs: nil)),
-            ]) == false
-        )
-    }
-
-    @Test func lastIsThinking_trueWhenStreamingReasoningThenText() {
-        #expect(
-            WorkingTurnIndicator.lastIsThinking(messages: [
-                row(
-                    .reasoning(blockID: "r1", text: "hmm", isStreaming: true, durationMs: nil),
-                    .text(blockID: "t1", text: "Hello", renderedMarkdown: nil)
-                ),
-            ])
-        )
-    }
-
-    @Test func lastIsThinking_falseWhenEmpty() {
-        #expect(WorkingTurnIndicator.lastIsThinking(messages: []) == false)
-    }
-
-    @Test func isStreamingThinking_trueForEmptyStreamingReasoning() {
-        #expect(
-            WorkingTurnIndicator.isStreamingThinking(messages: [
-                Message(
-                    id: "a1",
-                    role: .assistant,
-                    text: "",
-                    parts: [
-                        .reasoning(ReasoningPart(id: "r1", text: "", isStreaming: true)),
-                    ],
-                    model: nil,
-                    mode: nil,
-                    sentAtEpochMs: nil
-                ),
-            ])
-        )
-    }
-
-    @Test func isStreamingThinking_falseWhenSettled() {
-        #expect(
-            WorkingTurnIndicator.isStreamingThinking(messages: [
-                Message(
-                    id: "a1",
-                    role: .assistant,
-                    text: "",
-                    parts: [
-                        .reasoning(ReasoningPart(id: "r1", text: "done", isStreaming: false)),
-                    ],
-                    model: nil,
-                    mode: nil,
-                    sentAtEpochMs: nil
-                ),
-            ]) == false
-        )
-    }
-
     @Test func resolveFooter_freshIdleStaysUnmounted() {
         let resolved = resolve(activeLabel: nil, previous: .unmounted, hold: nil)
         #expect(resolved.chrome == .unmounted)
@@ -270,68 +78,9 @@ struct WorkingTurnIndicatorTests {
             previous: fadingWorking,
             hold: visibleHold()
         )
-        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: false))
+        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", fading: false))
         #expect(resolved.hold == nil)
         #expect(resolved.wakeAfterMs == nil)
-    }
-
-    @Test func resolveFooter_activeThinkingStaysExpanded() {
-        let resolved = resolve(activeLabel: WorkingTurnIndicator.thinkingLabel, lastIsThinking: true)
-        #expect(
-            resolved.chrome == WorkingTurnIndicator.Chrome(
-                label: WorkingTurnIndicator.thinkingLabel,
-                collapsed: false,
-                fading: false
-            )
-        )
-        #expect(resolved.hold == nil)
-        #expect(resolved.wakeAfterMs == nil)
-    }
-
-    @Test func resolveFooter_visibleWorkingIdleShowsIdle() {
-        let resolved = resolve(
-            activeLabel: nil,
-            previous: WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: false),
-            nowMs: 10_000
-        )
-        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: WorkingTurnIndicator.idleLabel, collapsed: false, fading: false))
-        #expect(resolved.hold == WorkingTurnIndicator.Hold(startedAtMs: 10_000))
-        #expect(resolved.wakeAfterMs == WorkingTurnIndicator.idleHoldMilliseconds)
-    }
-
-    @Test func resolveFooter_visibleHoldBeforeDeadlineStillIdle() {
-        let resolved = resolve(
-            activeLabel: nil,
-            previous: fadingWorking,
-            hold: visibleHold(startedAtMs: 10_000),
-            nowMs: 14_999
-        )
-        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: WorkingTurnIndicator.idleLabel, collapsed: false, fading: false))
-        #expect(resolved.hold == visibleHold(startedAtMs: 10_000))
-        #expect(resolved.wakeAfterMs == 1)
-    }
-
-    @Test func resolveFooter_visibleHoldAtDeadlineCollapsesIdle() {
-        let resolved = resolve(
-            activeLabel: nil,
-            previous: fadingWorking,
-            hold: visibleHold(startedAtMs: 10_000),
-            nowMs: 15_000
-        )
-        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: WorkingTurnIndicator.idleLabel, collapsed: true, fading: false))
-        #expect(resolved.hold == visibleHold(startedAtMs: 10_000))
-        #expect(resolved.wakeAfterMs == nil)
-    }
-
-    @Test func resolveFooter_collapsedThinkingIdleShowsIdle() {
-        let resolved = resolve(
-            activeLabel: nil,
-            previous: WorkingTurnIndicator.Chrome(label: "Working", collapsed: true, fading: false),
-            nowMs: 10_000
-        )
-        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: WorkingTurnIndicator.idleLabel, collapsed: false, fading: false))
-        #expect(resolved.hold == WorkingTurnIndicator.Hold(startedAtMs: 10_000))
-        #expect(resolved.wakeAfterMs == WorkingTurnIndicator.idleHoldMilliseconds)
     }
 
     @Test func resolveFooter_hideImmediatelyUnmountsAnyHold() {
@@ -346,17 +95,153 @@ struct WorkingTurnIndicatorTests {
         #expect(resolved.wakeAfterMs == nil)
     }
 
+    @Test func labelForActiveTurn_pendingRequestKeepsTheTurnWithNoStatus() {
+        #expect(WorkingTurnIndicator.labelForActiveTurn(statusLabel: nil, isAwaitingUser: true) == "Working")
+        #expect(WorkingTurnIndicator.labelForActiveTurn(statusLabel: "Retrying", isAwaitingUser: true) == "Retrying")
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(statusLabel: nil, isCompacting: true, isAwaitingUser: true)
+                == SessionCompactChrome.statusLabel
+        )
+    }
+
+    @Test func showsIdleMark_onlyForTheDoneMarker() {
+        #expect(WorkingTurnIndicator.showsIdleMark(label: WorkingTurnIndicator.idleLabel))
+        #expect(WorkingTurnIndicator.showsIdleMark(label: "Working") == false)
+        #expect(WorkingTurnIndicator.showsIdleMark(label: SessionCompactChrome.statusLabel) == false)
+    }
+
+    @Test func settle_resumeShowsNoDone() {
+        let working = WorkingTurnIndicator.Chrome(label: "Working", fading: false)
+        let settling = resolve(activeLabel: nil, previous: working, nowMs: 0)
+        let resumed = resolve(activeLabel: "Working", previous: settling.chrome, hold: settling.hold, nowMs: 499)
+        #expect(resumed.chrome == working)
+        #expect(resumed.hold == nil)
+        #expect(resumed.wakeAfterMs == nil)
+    }
+
+    @Test func labelForActiveTurn_retryingWinsOverSending() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: "Retrying",
+                isRetrying: true,
+                sendProgressPercent: 40
+            ) == "Retrying"
+        )
+    }
+
+    @Test func settle_keepsTheLastLabelThenDoneHoldsThenFades() {
+        let working = WorkingTurnIndicator.Chrome(label: "Compacting…", fading: false)
+        let started = resolve(activeLabel: nil, previous: working, nowMs: 10_000)
+        #expect(started.chrome == working)
+        #expect(started.wakeAfterMs == 500)
+        let hold = started.hold
+
+        func at(_ ms: Int64) -> WorkingTurnIndicator.Resolution {
+            resolve(activeLabel: nil, previous: working, hold: hold, nowMs: 10_000 + ms)
+        }
+        #expect(at(499).chrome.label == "Compacting…")
+        #expect(at(499).wakeAfterMs == 1)
+        #expect(at(500).chrome == WorkingTurnIndicator.Chrome(label: "Idle", fading: false))
+        #expect(at(500).wakeAfterMs == 3_000)
+        #expect(at(3_499).chrome.fading == false)
+        #expect(at(3_500).chrome == WorkingTurnIndicator.Chrome(label: "Idle", fading: true))
+        #expect(at(3_500).wakeAfterMs == 240)
+        #expect(at(3_740).chrome == .unmounted)
+        #expect(at(3_740).hold == nil)
+        #expect(at(3_740).wakeAfterMs == nil)
+    }
+
+    @Test func quietEnd_skipsDoneAndFadesWithTheLastLabel() {
+        let working = WorkingTurnIndicator.Chrome(label: "Working", fading: false)
+        let hold = resolve(activeLabel: nil, previous: working, nowMs: 0).hold
+        func at(_ ms: Int64, hold: WorkingTurnIndicator.Hold?) -> WorkingTurnIndicator.Resolution {
+            WorkingTurnIndicator.resolveFooter(
+                activeLabel: nil,
+                ending: .quiet,
+                hideImmediately: false,
+                previous: working,
+                hold: hold,
+                nowMs: ms
+            )
+        }
+        #expect(at(499, hold: hold).chrome == working)
+        let fading = at(500, hold: hold)
+        #expect(fading.chrome == WorkingTurnIndicator.Chrome(label: "Working", fading: true))
+        #expect(fading.wakeAfterMs == 240)
+        #expect(at(740, hold: fading.hold).chrome == .unmounted)
+    }
+
+    @Test func lateStopSignal_fadesDoneImmediately() {
+        let done = WorkingTurnIndicator.Chrome(label: "Idle", fading: false)
+        let hold = WorkingTurnIndicator.Hold(startedAtMs: 0, label: "Working")
+        let late = WorkingTurnIndicator.resolveFooter(
+            activeLabel: nil,
+            ending: .quiet,
+            hideImmediately: false,
+            previous: done,
+            hold: hold,
+            nowMs: 1_500
+        )
+        #expect(late.chrome == WorkingTurnIndicator.Chrome(label: "Idle", fading: true))
+        #expect(late.hold?.quietFadeAtMs == 1_500)
+        #expect(late.wakeAfterMs == 240)
+    }
+
+    @Test func failedEnd_unmountsAtOnce() {
+        let resolved = WorkingTurnIndicator.resolveFooter(
+            activeLabel: nil,
+            ending: .failed,
+            hideImmediately: false,
+            previous: WorkingTurnIndicator.Chrome(label: "Working", fading: false),
+            hold: nil,
+            nowMs: 0
+        )
+        #expect(resolved.chrome == .unmounted)
+        #expect(resolved.hold == nil)
+    }
+
+    @Test func connectionLost_keepsTheLastStateWithNoHold() {
+        let working = WorkingTurnIndicator.Chrome(label: "Retrying", fading: false)
+        let resolved = WorkingTurnIndicator.resolveFooter(
+            activeLabel: nil,
+            connectionLost: true,
+            hideImmediately: false,
+            previous: working,
+            hold: nil,
+            nowMs: 0
+        )
+        #expect(resolved.chrome == working)
+        #expect(resolved.hold == nil)
+        #expect(resolved.wakeAfterMs == nil)
+    }
+
+    @Test func lastTurnInterrupted_readsTheNewestAssistantReply() {
+        func message(_ id: String, _ role: MessageRole, stop: MessageStopReason? = nil, pickup: Bool = false) -> Message {
+            var message = Message(
+                id: id, role: role, text: "", model: nil, mode: nil, sentAtEpochMs: 1, isWaitingForPickup: pickup
+            )
+            message.stopReason = stop
+            return message
+        }
+        let stopped = message("a", .assistant, stop: .interrupted)
+        #expect(WorkingTurnIndicator.lastTurnInterrupted([message("u", .user), stopped]))
+        #expect(WorkingTurnIndicator.lastTurnInterrupted([stopped, message("q", .user, pickup: true)]))
+        #expect(!WorkingTurnIndicator.lastTurnInterrupted([stopped, message("u", .user)]))
+        #expect(!WorkingTurnIndicator.lastTurnInterrupted([stopped, message("b", .assistant)]))
+        #expect(!WorkingTurnIndicator.lastTurnInterrupted([message("a", .assistant, stop: .length)]))
+        #expect(!WorkingTurnIndicator.lastTurnInterrupted([]))
+    }
+
     private var fadingWorking: WorkingTurnIndicator.Chrome {
-        WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: true)
+        WorkingTurnIndicator.Chrome(label: "Working", fading: true)
     }
 
     private func visibleHold(startedAtMs: Int64 = 0) -> WorkingTurnIndicator.Hold {
-        WorkingTurnIndicator.Hold(startedAtMs: startedAtMs)
+        WorkingTurnIndicator.Hold(startedAtMs: startedAtMs, label: "Working")
     }
 
     private func resolve(
         activeLabel: String?,
-        lastIsThinking: Bool = false,
         hideImmediately: Bool = false,
         previous: WorkingTurnIndicator.Chrome = .unmounted,
         hold: WorkingTurnIndicator.Hold? = nil,
@@ -364,7 +249,6 @@ struct WorkingTurnIndicatorTests {
     ) -> WorkingTurnIndicator.Resolution {
         WorkingTurnIndicator.resolveFooter(
             activeLabel: activeLabel,
-            lastIsThinking: lastIsThinking,
             hideImmediately: hideImmediately,
             previous: previous,
             hold: hold,

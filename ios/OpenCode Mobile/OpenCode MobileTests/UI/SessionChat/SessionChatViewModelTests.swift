@@ -569,7 +569,9 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.backgroundWorkPill == SessionChatBackgroundWorkPill(
             label: "general needs input · 2 running",
             needsInput: true,
-            accessibilityLabel: "general needs input, 2 subagents running"
+            accessibilityLabel: "general needs input, 2 subagents running",
+            askingLabel: "general needs input",
+            stillRunning: .init(label: "2 subagents", accessibilityLabel: "2 subagents running")
         ))
         #expect(viewModel.uiState.subagents.map(\.id) == ["prt-a", "prt-b", "prt-c"])
         #expect(viewModel.uiState.subagents.first?.childSessionID == "child-a")
@@ -577,7 +579,7 @@ struct SessionChatViewModelTests {
 
     // MARK: Shells (#907)
 
-    @Test func shells_v1RunningBashCallShowsInThePillAndPanel() async throws {
+    @Test func shells_v1RunningBashCallShowsInThePanelButNotThePill() async throws {
         let manager = Self.makeActiveConnectionManager(serverProtocol: .v1)
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(messages: [
@@ -612,7 +614,7 @@ struct SessionChatViewModelTests {
 
         await viewModel.loadMessages()
         try #require(await waitUntil { viewModel.uiState.shells.count == 1 })
-        #expect(viewModel.uiState.backgroundWorkPill?.label == "1 shell")
+        #expect(viewModel.uiState.backgroundWorkPill == nil)
         #expect(viewModel.uiState.shells.first?.command == "npm test")
         #expect(viewModel.uiState.shells.first?.canStop == false)
 
@@ -631,7 +633,8 @@ struct SessionChatViewModelTests {
 
         repository.yield([running])
         try #require(await waitUntil { viewModel.uiState.shells == [running] })
-        #expect(viewModel.uiState.backgroundWorkPill?.label == "1 shell")
+        // Nothing marks it as a background command, so the panel lists it and the pill does not.
+        #expect(viewModel.uiState.backgroundWorkPill == nil)
         viewModel.openShellOutput(id: "sh_1")
         #expect(viewModel.uiState.shellOutput?.output == .empty)
         let watch = Task { await viewModel.watchShellOutput() }
@@ -5492,16 +5495,22 @@ struct SessionChatViewModelTests {
 
         await hold.open()
         await waitUntil { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        await waitUntil { viewModel.uiState.sessionStatusLabel == nil }
+        #expect(viewModel.uiState.workingIndicatorLabel == SessionCompactChrome.statusLabel)
+        await advanceTurnPill(clock, by: WorkingTurnIndicator.turnSettleMilliseconds)
         await waitUntil { viewModel.uiState.workingIndicatorLabel == WorkingTurnIndicator.idleLabel }
-        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
-        try? await clock.awaitWaiter(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
-        clock.now += WorkingTurnIndicator.idleHoldMilliseconds
-        clock.release(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
-        await waitUntil { viewModel.uiState.workingIndicatorCollapsed }
+        await advanceTurnPill(clock, by: WorkingTurnIndicator.turnDoneHoldMilliseconds)
+        await waitUntil { viewModel.uiState.workingIndicatorFading }
+        await advanceTurnPill(clock, by: WorkingTurnIndicator.turnFadeMilliseconds)
+        await waitUntil { viewModel.uiState.workingIndicatorLabel == nil }
         #expect(viewModel.uiState.sessionStatusLabel == nil)
-        #expect(viewModel.uiState.workingIndicatorLabel == WorkingTurnIndicator.idleLabel)
-        #expect(viewModel.uiState.workingIndicatorCollapsed)
         #expect(viewModel.uiState.workingIndicatorFading == false)
+    }
+
+    private func advanceTurnPill(_ clock: ChatTestSyncClock, by milliseconds: Int64) async {
+        try? await clock.awaitWaiter(milliseconds: Int(milliseconds))
+        clock.now += milliseconds
+        clock.release(milliseconds: Int(milliseconds))
     }
 
     @Test func workingFooter_holdsThroughIdleThenCollapsesAndCancelsOnBusy() async {
@@ -5515,20 +5524,21 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
         await viewModel.loadMessages()
         await waitUntil { viewModel.uiState.workingIndicatorLabel == "Working" }
-        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
         #expect(viewModel.uiState.workingIndicatorFading == false)
 
         eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
         await waitUntil { viewModel.uiState.sessionStatusLabel == nil }
-        #expect(viewModel.uiState.workingIndicatorLabel == WorkingTurnIndicator.idleLabel)
+        // The settle keeps the last label, and the rail or card stops being live at once.
+        #expect(viewModel.uiState.workingIndicatorLabel == "Working")
+        #expect(viewModel.uiState.isTurnWorking == false)
         #expect(viewModel.uiState.workingIndicatorFading == false)
-        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
 
-        try? await clock.awaitWaiter(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
-        clock.now += WorkingTurnIndicator.idleHoldMilliseconds
-        clock.release(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
-        await waitUntil { viewModel.uiState.workingIndicatorCollapsed }
-        #expect(viewModel.uiState.workingIndicatorLabel == WorkingTurnIndicator.idleLabel)
+        await advanceTurnPill(clock, by: WorkingTurnIndicator.turnSettleMilliseconds)
+        await waitUntil { viewModel.uiState.workingIndicatorLabel == WorkingTurnIndicator.idleLabel }
+        await advanceTurnPill(clock, by: WorkingTurnIndicator.turnDoneHoldMilliseconds)
+        await waitUntil { viewModel.uiState.workingIndicatorFading }
+        await advanceTurnPill(clock, by: WorkingTurnIndicator.turnFadeMilliseconds)
+        await waitUntil { viewModel.uiState.workingIndicatorLabel == nil }
         #expect(viewModel.uiState.workingIndicatorFading == false)
         #expect(viewModel.uiState.sessionStatusLabel == nil)
 
@@ -5541,12 +5551,10 @@ struct SessionChatViewModelTests {
         )
         await waitUntil {
             viewModel.uiState.workingIndicatorLabel == "Working" &&
-                !viewModel.uiState.workingIndicatorFading &&
-                !viewModel.uiState.workingIndicatorCollapsed
+                !viewModel.uiState.workingIndicatorFading
         }
         #expect(viewModel.uiState.workingIndicatorLabel == "Working")
         #expect(viewModel.uiState.workingIndicatorFading == false)
-        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
     }
 
     private func finishLongTurn(toolCalls: Int, clock: ChatTestSyncClock) async -> SessionChatViewModel {
@@ -7489,6 +7497,224 @@ private func permissionRequest(
         toolMessageID: nil,
         toolCallID: nil
     )
+}
+
+/// The turn's lifecycle through the region that owns it, on an injected clock.
+@MainActor
+struct SessionChatTurnLifecycleTests {
+    @MainActor
+    private final class Harness {
+        final class Loaded {
+            var messages: [Message] = []
+        }
+
+        let clock = ChatTestSyncClock(now: 10_000)
+        let loaded = Loaded()
+        let status: SessionChatTurnStatus
+
+        init() {
+            status = SessionChatTurnStatus(
+                sessionRepository: FakeChatSessionRepository(),
+                clock: clock,
+                loadedMessages: { [loaded] in loaded.messages },
+                childSessions: { [] },
+                applyOptimistic: { _, _ in },
+                reportError: { _ in }
+            )
+        }
+
+        @discardableResult
+        func publish(
+            _ label: String?,
+            rows: [SessionChatRow] = [],
+            connection: SessionConnectionStatus = .live,
+            resolved: Bool = true,
+            bound: Bool = true,
+            permissions: [PermissionRequest] = []
+        ) -> SessionChatTurnStatusResolution {
+            var info = SessionInfoRegionState()
+            info.connectionStatus = connection
+            info.hasResolvedSessionStatus = resolved
+            var inbox = SessionChatInboxRegionState()
+            inbox.permissionRequests = permissions
+            return status.resolve(SessionChatTurnStatusInputs(
+                sessionStatusLabel: label,
+                isCompacting: false,
+                isSessionBound: bound,
+                messages: rows,
+                sendProgressPercent: nil,
+                pendingPrompts: [],
+                previousSubagents: [],
+                inboxState: inbox,
+                infoState: info
+            ))
+        }
+
+        func advance(_ milliseconds: Int64) {
+            clock.now += milliseconds
+        }
+    }
+
+    private let permission = PermissionRequest(
+        id: "per-1",
+        sessionID: "ses-1",
+        permission: "bash",
+        patterns: ["git status"],
+        metadata: [:],
+        always: [],
+        toolMessageID: nil,
+        toolCallID: nil
+    )
+
+    private func assistant(_ block: SessionChatTimelineBlock) -> SessionChatRow {
+        SessionChatRow(id: "a1", role: .assistant, text: "", metadataLabel: "", blocks: [block])
+    }
+
+    /// Ends the turn and returns the label shown right after the settle.
+    private func labelAfterSettle(_ harness: Harness, rows: [SessionChatRow] = []) -> String? {
+        harness.publish(nil, rows: rows)
+        harness.advance(WorkingTurnIndicator.turnSettleMilliseconds)
+        return harness.publish(nil, rows: rows).workingIndicatorLabel
+    }
+
+    private func interruptedReply() -> Message {
+        var message = Message(id: "a1", role: .assistant, text: "", model: nil, mode: nil, sentAtEpochMs: 1)
+        message.stopReason = .interrupted
+        return message
+    }
+
+    @Test func finishedTurnShowsDone() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        harness.publish("Working")
+        #expect(labelAfterSettle(harness) == WorkingTurnIndicator.idleLabel)
+    }
+
+    @Test func idleSessionShowsNothing() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        #expect(harness.publish(nil).workingIndicatorLabel == nil)
+    }
+
+    @Test func resumeWithinTheSettleShowsNoDone() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        harness.publish("Working")
+        harness.publish(nil)
+        harness.advance(WorkingTurnIndicator.turnSettleMilliseconds - 1)
+        #expect(harness.publish("Working").workingIndicatorLabel == "Working")
+        harness.advance(WorkingTurnIndicator.turnSettleMilliseconds)
+        let stillRunning = harness.publish("Working")
+        #expect(stillRunning.workingIndicatorLabel == "Working")
+        #expect(!stillRunning.workingIndicatorFading)
+    }
+
+    @Test func stoppedTurnLeavesWithNoDone() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        harness.publish("Working")
+        harness.loaded.messages = [interruptedReply()]
+        #expect(labelAfterSettle(harness) == "Working")
+        #expect(harness.publish(nil).workingIndicatorFading)
+    }
+
+    @Test func aStopReasonArrivingAfterDoneFadesItImmediately() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        harness.publish("Working")
+        #expect(labelAfterSettle(harness) == WorkingTurnIndicator.idleLabel)
+        harness.advance(1_000)
+        harness.loaded.messages = [interruptedReply()]
+        let late = harness.publish(nil)
+        #expect(late.workingIndicatorLabel == WorkingTurnIndicator.idleLabel)
+        #expect(late.workingIndicatorFading)
+        harness.advance(WorkingTurnIndicator.turnFadeMilliseconds)
+        #expect(harness.publish(nil).workingIndicatorLabel == nil)
+    }
+
+    @Test func failedTurnHandsThePillToItsFailureAtOnce() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        harness.publish("Working")
+        let rows = [assistant(.failureLine(
+            blockID: "f",
+            text: .verbatim("HTTP 500"),
+            providerBody: nil,
+            isNeutral: false,
+            action: nil,
+            actionLabel: nil,
+            coveredByLiveRetry: false
+        ))]
+        #expect(harness.publish(nil, rows: rows).workingIndicatorLabel == nil)
+    }
+
+    @Test func connectionLostKeepsTheLastStateThenAnEndFoundOnReconnectIsQuiet() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        harness.publish("Retrying")
+        harness.advance(60_000)
+        let offline = harness.publish(nil, connection: .offline)
+        #expect(offline.workingIndicatorLabel == "Retrying")
+        #expect(!offline.workingIndicatorFading)
+        harness.advance(60_000)
+        #expect(harness.publish(nil, connection: .connecting).workingIndicatorLabel == "Retrying")
+
+        harness.publish(nil)
+        harness.advance(WorkingTurnIndicator.turnSettleMilliseconds)
+        let ended = harness.publish(nil)
+        #expect(ended.workingIndicatorLabel == "Retrying")
+        #expect(ended.workingIndicatorFading)
+    }
+
+    @Test func aTurnThatOutlivesTheReconnectEarnsDone() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        harness.publish("Working")
+        harness.publish("Working", connection: .offline)
+        harness.publish("Working")
+        harness.advance(WorkingTurnIndicator.reconnectConfirmMilliseconds + 1)
+        harness.publish("Working")
+        #expect(labelAfterSettle(harness) == WorkingTurnIndicator.idleLabel)
+    }
+
+    @Test func anIdleStatusAtTheEndOfTheReconnectWindowIsStillQuiet() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        harness.publish("Working")
+        harness.publish("Working", connection: .offline)
+        harness.publish("Working")
+        harness.advance(WorkingTurnIndicator.reconnectConfirmMilliseconds)
+        #expect(labelAfterSettle(harness) == "Working")
+    }
+
+    @Test func aCachedBusyThatTurnsOutIdleShowsNoDone() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        harness.publish("Working", resolved: false)
+        #expect(labelAfterSettle(harness) == "Working")
+    }
+
+    @Test func aPendingRequestKeepsTheTurnMountedAndTheCardFollowsTheOldRule() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        #expect(harness.publish("Working").isTurnWorking)
+        let waiting = harness.publish(nil, permissions: [permission])
+        #expect(waiting.workingIndicatorLabel == "Working")
+        #expect(!waiting.isTurnWorking)
+        #expect(harness.publish("Working", permissions: [permission]).isTurnWorking == false)
+        let answered = harness.publish("Working")
+        #expect(answered.workingIndicatorLabel == "Working")
+        #expect(answered.isTurnWorking)
+    }
+
+    @Test func anUnboundSessionUnmountsImmediately() {
+        let harness = Harness()
+        defer { harness.status.reset() }
+        harness.publish("Working")
+        let unbound = harness.publish("Working", bound: false)
+        #expect(unbound.workingIndicatorLabel == nil)
+        #expect(!unbound.isTurnWorking)
+    }
 }
 
 private final class ChatTestSyncClock: SyncClock, @unchecked Sendable {

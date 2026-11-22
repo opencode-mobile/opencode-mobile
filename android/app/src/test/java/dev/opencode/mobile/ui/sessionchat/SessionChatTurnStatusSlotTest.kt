@@ -1,108 +1,244 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.ui.components.OpenCodeTurnStatusAttentionMark
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
+import dev.opencode.mobile.ui.text.EnglishStrings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionChatTurnStatusSlotTest {
-    private val now = 1_000_000L
+    private val failed = SessionChatActivityItem.RequestFailed("m", "b")
+    private val waitingSubagent =
+        SessionChatActivityItem.Subagents(
+            requireNotNull(
+                SessionChatBackgroundWork.pill(
+                    listOf(subagent("p1", SessionChatSubagentStatus.WaitingForInput), subagent("p2", SessionChatSubagentStatus.Running)),
+                ),
+            ),
+        )
+
+    private fun subagent(
+        id: String,
+        status: SessionChatSubagentStatus,
+    ) = SessionChatSubagent(
+        id = id,
+        childSessionId = "child-$id",
+        agentName = "general",
+        title = null,
+        status = status,
+        startedAtMs = null,
+        finishedAtMs = null,
+    )
 
     private fun slot(
         label: String? = "Working",
-        collapsed: Boolean = false,
         fading: Boolean = false,
         awaiting: Boolean = false,
         items: List<SessionChatActivityItem> = emptyList(),
         keyboard: Boolean = false,
         away: Boolean = false,
-    ) = SessionChatPillSlots.turnStatus(label, collapsed, fading, awaiting, items, keyboard, away, now)
+    ) = SessionChatPillSlots.turnStatus(label, fading, awaiting, items, keyboard, away, EnglishStrings)
+
+    private fun attention(
+        label: String,
+        mark: OpenCodeTurnStatusAttentionMark,
+    ) = OpenCodeTurnStatusPillPhase.Attention(label, mark)
+
+    // Priority ladder
 
     @Test
-    fun aloneIsAFullPill() {
+    fun ladderRunsFromFailedDownToWorking() {
+        val all = listOf(SessionChatActivityItem.AnswerQuestion, waitingSubagent, SessionChatActivityItem.ReviewPermission, failed)
+
+        assertEquals(OpenCodeTurnStatusPillPhase.Failed("Request failed"), slot(items = all, awaiting = true)?.phase)
         assertEquals(
-            SessionChatTurnStatusSlot(OpenCodeTurnStatusPillPhase.Working("Working"), compact = false, leaving = false),
-            slot(),
+            attention("Review permission", OpenCodeTurnStatusAttentionMark.Reopen),
+            slot(items = all - failed, awaiting = true)?.phase,
         )
-        assertEquals(OpenCodeTurnStatusPillPhase.Done, slot(label = WorkingTurnIndicator.IDLE_LABEL)?.phase)
+        assertEquals(
+            attention("Answer question", OpenCodeTurnStatusAttentionMark.Reopen),
+            slot(items = all - failed - SessionChatActivityItem.ReviewPermission, awaiting = true)?.phase,
+        )
+        assertEquals(
+            attention("Waiting for you", OpenCodeTurnStatusAttentionMark.PulsingDot),
+            slot(items = listOf(waitingSubagent), awaiting = true)?.phase,
+        )
+        assertEquals(
+            attention("general needs input", OpenCodeTurnStatusAttentionMark.PulsingDot),
+            slot(items = listOf(waitingSubagent))?.phase,
+        )
+        assertEquals(OpenCodeTurnStatusPillPhase.Working("Working"), slot()?.phase)
         assertEquals(OpenCodeTurnStatusPillPhase.Working("Compacting…"), slot(label = "Compacting…")?.phase)
-    }
-
-    @Test
-    fun foldsBesideAnotherPillOrAwayFromTheEnd() {
-        assertEquals(true, slot(items = listOf(SessionChatActivityItem.Queued(1)))?.compact)
-        assertEquals(true, slot(away = true)?.compact)
-        assertEquals(true, slot(keyboard = true)?.compact)
-    }
-
-    @Test
-    fun aFadedFinishedItemDoesNotFoldIt() {
-        val faded = SessionChatActivityItem.Finished("a", "a", now - 10_000)
-        assertEquals(false, slot(items = listOf(faded))?.compact)
-    }
-
-    @Test
-    fun hiddenForRequestsAndFailures() {
-        assertNull(slot(awaiting = true))
-        assertNull(slot(items = listOf(SessionChatActivityItem.ReviewPermission)))
-        assertNull(slot(items = listOf(SessionChatActivityItem.AnswerQuestion)))
-        assertNull(slot(items = listOf(SessionChatActivityItem.RequestFailed("m", "b"))))
+        assertEquals(OpenCodeTurnStatusPillPhase.Done, slot(label = WorkingTurnIndicator.IDLE_LABEL)?.phase)
         assertNull(slot(label = null))
-        assertNull(slot(collapsed = true))
+    }
+
+    @Test
+    fun attentionShowsWithoutAnActiveLabel() {
+        assertEquals(
+            attention("Waiting for you", OpenCodeTurnStatusAttentionMark.PulsingDot),
+            slot(label = null, awaiting = true)?.phase,
+        )
+        assertEquals(OpenCodeTurnStatusPillPhase.Failed("Request failed"), slot(label = null, items = listOf(failed))?.phase)
+    }
+
+    // Taps
+
+    @Test
+    fun onlyActionableStatesCarryAnItem() {
+        assertEquals(failed, slot(items = listOf(failed))?.item)
+        assertTrue(slot(items = listOf(failed))?.isClosable == true)
+        assertEquals(SessionChatActivityItem.ReviewPermission, slot(items = listOf(SessionChatActivityItem.ReviewPermission))?.item)
+        assertEquals(SessionChatActivityItem.AnswerQuestion, slot(items = listOf(SessionChatActivityItem.AnswerQuestion))?.item)
+        assertNull(slot(awaiting = true)?.item)
+        assertNull(slot()?.item)
+        assertNull(slot(label = WorkingTurnIndicator.IDLE_LABEL)?.item)
+        assertFalse(slot(items = listOf(SessionChatActivityItem.ReviewPermission))?.isClosable == true)
+    }
+
+    @Test
+    fun aWaitingSubagentOpensItsRequestWithoutTheRunningSuffix() {
+        val item = slot(items = listOf(waitingSubagent))?.item as SessionChatActivityItem.Subagents
+
+        assertTrue(item.pill.needsInput)
+        assertEquals(item.pill.labelText, item.pill.accessibilityText)
+    }
+
+    // Folding
+
+    @Test
+    fun workingAndDoneFoldAwayFromTheEndOrWithTheKeyboard() {
+        listOf("Working", WorkingTurnIndicator.IDLE_LABEL).forEach { label ->
+            assertEquals(false, slot(label = label)?.compact)
+            assertEquals(true, slot(label = label, away = true)?.compact)
+            assertEquals(true, slot(label = label, keyboard = true)?.compact)
+        }
+    }
+
+    @Test
+    fun aSecondaryPillDoesNotFoldTheTurnPill() {
+        assertEquals(false, slot(items = listOf(SessionChatActivityItem.Queued(1)))?.compact)
+    }
+
+    @Test
+    fun attentionAndFailedNeverFold() {
+        listOf(
+            slot(items = listOf(failed), away = true, keyboard = true),
+            slot(items = listOf(SessionChatActivityItem.ReviewPermission), away = true, keyboard = true),
+            slot(awaiting = true, away = true, keyboard = true),
+            slot(items = listOf(waitingSubagent), away = true, keyboard = true),
+        ).forEach {
+            assertEquals(false, it?.compact)
+            assertEquals(false, it?.canFold)
+        }
+    }
+
+    private fun widths(
+        available: Int,
+        turn: Int = 100,
+        secondary: Int = 0,
+        overflow: Int = 0,
+        trailing: Int = 0,
+    ) = SessionChatPillRowWidths(
+        available = available,
+        turn = turn,
+        turnCompact = 36,
+        secondary = secondary,
+        secondaryCompact = if (secondary > 0) 36 else 0,
+        overflow = overflow,
+        trailing = trailing,
+        spacing = 8,
+    )
+
+    @Test
+    fun aRowThatFitsFoldsNothing() {
+        // 100 + 80 + 40 + 60 plus three gaps is exactly 304.
+        val row = widths(available = 304, secondary = 80, overflow = 40, trailing = 60)
+
+        assertEquals(SessionChatPillRowFold(), SessionChatPillSlots.pillRowFold(row, turnCanFold = true))
+        assertEquals(SessionChatPillRowFold(), SessionChatPillSlots.pillRowFold(row, turnCanFold = false))
+    }
+
+    @Test
+    fun anOverflowingRowFoldsAWorkingPill() {
+        val row = widths(available = 303, secondary = 80, overflow = 40, trailing = 60)
+
+        assertEquals(SessionChatPillRowFold(turnCompact = true), SessionChatPillSlots.pillRowFold(row, turnCanFold = true))
+    }
+
+    @Test
+    fun anOverflowingRowFoldsTheSecondaryBesideAttention() {
+        val row = widths(available = 303, secondary = 80, overflow = 40, trailing = 60)
+
+        assertEquals(SessionChatPillRowFold(secondaryCompact = true), SessionChatPillSlots.pillRowFold(row, turnCanFold = false))
+    }
+
+    @Test
+    fun aRowTooNarrowForAFoldedTurnFoldsBoth() {
+        val row = widths(available = 200, secondary = 120, overflow = 40, trailing = 60)
+
+        assertEquals(
+            SessionChatPillRowFold(turnCompact = true, secondaryCompact = true),
+            SessionChatPillSlots.pillRowFold(row, turnCanFold = true),
+        )
+    }
+
+    @Test
+    fun attentionWithNoSecondaryTruncatesInsteadOfFolding() {
+        assertEquals(SessionChatPillRowFold(turnMaxWidth = 50), SessionChatPillSlots.pillRowFold(widths(available = 50), turnCanFold = false))
+    }
+
+    // Row reserve
+
+    @Test
+    fun theRowStaysReservedThroughEveryStateUntilTheFade() {
+        listOf(
+            slot(),
+            slot(label = WorkingTurnIndicator.IDLE_LABEL),
+            slot(awaiting = true),
+            slot(items = listOf(SessionChatActivityItem.ReviewPermission)),
+            slot(items = listOf(failed)),
+            slot(items = listOf(waitingSubagent)),
+        ).forEach { assertEquals(true, it?.reservesRow) }
+        assertEquals(false, slot(label = WorkingTurnIndicator.IDLE_LABEL, fading = true)?.reservesRow)
+    }
+
+    @Test
+    fun aRequestArrivingDuringTheFadeTakesTheRowBack() {
+        val attentionSlot = slot(label = WorkingTurnIndicator.IDLE_LABEL, fading = true, awaiting = true)
+
+        assertEquals(false, attentionSlot?.leaving)
+        assertEquals(true, attentionSlot?.reservesRow)
     }
 
     @Test
     fun neverCountsTowardOverflow() {
         val items = listOf(SessionChatActivityItem.Queued(1))
-        assertNotNull(slot(items = items))
-        val activity = SessionChatPillSlots.activity(items, keyboardVisible = false, nowEpochMs = now)
+        val activity = SessionChatPillSlots.activity(items, keyboardVisible = false)
+
         assertTrue(activity.overflow.isEmpty())
         assertFalse(activity.showsOverflowButton)
     }
 
     @Test
-    fun leavingReleasesTheRow() {
-        assertEquals(true, slot()?.reservesRow)
-        assertEquals(false, slot(fading = true)?.reservesRow)
-    }
-
-    private fun resolve(nowMs: Long) =
-        WorkingTurnIndicator.resolveFooter(
-            activeLabel = null,
-            lastIsThinking = false,
-            hideImmediately = false,
-            previous = WorkingTurnIndicator.Chrome("Working", collapsed = false, fading = false),
-            hold = WorkingTurnIndicator.Hold(startedAtMs = 0),
-            nowMs = nowMs,
-            holdMs = WorkingTurnIndicator.TURN_PILL_HOLD_MS,
-            fadeMs = WorkingTurnIndicator.TURN_PILL_FADE_MS,
-        )
-
-    @Test
-    fun doneHoldsThenFadesThenCollapses() {
-        assertFalse(resolve(2_999).chrome.fading)
-        assertEquals(1L, resolve(2_999).wakeAfterMs)
-        assertTrue(resolve(3_000).chrome.fading)
-        assertEquals(240L, resolve(3_000).wakeAfterMs)
-        assertTrue(resolve(3_240).chrome.collapsed)
-        assertNull(resolve(3_240).wakeAfterMs)
-    }
-
-    @Test
-    fun otherStylesKeepTheFiveSecondIdle() {
-        val resolution =
-            WorkingTurnIndicator.resolveFooter(
-                activeLabel = null,
-                lastIsThinking = false,
-                hideImmediately = false,
-                previous = WorkingTurnIndicator.Chrome("Working", collapsed = false, fading = false),
-                hold = WorkingTurnIndicator.Hold(startedAtMs = 0),
-                nowMs = 4_999,
+    fun aPinnedPillThatStillDoesNotFitTruncatesAfterTheSecondaryFolds() {
+        val fold =
+            SessionChatPillSlots.pillRowFold(
+                SessionChatPillRowWidths(
+                    available = 200,
+                    turn = 260,
+                    turnCompact = 36,
+                    secondary = 120,
+                    secondaryCompact = 36,
+                    overflow = 0,
+                    trailing = 0,
+                    spacing = 8,
+                ),
+                turnCanFold = false,
             )
-        assertEquals(WorkingTurnIndicator.Chrome("Idle", collapsed = false, fading = false), resolution.chrome)
-        assertEquals(1L, resolution.wakeAfterMs)
+        assertEquals(SessionChatPillRowFold(secondaryCompact = true, turnMaxWidth = 156), fold)
     }
 }

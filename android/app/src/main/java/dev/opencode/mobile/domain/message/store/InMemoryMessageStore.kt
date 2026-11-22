@@ -5,6 +5,8 @@ import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.json.serverPayloadJson
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -413,6 +415,8 @@ class InMemoryMessageStore
             // v2 `inbox.delivered` carries no parts; publish it so the prompt leaves the
             // pending strip and shows as a bubble before the first step starts.
             val pickupChanged = !inserted && isUserInfo && wasWaiting != waiting
+            // A reply that fails before any part has only this info to show the failure.
+            val failureChanged = !isUserInfo && reportedError(previous?.get("error")) != reportedError(merged["error"])
             if (inserted && isUserInfo && waiting) {
                 order.add(messageId)
             } else if (inserted) {
@@ -431,6 +435,7 @@ class InMemoryMessageStore
                 insertedMessageIds = if (inserted) setOf(messageId) else emptySet(),
                 changedMessageIds = if (inserted) emptySet() else setOf(messageId),
                 pickupStateChangedIds = if (pickupChanged) setOf(messageId) else emptySet(),
+                failureChangedIds = if (failureChanged) setOf(messageId) else emptySet(),
                 structuralChange = inserted || delivered,
             )
         }
@@ -1319,6 +1324,9 @@ class InMemoryMessageStore
             runCatching {
                 json.decodeFromJsonElement<MessageInfoDto>(jsonObject)
             }.getOrNull()
+
+        /** An explicit null clears a failure, so it reads the same as no error. */
+        private fun reportedError(value: JsonElement?): JsonElement? = value.takeUnless { it is JsonNull }
 
         private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty() || failure != null
 

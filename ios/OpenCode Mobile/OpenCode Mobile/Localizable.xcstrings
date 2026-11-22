@@ -8553,17 +8553,6 @@
         }
       }
     },
-    "session_chat.activity.finished" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@, Done"
-          }
-        }
-      }
-    },
     "session_chat.activity.hide_more" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -19,6 +19,7 @@ import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPill
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
+import dev.opencode.mobile.ui.components.OpenCodeTurnStatusAttentionMark
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPill
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -79,6 +80,28 @@ fun FloatingPillGalleryScreen(modifier: Modifier = Modifier) {
                 OpenCodeTurnStatusPill(phase = turnPhase, compact = true)
             }
             OpenCodeChoiceBadge(label = "Done", selected = turnDone, onClick = { turnDone = !turnDone })
+            OpenCodeTurnStatusPill(phase = OpenCodeTurnStatusPillPhase.Working("Compacting…"))
+            OpenCodeTurnStatusPill(phase = OpenCodeTurnStatusPillPhase.Working("Sending 40%"))
+            OpenCodeTurnStatusPill(
+                phase = OpenCodeTurnStatusPillPhase.Attention("Waiting for you", OpenCodeTurnStatusAttentionMark.PulsingDot),
+            )
+            OpenCodeTurnStatusPill(
+                phase = OpenCodeTurnStatusPillPhase.Attention("general needs input", OpenCodeTurnStatusAttentionMark.PulsingDot),
+                onClick = { log = "Tapped general needs input" },
+            )
+            OpenCodeTurnStatusPill(
+                phase = OpenCodeTurnStatusPillPhase.Attention("Review permission", OpenCodeTurnStatusAttentionMark.Reopen),
+                onClick = { log = "Tapped Review permission" },
+            )
+            OpenCodeTurnStatusPill(
+                phase = OpenCodeTurnStatusPillPhase.Attention("Answer question", OpenCodeTurnStatusAttentionMark.Reopen),
+                onClick = { log = "Tapped Answer question" },
+            )
+            OpenCodeTurnStatusPill(
+                phase = OpenCodeTurnStatusPillPhase.Failed("Request failed"),
+                onClick = { log = "Tapped Request failed" },
+                onClose = { log = "Dismissed Request failed" },
+            )
         }
         var folded by remember { mutableStateOf(false) }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

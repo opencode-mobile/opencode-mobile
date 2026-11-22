@@ -89,10 +89,6 @@ extension SessionChatRow: MessageListTimelineHeightEstimating {
     }
 
     var timelineRowHeightEstimate: CGFloat {
-        if id == SessionChatStatusChrome.workingRowID {
-            if isLayoutCollapsed { return 0 }
-            return WorkingTurnIndicator.rowHeight
-        }
         let style: MessageListTimelineRowHeightEstimate.Style =
             switch role {
             case .user:
@@ -318,16 +314,16 @@ struct SessionChatUiState: Equatable {
     var isLoadingOlder: Bool = false
     var isAborting: Bool = false
     var sessionStatusLabel: String?
-    /// In-chat Working/Thinking/Retrying label for an active turn.
+    /// The turn pill's Working/Retrying/Compacting label; the Done marker after the turn ends.
     var workingIndicatorLabel: String? = nil
     /// Live rate-limit countdown. Hidden for content-filter retries.
     var retryCard: SessionRetryCard? = nil
     /// The session is in `retry` status: the composer owns the countdown, failure marks show none.
     var isRetrying: Bool = false
-    /// True after the Idle hold when the reserved footer has collapsed.
-    var workingIndicatorCollapsed: Bool = false
-    /// True while the reserved Working lamp/label is fading through the idle hold.
+    /// True while the turn pill fades out.
     var workingIndicatorFading: Bool = false
+    /// The turn is running and not waiting on the user: what makes a rail or card live.
+    var isTurnWorking: Bool = false
     /// Bottom-right Syncing pill label while cached or catching-up messages wait for network confirmation.
     var syncingIndicatorLabel: String? = nil
     var sessionTodos: [SessionTodo] = []

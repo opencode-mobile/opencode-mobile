@@ -232,15 +232,13 @@ data class SessionChatUiState(
     val isLoadingOlder: Boolean = false,
     val isAborting: Boolean = false,
     val sessionStatusLabel: String? = null,
-    /** In-chat Working/Thinking/Retrying label for an active turn. */
+    /** The turn pill's active label (Working, Retrying, Compacting…, Sending), or Idle for Done. */
     val workingIndicatorLabel: String? = null,
     /** Live rate-limit countdown. Hidden for content-filter retries. */
     val retryCard: SessionRetryCard? = null,
     /** The session is in `retry` status: the composer owns the countdown, failure marks show none. */
     val isRetrying: Boolean = false,
-    /** True after the Idle hold when the reserved footer has collapsed. */
-    val workingIndicatorCollapsed: Boolean = false,
-    /** True while the reserved Working lamp/label is fading through the idle hold. */
+    /** True while the turn pill fades out; the timeline gives its row back. */
     val workingIndicatorFading: Boolean = false,
     /** Top Syncing pill label while cached or catching-up messages wait for network confirmation. */
     val syncingIndicatorLabel: UiText? = null,

@@ -580,8 +580,8 @@ struct SessionChatView: View {
                 sessionBranchPill: viewModel.uiState.sessionBranchPill,
                 syncingIndicatorLabel: viewModel.uiState.syncingIndicatorLabel,
                 workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
-                workingIndicatorCollapsed: viewModel.uiState.workingIndicatorCollapsed,
                 workingIndicatorFading: viewModel.uiState.workingIndicatorFading,
+                isTurnWorking: viewModel.uiState.isTurnWorking,
                 isTurnActive: viewModel.uiState.sessionStatusLabel != nil,
                 isAwaitingUser: viewModel.uiState.permissionRequest != nil
                     || viewModel.uiState.questionRequest != nil,
@@ -607,7 +607,6 @@ struct SessionChatView: View {
                     ? composerScrimSolidHeight + keyboardOverlap
                     : nil,
                 activityItems: sessionChatActivityItems,
-                usesTurnStatusPill: SessionChatDisplayPreferences.shared.activityCardTimeline,
                 keyboardVisible: keyboardOverlap > 0,
                 onActivityTap: handleActivityTap,
                 onActivityClose: handleActivityClose,
@@ -712,7 +711,8 @@ struct SessionChatView: View {
         .ignoresSafeArea(edges: .bottom)
     }
 
-    /// Bottom-left activity the screen owns: collapsed requests, `/btw` side questions and queued prompts.
+    /// Bottom-left activity the screen owns. Collapsed requests and a waiting subagent feed the
+    /// turn pill; the rest (`/btw` side questions, background work, queued prompts) are secondary pills.
     private var sessionChatActivityItems: [SessionChatActivityItem] {
         var items: [SessionChatActivityItem] = []
         if viewModel.uiState.permissionDockHidden {
@@ -770,7 +770,7 @@ struct SessionChatView: View {
                 trigger: ProductAnalytics.Trigger.present
             )
             showPendingPromptsSheet = true
-        case .requestFailed, .sideQuestionsRunning, .finished:
+        case .requestFailed, .sideQuestionsRunning:
             break
         }
     }

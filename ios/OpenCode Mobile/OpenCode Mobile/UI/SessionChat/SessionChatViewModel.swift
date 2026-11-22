@@ -1865,8 +1865,7 @@ final class SessionChatViewModel {
                 ),
                 previousSubagents: uiState.subagents,
                 inboxState: inboxState,
-                infoState: infoState,
-                usesTurnStatusPill: SessionChatDisplayPreferences.shared.activityCardTimeline
+                infoState: infoState
             )
         )
         let subagents = turnStatusResolution.subagents
@@ -1917,8 +1916,8 @@ final class SessionChatViewModel {
             workingIndicatorLabel: turnStatusResolution.workingIndicatorLabel,
             retryCard: infoState.retryCard,
             isRetrying: infoState.isRetrying,
-            workingIndicatorCollapsed: turnStatusResolution.workingIndicatorCollapsed,
             workingIndicatorFading: turnStatusResolution.workingIndicatorFading,
+            isTurnWorking: turnStatusResolution.isTurnWorking,
             syncingIndicatorLabel: timelineState.isSyncingMessages
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,
@@ -1929,7 +1928,10 @@ final class SessionChatViewModel {
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: inboxState.sessionTodos),
             sessionTodoTotalCount: inboxState.sessionTodos.count,
             subagents: subagents,
-            backgroundWorkPill: SessionChatBackgroundWork.pill(for: subagents, shells: runningShells),
+            backgroundWorkPill: SessionChatBackgroundWork.pill(
+                for: subagents,
+                shells: SessionChatBackgroundWork.backgroundShells(runningShells, messages: loadedMessages)
+            ),
             backgroundWorkDoneUnseen: turnStatusResolution.backgroundWorkDoneUnseen,
             shells: runningShells,
             shellOutput: shellsState.output,

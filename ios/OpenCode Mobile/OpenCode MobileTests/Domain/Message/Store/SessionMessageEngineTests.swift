@@ -263,6 +263,41 @@ import Testing
         #expect(!engine.shouldPublishLive(changeSet))
     }
 
+    @Test func jsonBooleansStayBooleans() throws {
+        let json = try JSONSerialization.jsonObject(with: Data(#"{"retryable":false,"count":1}"#.utf8))
+        let value = try #require(AnySendable.from(json)?.dictionaryValue)
+        #expect(value["retryable"] == .bool(false))
+        #expect(value["count"] == .int(1))
+    }
+
+    @Test func infoOnlyFailure_isLivePublishableOnce() throws {
+        let engine = makeEngine()
+        let base: [String: AnySendable] = [
+            "id": .string("msg-2"),
+            "role": .string("assistant"),
+            "sessionID": .string("ses-1"),
+        ]
+        _ = engine.apply(sessionID: "ses-1", patch: .infoUpdated(base))
+        var failed = base
+        failed["error"] = .dictionary([
+            "name": .string("APIError"),
+            "data": .dictionary(["message": .string("Request failed")]),
+        ])
+        guard case .changed(let first) = engine.apply(sessionID: "ses-1", patch: .infoUpdated(failed)) else {
+            Issue.record("expected Changed")
+            return
+        }
+        #expect(first.failureChangedIDs == ["msg-2"])
+        #expect(engine.shouldPublishLive(first))
+        let frame = engine.frameAfterChange(sessionID: "ses-1", changeSet: first, previous: [])
+        #expect(try #require(frame.last).failure != nil)
+        guard case .changed(let repeated) = engine.apply(sessionID: "ses-1", patch: .infoUpdated(failed)) else {
+            Issue.record("expected Changed")
+            return
+        }
+        #expect(!engine.shouldPublishLive(repeated))
+    }
+
     @Test func userInsert_landsBeforeStreamingAssistant() {
         let engine = makeEngine()
         engine.replaceAll(

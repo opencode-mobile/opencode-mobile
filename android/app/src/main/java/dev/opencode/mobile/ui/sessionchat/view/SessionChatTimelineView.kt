@@ -61,8 +61,10 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -85,6 +87,7 @@ import dev.opencode.mobile.theme.OpenCodeTextRegion
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageLabel
 import dev.opencode.mobile.ui.sessionchat.SessionChatGoalTimeline
 import dev.opencode.mobile.ui.sessionchat.SessionChatGoalUiState
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
@@ -138,7 +141,7 @@ import dev.opencode.mobile.ui.components.OpenCodeToolChip
 import dev.opencode.mobile.ui.components.OpenCodeToolChipStatus
 import dev.opencode.mobile.ui.components.OpenCodeToolChipVariant
 import dev.opencode.mobile.ui.components.OpenCodeReasoningRow
-import dev.opencode.mobile.ui.components.OpenCodeWorkingIndicator
+import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.scroll.MessageListOlderHistory
 import dev.opencode.mobile.ui.scroll.MessageListOlderLoadIntent
@@ -175,7 +178,6 @@ import dev.opencode.mobile.ui.sessionchat.StepParagraphChips
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.ToolChipKind
-import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator
 import dev.opencode.mobile.ui.sessionchat.displayLabel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -202,7 +204,6 @@ internal data class SessionChatTimelineViewProps(
     val sessionBranchPill: SessionBranchPillUiState? = null,
     val syncingIndicatorLabel: UiText? = null,
     val workingIndicatorLabel: String? = null,
-    val workingIndicatorCollapsed: Boolean = false,
     val workingIndicatorFading: Boolean = false,
     val sessionTodosVisible: Boolean = false,
     val sessionTodoCompletedCount: Int = 0,
@@ -223,9 +224,7 @@ internal data class SessionChatTimelineViewProps(
     val composerHeight: Dp = 0.dp,
     /** Bottom-left live activity from the screen (requests, btw, queued). The timeline adds syncing and request failed. */
     val activityItems: List<SessionChatActivityItem> = emptyList(),
-    /** Activity Card style: the turn shows as a floating pill instead of the Working row. */
-    val usesTurnStatusPill: Boolean = false,
-    /** A permission or question waits, even with its dock collapsed: the turn status pill hides. */
+    /** A permission or question waits, even with its dock collapsed: the turn pill says so. */
     val isAwaitingUser: Boolean = false,
     /** The keyboard is up: the activity pill goes compact and the other corners hide. */
     val keyboardVisible: Boolean = false,
@@ -307,7 +306,17 @@ private fun SessionChatTimelineActivityOnlySlot(
 ) {
     var stackOpen by remember { mutableStateOf(false) }
     SessionChatActivitySlotView(
-        slot = SessionChatPillSlots.activity(props.activityItems, props.keyboardVisible, System.currentTimeMillis()),
+        slot = SessionChatPillSlots.activity(props.activityItems, props.keyboardVisible),
+        turnStatus =
+            SessionChatPillSlots.turnStatus(
+                label = props.workingIndicatorLabel,
+                fading = props.workingIndicatorFading,
+                isAwaitingUser = props.isAwaitingUser,
+                items = props.activityItems,
+                keyboardVisible = props.keyboardVisible,
+                awayFromEnd = false,
+                text = ResourcesUiTextLookup(LocalResources.current),
+            ),
         stackOpen = stackOpen,
         onStackOpenChange = { stackOpen = it },
         onClick = props.onActivityClick,
@@ -403,7 +412,6 @@ private fun SessionChatTimelineStateContent(
                 sessionBranchPill = props.sessionBranchPill,
                 syncingIndicatorLabel = props.syncingIndicatorLabel?.resolve(),
                 workingIndicatorLabel = props.workingIndicatorLabel,
-                workingIndicatorCollapsed = props.workingIndicatorCollapsed,
                 workingIndicatorFading = props.workingIndicatorFading,
                 sessionTodosVisible = props.sessionTodosVisible,
                 sessionTodoCompletedCount = props.sessionTodoCompletedCount,
@@ -414,7 +422,6 @@ private fun SessionChatTimelineStateContent(
                 composerStyle = props.composerStyle,
                 composerHeight = props.composerHeight,
                 activityItems = props.activityItems,
-                usesTurnStatusPill = props.usesTurnStatusPill,
                 isAwaitingUser = props.isAwaitingUser,
                 keyboardVisible = props.keyboardVisible,
                 isRetrying = props.hideRetryCountdown,
@@ -468,7 +475,6 @@ private fun SessionChatTimelineReadyView(
     sessionBranchPill: SessionBranchPillUiState?,
     syncingIndicatorLabel: String?,
     workingIndicatorLabel: String?,
-    workingIndicatorCollapsed: Boolean,
     workingIndicatorFading: Boolean,
     sessionTodosVisible: Boolean,
     sessionTodoCompletedCount: Int,
@@ -479,7 +485,6 @@ private fun SessionChatTimelineReadyView(
     composerStyle: SessionComposerStyle,
     composerHeight: Dp,
     activityItems: List<SessionChatActivityItem>,
-    usesTurnStatusPill: Boolean,
     isAwaitingUser: Boolean,
     keyboardVisible: Boolean,
     isRetrying: Boolean,
@@ -518,7 +523,8 @@ private fun SessionChatTimelineReadyView(
     var dismissedFailureBlockIds by remember { mutableStateOf(emptySet<String>()) }
     var newMessagesBaselineId by remember { mutableStateOf<String?>(null) }
     var revealed by remember { mutableStateOf<SessionChatReveal?>(null) }
-    var activityClockMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var pillRowWidthPx by remember { mutableIntStateOf(0) }
+    val pillText = ResourcesUiTextLookup(LocalResources.current)
     val displayedSyncingLabel = rememberDisplayedSyncingLabel(syncingIndicatorLabel)
     val latestFailure = remember(messages, isRetrying) { SessionChatPillSlots.latestFailure(messages, isRetrying) }
     val allActivityItems =
@@ -526,30 +532,22 @@ private fun SessionChatTimelineReadyView(
             latestFailure?.takeIf { it.blockId !in dismissedFailureBlockIds }?.let(::add)
             addAll(activityItems)
         }
-    val activitySlot = SessionChatPillSlots.activity(allActivityItems, keyboardVisible, activityClockMs)
-    val nextFadeMs = SessionChatPillSlots.nextFadeEpochMs(allActivityItems, activityClockMs)
-    LaunchedEffect(nextFadeMs) {
-        val fadeAt = nextFadeMs ?: return@LaunchedEffect
-        delay((fadeAt - System.currentTimeMillis()).coerceAtLeast(0L))
-        activityClockMs = System.currentTimeMillis()
-    }
+    val activitySlot = SessionChatPillSlots.activity(allActivityItems, keyboardVisible)
     // Whether the list reserves the activity pill row. It follows the pill only at the end
     // of the chat: with reverseLayout the reserve is before-content padding, so changing it
     // while scrolled away would move every visible row.
-    // The status pill's fold does not change whether it holds the row, so "away" is irrelevant here.
+    // The turn pill's fold does not change whether it holds the row, so "away" is irrelevant here.
     val turnStatusHoldsRow =
-        usesTurnStatusPill &&
-            SessionChatPillSlots
-                .turnStatus(
-                    label = workingIndicatorLabel,
-                    collapsed = workingIndicatorCollapsed,
-                    fading = workingIndicatorFading,
-                    isAwaitingUser = isAwaitingUser,
-                    items = allActivityItems,
-                    keyboardVisible = keyboardVisible,
-                    awayFromEnd = false,
-                    nowEpochMs = activityClockMs,
-                )?.reservesRow == true
+        SessionChatPillSlots
+            .turnStatus(
+                label = workingIndicatorLabel,
+                fading = workingIndicatorFading,
+                isAwaitingUser = isAwaitingUser,
+                items = allActivityItems,
+                keyboardVisible = keyboardVisible,
+                awayFromEnd = false,
+                text = pillText,
+            )?.reservesRow == true
     val hasActivityRow = activitySlot.primary != null || turnStatusHoldsRow
     var reservesActivityRow by remember { mutableStateOf(hasActivityRow) }
     // Springs to the new reserve so a pinned list glides instead of jumping. Away from the end
@@ -577,15 +575,9 @@ private fun SessionChatTimelineReadyView(
     // Required frames flush immediately; other kinds keep the committed snapshot.
     var committedMessages by remember { mutableStateOf(messages) }
     var committedFrame by remember { mutableStateOf(timelineFrame) }
-    var committedWorkingLabel by remember { mutableStateOf(workingIndicatorLabel) }
-    var committedWorkingCollapsed by remember { mutableStateOf(workingIndicatorCollapsed) }
-    var committedWorkingFading by remember { mutableStateOf(workingIndicatorFading) }
     LaunchedEffect(
         messages,
         timelineFrame,
-        workingIndicatorLabel,
-        workingIndicatorCollapsed,
-        workingIndicatorFading,
         isUserScrollInProgress,
     ) {
         val hold =
@@ -596,9 +588,6 @@ private fun SessionChatTimelineReadyView(
         if (!hold) {
             committedMessages = messages
             committedFrame = timelineFrame
-            committedWorkingLabel = workingIndicatorLabel
-            committedWorkingCollapsed = workingIndicatorCollapsed
-            committedWorkingFading = workingIndicatorFading
         } else {
             runCatching {
                 Log.d(
@@ -610,8 +599,6 @@ private fun SessionChatTimelineReadyView(
         }
     }
 
-    // The Activity Card style shows the turn on a pill, so the timeline has no Working row.
-    val timelineWorkingLabel = committedWorkingLabel.takeUnless { usesTurnStatusPill }
     val apply = committedFrame?.let(TimelineApply::classify)
     val layoutAffectingRevision = apply?.layoutAffectingRevision ?: 0L
     val structureAffectingRevision = apply?.structureAffectingRevision ?: 0L
@@ -735,28 +722,6 @@ private fun SessionChatTimelineReadyView(
                         ),
                     // A server echo keeps the item slot of the optimistic row it replaced.
                     key = { message -> committedFrame?.listKey(message.id) ?: message.id },
-                    statusIndicatorKey =
-                        if (timelineWorkingLabel != null) {
-                            SESSION_CHAT_STATUS_INDICATOR_KEY
-                        } else {
-                            null
-                        },
-                    statusIndicatorCollapsed = committedWorkingCollapsed,
-                    statusIndicatorContent =
-                        timelineWorkingLabel?.let { label ->
-                            {
-                                OpenCodeWorkingIndicator(
-                                    label = label,
-                                    state =
-                                        when {
-                                            committedWorkingCollapsed -> OpenCodeChatActivityState.Collapsed
-                                            WorkingTurnIndicator.showsIdleMark(label) -> OpenCodeChatActivityState.Idle
-                                            else -> OpenCodeChatActivityState.Working
-                                        },
-                                    fading = committedWorkingFading,
-                                )
-                            }
-                        },
                 ) { message, isNewestMessage, onContentSizeSettled ->
                     val revealAlpha =
                         rememberRevealHighlightAlpha(
@@ -856,48 +821,56 @@ private fun SessionChatTimelineReadyView(
         // Away from the end the left side folds into one round pill; Syncing shrinks to a circle.
         val awayFromEnd = timeline.showScrollToEnd
         val displayedActivitySlot =
-            SessionChatPillSlots.activity(allActivityItems, keyboardVisible, activityClockMs, awayFromEnd = awayFromEnd)
+            SessionChatPillSlots.activity(allActivityItems, keyboardVisible, awayFromEnd = awayFromEnd)
         val turnStatusSlot =
-            if (usesTurnStatusPill) {
-                SessionChatPillSlots.turnStatus(
-                    label = workingIndicatorLabel,
-                    collapsed = workingIndicatorCollapsed,
-                    fading = workingIndicatorFading,
-                    isAwaitingUser = isAwaitingUser,
-                    items = allActivityItems,
-                    keyboardVisible = keyboardVisible,
-                    awayFromEnd = awayFromEnd,
-                    nowEpochMs = activityClockMs,
-                )
-            } else {
-                null
-            }
+            SessionChatPillSlots.turnStatus(
+                label = workingIndicatorLabel,
+                fading = workingIndicatorFading,
+                isAwaitingUser = isAwaitingUser,
+                items = allActivityItems,
+                keyboardVisible = keyboardVisible,
+                awayFromEnd = awayFromEnd,
+                text = pillText,
+            )
         // Kept while Syncing animates out, so it does not flash the default text on exit.
         val syncingText = rememberLastNonNull(displayedSyncingLabel, stringResource(R.string.timeline_syncing))
         val navigationText = rememberLastNonNull(navigationPill, SessionChatNavigationPill(0))
+        val trailingPills =
+            buildList {
+                displayedSyncingLabel?.let {
+                    add(OpenCodeFloatingPillLayout.Counter(it) to SessionChatPillSlots.syncingCompact(awayFromEnd, keyboardVisible))
+                }
+                navigationPill?.let {
+                    add(
+                        OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.ArrowDownward, SessionChatNavigationCopy.label(it).resolve()) to false,
+                    )
+                }
+            }
+        val pillRowFold = rememberSessionChatPillRowFold(turnStatusSlot, displayedActivitySlot, trailingPills, pillRowWidthPx)
         Row(
             modifier =
                 Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
                     .padding(horizontal = SessionChatCornerSlotsLayout.HorizontalPadding)
-                    .padding(bottom = SessionChatCornerSlotsLayout.rowBottom(bottomOverlayInset)),
+                    .padding(bottom = SessionChatCornerSlotsLayout.rowBottom(bottomOverlayInset))
+                    .onSizeChanged { pillRowWidthPx = it.width },
             horizontalArrangement = Arrangement.spacedBy(SessionChatCornerSlotsLayout.Spacing),
             verticalAlignment = Alignment.Bottom,
         ) {
             SessionChatActivitySlotView(
                 slot = displayedActivitySlot,
                 turnStatus = turnStatusSlot,
+                fold = pillRowFold,
                 stackOpen = activityStackOpen,
                 onStackOpenChange = { activityStackOpen = it },
                 onClick = { item ->
                     if (item is SessionChatActivityItem.RequestFailed) {
                         val chronological = committedMessages.indexOfFirst { it.id == item.messageId }
                         if (chronological >= 0) {
-                            // Lazy order: bottom anchor, optional status row, then messages newest first.
-                            val statusRows = if (timelineWorkingLabel != null) 1 else 0
+                            // Lazy order: bottom anchor, then messages newest first.
                             timeline.scrollController.revealItem(
-                                index = 1 + statusRows + (committedMessages.size - 1 - chronological),
+                                index = 1 + (committedMessages.size - 1 - chronological),
                                 messageCount = timeline.messageCount,
                                 tolerancePx = timeline.autoFollowTolerancePx,
                                 bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
@@ -2047,7 +2020,6 @@ private fun ToolStatus.toToolCallCardStatusBase(): OpenCodeToolCallCardStatus =
     }
 
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
-private const val SESSION_CHAT_STATUS_INDICATOR_KEY = "session-chat-status-indicators"
 
 /** Animation label for tooling; not shown to users. */
 private const val PILL_RESERVE_ANIMATION_LABEL = "sessionChatPillReserve"

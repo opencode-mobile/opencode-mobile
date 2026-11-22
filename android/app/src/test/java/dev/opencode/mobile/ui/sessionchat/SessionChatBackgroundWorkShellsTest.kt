@@ -1,5 +1,9 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessagePart
+import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.shell.AgentShellStatus
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellsCopy
@@ -8,9 +12,79 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Test
 
+private const val LOADED_FROM_MS = 1_793_000_000_000L
+
 class SessionChatBackgroundWorkShellsTest {
+    private fun toolMessage(
+        status: ToolStatus,
+        shellId: String?,
+        sentAt: Long = LOADED_FROM_MS,
+    ) = Message(
+        id = "m1",
+        role = MessageRole.Assistant,
+        text = "",
+        sentAtEpochMs = sentAt,
+        parts =
+            listOf(
+                MessagePart.Tool(
+                    toolName = "any_tool",
+                    status = status,
+                    id = "prt_1",
+                    metadata = shellId?.let { id -> buildJsonObject { put("shellID", id) } },
+                ),
+            ),
+    )
+
+    private fun running(
+        id: String,
+        startedAtMs: Long?,
+    ) = shell(id).copy(startedAtMs = startedAtMs)
+
+    @Test
+    fun backgroundShells_aFinishedCallThatNamesTheShellCounts() {
+        val shells = listOf(running("sh_1", LOADED_FROM_MS + 2_000))
+
+        assertEquals(shells, SessionChatBackgroundWork.backgroundShells(shells, listOf(toolMessage(ToolStatus.Completed, "sh_1"))))
+    }
+
+    @Test
+    fun backgroundShells_aCallStillRunningIsForeground() {
+        val shells = listOf(running("sh_1", LOADED_FROM_MS + 2_000))
+
+        assertTrue(SessionChatBackgroundWork.backgroundShells(shells, listOf(toolMessage(ToolStatus.Running, "sh_1"))).isEmpty())
+        assertTrue(SessionChatBackgroundWork.backgroundShells(shells, listOf(toolMessage(ToolStatus.Pending, "sh_1"))).isEmpty())
+    }
+
+    @Test
+    fun backgroundShells_aShellOlderThanLoadedHistoryCounts() {
+        val older = running("sh_old", LOADED_FROM_MS - 1_000)
+        val newer = running("sh_new", LOADED_FROM_MS + 1_000)
+
+        assertEquals(
+            listOf(older),
+            SessionChatBackgroundWork.backgroundShells(listOf(older, newer), listOf(toolMessage(ToolStatus.Completed, null))),
+        )
+    }
+
+    @Test
+    fun backgroundShells_noStartTimeAndNoMatchDoesNotCount() {
+        val shells = listOf(running("sh_1", null))
+
+        assertTrue(SessionChatBackgroundWork.backgroundShells(shells, listOf(toolMessage(ToolStatus.Completed, "sh_other"))).isEmpty())
+        assertTrue(SessionChatBackgroundWork.backgroundShells(shells, emptyList()).isEmpty())
+    }
+
+    @Test
+    fun backgroundShells_anEndedShellNeverCounts() {
+        val ended = running("sh_1", LOADED_FROM_MS - 1_000).copy(status = AgentShellStatus.Exited(0))
+
+        assertTrue(SessionChatBackgroundWork.backgroundShells(listOf(ended), listOf(toolMessage(ToolStatus.Completed, "sh_1"))).isEmpty())
+    }
+
     @Test
     fun pill_shellsAloneShowThePill() {
         assertEquals(

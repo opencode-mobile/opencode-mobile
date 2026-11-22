@@ -75,6 +75,8 @@ nonisolated enum AnySendable: Sendable, Equatable {
     static func from(_ value: Any) -> AnySendable? {
         switch value {
         case let v as String: .string(v)
+        // JSONSerialization booleans are NSNumbers, which also cast to Int and then fail to decode as Bool.
+        case let v as NSNumber where CFGetTypeID(v) == CFBooleanGetTypeID(): .bool(v.boolValue)
         case let v as Int: .int(v)
         case let v as Int64: .int64(v)
         case let v as Double: .double(v)

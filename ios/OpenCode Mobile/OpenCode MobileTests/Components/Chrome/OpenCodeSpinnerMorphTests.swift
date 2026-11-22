@@ -58,11 +58,17 @@ struct OpenCodeSpinnerMorphTests {
 }
 
 struct SessionChatTurnStatusSlotTests {
-    private let now = Date(timeIntervalSince1970: 1_000)
+    private let waitingPill = SessionChatBackgroundWorkPill(
+        label: "general needs input · 1 running",
+        needsInput: true,
+        accessibilityLabel: "general needs input, 1 subagent running",
+        askingLabel: "general needs input",
+        stillRunning: .init(label: "1 subagent", accessibilityLabel: "1 subagent running")
+    )
+    private let failure = SessionChatActivityItem.requestFailed(rowID: "r", blockID: "b")
 
     private func slot(
         label: String? = "Working",
-        collapsed: Bool = false,
         fading: Bool = false,
         awaiting: Bool = false,
         items: [SessionChatActivityItem] = [],
@@ -71,13 +77,11 @@ struct SessionChatTurnStatusSlotTests {
     ) -> SessionChatTurnStatusSlot? {
         SessionChatPillSlots.turnStatus(
             label: label,
-            collapsed: collapsed,
             fading: fading,
             isAwaitingUser: awaiting,
             items: items,
             keyboardVisible: keyboard,
-            awayFromEnd: away,
-            now: now
+            awayFromEnd: away
         )
     }
 
@@ -85,72 +89,149 @@ struct SessionChatTurnStatusSlotTests {
         #expect(slot() == SessionChatTurnStatusSlot(phase: .working(label: "Working"), compact: false, leaving: false))
         #expect(slot(label: WorkingTurnIndicator.idleLabel)?.phase == .done)
         #expect(slot(label: "Compacting…")?.phase == .working(label: "Compacting…"))
+        #expect(slot(label: nil) == nil)
     }
 
-    @Test func foldsBesideAnotherPillOrAwayFromTheEnd() {
-        #expect(slot(items: [.queued(count: 1)])?.compact == true)
+    @Test func priorityLadder() {
+        let all: [SessionChatActivityItem] = [.subagents(waitingPill), .answerQuestion, .reviewPermission, failure]
+        #expect(slot(awaiting: true, items: all)?.phase == .failed(label: "Request failed"))
+        let noFailure = Array(all.dropLast())
+        #expect(slot(awaiting: true, items: noFailure)?.phase == .attention(label: "Review permission", mark: .arrowUp))
+        let question = [SessionChatActivityItem.subagents(waitingPill), .answerQuestion]
+        #expect(slot(awaiting: true, items: question)?.phase == .attention(label: "Answer question", mark: .arrowUp))
+        let subagent = [SessionChatActivityItem.subagents(waitingPill)]
+        #expect(slot(awaiting: true, items: subagent)?.phase == .attention(label: "Waiting for you", mark: .pulsingDot))
+        #expect(slot(items: subagent)?.phase == .attention(label: "general needs input", mark: .pulsingDot))
+        #expect(slot(label: "Retrying", items: [.queued(count: 1)])?.phase == .working(label: "Retrying"))
+    }
+
+    @Test func blockersShowWithNoTurnMounted() {
+        #expect(slot(label: nil, items: [failure])?.phase == .failed(label: "Request failed"))
+        #expect(slot(label: nil, items: [.reviewPermission])?.tapItem == .reviewPermission)
+    }
+
+    @Test func onlyTheContractStatesAreTappableOrClosable() {
+        #expect(slot(items: [failure])?.tapItem == failure)
+        #expect(slot(items: [failure])?.isClosable == true)
+        #expect(slot(items: [.reviewPermission])?.tapItem == .reviewPermission)
+        #expect(slot(items: [.reviewPermission])?.isClosable == false)
+        #expect(slot(items: [.subagents(waitingPill)])?.tapItem == .subagents(waitingPill))
+        #expect(slot(awaiting: true)?.tapItem == nil)
+        #expect(slot()?.tapItem == nil)
+        #expect(slot(label: WorkingTurnIndicator.idleLabel)?.tapItem == nil)
+    }
+
+    @Test func accessibilityReusesTheActivityStrings() {
+        #expect(slot(items: [failure])?.accessibilityLabel == "Request failed. Show in chat")
+        #expect(slot(items: [.reviewPermission])?.accessibilityLabel == "Review permission request")
+        #expect(slot(items: [.subagents(waitingPill)])?.accessibilityLabel == "general needs input. Open request")
+        #expect(slot(awaiting: true)?.accessibilityLabel == "Waiting for you")
+    }
+
+    @Test func workingAndDoneFoldAwayOrWithTheKeyboardButNotBesideASecondary() {
+        #expect(slot(items: [.queued(count: 1)])?.compact == false)
         #expect(slot(away: true)?.compact == true)
         #expect(slot(keyboard: true)?.compact == true)
+        #expect(slot(label: WorkingTurnIndicator.idleLabel, away: true)?.compact == true)
     }
 
-    @Test func aFadedFinishedItemDoesNotFoldIt() {
-        let faded = SessionChatActivityItem.finished(id: "a", label: "a", finishedAt: now.addingTimeInterval(-10))
-        #expect(slot(items: [faded])?.compact == false)
-    }
-
-    @Test func hiddenForRequestsAndFailures() {
-        #expect(slot(awaiting: true) == nil)
-        #expect(slot(items: [.reviewPermission]) == nil)
-        #expect(slot(items: [.answerQuestion]) == nil)
-        #expect(slot(items: [.requestFailed(rowID: "r", blockID: "b")]) == nil)
-        #expect(slot(label: nil) == nil)
-        #expect(slot(collapsed: true) == nil)
-    }
-
-    @Test func neverCountsTowardOverflow() {
-        let items: [SessionChatActivityItem] = [.queued(count: 1)]
-        #expect(slot(items: items) != nil)
-        let activity = SessionChatPillSlots.activity(items: items, keyboardVisible: false, now: now)
-        #expect(activity.overflow.isEmpty)
-        #expect(!activity.showsOverflowButton)
-    }
-
-    @Test func leavingReleasesTheRow() {
-        #expect(slot()?.reservesRow == true)
-        #expect(slot(fading: true)?.reservesRow == false)
-    }
-
-    @Test func doneHoldsThenFadesThenCollapses() {
-        func resolve(at nowMs: Int64) -> WorkingTurnIndicator.Resolution {
-            WorkingTurnIndicator.resolveFooter(
-                activeLabel: nil,
-                lastIsThinking: false,
-                hideImmediately: false,
-                previous: WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: false),
-                hold: WorkingTurnIndicator.Hold(startedAtMs: 0),
-                nowMs: nowMs,
-                holdMilliseconds: WorkingTurnIndicator.turnPillHoldMilliseconds,
-                fadeMilliseconds: WorkingTurnIndicator.turnPillFadeMilliseconds
-            )
+    @Test func attentionAndFailedNeverFold() {
+        for items in [[failure], [.reviewPermission], [.subagents(waitingPill)]] as [[SessionChatActivityItem]] {
+            #expect(slot(items: items, keyboard: true, away: true)?.compact == false)
         }
-        #expect(resolve(at: 2_999).chrome.fading == false)
-        #expect(resolve(at: 2_999).wakeAfterMs == 1)
-        #expect(resolve(at: 3_000).chrome.fading == true)
-        #expect(resolve(at: 3_000).wakeAfterMs == 240)
-        #expect(resolve(at: 3_240).chrome.collapsed == true)
-        #expect(resolve(at: 3_240).wakeAfterMs == nil)
+        #expect(slot(awaiting: true, keyboard: true, away: true)?.compact == false)
     }
 
-    @Test func otherStylesKeepTheFiveSecondIdle() {
-        let resolution = WorkingTurnIndicator.resolveFooter(
-            activeLabel: nil,
-            lastIsThinking: false,
-            hideImmediately: false,
-            previous: WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: false),
-            hold: WorkingTurnIndicator.Hold(startedAtMs: 0),
-            nowMs: 4_999
+    @Test func mergedItemsLeaveTheSecondaryRow() {
+        let activity = SessionChatPillSlots.activity(
+            items: [.reviewPermission, .answerQuestion, failure, .subagents(waitingPill), .queued(count: 1)],
+            keyboardVisible: false
         )
-        #expect(resolution.chrome == WorkingTurnIndicator.Chrome(label: "Idle", collapsed: false, fading: false))
-        #expect(resolution.wakeAfterMs == 1)
+        let remainder = SessionChatBackgroundWorkPill(
+            label: "1 subagent", needsInput: false, accessibilityLabel: "1 subagent running"
+        )
+        #expect(activity.primary == .subagents(remainder))
+        #expect(activity.overflow == [.queued(count: 1)])
+        #expect(activity.allItems == [.subagents(remainder), .queued(count: 1)])
+    }
+
+    @Test func aWaitingSubagentWithNothingRunningLeavesNoSecondary() {
+        let alone = SessionChatBackgroundWorkPill(
+            label: "general needs input", needsInput: true, accessibilityLabel: "general needs input",
+            askingLabel: "general needs input"
+        )
+        #expect(SessionChatPillSlots.activity(items: [.subagents(alone)], keyboardVisible: false) == .empty)
+    }
+
+    @Test func reserveStaysThroughCardAndWaitingChanges() {
+        let phases = [
+            slot(), slot(label: "Compacting…"), slot(awaiting: true), slot(items: [.reviewPermission]),
+            slot(items: [.subagents(waitingPill)]), slot(), slot(label: WorkingTurnIndicator.idleLabel),
+        ]
+        #expect(phases.allSatisfy { $0?.reservesRow == true })
+        #expect(slot(label: WorkingTurnIndicator.idleLabel, fading: true)?.reservesRow == false)
+    }
+
+    @Test func reserveDoesNotChangeWhileAwayFromTheEnd() {
+        #expect(SessionChatPillSlots.reservesPillRow(wanted: false, held: true, awayFromEnd: true))
+        #expect(!SessionChatPillSlots.reservesPillRow(wanted: true, held: false, awayFromEnd: true))
+        #expect(SessionChatPillSlots.reservesPillRow(wanted: true, held: false, awayFromEnd: false))
+        #expect(!SessionChatPillSlots.reservesPillRow(wanted: false, held: true, awayFromEnd: false))
+    }
+
+    // MARK: Fold
+
+    private let working = OpenCodeTurnStatusPillPhase.working(label: "Working")
+    private let attention = OpenCodeTurnStatusPillPhase.attention(label: "Review permission", mark: .arrowUp)
+
+    @Test func foldNothingWhenTheRowFits() {
+        // 100+8 + 80+8 + 40+8 + 50 = 294.
+        let widths = SessionChatPillRowWidths(available: 294, turn: 100, secondary: 80, overflow: 40, trailing: 50)
+        #expect(SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: true) == SessionChatPillRowFold())
+    }
+
+    @Test func foldWorkingFirstWhenOnePointShort() {
+        let widths = SessionChatPillRowWidths(available: 293, turn: 100, secondary: 80, overflow: 40, trailing: 50)
+        #expect(SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: true) == SessionChatPillRowFold(turnCompact: true))
+        #expect(SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: OpenCodeTurnStatusPillPhase.done.folds).turnCompact)
+    }
+
+    @Test func foldTheSecondaryToo_whenAFoldedWorkingStillDoesNotFit() {
+        let widths = SessionChatPillRowWidths(available: 150, turn: 100, secondary: 120)
+        #expect(
+            SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: true)
+                == SessionChatPillRowFold(turnCompact: true, secondaryCompact: true)
+        )
+    }
+
+    @Test func foldTheSecondaryForAttentionAndFailed() {
+        let widths = SessionChatPillRowWidths(available: 210, turn: 150, secondary: 80)
+        for phase in [attention, .failed(label: "Request failed")] {
+            let fold = SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: phase.folds)
+            #expect(!fold.turnCompact)
+            #expect(fold.secondaryCompact)
+            #expect(fold.turnMaxWidth == nil)
+        }
+    }
+
+    @Test func aPinnedPillTruncatesWhenEvenTheFoldedSecondaryDoesNotFit() {
+        // 300 + 8 + 36 = 344, 144 over.
+        let widths = SessionChatPillRowWidths(available: 200, turn: 300, secondary: 80)
+        let fold = SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: attention.folds)
+        #expect(!fold.turnCompact)
+        #expect(fold.secondaryCompact)
+        #expect(fold.turnMaxWidth == 156)
+    }
+
+    @Test func foldWaitsForAMeasuredRow() {
+        let widths = SessionChatPillRowWidths(available: 0, turn: 100, secondary: 80)
+        #expect(SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: true) == SessionChatPillRowFold())
+    }
+
+    @Test func foldsOnlyWorkingAndDonePhases() {
+        #expect(working.folds)
+        #expect(OpenCodeTurnStatusPillPhase.done.folds)
+        #expect(!attention.folds)
+        #expect(!OpenCodeTurnStatusPillPhase.failed(label: "Request failed").folds)
     }
 }
