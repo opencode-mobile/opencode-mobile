@@ -25,6 +25,7 @@ import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleSegment
 import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleTone
+import dev.opencode.mobile.ui.components.OpenCodeListItemTextFlow
 import dev.opencode.mobile.ui.components.OpenCodeListItemVariant
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -416,6 +417,18 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
                 onClick = {},
             )
         }
+
+        Text(text = "Wrapped text", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        OpenCodeListItem(
+            title = "Keep the current layout and move the settings into a separate screen",
+            subtitle =
+                "Every word of a long description stays readable, and the selection mark stays " +
+                    "beside the first line of the title however tall the row grows.",
+            style = OpenCodeListItemStyle.Card,
+            textFlow = OpenCodeListItemTextFlow.Wrapped,
+            startDecorator = StartDecorator.Icon(OpenCodeIcons.RadioButtonUnchecked, contentDescription = null),
+            onClick = {},
+        )
 
         Text(text = "Trailing", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         OpenCodeListItem(

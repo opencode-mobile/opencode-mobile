@@ -120,6 +120,29 @@ struct OpenCodeListItemStatus: Equatable {
     let tone: OpenCodeListItemStatusTone
 }
 
+/// How a standard row's title and subtitle use the width they have.
+enum OpenCodeListItemTextFlow {
+    /// One line each, ending in an ellipsis.
+    case singleLine
+    /// Every word shows, for rows whose text is the choice being made. The start decorator stays
+    /// beside the first line. Put these rows in a container that scrolls.
+    case wrapped
+
+    fileprivate var lineLimit: Int? {
+        switch self {
+        case .singleLine: 1
+        case .wrapped: nil
+        }
+    }
+
+    fileprivate var rowAlignment: VerticalAlignment {
+        switch self {
+        case .singleLine: .center
+        case .wrapped: .top
+        }
+    }
+}
+
 /// Built-in trailing control. Custom trailing views stay available for anything else.
 enum OpenCodeListItemAccessory {
     /// Navigation chevron. The row action owns the tap.
@@ -150,6 +173,8 @@ struct OpenCodeListItem<Trailing: View>: View {
     let selected: Bool
     let enabled: Bool
     let style: OpenCodeListItemStyle
+    /// Standard rows only; compact rows keep their two fixed lines.
+    let textFlow: OpenCodeListItemTextFlow
     let startDecorator: StartDecorator
     let accessory: OpenCodeListItemAccessory?
     let action: (() -> Void)?
@@ -180,6 +205,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         selected: Bool = false,
         enabled: Bool = true,
         style: OpenCodeListItemStyle = .plain,
+        textFlow: OpenCodeListItemTextFlow = .singleLine,
         startDecorator: StartDecorator = .none,
         accessory: OpenCodeListItemAccessory? = nil,
         action: (() -> Void)? = nil,
@@ -203,6 +229,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.selected = selected
         self.enabled = enabled
         self.style = style
+        self.textFlow = textFlow
         self.startDecorator = startDecorator
         self.accessory = accessory
         self.action = action
@@ -456,7 +483,7 @@ struct OpenCodeListItem<Trailing: View>: View {
     }
 
     private var standardContent: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: textFlow.rowAlignment, spacing: 12) {
             startDecoratorContent
 
             VStack(alignment: .leading, spacing: listItemTitleSubtitleSpacing * textScale) {
@@ -464,7 +491,8 @@ struct OpenCodeListItem<Trailing: View>: View {
                     titleText
                         .font(OpenCodeTypography.Style.body.font(scale: textScale).weight(.semibold))
                         .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
-                        .lineLimit(1)
+                        .lineLimit(textFlow.lineLimit)
+                        .fixedSize(horizontal: false, vertical: textFlow == .wrapped)
                     if let titleTag {
                         OpenCodeTag(titleTag, size: .small)
                     }
@@ -481,7 +509,8 @@ struct OpenCodeListItem<Trailing: View>: View {
                     Text(openCode: subtitle)
                         .font(OpenCodeTypography.Style.caption.font(scale: textScale))
                         .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
-                        .lineLimit(1)
+                        .lineLimit(textFlow.lineLimit)
+                        .fixedSize(horizontal: false, vertical: textFlow == .wrapped)
                 }
 
                 if let detailSegments {

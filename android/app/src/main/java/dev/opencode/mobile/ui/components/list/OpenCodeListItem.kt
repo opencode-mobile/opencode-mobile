@@ -106,6 +106,13 @@ private const val ListItemPopPeakScale = 1.035f
 
 private fun subtitleIconId(index: Int): String = "subtitle-icon-$index"
 
+private val OpenCodeListItemTextFlow.maxLines: Int
+    get() =
+        when (this) {
+            OpenCodeListItemTextFlow.SingleLine -> 1
+            OpenCodeListItemTextFlow.Wrapped -> Int.MAX_VALUE
+        }
+
 enum class OpenCodeListItemStyle {
     Plain,
     Card,
@@ -120,6 +127,18 @@ enum class OpenCodeListItemVariant {
      * Pairs with [StartDecorator.Tile].
      */
     Compact,
+}
+
+/** How a Standard row's title and subtitle use the width they have. */
+enum class OpenCodeListItemTextFlow {
+    /** One line each, ending in an ellipsis. */
+    SingleLine,
+
+    /**
+     * Every word shows, for rows whose text is the choice being made. The start decorator stays
+     * beside the first line. Put these rows in a container that scrolls.
+     */
+    Wrapped,
 }
 
 enum class OpenCodeListItemSubtitleTone {
@@ -198,6 +217,8 @@ fun OpenCodeListItem(
     titleEmphasized: Boolean = false,
     /** Part of [title] to mark, such as the text a search matched; out-of-range parts are ignored. */
     titleHighlight: IntRange? = null,
+    /** Standard rows only; Compact keeps its two fixed lines. */
+    textFlow: OpenCodeListItemTextFlow = OpenCodeListItemTextFlow.SingleLine,
     /**
      * Content below the row, inside the card and under a divider. It owns its own taps; the row
      * click does not cover it.
@@ -359,7 +380,8 @@ fun OpenCodeListItem(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = ListItemVerticalPadding),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment =
+                            if (textFlow == OpenCodeListItemTextFlow.Wrapped) Alignment.Top else Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
@@ -373,7 +395,7 @@ fun OpenCodeListItem(
                                     text = listItemTitleText(title, titleHighlight),
                                     color = if (enabled) textStrong else textWeaker,
                                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                                    maxLines = 1,
+                                    maxLines = textFlow.maxLines,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = titleModifier,
                                 )
@@ -403,7 +425,7 @@ fun OpenCodeListItem(
                                     text = subtitle,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = if (enabled) textBase else textWeaker,
-                                    maxLines = 1,
+                                    maxLines = textFlow.maxLines,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }

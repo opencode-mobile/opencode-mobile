@@ -419,6 +419,22 @@ struct ListItemGalleryView: View {
                 )
             }
 
+            Text("Wrapped text")
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+
+            OpenCodeListItem(
+                title: .verbatim("Keep the current layout and move the settings into a separate screen"),
+                subtitle: .verbatim(
+                    "Every word of a long description stays readable, and the selection mark stays "
+                        + "beside the first line of the title however tall the row grows."
+                ),
+                style: .card,
+                textFlow: .wrapped,
+                startDecorator: .icon(.radioButtonUnchecked),
+                action: {}
+            )
+
             Text("Trailing")
                 .font(OpenCodeTypography.button)
                 .foregroundStyle(OpenCodeColors.textStrong)

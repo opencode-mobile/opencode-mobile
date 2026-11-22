@@ -1902,6 +1902,7 @@ private fun ColumnScope.QuestionRequestContent(
                         enabled = !state.submitting,
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = questionSelectionDecorator(selected = optionSelected),
+                        textFlow = OpenCodeListItemTextFlow.Wrapped,
                         onClick = {
                             onAction(
                                 OpenCodeSessionComposerAction.ToggleQuestionOption(
