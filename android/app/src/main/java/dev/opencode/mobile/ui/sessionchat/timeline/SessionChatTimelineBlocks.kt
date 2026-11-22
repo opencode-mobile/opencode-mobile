@@ -537,6 +537,13 @@ object SessionChatTimelineBlocks {
                 is SessionChatTimelineBlock.ToolGroup -> block.members.first().blockID to block.images
                 else -> return null
             }
+        return toolGallery(sourceId, images)
+    }
+
+    private fun toolGallery(
+        sourceId: String,
+        images: List<SessionChatAttachmentItem>,
+    ): SessionChatTimelineBlock.ImageGallery? {
         if (images.isEmpty()) return null
         return SessionChatTimelineBlock.ImageGallery(
             blockID = PresentationBlockId.imageGallery(sourceId),
@@ -638,6 +645,9 @@ object SessionChatTimelineBlocks {
                     ),
                 )
             val partIds = textIds + toolIds
+            // A paragraph's block id grows with each tool; its expansion id does not.
+            val expansionId = PresentationBlockId.stepParagraph(listOf(partIds.first()))
+            val images = pendingTools.flatMap { it.images }.map(AttachmentPresentationMapper::from)
             blocks +=
                 SessionChatTimelineBlock.StepParagraph(
                     blockID = PresentationBlockId.stepParagraph(partIds),
@@ -646,9 +656,10 @@ object SessionChatTimelineBlocks {
                     errorLines = chips.mapNotNull(::chipErrorLine),
                     noteLines = chips.mapNotNull { chip -> chip.card.noteText },
                     textBlockID = if (text != null) PresentationBlockId.mergedText(textIds) else null,
-                    expansionID = PresentationBlockId.stepParagraph(listOf(partIds.first())),
+                    expansionID = expansionId,
                     exploreSummary = exploreSummary,
                 )
+            toolGallery(expansionId, images)?.let { blocks += it }
             pendingText.clear()
             pendingTools.clear()
             return true
@@ -730,6 +741,7 @@ object SessionChatTimelineBlocks {
         val blocks = mutableListOf<SessionChatTimelineBlock>()
         val pendingText = mutableListOf<Pair<String, String>>()
         val pendingSteps = mutableListOf<SessionChatStep>()
+        val pendingImages = mutableListOf<SessionChatAttachmentItem>()
 
         fun flushText() {
             if (pendingText.isEmpty()) return
@@ -744,8 +756,12 @@ object SessionChatTimelineBlocks {
 
         fun flushSegment() {
             if (pendingSteps.isEmpty()) return
-            blocks += segmentBlock(pendingSteps.toList())
+            val segment = segmentBlock(pendingSteps.toList())
+            blocks += segment
+            // One gallery under the run, keyed on its stable id, so it stays put as steps join.
+            toolGallery(segment.blockID, pendingImages.toList())?.let { blocks += it }
             pendingSteps.clear()
+            pendingImages.clear()
         }
 
         for (part in parts) {
@@ -763,6 +779,7 @@ object SessionChatTimelineBlocks {
                     val step = toStep(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
                     flushText()
                     pendingSteps += step
+                    pendingImages += part.images.map(AttachmentPresentationMapper::from)
                 }
                 is MessagePart.Reasoning -> {
                     // A live thought is not a step; the rail's Thinking… row covers it.

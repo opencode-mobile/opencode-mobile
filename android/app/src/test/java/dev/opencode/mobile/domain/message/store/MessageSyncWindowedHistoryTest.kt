@@ -901,6 +901,29 @@ class MessageSyncWindowedHistoryTest {
         }
 
     @Test
+    fun fullImage_mergedRowHintFetchesTheMessageThatHoldsTheImage() =
+        runTest(testDispatcher) {
+            val fetched = mutableListOf<String>()
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ -> MessagePage(listOf(toolAssistant("")), olderCursor = null, hasOlder = false) },
+                    sessionCache = SeededSessionCache(listOf(toolAssistant(""))),
+                    getMessage = { _, _, messageId ->
+                        fetched += messageId
+                        toolAssistant(PNG_URL)
+                    },
+                )
+            val job = launch { sync.observeMessages("ses-1", "/repo").collect { } }
+            advanceUntilIdle()
+
+            val image = sync.fullImage("ses-1", "/repo", "first-of-merged-row", ToolResultImages.id("prt-tool", 0))
+            job.cancel()
+
+            assertEquals(PNG_URL, image.dataUrl)
+            assertEquals(listOf("a1"), fetched)
+        }
+
+    @Test
     fun fullImage_throwsWhenTheFetchFailsOrLacksTheImage() =
         runTest(testDispatcher) {
             val failing =

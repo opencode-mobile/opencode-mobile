@@ -1540,6 +1540,7 @@ nonisolated enum SessionChatTimelineBlocks {
         var blocks: [SessionChatTimelineBlock] = []
         var pendingText: [(id: String, text: String)] = []
         var pendingSteps: [SessionChatStep] = []
+        var pendingStepTools: [ToolPart] = []
 
         func flushText() {
             guard !pendingText.isEmpty else { return }
@@ -1552,8 +1553,12 @@ nonisolated enum SessionChatTimelineBlocks {
 
         func flushRail() {
             guard let first = pendingSteps.first else { return }
-            blocks.append(makeRun(first.id, pendingSteps))
+            let run = makeRun(first.id, pendingSteps)
+            blocks.append(run)
+            // One gallery under the run, keyed on its stable id, so it stays put as steps join.
+            blocks.append(contentsOf: toolImageGallery(pendingStepTools, under: run))
             pendingSteps.removeAll()
+            pendingStepTools.removeAll()
         }
 
         for part in parts {
@@ -1594,6 +1599,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 guard let step = toolStep(tool) else { return .missingPartIds }
                 flushText()
                 pendingSteps.append(step)
+                pendingStepTools.append(tool)
             }
         }
         flushText()
@@ -1904,6 +1910,9 @@ nonisolated enum SessionChatTimelineBlocks {
                 return nil
             case .reasoning(_, _, true, _):
                 continue
+            case .imageGallery(_, let gallery) where gallery.source == .tool:
+                // A run's images sit under it; the run itself is still the trailing work.
+                continue
             default:
                 return nil
             }
@@ -1950,13 +1959,15 @@ nonisolated enum SessionChatTimelineBlocks {
                 let error = (chip.card.errorText ?? .app("tool.error.failed", "Failed")).resolved
                 return .app("tool.error.line", "\(label): \(error)")
             }
+            let paragraphTools = pendingTools.map(\.tool)
+            let paragraphID = PresentationBlockId.stepParagraphIdentity(firstPartId)
             pendingText.removeAll()
             pendingTools.removeAll()
             blocks.append(
                 .stepParagraph(
                     blockID: PresentationBlockId.stepParagraph(textIds + toolIds),
                     paragraph: SessionChatStepParagraphBlock(
-                        id: PresentationBlockId.stepParagraphIdentity(firstPartId),
+                        id: paragraphID,
                         textBlockID: textIds.isEmpty ? nil : PresentationBlockId.mergedText(textIds),
                         text: merged.isEmpty ? nil : merged,
                         renderedMarkdown: nil,
@@ -1966,6 +1977,8 @@ nonisolated enum SessionChatTimelineBlocks {
                     )
                 )
             )
+            // A paragraph's block id grows with each tool; its identity does not.
+            blocks.append(contentsOf: toolImageGallery(paragraphTools, ownerID: paragraphID))
             return true
         }
 
@@ -2710,11 +2723,18 @@ nonisolated enum SessionChatTimelineBlocks {
         _ tools: [ToolPart],
         under owner: SessionChatTimelineBlock
     ) -> [SessionChatTimelineBlock] {
+        toolImageGallery(tools, ownerID: owner.blockID)
+    }
+
+    private static func toolImageGallery(
+        _ tools: [ToolPart],
+        ownerID: String
+    ) -> [SessionChatTimelineBlock] {
         let images = tools.flatMap(\.images).map(AttachmentPreviewCache.shared.resolved)
         guard !images.isEmpty else { return [] }
         return [
             .imageGallery(
-                blockID: PresentationBlockId.imageGallery([owner.blockID]),
+                blockID: PresentationBlockId.imageGallery([ownerID]),
                 gallery: SessionChatImageGalleryBlock(source: .tool, images: images)
             ),
         ]

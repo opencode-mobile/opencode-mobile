@@ -85,6 +85,53 @@ struct SessionChatImageGalleryBlocksTests {
         #expect(kinds == ["card", "gallery", "text", "card", "gallery"])
     }
 
+    // MARK: - Other timeline styles
+
+    @Test func stepRailShowsTheRunsImagesInOneGalleryUnderIt() {
+        let blocks = styled(
+            [tool("t1", name: "read", images: 2), tool("t2", name: "read", images: 0), tool("t3", name: "read", images: 1)],
+            stepRail: true
+        )
+        #expect(blocks.count == 2)
+        guard case .stepRail(let railID, _) = blocks[0], case .imageGallery(let id, let gallery) = blocks[1] else {
+            Issue.record("Expected a rail then a gallery, got \(blocks)")
+            return
+        }
+        #expect(id == PresentationBlockId.imageGallery([railID]))
+        #expect(gallery.source == .tool)
+        #expect(gallery.images.map(\.id) == ["t1:file:0", "t1:file:1", "t3:file:0"])
+    }
+
+    @Test func activityCardShowsImagesUnderItsRunAndTextSplitsRuns() {
+        let blocks = styled(
+            [tool("t1", name: "read", images: 1), text("x", "Next"), tool("t2", name: "read", images: 1)],
+            activityCard: true
+        )
+        #expect(blocks.count == 5)
+        guard case .activityCard = blocks[0], case .imageGallery(_, let first) = blocks[1],
+              case .text = blocks[2],
+              case .activityCard = blocks[3], case .imageGallery(_, let second) = blocks[4]
+        else {
+            Issue.record("Expected card, gallery, text, card, gallery, got \(blocks)")
+            return
+        }
+        #expect(first.images.map(\.id) == ["t1:file:0"])
+        #expect(second.images.map(\.id) == ["t2:file:0"])
+    }
+
+    @Test func chipGalleryFollowsItsParagraphWithAnIdThatSurvivesNewTools() {
+        let before = styled([tool("t1", name: "bash", images: 1)], chips: true)
+        let after = styled([tool("t1", name: "bash", images: 1), tool("t2", name: "bash", images: 1)], chips: true)
+        guard case .stepParagraph = before.first, case .imageGallery(let beforeID, _) = before.last,
+              case .stepParagraph = after.first, case .imageGallery(let afterID, let gallery) = after.last
+        else {
+            Issue.record("Expected a paragraph then a gallery")
+            return
+        }
+        #expect(beforeID == afterID)
+        #expect(gallery.images.count == 2)
+    }
+
     // MARK: - Attached images
 
     @Test func userWithOneImageKeepsTheAttachmentBlock() {
@@ -157,6 +204,25 @@ struct SessionChatImageGalleryBlocksTests {
             role: role,
             parts: parts,
             collapseConsecutiveToolCalls: collapse
+        ) else {
+            Issue.record("Expected structured blocks")
+            return []
+        }
+        return blocks
+    }
+
+    private func styled(
+        _ parts: [MessagePart],
+        chips: Bool = false,
+        stepRail: Bool = false,
+        activityCard: Bool = false
+    ) -> [SessionChatTimelineBlock] {
+        guard case .ok(let blocks) = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: parts,
+            chipTimeline: chips,
+            stepRail: stepRail,
+            activityCard: activityCard
         ) else {
             Issue.record("Expected structured blocks")
             return []

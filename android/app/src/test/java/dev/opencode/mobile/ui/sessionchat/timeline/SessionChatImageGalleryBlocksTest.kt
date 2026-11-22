@@ -112,22 +112,6 @@ class SessionChatImageGalleryBlocksTest {
     }
 
     @Test
-    fun otherTimelineStyles_doNotShowToolImagesYet() {
-        val parts = listOf(MessagePart.Text("Checking", id = "x1"), readTool("t1", images = 2))
-        val styles =
-            listOf(
-                SessionChatTimelineBlocks.build(MessageRole.Assistant, parts, chipTimeline = true),
-                SessionChatTimelineBlocks.build(MessageRole.Assistant, parts, stepRail = true),
-                SessionChatTimelineBlocks.build(MessageRole.Assistant, parts, activityCard = true),
-            )
-
-        styles.forEach { result ->
-            val blocks = (result as SessionChatTimelineBlocksResult.Ok).blocks
-            assertTrue(blocks.none { it is SessionChatTimelineBlock.ImageGallery })
-        }
-    }
-
-    @Test
     fun messageAttachments_countSentGalleriesButNotToolImages() {
         val user = build(MessageRole.User, listOf(image("f1"), image("f2")))
         val tool = build(MessageRole.Assistant, listOf(readTool("t1", images = 2)))
@@ -144,6 +128,81 @@ class SessionChatImageGalleryBlocksTest {
 
         assertEquals(build(MessageRole.User, listOf(image("f1"), image("f2"))), optimistic)
     }
+
+    @Test
+    fun stepRail_showsTheRunsImagesInOneGalleryUnderIt() {
+        val blocks =
+            styled(listOf(readTool("t1", images = 2), readTool("t2", images = 0), readTool("t3", images = 1)), stepRail = true)
+
+        val rail = blocks[0] as SessionChatTimelineBlock.StepRail
+        val gallery = blocks[1] as SessionChatTimelineBlock.ImageGallery
+        assertEquals(2, blocks.size)
+        assertEquals(PresentationBlockId.imageGallery(rail.blockID), gallery.blockID)
+        assertEquals(listOf("t1:image:0", "t1:image:1", "t3:image:0"), gallery.images.map { it.id })
+        assertTrue(gallery.fromTool)
+    }
+
+    @Test
+    fun activityCard_showsTheRunsImagesUnderIt_andTextSplitsRuns() {
+        val blocks =
+            styled(
+                listOf(
+                    readTool("t1", images = 1),
+                    MessagePart.Text(id = "x", text = "Next"),
+                    readTool("t2", images = 1),
+                ),
+                activityCard = true,
+            )
+
+        assertEquals(5, blocks.size)
+        assertTrue(blocks[0] is SessionChatTimelineBlock.ActivityCard)
+        assertEquals(listOf("t1:image:0"), (blocks[1] as SessionChatTimelineBlock.ImageGallery).images.map { it.id })
+        assertTrue(blocks[2] is SessionChatTimelineBlock.Text)
+        assertTrue(blocks[3] is SessionChatTimelineBlock.ActivityCard)
+        assertEquals(listOf("t2:image:0"), (blocks[4] as SessionChatTimelineBlock.ImageGallery).images.map { it.id })
+    }
+
+    @Test
+    fun chips_galleryFollowsItsParagraph_withAnIdThatSurvivesNewTools() {
+        val first = styled(listOf(readTool("t1", images = 1)), chips = true)
+        val grown = styled(listOf(readTool("t1", images = 1), readTool("t2", images = 1)), chips = true)
+
+        assertTrue(first[0] is SessionChatTimelineBlock.StepParagraph)
+        assertTrue(grown[0] is SessionChatTimelineBlock.StepParagraph)
+        val before = first[1] as SessionChatTimelineBlock.ImageGallery
+        val after = grown[1] as SessionChatTimelineBlock.ImageGallery
+        assertEquals(before.blockID, after.blockID)
+        assertEquals(2, after.images.size)
+    }
+
+    @Test
+    fun liveRun_staysLiveWithItsGalleryBelowIt() {
+        for (activityCard in listOf(false, true)) {
+            val blocks = styled(listOf(readTool("t1", images = 1), readTool("t2", images = 0)), stepRail = !activityCard, activityCard = activityCard)
+            val item = SessionChatMessageItem(id = "a", role = MessageRole.Assistant, text = "", metadataLabel = "", blocks = blocks)
+
+            val marked = SessionChatStepRail.markLive(listOf(item), isTurnActive = true)
+
+            assertTrue(SessionChatStepRail.hasLiveRail(marked))
+            assertTrue(marked.single().blocks[1] is SessionChatTimelineBlock.ImageGallery)
+        }
+    }
+
+    private fun styled(
+        parts: List<MessagePart>,
+        chips: Boolean = false,
+        stepRail: Boolean = false,
+        activityCard: Boolean = false,
+    ): List<SessionChatTimelineBlock> =
+        (
+            SessionChatTimelineBlocks.build(
+                MessageRole.Assistant,
+                parts,
+                chipTimeline = chips,
+                stepRail = stepRail,
+                activityCard = activityCard,
+            ) as SessionChatTimelineBlocksResult.Ok
+        ).blocks
 
     private fun build(
         role: MessageRole,
