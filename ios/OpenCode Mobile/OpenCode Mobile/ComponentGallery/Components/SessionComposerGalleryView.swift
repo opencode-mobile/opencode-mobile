@@ -69,7 +69,7 @@ private let sampleQuestionOptions: [OpenCodeSessionComposerState.QuestionOption]
 
 struct SessionComposerGalleryView: View {
     @State private var scenario: SessionComposerGalleryScenario = .empty
-    @State private var composerStyle: SessionComposerStyle = .floating
+    @State private var composerStyle: SessionComposerStyle = .outlineFade
     @State private var draftText = "Summarize the current changes"
     @State private var mentionText = mentionGalleryText
     @State private var shellText = "!git status"
@@ -147,7 +147,6 @@ struct SessionComposerGalleryView: View {
 
     private static func styleLabel(_ style: SessionComposerStyle) -> String {
         switch style {
-        case .floating: "Floating"
         case .outlineFade: "Outline"
         case .docked: "Docked"
         }

@@ -2,7 +2,6 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.domain.featureflags.SessionComposerStyle
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -17,9 +16,8 @@ class OpenCodeSessionComposerChromeTest {
     }
 
     @Test
-    fun `only outline fade reserves room for the fade`() {
-        assertEquals(30.dp, openCodeComposerFadeClearance(SessionComposerStyle.OutlineFade))
-        assertEquals(0.dp, openCodeComposerFadeClearance(SessionComposerStyle.Floating))
-        assertEquals(0.dp, openCodeComposerFadeClearance(SessionComposerStyle.Docked))
+    fun `fade fits the resting gap and grows away from the end`() {
+        assertEquals(OpenCodeBottomFadeOverhang, openCodeComposerFadeHeight(awayFromEnd = false))
+        assertEquals(46.dp, openCodeComposerFadeHeight(awayFromEnd = true))
     }
 }

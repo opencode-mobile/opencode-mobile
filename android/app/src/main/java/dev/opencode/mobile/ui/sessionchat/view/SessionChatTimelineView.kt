@@ -79,7 +79,6 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.featureflags.SessionComposerStyle
 import dev.opencode.mobile.domain.goal.SessionGoalAction
 import dev.opencode.mobile.ui.components.OpenCodeComposerScrim
-import dev.opencode.mobile.ui.components.openCodeComposerFadeClearance
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.preferences.AppearanceTextRegion
 import dev.opencode.mobile.domain.text.UiText
@@ -219,7 +218,7 @@ internal data class SessionChatTimelineViewProps(
     /** Extra bottom inset so the timeline can scroll under a floating composer. */
     val bottomOverlayInset: Dp = 0.dp,
     /** Session Composer style: Outline and fade draws its scrim between the list and the pills. */
-    val composerStyle: SessionComposerStyle = SessionComposerStyle.Floating,
+    val composerStyle: SessionComposerStyle = SessionComposerStyle.OutlineFade,
     /** Measured composer height, including its bottom inset; sizes the composer scrim. */
     val composerHeight: Dp = 0.dp,
     /** Bottom-left live activity from the screen (requests, btw, queued). The timeline adds syncing and request failed. */
@@ -553,11 +552,7 @@ private fun SessionChatTimelineReadyView(
     // Springs to the new reserve so a pinned list glides instead of jumping. Away from the end
     // the reserve never changes (reservesActivityRow), so nothing moves.
     val animatedReserve by animateDpAsState(
-        targetValue =
-            SessionChatCornerSlotsLayout.reservedHeight(
-                hasActivity = reservesActivityRow,
-                fadeClearance = openCodeComposerFadeClearance(composerStyle),
-            ),
+        targetValue = SessionChatCornerSlotsLayout.reservedHeight(hasActivity = reservesActivityRow),
         animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
         label = PILL_RESERVE_ANIMATION_LABEL,
     )
@@ -769,7 +764,11 @@ private fun SessionChatTimelineReadyView(
         }
 
         if (composerStyle == SessionComposerStyle.OutlineFade) {
-            OpenCodeComposerScrim(composerHeight, Modifier.align(Alignment.BottomCenter))
+            OpenCodeComposerScrim(
+                composerHeight = composerHeight,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                awayFromEnd = timeline.showScrollToEnd,
+            )
         }
 
         // Stays up while a sheet is open: the pill that opened it should not vanish,

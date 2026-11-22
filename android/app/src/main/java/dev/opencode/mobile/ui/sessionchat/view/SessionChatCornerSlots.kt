@@ -76,12 +76,8 @@ internal object SessionChatCornerSlotsLayout {
      * Extra timeline clearance while an activity pill shows, so it never covers the last message.
      * Just the pill height: the resting end-pin gap above the composer supplies the 8 dp between
      * the pill and the last row. Scroll-to-end and Syncing are overlays and reserve nothing.
-     * [fadeClearance] keeps the last row out of a composer fade; the pill row already covers it.
      */
-    fun reservedHeight(
-        hasActivity: Boolean,
-        fadeClearance: Dp = 0.dp,
-    ): Dp = maxOf(if (hasActivity) PillHeight else 0.dp, fadeClearance)
+    fun reservedHeight(hasActivity: Boolean): Dp = if (hasActivity) PillHeight else 0.dp
 }
 
 private const val PillRevealMs = 260

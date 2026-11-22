@@ -17,12 +17,6 @@ enum class FeatureFlag(
         description = "Session Chat chip timeline mode and its Settings toggle",
         defaultValue = true,
     ),
-    SessionComposerOutlineFade(
-        key = "session_composer_outline_fade",
-        title = "Composer outline and fade",
-        description = "Session Composer gets an outline and the timeline fades out above it",
-        defaultValue = false,
-    ),
     SessionComposerDocked(
         key = "session_composer_docked",
         title = "Docked composer",

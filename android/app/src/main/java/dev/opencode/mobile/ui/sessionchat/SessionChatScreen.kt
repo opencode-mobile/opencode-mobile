@@ -100,10 +100,8 @@ import dev.opencode.mobile.ui.components.OpenCodeActionTile
 import dev.opencode.mobile.ui.components.OpenCodeActionTileBadge
 import dev.opencode.mobile.ui.components.OpenCodeActionTileGrid
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
-import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeComposerScrim
-import dev.opencode.mobile.ui.components.openCodeComposerFadeClearance
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
@@ -342,10 +340,7 @@ private fun SessionChatScreenBody(
     var composerOverlayHeightPx by remember { mutableStateOf(0) }
     // Flags are snapshot state, so a change in Settings applies on return without a restart.
     val composerStyle =
-        SessionComposerStyle.resolve(
-            outlineFade = FeatureFlags.isEnabled(FeatureFlag.SessionComposerOutlineFade),
-            docked = FeatureFlags.isEnabled(FeatureFlag.SessionComposerDocked),
-        )
+        SessionComposerStyle.resolve(docked = FeatureFlags.isEnabled(FeatureFlag.SessionComposerDocked))
     val density = LocalDensity.current
     val composerOverlayHeight = with(density) { composerOverlayHeightPx.toDp() }
     val timelineBottomInset =
@@ -1088,7 +1083,7 @@ private fun SessionChatScreenBody(
                         modifier =
                             Modifier
                                 .fillMaxSize()
-                                .padding(bottom = timelineBottomInset + openCodeComposerFadeClearance(composerStyle))
+                                .padding(bottom = timelineBottomInset)
                                 .padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -1267,13 +1262,6 @@ private fun SessionChatScreenBody(
                                 onNewGoal = viewModel::startNewGoal,
                             ),
                         modifier = Modifier.fillMaxSize(),
-                    )
-                }
-
-                if (timelineBottomInset > 0.dp && composerStyle == SessionComposerStyle.Floating) {
-                    OpenCodeBottomFade(
-                        height = timelineBottomInset,
-                        modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
 
