@@ -336,10 +336,15 @@ class MessageSync(
     ): MessagePart.File {
         val key = sessionKey(sessionId, directory)
         val storeSlot = key.storeSlot
-        engine.message(storeSlot, messageId)?.imageWithData(imageId)?.let { return it }
+        // messageId is a hint: a merged timeline row names its first message, while the image
+        // can belong to a later one, so the message actually holding the image wins.
+        val owner =
+            engine.message(storeSlot, messageId)?.takeIf { it.imageById(imageId) != null }
+                ?: engine.messages(storeSlot).firstOrNull { it.imageById(imageId) != null }
+        owner?.imageWithData(imageId)?.let { return it }
         val fetch = getMessage ?: throw IllegalStateException("single-message fetch unavailable")
         restAttempts += "full-image"
-        val message = fetch(key.sessionId, key.directory.ifEmpty { null }, messageId)
+        val message = fetch(key.sessionId, key.directory.ifEmpty { null }, owner?.id ?: messageId)
         val image = message.imageWithData(imageId) ?: throw NoSuchElementException("image not in message")
         if (engine.hydrateMedia(storeSlot, listOf(message))) {
             val merged = engine.messages(storeSlot)
@@ -356,17 +361,16 @@ class MessageSync(
         return image
     }
 
-    private fun Message.imageWithData(imageId: String): MessagePart.File? {
-        val image =
-            parts.firstNotNullOfOrNull { part ->
-                when (part) {
-                    is MessagePart.Tool -> part.images.firstOrNull { it.id == imageId }
-                    is MessagePart.File -> part.takeIf { it.id == imageId }
-                    else -> null
-                }
+    private fun Message.imageWithData(imageId: String): MessagePart.File? = imageById(imageId)?.takeIf { it.hasFullData }
+
+    private fun Message.imageById(imageId: String): MessagePart.File? =
+        parts.firstNotNullOfOrNull { part ->
+            when (part) {
+                is MessagePart.Tool -> part.images.firstOrNull { it.id == imageId }
+                is MessagePart.File -> part.takeIf { it.id == imageId }
+                else -> null
             }
-        return image?.takeIf { it.hasFullData }
-    }
+        }
 
     fun invalidate(
         sessionId: String,

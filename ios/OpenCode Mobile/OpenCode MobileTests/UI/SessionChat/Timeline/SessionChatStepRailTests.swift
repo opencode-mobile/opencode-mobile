@@ -285,6 +285,18 @@ struct SessionChatStepRailTests {
         #expect(SessionChatTimelineBlocks.liveStepRailID(in: rows, sessionWorking: false) == nil)
     }
 
+    @Test func liveRail_staysLiveWithItsToolGalleryBelowIt() {
+        let rail = SessionChatStepRailBlock(id: "sr:r1", steps: [])
+        let gallery = SessionChatImageGalleryBlock(source: .tool, images: [])
+        let rows = [
+            row("a1", role: .assistant, blocks: [
+                .stepRail(blockID: rail.id, rail: rail),
+                .imageGallery(blockID: "i:sr:r1", gallery: gallery),
+            ]),
+        ]
+        #expect(SessionChatTimelineBlocks.liveStepRailID(in: rows, sessionWorking: true) == "sr:r1")
+    }
+
     @Test func liveRail_textAfterRailKeepsTheFooter() {
         let rail = SessionChatStepRailBlock(id: "sr:r1", steps: [])
         let rows = [

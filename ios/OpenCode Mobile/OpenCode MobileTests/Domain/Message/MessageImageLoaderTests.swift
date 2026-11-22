@@ -66,6 +66,22 @@ struct MessageImageLoaderTests {
         #expect(image.dataURL == Self.png)
     }
 
+    @Test func mergedRowHintFetchesTheMessageThatHoldsTheImage() async throws {
+        let first = Message(id: "msg_first", role: .assistant, text: "", parts: [], model: nil, mode: nil, sentAtEpochMs: nil)
+        let holder = Self.turn(dataURL: "", previewData: Self.thumbnail)
+        let loader = MessageImageLoader(
+            cachedMessages: { id in id == "msg_first" ? [first] : [first, holder] },
+            fetchMessage: { messageID in
+                #expect(messageID == "msg_asst")
+                return Self.turn(dataURL: Self.png)
+            },
+            hydrate: { _ in }
+        )
+
+        let image = try await loader.fullImage(messageID: "msg_first", imageID: Self.imageID)
+        #expect(image.dataURL == Self.png)
+    }
+
     @Test func serverCopyWithoutThePictureFails() async {
         let loader = MessageImageLoader(
             cachedMessages: { _ in [Self.turn(dataURL: "", previewData: Self.thumbnail)] },

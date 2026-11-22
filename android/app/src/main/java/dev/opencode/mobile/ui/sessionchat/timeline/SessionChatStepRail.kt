@@ -112,17 +112,23 @@ object SessionChatStepRail {
         // A newer sent prompt starts another turn; queued follow-ups do not.
         val newerPrompt = messages.drop(index + 1).any { it.role == MessageRole.User && !it.isPending }
         if (newerPrompt) return -1
-        val trailing = messages[index].blocks.lastOrNull { it.paintsInTimeline }
+        val trailing = trailingWork(messages[index])
         val isStepSegment = trailing is SessionChatTimelineBlock.StepRail || trailing is SessionChatTimelineBlock.ActivityCard
         return if (isStepSegment) index else -1
     }
+
+    /** The last painted block, looking past a tool gallery: a run's images sit under the run. */
+    private fun trailingWork(message: SessionChatMessageItem): SessionChatTimelineBlock? =
+        message.blocks.lastOrNull { block ->
+            block.paintsInTimeline && !(block is SessionChatTimelineBlock.ImageGallery && block.fromTool)
+        }
 
     private fun withLiveRail(
         message: SessionChatMessageItem,
         live: Boolean,
     ): SessionChatMessageItem {
         val liveRailId =
-            if (live) message.blocks.lastOrNull { it.paintsInTimeline }?.blockID else null
+            if (live) trailingWork(message)?.blockID else null
         var changed = false
         val blocks =
             message.blocks.map { block ->

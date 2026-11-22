@@ -16,13 +16,15 @@ nonisolated struct MessageImageLoader: Sendable {
     let fetchMessage: @Sendable (_ messageID: String) async throws -> Message
     let hydrate: @Sendable (_ message: Message) -> Void
 
+    /// `messageID` is a hint: a merged timeline row names its first message, while the image can
+    /// belong to a later one, so the message actually holding the image wins.
     func fullImage(messageID: String?, imageID: String) async throws -> FilePart {
-        let owner = cachedMessages(messageID).first { message in
-            (messageID == nil || message.id == messageID) && Self.image(in: message, id: imageID) != nil
-        }
+        let holdsImage: (Message) -> Bool = { Self.image(in: $0, id: imageID) != nil }
+        let owner = cachedMessages(messageID).first { (messageID == nil || $0.id == messageID) && holdsImage($0) }
+            ?? (messageID == nil ? nil : cachedMessages(nil).first(where: holdsImage))
         let cached = owner.flatMap { Self.image(in: $0, id: imageID) }
         if let cached, Self.isFull(cached) { return cached }
-        guard let id = messageID ?? owner?.id else { throw MessageImageError.notFound }
+        guard let id = owner?.id ?? messageID else { throw MessageImageError.notFound }
         let fetched = try await fetchMessage(id)
         guard let image = Self.image(in: fetched, id: imageID), Self.isFull(image) else {
             throw MessageImageError.unavailable
