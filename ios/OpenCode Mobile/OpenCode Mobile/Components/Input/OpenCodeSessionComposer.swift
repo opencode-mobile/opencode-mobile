@@ -459,7 +459,7 @@ struct OpenCodeSessionComposer: View {
         dictation: OpenCodeSessionComposerDictation? = nil,
         attachmentDragActive: Bool = false,
         interruptHintVisible: Bool = false,
-        style: SessionComposerStyle = .floating,
+        style: SessionComposerStyle = .outlineFade,
         dockedBottomInset: CGFloat = 0,
         onAction: @escaping (OpenCodeSessionComposerAction) -> Void,
         status: AnyView? = nil

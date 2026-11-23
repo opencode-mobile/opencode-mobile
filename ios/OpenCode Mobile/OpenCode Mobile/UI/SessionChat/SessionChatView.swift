@@ -424,8 +424,7 @@ struct SessionChatView: View {
                     // adding the overlap again pushed the card under the header.
                     bottomInset: sessionChatTimelineBottomInset(composerOverlayHeight)
                         + snackbarOverlayHeight
-                        + composerHomeIndicatorLift
-                        + (composerStyle == .outlineFade ? OpenCodeSessionComposerScrim.restingClearance : 0),
+                        + composerHomeIndicatorLift,
                     onOpenRow: { kind in draftSheet = kind }
                 )
                 .transition(.opacity)
@@ -434,12 +433,6 @@ struct SessionChatView: View {
             }
 
             switch composerStyle {
-            case .floating:
-                OpenCodeBottomFade(
-                    height: sessionChatTimelineBottomInset(composerOverlayHeight)
-                        + composerHomeIndicatorLift
-                )
-                .allowsHitTesting(false)
             case .outlineFade:
                 // The timeline draws its own scrim under its floating pills.
                 if viewModel.uiState.draft != nil {
@@ -1363,10 +1356,7 @@ struct SessionChatView: View {
 
     /// Read here so a flag changed in Settings applies on return to Session Chat.
     private var composerStyle: SessionComposerStyle {
-        SessionComposerStyle.resolve(
-            outlineFadeEnabled: FeatureFlags.shared.isEnabled(.sessionComposerOutlineFade),
-            dockedEnabled: FeatureFlags.shared.isEnabled(.sessionComposerDocked)
-        )
+        SessionComposerStyle.resolve(dockedEnabled: FeatureFlags.shared.isEnabled(.sessionComposerDocked))
     }
 
     /// From the bottom of the timeline area to the composer's top edge.

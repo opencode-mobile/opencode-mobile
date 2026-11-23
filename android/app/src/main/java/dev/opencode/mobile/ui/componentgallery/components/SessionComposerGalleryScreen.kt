@@ -101,10 +101,10 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
     var customText by rememberSaveable { mutableStateOf("") }
     var questionIndex by rememberSaveable { mutableIntStateOf(0) }
     var permissionNote by rememberSaveable { mutableStateOf<String?>(null) }
-    var composerStyleName by rememberSaveable { mutableStateOf(SessionComposerStyle.Floating.name) }
+    var composerStyleName by rememberSaveable { mutableStateOf(SessionComposerStyle.OutlineFade.name) }
     val composerStyle =
         runCatching { SessionComposerStyle.valueOf(composerStyleName) }
-            .getOrDefault(SessionComposerStyle.Floating)
+            .getOrDefault(SessionComposerStyle.OutlineFade)
     val scenario =
         runCatching { SessionComposerGalleryScenario.valueOf(scenarioName) }
             .getOrDefault(SessionComposerGalleryScenario.Empty)

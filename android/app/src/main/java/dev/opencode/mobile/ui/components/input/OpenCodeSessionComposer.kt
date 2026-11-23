@@ -486,7 +486,7 @@ fun OpenCodeSessionComposer(
     /** The first Esc armed the interrupt: shows "Esc again to interrupt" above the content. */
     interruptArmed: Boolean = false,
     /** [SessionComposerStyle.Docked] applies the keyboard and navigation bar insets itself. */
-    style: SessionComposerStyle = SessionComposerStyle.Floating,
+    style: SessionComposerStyle = SessionComposerStyle.OutlineFade,
 ) {
     OpenCodeTextRegion(AppearanceTextRegion.SessionChat) {
         OpenCodeSessionComposerContent(state, onAction, modifier, focus, status, dictation, interruptArmed, style)
@@ -520,7 +520,6 @@ private fun OpenCodeSessionComposerContent(
     val docked = style == SessionComposerStyle.Docked
     val outline =
         when (style) {
-            SessionComposerStyle.Floating -> requestEdgeColor?.let { BorderStroke(1.dp, it) }
             SessionComposerStyle.OutlineFade -> BorderStroke(1.dp, requestEdgeColor ?: styleEdgeColor)
             SessionComposerStyle.Docked -> null
         }
@@ -568,7 +567,7 @@ private fun OpenCodeSessionComposerContent(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .then(if (docked) Modifier.composerDockedTopEdge(requestEdgeColor ?: styleEdgeColor) else Modifier),
+                    .then(if (docked) Modifier.composerDockedSeparation(requestEdgeColor) else Modifier),
             shape = shellShape,
             border = outline,
             shadowElevation = if (docked) 0.dp else 4.dp,

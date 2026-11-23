@@ -384,7 +384,6 @@ private struct SessionChatTimelineReadyView: View {
     /// Scroll clearance under the composer plus the bottom pill row, so no pill covers the last message.
     private var listBottomInset: CGFloat {
         props.bottomOverlayInset
-            + (props.composerScrimHeight == nil ? 0 : OpenCodeSessionComposerScrim.restingClearance)
             + SessionChatCornerSlotsLayout.reservedHeight(
                 hasActivity: SessionChatPillSlots.reservesPillRow(
                     wanted: wantsPillRowReserve,
@@ -560,7 +559,7 @@ private struct SessionChatTimelineReadyView: View {
         // the top bar.
         .overlay(alignment: .bottom) {
             if let height = props.composerScrimHeight {
-                OpenCodeSessionComposerScrim(solidHeight: height)
+                OpenCodeSessionComposerScrim(solidHeight: height, awayFromEnd: showScrollToEnd)
             }
         }
         .overlay(alignment: .bottom) { bottomSlots }
