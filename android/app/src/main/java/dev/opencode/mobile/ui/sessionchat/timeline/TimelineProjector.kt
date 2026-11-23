@@ -106,6 +106,7 @@ object TimelineProjector {
         frame: DisplayFrame,
         optimisticInputs: OptimisticInputs = OptimisticInputs(),
         previous: TimelineFrame? = null,
+        runHasOutput: Boolean = false,
     ): TimelineFrame {
         val previousById = previous?.rows?.associateBy { it.id }.orEmpty()
         val authoritative =
@@ -128,7 +129,7 @@ object TimelineProjector {
                 rows = visibleRows,
                 previousById = previousById,
                 listIdAliases = listIdAliases,
-                runIsActive = runIsActive(frame),
+                runIsActive = runHasOutput || runIsActive(frame),
             )
         return diffFrame(
             frameRevision = frame.frameRevision,

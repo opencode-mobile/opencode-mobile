@@ -1812,6 +1812,10 @@ final class SessionChatViewModel {
         )
         let commandsState = commands.state
         timeline.updateRevertBoundary(commands.revertMessageID)
+        timeline.updateSessionRun(
+            isBusy: infoState.sessionStatusLabel != nil,
+            isResolved: infoState.hasResolvedSessionStatus
+        )
         let isCompacting = effectiveCompacting(
             localCompacting: commandsState.isCompacting,
             sessionStatusLabel: infoState.sessionStatusLabel

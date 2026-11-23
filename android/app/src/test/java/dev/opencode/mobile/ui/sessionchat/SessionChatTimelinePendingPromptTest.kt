@@ -109,6 +109,24 @@ class SessionChatTimelinePendingPromptTest {
             assertEquals(listOf("b", "c"), timeline.loadedMessages().map { it.id })
         }
 
+    @Test
+    fun sessionRunReapply_keepsPendingPromptPatch() =
+        runTest(testDispatcher) {
+            val assistant = Message(id = "m0", role = MessageRole.Assistant, text = "Done", completedAtEpochMs = 2L)
+            val repository = FakePendingPromptMessageRepository(listOf(assistant, steer("a"), steer("b")))
+            val timeline = boundTimeline(repository)
+
+            timeline.applyOptimisticPendingPrompt("a", FollowUpDelivery.Queue)
+            advanceUntilIdle()
+            timeline.updateSessionRun(isBusy = true, isResolved = true)
+            advanceUntilIdle()
+            assertEquals(1, timeline.pendingPromptPatchCount())
+
+            repository.emit(listOf(assistant, steer("a"), steer("b")))
+            advanceUntilIdle()
+            assertQueued(timeline.loadedMessages().single { it.id == "a" })
+        }
+
     private fun TestScope.boundTimeline(repository: FakePendingPromptMessageRepository): SessionChatTimeline {
         val dispatcher = UnconfinedTestDispatcher(testDispatcher.scheduler)
         return SessionChatTimeline(repository, CoroutineScope(dispatcher)).apply {

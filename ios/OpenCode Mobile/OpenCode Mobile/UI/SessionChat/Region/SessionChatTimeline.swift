@@ -81,6 +81,8 @@ final class SessionChatTimeline {
         self.derivesChangeNotices = derivesChangeNotices
     }
 
+    private var steerRun = SteerRunTracker()
+
     func updateServerCommands(_ commands: [ServerCommand]) {
         guard commands != serverCommands else { return }
         let wasEmpty = serverCommands.isEmpty
@@ -97,6 +99,28 @@ final class SessionChatTimeline {
                 expirePendingPromptPatches: false
             )
         }
+    }
+
+    /// Feeds the session status in; a steer already waiting gets its pending look at once.
+    func updateSessionRun(isBusy: Bool, isResolved: Bool) {
+        let hadOutput = steerRun.hasOutput(lastLoadedMessages)
+        steerRun.update(isBusy: isBusy, isResolved: isResolved, messages: lastLoadedMessages)
+        guard !hadOutput, steerRun.hasOutput(lastLoadedMessages) else { return }
+        guard timelineFrame.rows.contains(where: {
+            $0.role == .user && $0.pendingDelivery == .steer && $0.steer == nil
+        }) else { return }
+        // Queued so a session switch drops it with the rest of this session's applies.
+        pendingRequiredDisplayApplies.append(
+            PendingRequiredDisplayApply(
+                displayMessages: lastLoadedDisplayMessages,
+                isRefreshing: false,
+                fromQuietRefresh: true,
+                messagesFromCache: state.messagesFromCache,
+                expirePendingPromptPatches: false,
+                onPublished: nil
+            )
+        )
+        kickDisplayApply()
     }
 
     func updateCollapseConsecutiveToolCalls(_ enabled: Bool) {
@@ -399,6 +423,7 @@ final class SessionChatTimeline {
     }
 
     func reset() {
+        steerRun = SteerRunTracker()
         cancelObservationTasks()
         mergePendingWhileSending = false
         pendingOptimisticRows = []
@@ -541,7 +566,8 @@ final class SessionChatTimeline {
         let stamped = SessionChatTimelineProjector.project(
             frame: frame,
             optimistic: optimistic,
-            previous: previousFrame
+            previous: previousFrame,
+            runHasOutput: steerRun.hasOutput(lastLoadedMessages)
         ).withRequired(false)
         timelineFrame = stamped
 
@@ -967,6 +993,7 @@ final class SessionChatTimeline {
         // Match Android: structural DisplayFrame + TimelineFrame conversion off main.
         let previewCandidates = Self.previewWarmCandidates(visibleDisplayMessages)
         let derivesNotices = derivesChangeNotices()
+        let runHasOutput = steerRun.hasOutput(lastLoadedMessages)
         let projected = await Task.detached(priority: .userInitiated) {
             AttachmentPreviewCache.shared.warm(previewCandidates)
             let frame = DisplayFrameBuilder.build(
@@ -985,7 +1012,8 @@ final class SessionChatTimeline {
             return SessionChatTimelineProjector.project(
                 frame: frame,
                 optimistic: optimistic,
-                previous: previousFrame
+                previous: previousFrame,
+                runHasOutput: runHasOutput
             )
         }.value
         guard !Task.isCancelled else { return }

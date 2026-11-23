@@ -49,6 +49,7 @@ nonisolated enum SessionChatTimelineProjector {
         frame: DisplayFrame,
         optimistic: OptimisticInputs = .none,
         previous: TimelineFrame? = nil,
+        runHasOutput: Bool = false,
         metadataLabel: (@Sendable (Message) -> String)? = nil
     ) -> TimelineFrame {
         let resolveLabel = metadataLabel ?? { message in Self.metadataLabel(for: message) }
@@ -86,7 +87,7 @@ nonisolated enum SessionChatTimelineProjector {
             visibleRows,
             previousByID: previousByID,
             listIDAliases: listIDAliases,
-            runIsActive: runIsActive(frame)
+            runIsActive: runHasOutput || runIsActive(frame)
         )
         let inserted = nextIDs.subtracting(previousIDs)
         let removed = previousIDs.subtracting(nextIDs)

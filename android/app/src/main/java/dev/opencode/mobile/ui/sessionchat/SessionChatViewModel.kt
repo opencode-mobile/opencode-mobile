@@ -478,6 +478,10 @@ class SessionChatViewModel
                 }.collect { (timelineState, composerState, infoState, reviewChangesState, commandsState, inboxState) ->
                     timeline.updateServerCommands(composerState.serverCommands)
                     timeline.updateRevertBoundary(commandsState.revertMessageId)
+                    timeline.updateSessionRun(
+                        isBusy = infoState.sessionStatusLabel != null,
+                        isResolved = infoState.hasResolvedSessionStatus,
+                    )
                     composer.tryApplyInitialSelection(timelineState, timeline.modelSelectionHistoryHints())
                     val isTurnActive =
                         infoState.sessionStatusLabel != null ||
