@@ -80,7 +80,7 @@ struct ChartsGalleryView: View {
             }
             section("Chart Card · Bar Chart") {
                 OpenCodeChartCard(title: .verbatim("Reconnects"), summary: .verbatim("7 reconnects")) {
-                    OpenCodeBarChart(values: reconnects)
+                    OpenCodeBarChart(values: reconnects, unobservedSlots: Set(40 ..< 44))
                         .frame(height: 56)
                 }
             }

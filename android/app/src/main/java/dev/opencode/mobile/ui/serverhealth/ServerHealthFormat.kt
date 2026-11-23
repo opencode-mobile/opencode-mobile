@@ -24,6 +24,12 @@ object ServerHealthFormat {
         }
     }
 
+    /** [duration] for a time axis, without a zero trailing unit: `1 h`, `7 d`, but `1 h 5 m`. */
+    fun axisDuration(ms: Long): String = duration(ms).removeSuffix(" 0 m").removeSuffix(" 0 h")
+
+    /** The measured time to show, or null when nothing was measured. */
+    fun measuredDuration(observedMs: Long): String? = if (observedMs > 0) duration(observedMs) else null
+
     /** One decimal; two from 99.95 up to (not including) 100, so 99.97% never reads as 100.0%. */
     fun percent(value: Double): String {
         val twoDecimals = value >= 99.95 && value < 100.0

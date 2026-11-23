@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -46,7 +45,6 @@ data class OpenCodeBandChartPoint(
 private const val BAND_ALPHA = 0.18f
 private const val BACKGROUND_ERROR_ALPHA = 0.16f
 private const val BACKGROUND_WARNING_ALPHA = 0.12f
-private const val BACKGROUND_UNOBSERVED_ALPHA = 0.10f
 private const val BAND_CHART_MIN_MAX = 40.0
 
 /** Rounds up to 1, 2, 2.5 or 5 times a power of ten. */
@@ -78,7 +76,7 @@ fun OpenCodeBandChart(
     val interactive = openCodeColor("interactive")
     val error = openCodeColor("error")
     val warning = openCodeColor("warning")
-    val unobserved = openCodeColor("text-weaker")
+    val unobserved = openCodeColor("text-strong")
     val grid = openCodeColor("border-weak-base")
     val labelColor = openCodeColor("text-weaker")
     val yMax = openCodeBandChartMax(points)
@@ -101,19 +99,7 @@ fun OpenCodeBandChart(
                     OpenCodeBandChartBackground.Warning ->
                         drawRect(warning.copy(alpha = BACKGROUND_WARNING_ALPHA), Offset(left, 0f), Size(slot, size.height))
                     OpenCodeBandChartBackground.Unobserved ->
-                        clipRect(left = left, top = 0f, right = left + slot, bottom = size.height) {
-                            val spacing = 4.dp.toPx()
-                            var start = left - size.height
-                            while (start < left + slot) {
-                                drawLine(
-                                    color = unobserved.copy(alpha = BACKGROUND_UNOBSERVED_ALPHA * 2f),
-                                    start = Offset(start, size.height),
-                                    end = Offset(start + size.height, 0f),
-                                    strokeWidth = 1.dp.toPx(),
-                                )
-                                start += spacing
-                            }
-                        }
+                        drawOpenCodeUnobserved(unobserved, Offset(left, 0f), Size(slot, size.height))
                 }
             }
             drawLine(

@@ -110,6 +110,7 @@ fun ChartsGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeChartCard(title = "Reconnects", summary = "4 reconnects") {
             OpenCodeBarChart(
                 values = (0 until 48).map { if (it % 11 == 3) (it % 3 + 1).toDouble() else 0.0 },
+                unobservedSlots = (18..21).toSet(),
                 tone = OpenCodeChartTone.Warning,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
             )

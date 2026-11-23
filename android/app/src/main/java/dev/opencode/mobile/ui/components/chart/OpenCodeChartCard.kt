@@ -1,7 +1,9 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -146,13 +149,27 @@ fun OpenCodeChartCard(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.semantics(mergeDescendants = true) {},
                     ) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(8.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(item.swatch.color()),
-                        )
+                        val swatchShape = RoundedCornerShape(2.dp)
+                        if (item.swatch == OpenCodeChartLegendSwatch.Unobserved) {
+                            val stripe = openCodeColor("text-strong")
+                            Canvas(
+                                modifier =
+                                    Modifier
+                                        .size(8.dp)
+                                        .clip(swatchShape)
+                                        .border(0.5.dp, openCodeColor("border-weak-base"), swatchShape),
+                            ) {
+                                drawOpenCodeUnobserved(stripe, Offset.Zero, size)
+                            }
+                        } else {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(8.dp)
+                                        .clip(swatchShape)
+                                        .background(item.swatch.color()),
+                            )
+                        }
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(text = item.label, style = MaterialTheme.typography.labelSmall, color = openCodeColor("text-base"))
                     }
