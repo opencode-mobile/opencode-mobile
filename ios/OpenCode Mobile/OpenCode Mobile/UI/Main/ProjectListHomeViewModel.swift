@@ -231,6 +231,12 @@ final class ProjectListHomeViewModel {
             foregroundEventStream: foregroundEventStream,
             branchRetryDelays: branchRetryDelays,
             serverBaseURL: serverBaseURL,
+            inventoryServerKey: {
+                WorktreeInventoryCache.serverKey(
+                    profile: activeConnectionManager.currentProfile(),
+                    fallbackBaseURL: serverBaseURL()
+                )
+            },
             serverProtocol: { activeConnectionManager.serverProtocol }
         )
         self.worktrees = worktrees
@@ -288,6 +294,7 @@ final class ProjectListHomeViewModel {
         }
         worktrees.homeProjects = { [weak self] in self?.homeProjects ?? [] }
         servers.onChange = { [weak self] in self?.publishUiState() }
+        projectList.isSwitchPending = { [weak self] in self?.servers.pendingID != nil }
         servers.onSwitchStarted = { [weak self] target, generation in
             guard let self else { return }
             // Drop the previous server's live updates immediately. Local projects paint next;
@@ -339,6 +346,9 @@ final class ProjectListHomeViewModel {
                 self.projectList.stopLiveObservations()
                 await self.refresh()
             }
+        })
+        coordinatorRegistrations.append(connectionSessionCoordinator.onProfileListChanged { [weak self] in
+            Task { @MainActor in await self?.refreshServersChrome() }
         })
         coordinatorRegistrations.append(connectionSessionCoordinator.onAddressCheck { [weak self] check in
             Task { @MainActor in

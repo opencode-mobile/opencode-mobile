@@ -31,6 +31,16 @@ class ConnectionProfileStoreTest {
         }
 
     @Test
+    fun addedWorktreesForProfile_defaultsToTheUrlLookup() =
+        runTest {
+            val store = InMemoryConnectionProfileStore()
+            store.saveProfile(ConnectionProfile(id = "a", baseUrl = server, username = "opencode"))
+            store.addWorktree(server, "/repo")
+
+            assertEquals(listOf("/repo"), store.addedWorktreesForProfile("a", server))
+        }
+
+    @Test
     fun saveAndLoadPersistsProtocolHint() =
         runTest {
             val store = InMemoryConnectionProfileStore()

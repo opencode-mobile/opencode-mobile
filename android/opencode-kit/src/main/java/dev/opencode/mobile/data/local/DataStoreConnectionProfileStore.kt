@@ -65,6 +65,21 @@ class DataStoreConnectionProfileStore
             }
         }
 
+        override suspend fun updateStoredProfile(
+            id: String,
+            transform: (ConnectionProfile) -> ConnectionProfile,
+        ): Boolean {
+            var updated = false
+            // One edit, so a removal cannot land between the check and the write. The catalog
+            // holds no passwords, and this path never touches the secure store.
+            mutateCatalog { catalog ->
+                val stored = catalog.profiles.firstOrNull { it.id == id } ?: return@mutateCatalog catalog
+                updated = true
+                catalog.save(transform(stored).copy(id = id))
+            }
+            return updated
+        }
+
         override suspend fun applyProfile(id: String) {
             mutateCatalog { catalog -> catalog.apply(id) }
         }
@@ -92,6 +107,15 @@ class DataStoreConnectionProfileStore
                 val raw = prefs[worktreeKey(profile.id)]
                 if (raw != null) return decodeWorktrees(raw)
             }
+            return decodeWorktrees(prefs[legacyWorktreeKey(serverBaseUrl)])
+        }
+
+        override suspend fun addedWorktreesForProfile(
+            profileId: String,
+            serverBaseUrl: String,
+        ): List<String> {
+            val prefs = context.connectionProfileDataStore.data.first()
+            prefs[worktreeKey(profileId)]?.let { return decodeWorktrees(it) }
             return decodeWorktrees(prefs[legacyWorktreeKey(serverBaseUrl)])
         }
 

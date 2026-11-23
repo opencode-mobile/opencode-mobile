@@ -56,6 +56,7 @@ import dev.opencode.mobile.domain.message.ServerFilePreviews
 import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
 import dev.opencode.mobile.domain.message.UnavailableServerFilePreviews
 import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.network.ConnectionChangedException
 import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionOption
@@ -88,6 +89,8 @@ import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
 import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.ui.sessionchat.region.NewSessionProfileChanged
+import dev.opencode.mobile.ui.sessionchat.region.PinnedFirstSend
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatDictation
@@ -113,6 +116,7 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetails
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -738,8 +742,8 @@ class SessionChatViewModel
             sessionId: String,
             sessionTitle: String,
             directory: String,
-        ) {
-            newSessionDraft.release()
+        ): NewSessionDraftStore.FirstSendHold? {
+            val hold = newSessionDraft.beginFirstSend()
             boundSessionId = sessionId
             boundSessionTitle = sessionTitle
             boundWorktree = directory
@@ -761,6 +765,7 @@ class SessionChatViewModel
             goal.bind(sessionId, directory)
             syncCoordinator.markFocused(ProjectionKey.Transcript(directory, sessionId))
             publishUiState()
+            return hold
         }
 
         private fun bindShells(
@@ -1544,7 +1549,7 @@ class SessionChatViewModel
         }
 
         /** Sends the composer to the bound session; false when nothing was sent. */
-        private fun sendToBoundSession(): Boolean {
+        private fun sendToBoundSession(firstSend: PinnedFirstSend? = null): Boolean {
             if (!hasCreatedSession()) return false
             // A side question never becomes a prompt, including a typed `/btw` this server cannot answer.
             if (sideQuestions.state.value.ui.composerMode ||
@@ -1620,6 +1625,7 @@ class SessionChatViewModel
                 },
                 serverAlreadyAccepted = ::serverAlreadyAccepted,
                 beforePrompt = { commands.commitPendingRevert(sessionId, worktree) },
+                firstSend = firstSend,
             )
         }
 
@@ -1751,22 +1757,63 @@ class SessionChatViewModel
             publishUiState()
             val job =
                 viewModelScope.launch {
+                    fun stopForServerChange() {
+                        logI("new session draft send stopped: server changed")
+                        newSessionDraft.endCreating()
+                        publishUiState()
+                    }
+                    val pin =
+                        try {
+                            activeConnectionManager.pinConnection()
+                        } catch (_: ConnectionChangedException) {
+                            stopForServerChange()
+                            return@launch
+                        }
+                    if (!newSessionDraft.belongsTo(pin.profileId)) {
+                        stopForServerChange()
+                        return@launch
+                    }
                     val created =
                         try {
-                            newSessionDraft.create()
+                            withContext(activeConnectionManager.pinContext(pin)) { newSessionDraft.create() }
                         } catch (cancellation: CancellationException) {
-                            throw cancellation
+                            // Closing the pinned client cancels its request; this job may still be live.
+                            ensureActive()
+                            if (activeConnectionManager.isCurrent(pin)) throw cancellation
+                            stopForServerChange()
+                            return@launch
+                        } catch (_: NewSessionProfileChanged) {
+                            stopForServerChange()
+                            return@launch
                         } catch (error: Throwable) {
+                            if (!activeConnectionManager.isCurrent(pin)) {
+                                stopForServerChange()
+                                return@launch
+                            }
                             logI("new session draft create failed error=${error.message}")
                             newSessionDraft.failCreate(error)
                             publishUiState()
                             return@launch
                         }
+                    if (!activeConnectionManager.isCurrent(pin)) {
+                        stopForServerChange()
+                        return@launch
+                    }
                     logI("new session draft created session=${created.id}")
                     val shellCommand = ComposerShellCommand.isShellMode(composer.state.value.composer.text)
-                    promoteNewSessionDraft(created.id, created.title, created.directory)
+                    val hold = promoteNewSessionDraft(created.id, created.title, created.directory)
                     // The prompt's own sending state takes over once its row shows.
-                    if (!sendToBoundSession() || shellCommand) {
+                    val sent =
+                        sendToBoundSession(
+                            PinnedFirstSend(
+                                context = activeConnectionManager.pinContext(pin),
+                                connectionLost = { !activeConnectionManager.isCurrent(pin) },
+                                onDelivered = { hold?.finish() },
+                                onKept = { hold?.restore() },
+                            ),
+                        )
+                    if (!sent) hold?.finish()
+                    if (!sent || shellCommand) {
                         newSessionDraft.endCreating()
                         publishUiState()
                     }

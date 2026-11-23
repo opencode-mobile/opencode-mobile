@@ -196,6 +196,57 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun staleHomeLoad_fromThePreviousServer_doesNotPaintOverTheNewOne() =
+        runTest(testDispatcher) {
+            val other = "http://192.0.2.2:4096/"
+            val store = SwitchingProfileStore()
+            store.add(ConnectionProfile(id = "a", baseUrl = serverUrl, username = "opencode", password = "", name = "A"), listOf("/a"))
+            store.add(ConnectionProfile(id = "b", baseUrl = other, username = "opencode", password = "", name = "B"), listOf("/b"))
+            store.applyProfile("a")
+            val holdA = CompletableDeferred<Unit>()
+            store.holdAddedWorktrees[serverUrl] = holdA
+            val viewModel = createViewModel(connectionProfileStore = store, initialProfile = store.profile("a"))
+            runCurrent()
+
+            viewModel.switchProfile("b")
+            runCurrent()
+            store.holdAddedWorktrees.remove(serverUrl)
+            holdA.complete(Unit)
+            advanceUntilIdle()
+
+            val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
+            assertEquals(listOf("/b"), loaded.sections.map { it.worktree })
+        }
+
+    @Test
+    fun refreshBeforeThePickedServerBinds_doesNotPaintThePreviousServer() =
+        runTest(testDispatcher) {
+            val other = "http://192.0.2.2:4096/"
+            val store = SwitchingProfileStore()
+            store.add(ConnectionProfile(id = "a", baseUrl = serverUrl, username = "opencode", password = "", name = "A"), listOf("/a"))
+            store.add(ConnectionProfile(id = "b", baseUrl = other, username = "opencode", password = "", name = "B"), listOf("/b"))
+            store.applyProfile("a")
+            val viewModel = createViewModel(connectionProfileStore = store, initialProfile = store.profile("a"))
+            advanceUntilIdle()
+            val holdBind = CompletableDeferred<Unit>()
+            store.holdApply = holdBind
+
+            viewModel.switchProfile("b")
+            runCurrent()
+            viewModel.refresh()
+            runCurrent()
+
+            val painted = viewModel.uiState.value.content as MainScreenUiState.Loaded
+            assertEquals(listOf("/b"), painted.sections.map { it.worktree })
+            val chrome = viewModel.uiState.value.servers
+            assertEquals("b", chrome.active?.id)
+            holdBind.complete(Unit)
+            advanceUntilIdle()
+            val landed = viewModel.uiState.value.content as MainScreenUiState.Loaded
+            assertEquals(listOf("/b"), landed.sections.map { it.worktree })
+        }
+
+    @Test
     fun switchProfile_thatFailsReturnsHomeToTheActiveServer() =
         runTest(testDispatcher) {
             val store = SwitchingProfileStore()
@@ -3595,12 +3646,22 @@ private class SwitchingProfileStore : ConnectionProfileStore {
         catalog = catalog.save(profile)
     }
 
+    /** Holds the switch before it stores and binds the new server. */
+    var holdApply: CompletableDeferred<Unit>? = null
+
     override suspend fun applyProfile(id: String) {
+        holdApply?.await()
         if (failApply) throw IOException("write failed")
         catalog = catalog.apply(id)
     }
 
-    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = worktrees[serverBaseUrl].orEmpty()
+    /** A gate holds the read of that server's projects, for a load overtaken by a switch. */
+    val holdAddedWorktrees = mutableMapOf<String, CompletableDeferred<Unit>>()
+
+    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> {
+        holdAddedWorktrees[serverBaseUrl]?.await()
+        return worktrees[serverBaseUrl].orEmpty()
+    }
 
     override suspend fun addWorktree(
         serverBaseUrl: String,

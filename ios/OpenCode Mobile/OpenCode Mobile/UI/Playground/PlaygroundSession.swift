@@ -102,7 +102,10 @@ final class PlaygroundSession {
     /// The fake project lists one worktree checkout, so a session bound there names it with the worktree icon.
     private static func worktreeInventory() -> WorktreeInventoryCache {
         let cache = WorktreeInventoryCache()
-        let server = playgroundProfile.baseURL
+        let server = WorktreeInventoryCache.serverKey(
+            profile: playgroundProfile,
+            fallbackBaseURL: playgroundProfile.baseURL
+        ) ?? playgroundProfile.baseURL
         cache.setAddedPaths([PlaygroundContent.worktree], server: server)
         cache.record(
             .loaded([PlaygroundContent.worktree, PlaygroundContent.worktreeCheckout]),

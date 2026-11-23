@@ -5,6 +5,153 @@ import Testing
 @Suite struct DefaultSessionCacheTests {
     private let connectionId = "http://localhost:4096/|opencode"
 
+    private func timelineKey(_ connection: String, _ session: String, worktree: String = "/repo") -> SessionCacheKey {
+        SessionCacheKey(connectionId: connection, worktree: worktree, kind: .messageTimeline, entryId: session)
+    }
+
+    private func message(_ id: String) -> Message {
+        Message(id: id, role: .user, text: id, model: nil, mode: nil, sentAtEpochMs: nil)
+    }
+
+    @Test func delayedTranscriptWriteKeepsTheConnectionItWasNotedUnder() async {
+        let store = InMemorySessionCacheStore()
+        let active = Locked<String?>("profile-a")
+        let cache = DefaultSessionCache(
+            store: store,
+            connectionIdProvider: { active.value },
+            clock: { 1_000 },
+            debounceMilliseconds: 60_000
+        )
+        let handle = cache.openMessages(sessionID: "ses-1", worktree: "/repo")
+        handle.note(messages: [message("m1")])
+
+        active.value = "profile-b"
+        await handle.flush()
+
+        #expect(await store.load(key: timelineKey("profile-a", "ses-1")) != nil)
+        #expect(await store.load(key: timelineKey("profile-b", "ses-1")) == nil)
+    }
+
+    @Test func pendingTranscriptWriteDoesNotUndoAClear() async {
+        let store = InMemorySessionCacheStore()
+        let cache = DefaultSessionCache(
+            store: store,
+            connectionIdProvider: { "profile-a" },
+            clock: { 1_000 },
+            debounceMilliseconds: 60_000
+        )
+        let handle = cache.openMessages(sessionID: "ses-1", worktree: "/repo")
+        handle.note(messages: [message("m1")])
+
+        await cache.clearAll()
+        await handle.flush()
+
+        #expect(await store.report(.all).entryCount == 0)
+    }
+
+    @Test func activityDedupeIsPerConnection() async {
+        let store = InMemorySessionCacheStore()
+        let active = Locked<String?>("profile-a")
+        let cache = DefaultSessionCache(
+            store: store,
+            connectionIdProvider: { active.value },
+            clock: { 1_000 },
+            activityDebounceMilliseconds: 0
+        )
+        let entries = [SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1_000)]
+        await cache.rememberActivity(directory: "/repo", entries: entries)
+
+        active.value = "profile-b"
+        await cache.rememberActivity(directory: "/repo", entries: entries)
+
+        #expect(await cache.seedActivity(directory: "/repo") == entries)
+    }
+
+    @Test func removingOneProfileKeepsAnotherProfilesPendingActivity() async {
+        let store = InMemorySessionCacheStore()
+        let active = Locked<String?>("profile-a")
+        let cache = DefaultSessionCache(
+            store: store,
+            connectionIdProvider: { active.value },
+            clock: { 1_000 },
+            activityDebounceMilliseconds: 20
+        )
+        let entries = [SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1_000)]
+        await cache.rememberActivity(directory: "/repo", entries: entries)
+
+        await cache.purgeConnection(profileID: "profile-b", serverBaseURL: "http://192.0.2.9:4096/")
+
+        var seeded: [SessionActivityCacheEntry]?
+        for _ in 0 ..< 200 where seeded == nil {
+            try? await Task.sleep(for: .milliseconds(5))
+            seeded = await cache.seedActivity(directory: "/repo")
+        }
+        #expect(seeded == entries)
+    }
+
+    @Test func transcriptsAreBoundedPerConnectionLeastRecentlyUsedFirst() async {
+        let store = InMemorySessionCacheStore()
+        let now = Locked<Int64>(1)
+        let cache = DefaultSessionCache(
+            store: store,
+            connectionIdProvider: { "profile-a" },
+            clock: { now.value },
+            debounceMilliseconds: 60_000
+        )
+        let list = SessionCacheKey(connectionId: "profile-a", worktree: "/repo", kind: .sessionList)
+        await store.commit(
+            key: list,
+            value: SessionCacheValue(payloadJSON: "[]", schemaVersion: 1),
+            meta: SessionCacheCommitMeta(syncedAtEpochMs: 0)
+        )
+        await store.commit(
+            key: timelineKey("profile-b", "other"),
+            value: SessionCacheValue(payloadJSON: "{}", schemaVersion: 1),
+            meta: SessionCacheCommitMeta(syncedAtEpochMs: 0)
+        )
+        for index in 0 ..< DefaultSessionCache.maxTimelinesPerConnection {
+            await store.commit(
+                key: timelineKey("profile-a", "ses-\(index)"),
+                value: SessionCacheValue(payloadJSON: "{}", schemaVersion: 1),
+                meta: SessionCacheCommitMeta(syncedAtEpochMs: Int64(index + 1))
+            )
+        }
+        // Opening the oldest makes it recent, so the next oldest goes instead.
+        now.value = 10_000
+        await store.retain(key: timelineKey("profile-a", "ses-0"), reason: .opened, atEpochMs: 10_000)
+
+        now.value = 10_001
+        let handle = cache.openMessages(sessionID: "ses-new", worktree: "/repo")
+        handle.note(messages: [message("m1")])
+        await handle.flush()
+
+        #expect(await store.load(key: timelineKey("profile-a", "ses-0")) != nil)
+        #expect(await store.load(key: timelineKey("profile-a", "ses-1")) == nil)
+        #expect(await store.load(key: timelineKey("profile-a", "ses-new")) != nil)
+        #expect(await store.load(key: list) != nil)
+        #expect(await store.load(key: timelineKey("profile-b", "other")) != nil)
+        let timelines = await store.messageTimelineKeys()?.filter { $0.connectionId == "profile-a" }
+        #expect(timelines?.count == DefaultSessionCache.maxTimelinesPerConnection)
+    }
+
+    @Test func swiftDataStoreEvictsOnlyTheLeastRecentTimelines() async throws {
+        let store = SwiftDataSessionCacheStore(container: try SwiftDataSessionCacheStore.makeInMemoryContainer())
+        for index in 0 ..< 4 {
+            await store.commit(
+                key: timelineKey("profile-a", "ses-\(index)"),
+                value: SessionCacheValue(payloadJSON: "{}", schemaVersion: 1),
+                meta: SessionCacheCommitMeta(syncedAtEpochMs: Int64(index + 1))
+            )
+        }
+        await store.retain(key: timelineKey("profile-a", "ses-0"), reason: .opened, atEpochMs: 100)
+
+        let evicted = await store.evictLeastRecentTimelines(connectionId: "profile-a", keeping: 2)
+
+        #expect(Set(evicted.map(\.entryId)) == ["ses-1", "ses-2"])
+        #expect(await store.load(key: timelineKey("profile-a", "ses-0")) != nil)
+        #expect(await store.load(key: timelineKey("profile-a", "ses-3")) != nil)
+    }
+
     @Test func seedAndRememberSessionsRoundTrip() async {
         let store = InMemorySessionCacheStore()
         let cache = DefaultSessionCache(

@@ -32,6 +32,9 @@ class DefaultSessionReadyStore
         private val previousTypes = mutableMapOf<String, MutableMap<String, String?>>()
         private val readyFlows = ConcurrentHashMap<String, MutableStateFlow<Set<String>>>()
         private val statusJobs = ConcurrentHashMap<String, Job>()
+
+        /** Bumped when observations restart, so a snapshot already in flight cannot land on the next profile. */
+        private var observationEpoch = 0L
         private val eventJob: Job =
             liveStoreScope.coroutineScope.launch {
                 eventStream.events.collect { event ->
@@ -170,11 +173,29 @@ class DefaultSessionReadyStore
                 readyFlows.keys.toList().forEach { directory ->
                     publishReadyLocked(directory, prune = false)
                 }
-                directoriesToObserve =
-                    cancelStatusObservationsLocked() + watched.values.map { it.directory }
+                cancelStatusObservationsLocked()
+                directoriesToObserve = subscribedDirectoriesLocked() + watched.values.map { it.directory }
                 logI("bindProfile profile=$next ready=${ready.size} watched=${watched.size}")
             }
             directoriesToObserve.forEach { ensureStatusObservation(it) }
+        }
+
+        override fun forgetProfile(profileId: String) {
+            synchronized(lock) {
+                if (profileId == currentProfileId) {
+                    val directories = (ready.values.map { it.directory } + watched.values.map { it.directory }).toSet()
+                    ready.clear()
+                    watched.clear()
+                    directories.forEach { publishReadyLocked(it, prune = false) }
+                }
+                val stored = persistence.load()
+                persistence.save(
+                    SessionReadyPersistedState(
+                        ready = stored.ready.filterNot { it.profileId == profileId },
+                        watched = stored.watched.filterNot { it.profileId == profileId },
+                    ),
+                )
+            }
         }
 
         override fun clearCache() {
@@ -189,7 +210,8 @@ class DefaultSessionReadyStore
                 readyFlows.keys.toList().forEach { directory ->
                     readyFlows[directory]?.value = emptySet()
                 }
-                directoriesToObserve = cancelStatusObservationsLocked()
+                cancelStatusObservationsLocked()
+                directoriesToObserve = subscribedDirectoriesLocked()
                 logI("clearCache")
             }
             directoriesToObserve.forEach { ensureStatusObservation(it) }
@@ -225,27 +247,32 @@ class DefaultSessionReadyStore
         }
 
         private fun ensureStatusObservationLocked(directory: String) {
+            val epoch = observationEpoch
             statusJobs.computeIfAbsent(directory) {
                 liveStoreScope.coroutineScope.launch {
                     sessionStatusLiveStore.observeActivity(directory).collect { snapshot ->
-                        onActivity(directory, snapshot)
+                        onActivity(directory, snapshot, epoch)
                     }
                 }
             }
         }
 
-        private fun cancelStatusObservationsLocked(): Set<String> {
-            val directories = statusJobs.keys.toSet()
+        private fun cancelStatusObservationsLocked() {
+            observationEpoch += 1
             statusJobs.values.forEach { it.cancel() }
             statusJobs.clear()
-            return directories
         }
+
+        /** Directories something on screen still collects Ready ids for. */
+        private fun subscribedDirectoriesLocked(): Set<String> = readyFlows.filterValues { it.subscriptionCount.value > 0 }.keys.toSet()
 
         private fun onActivity(
             directory: String,
             snapshot: SessionActivitySnapshot,
+            epoch: Long,
         ) {
             synchronized(lock) {
+                if (epoch != observationEpoch) return
                 val prunedDirectories = pruneExpiredLocked()
                 prunedDirectories.forEach { publishReadyLocked(it, prune = false) }
                 val previous = previousTypes.getOrPut(directory) { mutableMapOf() }
@@ -273,7 +300,8 @@ class DefaultSessionReadyStore
                         val watch = watched[sessionId]
                         val becameIdle = wasBusy && !isBusy
                         val restoredAlreadyIdle =
-                            firstSighting && !isBusy && (watch?.allowIdleCatchUp == true)
+                            // Only a real answer from this server can say a restored watch finished.
+                            snapshot.seeded && firstSighting && !isBusy && (watch?.allowIdleCatchUp == true)
                         if (becameIdle || restoredAlreadyIdle) {
                             if (handleIdleLocked(sessionId, directory, markPreviousIdle = false)) {
                                 readyChanged = true

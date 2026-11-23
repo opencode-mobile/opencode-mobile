@@ -241,19 +241,10 @@ fun MainNavigation(appCovered: Boolean = false) {
     val homeResetGeneration by rootViewModel.homeResetGeneration.collectAsStateWithLifecycle()
     LaunchedEffect(homeResetGeneration) {
         if (homeResetGeneration == 0) return@LaunchedEffect
-        while (backStack.size > 1) {
-            when (backStack.lastOrNull()) {
-                is SessionChat,
-                is SessionContext,
-                is Changes,
-                is FileBrowser,
-                is SessionToolGroup,
-                is Terminal,
-                is TerminalsCatalog,
-                is WorktreesHome,
-                -> backStack.popRouteUnlessRoot()
-                else -> break
-            }
+        // Also the ones beneath Settings: Back must never reopen the previous server's session.
+        val kept = backStack.filterIndexed { index, route -> index == 0 || !route.isSessionScoped() }
+        if (kept.size != backStack.size) {
+            backStack.retainAll(kept.toSet())
         }
     }
 
@@ -1024,6 +1015,21 @@ private fun ComponentGalleryEntryId.usesEdgeToEdgeBottomChrome(): Boolean =
     this == ComponentGalleryEntryId.SessionList ||
         this == ComponentGalleryEntryId.SessionListDock ||
         this == ComponentGalleryEntryId.SessionComposer
+
+/** Routes that show one server's sessions, so a server switch or clear removes them. */
+internal fun NavKey.isSessionScoped(): Boolean =
+    when (this) {
+        is SessionChat,
+        is SessionContext,
+        is Changes,
+        is FileBrowser,
+        is SessionToolGroup,
+        is Terminal,
+        is TerminalsCatalog,
+        is WorktreesHome,
+        -> true
+        else -> false
+    }
 
 private fun SessionOpenTarget.toSessionChatRoute(): SessionChat =
     SessionChat(

@@ -26,6 +26,32 @@ struct SessionStatusLiveStoreTests {
         #expect(running.statusLabel(for: "ses-1") == "Working")
     }
 
+    @Test func observeActivity_dropsAnAnswerFromTheServerThatWasLeft() async throws {
+        let repository = StatusLiveStoreFakeSessionRepository(
+            statuses: [SessionStatus(sessionID: "ses-from-a", raw: ["type": "busy"])]
+        )
+        repository.holdNextStatuses()
+        let epoch = Locked<UInt64>(1)
+        let store = DefaultSessionStatusLiveStore(
+            sessionRepository: repository,
+            eventStream: FakeForegroundEventStream(),
+            connectionEpoch: { epoch.value }
+        )
+        let collector = ActivityCollector(store: store, directory: "/repo")
+        #expect(await awaitPredicate { repository.statusFetchCount == 1 })
+
+        // The connection moves to B while A's answer is on its way.
+        epoch.value = 2
+        repository.resumeStatuses()
+        #expect(await awaitPredicate { repository.statusFetchCount == 2 })
+        let fromB = try await collector.awaitEmission { $0.seeded }
+        collector.cancel()
+
+        // The reload asked the bound server; A's answer was never committed as the first seed.
+        #expect(repository.statusFetchCount == 2)
+        #expect(fromB.seeded)
+    }
+
     @Test func observeActivity_keepsUpdatingForSessionWhoseTranscriptWasReleased() async throws {
         let repository = StatusLiveStoreFakeSessionRepository(statuses: [])
         let eventStream = FakeForegroundEventStream()

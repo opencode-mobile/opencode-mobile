@@ -60,6 +60,8 @@ internal class HomeServers(
         val active =
             connectionProfileStore.activeProfile()
                 ?: currentProfile()
+        // The picked server already owns the title; the one still bound must not paint over it.
+        if (pendingId != null) return
         updateState { current ->
             current.copy(
                 title = active?.displayName?.let(UiText::verbatim) ?: UiText.resource(R.string.home_sessions_title),

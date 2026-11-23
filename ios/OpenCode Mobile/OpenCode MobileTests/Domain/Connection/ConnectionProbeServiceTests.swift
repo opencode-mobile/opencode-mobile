@@ -3,6 +3,49 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct ConnectionProbeServiceTests {
+    @Test func confirmServer_savedV2SeesAServerThatMovedToV1() async throws {
+        ProtocolHealthURLProtocol.reset(responsesByPath: [
+            "/global/health": (200, #"{"healthy":true,"version":"1.18.4"}"#),
+            "/api/info": (200, #"{"healthy":true,"version":"2.0.0","pid":123}"#),
+        ])
+
+        let outcome = try await makeService().confirmServer(connection: sampleConnection, expected: .v2)
+
+        #expect(outcome.serverProtocol == .v1)
+    }
+
+    @Test func confirmServer_savedV1SeesAServerThatMovedToV2() async throws {
+        ProtocolHealthURLProtocol.reset(responsesByPath: [
+            "/global/health": (404, #"{}"#),
+            "/api/info": (200, #"{"healthy":true,"version":"2.0.0","pid":123}"#),
+        ])
+
+        let outcome = try await makeService().confirmServer(connection: sampleConnection, expected: .v1)
+
+        #expect(outcome.serverProtocol == .v2)
+    }
+
+    @Test func confirmServer_savedV2GivesASlowGlobalHealthTheAndroidGrace() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [SlowGlobalHealthURLProtocol.self]
+        let service = ConnectionProbeService(urlSession: URLSession(configuration: configuration))
+
+        // Past the old 300 ms and inside 750 ms: the healthy global answer means v1.
+        let outcome = try await service.confirmServer(connection: sampleConnection, expected: .v2)
+
+        #expect(outcome.serverProtocol == .v1)
+    }
+
+    @Test func confirmServer_savedV2DoesNotWaitOnAHangingEndpoint() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [HangingGlobalHealthURLProtocol.self]
+        let service = ConnectionProbeService(urlSession: URLSession(configuration: configuration))
+
+        let outcome = try await service.confirmServer(connection: sampleConnection, expected: .v2)
+
+        #expect(outcome.serverProtocol == .v2)
+    }
+
     @Test func probe_detectsV1FromGlobalHealthAndSkipsApiHealth() async throws {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, #"{"healthy":true,"version":"1.18.4"}"#),
@@ -311,4 +354,47 @@ private final class ProtocolHealthURLProtocol: URLProtocol {
 
 private extension ConnectionProbeServiceTests {
     var requestedPaths: [String] { ProtocolHealthURLProtocol.requestedPathsSnapshot }
+}
+
+/// `/global/health` never answers; every other path answers as a v2 server.
+private final class HangingGlobalHealthURLProtocol: URLProtocol {
+    override class func canInit(with _: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url, url.path != "/global/health",
+              let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+        else { return }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(#"{"healthy":true,"version":"2.0.0","pid":123}"#.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+/// Answers as a v2 server at once, and `/global/health` as healthy v1 after 450 ms.
+private final class SlowGlobalHealthURLProtocol: URLProtocol {
+    override class func canInit(with _: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url,
+              let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)
+        else { return }
+        let isGlobal = url.path == "/global/health"
+        let body = isGlobal ? #"{"healthy":true,"version":"1.18.4"}"# : #"{"healthy":true,"version":"2.0.0","pid":123}"#
+        let finish = { [self] in
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(body.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        }
+        if isGlobal {
+            DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(450), execute: finish)
+        } else {
+            finish()
+        }
+    }
+
+    override func stopLoading() {}
 }

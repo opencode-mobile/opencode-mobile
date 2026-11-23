@@ -2,6 +2,12 @@ package dev.opencode.mobile.domain.sync
 
 import kotlinx.coroutines.flow.Flow
 
+/** The profile generation and connection a load started on; see [SyncCoordinator.isCurrent]. */
+data class SyncLoadStamp(
+    val generation: Long,
+    val connection: Any?,
+)
+
 interface SyncRegistration {
     fun close()
 }
@@ -33,4 +39,9 @@ interface SyncCoordinator {
 
     val profileGeneration: Long
         get() = 0
+
+    fun loadStamp(): SyncLoadStamp = SyncLoadStamp(profileGeneration, null)
+
+    /** False once the profile changed or another connection was bound since [stamp] was taken. */
+    fun isCurrent(stamp: SyncLoadStamp): Boolean = loadStamp() == stamp
 }

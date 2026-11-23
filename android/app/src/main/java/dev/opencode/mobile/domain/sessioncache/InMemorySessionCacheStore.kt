@@ -114,6 +114,30 @@ class InMemorySessionCacheStore : SessionCacheStore {
                 .map { it.key.connectionId to it.key.entryId }
         }
 
+    override suspend fun touch(
+        key: SessionCacheKey,
+        atEpochMs: Long,
+    ) {
+        mutex.withLock { rows[key.cacheKey]?.retainedAtEpochMs = atEpochMs }
+    }
+
+    override suspend fun trimMessageTimelines(
+        connectionId: String,
+        keep: Int,
+    ): Int =
+        mutex.withLock {
+            val excess =
+                rows.values
+                    .filter { it.key.connectionId == connectionId && it.key.kind == SessionCacheKind.MessageTimeline }
+                    .sortedWith(
+                        compareByDescending<Row> { row ->
+                            maxOf(row.retainedAtEpochMs ?: 0L, row.syncedAtEpochMs)
+                        }.thenBy { row -> row.key.cacheKey },
+                    ).drop(keep)
+            excess.forEach { rows.remove(it.key.cacheKey) }
+            excess.size
+        }
+
     private fun matchesConnection(
         key: SessionCacheKey,
         selector: SessionCacheEvictSelector.Connection,

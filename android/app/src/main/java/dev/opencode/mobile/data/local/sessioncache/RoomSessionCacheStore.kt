@@ -115,6 +115,25 @@ class RoomSessionCacheStore
              * keeps message timelines under it.
              */
             const val MAX_READABLE_PAYLOAD_BYTES: Long = 1_950_000L
+
+            /** Stays under SQLite's bound-variable limit. */
+            private const val DELETE_CHUNK = 500
+        }
+
+        override suspend fun touch(
+            key: SessionCacheKey,
+            atEpochMs: Long,
+        ) {
+            dao.setRetainedAt(key.cacheKey, atEpochMs)
+        }
+
+        override suspend fun trimMessageTimelines(
+            connectionId: String,
+            keep: Int,
+        ): Int {
+            val excess = dao.keysBeyondRecent(connectionId, SessionCacheKind.MessageTimeline.name, keep)
+            excess.chunked(DELETE_CHUNK).forEach { dao.deleteKeys(it) }
+            return excess.size
         }
 
         override suspend fun messageTimelineEntries(): List<Pair<String, String>> =

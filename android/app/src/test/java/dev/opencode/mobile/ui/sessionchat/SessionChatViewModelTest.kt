@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import androidx.lifecycle.viewModelScope
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandError
@@ -7,6 +8,7 @@ import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.command.CommandRunOptions
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
+import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ServerProtocol
@@ -71,6 +73,7 @@ import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
+import dev.opencode.mobile.domain.session.NewSessionDraftStart
 import dev.opencode.mobile.domain.session.NewSessionDraftStore
 import dev.opencode.mobile.domain.session.NewSessionPlace
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
@@ -96,6 +99,7 @@ import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.markdown.HighlightCoreHighlightingEngine
 import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.network.ConnectionChangedException
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.network.ServerConnection
@@ -111,6 +115,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -5798,6 +5803,9 @@ class SessionChatViewModelTest {
 
     private fun SessionChatViewModel.draftUi(): NewSessionDraftUiState? = uiState.value.newSessionDraft
 
+    private val otherServerProfile =
+        ConnectionProfile(id = "profile-b", baseUrl = "http://192.0.2.2:4096/", username = "opencode", password = "")
+
     @Test
     fun newSessionDraft_bindCreatesNothingAndShowsTheRunSessionInCard() =
         runTest(testDispatcher) {
@@ -5859,6 +5867,364 @@ class SessionChatViewModelTest {
             assertNotEquals(SessionChatTimelineState.Draft, state.timeline)
             // A successful first send ends the draft.
             assertNull(drafts.draft(""))
+        }
+
+    @Test
+    fun newSessionDraft_profileChangedBeforeSend_createsNothingAndKeepsTheDraft() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val sessionRepository = FakeSessionRepository()
+            var manager: ActiveConnectionManager? = null
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = sessionRepository,
+                    homeProjectsSnapshot = draftProjects(),
+                    onConnectionManager = { manager = it },
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("hello")
+
+            manager!!.applyProfile(otherServerProfile)
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(0, sessionRepository.createSessionCallCount)
+            assertNull(repository.sentSessionId)
+            assertEquals("hello", viewModel.uiState.value.composer.text)
+            assertFalse(viewModel.uiState.value.newSessionDraft == null)
+        }
+
+    @Test
+    fun newSessionDraft_profileChangedDuringCreate_doesNotSendThePrompt() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val sessionRepository =
+                FakeSessionRepository(createSessionResult = Session(id = "ses-a", title = "Created", directory = "/repo"))
+            var manager: ActiveConnectionManager? = null
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = sessionRepository,
+                    homeProjectsSnapshot = draftProjects(),
+                    onConnectionManager = { manager = it },
+                )
+            sessionRepository.onCreateSession = {
+                manager!!.applyProfile(otherServerProfile)
+            }
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("hello")
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(1, sessionRepository.createSessionCallCount)
+            assertNull(repository.sentSessionId)
+            assertEquals("hello", viewModel.uiState.value.composer.text)
+            assertFalse(viewModel.uiState.value.newSessionDraft == null)
+        }
+
+    @Test
+    fun modelCatalog_burstOfProviderEvents_reloadsOnce() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val models = FakeModelRepository()
+            val viewModel = createViewModel(repository = repository, modelRepository = models)
+            viewModel.bind("ses-1", "Session", "/repo")
+            advanceUntilIdle()
+            val before = models.calls
+
+            repeat(5) { repository.eventStream.emit(OpencodeEvent(type = "model.updated")) }
+            repository.eventStream.emit(OpencodeEvent(type = "provider.updated"))
+            advanceUntilIdle()
+
+            assertEquals(before + 1, models.calls)
+        }
+
+    @Test
+    fun newSessionDraft_firstPrompt_runsPinnedToTheConnectionItWasCreatedOn() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            var manager: ActiveConnectionManager? = null
+            var pinnedDuringSend: String? = null
+            repository.onSendPrompt = { pinnedDuringSend = manager!!.pinnedConnection()?.baseUrl }
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository =
+                        FakeSessionRepository(createSessionResult = Session(id = "ses-a", title = "Created", directory = "/repo")),
+                    homeProjectsSnapshot = draftProjects(),
+                    onConnectionManager = { manager = it },
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            val original = manager!!.current()!!.baseUrl
+            viewModel.updateComposerText("hello")
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(original, pinnedDuringSend)
+        }
+
+    @Test
+    fun newSessionDraft_serverChangedDuringFirstPrompt_keepsTheDraft() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val drafts = NewSessionDraftStore()
+            var manager: ActiveConnectionManager? = null
+            repository.onSendPrompt = {
+                manager!!.applyProfile(otherServerProfile)
+                throw ConnectionChangedException()
+            }
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository =
+                        FakeSessionRepository(createSessionResult = Session(id = "ses-a", title = "Created", directory = "/repo")),
+                    homeProjectsSnapshot = draftProjects(),
+                    newSessionDraftStore = drafts,
+                    onConnectionManager = { manager = it },
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("hello")
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            val kept = drafts.draft("")
+            assertEquals("hello", kept?.composer?.text)
+            assertEquals("ses-a", kept?.createdSession?.id)
+            assertEquals("hello", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun newSessionDraft_newSessionDuringFirstPrompt_doesNotReopenTheSentPrompt() =
+        runTest(testDispatcher) {
+            val holdSend = CompletableDeferred<Unit>()
+            val drafts = NewSessionDraftStore()
+            val projects = draftProjects()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(holdSendUntil = holdSend),
+                    sessionRepository =
+                        FakeSessionRepository(createSessionResult = Session(id = "ses-a", title = "Created", directory = "/repo")),
+                    homeProjectsSnapshot = projects,
+                    newSessionDraftStore = drafts,
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("hello")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            val reopened = drafts.open("", NewSessionDraftStart.forDirectory(projects.projects.value, "/repo"))
+
+            assertEquals("", reopened.composer.text)
+            assertNull(reopened.createdSession)
+            holdSend.complete(Unit)
+            advanceUntilIdle()
+            assertEquals("", drafts.draft("")?.composer?.text)
+            assertNull(drafts.draft("")?.createdSession)
+        }
+
+    @Test
+    fun newSessionDraft_lostFirstPrompt_doesNotOverwriteANewerDraft() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val drafts = NewSessionDraftStore()
+            val projects = draftProjects()
+            var manager: ActiveConnectionManager? = null
+            repository.onSendPrompt = {
+                drafts.open("", NewSessionDraftStart.forDirectory(projects.projects.value, "/repo"))
+                drafts.update("") { it.copy(composer = ComposerDraft("newer")) }
+                manager!!.applyProfile(otherServerProfile)
+                throw ConnectionChangedException()
+            }
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository =
+                        FakeSessionRepository(createSessionResult = Session(id = "ses-a", title = "Created", directory = "/repo")),
+                    homeProjectsSnapshot = projects,
+                    newSessionDraftStore = drafts,
+                    onConnectionManager = { manager = it },
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("hello")
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals("newer", drafts.draft("")?.composer?.text)
+            assertNull(drafts.draft("")?.createdSession)
+        }
+
+    @Test
+    fun newSessionDraft_screenClosedBeforeFirstPromptIsSent_keepsTheDraft() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val drafts = NewSessionDraftStore()
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository =
+                        FakeSessionRepository(createSessionResult = Session(id = "ses-a", title = "Created", directory = "/repo")),
+                    homeProjectsSnapshot = draftProjects(),
+                    newSessionDraftStore = drafts,
+                )
+            repository.onPrepareOptimistic = { viewModel.viewModelScope.cancel() }
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("hello")
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertFalse(repository.sendPromptAsyncCalled)
+            assertEquals("hello", drafts.draft("")?.composer?.text)
+            assertEquals("ses-a", drafts.draft("")?.createdSession?.id)
+        }
+
+    @Test
+    fun newSessionDraft_backDuringFirstPrompt_thenFailure_keepsTheDraft() =
+        runTest(testDispatcher) {
+            val holdSend = CompletableDeferred<Unit>()
+            val drafts = NewSessionDraftStore()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(shouldFailSend = true, holdSendUntil = holdSend),
+                    sessionRepository =
+                        FakeSessionRepository(createSessionResult = Session(id = "ses-a", title = "Created", directory = "/repo")),
+                    homeProjectsSnapshot = draftProjects(),
+                    newSessionDraftStore = drafts,
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("hello")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            viewModel.viewModelScope.cancel()
+            holdSend.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals("hello", drafts.draft("")?.composer?.text)
+            assertEquals("ses-a", drafts.draft("")?.createdSession?.id)
+        }
+
+    @Test
+    fun newSessionDraft_backDuringFirstPrompt_thenAccepted_doesNotRestoreTheDraft() =
+        runTest(testDispatcher) {
+            val holdSend = CompletableDeferred<Unit>()
+            val drafts = NewSessionDraftStore()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(holdSendUntil = holdSend),
+                    sessionRepository =
+                        FakeSessionRepository(createSessionResult = Session(id = "ses-a", title = "Created", directory = "/repo")),
+                    homeProjectsSnapshot = draftProjects(),
+                    newSessionDraftStore = drafts,
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("hello")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            viewModel.viewModelScope.cancel()
+            holdSend.complete(Unit)
+            advanceUntilIdle()
+
+            assertNull(drafts.draft(""))
+        }
+
+    @Test
+    fun newSessionDraft_emptyNewSessionThenLostConnection_restoresTheHeldDraft() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val drafts = NewSessionDraftStore()
+            val projects = draftProjects()
+            var manager: ActiveConnectionManager? = null
+            repository.onSendPrompt = {
+                drafts.open("", NewSessionDraftStart.forDirectory(projects.projects.value, "/repo"))
+                manager!!.applyProfile(otherServerProfile)
+                throw ConnectionChangedException()
+            }
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository =
+                        FakeSessionRepository(createSessionResult = Session(id = "ses-a", title = "Created", directory = "/repo")),
+                    homeProjectsSnapshot = projects,
+                    newSessionDraftStore = drafts,
+                    onConnectionManager = { manager = it },
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("hello")
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals("hello", drafts.draft("")?.composer?.text)
+            assertEquals("ses-a", drafts.draft("")?.createdSession?.id)
+        }
+
+    @Test
+    fun newSessionDraft_ordinaryFailedFirstPrompt_stillEndsTheDraft() =
+        runTest(testDispatcher) {
+            val drafts = NewSessionDraftStore()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(shouldFailSend = true),
+                    sessionRepository =
+                        FakeSessionRepository(createSessionResult = Session(id = "ses-a", title = "Created", directory = "/repo")),
+                    homeProjectsSnapshot = draftProjects(),
+                    newSessionDraftStore = drafts,
+                )
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("hello")
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertNull(drafts.draft(""))
+            // The chat keeps the text for Retry.
+            assertEquals("hello", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun composerDraft_debouncedSave_staysUnderTheConnectionItWasTypedOn() =
+        runTest(testDispatcher) {
+            val drafts =
+                dev.opencode.mobile.domain.composer
+                    .InMemoryComposerDraftStore()
+            var manager: ActiveConnectionManager? = null
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    composerDraftStore = drafts,
+                    onConnectionManager = { manager = it },
+                )
+            viewModel.bind("ses-1", "Session", "/repo")
+            advanceUntilIdle()
+            val original = manager!!.currentProfile()!!
+            viewModel.updateComposerText("typed on a")
+
+            manager!!.applyProfile(otherServerProfile)
+            advanceUntilIdle()
+
+            assertEquals(
+                "typed on a",
+                drafts.load(ModelSelectionConnectionIdentity(original.baseUrl, original.username), "/repo", "ses-1")?.text,
+            )
+            assertNull(drafts.load(ModelSelectionConnectionIdentity("http://192.0.2.2:4096/", "opencode"), "/repo", "ses-1"))
         }
 
     @Test
@@ -8820,6 +9186,7 @@ class SessionChatViewModelTest {
             dev.opencode.mobile.domain.goal.EmptySessionGoalRepository,
         filesystemRepository: dev.opencode.mobile.domain.filesystem.FilesystemRepository =
             dev.opencode.mobile.domain.filesystem.UnavailableFilesystemRepository,
+        onConnectionManager: (ActiveConnectionManager) -> Unit = {},
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -8856,6 +9223,7 @@ class SessionChatViewModelTest {
             activeConnectionManager.applyProfile(profile, serverProtocol = serverProtocol)
             if (sideQuestionsSupported) activeConnectionManager.probeActive()
         }
+        onConnectionManager(activeConnectionManager)
         val connectionSessionCoordinator =
             testConnectionSessionCoordinator(
                 activeConnectionManager = activeConnectionManager,
@@ -9255,6 +9623,12 @@ private class FakeMessageRepository(
     var sentSessionId: String? = null
     val shellRequests = mutableListOf<Pair<ShellCommandOptions, String?>>()
     var shellError: Throwable? = null
+
+    /** Runs inside the send, for a server switch that lands mid-request. */
+    var onSendPrompt: (suspend () -> Unit)? = null
+
+    /** Runs before the optimistic row, for a screen closing before the send starts. */
+    var onPrepareOptimistic: (() -> Unit)? = null
     private var listMessagesCallCount = 0
 
     override fun observeMessages(
@@ -9330,7 +9704,10 @@ private class FakeMessageRepository(
         id: String,
         text: String,
         attachments: List<Attachment>,
-    ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text, attachments)
+    ): DisplayMessage {
+        onPrepareOptimistic?.invoke()
+        return contentPreparer.prepareOptimisticUserMessage(id, text, attachments)
+    }
 
     override fun clearMessageCache() = Unit
 
@@ -9352,6 +9729,7 @@ private class FakeMessageRepository(
         sendPromptAsyncCalled = true
         sentOptions = options
         sentSessionId = sessionId
+        onSendPrompt?.invoke()
         if (options.attachments.isNotEmpty()) {
             kotlin.coroutines.coroutineContext[PromptSendProgressReporter]
                 ?.onProgress
@@ -9486,6 +9864,9 @@ private class FakeSessionRepository(
     val childSessionRequests = mutableListOf<String>()
     var childSessionFailuresRemaining = 0
 
+    /** Runs inside createSession, for a server switch that lands mid-request. */
+    var onCreateSession: (suspend () -> Unit)? = null
+
     data class DiffRequest(
         val sessionId: String,
         val messageId: String?,
@@ -9606,6 +9987,7 @@ private class FakeSessionRepository(
     ): Session {
         createSessionRequest = LifecycleRequest(id = parentId.orEmpty(), directory = directory)
         createSessionCallCount += 1
+        onCreateSession?.invoke()
         createSessionFailures.removeFirstOrNull()?.let { throw it }
         createSessionError?.let { throw it }
         return createSessionResult ?: Session(id = "new-ses", title = title.orEmpty(), directory = directory)

@@ -321,6 +321,209 @@ import Testing
         #expect(coordinator.currentProfile()?.id == profileB.id)
         #expect(switched.value == 2)
     }
+
+    @Test @MainActor func switchBindsTheNewServerBeforeClearingProjections() async throws {
+        let log = TransactionLog()
+        let store = CatalogConnectionProfileStore()
+        let manager = ActiveConnectionManager(profileStore: store)
+        let caches = RecordingProjectionCaches(log: log)
+        caches.onClear = { log.append("clear-on:\(manager.connection?.baseURL.absoluteString ?? "none")") }
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore(),
+            projectionCaches: { caches }
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://192.0.2.1:4096/", username: "opencode", password: "test-password", name: "A")
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://192.0.2.2:4096/", username: "opencode", password: "test-password", name: "B")
+        )
+        let a = try #require(await store.listProfiles().first { $0.name == "A" })
+        log.reset()
+
+        await coordinator.switchProfile(id: a.id)
+
+        #expect(log.snapshot().contains("clear-on:http://192.0.2.1:4096/"))
+    }
+
+    @Test @MainActor func removingAnInactiveProfileLeavesTheActiveServerRunning() async throws {
+        let log = TransactionLog()
+        let store = CatalogConnectionProfileStore()
+        let manager = ActiveConnectionManager(profileStore: store)
+        let stream = DelayedRecordingStream(log: log)
+        let caches = RecordingProjectionCaches(log: log)
+        let purged = Locked<[String?]>([])
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore(),
+            eventStream: { stream },
+            projectionCaches: { caches },
+            hasActiveConnection: { manager.connection != nil },
+            purgeProfileState: { profile in purged.mutate { $0.append(profile?.id) } }
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://192.0.2.1:4096/", username: "opencode", password: "test-password", name: "A")
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://192.0.2.2:4096/", username: "opencode", password: "test-password", name: "B")
+        )
+        let a = try #require(await store.listProfiles().first { $0.name == "A" })
+        var listChanges = 0
+        var saves = 0
+        let listRegistration = coordinator.onProfileListChanged { listChanges += 1 }
+        let saveRegistration = coordinator.onProfileSaved { saves += 1 }
+        defer { withExtendedLifetime((listRegistration, saveRegistration)) {} }
+        log.reset()
+
+        await coordinator.removeProfile(id: a.id)
+
+        #expect(log.snapshot().isEmpty)
+        #expect(saves == 0)
+        #expect(listChanges == 1)
+        #expect(purged.value == [a.id])
+        #expect(manager.connection?.baseURL.absoluteString == "http://192.0.2.2:4096/")
+    }
+
+    @Test @MainActor func savingAProfileDoesNotHoldASwitchBehindItsAddressCheck() async throws {
+        let dead = "http://192.0.2.1:4096/"
+        let other = "http://198.51.100.1:4096/"
+        let healthy = "http://192.0.2.2:4096/"
+        let store = CatalogConnectionProfileStore()
+        let probe = HeldAddressProbe(winner: other)
+        let manager = ActiveConnectionManager(connectionProbing: probe, profileStore: store)
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore()
+        )
+        try await store.saveProfile(
+            ConnectionProfile(baseURL: healthy, username: "opencode", password: "test-password", name: "Healthy")
+        )
+        let target = try #require(await store.activeProfile())
+        let saving = Task {
+            try await coordinator.saveProfile(ConnectionProfile(
+                baseURL: dead, serverURLs: [dead, other], username: "opencode", password: "test-password", name: "Dead"
+            ))
+        }
+        await probe.started.wait()
+
+        let switching = Task { await coordinator.switchProfile(id: target.id) }
+        let switched = await eventually { coordinator.currentProfile()?.id == target.id }
+        probe.release.fire()
+        try await saving.value
+        await switching.value
+
+        #expect(switched)
+        // The stale check found a winner for the server we left; it must not rebind.
+        #expect(manager.connection?.baseURL.absoluteString == healthy)
+    }
+
+    @Test @MainActor func removingTheActiveProfileDoesNotHoldASwitchBehindTheNextAddressCheck() async throws {
+        let dead = "http://192.0.2.1:4096/"
+        let other = "http://198.51.100.1:4096/"
+        let healthy = "http://192.0.2.2:4096/"
+        let removedURL = "http://192.0.2.3:4096/"
+        let store = CatalogConnectionProfileStore()
+        let probe = HeldAddressProbe(winner: other)
+        let manager = ActiveConnectionManager(connectionProbing: probe, profileStore: store)
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore()
+        )
+        try await store.saveProfile(
+            ConnectionProfile(baseURL: healthy, username: "opencode", password: "test-password", name: "Healthy")
+        )
+        let target = try #require(await store.activeProfile())
+        try await store.saveProfile(ConnectionProfile(
+            baseURL: dead, serverURLs: [dead, other], username: "opencode", password: "test-password", name: "Dead"
+        ))
+        let next = try #require(await store.activeProfile())
+        try await store.saveProfile(
+            ConnectionProfile(baseURL: removedURL, username: "opencode", password: "test-password", name: "Removed")
+        )
+        let removed = try #require(await store.activeProfile())
+        // Removing the last entry makes the one before it ("Dead") active.
+        #expect(await store.listProfiles().last?.id == removed.id)
+        #expect(next.id != removed.id)
+
+        let removing = Task { await coordinator.removeProfile(id: removed.id) }
+        await probe.started.wait()
+        let switching = Task { await coordinator.switchProfile(id: target.id) }
+        let switched = await eventually { coordinator.currentProfile()?.id == target.id }
+        probe.release.fire()
+        await removing.value
+        await switching.value
+
+        #expect(switched)
+        #expect(manager.connection?.baseURL.absoluteString == healthy)
+    }
+
+    @Test @MainActor func lateAddressCheckDoesNotBringBackARemovedProfile() async throws {
+        let lan = "http://192.0.2.1:4096/"
+        let other = "http://198.51.100.1:4096/"
+        let store = CatalogConnectionProfileStore()
+        let probe = HeldAddressProbe(winner: other)
+        let manager = ActiveConnectionManager(connectionProbing: probe, profileStore: store)
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore()
+        )
+        try await store.saveProfile(
+            ConnectionProfile(baseURL: lan, serverURLs: [lan, other], username: "opencode", password: "test-password", name: "A")
+        )
+        let a = try #require(await store.activeProfile())
+        manager.apply(a)
+        await probe.started.wait()
+
+        await coordinator.removeProfile(id: a.id)
+        probe.release.fire()
+        await manager.awaitAddressResolution()
+        for _ in 0 ..< 50 { await Task.yield() }
+
+        #expect(await store.listProfiles().isEmpty)
+        #expect(manager.connection == nil)
+    }
+
+    @Test @MainActor func detectedProtocolNeverRecreatesARemovedProfile() async throws {
+        let store = CatalogConnectionProfileStore()
+
+        let updated = await store.updateDetectedServer(
+            id: "missing",
+            baseURL: "http://192.0.2.1:4096/",
+            serverProtocol: .v2
+        )
+
+        #expect(updated == false)
+        #expect(await store.listProfiles().isEmpty)
+    }
+}
+
+/// Answers health only for `winner`, and holds every answer until `release` fires.
+private final class HeldAddressProbe: ConnectionProbing, @unchecked Sendable {
+    let started = GateSignal()
+    let release = GateSignal()
+    private let winner: String
+
+    init(winner: String) {
+        self.winner = winner
+    }
+
+    func probe(connection: ServerConnection) async throws -> ServerProtocol {
+        started.fire()
+        await release.wait()
+        guard connection.baseURL.absoluteString == winner else { throw URLError(.cannotConnectToHost) }
+        return .v2
+    }
 }
 
 private final class InMemoryComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
@@ -629,6 +832,7 @@ private final class RecordingSyncCoordinator: SyncCoordinator, @unchecked Sendab
 @MainActor
 private final class RecordingProjectionCaches: ProjectionCaching {
     private let log: TransactionLog
+    var onClear: (() -> Void)?
 
     init(log: TransactionLog) {
         self.log = log
@@ -636,10 +840,12 @@ private final class RecordingProjectionCaches: ProjectionCaching {
 
     func clearAll() {
         log.append("clearAll")
+        onClear?()
     }
 
     func clearLiveProjections() {
         log.append("clear")
+        onClear?()
     }
 }
 

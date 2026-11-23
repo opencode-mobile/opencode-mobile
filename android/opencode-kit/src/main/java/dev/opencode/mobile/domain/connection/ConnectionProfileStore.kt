@@ -23,11 +23,30 @@ interface ConnectionProfileStore {
 
     suspend fun saveProfile(profile: ConnectionProfile)
 
+    /**
+     * Rewrites a stored profile's address or protocol, never its password. Returns false, and
+     * stores nothing, when [id] is gone: a late probe must not bring a removed profile back.
+     */
+    suspend fun updateStoredProfile(
+        id: String,
+        transform: (ConnectionProfile) -> ConnectionProfile,
+    ): Boolean {
+        val stored = listProfiles().firstOrNull { it.id == id } ?: return false
+        saveProfile(transform(stored))
+        return true
+    }
+
     suspend fun applyProfile(id: String) = Unit
 
     suspend fun removeProfile(id: String) = Unit
 
     suspend fun addedWorktrees(serverBaseUrl: String): List<String>
+
+    /** [profileId]'s projects, for a profile that is not bound yet; a URL can belong to two usernames. */
+    suspend fun addedWorktreesForProfile(
+        profileId: String,
+        serverBaseUrl: String,
+    ): List<String> = addedWorktrees(serverBaseUrl)
 
     suspend fun addWorktree(
         serverBaseUrl: String,

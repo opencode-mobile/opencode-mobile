@@ -28,6 +28,21 @@ interface SessionCacheStore {
      * when the store cannot list them; callers then skip work that needs the full set.
      */
     suspend fun messageTimelineEntries(): List<Pair<String, String>>? = null
+
+    /** Marks a message timeline as just used, for [trimMessageTimelines]. */
+    suspend fun touch(
+        key: SessionCacheKey,
+        atEpochMs: Long,
+    ) = Unit
+
+    /**
+     * Keeps [connectionId]'s [keep] most recently used message timelines and deletes the rest.
+     * Lists, activity and layout rows are never touched. Returns how many rows went.
+     */
+    suspend fun trimMessageTimelines(
+        connectionId: String,
+        keep: Int,
+    ): Int = 0
 }
 
 enum class SessionCacheKind {

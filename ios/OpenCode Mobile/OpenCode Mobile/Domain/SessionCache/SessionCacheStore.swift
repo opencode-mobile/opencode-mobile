@@ -11,10 +11,14 @@ nonisolated protocol SessionCacheStore: Sendable {
     /// Keys of every message timeline row, payload or not (an opened session retains an empty
     /// row). Nil when the store cannot list them; the thumbnail sweep then skips.
     func messageTimelineKeys() async -> [SessionCacheKey]?
+    /// Deletes the least recently used message timelines of `connectionId` past `keeping`, and
+    /// returns their keys. Recency is the later of the last open and the last write.
+    func evictLeastRecentTimelines(connectionId: String, keeping: Int) async -> [SessionCacheKey]
 }
 
 extension SessionCacheStore {
     func messageTimelineKeys() async -> [SessionCacheKey]? { nil }
+    func evictLeastRecentTimelines(connectionId _: String, keeping _: Int) async -> [SessionCacheKey] { [] }
 }
 
 nonisolated enum SessionCacheKind: String, Sendable {

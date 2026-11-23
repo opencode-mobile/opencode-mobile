@@ -743,7 +743,7 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .get("api/session/active")
-            .body<ApiActiveSessionsEnvelope>()
+            .bodyOnSuccess<ApiActiveSessionsEnvelope>()
             .data
 
     suspend fun getSessionV2(id: String): V2SessionDto =
@@ -913,7 +913,10 @@ class SessionsApi private constructor(
             }.bodyOnSuccess<ApiListEnvelope<FileDiffDto>>()
             .data
 
-    private suspend fun HttpResponse.decodeV2Session(): V2SessionDto = json.decodeDataEnvelope(body<JsonElement>())
+    private suspend fun HttpResponse.decodeV2Session(): V2SessionDto {
+        if (!status.isSuccess()) throw failure()
+        return json.decodeDataEnvelope(body<JsonElement>())
+    }
 
     /**
      * Live v2 404s can omit Content-Type. Decoding first then throws

@@ -54,6 +54,7 @@ import dev.opencode.mobile.ui.main.withSessionMoved
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -100,6 +101,8 @@ internal class HomeProjectList(
     private val isConnected: () -> Boolean,
     /** Whether other saved addresses are still being tried. */
     private val addressCheckRunning: () -> Boolean,
+    /** The user picked a server that is not bound yet; the bound one must not repaint Home. */
+    private val switchPending: () -> Boolean,
     /** A probe answered; capabilities other regions wait for may have changed. */
     private val onProbed: () -> Unit,
     private val onChange: (HomeProjectListState) -> Unit,
@@ -115,6 +118,9 @@ internal class HomeProjectList(
     var homeRowsDispatcher: CoroutineDispatcher = Dispatchers.Default
 
     private var loadMoreJob: Job? = null
+
+    /** Identifies the newest [load]; an older one stops at its next check. */
+    private var currentLoad = 0L
 
     private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
 
@@ -368,6 +374,11 @@ internal class HomeProjectList(
         return true
     }
 
+    /** A switch or clear started: whatever [load] is running belongs to the previous server. */
+    fun invalidateLoads() {
+        currentLoad += 1
+    }
+
     /** Every live list and status refetches. */
     suspend fun invalidateAll() {
         sessionLiveStore.invalidate(null)
@@ -430,18 +441,20 @@ internal class HomeProjectList(
      * built on [homeRowsDispatcher] and conflated, so only the latest reaches the main thread;
      * a new parent link learned by the ancestry rebuilds them.
      */
-    fun observeHomeRows(directory: String): Flow<HomeDirectoryRows> =
-        combine(
+    fun observeHomeRows(directory: String): Flow<HomeDirectoryRows> {
+        val ancestryOwner = sessionAncestry.currentOwner()
+        return combine(
             sessionLiveStore.observeSessions(directory),
             sessionStatusLiveStore.observeActivity(directory),
             sessionReadyStore.observeReadyIds(directory),
             sessionAncestry.changes,
         ) { snapshot, statuses, readyIds, _ ->
             val rows = homeRows(directory, snapshot, statuses, readyIds)
-            sessionAncestry.requestRoots(rows.unresolvedBusyIds, directory)
+            sessionAncestry.requestRoots(rows.unresolvedBusyIds, directory, ancestryOwner)
             HomeDirectoryRows(snapshot, rows.summaries)
         }.conflate()
             .flowOn(homeRowsDispatcher)
+    }
 
     fun recordMoreSessions(
         directory: String,
@@ -501,7 +514,8 @@ internal class HomeProjectList(
         id: String,
         isCurrent: () -> Boolean,
     ) {
-        val worktrees = connectionProfileStore.addedWorktrees(baseUrl)
+        invalidateLoads()
+        val worktrees = connectionProfileStore.addedWorktreesForProfile(id, baseUrl)
         val sections = worktrees.map { worktree -> sectionFromCache(worktree, connectionId = id) }
         if (!isCurrent()) return
         homeWorktrees.reset()
@@ -528,12 +542,19 @@ internal class HomeProjectList(
         skipProbe: Boolean = false,
         preserveContent: Boolean = false,
     ) {
+        // The switch landing, or failing, reloads Home.
+        if (switchPending()) return
+        val loadId = ++currentLoad
+
+        fun superseded() = loadId != currentLoad
+
         if (!isConnected()) {
             content = MainScreenUiState.Disconnected
             return
         }
 
         val worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl())
+        if (superseded()) return
 
         // Disk-first home: local worktrees + Session Cache paint Loaded
         // without Probing/Loading. Live store then SWR-refreshes.
@@ -545,19 +566,27 @@ internal class HomeProjectList(
             // Project, worktrees and branches first, so the cached paint labels rows and the
             // project pill as the live load will instead of relabeling them a moment later.
             homeWorktrees.seedResolutions(worktrees)
+            if (superseded()) return
             homeWorktrees.seedLayouts(worktrees)
+            if (superseded()) return
             val sections = loadSectionsFromCache(worktrees)
+            if (superseded()) return
             content =
                 MainScreenUiState.Loaded(sections = sections, projectLoads = visibleProjectLoads, home = homeWorktrees.index)
             applyPendingFirstServerSnapshots()
-            if (!skipProbe) {
-                runCatching { probeServer() }
-                    .onFailure {
-                        // Keep cached home; connection chrome reflects reachability.
-                    }
-            }
+            // Live rows start now; they share the probe through the connection manager.
             startLiveObservations(worktrees)
             startAwaitingProjectLoads()
+            if (!skipProbe) {
+                try {
+                    probeServer()
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (_: Exception) {
+                    // Keep cached home; connection chrome reflects reachability.
+                }
+                if (superseded()) return
+            }
             homeWorktrees.reload(worktrees)
             return
         }
@@ -567,17 +596,20 @@ internal class HomeProjectList(
             content = MainScreenUiState.Empty()
             if (!skipProbe) {
                 val probedBaseUrl = serverBaseUrl()
-                runCatching { probeServer() }
-                    .onFailure { error ->
-                        if (!probeFailureIsFinal(probedBaseUrl)) return@onFailure
-                        content =
-                            MainScreenUiState.ProbeFailed(
-                                when (error) {
-                                    is ServerProbeError -> probeErrorMessage(error)
-                                    else -> serverMessage(error, R.string.connection_error_unreachable)
-                                },
-                            )
-                    }
+                try {
+                    probeServer()
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (error: Exception) {
+                    if (superseded() || !probeFailureIsFinal(probedBaseUrl)) return
+                    content =
+                        MainScreenUiState.ProbeFailed(
+                            when (error) {
+                                is ServerProbeError -> probeErrorMessage(error)
+                                else -> serverMessage(error, R.string.connection_error_unreachable)
+                            },
+                        )
+                }
             }
             return
         }
@@ -588,17 +620,20 @@ internal class HomeProjectList(
             }
             try {
                 probeServer()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
             } catch (error: ServerProbeError) {
-                if (preserveContent) return
+                if (preserveContent || superseded()) return
                 stopLiveObservations()
                 content = MainScreenUiState.ProbeFailed(probeErrorMessage(error))
                 return
             } catch (error: Throwable) {
-                if (preserveContent) return
+                if (preserveContent || superseded()) return
                 stopLiveObservations()
                 content = MainScreenUiState.ProbeFailed(serverMessage(error, R.string.connection_error_unreachable))
                 return
             }
+            if (superseded()) return
         }
 
         val previous = content
@@ -617,6 +652,7 @@ internal class HomeProjectList(
             }
 
             val sections = loadProjectSections(worktrees)
+            if (superseded()) return
             if (sections.isEmpty()) {
                 stopLiveObservations()
                 content =
@@ -640,8 +676,10 @@ internal class HomeProjectList(
             applyPendingFirstServerSnapshots()
             startLiveObservations(worktrees)
             homeWorktrees.reload(worktrees)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
         } catch (error: Throwable) {
-            if (preserveContent) return
+            if (preserveContent || superseded()) return
             stopLiveObservations()
             content = MainScreenUiState.ProbeFailed(serverMessage(error, R.string.home_error_load_projects))
         }
@@ -703,6 +741,7 @@ internal class HomeProjectList(
                     async {
                         runCatching { loadSection(worktree) }
                             .getOrElse { throwable ->
+                                if (throwable is CancellationException) throw throwable
                                 ProjectSectionUi(
                                     worktree = worktree,
                                     displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree),

@@ -9,7 +9,13 @@ protocol SessionReadyStore: AnyObject, Sendable {
     /// after the next screen (child, parent, fork) may already have focused itself.
     func releaseFocusedSession(sessionID: String)
     func bindProfile(profileID: String?)
+    /// Drops the parked records of a removed, unbound profile.
+    func forgetProfile(profileID: String)
     func clearCache()
+}
+
+extension SessionReadyStore {
+    func forgetProfile(profileID _: String) {}
 }
 
 @MainActor

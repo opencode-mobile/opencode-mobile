@@ -46,6 +46,7 @@ final class HomeWorktrees {
     private let sessionCache: any SessionCache
     private let foregroundEventStream: (any ForegroundEventStream)?
     private let serverBaseURL: @MainActor () -> String
+    private let inventoryServerKey: @MainActor () -> String?
     private let serverProtocol: @MainActor () -> ServerProtocol?
 
     private let worktreeMarks: HomeWorktreeMarks
@@ -67,6 +68,7 @@ final class HomeWorktrees {
         foregroundEventStream: (any ForegroundEventStream)?,
         branchRetryDelays: [Duration],
         serverBaseURL: @escaping @MainActor () -> String,
+        inventoryServerKey: (@MainActor () -> String?)? = nil,
         serverProtocol: @escaping @MainActor () -> ServerProtocol?
     ) {
         self.projectRepository = projectRepository
@@ -75,6 +77,7 @@ final class HomeWorktrees {
         self.sessionCache = sessionCache
         self.foregroundEventStream = foregroundEventStream
         self.serverBaseURL = serverBaseURL
+        self.inventoryServerKey = inventoryServerKey ?? serverBaseURL
         self.serverProtocol = serverProtocol
         let projects = projectRepository
         let sessions = sessionRepository
@@ -195,9 +198,11 @@ final class HomeWorktrees {
 
     /// Cached projects for paths not resolved yet, so the cached paint groups (and keys its
     /// scopes) the way the live load will. A key that changes later reloads the whole list.
-    func seedResolutions(_ worktrees: [String]) async {
+    func seedResolutions(_ worktrees: [String], isCurrent: @MainActor () -> Bool = { true }) async {
         let missing = worktrees.filter { state.resolutions[$0] == nil }
-        for (path, resolution) in await cachedResolutions(missing, connectionID: nil)
+        let cached = await cachedResolutions(missing, connectionID: nil)
+        guard isCurrent() else { return }
+        for (path, resolution) in cached
             where state.resolutions[path] == nil {
             state.resolutions[path] = resolution
         }
@@ -220,9 +225,11 @@ final class HomeWorktrees {
 
     /// Cached worktree lists and branches for paths whose live inventory has not loaded, so a
     /// cold Home shows the worktree labels and project chip the live load will, not a relabel.
-    func seedLayouts(_ worktrees: [String]) async {
+    func seedLayouts(_ worktrees: [String], isCurrent: @MainActor () -> Bool = { true }) async {
         let missing = worktrees.filter { state.inventories[$0] == nil }
-        applyLayouts(await cachedLayouts(missing, connectionID: nil))
+        let cached = await cachedLayouts(missing, connectionID: nil)
+        guard isCurrent() else { return }
+        applyLayouts(cached)
     }
 
     func cachedLayouts(
@@ -353,7 +360,7 @@ final class HomeWorktrees {
         markTask?.cancel()
         worktreeMarks.onConnection(serverBaseURL())
         worktreeMarks.setAddedPaths(worktrees)
-        worktreeInventoryCache.setAddedPaths(worktrees, server: serverBaseURL())
+        worktreeInventoryCache.setAddedPaths(worktrees, server: inventoryServerKey() ?? serverBaseURL())
         branchLookups.refresh()
         loadServerProjectInfo()
         markTask = Task { @MainActor [weak self] in
@@ -450,7 +457,11 @@ final class HomeWorktrees {
 
     private func applyMark(_ update: WorktreeMarkUpdate) {
         state.inventories[update.addedPath] = update.inventory
-        worktreeInventoryCache.record(update.inventory, addedPath: update.addedPath, server: serverBaseURL())
+        worktreeInventoryCache.record(
+            update.inventory,
+            addedPath: update.addedPath,
+            server: inventoryServerKey() ?? serverBaseURL()
+        )
         if let projectID = update.projectID {
             state.projectIDs[update.addedPath] = projectID
         }

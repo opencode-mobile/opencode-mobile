@@ -256,10 +256,7 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         let deleted = try await run { try await remote.deleteSession(id: id, directory: directory) }
         if deleted,
            let profile = activeConnectionManager?.currentProfile() {
-            let identity = ModelSelectionConnectionIdentity(
-                serverBaseURL: profile.baseURL,
-                username: profile.username
-            )
+            let identity = ModelSelectionConnectionIdentity(profile: profile)
             if let sessionModelSelectionStore {
                 await sessionModelSelectionStore.deleteSessionEntries(
                     connectionIdentity: identity,

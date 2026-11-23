@@ -4018,16 +4018,265 @@ struct SessionChatViewModelTests {
         )[0]
     }
 
+    private static let serverA = ConnectionProfile(
+        baseURL: "http://192.0.2.1:4096/", username: "opencode", password: "test-password", id: "a", name: "A"
+    )
+    private static let serverB = ConnectionProfile(
+        baseURL: "http://198.51.100.2:4096/", username: "opencode", password: "test-password", id: "b", name: "B"
+    )
+
+    private func makePinnedDraft(
+        _ repository: FakeMessageRepository,
+        _ sessionRepository: FakeChatSessionRepository,
+        manager: ActiveConnectionManager,
+        store: NewSessionDraftStore
+    ) async -> SessionChatViewModel {
+        store.save(NewSessionDraft(projectKey: "prj", projectDirectory: "/repo"), forProfile: "a")
+        let viewModel = makeDraftViewModel(
+            repository,
+            sessionRepository: sessionRepository,
+            store: store,
+            activeConnectionManager: manager
+        )
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.composer.isModelSelectionReady }
+        viewModel.updateComposerText("For server A")
+        return viewModel
+    }
+
+    @Test func draft_createUsesTheCheckedServerWhenASwitchLandsAtTheRequest() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository()
+        let manager = ActiveConnectionManager()
+        manager.apply(Self.serverA, serverProtocol: .v1)
+        let store = NewSessionDraftStore()
+        let requestHost = Locked<String?>(nil)
+        sessionRepository.onCreateSession = {
+            manager.apply(Self.serverB, serverProtocol: .v2)
+            requestHost.value = manager.connection?.baseURL.host
+        }
+        let viewModel = await makePinnedDraft(repository, sessionRepository, manager: manager, store: store)
+        defer { viewModel.stopObserving() }
+
+        await viewModel.sendPrompt()
+
+        #expect(requestHost.value == "192.0.2.1")
+        #expect(repository.sendPromptAsyncCalled == false)
+        #expect(store.draft(forProfile: "a")?.composer.text == "For server A")
+    }
+
+    @Test func draft_firstPromptUsesTheCheckedServerWhenASwitchLandsAtTheRequest() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository()
+        let manager = ActiveConnectionManager()
+        manager.apply(Self.serverA, serverProtocol: .v1)
+        let store = NewSessionDraftStore()
+        let requestHost = Locked<String?>(nil)
+        let requestProtocol = Locked<ServerProtocol?>(nil)
+        repository.onSendPrompt = {
+            manager.apply(Self.serverB, serverProtocol: .v2)
+            requestHost.value = manager.connection?.baseURL.host
+            requestProtocol.value = await manager.currentProtocolOrProbe()
+        }
+        let viewModel = await makePinnedDraft(repository, sessionRepository, manager: manager, store: store)
+        defer { viewModel.stopObserving() }
+
+        await viewModel.sendPrompt()
+
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(requestHost.value == "192.0.2.1")
+        #expect(requestProtocol.value == .v1)
+    }
+
+    @Test func draft_unknownProtocolProbeSupersededByASwitchFailsAndKeepsTheDraft() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository()
+        let probe = HeldHostProbe()
+        let manager = ActiveConnectionManager(connectionProbing: probe)
+        manager.apply(Self.serverA)
+        let store = NewSessionDraftStore()
+        let viewModel = await makePinnedDraft(repository, sessionRepository, manager: manager, store: store)
+        defer { viewModel.stopObserving() }
+        await probe.waitForCall(host: "192.0.2.1")
+
+        let sending = Task { await viewModel.sendPrompt() }
+        for _ in 0 ..< 200 { await Task.yield() }
+        probe.answer(host: "198.51.100.2", with: .success(.v2))
+        manager.apply(Self.serverB)
+        await sending.value
+
+        #expect(sessionRepository.createSessionCallCount == 0)
+        #expect(repository.sendPromptAsyncCalled == false)
+        #expect(store.draft(forProfile: "a")?.composer.text == "For server A")
+    }
+
+    @Test func draft_firstPromptFailsOnASwitchAndItsRetryNeverGoesToTheNewServer() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository()
+        let manager = ActiveConnectionManager()
+        manager.apply(Self.serverA, serverProtocol: .v1)
+        let store = NewSessionDraftStore()
+        repository.onPrepareOptimistic = { manager.apply(Self.serverB, serverProtocol: .v2) }
+        let viewModel = await makePinnedDraft(repository, sessionRepository, manager: manager, store: store)
+        defer { viewModel.stopObserving() }
+
+        await viewModel.sendPrompt()
+        #expect(repository.sendPromptAsyncCalled == false)
+        #expect(viewModel.uiState.composer.text == "For server A")
+
+        repository.onPrepareOptimistic = nil
+        await viewModel.sendPrompt()
+        #expect(repository.sendPromptAsyncCalled == false)
+        #expect(viewModel.uiState.composer.text == "For server A")
+
+        manager.apply(Self.serverA, serverProtocol: .v1)
+        await viewModel.sendPrompt()
+        #expect(await waitUntil { repository.sendPromptAsyncCalled })
+    }
+
+    @Test func draft_retryReusesTheSessionCreatedBeforeASwitchInterrupted() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository(createSessionResult: Session(
+            id: "ses-new", title: "Created", slug: nil, projectID: nil,
+            directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+        ))
+        let manager = ActiveConnectionManager()
+        manager.apply(Self.serverA, serverProtocol: .v1)
+        let store = NewSessionDraftStore()
+        sessionRepository.afterCreateSession = { manager.apply(Self.serverB, serverProtocol: .v2) }
+        let viewModel = await makePinnedDraft(repository, sessionRepository, manager: manager, store: store)
+        defer { viewModel.stopObserving() }
+
+        await viewModel.sendPrompt()
+        #expect(sessionRepository.createSessionCallCount == 1)
+        #expect(repository.sendPromptAsyncCalled == false)
+
+        sessionRepository.afterCreateSession = nil
+        manager.apply(Self.serverA, serverProtocol: .v1)
+        await viewModel.retryDraftSend()
+
+        #expect(await waitUntil { repository.sendPromptAsyncCalled })
+        #expect(sessionRepository.createSessionCallCount == 1)
+        #expect(repository.sentSessionID == "ses-new")
+    }
+
+    @Test func draft_switchBeforeSendCreatesNothingAndKeepsTheDraft() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository(createSessionResult: Session(
+            id: "ses-new", title: "Created", slug: nil, projectID: nil,
+            directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+        ))
+        let manager = Self.makeActiveConnectionManager(serverProtocol: .v1)
+        let key = manager.currentProfile().map(NewSessionDraftStore.key(for:)) ?? ""
+        let store = NewSessionDraftStore()
+        store.save(NewSessionDraft(projectKey: "prj", projectDirectory: "/repo"), forProfile: key)
+        let viewModel = makeDraftViewModel(
+            repository,
+            sessionRepository: sessionRepository,
+            store: store,
+            activeConnectionManager: manager
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(await waitUntil { viewModel.uiState.composer.isModelSelectionReady })
+        viewModel.updateComposerText("For the first server")
+
+        manager.apply(ConnectionProfile(
+            baseURL: "http://198.51.100.2:4096/", username: "opencode", password: "test-password", id: "other", name: "Other"
+        ))
+        await viewModel.sendPrompt()
+
+        #expect(sessionRepository.createSessionCallCount == 0)
+        #expect(repository.sendPromptAsyncCalled == false)
+        #expect(store.draft(forProfile: key)?.composer.text == "For the first server")
+        #expect(viewModel.uiState.composer.text == "For the first server")
+    }
+
+    @Test func draft_switchDuringWorktreeCreateNeverCreatesTheSessionOnTheNewServer() async {
+        let repository = FakeMessageRepository(messages: [])
+        let sessionRepository = FakeChatSessionRepository(createSessionResult: Session(
+            id: "ses-new", title: "Created", slug: nil, projectID: nil,
+            directory: "/wt/a", parentID: nil, updatedAtEpochMs: nil
+        ))
+        let worktrees = DraftWorktreeRepository(created: .success(
+            CreatedWorktree(directory: "/wt/a", name: "a", branch: nil)
+        ))
+        let manager = Self.makeActiveConnectionManager(serverProtocol: .v1)
+        let key = manager.currentProfile().map(NewSessionDraftStore.key(for:)) ?? ""
+        worktrees.onCreate = {
+            manager.apply(ConnectionProfile(
+                baseURL: "http://198.51.100.2:4096/", username: "opencode", password: "test-password", id: "other", name: "Other"
+            ))
+        }
+        let store = NewSessionDraftStore()
+        store.save(
+            NewSessionDraft(projectKey: "prj", projectDirectory: "/repo", place: .newWorktree(baseBranch: nil)),
+            forProfile: key
+        )
+        let viewModel = makeDraftViewModel(
+            repository,
+            sessionRepository: sessionRepository,
+            store: store,
+            worktreeRepository: worktrees,
+            activeConnectionManager: manager
+        )
+        defer { viewModel.stopObserving() }
+        viewModel.updateDraftContext(NewSessionDraftContext(projects: [Self.draftProject]))
+        await viewModel.loadMessages()
+        #expect(await waitUntil { viewModel.uiState.composer.isModelSelectionReady })
+        viewModel.updateComposerText("Pinned")
+
+        await viewModel.sendPrompt()
+
+        #expect(worktrees.createRequests.count == 1)
+        #expect(sessionRepository.createSessionCallCount == 0)
+        #expect(repository.sendPromptAsyncCalled == false)
+        #expect(store.draft(forProfile: key)?.createdWorktree?.directory == "/wt/a")
+    }
+
+    @Test func composerDraft_debouncedSaveLandsUnderTheServerTheChatOpenedOn() async {
+        let draftStore = InMemoryComposerDraftStore()
+        let manager = Self.makeActiveConnectionManager(serverProtocol: .v1)
+        let opened = try! #require(manager.currentProfile())
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            composerDraftStore: draftStore,
+            activeConnectionManager: manager
+        )
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("written on the first server")
+
+        let other = ConnectionProfile(
+            baseURL: "http://198.51.100.2:4096/", username: "opencode", password: "test-password", id: "other", name: "Other"
+        )
+        manager.apply(other)
+        viewModel.flushComposerDraft()
+        viewModel.stopObserving()
+
+        #expect(draftStore.load(
+            connectionIdentity: ModelSelectionConnectionIdentity(profile: opened),
+            worktree: "/repo",
+            sessionID: "ses-1"
+        )?.text == "written on the first server")
+        #expect(draftStore.load(
+            connectionIdentity: ModelSelectionConnectionIdentity(profile: other),
+            worktree: "/repo",
+            sessionID: "ses-1"
+        ) == nil)
+    }
+
     private func makeDraftViewModel(
         _ repository: FakeMessageRepository,
         sessionRepository: FakeChatSessionRepository = FakeChatSessionRepository(),
         store: NewSessionDraftStore? = nil,
         serverProtocol: ServerProtocol = .v1,
-        worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository()
+        worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
+        activeConnectionManager: ActiveConnectionManager? = nil
     ) -> SessionChatViewModel {
         let store = store ?? NewSessionDraftStore()
         return makeViewModel(
             messageRepository: repository,
+            activeConnectionManager: activeConnectionManager,
             sessionRepository: sessionRepository,
             sessionID: OptimisticSessionCreate.placeholderSessionID,
             sessionTitle: "New Session",
@@ -6457,7 +6706,8 @@ private final class SyncingTestMessageRepository: MessageRepository, @unchecked 
     }
 
     func prepareOptimisticUserMessage(id: String, text: String) async -> DisplayMessage {
-        await contentPreparer.prepareOptimisticUserMessage(id: id, text: text)
+        fake.onPrepareOptimistic?()
+        return await contentPreparer.prepareOptimisticUserMessage(id: id, text: text)
     }
 
     func clearMessageCache() {
@@ -6616,6 +6866,8 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     let echoSentPrompt: Bool
     let holdSend: Bool
     var sendPromptAsyncCalled = false
+    var onSendPrompt: (@Sendable () async -> Void)?
+    var onPrepareOptimistic: (@Sendable () -> Void)?
     var sentOptions: PromptSendOptions?
     var sentSessionID: String?
     var sentDirectory: String?
@@ -6707,6 +6959,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
+        await onSendPrompt?()
         sendPromptAsyncCalled = true
         sentOptions = options
         sentSessionID = sessionID
@@ -7210,9 +7463,14 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         if let listSessionsError { throw listSessionsError }
         return sessions
     }
+    var onCreateSession: (@Sendable () -> Void)?
+    var afterCreateSession: (@Sendable () -> Void)?
+
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
         createSessionCallCount += 1
         createSessionDirectory = directory
+        onCreateSession?()
+        defer { afterCreateSession?() }
         if let createSessionError { throw createSessionError }
         return createSessionResult ?? Session(
             id: "new-ses",
@@ -7856,6 +8114,7 @@ private final class DraftRefreshLog {
 private final class DraftWorktreeRepository: WorktreeRepository, @unchecked Sendable {
     private let created: Result<CreatedWorktree, Error>
     private(set) var createRequests: [CreateWorktreeRequest] = []
+    var onCreate: (@Sendable () -> Void)?
 
     init(created: Result<CreatedWorktree, Error>) {
         self.created = created
@@ -7869,6 +8128,7 @@ private final class DraftWorktreeRepository: WorktreeRepository, @unchecked Send
     func onConnection(key: String) {}
     func create(_ request: CreateWorktreeRequest) async throws -> CreatedWorktree {
         createRequests.append(request)
+        onCreate?()
         return try created.get()
     }
     func baseBranches(directory: String) async throws -> [String] { ["main", "release"] }

@@ -18,6 +18,10 @@ final class SessionChatComposer {
     private let sessionRepository: any SessionRepository
     private let sessionModelSelectionStore: any SessionModelSelectionStore
     private let composerDraftStore: any ComposerDraftStore
+    /// The server this chat opened on. Drafts and model picks always save under it, even when a
+    /// debounced write lands after a profile switch.
+    private var boundIdentity: ModelSelectionConnectionIdentity?
+    private let catalogRefresh = CoalescedRefresh()
     private let projectFilesRepository: (any ProjectFilesRepository)?
     private let activeConnectionManager: ActiveConnectionManager
     private let attachmentUploadRepository: (any AttachmentUploadRepository)?
@@ -89,6 +93,7 @@ final class SessionChatComposer {
         self.sessionRepository = sessionRepository
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.composerDraftStore = composerDraftStore
+        self.boundIdentity = activeConnectionManager.currentProfile().map(ModelSelectionConnectionIdentity.init(profile:))
         self.projectFilesRepository = projectFilesRepository
         self.activeConnectionManager = activeConnectionManager
         self.attachmentUploadRepository = attachmentUploadRepository
@@ -209,6 +214,7 @@ final class SessionChatComposer {
     func stopCatalogEventRefresh() {
         catalogEventTask?.cancel()
         catalogEventTask = nil
+        catalogRefresh.cancel()
         catalogRefreshTask?.cancel()
         catalogRefreshTask = nil
         catalogRetryTask?.cancel()
@@ -230,10 +236,14 @@ final class SessionChatComposer {
     }
 
     private func refreshCatalogAfterServerUpdate(reason: String) {
-        OpenCodeLog.sessionChat.info("model catalog refresh reason=\(reason)")
-        catalogRefreshTask?.cancel()
-        catalogRefreshTask = Task { [weak self] in
-            await self?.loadCatalog(force: true, emptyRetryAttempt: 0)
+        // A provider change announces many `model.updated` events: one reload covers the burst.
+        catalogRefresh.request { [weak self] in
+            OpenCodeLog.sessionChat.info("model catalog refresh reason=\(reason)")
+            guard let self else { return }
+            self.catalogRefreshTask?.cancel()
+            self.catalogRefreshTask = Task { [weak self] in
+                await self?.loadCatalog(force: true, emptyRetryAttempt: 0)
+            }
         }
     }
 
@@ -1047,6 +1057,7 @@ final class SessionChatComposer {
 
     func sendPrompt(
         sessionID: String,
+        pin: PinnedServerConnection? = nil,
         onOptimisticRows: ([SessionChatRow]) async -> Void,
         onSendAccepted: () async -> Void,
         onSendFailed: (String, String) -> Void,
@@ -1058,7 +1069,12 @@ final class SessionChatComposer {
         beforePrompt: () async throws -> Void = {}
     ) async {
         if ComposerShellCommand.isShellMode(state.composer.text) {
-            runShellCommand(sessionID: sessionID, isSessionBusy: isSessionBusy, supportsFollowUp: supportsFollowUp)
+            runShellCommand(
+                sessionID: sessionID,
+                pin: pin,
+                isSessionBusy: isSessionBusy,
+                supportsFollowUp: supportsFollowUp
+            )
             return
         }
         guard !state.composer.hasPendingUploads else { return }
@@ -1220,26 +1236,28 @@ final class SessionChatComposer {
                     ) async throws {
                         try await beforePrompt()
                         func send(delivery: FollowUpDelivery) async throws {
-                            try await messageRepository.sendPromptAsync(
-                                sessionID: sessionID,
-                                options: PromptSendOptions(
-                                    text: text,
-                                    attachments: attachments,
-                                    model: PromptModelSelection(
-                                        providerID: model.option.providerID,
-                                        modelID: model.option.modelID
+                            try await Self.runPinned(pin, manager: activeConnectionManager) {
+                                try await messageRepository.sendPromptAsync(
+                                    sessionID: sessionID,
+                                    options: PromptSendOptions(
+                                        text: text,
+                                        attachments: attachments,
+                                        model: PromptModelSelection(
+                                            providerID: model.option.providerID,
+                                            modelID: model.option.modelID
+                                        ),
+                                        variant: composer.selectedVariant,
+                                        mode: composer.selectedMode,
+                                        agentMentions: mentions,
+                                        fileMentions: fileMentions,
+                                        worktree: worktree,
+                                        skillMentions: skillMentions,
+                                        delivery: delivery,
+                                        messageID: messageID
                                     ),
-                                    variant: composer.selectedVariant,
-                                    mode: composer.selectedMode,
-                                    agentMentions: mentions,
-                                    fileMentions: fileMentions,
-                                    worktree: worktree,
-                                    skillMentions: skillMentions,
-                                    delivery: delivery,
-                                    messageID: messageID
-                                ),
-                                directory: worktree
-                            )
+                                    directory: worktree
+                                )
+                            }
                         }
                         do {
                             try await send(delivery: composer.followUpDelivery)
@@ -1261,24 +1279,26 @@ final class SessionChatComposer {
                     }
                     switch intent {
                     case let .serverCommand(command, arguments):
-                        try await commandRepository.runCommand(
-                            sessionID: sessionID,
-                            options: CommandRunOptions(
-                                command: command,
-                                arguments: arguments,
-                                attachments: submittedAttachments,
-                                model: PromptModelSelection(
-                                    providerID: selectedModel.option.providerID,
-                                    modelID: selectedModel.option.modelID
+                        try await Self.runPinned(pin, manager: activeConnectionManager) {
+                            try await commandRepository.runCommand(
+                                sessionID: sessionID,
+                                options: CommandRunOptions(
+                                    command: command,
+                                    arguments: arguments,
+                                    attachments: submittedAttachments,
+                                    model: PromptModelSelection(
+                                        providerID: selectedModel.option.providerID,
+                                        modelID: selectedModel.option.modelID
+                                    ),
+                                    variant: composer.selectedVariant,
+                                    mode: composer.selectedMode,
+                                    delivery: composer.followUpDelivery,
+                                    skillIDs: ComposerMentionRouting.skillParts(text: trimmed, mentions: skillsForSend).map(\.skillID),
+                                    messageID: messageID
                                 ),
-                                variant: composer.selectedVariant,
-                                mode: composer.selectedMode,
-                                delivery: composer.followUpDelivery,
-                                skillIDs: ComposerMentionRouting.skillParts(text: trimmed, mentions: skillsForSend).map(\.skillID),
-                                messageID: messageID
-                            ),
-                            directory: worktree
-                        )
+                                directory: worktree
+                            )
+                        }
                     case let .prompt(text):
                         try await sendPrompt(
                             text: text,
@@ -1333,7 +1353,28 @@ final class SessionChatComposer {
     /// own task and the composer stays free meanwhile. Attachments stay in the composer because a
     /// command cannot carry them. A failure restores the draft (unless it was edited since) and
     /// shows the error the way a failed prompt does.
-    private func runShellCommand(sessionID: String, isSessionBusy: Bool, supportsFollowUp: Bool) {
+    /// Runs one request on `pin`'s server, or fails if the active connection already moved.
+    private static func runPinned(
+        _ pin: PinnedServerConnection?,
+        manager: ActiveConnectionManager,
+        _ request: () async throws -> Void
+    ) async throws {
+        guard let pin else {
+            try await request()
+            return
+        }
+        guard manager.isCurrent(pin) else { throw ServerConnectionChangedError() }
+        try await RequestConnectionPin.$current.withValue(pin.connection) {
+            try await request()
+        }
+    }
+
+    private func runShellCommand(
+        sessionID: String,
+        pin: PinnedServerConnection?,
+        isSessionBusy: Bool,
+        supportsFollowUp: Bool
+    ) {
         let composer = state.composer
         guard let command = ComposerShellCommand.command(composer.text),
               !OptimisticSessionCreate.isPlaceholder(sessionID),
@@ -1363,9 +1404,12 @@ final class SessionChatComposer {
         notifyChange()
         let messageRepository = messageRepository
         let worktree = worktree
+        let manager = activeConnectionManager
         Task { [weak self] in
             do {
-                try await messageRepository.runShellCommand(sessionID: sessionID, options: options, directory: worktree)
+                try await Self.runPinned(pin, manager: manager) {
+                    try await messageRepository.runShellCommand(sessionID: sessionID, options: options, directory: worktree)
+                }
                 DiagnosticLog.info(.chat, "shell command accepted session=\(sessionID)")
             } catch {
                 DiagnosticLog.warning(.chat, "runShellCommand failed", error: error)
@@ -1580,13 +1624,15 @@ final class SessionChatComposer {
     }
 
     private func currentIdentity() -> ModelSelectionConnectionIdentity? {
+        if let boundIdentity { return boundIdentity }
         guard let profile = activeConnectionManager.currentProfile() else { return nil }
-        return ModelSelectionConnectionIdentity(serverBaseURL: profile.baseURL, username: profile.username)
+        let identity = ModelSelectionConnectionIdentity(profile: profile)
+        boundIdentity = identity
+        return identity
     }
 
     private func loadCachedSelection() async {
-        if let profile = activeConnectionManager.currentProfile() {
-            let identity = ModelSelectionConnectionIdentity(serverBaseURL: profile.baseURL, username: profile.username)
+        if let identity = currentIdentity() {
             async let session = sessionModelSelectionStore.loadSession(
                 connectionIdentity: identity,
                 worktree: worktree,
@@ -1691,10 +1737,9 @@ final class SessionChatComposer {
     }
 
     private func persistCurrentSelection(updatePreference: Bool) {
-        guard let profile = activeConnectionManager.currentProfile(),
+        guard let identity = currentIdentity(),
               let selectedModel = state.composer.selectedModel
         else { return }
-        let identity = ModelSelectionConnectionIdentity(serverBaseURL: profile.baseURL, username: profile.username)
         let timestamp = max(Int64(Date().timeIntervalSince1970 * 1_000), lastSelectionTimestamp + 1)
         lastSelectionTimestamp = timestamp
         let selection = SessionModelSelection(

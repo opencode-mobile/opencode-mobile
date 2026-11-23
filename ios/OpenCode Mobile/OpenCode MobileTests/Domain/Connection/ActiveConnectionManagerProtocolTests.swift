@@ -131,9 +131,9 @@ struct ActiveConnectionManagerProtocolTests {
         )
         probing.release()
 
+        // The caller's request now goes to the replacement, so it gets that server's answer.
         let originalResult = await original.value
-        #expect(originalResult == .v1)
-        #expect(manager.serverProtocol == nil)
+        #expect(originalResult == .v2)
 
         let replacement = await manager.currentProtocolOrProbe()
         #expect(replacement == .v2)

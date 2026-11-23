@@ -162,7 +162,12 @@ final class SessionChatViewModel {
             worktreeRepository: worktreeRepository,
             foregroundEventStream: foregroundEventStream,
             currentProfile: { activeConnectionManager.currentProfile() },
-            inventoryServerKey: { activeConnectionManager.connection?.baseURL.absoluteString }
+            inventoryServerKey: {
+                WorktreeInventoryCache.serverKey(
+                    profile: activeConnectionManager.currentProfile(),
+                    fallbackBaseURL: activeConnectionManager.connection?.baseURL.absoluteString
+                )
+            }
         )
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
@@ -202,6 +207,8 @@ final class SessionChatViewModel {
             currentProfile: { activeConnectionManager.currentProfile() },
             currentProtocolOrProbe: { await activeConnectionManager.currentProtocolOrProbe() },
             serverProtocol: { activeConnectionManager.serverProtocol },
+            pinConnection: { try await activeConnectionManager.pinForSend() },
+            isPinCurrent: { activeConnectionManager.isCurrent($0) },
             composerContent: { boundComposer.draftContent },
             composerModelSelection: { boundComposer.draftModelSelection }
         )
@@ -1138,6 +1145,9 @@ final class SessionChatViewModel {
             await sendDraft()
             return
         }
+        // Held from a draft's create until its first prompt is accepted, so a retry of a failed
+        // one cannot go to a server the new session does not exist on.
+        let pin = firstSendPin
         let hasAttachments = !composer.state.composer.attachments.isEmpty
         guard sessionInfo.state.composerEnabled else {
             logChatAction(
@@ -1154,7 +1164,17 @@ final class SessionChatViewModel {
         }
         // A side question never becomes a prompt, including a typed `/btw` this server cannot answer.
         if sideQuestions.state.composerMode || SideQuestion.question(inDraft: composer.state.composer.text) != nil {
-            askSideQuestion()
+            guard let pin else {
+                askSideQuestion()
+                return
+            }
+            guard activeConnectionManager.isCurrent(pin) else {
+                composer.setSendError(ServerConnectionChangedError().localizedDescription)
+                publishUiState()
+                return
+            }
+            firstSendPin = nil
+            RequestConnectionPin.$current.withValue(pin.connection) { askSideQuestion() }
             return
         }
         sendInFlight = true
@@ -1185,6 +1205,7 @@ final class SessionChatViewModel {
         }
         await composer.sendPrompt(
             sessionID: sessionID,
+            pin: pin,
             onOptimisticRows: { [weak self] rows in
                 DiagnosticLog.info(.chat, "sendPrompt optimistic rows=\(rows.count)")
                 if let self, !self.isConnectionLive {
@@ -1196,6 +1217,7 @@ final class SessionChatViewModel {
             onSendAccepted: { [weak self] in
                 guard let self else { return }
                 DiagnosticLog.info(.chat, "sendPrompt accepted session=\(self.sessionID)")
+                self.firstSendPin = nil
                 self.armedSendAcceptance = nil
                 self.pendingSend = nil
                 self.sessionInfo.setOptimisticActivity(.running)
@@ -1689,6 +1711,9 @@ final class SessionChatViewModel {
         worktreeMove.retarget(worktree: directory)
     }
 
+    /// The connection a draft's create ran on, until the first prompt that follows is accepted.
+    private var firstSendPin: PinnedServerConnection?
+
     /// First send: creates the worktree (New worktree; reused after a failed attempt), then the
     /// session in that checkout, seeds its model selection, promotes the screen, and sends the
     /// prompt through the normal send path. A failure keeps the draft and offers Retry.
@@ -1710,7 +1735,7 @@ final class SessionChatViewModel {
         newSessionDraft.beginCreate()
         composer.setDraftSending(true)
         publishUiState()
-        let created: (directory: String, session: Session)
+        let created: (directory: String, session: Session, pin: PinnedServerConnection)
         do {
             created = try await newSessionDraft.create(currentModelSelection: { composer.currentModelSelection })
         } catch {
@@ -1722,6 +1747,7 @@ final class SessionChatViewModel {
         // Ends drafting first, so nothing writes the draft back to the store.
         promoteDraft(id: created.session.id, title: created.session.title, directory: created.directory)
         composer.setDraftSending(false)
+        firstSendPin = created.pin
         await sendPrompt()
     }
 

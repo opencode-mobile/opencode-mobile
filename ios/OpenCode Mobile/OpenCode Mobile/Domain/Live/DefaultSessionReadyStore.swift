@@ -203,6 +203,26 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         )
     }
 
+    /// Drops a removed profile's Ready and watch records. When it is the bound profile the
+    /// memory goes too, or the next bind would write them back.
+    func forgetProfile(profileID: String) {
+        if profileID == currentProfileID {
+            watched.removeAll()
+            ready.removeAll()
+            focusedSessionID = nil
+            focusedDirectory = nil
+            for (directory, handle) in handles {
+                handle.previousTypes.removeAll()
+                publishReady(directory: directory, handle: handle, prune: false)
+            }
+        }
+        let stored = persistence.load()
+        persistence.save(SessionReadyPersistedState(
+            ready: stored.ready.filter { $0.profileID != profileID },
+            watched: stored.watched.filter { $0.profileID != profileID }
+        ))
+    }
+
     func clearCache() {
         watched.removeAll()
         ready.removeAll()
@@ -242,6 +262,8 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         handle.statusTask = Task { [weak self] in
             guard let self else { return }
             for await snapshot in self.sessionStatusLiveStore.observeActivity(directory: directory) {
+                // A snapshot already on its way when the profile changed belongs to the old server.
+                guard !Task.isCancelled else { return }
                 self.onActivity(directory: directory, snapshot: snapshot)
             }
             guard !Task.isCancelled else { return }

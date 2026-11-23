@@ -5,9 +5,14 @@ public protocol ConnectionProfileStore: Sendable {
     func activeProfile() async -> ConnectionProfile?
     func listProfiles() async -> [ConnectionProfile]
     func saveProfile(_ profile: ConnectionProfile) async throws
+    /// Records the address and protocol a probe found on an existing profile. Never creates a
+    /// profile and never touches its password. False when `id` is not saved.
+    func updateDetectedServer(id: String, baseURL: String, serverProtocol: ServerProtocol) async -> Bool
     func applyProfile(id: String) async
     func removeProfile(id: String) async
     func addedWorktrees(serverBaseURL: String) async -> [String]
+    /// One saved profile's projects. Two profiles can share a URL with different usernames.
+    func addedWorktrees(profileID: String) async -> [String]
     func addWorktree(serverBaseURL: String, worktree: String) async
     func removeWorktree(serverBaseURL: String, worktree: String) async
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async
@@ -22,6 +27,25 @@ extension ConnectionProfileStore {
     public func listProfiles() async -> [ConnectionProfile] {
         if let active = await activeProfile() { return [active] }
         return []
+    }
+
+    public func updateDetectedServer(id: String, baseURL: String, serverProtocol: ServerProtocol) async -> Bool {
+        guard var profile = await listProfiles().first(where: { $0.id == id }) else { return false }
+        guard profile.baseURL != baseURL || profile.serverProtocol != serverProtocol else { return true }
+        profile.baseURL = baseURL
+        profile.serverProtocol = serverProtocol
+        do {
+            try await saveProfile(profile)
+            return true
+        } catch {
+            DiagnosticLog.warning(.connection, "Detected server was not saved (\(type(of: error)))")
+            return false
+        }
+    }
+
+    public func addedWorktrees(profileID: String) async -> [String] {
+        guard let profile = await listProfiles().first(where: { $0.id == profileID }) else { return [] }
+        return await addedWorktrees(serverBaseURL: profile.baseURL)
     }
 
     public func applyProfile(id _: String) async {}
@@ -175,6 +199,22 @@ public struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unche
         revisionSignal.yield()
     }
 
+    public func updateDetectedServer(id: String, baseURL: String, serverProtocol: ServerProtocol) async -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        var catalog = migratedCatalog()
+        guard let index = catalog.profiles.firstIndex(where: { $0.id == id }) else { return false }
+        let normalized = ConnectionProfileIdentity.normalizeBaseURL(baseURL)
+        guard catalog.profiles[index].baseURL != normalized
+            || catalog.profiles[index].serverProtocol != serverProtocol
+        else { return true }
+        catalog.profiles[index].baseURL = normalized
+        catalog.profiles[index].serverProtocol = serverProtocol
+        writeCatalog(catalog)
+        revisionSignal.yield()
+        return true
+    }
+
     public func applyProfile(id: String) async {
         lock.lock()
         defer { lock.unlock() }
@@ -208,6 +248,17 @@ public struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unche
             }
         }
         return defaults.stringArray(forKey: worktreePrefix + ConnectionProfileIdentity.normalizeBaseURL(serverBaseURL)) ?? []
+    }
+
+    public func addedWorktrees(profileID: String) async -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        let idKey = worktreeIdPrefix + profileID
+        if defaults.object(forKey: idKey) != nil {
+            return defaults.stringArray(forKey: idKey) ?? []
+        }
+        guard let profile = migratedCatalog().profiles.first(where: { $0.id == profileID }) else { return [] }
+        return defaults.stringArray(forKey: worktreePrefix + ConnectionProfileIdentity.normalizeBaseURL(profile.baseURL)) ?? []
     }
 
     public func addWorktree(serverBaseURL: String, worktree: String) async {

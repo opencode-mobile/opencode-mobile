@@ -72,6 +72,24 @@ class RoomSessionCacheStoreTest {
 private class CursorWindowDao : SessionCacheDao {
     val rows = mutableMapOf<String, SessionCacheSnapshotEntity>()
 
+    override suspend fun keysBeyondRecent(
+        connectionId: String,
+        kind: String,
+        keep: Int,
+    ): List<String> =
+        rows.values
+            .filter { it.connectionId == connectionId && it.kind == kind }
+            .sortedWith(
+                compareByDescending<SessionCacheSnapshotEntity> { row ->
+                    maxOf(row.retainedAtEpochMs ?: 0L, row.syncedAtEpochMs)
+                }.thenBy { row -> row.cacheKey },
+            ).drop(keep)
+            .map { it.cacheKey }
+
+    override suspend fun deleteKeys(cacheKeys: List<String>) {
+        cacheKeys.forEach(rows::remove)
+    }
+
     override suspend fun get(cacheKey: String): SessionCacheSnapshotEntity? {
         val row = rows[cacheKey] ?: return null
         check(row.payloadJson.toByteArray().size < WINDOW_BYTES) { "Row too big to fit into CursorWindow" }

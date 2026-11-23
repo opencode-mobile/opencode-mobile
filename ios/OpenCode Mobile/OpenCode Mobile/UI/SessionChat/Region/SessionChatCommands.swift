@@ -371,10 +371,7 @@ final class SessionChatCommands {
               let profile = activeConnectionManager.currentProfile()
         else { return }
         composerDraftStore.save(
-            connectionIdentity: ModelSelectionConnectionIdentity(
-                serverBaseURL: profile.baseURL,
-                username: profile.username
-            ),
+            connectionIdentity: ModelSelectionConnectionIdentity(profile: profile),
             worktree: worktree,
             sessionID: forkedSessionID,
             draft: ComposerDraft(text: text)

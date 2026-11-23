@@ -29,13 +29,26 @@ class LastTurnReviewChangesStore
 
         fun snapshot(sessionId: String): Snapshot? = snapshots.value[sessionId]
 
+        fun clear() {
+            snapshots.value = emptyMap()
+        }
+
         fun publish(
             sessionId: String,
             messageId: String,
             summary: ReviewChangesSummary?,
         ) {
             snapshots.update { current ->
-                current + (sessionId to Snapshot(sessionId, messageId, summary))
+                // Re-inserted so the map runs oldest to newest, and the oldest falls off.
+                (current - sessionId + (sessionId to Snapshot(sessionId, messageId, summary)))
+                    .entries
+                    .toList()
+                    .takeLast(MAX_SNAPSHOTS)
+                    .associate { it.toPair() }
             }
+        }
+
+        private companion object {
+            const val MAX_SNAPSHOTS = 64
         }
     }

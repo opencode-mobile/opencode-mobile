@@ -523,14 +523,34 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         do {
             try await loader()
             finishLoad(key: key, serial: serial, generation: generation, succeeded: true)
+        } catch is CancellationError {
+            finishCancelledLoad(key: key, generation: generation)
         } catch {
             finishLoad(key: key, serial: serial, generation: generation, succeeded: false)
         }
     }
 
+    /// A cancelled load is not a server failure: it leaves the key stale with no retry.
+    private func finishCancelledLoad(key: ProjectionKey, generation: UInt64) {
+        lock.lock()
+        guard _profileGeneration == generation, var record = records[key] else {
+            lock.unlock()
+            return
+        }
+        record.inFlight = false
+        record.loadTask = nil
+        record.state = .stale
+        let waiters = record.takeWaiters()
+        records[key] = record
+        publishStateLocked(key, .stale)
+        lock.unlock()
+        resume(waiters)
+    }
+
     private func finishLoad(key: ProjectionKey, serial: UInt64, generation: UInt64, succeeded: Bool) {
         lock.lock()
-        guard var record = records[key] else {
+        // The switch already reset this record; it may hold a newer load's flight now.
+        guard _profileGeneration == generation, var record = records[key] else {
             lock.unlock()
             return
         }

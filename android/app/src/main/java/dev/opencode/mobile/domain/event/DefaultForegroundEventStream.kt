@@ -25,7 +25,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -35,11 +34,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -140,12 +137,7 @@ class DefaultForegroundEventStream
 
         /** Counts leases going live, so a recheck can tell its no-answer result went stale. */
         private val leaseLiveEpoch = AtomicLong(0)
-        private val reconnectWakeEpoch = AtomicLong(0)
-        private val reconnectWake =
-            MutableSharedFlow<Unit>(
-                extraBufferCapacity = 1,
-                onBufferOverflow = BufferOverflow.DROP_OLDEST,
-            )
+        private val reconnectWake = ReconnectWakeSignal()
 
         private val _connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
         override val connectionState: StateFlow<EventStreamConnectionState> = _connectionState.asStateFlow()
@@ -253,8 +245,7 @@ class DefaultForegroundEventStream
 
         override fun onReconnectWake() {
             synchronized(stateLock) { lastProtocolRecheckMs = null }
-            reconnectWakeEpoch.incrementAndGet()
-            reconnectWake.tryEmit(Unit)
+            reconnectWake.wake()
         }
 
         override suspend fun stop() {
@@ -533,7 +524,7 @@ class DefaultForegroundEventStream
                         val lastActivityMs = lease.lastActivityMs
                         lastActivityMs.set(System.currentTimeMillis())
                         val attemptId = lease.nextAttempt()
-                        val wakeAtStart = reconnectWakeEpoch.get()
+                        val wakeAtStart = reconnectWake.current()
                         val attempt = SseLeaseAttempt()
                         val serverConnected = CompletableDeferred<Unit>()
                         val headersOpened = CompletableDeferred<Boolean>()
@@ -710,12 +701,12 @@ class DefaultForegroundEventStream
                                 val status =
                                     (outcome as? SseAttemptOutcome.Http)?.statusCode ?: 0
                                 markAuthFailed(generation, target.key, status, decision.delayMs)
-                                if (reconnectWakeEpoch.get() != wakeAtStart) {
+                                if (reconnectWake.current() != wakeAtStart) {
                                     retryAttempt = 0
                                     continue
                                 }
                                 retryAttempt += 1
-                                if (awaitReconnectWakeOrDelay(decision.delayMs)) {
+                                if (reconnectWake.awaitAfter(wakeAtStart, decision.delayMs)) {
                                     retryAttempt = 0
                                 }
                             }
@@ -723,7 +714,7 @@ class DefaultForegroundEventStream
                                 if (deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable) {
                                     continue
                                 }
-                                if (reconnectWakeEpoch.get() != wakeAtStart) {
+                                if (reconnectWake.current() != wakeAtStart) {
                                     retryAttempt = 0
                                     continue
                                 }
@@ -732,7 +723,7 @@ class DefaultForegroundEventStream
                                     DiagnosticLogArea.Sse,
                                     "foreground SSE retry target=${target.key} attempt=$retryAttempt backoffMs=${decision.delayMs}",
                                 )
-                                val wokeEarly = awaitReconnectWakeOrDelay(decision.delayMs)
+                                val wokeEarly = reconnectWake.awaitAfter(wakeAtStart, decision.delayMs)
                                 if (wokeEarly) {
                                     retryAttempt = 0
                                 }
@@ -748,16 +739,6 @@ class DefaultForegroundEventStream
                 ServerHealthFailureCategory.Timeout
             } else {
                 ServerHealthFailureClassifier.classify(outcome)
-            }
-
-        private suspend fun awaitReconnectWakeOrDelay(backoffMs: Long): Boolean =
-            if (backoffMs <= 0L) {
-                false
-            } else {
-                withTimeoutOrNull(backoffMs) {
-                    reconnectWake.first()
-                    true
-                } == true
             }
 
         /**

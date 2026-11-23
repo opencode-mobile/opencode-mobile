@@ -18,6 +18,7 @@ import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import kotlinx.coroutines.Dispatchers
 
 fun testConnectionSessionCoordinator(
     activeConnectionManager: ActiveConnectionManager,
@@ -50,7 +51,7 @@ fun testConnectionSessionCoordinator(
         worldSignals = worldSignals,
         projectionCaches = projectionCaches,
         serverHealthStore = serverHealthStore,
-    )
+    ).apply { clientRebuildDispatcher = Dispatchers.Unconfined }
 
 class InMemoryFeedbackIdentityStore : FeedbackIdentityStore {
     var token: String? = null

@@ -1,8 +1,12 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.event.EventDomainAdapter
+import dev.opencode.mobile.domain.message.AttachmentPreviewCache
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.model.ModelCatalogStore
+import dev.opencode.mobile.domain.session.NewSessionDraftStore
 import dev.opencode.mobile.domain.session.SideQuestionStore
+import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,6 +21,9 @@ interface ProjectionCaches {
     fun clearLiveProjections()
 
     fun bindProfile(profileId: String?)
+
+    /** A removed profile: its Ready records and New session draft, with the draft's attachments. */
+    fun forgetProfile(profileId: String) = Unit
 }
 
 @Singleton
@@ -33,10 +40,19 @@ class DefaultProjectionCaches
         private val messageSync: MessageSync,
         private val modelCatalogStore: ModelCatalogStore,
         private val sideQuestionStore: SideQuestionStore,
+        private val newSessionDraftStore: NewSessionDraftStore,
+        private val lastTurnReviewChangesStore: LastTurnReviewChangesStore,
+        private val eventDomainAdapter: EventDomainAdapter,
     ) : ProjectionCaches {
+        @Volatile
+        private var boundProfileId: String? = null
+
         override fun clearAll() {
             clearLiveProjections()
             sessionReadyStore.clearCache()
+            newSessionDraftStore.clear()
+            lastTurnReviewChangesStore.clear()
+            AttachmentPreviewCache.shared.clear()
         }
 
         override fun clearLiveProjections() {
@@ -52,6 +68,14 @@ class DefaultProjectionCaches
         }
 
         override fun bindProfile(profileId: String?) {
+            // Not on a save of the same profile: its running compaction still reports its end.
+            if (boundProfileId != null && boundProfileId != profileId) eventDomainAdapter.forgetRunningIds()
+            boundProfileId = profileId
             sessionReadyStore.bindProfile(profileId)
+        }
+
+        override fun forgetProfile(profileId: String) {
+            sessionReadyStore.forgetProfile(profileId)
+            newSessionDraftStore.forgetProfile(profileId)
         }
     }

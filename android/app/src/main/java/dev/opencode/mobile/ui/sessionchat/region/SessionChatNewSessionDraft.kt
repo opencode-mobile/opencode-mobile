@@ -344,14 +344,21 @@ class SessionChatNewSessionDraft(
         newSessionDraftStore.discardIfEmpty(profileId, owner)
     }
 
-    /** The first send created the session: the draft is done. */
-    fun release() {
+    /**
+     * The first send created the session and the screen moves to it. The draft leaves the store
+     * for the returned hold, which puts it back if the prompt never went out.
+     */
+    fun beginFirstSend(): NewSessionDraftStore.FirstSendHold? {
         pendingAddedDirectory = null
-        _state.value.profileId?.let { newSessionDraftStore.release(it, owner) }
+        val hold = _state.value.profileId?.let { newSessionDraftStore.holdForFirstSend(it, owner) }
         _state.update { it.copy(profileId = null, draft = null, sheet = null) }
         baseJob?.cancel()
         _state.update { it.copy(baseBranches = null) }
+        return hold
     }
+
+    /** Whether this draft belongs to [profileId]. */
+    fun belongsTo(profileId: String): Boolean = _state.value.profileId == profileId
 
     /**
      * Ctrl+N or `/new` from a session in [directory]: the profile's draft (it wins), else a
@@ -399,6 +406,8 @@ class SessionChatNewSessionDraft(
      */
     suspend fun create(): NewSessionCreatedSession {
         val draft = draft ?: throw CancellationException("draft gone")
+        requireDraftProfile()
+        val profile = currentProfile()
         val project = NewSessionDraftPresentation.project(draft, homeProjectsSnapshot.projects.value)
         val place =
             NewSessionDraftPresentation.effectivePlace(
@@ -414,11 +423,12 @@ class SessionChatNewSessionDraft(
                 is NewSessionPlace.NewWorktree -> draft.createdWorktree?.directory ?: createDraftWorktree(project, place)
             }
         this.draft?.createdSession?.takeIf { it.directory == directory }?.let { return it }
+        requireDraftProfile()
         val session = withContext(ioDispatcher) { sessionRepository.createSession(directory = directory) }
         val created = NewSessionCreatedSession(id = session.id, title = session.title, directory = directory)
         this.draft?.let { update(it.copy(createdSession = created)) }
+        requireDraftProfile()
         // Seed the session's model the way any new session gets one: the draft's pick, else the preference.
-        val profile = currentProfile()
         if (profile != null) {
             withContext(ioDispatcher) {
                 val selection = this@SessionChatNewSessionDraft.draft?.modelSelection ?: newSessionModelSelectionResolver.resolve(profile, directory)
@@ -429,6 +439,13 @@ class SessionChatNewSessionDraft(
     }
 
     private fun currentProfileId(): String = currentProfile()?.id.orEmpty()
+
+    /** Whether the server bound now is the one this draft belongs to. */
+    fun isOnDraftProfile(): Boolean = _state.value.profileId == currentProfileId()
+
+    private fun requireDraftProfile() {
+        if (!isOnDraftProfile()) throw NewSessionProfileChanged()
+    }
 
     private fun update(draft: NewSessionDraft) {
         _state.update { it.copy(draft = draft) }
@@ -467,6 +484,7 @@ class SessionChatNewSessionDraft(
         project: HomeProject,
         place: NewSessionPlace.NewWorktree,
     ): String {
+        requireDraftProfile()
         val v2 = protocolHint() == ServerProtocol.V2
         val created =
             try {
@@ -483,6 +501,7 @@ class SessionChatNewSessionDraft(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
+                if (!isOnDraftProfile()) throw NewSessionProfileChanged()
                 val message =
                     ((error as? WorktreeCreateError)?.message ?: error.message?.takeIf { it.isNotBlank() })
                         ?.let(UiText::verbatim)
@@ -502,6 +521,9 @@ class SessionChatNewSessionDraft(
             else -> error.message ?: "Unable to create session"
         }
 }
+
+/** The active server changed during the first send; the draft stays and nothing more is sent. */
+class NewSessionProfileChanged : Exception()
 
 /** Creating the draft's new worktree failed; [text] says so with the server's reason. */
 private class NewSessionDraftWorktreeFailure(

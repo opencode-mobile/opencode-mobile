@@ -9,6 +9,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
     private let syncCoordinator: any SyncCoordinator
     private let invalidationAckTimeoutMs: Int
     private let capabilities: @Sendable () -> ServerCapabilities
+    private let connectionEpoch: @Sendable () -> UInt64
     private let activeDirectories = ActiveDirectorySet()
     private let viewedWatermarks = SessionViewedWatermarks()
     private let loops = SessionListLoopRegistry()
@@ -23,8 +24,10 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         worldSignals: any WorldSignals = SilentWorldSignals.shared,
         syncCoordinator: (any SyncCoordinator)? = nil,
         invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs,
-        capabilities: @escaping @Sendable () -> ServerCapabilities = { .forProtocol(.v1) }
+        capabilities: @escaping @Sendable () -> ServerCapabilities = { .forProtocol(.v1) },
+        connectionEpoch: @escaping @Sendable () -> UInt64 = { 0 }
     ) {
+        self.connectionEpoch = connectionEpoch
         self.sessionRepository = sessionRepository
         self.eventStream = eventStream
         self.sessionCache = sessionCache
@@ -104,6 +107,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         let syncCoordinator = syncCoordinator
         let activeDirectories = activeDirectories
         let capabilities = capabilities
+        let connectionEpoch = connectionEpoch
         let viewedWatermarks = viewedWatermarks
         let loops = loops
         let windows = windows
@@ -118,6 +122,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                     syncCoordinator: syncCoordinator,
                     activeDirectories: activeDirectories,
                     capabilities: capabilities,
+                    connectionEpoch: connectionEpoch,
                     viewedWatermarks: viewedWatermarks,
                     loops: loops,
                     windows: windows,
@@ -138,6 +143,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
         syncCoordinator: any SyncCoordinator,
         activeDirectories: ActiveDirectorySet,
         capabilities: @escaping @Sendable () -> ServerCapabilities,
+        connectionEpoch: @escaping @Sendable () -> UInt64,
         viewedWatermarks: SessionViewedWatermarks,
         loops: SessionListLoopRegistry,
         windows: SessionWindowRegistry,
@@ -155,6 +161,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
 
         @Sendable func loadAndCommit() async throws {
             let generation = syncCoordinator.profileGeneration
+            let epoch = connectionEpoch()
             let outcome = await gate.refresh(
                 load: { () async -> LoadedSessionWindow? in
                     // The current window size, in one request, for every refetch trigger.
@@ -166,6 +173,11 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                 },
                 commit: { loaded in
                     guard syncCoordinator.profileGeneration == generation else { return }
+                    // Answered by the server we left: drop it and load again from the bound one.
+                    guard connectionEpoch() == epoch else {
+                        syncCoordinator.invalidate(key)
+                        return
+                    }
                     ancestry.record(loaded.window.sessions + loaded.window.children)
                     windows.committed(directory: directory, limit: loaded.limit, hasMore: loaded.window.hasMore)
                     // REST can race a `session.viewed`; the viewed watermark only moves forward.
@@ -186,7 +198,8 @@ final class DefaultSessionLiveStore: SessionLiveStore {
             if outcome == .failed {
                 // Observers learn the server load failed; the coordinator keeps its retry backoff.
                 // A cancelled refresh (superseded or torn down) is not a server failure.
-                if !Task.isCancelled, syncCoordinator.profileGeneration == generation {
+                try Task.checkCancellation()
+                if syncCoordinator.profileGeneration == generation, connectionEpoch() == epoch {
                     loop.publishLoadFailed()
                 }
                 throw URLError(.cannotConnectToHost)

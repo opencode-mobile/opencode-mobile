@@ -8,9 +8,92 @@ struct SessionModelSelection: Equatable, Sendable, Codable {
     var savedAtEpochMs: Int64? = nil
 }
 
+/// Whose drafts and model choices these are. With a `profileID`, entries are keyed by it, so they
+/// survive moving between saved addresses; `savedAddresses` finds entries written before that.
 struct ModelSelectionConnectionIdentity: Equatable, Sendable {
     let serverBaseURL: String
     let username: String
+    var profileID = ""
+    var savedAddresses: [String] = []
+
+    init(serverBaseURL: String, username: String) {
+        self.serverBaseURL = serverBaseURL
+        self.username = username
+    }
+
+    init(profile: ConnectionProfile) {
+        serverBaseURL = profile.baseURL
+        username = profile.username
+        profileID = profile.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        savedAddresses = profile.serverURLs
+    }
+}
+
+/// The UserDefaults key segments of one identity, shared by the draft and model stores.
+nonisolated enum ConnectionIdentityKeys {
+    static func current(_ identity: ModelSelectionConnectionIdentity) -> String {
+        identity.profileID.isEmpty
+            ? addressKey(identity.serverBaseURL, username: identity.username)
+            : "profile:\(encoded(identity.profileID))"
+    }
+
+    /// URL + username segments this identity may have been stored under, minus the current one.
+    static func legacy(_ identity: ModelSelectionConnectionIdentity) -> [String] {
+        let current = current(identity)
+        var seen: Set<String> = [current]
+        return addresses(identity)
+            .map { addressKey($0, username: identity.username) }
+            .filter { seen.insert($0).inserted }
+    }
+
+    static func addresses(_ identity: ModelSelectionConnectionIdentity) -> [String] {
+        [identity.serverBaseURL] + identity.savedAddresses
+    }
+
+    static func normalizedBaseURL(_ serverBaseURL: String) -> String {
+        let trimmed = serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasSuffix("/") ? trimmed : trimmed + "/"
+    }
+
+    static func encoded(_ value: String) -> String {
+        Data(value.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    /// Keeps the newest of `key` and its legacy entries under `key`, and removes the legacy ones.
+    /// An entry without a timestamp counts as oldest; on a tie the one already at `key` stays.
+    /// Safe to repeat: once moved there is nothing left to find.
+    static func migrate(
+        _ defaults: UserDefaults,
+        to key: String,
+        from legacyKeys: [String],
+        savedAt: (Data) -> Int64?
+    ) {
+        let existing = defaults.data(forKey: key)
+        var newest = existing
+        for legacyKey in legacyKeys {
+            guard let candidate = defaults.data(forKey: legacyKey) else { continue }
+            guard let current = newest else {
+                newest = candidate
+                continue
+            }
+            if (savedAt(candidate) ?? .min) > (savedAt(current) ?? .min) {
+                newest = candidate
+            }
+        }
+        if let newest, newest != existing {
+            defaults.set(newest, forKey: key)
+        }
+        legacyKeys.forEach(defaults.removeObject)
+    }
+
+    private static func addressKey(_ address: String, username: String) -> String {
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        return [encoded(normalizedBaseURL(address)), encoded(trimmed.isEmpty ? "opencode" : trimmed)]
+            .joined(separator: "|")
+    }
 }
 
 protocol SessionModelSelectionStore: Sendable {
@@ -115,7 +198,16 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
         worktree: String,
         sessionID: String
     ) -> SessionModelSelection? {
-        decode(defaults.data(forKey: sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID)))
+        let key = sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID)
+        ConnectionIdentityKeys.migrate(
+            defaults,
+            to: key,
+            from: ConnectionIdentityKeys.legacy(connectionIdentity).map {
+                "\(Self.versionPrefix)|session|\($0)|" + [encoded(worktree), encoded(sessionID)].joined(separator: "|")
+            },
+            savedAt: { decode($0)?.savedAtEpochMs }
+        )
+        return decode(defaults.data(forKey: key))
             ?? decode(defaults.data(forKey: legacyKey(
                 serverBaseURL: connectionIdentity.serverBaseURL,
                 worktree: worktree,
@@ -130,6 +222,7 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
         selection: SessionModelSelection
     ) async {
         let timestamped = withTimestamp(selection)
+        _ = peekSession(connectionIdentity: connectionIdentity, worktree: worktree, sessionID: sessionID)
         saveIfNewer(timestamped, key: sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID))
         defaults.removeObject(forKey: legacyKey(
             serverBaseURL: connectionIdentity.serverBaseURL,
@@ -145,6 +238,12 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
         sessionID: String
     ) async {
         defaults.removeObject(forKey: sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID))
+        for legacy in ConnectionIdentityKeys.legacy(connectionIdentity) {
+            defaults.removeObject(
+                forKey: "\(Self.versionPrefix)|session|\(legacy)|"
+                    + [encoded(worktree), encoded(sessionID)].joined(separator: "|")
+            )
+        }
         defaults.removeObject(forKey: legacyKey(
             serverBaseURL: connectionIdentity.serverBaseURL,
             worktree: worktree,
@@ -163,7 +262,16 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String
     ) -> SessionModelSelection? {
-        decode(defaults.data(forKey: preferenceKey(connectionIdentity, worktree: worktree)))
+        let key = preferenceKey(connectionIdentity, worktree: worktree)
+        ConnectionIdentityKeys.migrate(
+            defaults,
+            to: key,
+            from: ConnectionIdentityKeys.legacy(connectionIdentity).map {
+                "\(Self.versionPrefix)|preference|\($0)|" + encoded(worktree)
+            },
+            savedAt: { decode($0)?.savedAtEpochMs }
+        )
+        return decode(defaults.data(forKey: key))
     }
 
     func saveNewSessionPreference(
@@ -171,6 +279,7 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
         worktree: String,
         selection: SessionModelSelection
     ) async {
+        _ = peekNewSessionPreference(connectionIdentity: connectionIdentity, worktree: worktree)
         saveIfNewer(withTimestamp(selection), key: preferenceKey(connectionIdentity, worktree: worktree))
     }
 
@@ -184,10 +293,14 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
     }
 
     func clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) async {
-        let identityMarker = "|\(identityKey(connectionIdentity))|"
-        let legacyPrefix = prefix + normalizedBaseURL(connectionIdentity.serverBaseURL)
+        let markers = ([ConnectionIdentityKeys.current(connectionIdentity)]
+            + ConnectionIdentityKeys.legacy(connectionIdentity)).map { "|\($0)|" }
+        let legacyPrefixes = ConnectionIdentityKeys.addresses(connectionIdentity).map { prefix + normalizedBaseURL($0) }
         defaults.dictionaryRepresentation().keys
-            .filter { ($0.hasPrefix(Self.versionPrefix) && $0.contains(identityMarker)) || $0.hasPrefix(legacyPrefix) }
+            .filter { key in
+                (key.hasPrefix(Self.versionPrefix) && markers.contains { key.contains($0) })
+                    || legacyPrefixes.contains { key.hasPrefix($0) }
+            }
             .forEach(defaults.removeObject)
     }
 
@@ -197,10 +310,12 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
     ) async {
         let sessionSuffix = "|\(encoded(sessionID))"
         let legacyPrefix = prefix + normalizedBaseURL(connectionIdentity.serverBaseURL)
+        let prefixes = ([ConnectionIdentityKeys.current(connectionIdentity)]
+            + ConnectionIdentityKeys.legacy(connectionIdentity)).map { "\(Self.versionPrefix)|session|\($0)|" }
         defaults.dictionaryRepresentation().keys
-            .filter {
-                ($0.hasPrefix(sessionPrefix(connectionIdentity)) && $0.hasSuffix(sessionSuffix)) ||
-                    ($0.hasPrefix(legacyPrefix) && $0.hasSuffix("|\(sessionID)"))
+            .filter { key in
+                (prefixes.contains { key.hasPrefix($0) } && key.hasSuffix(sessionSuffix)) ||
+                    (key.hasPrefix(legacyPrefix) && key.hasSuffix("|\(sessionID)"))
             }
             .forEach(defaults.removeObject)
     }
@@ -230,8 +345,7 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
     }
 
     private func identityKey(_ identity: ModelSelectionConnectionIdentity) -> String {
-        [encoded(normalizedBaseURL(identity.serverBaseURL)), encoded(effectiveUsername(identity.username))]
-            .joined(separator: "|")
+        ConnectionIdentityKeys.current(identity)
     }
 
     private func encoded(_ value: String) -> String {
@@ -276,11 +390,6 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
         var timestamped = selection
         timestamped.savedAtEpochMs = Int64(Date().timeIntervalSince1970 * 1_000)
         return timestamped
-    }
-
-    private func effectiveUsername(_ username: String) -> String {
-        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? Self.defaultUsername : trimmed
     }
 
     private func normalizedBaseURL(_ serverBaseURL: String) -> String {

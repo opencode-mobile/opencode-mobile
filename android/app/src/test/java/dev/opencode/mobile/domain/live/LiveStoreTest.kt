@@ -2679,6 +2679,51 @@ class SessionStatusLiveStoreTest {
         return cache
     }
 
+    @Test
+    fun responseFromThePreviousConnection_isNotCommitted() =
+        runTest(testDispatcher) {
+            var connection = "server-a"
+            val answer = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val backing =
+                FakeSessionRepository(statuses = listOf(SessionStatus(sessionId = "ses-from-a", raw = mapOf("type" to "busy"))))
+            val repository =
+                object : dev.opencode.mobile.domain.session.SessionRepository by backing {
+                    override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> {
+                        answer.await()
+                        return backing.getAllSessionStatuses(directory)
+                    }
+                }
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val scope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
+            val store =
+                DefaultSessionStatusLiveStore(
+                    repository,
+                    eventStream,
+                    scope,
+                    EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    SilentWorldSignals,
+                    dev.opencode.mobile.domain.sync.DefaultSyncCoordinator(
+                        liveConnection = eventStream,
+                        worldSignals = SilentWorldSignals,
+                        scope = scope.coroutineScope,
+                        nowMs = { testDispatcher.scheduler.currentTime },
+                        wait = { delay(it) },
+                        connectionIdentity = { connection },
+                    ),
+                )
+            val snapshots = mutableListOf<dev.opencode.mobile.domain.session.SessionActivitySnapshot>()
+            val job = launch { store.observeActivity("/repo").collect { snapshots += it } }
+            testScheduler.runCurrent()
+
+            connection = "server-b"
+            answer.complete(Unit)
+            testScheduler.runCurrent()
+            job.cancel()
+
+            assertTrue(snapshots.none { "ses-from-a" in it.entries })
+        }
+
     private fun createStatusStore(
         repository: FakeSessionRepository,
         eventStream: FakeForegroundEventStream,

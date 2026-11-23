@@ -10,6 +10,9 @@ public protocol ConnectionProbing: Sendable {
     func probe(connection: ServerConnection) async throws -> ServerProtocol
     /// Protocol plus the server's health `version`. Defaults to `probe` with no version.
     func probeServer(connection: ServerConnection) async throws -> ServerProbeOutcome
+    /// Like `probeServer`, but returns as soon as the server answers as `expected`, without
+    /// waiting on the other health endpoints. Anything else gets the full detection.
+    func confirmServer(connection: ServerConnection, expected: ServerProtocol) async throws -> ServerProbeOutcome
     /// Release-dependent v2 features (opencode 2.1.0+). Throws when the server's API contract
     /// could not be read, so the caller can retry later. Defaults to none.
     func probeV2Features(connection: ServerConnection) async throws -> V2ServerFeatures
@@ -18,6 +21,10 @@ public protocol ConnectionProbing: Sendable {
 extension ConnectionProbing {
     public func probeServer(connection: ServerConnection) async throws -> ServerProbeOutcome {
         ServerProbeOutcome(serverProtocol: try await probe(connection: connection), serverVersion: nil)
+    }
+
+    public func confirmServer(connection: ServerConnection, expected _: ServerProtocol) async throws -> ServerProbeOutcome {
+        try await probeServer(connection: connection)
     }
 
     public func probeV2Features(connection _: ServerConnection) async throws -> V2ServerFeatures {
@@ -67,6 +74,15 @@ public struct ConnectionProbeService: ConnectionProbing, Sendable {
             let outcome = try await client.detectServer()
             DiagnosticLog.info(.connection, "protocol=\(outcome.serverProtocol.wireValue)")
             return outcome
+        } catch {
+            throw adapter.mapProbeError(error)
+        }
+    }
+
+    public func confirmServer(connection: ServerConnection, expected: ServerProtocol) async throws -> ServerProbeOutcome {
+        let client = ProjectsAPIClient(fixedConnection: connection, urlSession: urlSession)
+        do {
+            return try await client.detectServer(expecting: expected)
         } catch {
             throw adapter.mapProbeError(error)
         }

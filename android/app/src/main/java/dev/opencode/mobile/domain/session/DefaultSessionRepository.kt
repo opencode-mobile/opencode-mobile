@@ -4,8 +4,8 @@ import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
-import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.model.modelSelectionIdentity
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
@@ -93,7 +93,7 @@ class DefaultSessionRepository
                 mapped { remote.deleteSession(id, directory) }
             val profile = activeConnectionManager?.currentProfile()
             if (deleted && profile != null) {
-                val identity = ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
+                val identity = profile.modelSelectionIdentity()
                 runCatching {
                     sessionModelSelectionStore?.deleteSessionEntries(identity, id)
                 }.onFailure { DiagnosticLog.warning(DiagnosticLogArea.Session, "delete model selection failed", it) }

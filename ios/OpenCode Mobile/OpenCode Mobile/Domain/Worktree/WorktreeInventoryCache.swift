@@ -61,7 +61,22 @@ final class WorktreeInventoryCache: @unchecked Sendable {
         lock.withLock { servers.removeAll() }
     }
 
+    /// The cache key of a profile: its id, so two users of one URL keep separate inventories.
+    static func serverKey(profile: ConnectionProfile?, fallbackBaseURL: String?) -> String? {
+        if let id = profile?.id.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty {
+            return profilePrefix + id
+        }
+        return fallbackBaseURL
+    }
+
+    func remove(server: String) {
+        let key = Self.key(server)
+        lock.withLock { servers[key] = nil }
+    }
+
+    private static let profilePrefix = "profile:"
+
     private static func key(_ server: String) -> String {
-        ConnectionProfileIdentity.normalizeBaseURL(server)
+        server.hasPrefix(profilePrefix) ? server : ConnectionProfileIdentity.normalizeBaseURL(server)
     }
 }

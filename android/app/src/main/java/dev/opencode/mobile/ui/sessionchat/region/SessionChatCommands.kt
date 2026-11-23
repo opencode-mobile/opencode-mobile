@@ -13,8 +13,8 @@ import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServerCatalog
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
+import dev.opencode.mobile.domain.model.modelSelectionIdentity
 import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
@@ -427,7 +427,7 @@ class SessionChatCommands(
         text: String,
     ) {
         val profile = connectionSessionCoordinator.currentProfile() ?: return
-        val identity = ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
+        val identity = profile.modelSelectionIdentity()
         runCatching {
             composerDraftStore.save(identity, worktree, forkedSessionId, ComposerDraft(text = text))
         }.onFailure { error ->

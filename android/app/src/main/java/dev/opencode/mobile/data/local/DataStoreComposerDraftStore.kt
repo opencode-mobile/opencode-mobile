@@ -12,19 +12,31 @@ import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.Base64
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 class DataStoreComposerDraftStore
     internal constructor(
         private val dataStore: DataStore<Preferences>,
         private val json: Json,
+        private val detachedWrites: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     ) : ComposerDraftStore {
+        /** Detached saves not on disk yet; [load] reads through them. */
+        private val pendingDetached = ConcurrentHashMap<Preferences.Key<String>, ComposerDraft>()
+
         @Inject
         constructor(
             @ApplicationContext context: Context,
@@ -36,8 +48,41 @@ class DataStoreComposerDraftStore
             worktree: String,
             sessionId: String,
         ): ComposerDraft? {
+            val key = sessionKey(connectionIdentity, worktree, sessionId)
+            pendingDetached[key]?.let { pending -> return pending.takeIf { it.text.isNotBlank() } }
             val prefs = dataStore.data.first()
-            return decodeDraft(prefs[sessionKey(connectionIdentity, worktree, sessionId)])
+            return decodeDraft(prefs[key])
+        }
+
+        override fun saveDetached(
+            connectionIdentity: ModelSelectionConnectionIdentity,
+            worktree: String,
+            sessionId: String,
+            draft: ComposerDraft,
+        ) {
+            val key = sessionKey(connectionIdentity, worktree, sessionId)
+            val stored = draft.withTimestamp()
+            pendingDetached[key] = stored
+            detachedWrites.launch {
+                try {
+                    dataStore.edit { prefs ->
+                        // A clear or a newer detached save replaced this entry: it no longer applies.
+                        if (pendingDetached[key] !== stored) return@edit
+                        if (stored.text.isBlank()) {
+                            prefs.remove(key)
+                        } else {
+                            saveIfNewer(prefs, key, stored)
+                            evictOldestSessions(prefs, connectionIdentity)
+                        }
+                    }
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (error: Exception) {
+                    DiagnosticLog.warning(DiagnosticLogArea.Session, "detached composer draft save failed", error)
+                } finally {
+                    pendingDetached.remove(key, stored)
+                }
+            }
         }
 
         override suspend fun save(
@@ -47,8 +92,12 @@ class DataStoreComposerDraftStore
             draft: ComposerDraft,
         ) {
             val stored = draft.withTimestamp()
+            val key = sessionKey(connectionIdentity, worktree, sessionId)
+            val replacedDetached = pendingDetached.remove(key) != null
             dataStore.edit { prefs ->
-                saveIfNewer(prefs, sessionKey(connectionIdentity, worktree, sessionId), stored)
+                // The queued copy never ran, so this newer write must not lose to its timestamp.
+                if (replacedDetached) prefs.remove(key)
+                saveIfNewer(prefs, key, stored)
                 evictOldestSessions(prefs, connectionIdentity)
             }
         }
@@ -58,9 +107,9 @@ class DataStoreComposerDraftStore
             worktree: String,
             sessionId: String,
         ) {
-            dataStore.edit { prefs ->
-                prefs.remove(sessionKey(connectionIdentity, worktree, sessionId))
-            }
+            val key = sessionKey(connectionIdentity, worktree, sessionId)
+            pendingDetached.remove(key)
+            dataStore.edit { prefs -> prefs.remove(key) }
         }
 
         override suspend fun deleteSessionEntries(
@@ -68,6 +117,8 @@ class DataStoreComposerDraftStore
             sessionId: String,
         ) {
             val sessionSuffix = "|${encode(sessionId)}"
+            val prefix = sessionPrefix(connectionIdentity)
+            pendingDetached.keys.removeAll { it.name.startsWith(prefix) && it.name.endsWith(sessionSuffix) }
             dataStore.edit { prefs ->
                 prefs
                     .asMap()
@@ -81,13 +132,41 @@ class DataStoreComposerDraftStore
             }
         }
 
+        override suspend fun migrateConnection(
+            connectionIdentity: ModelSelectionConnectionIdentity,
+            addresses: Set<String>,
+        ) {
+            if (connectionIdentity.profileId.isBlank()) return
+            val target = sessionPrefix(connectionIdentity)
+            val sources = addresses.map { "$VERSION_PREFIX|session|${urlIdentityKey(it, connectionIdentity.username)}|" }
+            val hasLegacy =
+                dataStore.data
+                    .first()
+                    .asMap()
+                    .keys
+                    .any { key -> sources.any(key.name::startsWith) }
+            if (!hasLegacy) return
+            dataStore.edit { prefs ->
+                prefs.asMap().toMap().forEach { (key, value) ->
+                    val source = sources.firstOrNull(key.name::startsWith) ?: return@forEach
+                    // An entry this build cannot read stays where it is rather than being lost.
+                    val draft = decodeDraft(value as? String) ?: return@forEach
+                    saveIfNewer(prefs, stringPreferencesKey(target + key.name.removePrefix(source)), draft)
+                    @Suppress("UNCHECKED_CAST")
+                    prefs.remove(key as Preferences.Key<String>)
+                }
+                evictOldestSessions(prefs, connectionIdentity)
+            }
+        }
+
         override suspend fun clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) {
-            val identityMarker = "|${identityKey(connectionIdentity)}|"
+            val markers = identityMarkers(connectionIdentity)
+            pendingDetached.keys.removeAll { key -> markers.any(key.name::contains) }
             dataStore.edit { prefs ->
                 prefs
                     .asMap()
                     .keys
-                    .filter { key -> key.name.startsWith(VERSION_PREFIX) && key.name.contains(identityMarker) }
+                    .filter { key -> key.name.startsWith(VERSION_PREFIX) && markers.any(key.name::contains) }
                     .forEach { key ->
                         @Suppress("UNCHECKED_CAST")
                         prefs.remove(key as Preferences.Key<String>)
@@ -96,6 +175,7 @@ class DataStoreComposerDraftStore
         }
 
         override suspend fun clearAll() {
+            pendingDetached.clear()
             dataStore.edit { prefs ->
                 prefs.clear()
             }
@@ -110,7 +190,22 @@ class DataStoreComposerDraftStore
         private fun sessionPrefix(identity: ModelSelectionConnectionIdentity): String = "$VERSION_PREFIX|session|${identityKey(identity)}|"
 
         private fun identityKey(identity: ModelSelectionConnectionIdentity): String =
-            "${encode(normalizeBaseUrl(identity.serverBaseUrl))}|${encode(effectiveUsername(identity.username))}"
+            if (identity.profileId.isNotBlank()) {
+                "p|${encode(identity.profileId)}"
+            } else {
+                urlIdentityKey(identity.serverBaseUrl, identity.username)
+            }
+
+        private fun urlIdentityKey(
+            baseUrl: String,
+            username: String,
+        ): String = "${encode(normalizeBaseUrl(baseUrl))}|${encode(effectiveUsername(username))}"
+
+        /** The profile's key and the URL key it may still have entries under. */
+        private fun identityMarkers(identity: ModelSelectionConnectionIdentity): List<String> =
+            listOf(identityKey(identity), urlIdentityKey(identity.serverBaseUrl, identity.username))
+                .distinct()
+                .map { "|$it|" }
 
         private fun encode(value: String): String =
             Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))

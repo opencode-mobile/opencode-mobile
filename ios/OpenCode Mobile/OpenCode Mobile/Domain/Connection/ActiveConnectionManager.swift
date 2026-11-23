@@ -13,11 +13,14 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private var _v2Features = V2ServerFeatures()
     /// Server version `_v2Features` was read for, so a re-probe of the same release skips the fetch.
     private var _v2FeaturesVersion: String?
-    private var inFlightProbe: Task<Result<ServerProtocol, Error>, Never>?
+    private var inFlightProbe: InFlightProbe?
     private var probeGeneration = 0
     private var probeFailed = false
     private var addressResolution: Task<Void, Never>?
     private var addressResolutionGeneration = 0
+    /// Moves whenever the bound server changes identity. A load compares it at commit, so a
+    /// response from the previous server is dropped even when no profile switch has begun.
+    private var _connectionEpoch: UInt64 = 0
     /// Fired when a saved-address check ends (or has nothing to check): the resolution
     /// generation, and whether a different host was bound.
     var onAddressResolved: ((Int, Bool) -> Void)?
@@ -31,6 +34,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
     }
 
     var connection: ServerConnection? {
+        if let pinned = RequestConnectionPin.current { return pinned }
         lock.lock()
         defer { lock.unlock() }
         return _connection
@@ -38,6 +42,13 @@ final class ActiveConnectionManager: @unchecked Sendable {
 
     var serverProtocol: ServerProtocol? {
         connection?.serverProtocol
+    }
+
+    /// Identifies the bound server for commit checks; see `_connectionEpoch`.
+    var connectionEpoch: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return _connectionEpoch
     }
 
     /// Server version reported by health when this connection was last probed.
@@ -50,15 +61,59 @@ final class ActiveConnectionManager: @unchecked Sendable {
     var capabilities: ServerCapabilities {
         lock.lock()
         defer { lock.unlock() }
-        guard let connection = _connection else { return .forProtocol(.v1) }
+        if let pinned = pinnedElsewhereLocked() {
+            return .forProtocol(pinned.serverProtocol ?? .v1)
+        }
+        guard let connection = RequestConnectionPin.current ?? _connection else { return .forProtocol(.v1) }
         return .forProtocol(connection.serverProtocol ?? .v1, v2Features: _v2Features)
+    }
+
+    /// The request's pin when it names another server: the features read here are not its own.
+    private func pinnedElsewhereLocked() -> ServerConnection? {
+        guard let pinned = RequestConnectionPin.current,
+              _connection?.hasSameIdentity(as: pinned) != true
+        else { return nil }
+        return pinned
+    }
+
+    /// Captures the bound server for a send that spans several requests. An unknown protocol is
+    /// probed on this server only; a connection change meanwhile throws instead of moving on.
+    func pinForSend() async throws -> PinnedServerConnection {
+        lock.lock()
+        let active = _connection
+        lock.unlock()
+        guard let active else { throw ServerConnectionChangedError() }
+        if active.serverProtocol != nil {
+            return PinnedServerConnection(connection: active)
+        }
+        let detected: ServerProtocol
+        switch await sharedProbe(force: false) {
+        case let .success(value):
+            detected = value
+        case let .failure(error):
+            guard error is CancellationError else { throw error }
+            try Task.checkCancellation()
+            throw ServerConnectionChangedError()
+        }
+        let pin = PinnedServerConnection(connection: active.withProtocol(detected))
+        guard isCurrent(pin) else { throw ServerConnectionChangedError() }
+        return pin
+    }
+
+    /// True while the bound server is the pinned one, including after switching away and back.
+    func isCurrent(_ pin: PinnedServerConnection) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _connection?.hasSameIdentity(as: pin.connection) == true
     }
 
     /// `paths.tmp` where uploads go, only while streamed upload is on for this connection.
     var streamedUploadDirectory: String? {
         lock.lock()
         defer { lock.unlock() }
-        guard _connection?.serverProtocol == .v2, _v2Features.streamedUpload else { return nil }
+        guard pinnedElsewhereLocked() == nil,
+              _connection?.serverProtocol == .v2, _v2Features.streamedUpload
+        else { return nil }
         return _v2Features.uploadDirectory
     }
 
@@ -66,7 +121,9 @@ final class ActiveConnectionManager: @unchecked Sendable {
     /// connection. Probing again for the same release keeps the cleared flag.
     func disableStreamedUpload() {
         lock.lock()
-        _v2Features.streamedUploadRoute = false
+        if pinnedElsewhereLocked() == nil {
+            _v2Features.streamedUploadRoute = false
+        }
         lock.unlock()
     }
 
@@ -79,8 +136,33 @@ final class ActiveConnectionManager: @unchecked Sendable {
         if let profile = await store.activeProfile() {
             install(profile)
             scheduleAddressResolution(for: profile, store: store)
-            await addressResolution?.value
+            await awaitAddressResolution()
         }
+    }
+
+    /// Waits for the running saved-address check, if any.
+    func awaitAddressResolution() async {
+        lock.lock()
+        let running = addressResolution
+        lock.unlock()
+        await running?.value
+    }
+
+    /// The running saved-address check, for a caller that waits on it outside the profile gate.
+    var runningAddressResolution: Task<Void, Never>? {
+        lock.lock()
+        defer { lock.unlock() }
+        return addressResolution
+    }
+
+    /// Stops the saved-address check, so it cannot rebind or save a profile being removed.
+    func cancelAddressResolution() {
+        lock.lock()
+        addressResolutionGeneration += 1
+        let running = addressResolution
+        addressResolution = nil
+        lock.unlock()
+        running?.cancel()
     }
 
     /// Binds the stored address immediately. When [waitForAddressResolution] is false, a better
@@ -90,7 +172,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
         if let profile = await store.activeProfile() {
             apply(profile)
             if waitForAddressResolution {
-                await addressResolution?.value
+                await awaitAddressResolution()
             }
         } else {
             disconnect()
@@ -119,6 +201,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
             DiagnosticLog.warning(.connection, "profile baseURL does not parse; not connecting")
             lock.lock()
             _profile = stamped
+            if _connection != nil { _connectionEpoch &+= 1 }
             _connection = nil
             _serverVersion = nil
             probeFailed = false
@@ -134,6 +217,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
         if !sameServer {
             _serverVersion = nil
             forgetV2FeaturesLocked()
+            _connectionEpoch &+= 1
         }
         _profile = stamped
         _connection = connection
@@ -147,14 +231,16 @@ final class ActiveConnectionManager: @unchecked Sendable {
         lock.lock()
         addressResolutionGeneration += 1
         let generation = addressResolutionGeneration
+        let previous = addressResolution
+        addressResolution = nil
         lock.unlock()
+        previous?.cancel()
         let urls = ConnectionProfileIdentity.normalizedAddressList(profile.serverURLs)
         guard !urls.isEmpty, let probing = connectionProbing else {
-            addressResolution = nil
             onAddressResolved?(generation, false)
             return
         }
-        addressResolution = Task { [self] in
+        let resolution = Task { [self] in
             await self.resolveSavedAddresses(
                 profile,
                 urls: urls,
@@ -162,6 +248,14 @@ final class ActiveConnectionManager: @unchecked Sendable {
                 store: store,
                 generation: generation
             )
+        }
+        lock.lock()
+        if addressResolutionGeneration == generation {
+            addressResolution = resolution
+            lock.unlock()
+        } else {
+            lock.unlock()
+            resolution.cancel()
         }
     }
 
@@ -181,10 +275,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
             currentBaseURL: profile.baseURL,
             probing: probing
         )
-        lock.lock()
-        let current = addressResolutionGeneration == generation
-        lock.unlock()
-        guard current else { return }
+        guard !Task.isCancelled, addressResolutionIsCurrent(generation) else { return }
         guard let winner = resolution.chosen, let detected = resolution.reachableProtocol,
               ConnectionProfileIdentity.normalizeBaseURL(winner)
               != ConnectionProfileIdentity.normalizeBaseURL(profile.baseURL)
@@ -195,17 +286,22 @@ final class ActiveConnectionManager: @unchecked Sendable {
         var updated = profile
         updated.baseURL = winner
         updated.serverProtocol = detected
+        // Update-only, and before binding: a profile removed meanwhile stays removed.
+        guard await store.updateDetectedServer(id: profile.id, baseURL: winner, serverProtocol: detected) else {
+            guard addressResolutionIsCurrent(generation) else { return }
+            onAddressResolved?(generation, false)
+            return
+        }
+        guard !Task.isCancelled, addressResolutionIsCurrent(generation) else { return }
         install(updated, serverProtocol: detected)
-        try? await store.saveProfile(updated)
-        lock.lock()
-        let stillCurrent = addressResolutionGeneration == generation
-        lock.unlock()
-        guard stillCurrent else { return }
         onAddressResolved?(generation, true)
     }
 
     func applyConnection(_ connection: ServerConnection) {
         lock.lock()
+        if _connection.map({ !$0.hasSameIdentity(as: connection) }) ?? true {
+            _connectionEpoch &+= 1
+        }
         _connection = connection
         probeFailed = false
         lock.unlock()
@@ -216,8 +312,9 @@ final class ActiveConnectionManager: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let current = _connection else { return }
+        let changed = current.serverProtocol != serverProtocol
         _connection = current.withProtocol(serverProtocol)
-        persistLocked()
+        if changed { persistDetectedLocked() }
     }
 
     /// Last-known protocol for opening SSE without waiting on detect.
@@ -236,12 +333,37 @@ final class ActiveConnectionManager: @unchecked Sendable {
     /// caches the result, and returns it. Missing connection, missing probe, or
     /// a thrown probe returns `.v1` without throwing.
     func currentProtocolOrProbe() async -> ServerProtocol {
-        (try? await sharedProbe(force: false).get()) ?? .v1
+        if let pinned = RequestConnectionPin.current { return pinned.serverProtocol ?? .v1 }
+        // A probe superseded by a connection change says nothing about the new server: ask
+        // again rather than report v1. A cancelled caller stops here.
+        for _ in 0 ..< Self.supersededProbeRetries {
+            let generation = currentProbeGeneration()
+            switch await sharedProbe(force: false) {
+            case let .success(detected):
+                return detected
+            case let .failure(error):
+                guard error is CancellationError, !Task.isCancelled,
+                      currentProbeGeneration() != generation
+                else {
+                    return serverProtocol ?? .v1
+                }
+            }
+        }
+        return serverProtocol ?? .v1
     }
+
+    private func currentProbeGeneration() -> Int {
+        probeLock.lock()
+        defer { probeLock.unlock() }
+        return probeGeneration
+    }
+
+    private static let supersededProbeRetries = 3
 
     /// Home / Test Connection: join the in-flight detect and throw on failure.
     func probeActive() async throws -> ServerProtocol {
-        try await sharedProbe(force: true).get()
+        // A saved protocol only needs confirming; `redetectProtocol` does the full detection.
+        try await sharedProbe(force: true, confirmSaved: true).get()
     }
 
     /// Re-runs detection on the active connection, so a server replaced at the same address by
@@ -258,7 +380,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
         }
     }
 
-    private func sharedProbe(force: Bool) async -> Result<ServerProtocol, Error> {
+    private func sharedProbe(force: Bool, confirmSaved: Bool = false) async -> Result<ServerProtocol, Error> {
         if !force, let cached = serverProtocol {
             return .success(cached)
         }
@@ -285,30 +407,52 @@ final class ActiveConnectionManager: @unchecked Sendable {
             probeLock.unlock()
             return .success(.v1)
         }
-        if let existing = inFlightProbe {
-            task = existing
+        // A full detection may join a full one only: a confirmation cannot see a protocol change.
+        if let existing = inFlightProbe, let active = connection,
+           existing.connection.hasSameIdentity(as: active),
+           confirmSaved || existing.expected == nil
+        {
+            task = existing.task
         } else {
             if force {
                 lock.lock()
                 probeFailed = false
                 lock.unlock()
             }
+            guard let probed = connection else {
+                probeLock.unlock()
+                return .success(.v1)
+            }
             let generation = probeGeneration
             let skipCache = force
+            let expected = confirmSaved ? probed.serverProtocol : nil
+            let probeID = UUID()
             let created = Task { [self] in
-                await self.performProtocolProbe(generation: generation, skipCache: skipCache)
+                await self.performProtocolProbe(
+                    probed,
+                    id: probeID,
+                    expected: expected,
+                    generation: generation,
+                    skipCache: skipCache
+                )
             }
-            inFlightProbe = created
+            inFlightProbe = InFlightProbe(id: probeID, connection: probed, expected: expected, task: created)
             task = created
         }
         probeLock.unlock()
         return await task.value
     }
 
-    private func performProtocolProbe(generation: Int, skipCache: Bool) async -> Result<ServerProtocol, Error> {
+    private func performProtocolProbe(
+        _ current: ServerConnection,
+        id: UUID,
+        expected: ServerProtocol?,
+        generation: Int,
+        skipCache: Bool
+    ) async -> Result<ServerProtocol, Error> {
         defer {
             probeLock.lock()
-            if probeGeneration == generation {
+            if inFlightProbe?.id == id {
                 inFlightProbe = nil
             }
             probeLock.unlock()
@@ -316,14 +460,20 @@ final class ActiveConnectionManager: @unchecked Sendable {
         if !skipCache, let cached = serverProtocol {
             return .success(cached)
         }
-        guard let current = connection, let probing = connectionProbing else {
+        guard let probing = connectionProbing else {
             return .success(.v1)
         }
         do {
-            let outcome = try await probing.probeServer(connection: current)
+            let outcome = if let expected {
+                try await probing.confirmServer(connection: current, expected: expected)
+            } else {
+                try await probing.probeServer(connection: current)
+            }
             let features = outcome.serverProtocol == .v2
-                ? await probeV2Features(probing: probing, connection: current, version: outcome.serverVersion)
+                ? try await probeV2Features(probing: probing, connection: current, version: outcome.serverVersion)
                 : nil
+            try Task.checkCancellation()
+            guard probeIsCurrent(generation) else { throw CancellationError() }
             return .success(
                 cacheDetectedProtocol(
                     outcome.serverProtocol,
@@ -335,11 +485,22 @@ final class ActiveConnectionManager: @unchecked Sendable {
         } catch is CancellationError {
             return .failure(CancellationError())
         } catch {
+            if Task.isCancelled { return .failure(CancellationError()) }
+            // A late failure from an older connection must not mark the current one as failed.
+            guard probeIsCurrent(generation) else { return .failure(CancellationError()) }
             lock.lock()
-            probeFailed = true
+            if _connection?.hasSameIdentity(as: current) == true {
+                probeFailed = true
+            }
             lock.unlock()
             return .failure(error)
         }
+    }
+
+    private func probeIsCurrent(_ generation: Int) -> Bool {
+        probeLock.lock()
+        defer { probeLock.unlock() }
+        return probeGeneration == generation
     }
 
     /// Caches `detected` only when the active connection is still the probed one.
@@ -356,11 +517,12 @@ final class ActiveConnectionManager: @unchecked Sendable {
         guard let active = _connection, active.hasSameIdentity(as: probed) else {
             return _connection?.serverProtocol ?? .v1
         }
+        let changed = active.serverProtocol != detected
         _connection = active.withProtocol(detected)
         _serverVersion = serverVersion
         _v2Features = v2Features ?? V2ServerFeatures()
         _v2FeaturesVersion = v2Features == nil || v2Features?.uploadDirectoryUnread == true ? nil : serverVersion
-        persistLocked()
+        if changed { persistDetectedLocked() }
         return detected
     }
 
@@ -371,13 +533,15 @@ final class ActiveConnectionManager: @unchecked Sendable {
         probing: any ConnectionProbing,
         connection: ServerConnection,
         version: String?
-    ) async -> V2ServerFeatures? {
+    ) async throws -> V2ServerFeatures? {
         lock.lock()
         let cached = version != nil && _v2FeaturesVersion == version ? _v2Features : nil
         lock.unlock()
         if let cached { return cached }
         do {
             return try await probing.probeV2Features(connection: connection)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             DiagnosticLog.warning(.connection, "probe /\(V2ServerContract.openAPIPath) failed")
             return nil
@@ -389,10 +553,16 @@ final class ActiveConnectionManager: @unchecked Sendable {
         _v2FeaturesVersion = nil
     }
 
-    private func persistLocked() {
-        guard let store = profileStore, let profile = currentProfileLocked() else { return }
+    /// Saves what a probe learned. Update-only and without the password, so a late probe cannot
+    /// bring back a removed profile or rewrite its credential.
+    private func persistDetectedLocked() {
+        guard let store = profileStore, let profile = _profile, !profile.id.isEmpty,
+              let detected = _connection?.serverProtocol
+        else { return }
+        let id = profile.id
+        let baseURL = profile.baseURL
         Task {
-            try? await store.saveProfile(profile)
+            _ = await store.updateDetectedServer(id: id, baseURL: baseURL, serverProtocol: detected)
         }
     }
 
@@ -408,20 +578,25 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private func invalidateInFlightProbe() {
         probeLock.lock()
         probeGeneration += 1
+        let superseded = inFlightProbe
         inFlightProbe = nil
         probeLock.unlock()
+        superseded?.task.cancel()
     }
 
     func disconnect() {
         lock.lock()
         addressResolutionGeneration += 1
+        if _connection != nil { _connectionEpoch &+= 1 }
         _connection = nil
         _profile = nil
         _serverVersion = nil
         forgetV2FeaturesLocked()
         probeFailed = false
-        lock.unlock()
+        let running = addressResolution
         addressResolution = nil
+        lock.unlock()
+        running?.cancel()
         invalidateInFlightProbe()
     }
 
@@ -430,6 +605,15 @@ final class ActiveConnectionManager: @unchecked Sendable {
         defer { lock.unlock() }
         return currentProfileLocked()
     }
+}
+
+/// A running protocol probe and the connection it asks; joiners only share a probe of their own server.
+private struct InFlightProbe {
+    let id: UUID
+    let connection: ServerConnection
+    /// Set when this only confirms a saved protocol instead of detecting from scratch.
+    let expected: ServerProtocol?
+    let task: Task<Result<ServerProtocol, Error>, Never>
 }
 
 final class ConnectionSessionCoordinator: @unchecked Sendable {
@@ -449,6 +633,9 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let hasActiveConnection: @Sendable () -> Bool
     /// Deletes Server Health records for a profile; nil deletes every profile's.
     private let purgeServerHealth: @Sendable (String?) async -> Void
+    /// Clears what lives outside the stores above for one removed profile (Ready records, its
+    /// New session draft), or for every profile when nil.
+    private let purgeProfileState: @Sendable (ConnectionProfile?) async -> Void
     private let profileChangeGate = ProfileChangeGate()
     private let lock = NSLock()
     /// Lock-guarded handler storage. `nonisolated(unsafe)` lets a released registration remove
@@ -456,6 +643,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     nonisolated(unsafe) private var profileSwitchingHandlers: [(id: UUID, handler: (String) -> Void)] = []
     nonisolated(unsafe) private var profileSavedHandlers: [(id: UUID, handler: () -> Void)] = []
     nonisolated(unsafe) private var profileClearedHandlers: [(id: UUID, handler: () -> Void)] = []
+    nonisolated(unsafe) private var profileListHandlers: [(id: UUID, handler: () -> Void)] = []
     nonisolated(unsafe) private var addressCheckHandlers: [(id: UUID, handler: (AddressCheck) -> Void)] = []
     private var currentAddressCheck = AddressCheck(generation: 0, state: .kept)
     private var switchGeneration: UInt64 = 0
@@ -488,9 +676,11 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         occupancy: @escaping @Sendable () -> StreamOccupancy = { .active },
         emitProfileSwitched: @escaping @Sendable () -> Void = {},
         hasActiveConnection: @escaping @Sendable () -> Bool = { false },
-        purgeServerHealth: @escaping @Sendable (String?) async -> Void = { _ in }
+        purgeServerHealth: @escaping @Sendable (String?) async -> Void = { _ in },
+        purgeProfileState: @escaping @Sendable (ConnectionProfile?) async -> Void = { _ in }
     ) {
         self.purgeServerHealth = purgeServerHealth
+        self.purgeProfileState = purgeProfileState
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
         self.sessionCache = sessionCache
@@ -547,6 +737,19 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         return registration(removing: { coordinator in
             let removed = coordinator.profileClearedHandlers.filter { $0.id == id }
             coordinator.profileClearedHandlers.removeAll { $0.id == id }
+            return removed
+        })
+    }
+
+    /// A saved server that is not the active one went away: the list changed, the live state did not.
+    func onProfileListChanged(_ handler: @escaping () -> Void) -> Registration {
+        let id = UUID()
+        lock.lock()
+        profileListHandlers.append((id, handler))
+        lock.unlock()
+        return registration(removing: { coordinator in
+            let removed = coordinator.profileListHandlers.filter { $0.id == id }
+            coordinator.profileListHandlers.removeAll { $0.id == id }
             return removed
         })
     }
@@ -609,24 +812,32 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     }
 
     func saveProfile(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) async throws {
-        try await profileChangeGate.run {
+        let resolution: Task<Void, Never>? = try await profileChangeGate.run {
             var stamped = profile
             stamped.serverProtocol = serverProtocol ?? profile.serverProtocol
             let wasNew = stamped.id.isEmpty
             try await self.connectionProfileStore.saveProfile(stamped)
             let active = await self.connectionProfileStore.activeProfile()
             let savedIsActive = wasNew || (!stamped.id.isEmpty && active?.id == stamped.id)
-            if savedIsActive {
-                await self.applyActiveProfileChange(notify: .saved)
-            }
+            guard savedIsActive else { return nil }
+            await self.applyActiveProfileChange(notify: .saved)
+            return self.activeConnectionManager.runningAddressResolution
         }
+        // Outside the gate: a switch must not queue behind a dead server's address check.
+        // A newer change retires this check by generation, so it cannot apply late.
+        await resolution?.value
     }
 
     func switchProfile(id: String) async {
         notifySwitching(id)
-        await profileChangeGate.run {
-            await self.connectionProfileStore.applyProfile(id: id)
-            await self.applyActiveProfileChange(notify: .saved, waitForAddressResolution: false)
+        do {
+            try await profileChangeGate.run {
+                await self.connectionProfileStore.applyProfile(id: id)
+                await self.applyActiveProfileChange(notify: .saved)
+            }
+        } catch {
+            // Only a cancelled wait in the queue lands here: this switch never started.
+            DiagnosticLog.info(.connection, "profile switch cancelled before it started")
         }
     }
 
@@ -634,35 +845,47 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     /// activity in the session cache, composer drafts, and model selections. Re-adding the
     /// same server later starts clean instead of resurrecting the old state.
     func removeProfile(id: String) async {
-        await profileChangeGate.run {
+        // Not cancellable: the user confirmed it, and a half-queued removal must not vanish.
+        let resolution: Task<Void, Never>?? = try? await profileChangeGate.run(cancellable: false) {
             let removed = await self.connectionProfileStore.listProfiles().first { $0.id == id }
+            let wasActive = await self.connectionProfileStore.activeProfile()?.id == id
+            if wasActive {
+                self.activeConnectionManager.cancelAddressResolution()
+            }
             await self.connectionProfileStore.removeProfile(id: id)
             if let removed {
-                let identity = ModelSelectionConnectionIdentity(
-                    serverBaseURL: removed.baseURL,
-                    username: removed.username
-                )
+                let identity = ModelSelectionConnectionIdentity(profile: removed)
                 await self.sessionCache()?.purgeConnection(profileID: removed.id, serverBaseURL: removed.baseURL)
                 await self.purgeServerHealth(removed.id)
                 await self.sessionModelSelectionStore.clearConnection(connectionIdentity: identity)
                 self.composerDraftStore.clearConnection(connectionIdentity: identity)
+                await self.purgeProfileState(removed)
+            }
+            guard wasActive else {
+                // The active server, its stream and any open chat are untouched.
+                self.notifyProfileListChanged()
+                return nil
             }
             if await self.connectionProfileStore.activeProfile() == nil {
                 await self.applyActiveProfileChange(notify: .cleared)
-            } else {
-                await self.applyActiveProfileChange(notify: .saved)
+                return nil
             }
+            await self.applyActiveProfileChange(notify: .saved)
+            return self.activeConnectionManager.runningAddressResolution
         }
+        await resolution??.value
     }
 
     func clearConnectionData() async {
-        await profileChangeGate.run {
+        try? await profileChangeGate.run(cancellable: false) {
+            self.activeConnectionManager.cancelAddressResolution()
             self.secureCredentialStore.clearAll()
             await self.connectionProfileStore.clearAll()
             await self.sessionModelSelectionStore.clearAll()
             self.composerDraftStore.clearAll()
             self.feedbackRefreshTokenStore?.delete()
             await self.purgeServerHealth(nil)
+            await self.purgeProfileState(nil)
             await self.applyActiveProfileChange(notify: .cleared)
         }
     }
@@ -676,10 +899,9 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         case cleared
     }
 
-    private func applyActiveProfileChange(
-        notify: ProfileNotify,
-        waitForAddressResolution: Bool = true
-    ) async {
+    /// Binds the active profile. Its saved-address check keeps running after this returns, and
+    /// reports through `onAddressResolved`; waiting on it here would hold the profile gate.
+    private func applyActiveProfileChange(notify: ProfileNotify) async {
         lock.lock()
         switchGeneration += 1
         let generation = switchGeneration
@@ -693,6 +915,15 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         }
 
         let nextProfile = await connectionProfileStore.activeProfile()
+        // Bind first: clearing the projections restarts their observers, which must not fetch
+        // from the server being left under the new generation.
+        if nextProfile == nil {
+            activeConnectionManager.disconnect()
+        } else {
+            // The rebind checks the saved addresses; Home must see that before it loads.
+            publishAddressCheck(AddressCheck(generation: generation, state: .running))
+            await rebindActive()
+        }
         await MainActor.run {
             if notify == .cleared {
                 self.projectionCaches()?.clearAll()
@@ -701,14 +932,6 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
             }
         }
         await bindReadyProfile(nextProfile?.id)
-
-        if nextProfile == nil {
-            activeConnectionManager.disconnect()
-        } else {
-            // The rebind checks the saved addresses; Home must see that before it loads.
-            publishAddressCheck(AddressCheck(generation: generation, state: .running))
-            await rebindActive(waitForAddressResolution: waitForAddressResolution)
-        }
 
         emitProfileSwitched()
 
@@ -724,8 +947,8 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         }
     }
 
-    private func rebindActive(waitForAddressResolution: Bool) async {
-        await activeConnectionManager.reloadFromStore(waitForAddressResolution: waitForAddressResolution)
+    private func rebindActive() async {
+        await activeConnectionManager.reloadFromStore(waitForAddressResolution: false)
         if activeConnectionManager.currentProfile() == nil,
            let active = await connectionProfileStore.activeProfile()
         {
@@ -743,6 +966,13 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private func notifySaved() {
         lock.lock()
         let handlers = profileSavedHandlers
+        lock.unlock()
+        handlers.forEach { $0.handler() }
+    }
+
+    private func notifyProfileListChanged() {
+        lock.lock()
+        let handlers = profileListHandlers
         lock.unlock()
         handlers.forEach { $0.handler() }
     }
@@ -768,7 +998,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
 
     private func restartAfterAddressRetarget(generation: Int) async {
         guard activeConnectionManager.addressResolutionIsCurrent(generation) else { return }
-        await profileChangeGate.run {
+        try? await profileChangeGate.run {
             guard self.activeConnectionManager.addressResolutionIsCurrent(generation) else { return }
             if self.hasActiveConnection(), let stream = self.eventStream() {
                 await stream.stop()
@@ -802,10 +1032,4 @@ struct AddressCheck: Equatable, Sendable {
 
     let generation: UInt64
     let state: State
-}
-
-private actor ProfileChangeGate {
-    func run<T: Sendable>(_ operation: @Sendable () async throws -> T) async rethrows -> T {
-        try await operation()
-    }
 }

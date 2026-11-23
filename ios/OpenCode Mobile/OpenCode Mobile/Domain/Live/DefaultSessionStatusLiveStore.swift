@@ -10,6 +10,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
     private let sessionCache: any SessionCache
     private let clock: any SyncClock
     private let connection: any LiveConnection
+    private let connectionEpoch: @Sendable () -> UInt64
     private let invalidationAckTimeoutMs: Int
     private let activeDirectories = ActiveDirectorySet()
     private let optimistic = OptimisticActivityTable()
@@ -24,8 +25,10 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         syncCoordinator: (any SyncCoordinator)? = nil,
         sessionCache: any SessionCache = NoOpSessionCache.shared,
         clock: any SyncClock = SystemSyncClock(),
-        invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs
+        invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs,
+        connectionEpoch: @escaping @Sendable () -> UInt64 = { 0 }
     ) {
+        self.connectionEpoch = connectionEpoch
         self.sessionRepository = sessionRepository
         self.eventStream = eventStream
         self.eventAdapter = eventAdapter
@@ -112,6 +115,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         let sessionCache = sessionCache
         let clock = clock
         let connection = connection
+        let connectionEpoch = connectionEpoch
         let activeDirectories = activeDirectories
         let optimistic = optimistic
         let mutationBus = mutationBus
@@ -127,6 +131,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     sessionCache: sessionCache,
                     clock: clock,
                     connection: connection,
+                    connectionEpoch: connectionEpoch,
                     activeDirectories: activeDirectories,
                     optimistic: optimistic,
                     mutationBus: mutationBus,
@@ -148,6 +153,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
         sessionCache: any SessionCache,
         clock: any SyncClock,
         connection: any LiveConnection,
+        connectionEpoch: @escaping @Sendable () -> UInt64,
         activeDirectories: ActiveDirectorySet,
         optimistic: OptimisticActivityTable,
         mutationBus: ActivityMutationBus,
@@ -173,7 +179,9 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                     observedAtMs: entry.observedAtMs
                 )
             }
+            let epoch = connectionEpoch()
             Task {
+                guard connectionEpoch() == epoch else { return }
                 await sessionCache.rememberActivity(directory: directory, entries: entries)
             }
         }
@@ -261,6 +269,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
 
         @Sendable func loadAndCommit() async throws {
             let generation = syncCoordinator.profileGeneration
+            let epoch = connectionEpoch()
             let reconcile = reconcileFlag.takeReconcile()
             let outcome = await gate.refresh(
                 load: { () async -> [String: SessionActivity]? in
@@ -272,6 +281,11 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 },
                 commit: { loaded in
                     guard syncCoordinator.profileGeneration == generation else { return }
+                    // Answered by the server we left: drop it and load again from the bound one.
+                    guard connectionEpoch() == epoch else {
+                        syncCoordinator.invalidate(key)
+                        return
+                    }
                     DiagnosticLog.info(.session, "statusLiveStore refresh directory=\(directory)")
                     commitLoaded(loaded, reconcile: reconcile)
                 }
@@ -283,6 +297,7 @@ final class DefaultSessionStatusLiveStore: SessionStatusLiveStore {
                 )
             }
             if outcome == .failed {
+                try Task.checkCancellation()
                 throw URLError(.cannotConnectToHost)
             }
         }

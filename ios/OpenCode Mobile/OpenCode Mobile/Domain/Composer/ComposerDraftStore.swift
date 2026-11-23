@@ -86,7 +86,14 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
         worktree: String,
         sessionID: String
     ) -> ComposerDraft? {
-        decode(defaults.data(forKey: sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID)))
+        let key = sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID)
+        ConnectionIdentityKeys.migrate(
+            defaults,
+            to: key,
+            from: legacySessionKeys(connectionIdentity, worktree: worktree, sessionID: sessionID),
+            savedAt: { decode($0)?.savedAtEpochMs }
+        )
+        return decode(defaults.data(forKey: key))
     }
 
     func save(
@@ -95,6 +102,7 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
         sessionID: String,
         draft: ComposerDraft
     ) {
+        _ = load(connectionIdentity: connectionIdentity, worktree: worktree, sessionID: sessionID)
         saveIfNewer(withTimestamp(draft), key: sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID))
         evictOldestSessions(connectionIdentity)
     }
@@ -105,6 +113,8 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
         sessionID: String
     ) {
         defaults.removeObject(forKey: sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID))
+        legacySessionKeys(connectionIdentity, worktree: worktree, sessionID: sessionID)
+            .forEach(defaults.removeObject)
     }
 
     func deleteSessionEntries(
@@ -112,8 +122,10 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
         sessionID: String
     ) {
         let sessionSuffix = "|\(encoded(sessionID))"
+        let prefixes = ([ConnectionIdentityKeys.current(connectionIdentity)]
+            + ConnectionIdentityKeys.legacy(connectionIdentity)).map { "\(Self.versionPrefix)|session|\($0)|" }
         defaults.dictionaryRepresentation().keys
-            .filter { $0.hasPrefix(sessionPrefix(connectionIdentity)) && $0.hasSuffix(sessionSuffix) }
+            .filter { key in prefixes.contains { key.hasPrefix($0) } && key.hasSuffix(sessionSuffix) }
             .forEach(defaults.removeObject)
     }
 
@@ -125,10 +137,21 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
     }
 
     func clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) {
-        let identityMarker = "|\(identityKey(connectionIdentity))|"
+        let markers = ([ConnectionIdentityKeys.current(connectionIdentity)]
+            + ConnectionIdentityKeys.legacy(connectionIdentity)).map { "|\($0)|" }
         defaults.dictionaryRepresentation().keys
-            .filter { $0.hasPrefix(Self.versionPrefix) && $0.contains(identityMarker) }
+            .filter { key in key.hasPrefix(Self.versionPrefix) && markers.contains { key.contains($0) } }
             .forEach(defaults.removeObject)
+    }
+
+    private func legacySessionKeys(
+        _ identity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) -> [String] {
+        ConnectionIdentityKeys.legacy(identity).map {
+            "\(Self.versionPrefix)|session|\($0)|" + [encoded(worktree), encoded(sessionID)].joined(separator: "|")
+        }
     }
 
     private func sessionKey(
@@ -144,8 +167,7 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
     }
 
     private func identityKey(_ identity: ModelSelectionConnectionIdentity) -> String {
-        [encoded(normalizedBaseURL(identity.serverBaseURL)), encoded(effectiveUsername(identity.username))]
-            .joined(separator: "|")
+        ConnectionIdentityKeys.current(identity)
     }
 
     private func encoded(_ value: String) -> String {
@@ -192,17 +214,6 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
         return timestamped
     }
 
-    private func effectiveUsername(_ username: String) -> String {
-        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? Self.defaultUsername : trimmed
-    }
-
-    private func normalizedBaseURL(_ serverBaseURL: String) -> String {
-        let trimmed = serverBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.hasSuffix("/") ? trimmed : trimmed + "/"
-    }
-
     private static let versionPrefix = "composerDraft.v1"
-    private static let defaultUsername = "opencode"
     private static let maxSessionEntries = 500
 }

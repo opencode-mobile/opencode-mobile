@@ -92,12 +92,62 @@ public nonisolated struct ProjectsAPIClient: Sendable {
     /// Probe health endpoints and return the detected protocol with the
     /// health `version` of the payload that decided it.
     public func detectServer() async throws -> ServerProbeOutcome {
-        async let globalFetch = fetchHealth(path: "global/health") { try await getGlobalHealth() }
-        async let infoFetch = fetchHealth(path: "api/info") { try await getApiInfo() }
-        async let apiHealthFetch = fetchHealth(path: "api/health") { try await getApiHealth() }
-        let globalResult = await globalFetch
-        let infoResult = await infoFetch
-        let apiHealthResult = await apiHealthFetch
+        try await detectServer(expecting: nil)
+    }
+
+    /// With `expected`, stops at the first answer that confirms it; an endpoint that hangs then
+    /// cannot hold up a server already known. Any other result waits for all three, as a full
+    /// detection does, so a server that changed protocol is still found.
+    public func detectServer(expecting expected: ServerProtocol?) async throws -> ServerProbeOutcome {
+        var globalResult = HealthFetch(health: nil, error: nil)
+        var infoResult = HealthFetch(health: nil, error: nil)
+        var apiHealthResult = HealthFetch(health: nil, error: nil)
+        await withTaskGroup(of: (HealthEndpoint, HealthFetch).self) { group in
+            group.addTask { (.global, await self.fetchHealth(path: "global/health") { try await self.getGlobalHealth() }) }
+            group.addTask { (.info, await self.fetchHealth(path: "api/info") { try await self.getApiInfo() }) }
+            group.addTask { (.apiHealth, await self.fetchHealth(path: "api/health") { try await self.getApiHealth() }) }
+            var globalAnswered = false
+            var graceStarted = false
+            while let (endpoint, fetch) = await group.next() {
+                switch endpoint {
+                case .global:
+                    globalResult = fetch
+                    globalAnswered = true
+                case .info: infoResult = fetch
+                case .apiHealth: apiHealthResult = fetch
+                case .graceExpired:
+                    group.cancelAll()
+                    return
+                }
+                switch expected {
+                case .v1:
+                    if globalResult.health?.healthy == true {
+                        group.cancelAll()
+                        return
+                    }
+                case .v2:
+                    let usable = [infoResult.health, apiHealthResult.health].contains {
+                        $0?.pid != nil && $0?.healthy != false
+                    }
+                    guard usable else { break }
+                    // A healthy global endpoint means v1 even beside a v2 answer, so give it a
+                    // moment to say so. One that hangs costs only this grace.
+                    if globalAnswered {
+                        group.cancelAll()
+                        return
+                    }
+                    if !graceStarted {
+                        graceStarted = true
+                        group.addTask {
+                            try? await Task.sleep(for: Self.confirmGlobalGrace)
+                            return (.graceExpired, HealthFetch(health: nil, error: nil))
+                        }
+                    }
+                case nil:
+                    break
+                }
+            }
+        }
         let resolvedGlobal = globalResult.health
         let resolvedInfo = infoResult.health
         let resolvedApiHealth = apiHealthResult.health
@@ -143,6 +193,12 @@ public nonisolated struct ProjectsAPIClient: Sendable {
         return ServerProbeOutcome(serverProtocol: detected, serverVersion: version)
     }
 
+    private enum HealthEndpoint: Sendable {
+        case global, info, apiHealth, graceExpired
+    }
+
+    private static let confirmGlobalGrace = Duration.milliseconds(750)
+
     private struct HealthFetch: Sendable {
         public var health: HealthDTO?
         public var error: Error?
@@ -156,7 +212,10 @@ public nonisolated struct ProjectsAPIClient: Sendable {
             return HealthFetch(health: try await run(), error: nil)
         } catch {
             let mapped = adapter.mapProbeError(error)
-            DiagnosticLog.warning(.connection, "probe /\(path) failed \(describeProbeFailure(error, mapped: mapped))")
+            // Cancelled once another endpoint confirmed the server: not a failed probe.
+            if !Task.isCancelled {
+                DiagnosticLog.warning(.connection, "probe /\(path) failed \(describeProbeFailure(error, mapped: mapped))")
+            }
             return HealthFetch(health: nil, error: mapped)
         }
     }

@@ -70,6 +70,9 @@ extension Container {
                 },
                 purgeServerHealth: { profileID in
                     await Container.purgeServerHealth(profileID: profileID)
+                },
+                purgeProfileState: { profile in
+                    await Container.purgeProfileState(profile)
                 }
             )
         }.singleton
@@ -636,7 +639,8 @@ extension Container {
                 eventAdapter: self.eventDomainAdapter(),
                 worldSignals: self.worldSignals(),
                 syncCoordinator: self.syncCoordinator(),
-                sessionCache: self.sessionCache()
+                sessionCache: self.sessionCache(),
+                connectionEpoch: { [manager = self.activeConnectionManager()] in manager.connectionEpoch }
             )
         }.singleton
     }
@@ -693,7 +697,8 @@ extension Container {
                 sessionCache: self.sessionCache(),
                 worldSignals: self.worldSignals(),
                 syncCoordinator: self.syncCoordinator(),
-                capabilities: { manager.capabilities }
+                capabilities: { manager.capabilities },
+                connectionEpoch: { manager.connectionEpoch }
             )
         }.singleton
     }
@@ -964,6 +969,26 @@ extension Container {
             feed: feed,
             repository: shared.worktreeRepository(),
             changeCount: { directory in try? await sessions.getVcsStatus(directory: directory).count }
+        )
+    }
+
+    /// One removed profile's Ready records and New session draft; nil is Clear All, which also
+    /// drops Last Turn summaries and decoded attachment previews.
+    @MainActor
+    static func purgeProfileState(_ profile: ConnectionProfile?) {
+        guard let profile else {
+            shared.newSessionDraftStore().clearAll()
+            shared.lastTurnReviewChangesStore().clearAll()
+            AttachmentPreviewCache.shared.removeAll()
+            return
+        }
+        shared.sessionReadyStore().forgetProfile(profileID: profile.id)
+        if let key = WorktreeInventoryCache.serverKey(profile: profile, fallbackBaseURL: profile.baseURL) {
+            shared.worktreeInventoryCache().remove(server: key)
+        }
+        shared.newSessionDraftStore().clear(
+            profile: NewSessionDraftStore.key(for: profile),
+            discardingAttachments: true
         )
     }
 
