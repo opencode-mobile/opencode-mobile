@@ -148,6 +148,7 @@ class MainScreenViewModel
                 onSwitchStarted = { target, generation ->
                     // Drop the previous server's live updates immediately. Local projects paint next;
                     // the connection switch and session lists catch up in the background.
+                    projectList.invalidateLoads()
                     projectList.stopLiveObservations()
                     DiagnosticLog.info(DiagnosticLogArea.Connection, "switch profile ui id=${target.id}")
                     viewModelScope.launch {
@@ -207,6 +208,7 @@ class MainScreenViewModel
                 addressCheckRunning = {
                     connectionSessionCoordinator.addressCheck.value.state == AddressCheck.State.Running
                 },
+                switchPending = { serversRegion.pendingId != null },
                 onProbed = archivedMenuRegion::recheck,
                 onChange = { list ->
                     _uiState.update {
@@ -300,7 +302,11 @@ class MainScreenViewModel
                 }
             }
             viewModelScope.launch {
+                connectionSessionCoordinator.profileListChanged.collect { serversRegion.refreshChrome() }
+            }
+            viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
+                    projectList.invalidateLoads()
                     projectList.stopLiveObservations()
                     projectList.resetLoads()
                     worktreesRegion.reset()

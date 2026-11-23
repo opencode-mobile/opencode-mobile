@@ -49,6 +49,12 @@ class EventDomainAdapter(
      */
     private val runningShellMessageIds = ConcurrentHashMap<String, String>()
 
+    /** The profile changed: the previous server's running items will never report their end here. */
+    fun forgetRunningIds() {
+        runningCompactionIds.clear()
+        runningShellMessageIds.clear()
+    }
+
     /**
      * Goal set notice per v2 inbox id, remembered from the kickoff's enqueue:
      * `inbox.delivered` carries only the id, and must not turn the row into a user message.

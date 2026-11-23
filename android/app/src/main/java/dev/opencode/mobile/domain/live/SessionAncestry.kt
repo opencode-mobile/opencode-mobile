@@ -4,12 +4,15 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,12 +35,27 @@ class SessionAncestry(
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    private val connectionIdentity: () -> Any? = { null },
 ) {
     @Inject
     constructor(
         sessionRepository: SessionRepository,
         liveStoreScope: LiveStoreScope,
-    ) : this(sessionRepository, liveStoreScope.coroutineScope)
+        activeConnectionManager: ActiveConnectionManager,
+    ) : this(
+        sessionRepository,
+        liveStoreScope.coroutineScope,
+        // The profile, not the address: session ids stay valid when another saved address wins.
+        connectionIdentity = { activeConnectionManager.connectionIdentity()?.profileId },
+    )
+
+    /** Whose ids a lookup holds; taken where the ids were read, checked before each fetch. */
+    data class Owner(
+        val generation: Int,
+        val connection: Any?,
+    )
+
+    fun currentOwner(): Owner = Owner(generation, connectionIdentity())
 
     /** Parent id per session; [ROOT] for a session without one. */
     private val parents = ConcurrentHashMap<String, String>()
@@ -90,10 +108,12 @@ class SessionAncestry(
     fun requestRoots(
         sessionIds: Collection<String>,
         directory: String?,
+        owner: Owner = currentOwner(),
     ) {
+        if (owner != currentOwner()) return
         val unresolved = sessionIds.filter { it !in archived && rootOf(it) == null }
         if (unresolved.isEmpty()) return
-        scope.launch { resolveRoots(unresolved, directory) }
+        scope.launch { resolveRoots(unresolved, directory, owner) }
     }
 
     /**
@@ -103,10 +123,11 @@ class SessionAncestry(
     suspend fun resolveRoots(
         sessionIds: Collection<String>,
         directory: String?,
+        owner: Owner = currentOwner(),
     ): Map<String, String> =
         buildMap {
             for (id in sessionIds) {
-                resolveRoot(id, directory)?.let { put(id, it) }
+                resolveRoot(id, directory, owner)?.let { put(id, it) }
             }
         }
 
@@ -116,6 +137,7 @@ class SessionAncestry(
         archived.clear()
         roots.clear()
         failedAtMs.clear()
+        inFlight.values.forEach { it.cancel() }
         inFlight.clear()
         _changes.update { it + 1 }
     }
@@ -123,14 +145,16 @@ class SessionAncestry(
     private suspend fun resolveRoot(
         sessionId: String,
         directory: String?,
+        owner: Owner,
     ): String? {
         var current = sessionId
         var steps = 0
         while (steps <= MAX_DEPTH) {
+            if (owner != currentOwner()) return null
             when (val parent = parents[current]) {
                 ROOT -> return current
                 null -> {
-                    fetch(current, directory) ?: return null
+                    fetch(current, directory, owner) ?: return null
                     if (parents[current] == null) return null
                 }
                 else -> {
@@ -146,11 +170,11 @@ class SessionAncestry(
     private suspend fun fetch(
         sessionId: String,
         directory: String?,
+        owner: Owner,
     ): Session? {
         failedAtMs[sessionId]?.let { failedAt ->
             if (nowMs() - failedAt < FAILURE_RETRY_MS) return null
         }
-        val fetchGeneration = generation
         val pending =
             inFlight.computeIfAbsent(sessionId) {
                 scope.async(ioDispatcher) {
@@ -167,10 +191,15 @@ class SessionAncestry(
         val session =
             try {
                 pending.await()
+            } catch (cancellation: CancellationException) {
+                // clear() cancelled the shared lookup; only this caller's own cancellation propagates.
+                currentCoroutineContext().ensureActive()
+                if (owner != currentOwner()) return null
+                throw cancellation
             } finally {
                 inFlight.remove(sessionId, pending)
             }
-        if (fetchGeneration != generation) return null
+        if (owner != currentOwner()) return null
         if (session == null) {
             failedAtMs[sessionId] = nowMs()
             return null

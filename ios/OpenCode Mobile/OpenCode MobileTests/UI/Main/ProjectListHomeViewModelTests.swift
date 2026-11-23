@@ -152,6 +152,28 @@ struct ProjectListHomeViewModelTests {
         #expect(await eventually { if case .probeFailed = viewModel.uiState.content { true } else { false } })
     }
 
+    @Test func olderLoadThatFinishesLateDoesNotPaintOverTheNewerOne() async {
+        let store = FakeConnectionProfileStore(initial: ["/old"])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: store
+        )
+        let gate = store.holdNextWorktreeRead()
+        let older = Task { await viewModel.refresh() }
+        await gate.reached.wait()
+
+        await store.setAddedWorktrees(serverBaseURL: "http://127.0.0.1:4096/", worktrees: ["/new"])
+        await viewModel.refresh()
+        gate.release.fire()
+        await older.value
+
+        guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else {
+            Issue.record("Expected loaded content")
+            return
+        }
+        #expect(sections.map(\.worktree) == ["/new"])
+    }
+
     @Test func refresh_staysEmpty_whenNoAddedProjects() async {
         let store = FakeConnectionProfileStore()
         let viewModel = makeViewModel(
@@ -3004,7 +3026,29 @@ private final class FakeConnectionProfileStore: ConnectionProfileStore, @uncheck
 
     func saveProfile(_ profile: ConnectionProfile) async {}
 
-    func addedWorktrees(serverBaseURL: String) async -> [String] { added }
+    /// The next read takes its answer now, then waits for `release` before returning it.
+    final class WorktreeReadGate: Sendable {
+        let reached = GateSignal()
+        let release = GateSignal()
+    }
+
+    private var nextReadGate: WorktreeReadGate?
+
+    func holdNextWorktreeRead() -> WorktreeReadGate {
+        let gate = WorktreeReadGate()
+        nextReadGate = gate
+        return gate
+    }
+
+    func addedWorktrees(serverBaseURL: String) async -> [String] {
+        let answer = added
+        if let gate = nextReadGate {
+            nextReadGate = nil
+            gate.reached.fire()
+            await gate.release.wait()
+        }
+        return answer
+    }
 
     func addWorktree(serverBaseURL: String, worktree: String) async {
         if !added.contains(worktree) { added.append(worktree) }

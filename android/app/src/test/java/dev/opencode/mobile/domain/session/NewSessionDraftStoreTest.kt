@@ -3,6 +3,8 @@ package dev.opencode.mobile.domain.session
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeWorktree
+import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -24,6 +26,148 @@ class NewSessionDraftStoreTest {
         // Another profile never sees it.
         assertEquals("/play", store.open("b", play).projectDirectory)
         assertEquals("", store.draft("b")?.composer?.text)
+    }
+
+    @Test
+    fun heldFirstSend_isNotOfferedAgainAndFinishDropsIt() {
+        val store = NewSessionDraftStore()
+        val owner = Any()
+        store.claim("a", owner, repo)
+        store.save("a", owner, store.draft("a")!!.copy(composer = ComposerDraft("sent")))
+
+        val hold = store.holdForFirstSend("a", owner)
+
+        assertNull(store.draft("a"))
+        assertEquals("", store.open("a", repo).composer.text)
+        store.discard("a")
+        hold?.finish()
+        hold?.restore()
+        assertNull(store.draft("a"))
+    }
+
+    @Test
+    fun heldFirstSend_restoresOnlyWhenTheProfileHasNoNewerDraft() {
+        val store = NewSessionDraftStore()
+        val owner = Any()
+        store.claim("a", owner, repo)
+        store.save("a", owner, store.draft("a")!!.copy(composer = ComposerDraft("sent")))
+        val hold = store.holdForFirstSend("a", owner)
+        store.open("a", repo)
+        store.update("a") { it.copy(composer = ComposerDraft("newer")) }
+
+        hold?.restore()
+        assertEquals("newer", store.draft("a")?.composer?.text)
+
+        val other = Any()
+        store.discard("a")
+        store.claim("a", other, repo)
+        store.save("a", other, store.draft("a")!!.copy(composer = ComposerDraft("sent again")))
+        val second = store.holdForFirstSend("a", other)
+        second?.restore()
+        assertEquals("sent again", store.draft("a")?.composer?.text)
+    }
+
+    @Test
+    fun heldFirstSend_replacesAnEmptyDraft_andItsOpenScreenCannotEraseIt() {
+        val store = NewSessionDraftStore()
+        val sender = Any()
+        val emptyScreen = Any()
+        store.claim("a", sender, repo)
+        store.save("a", sender, store.draft("a")!!.copy(composer = ComposerDraft("sent")))
+        val hold = store.holdForFirstSend("a", sender)
+        val empty = store.claim("a", emptyScreen, repo)
+
+        hold?.restore()
+        assertEquals("sent", store.draft("a")?.composer?.text)
+
+        // The open screen still holds its empty copy: a sync, Discard or leaving must not erase the prompt.
+        store.save("a", emptyScreen, empty.copy(modelSelection = null))
+        assertEquals("sent", store.draft("a")?.composer?.text)
+        store.release("a", emptyScreen)
+        assertEquals("sent", store.draft("a")?.composer?.text)
+        assertFalse(store.discardIfEmpty("a", emptyScreen))
+        assertEquals("sent", store.draft("a")?.composer?.text)
+    }
+
+    @Test
+    fun heldFirstSend_typingInTheOpenScreenKeepsBothPrompts() {
+        val store = NewSessionDraftStore()
+        val sender = Any()
+        val emptyScreen = Any()
+        store.claim("a", sender, repo)
+        store.save("a", sender, store.draft("a")!!.copy(composer = ComposerDraft("sent")))
+        val hold = store.holdForFirstSend("a", sender)
+        val empty = store.claim("a", emptyScreen, repo)
+        hold?.restore()
+
+        store.save("a", emptyScreen, empty.copy(composer = ComposerDraft("typed")))
+        assertEquals("typed", store.draft("a")?.composer?.text)
+
+        store.release("a", emptyScreen)
+        assertEquals("sent", store.draft("a")?.composer?.text)
+    }
+
+    @Test
+    fun heldFirstSend_behindADraftWithContent_returnsWhenThatDraftEnds() {
+        val store = NewSessionDraftStore()
+        val owner = Any()
+        store.claim("a", owner, repo)
+        val attachment =
+            Attachment(
+                id = "att-1",
+                filename = "photo.png",
+                mime = "image/png",
+                dataUrl = "data:image/png;base64,AA==",
+                kind = AttachmentKind.Image,
+                byteCount = 1,
+            )
+        store.save("a", owner, store.draft("a")!!.copy(composer = ComposerDraft("sent"), attachments = listOf(attachment)))
+        val hold = store.holdForFirstSend("a", owner)
+        store.open("a", repo)
+        store.update("a") { it.copy(composer = ComposerDraft("newer")) }
+
+        hold?.restore()
+        assertEquals("newer", store.draft("a")?.composer?.text)
+
+        store.discard("a")
+        assertEquals("sent", store.draft("a")?.composer?.text)
+        assertEquals(listOf(attachment), store.draft("a")?.attachments)
+    }
+
+    @Test
+    fun heldFirstSend_parkedBehindANewerDraft_goesWithItsProfile() {
+        val store = NewSessionDraftStore()
+        val owner = Any()
+        store.claim("a", owner, repo)
+        store.save("a", owner, store.draft("a")!!.copy(composer = ComposerDraft("sent")))
+        val hold = store.holdForFirstSend("a", owner)
+        store.open("a", repo)
+        store.update("a") { it.copy(composer = ComposerDraft("newer")) }
+        hold?.restore()
+
+        store.forgetProfile("a")
+
+        assertNull(store.draft("a"))
+        assertEquals("", store.open("a", repo).composer.text)
+    }
+
+    @Test
+    fun heldFirstSend_doesNotComeBackAfterItsProfileIsRemovedOrCleared() {
+        val store = NewSessionDraftStore()
+        val owner = Any()
+        store.claim("a", owner, repo)
+        store.save("a", owner, store.draft("a")!!.copy(composer = ComposerDraft("sent")))
+        val removed = store.holdForFirstSend("a", owner)
+        store.forgetProfile("a")
+        removed?.restore()
+        assertNull(store.draft("a"))
+
+        store.claim("b", owner, play)
+        store.save("b", owner, store.draft("b")!!.copy(composer = ComposerDraft("sent")))
+        val cleared = store.holdForFirstSend("b", owner)
+        store.clear()
+        cleared?.restore()
+        assertNull(store.draft("b"))
     }
 
     @Test

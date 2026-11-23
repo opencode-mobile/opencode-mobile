@@ -96,6 +96,26 @@ class SessionsApiNeedsYouTest {
             assertEquals(404, (error as HttpBodyResponseException).response.status.value)
         }
 
+    @Test
+    fun aServerErrorOnActiveSessionsIsNotNothingRunning() =
+        runTest {
+            val api = api { respond("""{"message":"boom"}""", HttpStatusCode.InternalServerError, jsonHeaders) }
+
+            val error = runCatching { api.getActiveSessionsV2() }.exceptionOrNull()
+
+            assertEquals(500, (error as HttpBodyResponseException).response.status.value)
+        }
+
+    @Test
+    fun aServerErrorOnASessionIsAnHttpErrorNotAParseFailure() =
+        runTest {
+            val api = api { respond("""{"message":"gone"}""", HttpStatusCode.NotFound, jsonHeaders) }
+
+            val error = runCatching { api.getSessionV2("ses_1") }.exceptionOrNull()
+
+            assertEquals(404, (error as HttpBodyResponseException).response.status.value)
+        }
+
     private fun api(handler: MockRequestHandler): SessionsApi {
         val json = Json { ignoreUnknownKeys = true }
         val client =

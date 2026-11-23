@@ -61,29 +61,32 @@ private final class TimeoutOnceResume: @unchecked Sendable {
 
 nonisolated final class ActiveDirectorySet: @unchecked Sendable {
     private let lock = NSLock()
-    private var values: Set<String> = []
+    /// Counted: an old flow tearing down must not remove the new flow of the same directory.
+    private var values: [String: Int] = [:]
 
     func insert(_ value: String) {
         lock.lock()
-        values.insert(value)
+        values[value, default: 0] += 1
         lock.unlock()
     }
 
     func remove(_ value: String) {
         lock.lock()
-        values.remove(value)
+        if let count = values[value] {
+            values[value] = count > 1 ? count - 1 : nil
+        }
         lock.unlock()
     }
 
     func contains(_ value: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return values.contains(value)
+        return values[value] != nil
     }
 
     func snapshot() -> [String] {
         lock.lock()
         defer { lock.unlock() }
-        return Array(values)
+        return Array(values.keys)
     }
 }

@@ -155,6 +155,18 @@ class NewSessionDraftStore
          */
         private val owners = mutableMapOf<String, Any>()
 
+        /** Guarded by [owners]. */
+        private val holds = mutableSetOf<FirstSendHold>()
+
+        /**
+         * A restored prompt in a profile's slot that no screen has opened yet. A screen that was
+         * already open still has its older copy, and must not erase this one. Guarded by [owners].
+         */
+        private val restored = mutableMapOf<String, NewSessionDraft>()
+
+        /** Restored prompts waiting behind a draft with content, oldest first. Guarded by [owners]. */
+        private val parked = mutableMapOf<String, MutableList<NewSessionDraft>>()
+
         fun draft(profileId: String): NewSessionDraft? = _drafts.value[profileId]
 
         /** New session: the profile's draft when there is one (it wins), else a fresh one at [start]. */
@@ -162,7 +174,11 @@ class NewSessionDraftStore
             profileId: String,
             start: NewSessionDraftStart,
         ): NewSessionDraft {
-            synchronized(owners) { owners.remove(profileId) }
+            synchronized(owners) {
+                owners.remove(profileId)
+                returnParkedLocked(profileId)
+                restored.remove(profileId)
+            }
             _drafts.value[profileId]?.let { return it }
             val fresh = NewSessionDraft.from(start)
             _drafts.update { it + (profileId to fresh) }
@@ -174,7 +190,11 @@ class NewSessionDraftStore
             profileId: String,
             start: NewSessionDraftStart,
         ): NewSessionDraft {
-            synchronized(owners) { owners.remove(profileId) }
+            synchronized(owners) {
+                owners.remove(profileId)
+                returnParkedLocked(profileId)
+                restored.remove(profileId)
+            }
             val existing = _drafts.value[profileId]
             val next =
                 existing?.movedTo(start.projectKey, start.projectDirectory, start.place)
@@ -189,17 +209,31 @@ class NewSessionDraftStore
             owner: Any,
             start: NewSessionDraftStart,
         ): NewSessionDraft {
-            val draft =
-                _drafts.value[profileId]
-                    ?: NewSessionDraft.from(start).also { fresh -> _drafts.update { it + (profileId to fresh) } }
-            synchronized(owners) { owners[profileId] = owner }
-            return draft
+            return synchronized(owners) {
+                returnParkedLocked(profileId)
+                restored.remove(profileId)
+                val draft =
+                    _drafts.value[profileId]
+                        ?: NewSessionDraft.from(start).also { fresh -> _drafts.update { it + (profileId to fresh) } }
+                owners[profileId] = owner
+                draft
+            }
         }
 
-        private fun owns(
-            profileId: String,
-            owner: Any,
-        ): Boolean = synchronized(owners) { owners[profileId] === owner }
+        /** Puts the oldest parked prompt in the slot once nothing with content is there. */
+        private fun returnParkedLocked(profileId: String) {
+            val waiting = parked[profileId] ?: return
+            if (_drafts.value[profileId]?.hasContent == true) return
+            val next = waiting.removeAt(0)
+            if (waiting.isEmpty()) parked.remove(profileId)
+            restored[profileId] = next
+            _drafts.update { it + (profileId to next) }
+        }
+
+        private fun holdsRestoredLocked(profileId: String): Boolean {
+            val current = _drafts.value[profileId]
+            return current != null && current === restored[profileId]
+        }
 
         /** [owner]'s current draft for [profileId]; ignored once another screen or Home took the draft over. */
         fun save(
@@ -207,8 +241,15 @@ class NewSessionDraftStore
             owner: Any,
             draft: NewSessionDraft,
         ) {
-            if (!owns(profileId, owner)) return
-            _drafts.update { it + (profileId to draft) }
+            synchronized(owners) {
+                if (owners[profileId] !== owner) return
+                if (holdsRestoredLocked(profileId)) {
+                    // This screen's copy predates the restored prompt. Only real typing replaces it.
+                    if (!draft.hasContent) return
+                    parked.getOrPut(profileId) { mutableListOf() } += checkNotNull(restored.remove(profileId))
+                }
+                _drafts.update { it + (profileId to draft) }
+            }
         }
 
         /** Changes [profileId]'s draft in place (Home, tests); a screen that owns it writes with [save]. */
@@ -227,13 +268,85 @@ class NewSessionDraftStore
             profileId: String,
             owner: Any,
         ) {
-            if (!owns(profileId, owner)) return
-            discard(profileId)
+            synchronized(owners) {
+                if (owners[profileId] !== owner) return
+                if (holdsRestoredLocked(profileId)) {
+                    owners.remove(profileId)
+                    return
+                }
+                discard(profileId)
+            }
         }
 
         fun discard(profileId: String) {
-            _drafts.update { it - profileId }
-            synchronized(owners) { owners.remove(profileId) }
+            synchronized(owners) {
+                _drafts.update { it - profileId }
+                restored.remove(profileId)
+                owners.remove(profileId)
+                returnParkedLocked(profileId)
+            }
+        }
+
+        /**
+         * The first send created [owner]'s session: its draft leaves the store, so New session
+         * cannot reopen a prompt that is on its way. Null when [owner] no longer holds the draft.
+         */
+        fun holdForFirstSend(
+            profileId: String,
+            owner: Any,
+        ): FirstSendHold? =
+            synchronized(owners) {
+                if (owners[profileId] !== owner || holdsRestoredLocked(profileId)) return null
+                owners.remove(profileId)
+                val draft = _drafts.value[profileId] ?: return null
+                _drafts.update { it - profileId }
+                returnParkedLocked(profileId)
+                FirstSendHold(profileId, draft).also(holds::add)
+            }
+
+        /** A removed profile: its draft, and one held by a running first send. */
+        fun forgetProfile(profileId: String) {
+            synchronized(owners) {
+                holds.removeAll { it.profileId == profileId }
+                restored.remove(profileId)
+                parked.remove(profileId)
+                owners.remove(profileId)
+                _drafts.update { it - profileId }
+            }
+        }
+
+        /** Clear All: no profile keeps a draft or its attachments. */
+        fun clear() {
+            synchronized(owners) {
+                holds.clear()
+                restored.clear()
+                parked.clear()
+                owners.clear()
+                _drafts.value = emptyMap()
+            }
+        }
+
+        /** A draft out of the store while its first prompt is sent. Settles once. */
+        inner class FirstSendHold internal constructor(
+            internal val profileId: String,
+            private val draft: NewSessionDraft,
+        ) {
+            /** The prompt is settled on its server: the draft is done. */
+            fun finish() {
+                synchronized(owners) { holds.remove(this) }
+            }
+
+            /**
+             * The prompt did not go out. It replaces an empty draft; behind a draft with content it
+             * waits, attachments included, and returns when that draft ends.
+             */
+            fun restore() {
+                synchronized(owners) {
+                    if (!holds.remove(this)) return
+                    parked.getOrPut(profileId) { mutableListOf() } += draft
+                    returnParkedLocked(profileId)
+                }
+            }
         }
 
         /** [owner] leaves its draft: one with no text and no attachments is not kept. */
@@ -241,11 +354,18 @@ class NewSessionDraftStore
             profileId: String,
             owner: Any,
         ): Boolean {
-            if (!owns(profileId, owner)) return false
-            val draft = _drafts.value[profileId] ?: return false
-            if (draft.hasContent) return false
-            _drafts.update { it - profileId }
-            synchronized(owners) { owners.remove(profileId) }
-            return true
+            synchronized(owners) {
+                if (owners[profileId] !== owner) return false
+                if (holdsRestoredLocked(profileId)) {
+                    owners.remove(profileId)
+                    return false
+                }
+                val draft = _drafts.value[profileId] ?: return false
+                if (draft.hasContent) return false
+                _drafts.update { it - profileId }
+                owners.remove(profileId)
+                returnParkedLocked(profileId)
+                return true
+            }
         }
     }

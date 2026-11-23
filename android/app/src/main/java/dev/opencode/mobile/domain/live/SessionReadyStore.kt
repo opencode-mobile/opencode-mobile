@@ -23,6 +23,9 @@ interface SessionReadyStore {
 
     fun bindProfile(profileId: String?)
 
+    /** Drops [profileId]'s stored Ready and watch records; a removed profile leaves nothing behind. */
+    fun forgetProfile(profileId: String) = Unit
+
     fun clearCache()
 }
 

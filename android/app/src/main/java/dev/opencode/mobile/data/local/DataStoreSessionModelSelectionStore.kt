@@ -102,8 +102,51 @@ class DataStoreSessionModelSelectionStore
             }
         }
 
+        override suspend fun migrateConnection(
+            connectionIdentity: ModelSelectionConnectionIdentity,
+            addresses: Set<String>,
+            exclusiveAddresses: Set<String>,
+        ) {
+            if (connectionIdentity.profileId.isBlank()) return
+            val moves =
+                addresses.flatMap { address ->
+                    val urlKey = urlIdentityKey(address, connectionIdentity.username)
+                    listOf(
+                        "$VERSION_PREFIX|session|$urlKey|" to sessionPrefix(connectionIdentity),
+                        "$VERSION_PREFIX|preference|$urlKey|" to preferencePrefix(connectionIdentity),
+                    )
+                }
+            val plainPrefixes = exclusiveAddresses.map { "${normalizeBaseUrl(it)}|" }
+            val hasLegacy =
+                dataStore.data
+                    .first()
+                    .asMap()
+                    .keys
+                    .any { key -> moves.any { key.name.startsWith(it.first) } || plainPrefixes.any(key.name::startsWith) }
+            if (!hasLegacy) return
+            dataStore.edit { prefs ->
+                prefs.asMap().toMap().forEach { (key, value) ->
+                    val target =
+                        moves.firstOrNull { key.name.startsWith(it.first) }?.let { (source, destination) ->
+                            destination + key.name.removePrefix(source)
+                        } ?: plainPrefixes.firstOrNull(key.name::startsWith)?.let { prefix ->
+                            val rest = key.name.removePrefix(prefix)
+                            if ('|' !in rest) return@forEach
+                            sessionPrefix(connectionIdentity) +
+                                "${encode(rest.substringBeforeLast('|'))}|${encode(rest.substringAfterLast('|'))}"
+                        } ?: return@forEach
+                    // An entry this build cannot read stays where it is rather than being lost.
+                    val selection = decodeSelection(value as? String) ?: return@forEach
+                    saveIfNewer(prefs, stringPreferencesKey(target), selection)
+                    @Suppress("UNCHECKED_CAST")
+                    prefs.remove(key as Preferences.Key<String>)
+                }
+                evictOldestSessions(prefs, connectionIdentity)
+            }
+        }
+
         override suspend fun clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) {
-            val identityMarker = "|${identityKey(connectionIdentity)}|"
+            val markers = identityMarkers(connectionIdentity)
             // Legacy keys are `<url>/|worktree|session`: the `|` keeps `http://h/` from matching `http://h/sub/`.
             val legacyPrefix = "${normalizeBaseUrl(connectionIdentity.serverBaseUrl)}|"
             dataStore.edit { prefs ->
@@ -111,7 +154,7 @@ class DataStoreSessionModelSelectionStore
                     .asMap()
                     .keys
                     .filter { key ->
-                        (key.name.startsWith(VERSION_PREFIX) && key.name.contains(identityMarker)) ||
+                        (key.name.startsWith(VERSION_PREFIX) && markers.any(key.name::contains)) ||
                             key.name.startsWith(legacyPrefix)
                     }.forEach { key ->
                         @Suppress("UNCHECKED_CAST")
@@ -174,7 +217,22 @@ class DataStoreSessionModelSelectionStore
             "$VERSION_PREFIX|preference|${identityKey(identity)}|"
 
         private fun identityKey(identity: ModelSelectionConnectionIdentity): String =
-            "${encode(normalizeBaseUrl(identity.serverBaseUrl))}|${encode(effectiveUsername(identity.username))}"
+            if (identity.profileId.isNotBlank()) {
+                "p|${encode(identity.profileId)}"
+            } else {
+                urlIdentityKey(identity.serverBaseUrl, identity.username)
+            }
+
+        private fun urlIdentityKey(
+            baseUrl: String,
+            username: String,
+        ): String = "${encode(normalizeBaseUrl(baseUrl))}|${encode(effectiveUsername(username))}"
+
+        /** The profile's key and the URL key it may still have entries under. */
+        private fun identityMarkers(identity: ModelSelectionConnectionIdentity): List<String> =
+            listOf(identityKey(identity), urlIdentityKey(identity.serverBaseUrl, identity.username))
+                .distinct()
+                .map { "|$it|" }
 
         private fun encode(value: String): String =
             Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray(Charsets.UTF_8))

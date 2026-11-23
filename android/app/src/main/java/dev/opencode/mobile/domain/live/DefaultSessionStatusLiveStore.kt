@@ -22,6 +22,7 @@ import dev.opencode.mobile.domain.sessioncache.SessionActivityCacheEntry
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -79,7 +80,7 @@ class DefaultSessionStatusLiveStore
         )
 
         private val cache = LiveStoreFlowCache<SessionActivitySnapshot>(liveStoreScope)
-        private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
+        private val activeDirectories = ConcurrentHashMap<String, Any>()
         private val optimistic = ConcurrentHashMap<String, ConcurrentHashMap<String, OptimisticRecord>>()
         private val expiryJobs = ConcurrentHashMap<OptimisticKey, Job>()
         private val mutationBus = MutableSharedFlow<StatusMutation>(extraBufferCapacity = 32)
@@ -126,9 +127,9 @@ class DefaultSessionStatusLiveStore
         override suspend fun invalidate(directory: String?) {
             val keys =
                 if (directory != null) {
-                    listOf(directory).filter { activeDirectories.contains(it) }
+                    listOf(directory).filter { activeDirectories.containsKey(it) }
                 } else {
-                    activeDirectories.toList()
+                    activeDirectories.keys.toList()
                 }
             if (keys.isEmpty()) return
             coroutineScope {
@@ -172,6 +173,7 @@ class DefaultSessionStatusLiveStore
                 var reconcileRefreshRequested = false
                 val idleUnconfirmed = mutableSetOf<String>()
                 val touchedSinceLoadStart = mutableSetOf<String>()
+                val flowOwner = Any()
                 val key = ProjectionKey.SessionStatuses(directory)
                 val gate = LiveStoreRefreshGate()
 
@@ -323,7 +325,7 @@ class DefaultSessionStatusLiveStore
 
                 val registration =
                     syncCoordinator.register(key) {
-                        val generation = syncCoordinator.profileGeneration
+                        val loadStamp = syncCoordinator.loadStamp()
                         val reconcile = reconcileRefreshRequested
                         reconcileRefreshRequested = false
                         val outcome =
@@ -332,10 +334,10 @@ class DefaultSessionStatusLiveStore
                                     touchedSinceLoadStart.clear()
                                     runCatching {
                                         sessionRepository.getAllSessionStatuses(directory = directory)
-                                    }.getOrNull()
+                                    }.onFailure { if (it is CancellationException) throw it }.getOrNull()
                                 },
                                 commit = { loaded -> commitLoaded(loaded, reconcile) },
-                                isCurrent = { syncCoordinator.profileGeneration == generation },
+                                isCurrent = { syncCoordinator.isCurrent(loadStamp) },
                             )
                         if (outcome == LiveStoreRefreshOutcome.FAILED) {
                             error("status refresh failed directory=$directory")
@@ -355,7 +357,7 @@ class DefaultSessionStatusLiveStore
                             .collect { emitSnapshot() }
                     }
                     yield()
-                    activeDirectories.add(directory)
+                    activeDirectories[directory] = flowOwner
                     sessionCache.seedActivity(directory)?.let { cached ->
                         server =
                             cached.associate { entry ->
@@ -402,7 +404,7 @@ class DefaultSessionStatusLiveStore
                 } finally {
                     syncCoordinator.visible(key, false)
                     syncCoordinator.unregister(registration)
-                    activeDirectories.remove(directory)
+                    activeDirectories.remove(directory, flowOwner)
                 }
             }
 

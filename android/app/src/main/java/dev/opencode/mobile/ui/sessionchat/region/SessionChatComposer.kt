@@ -53,6 +53,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.ModelVariants
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.model.modelSelectionIdentity
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionError
@@ -76,7 +77,11 @@ import dev.opencode.mobile.ui.sessionchat.knownChildSessionIds
 import dev.opencode.mobile.ui.sessionchat.toAtSuggestion
 import dev.opencode.mobile.ui.sessionchat.toFileSuggestion
 import dev.opencode.mobile.ui.sessionchat.toSlashSuggestion
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -87,6 +92,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -95,6 +101,23 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
+
+/**
+ * The first prompt of a New session draft. [context] pins it to the connection the session was
+ * created on. [onDelivered] ends the draft. [onKept] puts it back, after a lost connection or
+ * when the send job ended without settling; it does nothing once the draft is settled.
+ */
+class PinnedFirstSend(
+    val context: CoroutineContext,
+    val connectionLost: () -> Boolean,
+    val onDelivered: () -> Unit,
+    val onKept: () -> Unit,
+) {
+    /** A closed screen cannot offer Retry, so its draft goes back to the store. */
+    fun settleFailed(sendJobActive: Boolean) {
+        if (!sendJobActive || connectionLost()) onKept() else onDelivered()
+    }
+}
 
 class SessionChatComposer(
     private val messageRepository: MessageRepository,
@@ -123,6 +146,9 @@ class SessionChatComposer(
 
     private var boundSessionId: String? = null
     private var boundWorktree: String? = null
+
+    /** The connection this chat bound to. Drafts and picks are saved under it, even after a switch. */
+    private var boundIdentity: ModelSelectionConnectionIdentity? = null
     private var loadedCatalog: ModelSelectionCatalog? = null
     private var loadedSelectableAgents = false
     private var cachedSelection: SessionModelSelection? = null
@@ -185,7 +211,8 @@ class SessionChatComposer(
         if (previousSessionId != null && previousWorktree != null) {
             persistDraftJob?.cancel()
             val snapshot = currentDraft()
-            scope.launch { persistDraft(previousSessionId, previousWorktree, snapshot) }
+            val previousIdentity = boundIdentity
+            scope.launch { persistDraft(previousSessionId, previousWorktree, snapshot, previousIdentity) }
         }
         cancelUploads()
         // A New session draft keeps its attachments in memory for the next draft screen.
@@ -194,6 +221,7 @@ class SessionChatComposer(
         }
         boundSessionId = sessionId
         boundWorktree = worktree
+        boundIdentity = currentIdentity()
         loadedCatalog = null
         loadedSelectableAgents = false
         cachedSelection = null
@@ -288,8 +316,8 @@ class SessionChatComposer(
         boundWorktree = worktree
         logI("move session=$sessionId from=$previousWorktree to=$worktree")
         scope.launch {
-            persistDraft(sessionId, previousWorktree, ComposerDraft(text = ""))
-            persistDraft(sessionId, worktree, snapshot)
+            persistDraft(sessionId, previousWorktree, ComposerDraft(text = ""), chatIdentity())
+            persistDraft(sessionId, worktree, snapshot, chatIdentity())
         }
         // A search still running answers for the old directory.
         fileSearchJob?.cancel()
@@ -348,6 +376,7 @@ class SessionChatComposer(
      * when the stream reconnects (the server may have restarted and announced its catalog
      * while the stream was down), so an empty answer recovers without a manual retry.
      */
+    @OptIn(FlowPreview::class)
     private fun startCatalogEventRefresh() {
         val stream = foregroundEventStream ?: return
         if (catalogEventJob?.isActive == true) return
@@ -355,6 +384,8 @@ class SessionChatComposer(
             scope.launch {
                 stream.events
                     .filter { it.triggersModelCatalogRefresh }
+                    // A provider change announces every model; one reload covers the burst.
+                    .debounce(CATALOG_REFRESH_DEBOUNCE_MS)
                     .collect { event ->
                         logI("model catalog refresh reason=${event.type}")
                         loadCatalog(keepLoadedCatalogOnFailure = true, force = true)
@@ -1216,6 +1247,8 @@ class SessionChatComposer(
         holdUntil: suspend () -> Boolean = { true },
         serverAlreadyAccepted: () -> Boolean = { false },
         beforePrompt: suspend () -> Unit = {},
+        /** A New session draft's first prompt: it runs on the connection the draft's create used. */
+        firstSend: PinnedFirstSend? = null,
     ): Boolean {
         if (ComposerShellCommand.isShellMode(_state.value.composer.text)) {
             return runShellCommand(
@@ -1223,6 +1256,7 @@ class SessionChatComposer(
                 worktree = worktree,
                 isSessionBusy = isSessionBusy,
                 supportsFollowUp = supportsFollowUp,
+                firstSend = firstSend,
             )
         }
         val composer = _state.value.composer
@@ -1271,7 +1305,7 @@ class SessionChatComposer(
             ClientMessageId.next().takeIf {
                 intent !is ComposerSubmitIntent.ServerCommand || commandKeepsClientMessageId
             }
-        scope.launch {
+        launchSend(firstSend) {
             val display =
                 withContext(ioDispatcher) {
                     messageRepository.prepareOptimisticUserMessage(
@@ -1357,8 +1391,9 @@ class SessionChatComposer(
                         submittedAttachmentRevisions = submittedAttachmentRevisions,
                     )
                     _state.update { it.copy(isSending = false, sendProgressPercent = null) }
+                    firstSend?.settleFailed(sendJobActive = isActive)
                     onSendFailed(display.id, UiText.verbatim(PENDING_SEND_TIMEOUT_ERROR))
-                    return@launch
+                    return@launchSend
                 }
                 val hasAttachments = attachments.isNotEmpty()
                 val progress =
@@ -1456,21 +1491,24 @@ class SessionChatComposer(
                     }
                     persistCurrentSelection(updatePreference = false)
                     _state.update { it.copy(sendProgressPercent = null) }
+                    firstSend?.onDelivered?.invoke()
                     onSendAccepted()
                     discardStoredAttachments(attachments)
                 }
-            } catch (throwable: CancellationException) {
-                throw throwable
             } catch (throwable: Throwable) {
+                if (throwable is CancellationException && !(isActive && firstSend?.connectionLost?.invoke() == true)) {
+                    throw throwable
+                }
                 if (isTransportFailure(throwable) && serverAlreadyAccepted()) {
                     logI("sendPrompt transport error ignored; server already accepted the send")
                     withContext(NonCancellable) {
                         persistCurrentSelection(updatePreference = false)
                         _state.update { it.copy(sendProgressPercent = null) }
+                        firstSend?.onDelivered?.invoke()
                         onSendAccepted()
                         discardStoredAttachments(attachments)
                     }
-                    return@launch
+                    return@launchSend
                 }
                 logSendFailure(throwable)
                 restoreFailedSubmission(
@@ -1483,6 +1521,7 @@ class SessionChatComposer(
                     submittedAttachmentRevisions = submittedAttachmentRevisions,
                 )
                 _state.update { it.copy(isSending = false, sendProgressPercent = null) }
+                firstSend?.settleFailed(sendJobActive = isActive)
                 onSendFailed(
                     display.id,
                     (throwable as? SessionChatRevertCommitFailure)?.text ?: UiText.verbatim(errorMessage(throwable)),
@@ -1505,6 +1544,7 @@ class SessionChatComposer(
         worktree: String,
         isSessionBusy: Boolean,
         supportsFollowUp: Boolean,
+        firstSend: PinnedFirstSend? = null,
     ): Boolean {
         val composer = _state.value.composer
         val command = ComposerShellCommand.command(composer.text) ?: return false
@@ -1531,15 +1571,18 @@ class SessionChatComposer(
             )
         clearAcceptedSubmission(textRevision = submittedDraftRevision, submittedAttachmentRevisions = emptyMap())
         _state.update { it.copy(errorMessage = null) }
-        scope.launch {
+        launchSend(firstSend) {
             try {
                 withContext(NonCancellable) {
                     messageRepository.runShellCommand(sessionId = sessionId, options = options, directory = worktree)
+                    firstSend?.onDelivered?.invoke()
                 }
                 logI("shell command accepted session=$sessionId")
-            } catch (throwable: CancellationException) {
-                throw throwable
             } catch (throwable: Throwable) {
+                if (throwable is CancellationException && !(isActive && firstSend?.connectionLost?.invoke() == true)) {
+                    throw throwable
+                }
+                firstSend?.settleFailed(sendJobActive = isActive)
                 DiagnosticLog.error(DiagnosticLogArea.Chat, "runShellCommand failed", throwable)
                 restoreFailedSubmission(
                     textRevision = submittedDraftRevision,
@@ -1554,6 +1597,15 @@ class SessionChatComposer(
             }
         }
         return true
+    }
+
+    /** A first send's draft comes back if its job ends unsettled, even cancelled before its body ran. */
+    private fun launchSend(
+        firstSend: PinnedFirstSend?,
+        block: suspend CoroutineScope.() -> Unit,
+    ) {
+        val job = scope.launch(firstSend?.context ?: EmptyCoroutineContext, block = block)
+        if (firstSend != null) job.invokeOnCompletion { firstSend.onKept() }
     }
 
     /** Leaves shell mode by dropping the leading `!`; the rest of the draft stays. */
@@ -1607,7 +1659,7 @@ class SessionChatComposer(
                 )
         }
         persistDraftJob?.cancel()
-        scope.launch { persistDraft(boundSessionId, boundWorktree, currentDraft()) }
+        scope.launch { persistDraft(boundSessionId, boundWorktree, currentDraft(), chatIdentity()) }
     }
 
     private fun restoreFailedSubmission(
@@ -1658,7 +1710,7 @@ class SessionChatComposer(
                 )
         }
         persistDraftJob?.cancel()
-        scope.launch { persistDraft(boundSessionId, boundWorktree, currentDraft()) }
+        scope.launch { persistDraft(boundSessionId, boundWorktree, currentDraft(), chatIdentity()) }
     }
 
     fun flushDraft() {
@@ -1668,7 +1720,10 @@ class SessionChatComposer(
         val worktree = boundWorktree
         if (sessionId == null || worktree == null) return
         val snapshot = currentDraft()
-        kotlinx.coroutines.runBlocking { persistDraft(sessionId, worktree, snapshot) }
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        val identity = chatIdentity() ?: return
+        // The screen is closing, so its scope is gone: the store finishes this write on its own.
+        composerDraftStore.saveDetached(identity, worktree, sessionId, snapshot)
     }
 
     fun clearSending() {
@@ -1784,7 +1839,7 @@ class SessionChatComposer(
             return
         }
         val generation = ++draftLoadGeneration
-        val identity = currentIdentity() ?: return
+        val identity = chatIdentity() ?: return
         scope.launch {
             val loaded =
                 runCatching {
@@ -1806,11 +1861,12 @@ class SessionChatComposer(
         val sessionId = boundSessionId
         val worktree = boundWorktree
         if (sessionId == null || worktree == null) return
+        val identity = chatIdentity()
         persistDraftJob?.cancel()
         persistDraftJob =
             scope.launch {
                 delay(DRAFT_PERSIST_DEBOUNCE_MS)
-                persistDraft(sessionId, worktree, currentDraft())
+                persistDraft(sessionId, worktree, currentDraft(), identity)
             }
     }
 
@@ -1818,11 +1874,11 @@ class SessionChatComposer(
         sessionId: String?,
         worktree: String?,
         draft: ComposerDraft,
+        identity: ModelSelectionConnectionIdentity?,
     ) {
-        if (sessionId == null || worktree == null) return
+        if (sessionId == null || worktree == null || identity == null) return
         if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
-        val identity = currentIdentity() ?: return
-        runCatching {
+        try {
             withContext(ioDispatcher) {
                 if (draft.text.isBlank()) {
                     composerDraftStore.delete(identity, worktree, sessionId)
@@ -1830,15 +1886,20 @@ class SessionChatComposer(
                     composerDraftStore.save(identity, worktree, sessionId, draft)
                 }
             }
-        }.onFailure {
-            logW("saveComposerDraft failed error=${it.message ?: it::class.simpleName}")
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Exception) {
+            logW("saveComposerDraft failed error=${error.message ?: error::class.simpleName}")
         }
     }
 
     private fun currentIdentity(): ModelSelectionConnectionIdentity? {
         val profile = connectionSessionCoordinator.currentProfile() ?: return null
-        return ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
+        return profile.modelSelectionIdentity()
     }
+
+    /** The bound connection; a chat bound before any profile loaded takes the first one it sees. */
+    private fun chatIdentity(): ModelSelectionConnectionIdentity? = boundIdentity ?: currentIdentity()?.also { boundIdentity = it }
 
     private fun loadCachedSelection() {
         val sessionId = boundSessionId ?: return
@@ -1849,7 +1910,7 @@ class SessionChatComposer(
                 applyInitialSelectionIfReady()
                 return
             }
-        val identity = ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
+        val identity = profile.modelSelectionIdentity()
         // A draft has no saved session selection: its own pick lives in memory.
         val isDraft = OptimisticSessionCreate.isPlaceholder(sessionId)
         val draftPick = draftSelection
@@ -1895,8 +1956,7 @@ class SessionChatComposer(
     private fun persistCurrentSelection(updatePreference: Boolean) {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
-        val profile = connectionSessionCoordinator.currentProfile() ?: return
-        val identity = ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
+        val identity = chatIdentity() ?: return
         val selected = _state.value.composer.selectedModel ?: return
         val variant = _state.value.composer.selectedVariant
         val timestamp = maxOf(System.currentTimeMillis(), lastSelectionTimestamp + 1)
@@ -2241,6 +2301,7 @@ class SessionChatComposer(
     companion object {
         val DEFAULT_CATALOG_RETRY_DELAYS_MS = listOf(1_000L, 2_000L, 4_000L)
         private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
+        internal const val CATALOG_REFRESH_DEBOUNCE_MS = 300L
         const val ModelFilterThreshold = 10
         const val PENDING_SEND_TIMEOUT_ERROR = "Couldn't send. Try again."
         const val SHELL_CANNOT_QUEUE_ERROR = "Shell commands can't be queued. Switch to Steer to run it now."

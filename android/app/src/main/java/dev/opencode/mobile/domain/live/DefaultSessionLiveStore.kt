@@ -16,6 +16,7 @@ import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
@@ -78,7 +79,7 @@ class DefaultSessionLiveStore
         )
 
         private val cache = LiveStoreFlowCache<SessionListSnapshot>(liveStoreScope)
-        private val activeDirectories = ConcurrentHashMap.newKeySet<String>()
+        private val activeDirectories = ConcurrentHashMap<String, Any>()
 
         /** Highest acknowledged idle watermark per session (v2), so stale REST lists never regress. */
         private val viewedWatermarks = ConcurrentHashMap<String, Long>()
@@ -102,7 +103,7 @@ class DefaultSessionLiveStore
         private fun windowSize(directory: String): Int = windows.limit(directory)
 
         override suspend fun loadMore(directory: String) {
-            if (!activeDirectories.contains(directory)) return
+            if (!activeDirectories.containsKey(directory)) return
             if (latestByDirectory[directory]?.hasMore != true) return
             if (!loadingMore.add(directory)) return
             try {
@@ -161,9 +162,9 @@ class DefaultSessionLiveStore
         override suspend fun invalidate(directory: String?) {
             val keys =
                 if (directory != null) {
-                    listOf(directory).filter { activeDirectories.contains(it) }
+                    listOf(directory).filter { activeDirectories.containsKey(it) }
                 } else {
-                    activeDirectories.toList()
+                    activeDirectories.keys.toList()
                 }
             if (keys.isEmpty()) return
             coroutineScope {
@@ -196,6 +197,7 @@ class DefaultSessionLiveStore
 
         private fun buildSessionFlow(directory: String): Flow<SessionListSnapshot> =
             channelFlow {
+                val flowOwner = Any()
                 val key = ProjectionKey.SessionList(directory)
                 val gate = LiveStoreRefreshGate()
                 val publishLock = Mutex()
@@ -210,14 +212,14 @@ class DefaultSessionLiveStore
                 }
                 val registration =
                     syncCoordinator.register(key) {
-                        val generation = syncCoordinator.profileGeneration
+                        val loadStamp = syncCoordinator.loadStamp()
                         val outcome =
                             gate.refresh(
                                 load = {
                                     // One request for the current window, never every page (#981).
                                     runCatching {
                                         sessionRepository.listRootSessionsWindow(directory = directory, limit = windowSize(directory))
-                                    }.getOrNull()
+                                    }.onFailure { if (it is CancellationException) throw it }.getOrNull()
                                 },
                                 commit = { window ->
                                     windows.markCommitted(directory)
@@ -240,7 +242,7 @@ class DefaultSessionLiveStore
                                         "sessionLiveStore refresh directory=$directory count=${sessions.size} hasMore=${window.hasMore}",
                                     )
                                 },
-                                isCurrent = { syncCoordinator.profileGeneration == generation },
+                                isCurrent = { syncCoordinator.isCurrent(loadStamp) },
                             )
                         if (outcome == LiveStoreRefreshOutcome.FAILED) {
                             // Tell observers now; the coordinator keeps retrying with backoff.
@@ -261,7 +263,7 @@ class DefaultSessionLiveStore
                     }
                 syncCoordinator.visible(key, true)
                 try {
-                    activeDirectories.add(directory)
+                    activeDirectories[directory] = flowOwner
                     sessionCache.seedSessions(directory)?.let { seeded ->
                         // Match the first live load to the painted rows, not one page (no shrink/grow).
                         windows.seedFromCache(directory, seeded.size)
@@ -302,7 +304,7 @@ class DefaultSessionLiveStore
                 } finally {
                     syncCoordinator.visible(key, false)
                     syncCoordinator.unregister(registration)
-                    activeDirectories.remove(directory)
+                    activeDirectories.remove(directory, flowOwner)
                 }
             }
     }

@@ -37,7 +37,10 @@ class ConnectionProbeService(
                 fetchGlobalHealth = { client.fetchHealth("global/health") },
                 fetchApiInfo = { client.fetchHealth("api/info") },
                 fetchApiHealth = { client.fetchHealth("api/health") },
+                expected = connection.serverProtocol,
             )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Throwable) {
             throw if (error is ServerProbeError) error else adapter.mapProbeError(error)
         } finally {

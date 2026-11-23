@@ -20,6 +20,81 @@ final class SessionReadyStoreTests: XCTestCase {
         XCTAssertTrue(ready.latest.contains("ses-1"))
     }
 
+    func testSnapshotFromTheLeftServer_doesNotMarkTheNewProfilesWatchReady() async {
+        let statusStore = FakeReadyStatusStore()
+        let persistence = InMemorySessionReadyPersistence()
+        let now = Date().timeIntervalSince1970 * 1000
+        persistence.save(SessionReadyPersistedState(
+            ready: [],
+            watched: [SessionReadyPersistedEntry(sessionID: "ses-b", directory: "/repo", atEpochMs: now, profileID: "b")]
+        ))
+        let store = DefaultSessionReadyStore(
+            sessionStatusLiveStore: statusStore,
+            eventStream: FakeForegroundEventStream(),
+            persistence: persistence
+        )
+        store.bindProfile(profileID: "a")
+        let ready = ReadyCollector(store: store, directory: "/repo")
+        await ready.waitForSubscription()
+
+        // A's seeded snapshot lacks B's session; it is queued when the switch lands.
+        statusStore.emit(directory: "/repo", statuses: [:])
+        statusStore.clearCache()
+        store.bindProfile(profileID: "b")
+        await settle()
+        XCTAssertFalse(ready.latest.contains("ses-b"))
+
+        // A real answer from B is what restores it.
+        statusStore.emit(directory: "/repo", statuses: [:])
+        await ready.waitUntil { $0.contains("ses-b") }
+        ready.cancel()
+        XCTAssertTrue(ready.latest.contains("ses-b"))
+    }
+
+    func testForgetProfile_ofTheBoundProfile_doesNotComeBackOnRebind() {
+        let persistence = InMemorySessionReadyPersistence()
+        let now = Date().timeIntervalSince1970 * 1000
+        persistence.save(SessionReadyPersistedState(
+            ready: [SessionReadyPersistedEntry(sessionID: "s-a", directory: "/repo", atEpochMs: now, profileID: "a")],
+            watched: [SessionReadyPersistedEntry(sessionID: "w-a", directory: "/repo", atEpochMs: now, profileID: "a")]
+        ))
+        let store = DefaultSessionReadyStore(
+            sessionStatusLiveStore: FakeReadyStatusStore(),
+            eventStream: FakeForegroundEventStream(),
+            persistence: persistence
+        )
+        store.bindProfile(profileID: "a")
+
+        store.forgetProfile(profileID: "a")
+        store.bindProfile(profileID: "b")
+
+        XCTAssertTrue(persistence.load().ready.isEmpty)
+        XCTAssertTrue(persistence.load().watched.isEmpty)
+    }
+
+    func testForgetProfile_dropsOnlyThatProfilesParkedRecords() {
+        let persistence = InMemorySessionReadyPersistence()
+        let now = Date().timeIntervalSince1970 * 1000
+        persistence.save(SessionReadyPersistedState(
+            ready: [
+                SessionReadyPersistedEntry(sessionID: "s-a", directory: "/repo", atEpochMs: now, profileID: "a"),
+                SessionReadyPersistedEntry(sessionID: "s-b", directory: "/repo", atEpochMs: now, profileID: "b"),
+            ],
+            watched: [SessionReadyPersistedEntry(sessionID: "w-a", directory: "/repo", atEpochMs: now, profileID: "a")]
+        ))
+        let store = DefaultSessionReadyStore(
+            sessionStatusLiveStore: FakeReadyStatusStore(),
+            eventStream: FakeForegroundEventStream(),
+            persistence: persistence
+        )
+        store.bindProfile(profileID: "b")
+
+        store.forgetProfile(profileID: "a")
+
+        XCTAssertEqual(persistence.load().ready.map(\.sessionID), ["s-b"])
+        XCTAssertTrue(persistence.load().watched.isEmpty)
+    }
+
     func testIdleWhileFocused_doesNotSetReady() async {
         let statusStore = FakeReadyStatusStore()
         let eventStream = FakeForegroundEventStream()

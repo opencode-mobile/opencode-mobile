@@ -642,7 +642,7 @@ class MessageSync(
                 syncCoordinator.register(projection) {
                     authorityWindowOpen.set(true)
                     try {
-                        val generation = syncCoordinator.profileGeneration
+                        val loadStamp = syncCoordinator.loadStamp()
                         applyQueuedIncrementalEvents()
                         val previous = lastIdentities[storeSlot]
                         val previousFrame = lastPublishedFrames[storeSlot]
@@ -653,17 +653,17 @@ class MessageSync(
                                     reason = "transcript",
                                     mergeExisting = true,
                                     beforeCommit = {
-                                        if (syncCoordinator.profileGeneration == generation) {
+                                        if (syncCoordinator.isCurrent(loadStamp)) {
                                             applyQueuedIncrementalEvents()
                                         }
                                     },
-                                    stillCurrent = { syncCoordinator.profileGeneration == generation && mayCommit() },
+                                    stillCurrent = { syncCoordinator.isCurrent(loadStamp) && mayCommit() },
                                 )
                         ) {
                             is ReloadResult.Accepted,
                             is ReloadResult.Discarded,
                             -> {
-                                if (syncCoordinator.profileGeneration != generation) return@register
+                                if (!syncCoordinator.isCurrent(loadStamp)) return@register
                                 if (overflowed.getAndSet(false)) {
                                     throw IllegalStateException("event staging overflow")
                                 }

@@ -38,11 +38,17 @@ class DefaultSessionCache(
     private val messageEncoder: SessionCacheMessageEncoder = SessionCacheMessageEncoder.Default,
 ) : SessionCache {
     private val thumbnailEvictionJob = AtomicReference<Job?>(null)
+    private val thumbnailSweepJob = AtomicReference<Job?>(null)
 
     private val activityMutex = Mutex()
-    private val pendingActivity = mutableMapOf<String, List<SessionActivityCacheEntry>>()
-    private val lastCommittedActivity = ConcurrentHashMap<String, List<SessionActivityCacheEntry>>()
-    private val activityDebounceJobs = ConcurrentHashMap<String, Job>()
+
+    // Keyed by connection and directory: two servers can hold the same path.
+    private val pendingActivity = mutableMapOf<SessionCacheKey, List<SessionActivityCacheEntry>>()
+    private val lastCommittedActivity = ConcurrentHashMap<SessionCacheKey, List<SessionActivityCacheEntry>>()
+    private val activityDebounceJobs = ConcurrentHashMap<SessionCacheKey, Job>()
+
+    /** Timeline commits hold this, so a purge waits for one in flight and later ones see the purge. */
+    private val timelinePurges = TimelinePurges()
 
     /** Bumped by every purge; a remember that started before a purge must not register after it. */
     @Volatile
@@ -137,17 +143,17 @@ class DefaultSessionCache(
         val normalized = entries.map { it.normalized() }.sortedBy { it.sessionId }
         activityMutex.withLock {
             if (generation != activityGeneration) return
-            if (normalized == lastCommittedActivity[directory]) {
-                pendingActivity.remove(directory)
-                activityDebounceJobs.remove(directory)?.cancel()
+            if (normalized == lastCommittedActivity[key]) {
+                pendingActivity.remove(key)
+                activityDebounceJobs.remove(key)?.cancel()
                 return
             }
-            pendingActivity[directory] = normalized
-            activityDebounceJobs.remove(directory)?.cancel()
-            activityDebounceJobs[directory] =
+            pendingActivity[key] = normalized
+            activityDebounceJobs.remove(key)?.cancel()
+            activityDebounceJobs[key] =
                 scope.launch {
                     delay(activityDebounceMs)
-                    flushActivity(directory, key)
+                    flushActivity(key)
                 }
         }
     }
@@ -169,6 +175,9 @@ class DefaultSessionCache(
             thumbnailDispatcher = thumbnailDispatcher,
             onThumbnailsWritten = ::scheduleThumbnailEviction,
             messageEncoder = messageEncoder,
+            purges = timelinePurges,
+            onDiscardedAfterPurge = ::sweepThumbnails,
+            onTimelinesTrimmed = ::scheduleThumbnailSweep,
         )
 
     /**
@@ -194,6 +203,17 @@ class DefaultSessionCache(
         thumbnailEvictionJob.getAndSet(job)?.cancel()
     }
 
+    /** Trimmed timelines release their thumbnails; debounced because the walk lists every folder. */
+    private fun scheduleThumbnailSweep() {
+        if (thumbnails == null) return
+        val job =
+            scope.launch(thumbnailDispatcher) {
+                delay(thumbnailEvictionDebounceMs)
+                sweepThumbnails()
+            }
+        thumbnailSweepJob.getAndSet(job)?.cancel()
+    }
+
     /** Thumbnail folders follow the timeline rows: any session folder without a row goes. */
     private suspend fun sweepThumbnails() {
         val thumbnails = thumbnails ?: return
@@ -210,29 +230,31 @@ class DefaultSessionCache(
         serverBaseUrl: String,
         worktree: String,
     ) {
-        dropActivityMemory(worktree)
-        dropPendingHomeRecords(worktree)
         val connectionId = connectionIdProvider()
-        if (connectionId != null) {
+        dropActivityMemory(worktree, connectionId)
+        dropPendingHomeRecords(worktree, connectionId)
+        timelinePurges.purgingWorktree(connectionId, worktree) {
+            if (connectionId != null) {
+                runCatching {
+                    store.evict(
+                        SessionCacheEvictSelector.Worktree(
+                            connectionIdOrUrlPrefix = connectionId,
+                            worktree = worktree,
+                            matchByUrlPrefix = false,
+                        ),
+                    )
+                }.onFailure { logSessionCacheIo("purge worktree by profile", it) }
+            }
             runCatching {
                 store.evict(
                     SessionCacheEvictSelector.Worktree(
-                        connectionIdOrUrlPrefix = connectionId,
+                        connectionIdOrUrlPrefix = CacheUrlNormalizer.connectionIdPrefix(serverBaseUrl),
                         worktree = worktree,
-                        matchByUrlPrefix = false,
+                        matchByUrlPrefix = true,
                     ),
                 )
-            }.onFailure { logSessionCacheIo("purge worktree by profile", it) }
+            }.onFailure { logSessionCacheIo("purge worktree", it) }
         }
-        runCatching {
-            store.evict(
-                SessionCacheEvictSelector.Worktree(
-                    connectionIdOrUrlPrefix = CacheUrlNormalizer.connectionIdPrefix(serverBaseUrl),
-                    worktree = worktree,
-                    matchByUrlPrefix = true,
-                ),
-            )
-        }.onFailure { logSessionCacheIo("purge worktree", it) }
         sweepThumbnails()
     }
 
@@ -240,28 +262,34 @@ class DefaultSessionCache(
         profileId: String,
         serverBaseUrl: String,
     ) {
-        dropActivityMemory(null)
-        dropPendingHomeRecords(null)
-        if (profileId.isNotBlank()) {
-            runCatching { store.evict(SessionCacheEvictSelector.Connection(connectionIdOrUrlPrefix = profileId)) }
-                .onFailure { logSessionCacheIo("purge connection by profile", it) }
+        // Only this profile's queued writes: another server may be active and still writing.
+        val connectionId = profileId.takeIf { it.isNotBlank() }
+        dropActivityMemory(null, connectionId)
+        dropPendingHomeRecords(null, connectionId)
+        timelinePurges.purging(connectionId) {
+            if (connectionId != null) {
+                runCatching { store.evict(SessionCacheEvictSelector.Connection(connectionIdOrUrlPrefix = connectionId)) }
+                    .onFailure { logSessionCacheIo("purge connection by profile", it) }
+            }
+            runCatching {
+                store.evict(
+                    SessionCacheEvictSelector.Connection(
+                        connectionIdOrUrlPrefix = CacheUrlNormalizer.connectionIdPrefix(serverBaseUrl),
+                        matchByUrlPrefix = true,
+                    ),
+                )
+            }.onFailure { logSessionCacheIo("purge connection", it) }
         }
-        runCatching {
-            store.evict(
-                SessionCacheEvictSelector.Connection(
-                    connectionIdOrUrlPrefix = CacheUrlNormalizer.connectionIdPrefix(serverBaseUrl),
-                    matchByUrlPrefix = true,
-                ),
-            )
-        }.onFailure { logSessionCacheIo("purge connection", it) }
         sweepThumbnails()
     }
 
     override suspend fun clearAll() {
-        dropActivityMemory(null)
-        dropPendingHomeRecords(null)
-        runCatching { store.evict(SessionCacheEvictSelector.All) }
-            .onFailure { logSessionCacheIo("clear all", it) }
+        dropActivityMemory(null, null)
+        dropPendingHomeRecords(null, null)
+        timelinePurges.purging(null) {
+            runCatching { store.evict(SessionCacheEvictSelector.All) }
+                .onFailure { logSessionCacheIo("clear all", it) }
+        }
         thumbnails?.let { store ->
             withContext(thumbnailDispatcher) {
                 runCatching { store.deleteAll() }.onFailure { logSessionCacheIo("clear thumbnails", it) }
@@ -352,11 +380,17 @@ class DefaultSessionCache(
         }
     }
 
-    /** Drops queued Home records for [worktree], or all when `null`, after any commit in flight. */
-    private suspend fun dropPendingHomeRecords(worktree: String?) {
+    /**
+     * Drops queued Home records for [worktree] (all when `null`) of [connectionId] (every
+     * connection when `null`), after any commit in flight.
+     */
+    private suspend fun dropPendingHomeRecords(
+        worktree: String?,
+        connectionId: String?,
+    ) {
         homeRecordMutex.withLock {
             synchronized(pendingHomeRecords) {
-                pendingHomeRecords.keys.removeAll { worktree == null || it.worktree == worktree }
+                pendingHomeRecords.keys.removeAll { it.matches(worktree, connectionId) }
             }
         }
     }
@@ -366,16 +400,13 @@ class DefaultSessionCache(
             .onFailure { logSessionCacheIo("report size", it) }
             .getOrDefault(0L)
 
-    private suspend fun flushActivity(
-        directory: String,
-        key: SessionCacheKey,
-    ) {
+    private suspend fun flushActivity(key: SessionCacheKey) {
         // The commit stays under the lock so a purge waits for it and then evicts the row,
         // instead of the commit landing after the purge.
         activityMutex.withLock {
-            activityDebounceJobs.remove(directory)
-            val entries = pendingActivity.remove(directory) ?: return
-            if (entries == lastCommittedActivity[directory]) return
+            activityDebounceJobs.remove(key)
+            val entries = pendingActivity.remove(key) ?: return
+            if (entries == lastCommittedActivity[key]) return
             val payload =
                 runCatching { SessionCacheCodec.encodeActivity(entries, json) }
                     .onFailure { logSessionCacheIo("encode activity", it) }
@@ -390,25 +421,24 @@ class DefaultSessionCache(
                         ),
                     meta = SessionCacheCommitMeta(syncedAtEpochMs = clock()),
                 )
-                lastCommittedActivity[directory] = entries
+                lastCommittedActivity[key] = entries
             }.onFailure { logSessionCacheIo("commit activity", it) }
         }
     }
 
-    private suspend fun dropActivityMemory(worktree: String?) {
+    private suspend fun dropActivityMemory(
+        worktree: String?,
+        connectionId: String?,
+    ) {
         activityMutex.withLock {
             activityGeneration += 1
-            val directories =
-                if (worktree != null) {
-                    listOf(worktree)
-                } else {
-                    (lastCommittedActivity.keys + pendingActivity.keys + activityDebounceJobs.keys).toList()
+            (lastCommittedActivity.keys + pendingActivity.keys + activityDebounceJobs.keys)
+                .filter { it.matches(worktree, connectionId) }
+                .forEach { key ->
+                    activityDebounceJobs.remove(key)?.cancel()
+                    pendingActivity.remove(key)
+                    lastCommittedActivity.remove(key)
                 }
-            directories.distinct().forEach { directory ->
-                activityDebounceJobs.remove(directory)?.cancel()
-                pendingActivity.remove(directory)
-                lastCommittedActivity.remove(directory)
-            }
         }
     }
 
@@ -432,6 +462,92 @@ private inline fun <T> catchingExceptions(block: () -> T): Result<T> =
     } catch (exception: Exception) {
         Result.failure(exception)
     }
+
+/** Message timelines kept per Connection Profile; the least recently used go on write. */
+internal const val MAX_TRANSCRIPTS_PER_PROFILE = 200
+
+/** Whether this key is under [worktree] and [connectionId]; `null` matches any. */
+private fun SessionCacheKey.matches(
+    worktree: String?,
+    connectionId: String?,
+): Boolean = (worktree == null || this.worktree == worktree) && (connectionId == null || this.connectionId == connectionId)
+
+/**
+ * Counts purges per connection and project. A transcript handle remembers the count when it takes its key
+ * and commits only while it is unchanged, so a write still pending cannot undo a clear.
+ */
+private class TimelinePurges {
+    private val mutex = Mutex()
+    private val perConnection = ConcurrentHashMap<String, Long>()
+
+    /** Keyed by connection and worktree; [ANY_CONNECTION] when no profile was bound at the purge. */
+    private val perWorktree = ConcurrentHashMap<Pair<String, String>, Long>()
+
+    @Volatile
+    private var all = 0L
+
+    data class Stamp(
+        val all: Long,
+        val connection: Long,
+        val worktree: Long,
+    )
+
+    fun stamp(
+        connectionId: String,
+        worktree: String,
+    ): Stamp =
+        Stamp(
+            all = all,
+            connection = perConnection[connectionId] ?: 0L,
+            worktree = (perWorktree[connectionId to worktree] ?: 0L) + (perWorktree[ANY_CONNECTION to worktree] ?: 0L),
+        )
+
+    /** Runs [evict] with commits held off; [connectionId] null means every connection. */
+    suspend fun purging(
+        connectionId: String?,
+        evict: suspend () -> Unit,
+    ) {
+        mutex.withLock {
+            if (connectionId == null) {
+                all += 1
+                perWorktree.clear()
+            } else {
+                perConnection.merge(connectionId, 1L, Long::plus)
+                // The connection's count already outdates its handles, so these rows can go.
+                perWorktree.keys.removeAll { it.first == connectionId }
+            }
+            evict()
+        }
+    }
+
+    suspend fun purgingWorktree(
+        connectionId: String?,
+        worktree: String,
+        evict: suspend () -> Unit,
+    ) {
+        mutex.withLock {
+            perWorktree.merge((connectionId ?: ANY_CONNECTION) to worktree, 1L, Long::plus)
+            evict()
+        }
+    }
+
+    /** Runs [commit] unless [connectionId] was purged since [stamp]; returns whether it ran. */
+    suspend fun committing(
+        connectionId: String,
+        worktree: String,
+        stamp: Stamp,
+        commit: suspend () -> Unit,
+    ): Boolean =
+        mutex.withLock {
+            if (stamp(connectionId, worktree) != stamp) return@withLock false
+            commit()
+            true
+        }
+
+    private companion object {
+        const val ANY_CONNECTION = ""
+    }
+}
 
 private fun logSessionCacheIo(
     action: String,
@@ -461,26 +577,45 @@ private class DefaultSessionMessageCacheHandle(
     private val thumbnailDispatcher: CoroutineDispatcher,
     private val onThumbnailsWritten: () -> Unit,
     private val messageEncoder: SessionCacheMessageEncoder,
+    private val purges: TimelinePurges,
+    private val onDiscardedAfterPurge: suspend () -> Unit,
+    private val onTimelinesTrimmed: () -> Unit,
 ) : SessionMessageCacheHandle {
     private val mutex = Mutex()
     private var pending: List<Message>? = null
     private var debounceJob: Job? = null
     private var closed = false
 
-    private fun keyOrNull(): SessionCacheKey? {
-        val connectionId = connectionIdProvider() ?: return null
-        return SessionCacheKey(
-            connectionId = connectionId,
-            worktree = worktree,
-            kind = SessionCacheKind.MessageTimeline,
-            entryId = sessionId,
+    /** Taken once: this handle's messages belong to the server it first saw, even after a switch. */
+    @Volatile
+    private var pinned: PinnedKey? = connectionIdProvider()?.let(::pin)
+
+    private class PinnedKey(
+        val key: SessionCacheKey,
+        val purgeStamp: TimelinePurges.Stamp,
+    )
+
+    private fun pin(connectionId: String) =
+        PinnedKey(
+            key =
+                SessionCacheKey(
+                    connectionId = connectionId,
+                    worktree = worktree,
+                    kind = SessionCacheKind.MessageTimeline,
+                    entryId = sessionId,
+                ),
+            purgeStamp = purges.stamp(connectionId, worktree),
         )
-    }
+
+    private fun pinnedOrNull(): PinnedKey? = pinned ?: connectionIdProvider()?.let(::pin)?.also { pinned = it }
+
+    private fun keyOrNull(): SessionCacheKey? = pinnedOrNull()?.key
 
     override suspend fun seed(): List<Message>? {
         val key = keyOrNull() ?: return null
         catchingExceptions {
             store.retain(key, SessionCacheRetainReason.Opened, clock())
+            store.touch(key, clock())
         }.onFailure { logSessionCacheIo("retain opened", it) }
         // A seed is only a first paint, so any failure is a miss and the live load still runs
         // (#1033). An OutOfMemoryError is caught too, but only here: by now the row and whatever
@@ -553,7 +688,8 @@ private class DefaultSessionMessageCacheHandle(
     private suspend fun flushLocked() {
         val messages = pending ?: return
         pending = null
-        val key = keyOrNull() ?: return
+        val pinnedKey = pinnedOrNull() ?: return
+        val key = pinnedKey.key
         // Thumbnails first (newest tool images, off the main thread), so the row marks only
         // the images whose file is really there.
         val saved =
@@ -572,17 +708,25 @@ private class DefaultSessionMessageCacheHandle(
             catchingExceptions { messageEncoder.encode(messages, json, hasThumbnail = { it.id in savedIds }) }
                 .onFailure { logSessionCacheIo("encode messages", it) }
                 .getOrNull() ?: return
-        catchingExceptions {
-            store.retain(key, SessionCacheRetainReason.Opened, clock())
-            store.commit(
-                key = key,
-                value =
-                    SessionCacheValue(
-                        payloadJson = payload,
-                        schemaVersion = SessionCacheCodec.SCHEMA_VERSION,
-                    ),
-                meta = SessionCacheCommitMeta(syncedAtEpochMs = clock()),
-            )
-        }.onFailure { logSessionCacheIo("commit messages", it) }
+        var trimmed = 0
+        val committed =
+            catchingExceptions {
+                purges.committing(key.connectionId, key.worktree, pinnedKey.purgeStamp) {
+                    store.retain(key, SessionCacheRetainReason.Opened, clock())
+                    store.commit(
+                        key = key,
+                        value =
+                            SessionCacheValue(
+                                payloadJson = payload,
+                                schemaVersion = SessionCacheCodec.SCHEMA_VERSION,
+                            ),
+                        meta = SessionCacheCommitMeta(syncedAtEpochMs = clock()),
+                    )
+                    trimmed = store.trimMessageTimelines(key.connectionId, MAX_TRANSCRIPTS_PER_PROFILE)
+                }
+            }.onFailure { logSessionCacheIo("commit messages", it) }
+        // Purged while encoding: the thumbnails just written have no row and must not stay.
+        if (committed.getOrNull() == false && saved?.wrote == true) onDiscardedAfterPurge()
+        if (trimmed > 0) onTimelinesTrimmed()
     }
 }

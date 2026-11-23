@@ -51,6 +51,8 @@ final class HomeProjectList {
 
     /// An empty Home failed its probe while other saved addresses were still being tried.
     var probeWaitsOnAddressCheck = false
+    /// A picked server has not been bound yet; a load now would read the one being left.
+    var isSwitchPending: @MainActor () -> Bool = { false }
     /// In-flight persistence of the last `reorder` call, for callers
     /// that need to observe the Connection Profile after a reorder.
     private(set) var projectOrderPersistence: Task<Void, Never>?
@@ -92,6 +94,15 @@ final class HomeProjectList {
     private var ancestryPending: [String: Set<String>] = [:]
     private var loadMoreTask: Task<Void, Never>?
     private var lastHomeHiddenAtEpochMs: Int64?
+    /// Serial of the newest load; an older one stops at its next check.
+    private var loadSerial = 0
+
+    /// What a load started against. It paints only while all of it still holds.
+    private struct LoadTicket {
+        let serial: Int
+        let profileID: String?
+        let baseURL: String
+    }
 
     init(
         projectRepository: any ProjectRepository,
@@ -188,7 +199,21 @@ final class HomeProjectList {
         }
     }
 
+    private func beginLoad() -> LoadTicket {
+        loadSerial += 1
+        return LoadTicket(serial: loadSerial, profileID: currentProfile()?.id, baseURL: serverBaseURL())
+    }
+
+    private func isCurrent(_ ticket: LoadTicket) -> Bool {
+        !Task.isCancelled
+            && ticket.serial == loadSerial
+            && ticket.profileID == currentProfile()?.id
+            && ticket.baseURL == serverBaseURL()
+    }
+
     func load(skipProbe: Bool = false, preserveContent: Bool = false) async {
+        guard !isSwitchPending() else { return }
+        let ticket = beginLoad()
         guard isConnected() else {
             clearProjectLoads()
             stopLiveObservations()
@@ -196,7 +221,12 @@ final class HomeProjectList {
             return
         }
 
-        let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL())
+        let worktrees: [String] = if let id = ticket.profileID, !id.isEmpty {
+            await connectionProfileStore.addedWorktrees(profileID: id)
+        } else {
+            await connectionProfileStore.addedWorktrees(serverBaseURL: ticket.baseURL)
+        }
+        guard isCurrent(ticket) else { return }
         for worktree in projectLoads.keys where !worktrees.contains(worktree) {
             clearProjectLoad(worktree)
         }
@@ -209,15 +239,21 @@ final class HomeProjectList {
                 return
             }
             // Projects and worktrees first: the cached rows are built and labeled from them.
-            await self.worktrees.seedResolutions(worktrees)
-            await self.worktrees.seedLayouts(worktrees)
+            await self.worktrees.seedResolutions(worktrees) { self.isCurrent(ticket) }
+            guard isCurrent(ticket) else { return }
+            await self.worktrees.seedLayouts(worktrees) { self.isCurrent(ticket) }
+            guard isCurrent(ticket) else { return }
             let sections = await loadSectionsFromCache(worktrees: worktrees)
+            guard isCurrent(ticket) else { return }
             state.content = .loaded(
                 sections: sections,
                 showAddProjectSheet: false,
                 addProjectSheet: nil,
                 projectSessionCreateError: nil
             )
+            // Live lists start on the cached paint; a slow or dead server's probe cannot hold them.
+            startLiveObservations(worktrees: worktrees)
+            self.worktrees.reload(worktrees)
             if !skipProbe {
                 do {
                     try await probeServer()
@@ -225,8 +261,6 @@ final class HomeProjectList {
                     // Keep cached home; connection chrome reflects reachability.
                 }
             }
-            startLiveObservations(worktrees: worktrees)
-            self.worktrees.reload(worktrees)
             return
         }
 
@@ -237,8 +271,10 @@ final class HomeProjectList {
                 let probedBaseURL = serverBaseURL()
                 do {
                     try await probeServer()
+                } catch is CancellationError {
+                    return
                 } catch {
-                    guard probeFailureIsFinal(probedBaseURL: probedBaseURL) else { return }
+                    guard isCurrent(ticket), probeFailureIsFinal(probedBaseURL: probedBaseURL) else { return }
                     state.content = .probeFailed(error.localizedDescription)
                 }
             }
@@ -251,17 +287,15 @@ final class HomeProjectList {
             }
             do {
                 try await probeServer()
-            } catch let error as ServerProbeError {
-                if preserveContent { return }
-                stopLiveObservations()
-                state.content = .probeFailed(error.localizedDescription)
+            } catch is CancellationError {
                 return
             } catch {
-                if preserveContent { return }
+                guard isCurrent(ticket), !preserveContent else { return }
                 stopLiveObservations()
                 state.content = .probeFailed(error.localizedDescription)
                 return
             }
+            guard isCurrent(ticket) else { return }
         }
 
         let previous = state.content
@@ -284,6 +318,7 @@ final class HomeProjectList {
             }
 
             let sections = await loadSections(worktrees: worktrees)
+            guard isCurrent(ticket) else { return }
             if sections.isEmpty {
                 stopLiveObservations()
                 if case let .empty(showAdd, addProjectSheet, createError) = previous, preserveContent {
@@ -325,7 +360,13 @@ final class HomeProjectList {
     /// the switch has not bound that server yet. A project with no cache shows the skeleton.
     /// `isCurrent` is read after the cache reads, so a newer pick wins.
     func paintSwitchedServer(baseURL: String, id: String, isCurrent: @MainActor () -> Bool) async {
-        let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: baseURL)
+        // Any load still running belongs to the server being left.
+        loadSerial += 1
+        let worktrees: [String] = if id.isEmpty {
+            await connectionProfileStore.addedWorktrees(serverBaseURL: baseURL)
+        } else {
+            await connectionProfileStore.addedWorktrees(profileID: id)
+        }
         var sections: [ProjectSectionItem] = []
         for worktree in worktrees {
             sections.append(await sectionFromCache(worktree: worktree, connectionID: id))
@@ -903,9 +944,15 @@ final class HomeProjectList {
         let loadedRoots = Set(liveSessionsByWorktree[worktree]?.sessions.map(\.id) ?? [])
         ancestryTasks[worktree] = Task { [weak self] in
             // Same priority as the row build it feeds: these rows are on screen.
-            let resolution = await Task.detached(priority: .userInitiated) {
+            let lookup = Task.detached(priority: .userInitiated) {
                 await ancestry.resolveRoots(ids: ids, directory: worktree, loadedRoots: loadedRoots)
-            }.value
+            }
+            // A detached task does not inherit cancellation: stopping Home must stop the walk.
+            let resolution = await withTaskCancellationHandler {
+                await lookup.value
+            } onCancel: {
+                lookup.cancel()
+            }
             guard !Task.isCancelled, let self else { return }
             self.ancestryTasks[worktree] = nil
             let waited = self.ancestryPending.removeValue(forKey: worktree) ?? []

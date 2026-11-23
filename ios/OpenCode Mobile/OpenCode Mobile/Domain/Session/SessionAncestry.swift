@@ -123,6 +123,7 @@ nonisolated final class SessionAncestry: @unchecked Sendable {
         var asked: Set<String> = []
         for id in ids where asked.insert(id).inserted {
             for _ in 0 ... Self.maxDepth {
+                guard !Task.isCancelled else { return resolution }
                 guard let unknown = snapshot().firstUnknown(from: id, loadedRoots: loadedRoots) else { break }
                 guard await load(unknown, directory: directory) else { break }
                 resolution.learned = true
@@ -140,18 +141,33 @@ nonisolated final class SessionAncestry: @unchecked Sendable {
     private func load(_ sessionID: String, directory: String?) async -> Bool {
         let now = nowMs()
         let task: Task<Bool, Never>? = lock.withLock {
-            guard let fetch else { return nil }
+            guard let fetch, !Task.isCancelled else { return nil }
             if let failed = failedAtMs[sessionID], now - failed < Self.failureRetryMs { return nil }
             if let running = inFlight[sessionID] { return running }
             let startedIn = generation
             let task = Task<Bool, Never> { [weak self] in
-                let session = try? await fetch(sessionID, directory)
-                return self?.finishLoad(sessionID, session: session, startedIn: startedIn) ?? false
+                do {
+                    let session = try await fetch(sessionID, directory)
+                    return self?.finishLoad(sessionID, session: session, startedIn: startedIn) ?? false
+                } catch is CancellationError {
+                    // Not an answer: the id may be asked for again.
+                    self?.abandonLoad(sessionID, startedIn: startedIn)
+                    return false
+                } catch {
+                    return self?.finishLoad(sessionID, session: nil, startedIn: startedIn) ?? false
+                }
             }
             inFlight[sessionID] = task
             return task
         }
         return await task?.value ?? false
+    }
+
+    private func abandonLoad(_ sessionID: String, startedIn: Int) {
+        lock.withLock {
+            guard generation == startedIn else { return }
+            inFlight.removeValue(forKey: sessionID)
+        }
     }
 
     private func finishLoad(_ sessionID: String, session: Session?, startedIn: Int) -> Bool {

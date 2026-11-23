@@ -14,12 +14,177 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ActiveConnectionManagerProtocolTest {
+    /** Each probe waits on the gate of the server it was sent to. */
+    private class GatedProbing : ConnectionProbing {
+        val gates = mutableMapOf<String, CompletableDeferred<Result<ServerProtocol>>>()
+        val entered = mutableMapOf<String, CompletableDeferred<Unit>>()
+        val calls = mutableListOf<String>()
+
+        fun gate(baseUrl: String) = gates.getOrPut(baseUrl) { CompletableDeferred() }
+
+        fun entered(baseUrl: String) = entered.getOrPut(baseUrl) { CompletableDeferred() }
+
+        override suspend fun probe(connection: ServerConnection): ServerProtocol {
+            calls += connection.baseUrl
+            entered(connection.baseUrl).complete(Unit)
+            return gate(connection.baseUrl).await().getOrThrow()
+        }
+    }
+
+    private val serverA = ConnectionProfile(id = "a", baseUrl = "http://192.0.2.1:4096/", username = "opencode", password = "a")
+    private val serverB = ConnectionProfile(id = "b", baseUrl = "http://192.0.2.2:4096/", username = "opencode", password = "b")
+
+    @Test
+    fun redetectProtocol_runsFullDetectionWithNoExpectedProtocol() =
+        runTest {
+            val expected = mutableListOf<ServerProtocol?>()
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing { connection ->
+                        expected += connection.serverProtocol
+                        ServerProtocol.V1
+                    },
+                )
+            manager.applyProfile(serverA, serverProtocol = ServerProtocol.V2)
+
+            assertEquals(ProtocolRedetection.Detected(ServerProtocol.V1), manager.redetectProtocol())
+
+            assertEquals(listOf<ServerProtocol?>(null), expected)
+        }
+
+    @Test
+    fun redetectProtocol_doesNotJoinARunningSavedProtocolProbe() =
+        runTest {
+            val expected = mutableListOf<ServerProtocol?>()
+            val release = CompletableDeferred<Unit>()
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing { connection ->
+                        expected += connection.serverProtocol
+                        if (connection.serverProtocol != null) {
+                            release.await()
+                            ServerProtocol.V2
+                        } else {
+                            ServerProtocol.V1
+                        }
+                    },
+                )
+            manager.applyProfile(serverA, serverProtocol = ServerProtocol.V2)
+            val shortcut = async { manager.probeActive() }
+            testScheduler.runCurrent()
+            val redetection = async { manager.redetectProtocol() }
+            testScheduler.runCurrent()
+
+            release.complete(Unit)
+            shortcut.await()
+
+            assertEquals(ProtocolRedetection.Detected(ServerProtocol.V1), redetection.await())
+            assertEquals(listOf(ServerProtocol.V2, null), expected)
+        }
+
+    @Test
+    fun pinConnection_unknownProtocolAndASwitch_failsInsteadOfUsingTheNewServer() =
+        runTest {
+            val probing = GatedProbing()
+            val manager = ActiveConnectionManager(FakeProfileStore(), probing)
+            manager.applyProfile(serverA)
+            val pin = async { runCatching { manager.pinConnection() } }
+            probing.entered(serverA.baseUrl).await()
+
+            manager.applyProfile(serverB)
+            probing.gate(serverB.baseUrl).complete(Result.success(ServerProtocol.V2))
+
+            assertTrue(pin.await().exceptionOrNull() is ConnectionChangedException)
+        }
+
+    @Test
+    fun pinnedWork_keepsTheCapturedProtocolAndNeverProbesTheNewServer() =
+        runTest {
+            val probing = GatedProbing()
+            val manager = ActiveConnectionManager(FakeProfileStore(), probing)
+            manager.applyProfile(serverA, serverProtocol = ServerProtocol.V2)
+            val pin = manager.pinConnection()
+
+            manager.applyProfile(serverB)
+
+            withContext(manager.pinContext(pin)) {
+                assertEquals(ServerProtocol.V2, manager.currentProtocolOrProbe())
+                assertEquals(ServerProtocol.V2, manager.protocolHint())
+            }
+            assertTrue(probing.calls.isEmpty())
+            assertFalse(manager.isCurrent(pin))
+        }
+
+    @Test
+    fun lateFailureFromAnOlderConnection_leavesTheNewProbeAlone() =
+        runTest {
+            val probing = GatedProbing()
+            val manager = ActiveConnectionManager(FakeProfileStore(), probing)
+            manager.applyProfile(serverA)
+            val oldProbe = async { runCatching { manager.currentProtocolOrProbe() } }
+            probing.entered(serverA.baseUrl).await()
+
+            manager.applyProfile(serverB)
+            val newProbe = async { manager.probeActive() }
+            probing.entered(serverB.baseUrl).await()
+            probing.gate(serverA.baseUrl).complete(Result.failure(IllegalStateException("server a down")))
+            testScheduler.advanceUntilIdle()
+
+            assertTrue(newProbe.isActive)
+            probing.gate(serverB.baseUrl).complete(Result.success(ServerProtocol.V2))
+            assertEquals(ServerProtocol.V2, newProbe.await())
+            assertEquals(ServerProtocol.V2, oldProbe.await().getOrThrow())
+            assertEquals(ServerProtocol.V2, manager.currentProtocolOrProbe())
+        }
+
+    @Test
+    fun lateSuccessFromAnOlderConnection_doesNotSetTheNewProtocol() =
+        runTest {
+            val probing = GatedProbing()
+            val manager = ActiveConnectionManager(FakeProfileStore(), probing)
+            manager.applyProfile(serverA)
+            val oldProbe = async { manager.probeActive() }
+            probing.entered(serverA.baseUrl).await()
+
+            manager.applyProfile(serverB)
+            probing.gate(serverA.baseUrl).complete(Result.success(ServerProtocol.V2))
+            testScheduler.advanceUntilIdle()
+
+            assertNull(manager.currentProtocol())
+            probing.gate(serverB.baseUrl).complete(Result.success(ServerProtocol.V1))
+            assertEquals(ServerProtocol.V1, oldProbe.await())
+            assertEquals(ServerProtocol.V1, manager.currentProtocol())
+        }
+
+    @Test
+    fun cancelledProbeLeader_doesNotMakeAJoinerFallBackToV1() =
+        runTest {
+            val probing = GatedProbing()
+            val manager = ActiveConnectionManager(FakeProfileStore(), probing)
+            manager.applyProfile(serverA)
+            val leader = async { manager.currentProtocolOrProbe() }
+            probing.entered(serverA.baseUrl).await()
+            val joiner = async { manager.currentProtocolOrProbe() }
+            testScheduler.runCurrent()
+
+            leader.cancelAndJoin()
+            testScheduler.runCurrent()
+            assertEquals(2, probing.calls.size)
+            probing.gate(serverA.baseUrl).complete(Result.success(ServerProtocol.V2))
+
+            assertEquals(ServerProtocol.V2, joiner.await())
+        }
+
     @Test
     fun probeActive_keepsServerVersionUntilDisconnect() =
         runTest {

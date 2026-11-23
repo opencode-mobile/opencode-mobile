@@ -183,3 +183,57 @@ import Testing
         #expect(await store.loadSession(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-500")?.modelID == "model-500")
     }
 }
+
+@Suite struct SessionModelSelectionProfileKeyTests {
+    @Test func migration_keepsTheNewestSelectionAcrossSavedAddresses() async {
+        let suite = "SessionModelSelectionProfileKeyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = UserDefaultsSessionModelSelectionStore(defaults: defaults)
+        let first = ModelSelectionConnectionIdentity(serverBaseURL: "http://192.0.2.1:4096/", username: "opencode")
+        let second = ModelSelectionConnectionIdentity(serverBaseURL: "http://192.0.2.2:4096/", username: "opencode")
+        let older = SessionModelSelection(providerID: "p", modelID: "older", variant: nil, savedAtEpochMs: 1_000)
+        let newer = SessionModelSelection(providerID: "p", modelID: "newer", variant: nil, savedAtEpochMs: 2_000)
+        await store.saveSession(connectionIdentity: first, worktree: "/repo", sessionID: "ses-1", selection: older)
+        await store.saveSession(connectionIdentity: second, worktree: "/repo", sessionID: "ses-1", selection: newer)
+        await store.saveNewSessionPreference(connectionIdentity: first, worktree: "/repo", selection: older)
+        await store.saveNewSessionPreference(connectionIdentity: second, worktree: "/repo", selection: newer)
+        let identity = ModelSelectionConnectionIdentity(profile: ConnectionProfile(
+            baseURL: "http://192.0.2.1:4096/",
+            serverURLs: ["http://192.0.2.1:4096/", "http://192.0.2.2:4096/"],
+            username: "opencode",
+            password: "test-password",
+            id: "profile-a"
+        ))
+
+        #expect(await store.loadSession(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1") == newer)
+        #expect(await store.loadSession(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1") == newer)
+        #expect(await store.loadNewSessionPreference(connectionIdentity: identity, worktree: "/repo") == newer)
+    }
+
+    @Test func profileKeyedRead_migratesSessionAndPreferenceAndClearRemovesThem() async {
+        let suite = "SessionModelSelectionProfileKeyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = UserDefaultsSessionModelSelectionStore(defaults: defaults)
+        let legacy = ModelSelectionConnectionIdentity(serverBaseURL: "http://192.0.2.1:4096/", username: "opencode")
+        let selection = SessionModelSelection(providerID: "openai", modelID: "gpt-4", variant: nil, savedAtEpochMs: 5)
+        await store.saveSession(connectionIdentity: legacy, worktree: "/repo", sessionID: "ses-1", selection: selection)
+        await store.saveNewSessionPreference(connectionIdentity: legacy, worktree: "/repo", selection: selection)
+        let identity = ModelSelectionConnectionIdentity(profile: ConnectionProfile(
+            baseURL: "http://192.0.2.2:4096/",
+            serverURLs: ["http://192.0.2.1:4096/"],
+            username: "opencode",
+            password: "test-password",
+            id: "profile-a"
+        ))
+
+        #expect(await store.loadSession(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1") == selection)
+        #expect(await store.loadNewSessionPreference(connectionIdentity: identity, worktree: "/repo") == selection)
+        #expect(await store.loadNewSessionPreference(connectionIdentity: legacy, worktree: "/repo") == nil)
+
+        await store.clearConnection(connectionIdentity: identity)
+        #expect(await store.loadSession(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1") == nil)
+        #expect(await store.loadNewSessionPreference(connectionIdentity: identity, worktree: "/repo") == nil)
+    }
+}

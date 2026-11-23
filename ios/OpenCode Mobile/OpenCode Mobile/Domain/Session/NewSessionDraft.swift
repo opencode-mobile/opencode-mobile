@@ -23,6 +23,12 @@ enum NewSessionPlace: Equatable, Sendable {
 
 /// The New session draft of one Connection Profile: what the user typed and chose before the
 /// session exists. Kept in memory only (`NewSessionDraftStore`), so an app restart drops it.
+/// The session a first send created before it stopped, and the checkout it lives in.
+struct NewSessionCreatedSession: Equatable, Sendable {
+    let session: Session
+    let directory: String
+}
+
 struct NewSessionDraft: Equatable, Sendable {
     /// Home project key when known.
     var projectKey: String?
@@ -35,6 +41,9 @@ struct NewSessionDraft: Equatable, Sendable {
     var modelSelection: SessionModelSelection?
     /// A worktree an earlier first send created before it failed, so a retry reuses it.
     var createdWorktree: CreatedWorktree?
+    /// A session an earlier first send created before it stopped, so a retry reuses it. The
+    /// store keeps drafts per profile, so it is only ever reused on the server that made it.
+    var createdSession: NewSessionCreatedSession?
 
     init(
         projectKey: String?,
@@ -43,7 +52,8 @@ struct NewSessionDraft: Equatable, Sendable {
         composer: ComposerDraft = ComposerDraft(text: ""),
         attachments: [Attachment] = [],
         modelSelection: SessionModelSelection? = nil,
-        createdWorktree: CreatedWorktree? = nil
+        createdWorktree: CreatedWorktree? = nil,
+        createdSession: NewSessionCreatedSession? = nil
     ) {
         self.projectKey = projectKey
         self.projectDirectory = ServerPathPolicy.canonical(projectDirectory)
@@ -52,6 +62,7 @@ struct NewSessionDraft: Equatable, Sendable {
         self.attachments = attachments
         self.modelSelection = modelSelection
         self.createdWorktree = createdWorktree
+        self.createdSession = createdSession
     }
 
     /// Where the screen binds while drafting: the checkout itself, or the main checkout for a
@@ -75,6 +86,7 @@ struct NewSessionDraft: Equatable, Sendable {
         next.projectDirectory = ServerPathPolicy.canonical(projectDirectory)
         next.place = .local
         next.createdWorktree = nil
+        next.createdSession = nil
         return next
     }
 
@@ -85,6 +97,7 @@ struct NewSessionDraft: Equatable, Sendable {
         next.projectDirectory = start.projectDirectory
         next.place = start.place
         if !start.place.isNewWorktree { next.createdWorktree = nil }
+        next.createdSession = nil
         return next
     }
 }

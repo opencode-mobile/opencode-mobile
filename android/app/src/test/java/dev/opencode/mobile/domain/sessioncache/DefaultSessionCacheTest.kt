@@ -573,6 +573,157 @@ class DefaultSessionCacheTest {
             assertNull(cache.seedActivity("/repo"))
         }
 
+    @Test
+    fun delayedTranscriptWrite_keepsTheProfileItWasOpenedUnder() =
+        runTest {
+            var connectionId = "profile-a"
+            val store = InMemorySessionCacheStore()
+            val cache =
+                DefaultSessionCache(
+                    store = store,
+                    connectionIdProvider = { connectionId },
+                    scope = backgroundScope,
+                    json = json,
+                    debounceMs = 1_000L,
+                )
+            val handle = cache.openMessages("ses-1", "/repo")
+            handle.note(listOf(Message(id = "msg-1", role = MessageRole.User, text = "from a")))
+            runCurrent()
+
+            connectionId = "profile-b"
+            advanceTimeBy(2_000)
+            runCurrent()
+
+            val keyFor = { id: String ->
+                SessionCacheKey(connectionId = id, worktree = "/repo", kind = SessionCacheKind.MessageTimeline, entryId = "ses-1")
+            }
+            assertTrue(store.load(keyFor("profile-a")) != null)
+            assertNull(store.load(keyFor("profile-b")))
+        }
+
+    @Test
+    fun pendingTranscriptWrite_doesNotUndoClearAll() =
+        runTest {
+            val store = InMemorySessionCacheStore()
+            val cache =
+                DefaultSessionCache(
+                    store = store,
+                    connectionIdProvider = { "profile-a" },
+                    scope = backgroundScope,
+                    json = json,
+                    debounceMs = 1_000L,
+                )
+            val handle = cache.openMessages("ses-1", "/repo")
+            handle.note(listOf(Message(id = "msg-1", role = MessageRole.User, text = "secret")))
+            runCurrent()
+
+            cache.clearAll()
+            advanceTimeBy(2_000)
+            runCurrent()
+            handle.flush()
+
+            assertEquals(0L, store.report(SessionCacheEvictSelector.All).entryCount)
+        }
+
+    @Test
+    fun transcripts_keepTheNewestPerProfile_andNeverEvictOtherRows() =
+        runTest {
+            var now = 1_000L
+            var connectionId = "profile-a"
+            val store = InMemorySessionCacheStore()
+            val cache =
+                DefaultSessionCache(
+                    store = store,
+                    connectionIdProvider = { connectionId },
+                    scope = backgroundScope,
+                    json = json,
+                    clock = { now },
+                    debounceMs = 1L,
+                )
+            cache.rememberSessions("/repo", listOf(Session(id = "ses-listed", title = "Listed")))
+
+            suspend fun write(sessionId: String) {
+                now += 1
+                val handle = cache.openMessages(sessionId, "/repo")
+                handle.note(listOf(Message(id = "msg-$sessionId", role = MessageRole.User, text = "text")))
+                runCurrent()
+                handle.flush()
+            }
+            write("ses-oldest")
+            write("ses-reopened")
+            repeat(MAX_TRANSCRIPTS_PER_PROFILE - 2) { write("ses-$it") }
+            now += 1
+            cache.openMessages("ses-reopened", "/repo").seed()
+            connectionId = "profile-b"
+            write("ses-other-profile")
+            connectionId = "profile-a"
+
+            write("ses-newest")
+
+            val transcript = { id: String, connection: String ->
+                SessionCacheKey(connectionId = connection, worktree = "/repo", kind = SessionCacheKind.MessageTimeline, entryId = id)
+            }
+            assertNull(store.load(transcript("ses-oldest", "profile-a")))
+            assertTrue(store.load(transcript("ses-reopened", "profile-a")) != null)
+            assertTrue(store.load(transcript("ses-newest", "profile-a")) != null)
+            assertTrue(store.load(transcript("ses-other-profile", "profile-b")) != null)
+            assertEquals(MAX_TRANSCRIPTS_PER_PROFILE + 1, store.messageTimelineEntries().count { it.first == "profile-a" } + 1)
+            assertEquals(1, cache.seedSessions("/repo", "profile-a")?.size)
+        }
+
+    @Test
+    fun pendingTranscriptWrite_doesNotRecreateARemovedProject() =
+        runTest {
+            val store = InMemorySessionCacheStore()
+            val cache =
+                DefaultSessionCache(
+                    store = store,
+                    connectionIdProvider = { "profile-a" },
+                    scope = backgroundScope,
+                    json = json,
+                    debounceMs = 1_000L,
+                )
+            val removed = cache.openMessages("ses-1", "/repo")
+            val kept = cache.openMessages("ses-2", "/other")
+            removed.note(listOf(Message(id = "msg-1", role = MessageRole.User, text = "removed")))
+            kept.note(listOf(Message(id = "msg-2", role = MessageRole.User, text = "kept")))
+            runCurrent()
+
+            cache.purgeWorktree("http://192.0.2.1:4096/", "/repo")
+            advanceTimeBy(2_000)
+            runCurrent()
+
+            assertEquals(listOf("profile-a" to "ses-2"), store.messageTimelineEntries())
+        }
+
+    @Test
+    fun activityDedupe_isPerConnection() =
+        runTest {
+            var connectionId = "profile-a"
+            val store = CountingSessionCacheStore()
+            val cache =
+                DefaultSessionCache(
+                    store = store,
+                    connectionIdProvider = { connectionId },
+                    scope = backgroundScope,
+                    json = json,
+                    clock = { 1_000L },
+                    activityDebounceMs = 1_000L,
+                )
+            val entries = listOf(SessionActivityCacheEntry("ses-1", SessionActivity.Running, 1_000L))
+            cache.rememberActivity("/repo", entries)
+            advanceTimeBy(2_000)
+            runCurrent()
+
+            connectionId = "profile-b"
+            cache.rememberActivity("/repo", entries)
+            advanceTimeBy(2_000)
+            runCurrent()
+
+            assertEquals(2, store.commits)
+            assertEquals(1, cache.seedActivity("/repo")?.size)
+        }
+
     private fun TestScope.activityCache(clock: () -> Long) =
         DefaultSessionCache(
             store = InMemorySessionCacheStore(),

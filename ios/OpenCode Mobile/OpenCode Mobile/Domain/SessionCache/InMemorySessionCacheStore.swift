@@ -33,7 +33,7 @@ actor InMemorySessionCacheStore: SessionCacheStore {
 
     func retain(key: SessionCacheKey, reason: SessionCacheRetainReason, atEpochMs: Int64) async {
         if var existing = rows[key.cacheKey] {
-            if existing.retainedAtEpochMs == nil || existing.retainedAtEpochMs == 0 {
+            if (existing.retainedAtEpochMs ?? 0) < atEpochMs {
                 existing.retainedAtEpochMs = atEpochMs
                 rows[key.cacheKey] = existing
             }
@@ -60,6 +60,19 @@ actor InMemorySessionCacheStore: SessionCacheStore {
                 !matchesConnection(row.key, prefix: prefix, matchByUrlPrefix: matchByUrlPrefix)
             }
         }
+    }
+
+    func evictLeastRecentTimelines(connectionId: String, keeping: Int) async -> [SessionCacheKey] {
+        let timelines = rows.values.filter { $0.key.kind == .messageTimeline && $0.key.connectionId == connectionId }
+        guard timelines.count > keeping else { return [] }
+        let oldestFirst = timelines.sorted {
+            let left = max($0.syncedAtEpochMs, $0.retainedAtEpochMs ?? 0)
+            let right = max($1.syncedAtEpochMs, $1.retainedAtEpochMs ?? 0)
+            return left == right ? $0.key.cacheKey < $1.key.cacheKey : left < right
+        }
+        let evicted = oldestFirst.prefix(timelines.count - keeping).map(\.key)
+        evicted.forEach { rows.removeValue(forKey: $0.cacheKey) }
+        return evicted
     }
 
     func report(_ selector: SessionCacheEvictSelector) async -> SessionCacheReport {

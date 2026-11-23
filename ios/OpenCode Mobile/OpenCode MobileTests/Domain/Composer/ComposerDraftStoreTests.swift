@@ -42,6 +42,73 @@ import Testing
         #expect(store.load(connectionIdentity: bob, worktree: "/repo", sessionID: "ses-1")?.text == "other user")
     }
 
+    @Test func profileKeyedRead_migratesAnAddressKeyedDraftOnce() {
+        let store = makeStore("ComposerDraftStoreTests.migrate")
+        let legacy = ModelSelectionConnectionIdentity(serverBaseURL: "http://192.0.2.1:4096/", username: "opencode")
+        store.save(connectionIdentity: legacy, worktree: "/repo", sessionID: "ses-1", draft: ComposerDraft(text: "kept"))
+        let profile = ConnectionProfile(
+            baseURL: "http://192.0.2.2:4096/",
+            serverURLs: ["http://192.0.2.1:4096/", "http://192.0.2.2:4096/"],
+            username: "opencode",
+            password: "test-password",
+            id: "profile-a"
+        )
+        let identity = ModelSelectionConnectionIdentity(profile: profile)
+
+        #expect(store.load(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1")?.text == "kept")
+        #expect(store.load(connectionIdentity: legacy, worktree: "/repo", sessionID: "ses-1") == nil)
+        #expect(store.load(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1")?.text == "kept")
+
+        var moved = profile
+        moved.baseURL = "http://192.0.2.1:4096/"
+        let afterMove = ModelSelectionConnectionIdentity(profile: moved)
+        #expect(store.load(connectionIdentity: afterMove, worktree: "/repo", sessionID: "ses-1")?.text == "kept")
+
+        store.clearConnection(connectionIdentity: afterMove)
+        #expect(store.load(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1") == nil)
+    }
+
+    @Test func migration_keepsTheNewestDraftAcrossSavedAddresses() {
+        let store = makeStore("ComposerDraftStoreTests.migrateNewest")
+        let first = ModelSelectionConnectionIdentity(serverBaseURL: "http://192.0.2.1:4096/", username: "opencode")
+        let second = ModelSelectionConnectionIdentity(serverBaseURL: "http://192.0.2.2:4096/", username: "opencode")
+        store.save(connectionIdentity: first, worktree: "/repo", sessionID: "ses-1",
+                   draft: ComposerDraft(text: "older", savedAtEpochMs: 1_000))
+        store.save(connectionIdentity: second, worktree: "/repo", sessionID: "ses-1",
+                   draft: ComposerDraft(text: "newer", savedAtEpochMs: 2_000))
+        let identity = ModelSelectionConnectionIdentity(profile: ConnectionProfile(
+            baseURL: "http://192.0.2.1:4096/",
+            serverURLs: ["http://192.0.2.1:4096/", "http://192.0.2.2:4096/"],
+            username: "opencode",
+            password: "test-password",
+            id: "profile-a"
+        ))
+
+        #expect(store.load(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1")?.text == "newer")
+        #expect(store.load(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1")?.text == "newer")
+        #expect(store.load(connectionIdentity: first, worktree: "/repo", sessionID: "ses-1") == nil)
+        #expect(store.load(connectionIdentity: second, worktree: "/repo", sessionID: "ses-1") == nil)
+    }
+
+    @Test func migration_aNewerAddressEntryReplacesAnOlderProfileEntry() {
+        let store = makeStore("ComposerDraftStoreTests.migrateOverProfile")
+        let legacy = ModelSelectionConnectionIdentity(serverBaseURL: "http://192.0.2.1:4096/", username: "opencode")
+        let profile = ConnectionProfile(
+            baseURL: "http://192.0.2.2:4096/",
+            serverURLs: ["http://192.0.2.1:4096/"],
+            username: "opencode",
+            password: "test-password",
+            id: "profile-a"
+        )
+        let identity = ModelSelectionConnectionIdentity(profile: profile)
+        store.save(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1",
+                   draft: ComposerDraft(text: "profile older", savedAtEpochMs: 1_000))
+        store.save(connectionIdentity: legacy, worktree: "/repo", sessionID: "ses-1",
+                   draft: ComposerDraft(text: "address newer", savedAtEpochMs: 2_000))
+
+        #expect(store.load(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1")?.text == "address newer")
+    }
+
     @Test func deleteAndDeleteSessionEntries_removeMatchingDrafts() {
         let store = makeStore("ComposerDraftStoreTests.delete")
         let alice = ModelSelectionConnectionIdentity(serverBaseURL: "http://127.0.0.1:4096/", username: "alice")

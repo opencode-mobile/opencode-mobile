@@ -33,6 +33,8 @@ final class SessionChatNewSessionDraft {
     private let currentProfile: () -> ConnectionProfile?
     private let currentProtocolOrProbe: @MainActor () async -> ServerProtocol
     private let serverProtocol: () -> ServerProtocol?
+    private let pinConnection: @MainActor () async throws -> PinnedServerConnection
+    private let isPinCurrent: (PinnedServerConnection) -> Bool
     /// What the composer holds, mirrored into the store.
     private let composerContent: () -> (composer: ComposerDraft, attachments: [Attachment])
     private let composerModelSelection: () -> SessionModelSelection?
@@ -48,6 +50,8 @@ final class SessionChatNewSessionDraft {
         currentProfile: @escaping () -> ConnectionProfile?,
         currentProtocolOrProbe: @escaping @MainActor () async -> ServerProtocol,
         serverProtocol: @escaping () -> ServerProtocol?,
+        pinConnection: @escaping @MainActor () async throws -> PinnedServerConnection,
+        isPinCurrent: @escaping (PinnedServerConnection) -> Bool,
         composerContent: @escaping () -> (composer: ComposerDraft, attachments: [Attachment]),
         composerModelSelection: @escaping () -> SessionModelSelection?
     ) {
@@ -60,6 +64,8 @@ final class SessionChatNewSessionDraft {
         self.currentProfile = currentProfile
         self.currentProtocolOrProbe = currentProtocolOrProbe
         self.serverProtocol = serverProtocol
+        self.pinConnection = pinConnection
+        self.isPinCurrent = isPinCurrent
         self.composerContent = composerContent
         self.composerModelSelection = composerModelSelection
     }
@@ -132,6 +138,7 @@ final class SessionChatNewSessionDraft {
         if !place.isNewWorktree {
             current.createdWorktree = nil
         }
+        current.createdSession = nil
         state.draft = current
         return true
     }
@@ -147,6 +154,7 @@ final class SessionChatNewSessionDraft {
         current.place = .newWorktree(baseBranch: normalized)
         // A worktree made from another base no longer matches.
         current.createdWorktree = nil
+        current.createdSession = nil
         state.draft = current
         save()
         notifyChange()
@@ -208,61 +216,98 @@ final class SessionChatNewSessionDraft {
     /// error is rethrown for `showCreateError(_:)`.
     func create(
         currentModelSelection: () -> SessionModelSelection?
-    ) async throws -> (directory: String, session: Session) {
+    ) async throws -> (directory: String, session: Session, pin: PinnedServerConnection) {
         guard let current = state.draft else { throw CancellationError() }
         let directory: String
         let session: Session
+        let pin: PinnedServerConnection
         do {
+            _ = try requireDraftProfile()
+            // Every request below goes to this connection, even if a switch binds another
+            // while one is starting. The checks stop the steps after it.
+            pin = try await pinConnection()
+            let profile = try requireDraftServer(pin)
             if case let .newWorktree(base) = current.place {
                 if let created = current.createdWorktree {
                     directory = created.directory
                 } else {
                     let project = NewSessionDraftPresentation.project(of: current, in: state.context.projects)
-                    let created = try await worktreeRepository.create(
-                        CreateWorktreeRequest(
-                            projectID: project?.projectID,
-                            sourceDirectory: current.projectDirectory,
-                            name: nil,
-                            baseRef: await currentProtocolOrProbe() == .v2 ? base : nil
-                        )
+                    let request = CreateWorktreeRequest(
+                        projectID: project?.projectID,
+                        sourceDirectory: current.projectDirectory,
+                        name: nil,
+                        baseRef: pin.connection.serverProtocol == .v2 ? base : nil
                     )
+                    let created = try await RequestConnectionPin.$current.withValue(pin.connection) {
+                        try await worktreeRepository.create(request)
+                    }
                     OpenCodeLog.sessionChat.info("draft worktree created directory=\(created.directory)")
                     state.draft?.createdWorktree = created
                     save()
                     directory = created.directory
+                    _ = try requireDraftServer(pin)
                     await refreshWorktreeInventory?(created.directory)
                 }
             } else {
                 directory = current.directory
             }
-            session = try await sessionRepository.createSession(parentID: nil, title: nil, directory: directory)
+            _ = try requireDraftServer(pin)
+            if let existing = state.draft?.createdSession, existing.directory == directory {
+                session = existing.session
+            } else {
+                session = try await RequestConnectionPin.$current.withValue(pin.connection) {
+                    try await sessionRepository.createSession(parentID: nil, title: nil, directory: directory)
+                }
+                OpenCodeLog.sessionChat.info("draft session created id=\(session.id)")
+                // Kept before the next check, so a retry reuses it instead of creating another.
+                state.draft?.createdSession = NewSessionCreatedSession(session: session, directory: directory)
+                save()
+            }
+            _ = try requireDraftServer(pin)
+            if let profile {
+                let selection: SessionModelSelection? = if let picked = currentModelSelection() {
+                    picked
+                } else {
+                    await modelSelectionResolver.resolve(profile: profile, worktree: directory)
+                }
+                _ = try requireDraftServer(pin)
+                if let selection {
+                    await modelSelectionResolver.seedSession(
+                        profile: profile,
+                        worktree: directory,
+                        sessionID: session.id,
+                        selection: selection
+                    )
+                }
+            }
+            _ = try requireDraftServer(pin)
         } catch {
             OpenCodeLog.sessionChat.warning("draft create failed error=\(error.localizedDescription)")
             state.isCreating = false
             throw error
-        }
-        OpenCodeLog.sessionChat.info("draft session created id=\(session.id)")
-        if let profile = currentProfile() {
-            let selection: SessionModelSelection? = if let picked = currentModelSelection() {
-                picked
-            } else {
-                await modelSelectionResolver.resolve(profile: profile, worktree: directory)
-            }
-            if let selection {
-                await modelSelectionResolver.seedSession(
-                    profile: profile,
-                    worktree: directory,
-                    sessionID: session.id,
-                    selection: selection
-                )
-            }
         }
         if let profileKey {
             // The composer now owns the text and attachments; the session row shows on Home.
             store.clear(profile: profileKey, discardingAttachments: false)
         }
         state.isCreating = false
-        return (directory, session)
+        return (directory, session, pin)
+    }
+
+    /// The active profile, when it is still the one this draft belongs to.
+    private func requireDraftProfile() throws -> ConnectionProfile? {
+        let active = currentProfile()
+        guard active.map(NewSessionDraftStore.key(for:)) == profileKey else {
+            throw ServerConnectionChangedError()
+        }
+        return active
+    }
+
+    /// Also fails when the same profile moved to another connection since `pin` was taken.
+    private func requireDraftServer(_ pin: PinnedServerConnection) throws -> ConnectionProfile? {
+        let active = try requireDraftProfile()
+        guard isPinCurrent(pin) else { throw ServerConnectionChangedError() }
+        return active
     }
 
     /// The create step failed: its error shows on the snackbar with Retry. Silent.

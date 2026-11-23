@@ -74,6 +74,7 @@ class AppRootViewModel
 
         private suspend fun loadInitialState() {
             activeConnectionManager.ensureLoaded()
+            connectionSessionCoordinator.migrateStoredSelections()
             connectionSessionCoordinator.bindActiveProfile()
             eventStream.stop()
             yield()

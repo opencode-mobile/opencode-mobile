@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
@@ -36,13 +37,13 @@ class DefaultPermissionLiveStore
                     val gate = LiveStoreRefreshGate()
                     val registration =
                         syncCoordinator.register(key) {
-                            val generation = syncCoordinator.profileGeneration
+                            val loadStamp = syncCoordinator.loadStamp()
                             var failure: Throwable? = null
                             val outcome =
                                 gate.refresh(
                                     load = {
                                         runCatching { sessionRepository.listPendingPermissions(directory) }
-                                            .onFailure { failure = it }
+                                            .onFailure { if (it is CancellationException) throw it else failure = it }
                                             .getOrNull()
                                     },
                                     commit = { requests ->
@@ -55,7 +56,7 @@ class DefaultPermissionLiveStore
                                             send(requests)
                                         }
                                     },
-                                    isCurrent = { syncCoordinator.profileGeneration == generation },
+                                    isCurrent = { syncCoordinator.isCurrent(loadStamp) },
                                 )
                             failure?.let {
                                 diagnosticLogger.warning(

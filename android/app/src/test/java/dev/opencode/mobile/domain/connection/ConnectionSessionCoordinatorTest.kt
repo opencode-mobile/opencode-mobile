@@ -434,6 +434,200 @@ class ConnectionSessionCoordinatorTest {
         }
 
     @Test
+    fun switchProfile_bindsTheNewServerBeforeClearingLiveProjections() =
+        runTest {
+            val connectionProfileStore = CatalogConnectionProfileStore()
+            connectionProfileStore.saveProfile(
+                ConnectionProfile(baseUrl = "http://192.0.2.1:4096/", username = "opencode", password = "a", name = "A"),
+            )
+            connectionProfileStore.saveProfile(
+                ConnectionProfile(baseUrl = "http://192.0.2.2:4096/", username = "opencode", password = "b", name = "B"),
+            )
+            val a = connectionProfileStore.listProfiles().first { it.name == "A" }
+            val json = Json { ignoreUnknownKeys = true }
+            val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+            activeConnectionManager.reloadFromStore()
+            val boundAtClear = CopyOnWriteArrayList<String?>()
+            val caches =
+                object : ProjectionCaches {
+                    override fun clearAll() = Unit
+
+                    override fun clearLiveProjections() {
+                        boundAtClear += activeConnectionManager.current()?.baseUrl
+                    }
+
+                    override fun bindProfile(profileId: String?) {
+                        boundAtClear += activeConnectionManager.current()?.baseUrl
+                    }
+                }
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    projectionCaches = caches,
+                )
+
+            coordinator.switchProfile(a.id)
+            advanceUntilIdle()
+
+            assertEquals(listOf(a.baseUrl, a.baseUrl), boundAtClear.toList())
+        }
+
+    @Test
+    fun failedSwitch_restartsTheEventStream() =
+        runTest {
+            val backing = CatalogConnectionProfileStore()
+            backing.saveProfile(ConnectionProfile(baseUrl = "http://192.0.2.1:4096/", username = "opencode", password = "a", name = "A"))
+            backing.saveProfile(ConnectionProfile(baseUrl = "http://192.0.2.2:4096/", username = "opencode", password = "b", name = "B"))
+            val a = backing.listProfiles().first { it.name == "A" }
+            val failing =
+                object : ConnectionProfileStore by backing {
+                    override suspend fun applyProfile(id: String): Unit = throw IllegalStateException("store failed")
+                }
+            val json = Json { ignoreUnknownKeys = true }
+            val activeConnectionManager = ActiveConnectionManager(failing)
+            activeConnectionManager.reloadFromStore()
+            val stream = RecordingForegroundEventStream()
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = failing,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    eventStream = stream,
+                )
+            stream.start()
+            stream.ops.clear()
+
+            val failure = runCatching { coordinator.switchProfile(a.id) }.exceptionOrNull()
+
+            assertEquals("store failed", failure?.message)
+            assertEquals(listOf("stop", "start"), stream.ops.toList())
+        }
+
+    @Test
+    fun lateProbe_doesNotRecreateARemovedProfile() =
+        runTest {
+            val store = CatalogConnectionProfileStore()
+            store.saveProfile(ConnectionProfile(baseUrl = "http://192.0.2.1:4096/", username = "opencode", password = "a", name = "A"))
+            store.saveProfile(ConnectionProfile(baseUrl = "http://192.0.2.2:4096/", username = "opencode", password = "b", name = "B"))
+            val a = store.listProfiles().first { it.name == "A" }
+            store.applyProfile(a.id)
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing {
+                        entered.complete(Unit)
+                        release.await()
+                        ServerProtocol.V2
+                    },
+                )
+            manager.reloadFromStore()
+            val probe = backgroundScope.async { manager.probeActive() }
+            entered.await()
+
+            store.removeProfile(a.id)
+            release.complete(Unit)
+            probe.await()
+
+            assertEquals(listOf("B"), store.listProfiles().map { it.name })
+        }
+
+    @Test
+    fun repeatedProbe_doesNotRewriteTheStoredProfile() =
+        runTest {
+            val backing = CatalogConnectionProfileStore()
+            backing.saveProfile(
+                ConnectionProfile(
+                    baseUrl = "http://192.0.2.1:4096/",
+                    username = "opencode",
+                    password = "a",
+                    name = "A",
+                    serverProtocol = ServerProtocol.V2,
+                ),
+            )
+            val saves = AtomicInteger(0)
+            val counting =
+                object : ConnectionProfileStore by backing {
+                    override suspend fun saveProfile(profile: ConnectionProfile) {
+                        saves.incrementAndGet()
+                        backing.saveProfile(profile)
+                    }
+                }
+            val manager = ActiveConnectionManager(counting, ConnectionProbing { ServerProtocol.V2 })
+            manager.reloadFromStore()
+
+            manager.probeActive()
+            manager.probeActive()
+
+            assertEquals(0, saves.get())
+        }
+
+    @Test
+    fun removingAnInactiveProfile_leavesTheActiveServerRunning() =
+        runTest {
+            val store = CatalogConnectionProfileStore()
+            store.saveProfile(ConnectionProfile(baseUrl = "http://192.0.2.1:4096/", username = "opencode", password = "a", name = "A"))
+            store.saveProfile(ConnectionProfile(baseUrl = "http://192.0.2.2:4096/", username = "opencode", password = "b", name = "B"))
+            val a = store.listProfiles().first { it.name == "A" }
+            val json = Json { ignoreUnknownKeys = true }
+            val manager = ActiveConnectionManager(store)
+            manager.reloadFromStore()
+            val stream = RecordingForegroundEventStream()
+            val forgotten = CopyOnWriteArrayList<String>()
+            val cleared = AtomicInteger(0)
+            val caches =
+                object : ProjectionCaches {
+                    override fun clearAll() {
+                        cleared.incrementAndGet()
+                    }
+
+                    override fun clearLiveProjections() {
+                        cleared.incrementAndGet()
+                    }
+
+                    override fun bindProfile(profileId: String?) = Unit
+
+                    override fun forgetProfile(profileId: String) {
+                        forgotten += profileId
+                    }
+                }
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, manager),
+                    sseHttpClient = OpencodeSseHttpClient(json, manager),
+                    eventStream = stream,
+                    projectionCaches = caches,
+                )
+            val generation = coordinator.profileGeneration
+            stream.start()
+            stream.ops.clear()
+
+            coordinator.removeProfile(a.id)
+
+            assertEquals(emptyList<String>(), stream.ops.toList())
+            assertEquals(0, cleared.get())
+            assertEquals(generation, coordinator.profileGeneration)
+            assertEquals(listOf(a.id), forgotten.toList())
+            assertEquals(listOf("B"), store.listProfiles().map { it.name })
+        }
+
+    @Test
     fun switchProfile_signalsTheUiBeforeStopFinishes() =
         runTest {
             val connectionProfileStore = CatalogConnectionProfileStore()

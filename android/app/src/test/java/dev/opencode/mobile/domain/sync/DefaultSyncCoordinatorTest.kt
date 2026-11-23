@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
@@ -302,6 +303,49 @@ class DefaultSyncCoordinatorTest {
             assertTrue(committed)
             assertEquals(ProjectionState.Stale, env.coordinator.observe(key).first())
             assertEquals(2, env.coordinator.profileGeneration)
+        }
+
+    @Test
+    fun loadStamp_fromAnotherConnectionIsNotCurrent_evenInTheSameGeneration() =
+        runTest(dispatcher) {
+            var connection = "server-a"
+            val coordinator =
+                DefaultSyncCoordinator(
+                    liveConnection = FakeForegroundEventStream(),
+                    worldSignals = FakeWorldSignals(),
+                    scope = backgroundScope,
+                    nowMs = { dispatcher.scheduler.currentTime },
+                    wait = { delay(it) },
+                    connectionIdentity = { connection },
+                )
+            coordinator.beginProfileSwitch(2)
+            val startedOnA = coordinator.loadStamp()
+            assertTrue(coordinator.isCurrent(startedOnA))
+
+            connection = "server-b"
+
+            assertFalse(coordinator.isCurrent(startedOnA))
+        }
+
+    @Test
+    fun oldFlowTeardown_keepsTheNewFlowVisible() =
+        runTest(dispatcher) {
+            val env = env()
+            val key = ProjectionKey.SessionStatuses("/repo")
+            var loads = 0
+            val old = env.coordinator.register(key) { loads += 1 }
+            env.coordinator.visible(key, true)
+            val new = env.coordinator.register(key) { loads += 1 }
+            env.coordinator.visible(key, true)
+
+            env.coordinator.visible(key, false)
+            env.coordinator.unregister(old)
+            env.coordinator.invalidate(key)
+            env.coordinator.bootstrap(SyncBootstrapReason.Manual)
+            runCurrent()
+
+            assertEquals(1, loads)
+            env.coordinator.unregister(new)
         }
 
     private fun TestScope.env(startMs: Long = dispatcher.scheduler.currentTime): Env {

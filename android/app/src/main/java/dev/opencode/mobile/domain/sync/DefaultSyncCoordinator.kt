@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.event.canCatchUp
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,16 +33,19 @@ class DefaultSyncCoordinator(
     private val scope: CoroutineScope,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     private val wait: suspend (Long) -> Unit = { delay(it) },
+    private val connectionIdentity: () -> Any? = { null },
 ) : SyncCoordinator {
     @Inject
     constructor(
         liveConnection: LiveConnection,
         worldSignals: WorldSignals,
         liveStoreScope: LiveStoreScope,
+        activeConnectionManager: ActiveConnectionManager,
     ) : this(
         liveConnection = liveConnection,
         worldSignals = worldSignals,
         scope = liveStoreScope.coroutineScope,
+        connectionIdentity = activeConnectionManager::connectionIdentity,
     )
 
     private val mutex = Mutex()
@@ -194,11 +199,15 @@ class DefaultSyncCoordinator(
         visible: Boolean,
     ) {
         val entry = entries.getOrPut(key) { Entry(key) }
-        entry.visible = visible
+        // Counted: a replaced flow's teardown must not hide the flow that took over this key.
+        val holders = entry.visibleHolders.updateAndGet { count -> if (visible) count + 1 else maxOf(0, count - 1) }
+        entry.visible = holders > 0
     }
 
     override val profileGeneration: Long
         get() = generation.get()
+
+    override fun loadStamp(): SyncLoadStamp = SyncLoadStamp(profileGeneration, connectionIdentity())
 
     override fun beginProfileSwitch(generation: Long) {
         this.generation.set(generation)
@@ -379,14 +388,14 @@ class DefaultSyncCoordinator(
             }
         var attempt = 0
         while (true) {
-            val startedGeneration = profileGeneration
+            val started = loadStamp()
             if (entry.staleSerial.get() != serial) {
                 entry.state.value = ProjectionState.Stale
                 return
             }
             try {
                 loader()
-                if (profileGeneration != startedGeneration) {
+                if (!isCurrent(started)) {
                     entry.state.value = ProjectionState.Stale
                     return
                 }
@@ -437,6 +446,8 @@ class DefaultSyncCoordinator(
 
         @Volatile
         var loader: (suspend () -> Unit)? = null
+
+        val visibleHolders = AtomicInteger(0)
 
         @Volatile
         var visible: Boolean = false

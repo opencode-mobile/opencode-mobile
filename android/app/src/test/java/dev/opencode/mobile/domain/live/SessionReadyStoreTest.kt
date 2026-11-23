@@ -443,6 +443,57 @@ class SessionReadyStoreTest {
             assertEquals(emptySet<String>(), second.observeReadyIds("/repo").first())
         }
 
+    @Test
+    fun restoredWatch_cachedIdleSnapshot_doesNotMarkReady() =
+        runTest(testDispatcher) {
+            val statusStore = FakeReadyStatusStore()
+            val persistence = InMemorySessionReadyPersistence()
+            persistence.save(
+                SessionReadyPersistedState(
+                    watched =
+                        listOf(
+                            SessionReadyPersistedEntry(
+                                sessionId = "ses-b",
+                                directory = "/repo",
+                                atEpochMs = System.currentTimeMillis(),
+                                profileId = "b",
+                            ),
+                        ),
+                ),
+            )
+            val store = createStore(statusStore, persistence = persistence)
+            store.bindProfile("b")
+            val emissions = mutableListOf<Set<String>>()
+            val job = launch { store.observeReadyIds("/repo").collect { emissions.add(it) } }
+            advanceUntilIdle()
+
+            statusStore.emit("/repo", SessionActivitySnapshot(entries = emptyMap(), seeded = false, fromCache = true))
+            advanceUntilIdle()
+            assertTrue(emissions.last().isEmpty())
+
+            statusStore.emit("/repo", idleSnapshot())
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(emissions.last().contains("ses-b"))
+        }
+
+    @Test
+    fun bindProfile_reobservesOnlyTheNewProfilesDirectories() =
+        runTest(testDispatcher) {
+            val statusStore = FakeReadyStatusStore()
+            val store = createStore(statusStore)
+            store.bindProfile("a")
+            store.notifyPromptSent("ses-a", "/only-on-a")
+            advanceUntilIdle()
+            statusStore.observed.clear()
+
+            store.bindProfile("b")
+            advanceUntilIdle()
+
+            assertTrue(statusStore.observed.isEmpty())
+        }
+
     private fun createStore(
         statusStore: SessionStatusLiveStore,
         eventStream: FakeForegroundEventStream = FakeForegroundEventStream(),
@@ -484,7 +535,12 @@ private class FakeReadyStatusStore : SessionStatusLiveStore {
         flow(directory).tryEmit(snapshot)
     }
 
-    override fun observeActivity(directory: String): Flow<SessionActivitySnapshot> = flow(directory)
+    val observed = mutableListOf<String>()
+
+    override fun observeActivity(directory: String): Flow<SessionActivitySnapshot> {
+        observed += directory
+        return flow(directory)
+    }
 
     override fun clearCache() = Unit
 

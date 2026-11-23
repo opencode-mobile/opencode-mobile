@@ -145,7 +145,8 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
         do {
             let context = ModelContext(container)
             if let existing = try fetch(cacheKey: key.cacheKey, in: context) {
-                if existing.retainedAtEpochMs == nil || existing.retainedAtEpochMs == 0 {
+                // The latest open: transcript eviction reads it as "last used".
+                if (existing.retainedAtEpochMs ?? 0) < atEpochMs {
                     existing.retainedAtEpochMs = atEpochMs
                     try context.save()
                 }
@@ -266,6 +267,35 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
         } catch {
             DiagnosticLog.warning(.session, "SwiftData session cache key list failed: \(error.localizedDescription)")
             return nil
+        }
+    }
+
+    func evictLeastRecentTimelines(connectionId: String, keeping: Int) async -> [SessionCacheKey] {
+        do {
+            let context = ModelContext(container)
+            let kind = SessionCacheKind.messageTimeline.rawValue
+            let predicate = #Predicate<SessionCacheSnapshotRecord> {
+                $0.kind == kind && $0.connectionId == connectionId
+            }
+            guard try context.fetchCount(FetchDescriptor(predicate: predicate)) > keeping else { return [] }
+            var descriptor = FetchDescriptor<SessionCacheSnapshotRecord>(predicate: predicate)
+            // Without the payloads: a timeline can be large.
+            descriptor.propertiesToFetch = [\.cacheKey, \.worktree, \.entryId, \.syncedAtEpochMs, \.retainedAtEpochMs]
+            let oldestFirst = try context.fetch(descriptor).sorted {
+                let left = max($0.syncedAtEpochMs, $0.retainedAtEpochMs ?? 0)
+                let right = max($1.syncedAtEpochMs, $1.retainedAtEpochMs ?? 0)
+                return left == right ? $0.cacheKey < $1.cacheKey : left < right
+            }
+            let evicted = Array(oldestFirst.prefix(max(0, oldestFirst.count - keeping)))
+            let keys = evicted.map {
+                SessionCacheKey(connectionId: connectionId, worktree: $0.worktree, kind: .messageTimeline, entryId: $0.entryId)
+            }
+            evicted.forEach(context.delete)
+            try context.save()
+            return keys
+        } catch {
+            DiagnosticLog.warning(.session, "SwiftData session cache bound failed: \(error.localizedDescription)")
+            return []
         }
     }
 

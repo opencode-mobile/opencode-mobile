@@ -17,7 +17,7 @@ class NewSessionModelSelectionResolver
             profile: ConnectionProfile,
             worktree: String,
         ): SessionModelSelection? {
-            val identity = ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
+            val identity = profile.modelSelectionIdentity()
             val (preference, catalog) =
                 coroutineScope {
                     val preference =
@@ -58,7 +58,7 @@ class NewSessionModelSelectionResolver
             modelCatalogStore.rememberSelection(worktree, sessionId, selection)
             runCatching {
                 store.saveSession(
-                    ModelSelectionConnectionIdentity(profile.baseUrl, profile.username),
+                    profile.modelSelectionIdentity(),
                     worktree,
                     sessionId,
                     selection,

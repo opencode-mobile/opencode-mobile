@@ -10,7 +10,7 @@ struct NewSessionModelSelectionResolver: Sendable {
     }
 
     func resolve(profile: ConnectionProfile, worktree: String) async -> SessionModelSelection? {
-        let identity = ModelSelectionConnectionIdentity(serverBaseURL: profile.baseURL, username: profile.username)
+        let identity = ModelSelectionConnectionIdentity(profile: profile)
         async let preferenceLoad = store.loadNewSessionPreference(connectionIdentity: identity, worktree: worktree)
         async let catalogLoad = try? modelCatalogStore.refreshCatalog(worktree: worktree)
         let (preference, fetchedCatalog) = await (preferenceLoad, catalogLoad)
@@ -41,10 +41,7 @@ struct NewSessionModelSelectionResolver: Sendable {
         selection: SessionModelSelection
     ) async {
         await store.saveSession(
-            connectionIdentity: ModelSelectionConnectionIdentity(
-                serverBaseURL: profile.baseURL,
-                username: profile.username
-            ),
+            connectionIdentity: ModelSelectionConnectionIdentity(profile: profile),
             worktree: worktree,
             sessionID: sessionID,
             selection: selection

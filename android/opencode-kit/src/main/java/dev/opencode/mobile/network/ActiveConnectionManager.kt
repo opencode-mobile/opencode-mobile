@@ -14,9 +14,54 @@ import dev.opencode.mobile.domain.connection.toProbeStatus
 import dev.opencode.mobile.domain.project.ServerProbeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.asContextElement
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Singleton
+import kotlin.coroutines.CoroutineContext
+
+/** A running probe of [connection]; its waiters share [result]. */
+private class ProbeFlight(
+    val connection: ServerConnection,
+    /** Ran every health endpoint, with no saved-protocol shortcut. */
+    val fullDetection: Boolean,
+) {
+    val result = CompletableDeferred<Result<ServerProtocol>>()
+}
+
+/** The probe no longer speaks for the bound connection; not a server failure. */
+private object ProbeSuperseded : Exception() {
+    private fun readResolve(): Any = ProbeSuperseded
+}
+
+/** The connection a pinned operation started on is no longer the bound one. */
+class ConnectionChangedException : IOException("The active server changed")
+
+/**
+ * One connection captured for an operation that must not move to another server. Run the work
+ * with [ActiveConnectionManager.pinContext]; its requests use this connection or fail.
+ */
+class ConnectionPin internal constructor(
+    internal val connection: ServerConnection,
+    internal val binding: ConnectionBinding,
+    internal val protocol: ServerProtocol,
+    internal val features: V2ServerFeatures,
+) {
+    val profileId: String get() = binding.profileId
+}
+
+/** The server a piece of work started against. */
+data class ConnectionBinding(
+    val profileId: String,
+    val baseUrl: String,
+    val username: String,
+)
 
 @Singleton
 class ActiveConnectionManager(
@@ -26,8 +71,11 @@ class ActiveConnectionManager(
     private val mutex = Mutex()
     private var connection: ServerConnection? = null
     private var profile: ConnectionProfile? = null
-    private var inFlightProbe: CompletableDeferred<Result<ServerProtocol>>? = null
+    private val inFlightProbe = AtomicReference<ProbeFlight?>(null)
     private var probeFailed = false
+
+    /** The pin of the running coroutine; it follows the coroutine across dispatchers. */
+    private val pinOfCoroutine = ThreadLocal<ConnectionPin?>()
 
     /** Health `version` from the last probe of the active connection; null until one succeeds. */
     @Volatile
@@ -50,7 +98,7 @@ class ActiveConnectionManager(
         mutex.withLock {
             if (connection != null) return
             persistAddressChange(loaded, resolved)
-            bindLocked(connectionProfileStore.activeProfile() ?: resolved)
+            bindLocked(connectionProfileStore.activeProfile())
         }
     }
 
@@ -79,21 +127,54 @@ class ActiveConnectionManager(
             val active = this.profile
             if (active == null || active.id != profile.id) return@withLock false
             if (ConnectionProfileIdentity.normalizeBaseUrl(active.baseUrl) != before) return@withLock false
-            persistAddressChange(profile, resolved)
-            bindLocked(connectionProfileStore.activeProfile() ?: resolved)
+            if (!persistAddressChange(profile, resolved)) return@withLock false
+            bindLocked(connectionProfileStore.activeProfile())
             true
         }
     }
 
     fun current(): ServerConnection? = connection
 
-    fun currentProtocol(): ServerProtocol? = connection?.serverProtocol
+    /**
+     * Who a response belongs to: profile, address and username. A protocol or password update
+     * keeps it, so a load that started before one still commits.
+     */
+    fun connectionIdentity(): ConnectionBinding? {
+        val active = connection ?: return null
+        return ConnectionBinding(profile?.id.orEmpty(), active.baseUrl, active.username)
+    }
+
+    fun currentProtocol(): ServerProtocol? = pinOfCoroutine.get()?.protocol ?: connection?.serverProtocol
+
+    /**
+     * Captures the bound connection with a known protocol. An unknown protocol is probed first,
+     * and if the connection changes meanwhile this throws [ConnectionChangedException].
+     */
+    suspend fun pinConnection(): ConnectionPin {
+        val started = connectionIdentity() ?: throw ConnectionChangedException()
+        val probed = sharedProbe(force = false).getOrDefault(ServerProtocol.V1)
+        return mutex.withLock {
+            val active = connection
+            if (active == null || connectionIdentity() != started) throw ConnectionChangedException()
+            ConnectionPin(active, started, active.serverProtocol ?: probed, v2Features)
+        }
+    }
+
+    fun pinContext(pin: ConnectionPin): CoroutineContext = pinOfCoroutine.asContextElement(pin)
+
+    /** The connection the running coroutine is pinned to, if any. */
+    fun pinnedConnection(): ServerConnection? = pinOfCoroutine.get()?.connection
+
+    fun isCurrent(pin: ConnectionPin): Boolean = connectionIdentity() == pin.binding
 
     fun currentServerVersion(): String? = serverVersion?.takeIf { connection != null }
 
     fun protocolHint(): ServerProtocol = currentProtocol() ?: ServerProtocol.V1
 
     fun currentCapabilities(): ServerCapabilities {
+        pinOfCoroutine.get()?.let { pin ->
+            return ServerCapabilities.forProtocol(pin.protocol, v2Features = pin.features)
+        }
         val active = connection ?: return ServerCapabilities.forProtocol(ServerProtocol.V1)
         return ServerCapabilities.forProtocol(
             active.serverProtocol ?: ServerProtocol.V1,
@@ -102,7 +183,10 @@ class ActiveConnectionManager(
     }
 
     /** `paths.tmp` for streamed uploads, or null while the server has not declared the route. */
-    fun attachmentUploadTmpDirectory(): String? = if (connection != null) v2Features.attachmentUploadTmp else null
+    fun attachmentUploadTmpDirectory(): String? {
+        pinOfCoroutine.get()?.let { return it.features.attachmentUploadTmp }
+        return if (connection != null) v2Features.attachmentUploadTmp else null
+    }
 
     /**
      * A live upload showed the route is not what the contract promised. Streamed uploads stay
@@ -125,7 +209,7 @@ class ActiveConnectionManager(
             probeFailed = false
             serverVersion = null
             forgetV2Features()
-            completeInFlight(Result.success(ServerProtocol.V1))
+            supersedeFlight()
         }
     }
 
@@ -150,7 +234,8 @@ class ActiveConnectionManager(
      * a thrown probe returns [ServerProtocol.V1] without throwing.
      * A failed probe is remembered until the connection changes or [probeActive].
      */
-    suspend fun currentProtocolOrProbe(): ServerProtocol = sharedProbe(force = false).getOrDefault(ServerProtocol.V1)
+    suspend fun currentProtocolOrProbe(): ServerProtocol =
+        pinOfCoroutine.get()?.protocol ?: sharedProbe(force = false).getOrDefault(ServerProtocol.V1)
 
     /** Home / Test Connection: join the in-flight detect and throw on failure. */
     suspend fun probeActive(): ServerProtocol = sharedProbe(force = true).getOrThrow()
@@ -161,7 +246,7 @@ class ActiveConnectionManager(
      */
     suspend fun redetectProtocol(): ProtocolRedetection {
         if (connection == null || connectionProbing == null) return ProtocolRedetection.Skipped
-        return sharedProbe(force = true).fold(
+        return sharedProbe(force = true, fullDetection = true).fold(
             onSuccess = { ProtocolRedetection.Detected(it) },
             onFailure = { error ->
                 when {
@@ -173,61 +258,97 @@ class ActiveConnectionManager(
         )
     }
 
-    private suspend fun sharedProbe(force: Boolean): Result<ServerProtocol> {
-        var existing: CompletableDeferred<Result<ServerProtocol>>? = null
-        mutex.withLock {
-            if (!force) {
-                connection?.serverProtocol?.let { return Result.success(it) }
-                if (probeFailed) return Result.success(ServerProtocol.V1)
+    /**
+     * One probe per bound connection. A flight replaced by a bind, or whose leader was cancelled,
+     * answers [ProbeSuperseded], and its waiters ask again against whatever is bound now.
+     */
+    private suspend fun sharedProbe(
+        force: Boolean,
+        fullDetection: Boolean = false,
+    ): Result<ServerProtocol> {
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            var joined: ProbeFlight? = null
+            var leading: ProbeFlight? = null
+            var outlasting: ProbeFlight? = null
+            mutex.withLock {
+                if (!force) {
+                    connection?.serverProtocol?.let { return Result.success(it) }
+                    if (probeFailed) return Result.success(ServerProtocol.V1)
+                }
+                val active = connection
+                if (active == null || connectionProbing == null) {
+                    return Result.success(ServerProtocol.V1)
+                }
+                val inFlight = inFlightProbe.get()
+                if (inFlight != null && fullDetection && !inFlight.fullDetection) {
+                    // A shortcut answer cannot settle a redetection: wait it out, then run in full.
+                    outlasting = inFlight
+                } else if (inFlight != null) {
+                    joined = inFlight
+                } else {
+                    if (force) probeFailed = false
+                    leading =
+                        ProbeFlight(active, fullDetection = fullDetection || active.serverProtocol == null)
+                            .also(inFlightProbe::set)
+                }
             }
-            if (connection == null || connectionProbing == null) {
-                return Result.success(ServerProtocol.V1)
+            outlasting?.let { running ->
+                running.result.await()
+                continue
             }
-            val inFlight = inFlightProbe
-            if (inFlight != null) {
-                existing = inFlight
-            } else {
-                if (force) probeFailed = false
-                val deferred = CompletableDeferred<Result<ServerProtocol>>()
-                inFlightProbe = deferred
-            }
+            val result = joined?.result?.await() ?: leadProbe(checkNotNull(leading), checkNotNull(connectionProbing))
+            if (result.exceptionOrNull() !is ProbeSuperseded) return result
         }
-        existing?.let { return it.await() }
+    }
 
-        val current = connection
-        val probedProfile = profile
-        val probing = connectionProbing
-        if (current == null || probing == null) {
-            val fallback = Result.success(ServerProtocol.V1)
-            completeInFlight(fallback)
-            return fallback
+    /** Runs the flight, and stops waiting on a dead server the moment a bind supersedes it. */
+    private suspend fun leadProbe(
+        flight: ProbeFlight,
+        probing: ConnectionProbing,
+    ): Result<ServerProtocol> =
+        coroutineScope {
+            val work = launch { runProbe(flight, probing) }
+            flight.result.await().also { work.cancel() }
         }
+
+    private suspend fun runProbe(
+        flight: ProbeFlight,
+        probing: ConnectionProbing,
+    ): Result<ServerProtocol> {
         val result =
             try {
-                val server = probing.probeServer(current)
+                val target = if (flight.fullDetection) flight.connection.copy(serverProtocol = null) else flight.connection
+                val server = probing.probeServer(target)
                 val detected = server.protocol
-                val features = if (detected == ServerProtocol.V2) probeV2Features(probing, current, server.version) else null
+                val features = if (detected == ServerProtocol.V2) probeV2Features(probing, flight.connection, server.version) else null
                 mutex.withLock {
                     val active = connection
-                    if (active != null && sameProfileDuringProbe(probedProfile, profile, active, current)) {
+                    if (active == null || inFlightProbe.get() !== flight) {
+                        Result.failure(ProbeSuperseded)
+                    } else {
                         serverVersion = server.version
                         v2Features = features?.getOrNull() ?: V2ServerFeatures()
                         v2FeaturesVersion = features?.getOrNull()?.takeUnless { it.tmpDirectoryUnread }?.let { server.version }
                         connection = active.withProtocol(detected)
                         persistLocked()
                         Result.success(detected)
-                    } else {
-                        Result.success(connection?.serverProtocol ?: ServerProtocol.V1)
                     }
                 }
             } catch (cancelled: CancellationException) {
-                completeInFlight(Result.failure(cancelled))
+                finishFlight(flight, Result.failure(ProbeSuperseded))
                 throw cancelled
             } catch (error: Throwable) {
-                mutex.withLock { probeFailed = true }
-                Result.failure(error)
+                mutex.withLock {
+                    if (inFlightProbe.get() === flight) {
+                        probeFailed = true
+                        Result.failure(error)
+                    } else {
+                        Result.failure(ProbeSuperseded)
+                    }
+                }
             }
-        completeInFlight(result)
+        finishFlight(flight, result)
         return result
     }
 
@@ -257,15 +378,27 @@ class ActiveConnectionManager(
         v2FeaturesVersion = null
     }
 
-    private fun completeInFlight(result: Result<ServerProtocol>) {
-        val deferred = inFlightProbe
-        inFlightProbe = null
-        deferred?.complete(result)
+    private fun finishFlight(
+        flight: ProbeFlight,
+        result: Result<ServerProtocol>,
+    ) {
+        inFlightProbe.compareAndSet(flight, null)
+        flight.result.complete(result)
     }
 
+    /** The connection changed: whoever waits on the running probe asks the new one instead. */
+    private fun supersedeFlight() {
+        inFlightProbe.getAndSet(null)?.result?.complete(Result.failure(ProbeSuperseded))
+    }
+
+    /** Stores a newly detected protocol. An unchanged one writes nothing. */
     private suspend fun persistLocked() {
-        val profile = currentProfile() ?: return
-        connectionProfileStore.saveProfile(profile)
+        val stored = profile ?: return
+        val detected = connection?.serverProtocol ?: return
+        if (stored.serverProtocol == detected) return
+        if (connectionProfileStore.updateStoredProfile(stored.id) { it.copy(serverProtocol = detected) }) {
+            profile = stored.copy(serverProtocol = detected)
+        }
     }
 
     suspend fun applyProfile(
@@ -310,27 +443,17 @@ class ActiveConnectionManager(
     private suspend fun persistAddressChange(
         loaded: ConnectionProfile?,
         resolved: ConnectionProfile?,
-    ) {
-        if (loaded == null || resolved == null) return
+    ): Boolean {
+        if (loaded == null || resolved == null) return false
         if (
             ConnectionProfileIdentity.normalizeBaseUrl(loaded.baseUrl) ==
             ConnectionProfileIdentity.normalizeBaseUrl(resolved.baseUrl)
         ) {
-            return
+            return false
         }
-        connectionProfileStore.saveProfile(resolved)
-    }
-
-    private fun sameProfileDuringProbe(
-        probed: ConnectionProfile?,
-        activeProfile: ConnectionProfile?,
-        active: ServerConnection,
-        probedConnection: ServerConnection,
-    ): Boolean {
-        if (probed != null && activeProfile != null) {
-            return probed.hasSameIdentity(activeProfile)
+        return connectionProfileStore.updateStoredProfile(resolved.id) {
+            it.copy(baseUrl = resolved.baseUrl, serverProtocol = resolved.serverProtocol)
         }
-        return active.hasSameIdentity(probedConnection)
     }
 
     private fun bindLocked(loaded: ConnectionProfile?) {
@@ -341,6 +464,6 @@ class ActiveConnectionManager(
         profile = loaded
         connection = loaded?.let(ServerConnection::fromProfile)
         probeFailed = false
-        completeInFlight(Result.success(loaded?.serverProtocol ?: ServerProtocol.V1))
+        supersedeFlight()
     }
 }

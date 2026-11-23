@@ -7,58 +7,124 @@ import javax.inject.Singleton
 
 @Singleton
 class OpencodeHttpClient
-    @Inject
-    constructor(
-        private val json: Json,
+    internal constructor(
         private val activeConnectionManager: ActiveConnectionManager,
+        private val clientFactory: (ServerConnection) -> HttpClient,
     ) {
+        @Inject
+        constructor(
+            json: Json,
+            activeConnectionManager: ActiveConnectionManager,
+        ) : this(activeConnectionManager, { connection -> KtorClientFactory.create(connection, json) })
+
         @Volatile
-        private var delegate: HttpClient = createClient(activeConnectionManager.current())
+        private var bound: BoundClient = bindClient(activeConnectionManager.current(), clientFactory)
 
         @Synchronized
         fun rebuild() {
-            delegate.close()
-            delegate = createClient(activeConnectionManager.current())
+            bound.client.close()
+            bound = bindClient(activeConnectionManager.current(), clientFactory)
         }
 
-        fun get(): HttpClient = delegate
+        /** Moves to the bound connection, leaving a client that already serves it (and its requests) alone. */
+        @Synchronized
+        fun rebind() {
+            swapIfNeeded(activeConnectionManager.current())
+        }
 
-        private fun createClient(connection: ServerConnection?): HttpClient {
-            val resolved =
-                connection
-                    ?: ServerConnection(
-                        baseUrl = "http://127.0.0.1:1/",
-                        password = null,
-                    )
-            return KtorClientFactory.create(resolved, json)
+        /**
+         * The client of the bound connection, never another's. Inside a connection pin it is the
+         * pinned connection's client, and a changed connection throws [ConnectionChangedException].
+         */
+        fun get(): HttpClient {
+            val pinned = activeConnectionManager.pinnedConnection()
+            val wanted = pinned ?: activeConnectionManager.current()
+            val current = bound
+            if (current.key == clientKey(wanted)) return current.client
+            return synchronized(this) {
+                val live = activeConnectionManager.current()
+                if (pinned != null && clientKey(live) != clientKey(pinned)) throw ConnectionChangedException()
+                swapIfNeeded(live)
+            }
+        }
+
+        private fun swapIfNeeded(connection: ServerConnection?): HttpClient {
+            val current = bound
+            if (current.key == clientKey(connection)) return current.client
+            val next = bindClient(connection, clientFactory)
+            bound = next
+            current.client.close()
+            return next.client
         }
     }
 
+/** A client and the connection it was built for. */
+private class BoundClient(
+    val key: ClientKey?,
+    val client: HttpClient,
+)
+
+/** What a client carries: its address and credentials. A protocol update keeps the client. */
+private data class ClientKey(
+    val baseUrl: String,
+    val username: String,
+    val password: String?,
+)
+
+private fun clientKey(connection: ServerConnection?): ClientKey? = connection?.let { ClientKey(it.baseUrl, it.username, it.password) }
+
+private fun bindClient(
+    connection: ServerConnection?,
+    factory: (ServerConnection) -> HttpClient,
+): BoundClient =
+    BoundClient(
+        key = clientKey(connection),
+        client = factory(connection ?: UNBOUND_CONNECTION),
+    )
+
+/** Fails fast: nothing listens here, so a request with no bound server cannot reach one. */
+private val UNBOUND_CONNECTION = ServerConnection(baseUrl = "http://127.0.0.1:1/", password = null)
+
 @Singleton
 class OpencodeSseHttpClient
-    @Inject
-    constructor(
-        private val json: Json,
+    internal constructor(
         private val activeConnectionManager: ActiveConnectionManager,
+        private val clientFactory: (ServerConnection) -> HttpClient,
     ) {
+        @Inject
+        constructor(
+            json: Json,
+            activeConnectionManager: ActiveConnectionManager,
+        ) : this(
+            activeConnectionManager,
+            { connection ->
+                KtorClientFactory.create(
+                    connection = connection,
+                    json = json,
+                    contentNegotiation = false,
+                    sse = true,
+                )
+            },
+        )
+
         @Volatile
-        private var delegate: HttpClient = createClient(activeConnectionManager.current())
+        private var bound: BoundClient = bindClient(activeConnectionManager.current(), clientFactory)
         private val dials = mutableListOf<Dial>()
         private var retiredBefore: Long = 0L
 
         @Synchronized
         fun rebuild() {
-            val previous = delegate
+            val previous = bound
             val open = dials.toList()
             dials.clear()
-            delegate = createClient(activeConnectionManager.current())
-            previous.close()
+            bound = bindClient(activeConnectionManager.current(), clientFactory)
+            previous.client.close()
             open.forEach { it.client.close() }
         }
 
         @Synchronized
         fun openDial(token: Long): HttpClient {
-            val client = createClient(activeConnectionManager.current())
+            val client = clientFactory(activeConnectionManager.current() ?: UNBOUND_CONNECTION)
             if (token < retiredBefore) {
                 client.close()
                 return client
@@ -81,21 +147,22 @@ class OpencodeSseHttpClient
             stale.forEach { it.client.close() }
         }
 
-        fun get(): HttpClient = delegate
-
-        private fun createClient(connection: ServerConnection?): HttpClient {
-            val resolved =
-                connection
-                    ?: ServerConnection(
-                        baseUrl = "http://127.0.0.1:1/",
-                        password = null,
-                    )
-            return KtorClientFactory.create(
-                connection = resolved,
-                json = json,
-                contentNegotiation = false,
-                sse = true,
-            )
+        /** The client of the bound connection, never another's. */
+        fun get(): HttpClient {
+            val connection = activeConnectionManager.current()
+            val current = bound
+            if (current.key == clientKey(connection)) return current.client
+            return synchronized(this) {
+                val live = activeConnectionManager.current()
+                val latest = bound
+                if (latest.key == clientKey(live)) {
+                    latest.client
+                } else {
+                    bound = bindClient(live, clientFactory)
+                    latest.client.close()
+                    bound.client
+                }
+            }
         }
 
         private data class Dial(

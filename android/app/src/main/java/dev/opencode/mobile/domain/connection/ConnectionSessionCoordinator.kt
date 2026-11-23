@@ -1,14 +1,16 @@
 package dev.opencode.mobile.domain.connection
 
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.StreamOccupancy
 import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.feedback.FeedbackIdentityStore
 import dev.opencode.mobile.domain.live.ProjectionCaches
-import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.model.modelSelectionIdentity
 import dev.opencode.mobile.domain.serverhealth.ServerHealthStore
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.SyncCoordinator
@@ -16,10 +18,12 @@ import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +34,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
@@ -95,6 +100,9 @@ class ConnectionSessionCoordinator
         private val retargetScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private val retargetJob = AtomicReference<Job?>(null)
 
+        /** Where HTTP clients are closed and rebuilt; tests run it on their scheduler. */
+        internal var clientRebuildDispatcher: CoroutineDispatcher = Dispatchers.IO
+
         val profileGeneration: Long
             get() = switchGeneration.get()
 
@@ -112,12 +120,42 @@ class ConnectionSessionCoordinator
         private val profileClearedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val profileCleared: SharedFlow<Unit> = profileClearedEvents.asSharedFlow()
 
+        private val profileListChangedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+        /** An inactive profile was removed: only the list of saved servers changed. */
+        val profileListChanged: SharedFlow<Unit> = profileListChangedEvents.asSharedFlow()
+
         fun currentProfile(): ConnectionProfile? = activeConnectionManager.currentProfile()
 
         suspend fun listProfiles(): List<ConnectionProfile> = connectionProfileStore.listProfiles()
 
         fun bindActiveProfile() {
             projectionCaches.bindProfile(activeConnectionManager.currentProfile()?.id)
+        }
+
+        /**
+         * Once per launch, before any chat binds: drafts and model picks stored by URL move under
+         * their profile id. A failure keeps the old entries, and the next launch tries again.
+         */
+        suspend fun migrateStoredSelections() {
+            try {
+                val profiles = connectionProfileStore.catalogWithoutPasswords().profiles
+                val useCount = profiles.flatMap(ConnectionProfileIdentity::addressesOf).groupingBy { it }.eachCount()
+                profiles.forEach { profile ->
+                    val addresses = ConnectionProfileIdentity.addressesOf(profile)
+                    val identity = profile.modelSelectionIdentity()
+                    composerDraftStore.migrateConnection(identity, addresses)
+                    sessionModelSelectionStore.migrateConnection(
+                        identity,
+                        addresses,
+                        exclusiveAddresses = addresses.filterTo(mutableSetOf()) { useCount[it] == 1 },
+                    )
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                DiagnosticLog.warning(DiagnosticLogArea.Connection, "stored selection migration failed", error)
+            }
         }
 
         suspend fun saveProfile(
@@ -157,15 +195,51 @@ class ConnectionSessionCoordinator
         suspend fun removeProfile(id: String) {
             val generation =
                 mutex.withLock {
+                    if (connectionProfileStore.activeProfile()?.id != id) {
+                        // The active server is untouched: its stream, projections and open chat stay.
+                        removeStoredProfile(id)
+                        return@withLock null
+                    }
+                    retargetJob.getAndSet(null)?.cancel()
                     applyProfileChangeLocked(ProfileChange.Removed(id))
                     switchGeneration.get()
                 }
-            retargetReachableAddress(generation)
+            if (generation == null) {
+                profileListChangedEvents.tryEmit(Unit)
+            } else {
+                retargetReachableAddress(generation)
+            }
         }
 
         suspend fun clearConnectionData() {
+            retargetJob.getAndSet(null)?.cancel()
             mutex.withLock {
                 applyProfileChangeLocked(ProfileChange.Cleared)
+                // No profile is left to check, so Home must not wait on a cancelled check.
+                addressCheckState.value = AddressCheck(switchGeneration.get(), AddressCheck.State.Kept)
+            }
+        }
+
+        /** Forgets the profile and everything stored under it. Re-adding the server starts clean. */
+        private suspend fun removeStoredProfile(id: String) {
+            val removed = connectionProfileStore.listProfiles().firstOrNull { it.id == id }
+            connectionProfileStore.removeProfile(id)
+            if (removed != null) {
+                // Every saved address: entries not migrated yet are still stored by URL.
+                ConnectionProfileIdentity.addressesOf(removed).forEach { address ->
+                    val identity = removed.copy(baseUrl = address).modelSelectionIdentity()
+                    sessionCache.purgeConnection(profileId = removed.id, serverBaseUrl = address)
+                    sessionModelSelectionStore.clearConnection(identity)
+                    composerDraftStore.clearConnection(identity)
+                }
+            }
+            projectionCaches.forgetProfile(id)
+            try {
+                serverHealthStore.purge(id)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                DiagnosticLog.warning(DiagnosticLogArea.Connection, "server health purge failed", error)
             }
         }
 
@@ -190,8 +264,7 @@ class ConnectionSessionCoordinator
             mutex.withLock {
                 if (switchGeneration.get() != generation) return
                 eventStream.stop()
-                httpClient.rebuild()
-                sseHttpClient.rebuild()
+                rebuildClients()
                 if (
                     worldSignals.occupancy.value != StreamOccupancy.Stopped &&
                     activeConnectionManager.current() != null
@@ -200,6 +273,15 @@ class ConnectionSessionCoordinator
                 }
             }
             finishAddressCheck(generation, AddressCheck.State.Moved)
+        }
+
+        /** Closing a client can block. Not cancellable: a bound server must never keep the old client. */
+        private suspend fun rebuildClients() {
+            withContext(NonCancellable + clientRebuildDispatcher) {
+                // A load in the gap may already use the new server's client; it must stay open.
+                httpClient.rebind()
+                sseHttpClient.rebuild()
+            }
         }
 
         private fun finishAddressCheck(
@@ -215,23 +297,33 @@ class ConnectionSessionCoordinator
             // refetch the server we are leaving.
             syncCoordinator.beginProfileSwitch(generation)
             eventStream.stop()
+            val active =
+                try {
+                    commitProfileChange(target)
+                } finally {
+                    // Also after a failure: the stream must not stay stopped on the server still bound.
+                    if (
+                        worldSignals.occupancy.value != StreamOccupancy.Stopped &&
+                        activeConnectionManager.current() != null
+                    ) {
+                        eventStream.start()
+                    }
+                }
+            if (active == null) {
+                profileClearedEvents.emit(Unit)
+            } else {
+                // Every caller checks the saved addresses next; Home must see that before it loads.
+                addressCheckState.value = AddressCheck(generation, AddressCheck.State.Running)
+                profileSavedEvents.emit(Unit)
+            }
+        }
+
+        /** Stores the change and binds its server; returns the profile that is now active. */
+        private suspend fun commitProfileChange(target: ProfileChange): ConnectionProfile? {
             when (target) {
                 is ProfileChange.Switch -> connectionProfileStore.applyProfile(target.id)
                 is ProfileChange.Saved -> Unit
-                is ProfileChange.Removed -> {
-                    // Forget the profile and everything stored under it: password, transcripts
-                    // and activity in the session cache, composer drafts, model selections.
-                    // Re-adding the same server later starts clean.
-                    val removed = connectionProfileStore.listProfiles().firstOrNull { it.id == target.id }
-                    connectionProfileStore.removeProfile(target.id)
-                    if (removed != null) {
-                        val identity = ModelSelectionConnectionIdentity(removed.baseUrl, removed.username)
-                        sessionCache.purgeConnection(profileId = removed.id, serverBaseUrl = removed.baseUrl)
-                        sessionModelSelectionStore.clearConnection(identity)
-                        composerDraftStore.clearConnection(identity)
-                    }
-                    runCatching { serverHealthStore.purge(target.id) }
-                }
+                is ProfileChange.Removed -> removeStoredProfile(target.id)
                 is ProfileChange.Cleared -> {
                     secureCredentialStore.clearAll()
                     connectionProfileStore.clearAll()
@@ -247,32 +339,20 @@ class ConnectionSessionCoordinator
                 } else {
                     connectionProfileStore.activeProfile()
                 }
+            // Bind first: clearing restarts subscribed flows, which fetch from whatever is bound.
+            if (active == null) {
+                activeConnectionManager.disconnect()
+            } else {
+                activeConnectionManager.reloadFromStore()
+            }
+            rebuildClients()
             if (active == null) {
                 projectionCaches.clearAll()
             } else {
                 projectionCaches.clearLiveProjections()
             }
             projectionCaches.bindProfile(active?.id)
-            if (active == null) {
-                activeConnectionManager.disconnect()
-            } else {
-                activeConnectionManager.reloadFromStore()
-            }
-            httpClient.rebuild()
-            sseHttpClient.rebuild()
             worldSignals.emit(WorldSignal.ProfileSwitched)
-            if (
-                worldSignals.occupancy.value != StreamOccupancy.Stopped &&
-                activeConnectionManager.current() != null
-            ) {
-                eventStream.start()
-            }
-            if (active == null) {
-                profileClearedEvents.emit(Unit)
-            } else {
-                // Every caller checks the saved addresses next; Home must see that before it loads.
-                addressCheckState.value = AddressCheck(generation, AddressCheck.State.Running)
-                profileSavedEvents.emit(Unit)
-            }
+            return active
         }
     }

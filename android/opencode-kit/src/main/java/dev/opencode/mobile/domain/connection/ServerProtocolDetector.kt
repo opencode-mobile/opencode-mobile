@@ -5,8 +5,13 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ServerProbeError
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Shared health detection used by connection setup and home probe.
@@ -26,6 +31,8 @@ class ServerProtocolDetector(
         fetchGlobalHealth: suspend () -> HealthDto,
         fetchApiInfo: suspend () -> HealthDto,
         fetchApiHealth: suspend () -> HealthDto,
+        /** The saved protocol: its own answer ends detection without the slowest endpoint. */
+        expected: ServerProtocol? = null,
     ): DetectedServer {
         val (globalHealth, apiInfo, apiHealth, lastError) =
             coroutineScope {
@@ -41,6 +48,10 @@ class ServerProtocolDetector(
                     async {
                         probe("/api/health", fetchApiHealth)
                     }
+                savedProtocolAnswer(expected, global, info, health)?.let { answer ->
+                    coroutineContext.cancelChildren()
+                    return@coroutineScope answer
+                }
                 val globalResult = global.await()
                 val infoResult = info.await()
                 val healthResult = health.await()
@@ -86,13 +97,67 @@ class ServerProtocolDetector(
         return DetectedServer(protocol = protocol, version = version?.trim()?.takeIf { it.isNotEmpty() })
     }
 
+    /**
+     * The answer that settles a saved protocol early, or null to wait for all three. A healthy
+     * `/global/health` always classifies as v1, so it settles alone. A v2 answer settles once
+     * `/global/health` had [SAVED_V2_GLOBAL_GRACE_MS] to say the server is v1 now.
+     */
+    private suspend fun savedProtocolAnswer(
+        expected: ServerProtocol?,
+        global: Deferred<Result<HealthDto>>,
+        info: Deferred<Result<HealthDto>>,
+        health: Deferred<Result<HealthDto>>,
+    ): ProbeRound? =
+        when (expected) {
+            ServerProtocol.V1 ->
+                global
+                    .await()
+                    .getOrNull()
+                    ?.takeIf { it.healthy == true }
+                    ?.let { ProbeRound(it, null, null, null) }
+            ServerProtocol.V2 -> {
+                val usable = firstUsableV2(info, health)
+                if (usable == null) {
+                    null
+                } else {
+                    val globalAnswer = withTimeoutOrNull(SAVED_V2_GLOBAL_GRACE_MS) { global.await() }?.getOrNull()
+                    ProbeRound(globalAnswer, usable, null, null)
+                }
+            }
+            null -> null
+        }
+
+    /** The first of the two v2 endpoints to answer with a usable payload; null when neither does. */
+    private suspend fun firstUsableV2(
+        info: Deferred<Result<HealthDto>>,
+        health: Deferred<Result<HealthDto>>,
+    ): HealthDto? {
+        val remaining = mutableListOf(info, health)
+        while (remaining.isNotEmpty()) {
+            val (finished, answer) =
+                select {
+                    remaining.forEach { candidate ->
+                        candidate.onAwait { result -> candidate to result }
+                    }
+                }
+            remaining.remove(finished)
+            answer.getOrNull()?.takeIf { it.pid != null && it.healthy != false }?.let { return it }
+        }
+        return null
+    }
+
     private suspend fun probe(
         path: String,
         fetch: suspend () -> HealthDto,
     ): Result<HealthDto> {
         val result =
-            runCatching { fetch() }
-                .recoverCatching { throw adapter.mapProbeError(it) }
+            try {
+                Result.success(fetch())
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                Result.failure(adapter.mapProbeError(error))
+            }
         result.exceptionOrNull()?.let { error ->
             DiagnosticLog.warning(
                 DiagnosticLogArea.Connection,
@@ -119,6 +184,11 @@ class ServerProtocolDetector(
         val apiHealth: HealthDto?,
         val lastError: Throwable?,
     )
+
+    companion object {
+        /** How long a saved v2 server's answer waits for `/global/health` to report v1 instead. */
+        const val SAVED_V2_GLOBAL_GRACE_MS = 750L
+    }
 }
 
 /** A probed server: its protocol and the version its health endpoint reported. */
