@@ -160,12 +160,15 @@ interface SessionCacheDao {
     @Query("SELECT connection_id, entry_id FROM session_cache_snapshot WHERE kind = :kind")
     suspend fun entriesOfKind(kind: String): List<SessionCacheEntryRef>
 
-    /** Keys of [connectionId]'s rows of [kind] past the [keep] most recently used. */
+    /**
+     * Keys of [connectionId]'s rows of [kind] past the [keep] most recently used. Rows never
+     * committed (`synced_at_ms` 0) rank last, so an empty placeholder cannot push out a transcript.
+     */
     @Query(
         """
         SELECT cache_key FROM session_cache_snapshot
         WHERE connection_id = :connectionId AND kind = :kind
-        ORDER BY MAX(COALESCE(retained_at_ms, 0), synced_at_ms) DESC, cache_key ASC
+        ORDER BY (synced_at_ms = 0) ASC, MAX(COALESCE(retained_at_ms, 0), synced_at_ms) DESC, cache_key ASC
         LIMIT -1 OFFSET :keep
         """,
     )

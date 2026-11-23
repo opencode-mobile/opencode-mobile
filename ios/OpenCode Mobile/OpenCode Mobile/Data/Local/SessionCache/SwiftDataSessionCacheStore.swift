@@ -282,6 +282,8 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
             // Without the payloads: a timeline can be large.
             descriptor.propertiesToFetch = [\.cacheKey, \.worktree, \.entryId, \.syncedAtEpochMs, \.retainedAtEpochMs]
             let oldestFirst = try context.fetch(descriptor).sorted {
+                // Never committed: an empty placeholder must not push out a transcript.
+                if ($0.syncedAtEpochMs == 0) != ($1.syncedAtEpochMs == 0) { return $0.syncedAtEpochMs == 0 }
                 let left = max($0.syncedAtEpochMs, $0.retainedAtEpochMs ?? 0)
                 let right = max($1.syncedAtEpochMs, $1.retainedAtEpochMs ?? 0)
                 return left == right ? $0.cacheKey < $1.cacheKey : left < right
