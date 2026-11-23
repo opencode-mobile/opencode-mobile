@@ -169,7 +169,8 @@ class SessionChatTimeline(
             lastTimelineFrame?.rows.orEmpty().any {
                 it.role == MessageRole.User && it.pendingDelivery == FollowUpDelivery.Steer && it.steer == null
             }
-        if (!hasUnmarkedSteer) return
+        // A live snapshot already waiting reads the new run state when it publishes.
+        if (!hasUnmarkedSteer || pendingLiveDisplayApply != null) return
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
         applyLoadedDisplayMessages(
@@ -177,7 +178,7 @@ class SessionChatTimeline(
             sourceSessionId = sessionId,
             sourceWorktree = worktree,
             fromQuietRefresh = true,
-            source = "session-run",
+            source = SOURCE_SESSION_RUN,
             messagesFromCache = _state.value.messagesFromCache,
         )
     }
@@ -1054,6 +1055,7 @@ class SessionChatTimeline(
             source != "commands-ready" &&
             source != "collapse-pref" &&
             source != "chip-pref" &&
+            source != SOURCE_SESSION_RUN &&
             source != SOURCE_CHILD_SESSIONS
 
     private fun applyPendingPromptOverlay(
@@ -1596,6 +1598,7 @@ class SessionChatTimeline(
         private const val TAG = "SessionChatTimeline"
         private const val SOURCE_PENDING_PROMPT = "pending-prompt"
         private const val SOURCE_CHILD_SESSIONS = "child-sessions"
+        private const val SOURCE_SESSION_RUN = "session-run"
         private const val CHILD_SESSION_LOOKUP_ATTEMPTS = 3
 
         /**

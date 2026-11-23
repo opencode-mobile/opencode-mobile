@@ -109,17 +109,18 @@ final class SessionChatTimeline {
         guard timelineFrame.rows.contains(where: {
             $0.role == .user && $0.pendingDelivery == .steer && $0.steer == nil
         }) else { return }
-        let snapshot = lastLoadedDisplayMessages
-        let fromCache = state.messagesFromCache
-        Task {
-            await applyLoadedDisplayMessagesTransform(
-                snapshot,
+        // Queued so a session switch drops it with the rest of this session's applies.
+        pendingRequiredDisplayApplies.append(
+            PendingRequiredDisplayApply(
+                displayMessages: lastLoadedDisplayMessages,
                 isRefreshing: false,
                 fromQuietRefresh: true,
-                messagesFromCache: fromCache,
-                expirePendingPromptPatches: false
+                messagesFromCache: state.messagesFromCache,
+                expirePendingPromptPatches: false,
+                onPublished: nil
             )
-        }
+        )
+        kickDisplayApply()
     }
 
     func updateCollapseConsecutiveToolCalls(_ enabled: Bool) {

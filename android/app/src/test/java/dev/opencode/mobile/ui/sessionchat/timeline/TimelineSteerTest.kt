@@ -209,6 +209,59 @@ class TimelineSteerTest {
     }
 
     @Test
+    fun steerRunTracker_outputLoadedBeforeLateBusyStillCounts() {
+        val tracker = SteerRunTracker()
+        val idle = listOf(prompt("u1", "Start"), done("a1"))
+        tracker.update(isBusy = false, isResolved = true, messages = idle)
+
+        val loadedFirst = idle + prompt("u2", "Next") + done("a2")
+        tracker.update(isBusy = false, isResolved = true, messages = loadedFirst)
+        tracker.update(isBusy = true, isResolved = true, messages = loadedFirst)
+
+        assertTrue(tracker.hasOutput(loadedFirst + waiting("u3", "Steer", FollowUpDelivery.Steer)))
+    }
+
+    @Test
+    fun steerRunTracker_lateOutputOfFinishedRunIsNotTheNextRuns() {
+        val tracker = SteerRunTracker()
+        val running = listOf(prompt("u1", "Start"), done("a1"), prompt("u2", "Next"))
+        tracker.update(isBusy = false, isResolved = true, messages = running.take(2))
+        tracker.update(isBusy = true, isResolved = true, messages = running)
+        tracker.update(isBusy = false, isResolved = true, messages = running)
+
+        val settled = running + done("a2")
+        tracker.update(isBusy = false, isResolved = true, messages = settled)
+        tracker.update(isBusy = true, isResolved = true, messages = settled)
+
+        assertFalse(tracker.hasOutput(settled + waiting("u3", "Next", FollowUpDelivery.Steer)))
+    }
+
+    @Test
+    fun steerRunTracker_idlePromptAfterARunMissedWhileIdleIsNotASteer() {
+        val tracker = SteerRunTracker()
+        val idle = listOf(prompt("u1", "Start"), done("a1"))
+        tracker.update(isBusy = false, isResolved = true, messages = idle)
+        val missedRun = idle + prompt("u2", "Elsewhere") + done("a2")
+        tracker.update(isBusy = false, isResolved = true, messages = missedRun)
+
+        val waking = missedRun + waiting("u3", "Next", FollowUpDelivery.Steer)
+        tracker.update(isBusy = true, isResolved = true, messages = waking)
+
+        assertFalse(tracker.hasOutput(waking))
+    }
+
+    @Test
+    fun steerRunTracker_historyLoadedAfterFirstIdleStatusIsSettled() {
+        val tracker = SteerRunTracker()
+        tracker.update(isBusy = false, isResolved = true, messages = emptyList())
+        val loaded = listOf(prompt("u1", "Start"), done("a1"))
+        tracker.update(isBusy = false, isResolved = true, messages = loaded)
+        tracker.update(isBusy = true, isResolved = true, messages = loaded)
+
+        assertFalse(tracker.hasOutput(loaded + waiting("u2", "Next", FollowUpDelivery.Steer)))
+    }
+
+    @Test
     fun optimisticBusySteer_handsOffToServerRowWithoutDuplicate() {
         val optimisticRow = optimisticRow(CLIENT_ID, "Use staging", FollowUpDelivery.Steer)
         val optimistic = OptimisticInputs(pendingRows = listOf(optimisticRow), baselineIds = setOf("u1", "a1"))

@@ -16,12 +16,16 @@ nonisolated struct SteerRunTracker: Equatable, Sendable {
     private var hasResolvedStatus = false
     private var isBusy = false
     private var baselineAssistantID: String?
+    private var settledUserID: String?
+    private var settledAssistantID: String?
 
     mutating func update(isBusy: Bool, isResolved: Bool, messages: [Message]) {
         guard isResolved else { return }
         if isBusy, !self.isBusy {
             // Opening a session mid-run: everything loaded may belong to this run.
-            baselineAssistantID = hasResolvedStatus ? Self.newestAssistantID(messages) : nil
+            baselineAssistantID = hasResolvedStatus ? runBaseline(messages) : nil
+        } else if !isBusy {
+            settle(messages)
         }
         hasResolvedStatus = true
         self.isBusy = isBusy
@@ -30,6 +34,23 @@ nonisolated struct SteerRunTracker: Equatable, Sendable {
     func hasOutput(_ messages: [Message]) -> Bool {
         guard isBusy, let newest = Self.newestAssistantID(messages) else { return false }
         return newest != baselineAssistantID
+    }
+
+    /// Follows late output of the finished run while idle. A newer user prompt means another
+    /// run has started and its busy status is still on the way, so its output is not settled.
+    private mutating func settle(_ messages: [Message]) {
+        let newestUserID = messages.last(where: { $0.role == .user })?.id
+        let stayedIdle = hasResolvedStatus && !isBusy
+        if stayedIdle, settledUserID != nil, newestUserID != settledUserID { return }
+        settledUserID = newestUserID
+        settledAssistantID = Self.newestAssistantID(messages)
+    }
+
+    /// A prompt waiting after the newest assistant message woke this run, so nothing before it is output.
+    private func runBaseline(_ messages: [Message]) -> String? {
+        let afterNewest = messages.lastIndex(where: { $0.role == .assistant }).map { $0 + 1 } ?? 0
+        let promptWokeRun = messages[afterNewest...].contains { $0.role == .user && $0.isWaitingForPickup }
+        return promptWokeRun ? Self.newestAssistantID(messages) : settledAssistantID
     }
 
     private static func newestAssistantID(_ messages: [Message]) -> String? {

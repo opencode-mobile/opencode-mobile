@@ -156,6 +156,55 @@ struct SessionChatTimelineSteerTests {
         #expect(tracker.hasOutput(loaded))
     }
 
+    @Test func steerRunTracker_outputLoadedBeforeLateBusyStillCounts() {
+        var tracker = SteerRunTracker()
+        let idle = [prompt("u1", "Start"), done("a1")]
+        tracker.update(isBusy: false, isResolved: true, messages: idle)
+
+        let loadedFirst = idle + [prompt("u2", "Next"), done("a2")]
+        tracker.update(isBusy: false, isResolved: true, messages: loadedFirst)
+        tracker.update(isBusy: true, isResolved: true, messages: loadedFirst)
+
+        #expect(tracker.hasOutput(loadedFirst + [waiting("u3", "Steer", .steer)]))
+    }
+
+    @Test func steerRunTracker_lateOutputOfFinishedRunIsNotTheNextRuns() {
+        var tracker = SteerRunTracker()
+        let running = [prompt("u1", "Start"), done("a1"), prompt("u2", "Next")]
+        tracker.update(isBusy: false, isResolved: true, messages: Array(running.prefix(2)))
+        tracker.update(isBusy: true, isResolved: true, messages: running)
+        tracker.update(isBusy: false, isResolved: true, messages: running)
+
+        let settled = running + [done("a2")]
+        tracker.update(isBusy: false, isResolved: true, messages: settled)
+        tracker.update(isBusy: true, isResolved: true, messages: settled)
+
+        #expect(!tracker.hasOutput(settled + [waiting("u3", "Next", .steer)]))
+    }
+
+    @Test func steerRunTracker_idlePromptAfterARunMissedWhileIdleIsNotASteer() {
+        var tracker = SteerRunTracker()
+        let idle = [prompt("u1", "Start"), done("a1")]
+        tracker.update(isBusy: false, isResolved: true, messages: idle)
+        let missedRun = idle + [prompt("u2", "Elsewhere"), done("a2")]
+        tracker.update(isBusy: false, isResolved: true, messages: missedRun)
+
+        let waking = missedRun + [waiting("u3", "Next", .steer)]
+        tracker.update(isBusy: true, isResolved: true, messages: waking)
+
+        #expect(!tracker.hasOutput(waking))
+    }
+
+    @Test func steerRunTracker_historyLoadedAfterFirstIdleStatusIsSettled() {
+        var tracker = SteerRunTracker()
+        tracker.update(isBusy: false, isResolved: true, messages: [])
+        let loaded = [prompt("u1", "Start"), done("a1")]
+        tracker.update(isBusy: false, isResolved: true, messages: loaded)
+        tracker.update(isBusy: true, isResolved: true, messages: loaded)
+
+        #expect(!tracker.hasOutput(loaded + [waiting("u2", "Next", .steer)]))
+    }
+
     @Test func optimisticBusySteer_handsOffToServerRowWithoutDuplicate() {
         let id = "msg_19a1b2c3d4e5AbCdEfGhIjKlMn"
         let optimisticRow = TimelineRow(

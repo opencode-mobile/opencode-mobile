@@ -23,6 +23,8 @@ class SteerRunTracker {
     private var hasResolvedStatus = false
     private var isBusy = false
     private var baselineAssistantId: String? = null
+    private var settledUserId: String? = null
+    private var settledAssistantId: String? = null
 
     fun update(
         isBusy: Boolean,
@@ -32,7 +34,9 @@ class SteerRunTracker {
         if (!isResolved) return
         if (isBusy && !this.isBusy) {
             // Opening a session mid-run: everything loaded may belong to this run.
-            baselineAssistantId = if (hasResolvedStatus) newestAssistantId(messages) else null
+            baselineAssistantId = if (hasResolvedStatus) runBaseline(messages) else null
+        } else if (!isBusy) {
+            settle(messages)
         }
         hasResolvedStatus = true
         this.isBusy = isBusy
@@ -42,6 +46,26 @@ class SteerRunTracker {
         if (!isBusy) return false
         val newest = newestAssistantId(messages) ?: return false
         return newest != baselineAssistantId
+    }
+
+    /**
+     * Follows late output of the finished run while idle. A newer user prompt means another
+     * run has started and its busy status is still on the way, so its output is not settled.
+     */
+    private fun settle(messages: List<Message>) {
+        val newestUserId = messages.lastOrNull { it.role == MessageRole.User }?.id
+        val stayedIdle = hasResolvedStatus && !isBusy
+        if (stayedIdle && settledUserId != null && newestUserId != settledUserId) return
+        settledUserId = newestUserId
+        settledAssistantId = newestAssistantId(messages)
+    }
+
+    /** A prompt waiting after the newest assistant message woke this run, so nothing before it is output. */
+    private fun runBaseline(messages: List<Message>): String? {
+        val newestIndex = messages.indexOfLast { it.role == MessageRole.Assistant }
+        val promptWokeRun =
+            messages.drop(newestIndex + 1).any { it.role == MessageRole.User && it.isWaitingForPickup }
+        return if (promptWokeRun) newestAssistantId(messages) else settledAssistantId
     }
 
     private fun newestAssistantId(messages: List<Message>): String? = messages.lastOrNull { it.role == MessageRole.Assistant }?.id
