@@ -43,7 +43,24 @@ struct SessionChatActivitySlotView: View {
         if slot.showsOverflowButton {
             widths.overflow = OpenCodeFloatingPill.fullWidth(textWidth: overflowTextWidth, hasMark: false, hasClose: false)
         }
-        return SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: turnStatus?.phase.folds == true)
+        return SessionChatPillSlots.pillRowFold(
+            widths: widths,
+            turnCanFold: turnStatus?.phase.folds == true,
+            turnMergesWhenCompact: SessionChatPillSlots.turnMergesIntoActivity(
+                turnStatus: turnStatus,
+                turnCompact: true,
+                primary: slot.primary
+            )
+        )
+    }
+
+    /// The folded Working spinner gives way to the running activity pill beside it.
+    private var turnMerged: Bool {
+        SessionChatPillSlots.turnMergesIntoActivity(
+            turnStatus: turnStatus,
+            turnCompact: turnStatus?.compact == true || rowFold.turnCompact,
+            primary: slot.primary
+        )
     }
 
     /// Hidden copies of the labels: the pills themselves fold, so they cannot report full width.
@@ -90,7 +107,7 @@ struct SessionChatActivitySlotView: View {
                 }
             }
             HStack(spacing: 0) {
-                if let turnStatus {
+                if let turnStatus, !turnMerged {
                     // One identity across every phase, so the label, width and mark change in place.
                     OpenCodeTurnStatusPill(
                         phase: turnStatus.phase,
@@ -133,6 +150,7 @@ struct SessionChatActivitySlotView: View {
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.78), value: stackOpen)
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : OpenCodeFloatingPill.widthAnimation, value: slot)
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : OpenCodeFloatingPill.widthAnimation, value: turnStatus == nil)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : OpenCodeFloatingPill.widthAnimation, value: turnMerged)
         .onChange(of: slot.showsOverflowButton) { _, shows in
             if !shows, !slot.isCollapsed { stackOpen = false }
         }
@@ -151,13 +169,15 @@ struct SessionChatActivitySlotView: View {
         let collapsed = slot.isCollapsed
         let count = slot.allItems.count
         let pending: Bool = if case .queued = primary { true } else { false }
+        let label = collapsed
+            ? Self.collapsedAccessibilityLabel(primary, count: count, stackOpen: stackOpen)
+            : Self.accessibilityLabel(primary)
         return pill(
             primary,
             compact: collapsed || slot.primaryCompact || rowFold.secondaryCompact,
             summary: collapsed ? OpenCodeFloatingPillSummary(count: count, pending: pending) : nil,
-            accessibilityLabel: collapsed
-                ? Self.collapsedAccessibilityLabel(primary, count: count, stackOpen: stackOpen)
-                : nil,
+            // The hidden spinner's status is still spoken, by the pill that replaced it.
+            accessibilityLabel: Self.withMergedTurn(turnLabel: turnMerged ? turnStatus?.phase.label : nil, label: label),
             action: collapsed ? { stackOpen.toggle() } : nil
         )
     }
@@ -279,6 +299,15 @@ struct SessionChatActivitySlotView: View {
         return String(
             localized: "session_chat.activity.status_action",
             defaultValue: "\(statusText). \(toggleText)"
+        )
+    }
+
+    /// `label`, led by the turn status of a Working pill merged into this one, if any.
+    static func withMergedTurn(turnLabel: String?, label: String) -> String {
+        guard let turnLabel else { return label }
+        return String(
+            localized: "session_chat.activity.status_action",
+            defaultValue: "\(turnLabel). \(label)"
         )
     }
 
@@ -493,6 +522,7 @@ enum SessionChatCornerSlotsLayout {
 struct SessionChatTimelineActivityOnlySlot: View {
     let props: SessionChatTimelineViewProps
     @State private var stackOpen = false
+    @State private var rowWidth: CGFloat = 0
 
     var body: some View {
         SessionChatActivitySlotView(
@@ -508,10 +538,13 @@ struct SessionChatTimelineActivityOnlySlot: View {
                 keyboardVisible: props.keyboardVisible,
                 awayFromEnd: false
             ),
+            rowWidth: rowWidth,
             stackOpen: $stackOpen,
             onTap: props.onActivityTap,
             onClose: props.onActivityClose
         )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
         .padding(.horizontal, SessionChatCornerSlotsLayout.horizontalPadding)
         .padding(.bottom, SessionChatCornerSlotsLayout.rowBottom(overlayInset: props.bottomOverlayInset))
     }

@@ -40,6 +40,7 @@ import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPill
+import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
 import dev.opencode.mobile.ui.components.floatingPillChromeWidth
 import dev.opencode.mobile.ui.components.label
 import dev.opencode.mobile.ui.components.openCodeTurnStatusPillChromeWidth
@@ -78,6 +79,16 @@ internal object SessionChatCornerSlotsLayout {
      * the pill and the last row. Scroll-to-end and Syncing are overlays and reserve nothing.
      */
     fun reservedHeight(hasActivity: Boolean): Dp = if (hasActivity) PillHeight else 0.dp
+
+    /**
+     * What the bottom-right pills take from the row, beyond the one gap the fold already counts:
+     * the row's second gap around its spacer, and the navigation pill's own leading gap.
+     */
+    fun trailingRowWidth(
+        pillsPx: Int,
+        hasNavigation: Boolean,
+        spacingPx: Int,
+    ): Int = if (pillsPx == 0) 0 else pillsPx + spacingPx + if (hasNavigation) spacingPx else 0
 }
 
 private const val PillRevealMs = 260
@@ -158,25 +169,31 @@ internal fun SessionChatActivitySlotView(
             horizontalArrangement = Arrangement.spacedBy(SessionChatCornerSlotsLayout.Spacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val turnCompact = turnStatus != null && (turnStatus.compact || (turnStatus.canFold && fold.turnCompact))
+            val turnMerged = SessionChatPillSlots.turnMergesIntoActivity(turnStatus, turnCompact, primary)
+            // The hidden spinner's status is still spoken, by the pill that replaced it.
+            val mergedTurnLabel = (turnStatus?.phase as? OpenCodeTurnStatusPillPhase.Working)?.label?.takeIf { turnMerged }
             // One call site across every phase, so label and width change in place and the
             // spinner can morph into the check.
             if (turnStatus != null) {
                 val turnItem = turnStatus.item
-                OpenCodeTurnStatusPill(
-                    phase = turnStatus.phase,
-                    compact = turnStatus.compact || (turnStatus.canFold && fold.turnCompact),
-                    maxWidthPx = fold.turnMaxWidth,
-                    leaving = turnStatus.leaving,
-                    accessibilityLabel = turnItem?.let { SessionChatActivityPillCopy.accessibilityLabel(it).resolve() },
-                    onClick =
-                        turnItem?.let { item ->
-                            {
-                                onStackOpenChange(false)
-                                onClick(item)
-                            }
-                        },
-                    onClose = turnItem?.takeIf { turnStatus.isClosable }?.let { item -> { onClose(item) } },
-                )
+                SessionChatPillReveal(visible = !turnMerged) {
+                    OpenCodeTurnStatusPill(
+                        phase = turnStatus.phase,
+                        compact = turnCompact,
+                        maxWidthPx = fold.turnMaxWidth,
+                        leaving = turnStatus.leaving,
+                        accessibilityLabel = turnItem?.let { SessionChatActivityPillCopy.accessibilityLabel(it).resolve() },
+                        onClick =
+                            turnItem?.let { item ->
+                                {
+                                    onStackOpenChange(false)
+                                    onClick(item)
+                                }
+                            },
+                        onClose = turnItem?.takeIf { turnStatus.isClosable }?.let { item -> { onClose(item) } },
+                    )
+                }
             }
             // One call site for both forms, so collapsing folds this pill's width instead of
             // swapping in a second pill.
@@ -187,11 +204,16 @@ internal fun SessionChatActivitySlotView(
                     compact = collapsed || slot.primaryCompact || fold.secondaryCompact,
                     badgeCount = if (collapsed) slot.itemCount else 0,
                     accessibilityLabel =
-                        if (collapsed) {
-                            SessionChatActivityPillCopy.collapsedAccessibilityLabel(primary, slot.itemCount, stackOpen)
-                        } else {
-                            SessionChatActivityPillCopy.accessibilityLabel(primary)
-                        }.resolve(),
+                        SessionChatActivityPillCopy
+                            .withMergedTurn(
+                                turnLabel = mergedTurnLabel,
+                                label =
+                                    if (collapsed) {
+                                        SessionChatActivityPillCopy.collapsedAccessibilityLabel(primary, slot.itemCount, stackOpen)
+                                    } else {
+                                        SessionChatActivityPillCopy.accessibilityLabel(primary)
+                                    },
+                            ).resolve(),
                     onClick = {
                         if (collapsed) {
                             onStackOpenChange(!stackOpen)
@@ -231,6 +253,7 @@ internal fun rememberSessionChatPillRowFold(
     slot: SessionChatActivitySlot,
     trailing: List<Pair<OpenCodeFloatingPillLayout, Boolean>>,
     availablePx: Int,
+    hasNavigation: Boolean = false,
 ): SessionChatPillRowFold {
     if (availablePx <= 0) return SessionChatPillRowFold()
     val measurer = rememberTextMeasurer(cacheSize = 16)
@@ -271,8 +294,11 @@ internal fun rememberSessionChatPillRowFold(
         }
     val spacingPx = px(SessionChatCornerSlotsLayout.Spacing)
     val trailingPx =
-        trailing.sumOf { (layout, compact) -> if (compact) compactPx else pillPx(layout, OpenCodeFloatingPillState.Live) } +
-            spacingPx * (trailing.size - 1).coerceAtLeast(0)
+        SessionChatCornerSlotsLayout.trailingRowWidth(
+            pillsPx = trailing.sumOf { (layout, compact) -> if (compact) compactPx else pillPx(layout, OpenCodeFloatingPillState.Live) },
+            hasNavigation = hasNavigation,
+            spacingPx = spacingPx,
+        )
     return SessionChatPillSlots.pillRowFold(
         widths =
             SessionChatPillRowWidths(
@@ -286,6 +312,7 @@ internal fun rememberSessionChatPillRowFold(
                 spacing = spacingPx,
             ),
         turnCanFold = turnStatus?.canFold == true,
+        turnMergesWhenCompact = SessionChatPillSlots.turnMergesIntoActivity(turnStatus, turnCompact = true, primary = primary),
     )
 }
 
@@ -387,6 +414,13 @@ internal object SessionChatActivityPillCopy {
             }
         return UiText.resource(R.string.session_chat_activity_status_action, status(primary), toggle)
     }
+
+    /** [label], led by the turn status of a Working pill merged into this one, if any. */
+    fun withMergedTurn(
+        turnLabel: String?,
+        label: UiText,
+    ): UiText =
+        turnLabel?.let { UiText.resource(R.string.session_chat_activity_status_action, UiText.verbatim(it), label) } ?: label
 
     /** The item's state, as read aloud. */
     private fun status(item: SessionChatActivityItem): UiText =

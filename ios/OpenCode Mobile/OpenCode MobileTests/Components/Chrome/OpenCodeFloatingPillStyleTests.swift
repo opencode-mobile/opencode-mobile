@@ -155,7 +155,7 @@ struct OpenCodeFloatingPillOptionsTests {
         #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .needsAttention) == .icon(.arrowUpward))
         #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .error) == .glyph("!"))
         #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .ready) == .icon(.check))
-        #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .live) == .pulsingDot)
+        #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .live) == .spinner)
         #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .done) == .doneCheck)
         #expect(OpenCodeFloatingPillStyle.leading(layout: .summary(count: 1, pending: true), state: .ready) == .glyph("⋯"))
         #expect(OpenCodeFloatingPillStyle.badgeCount(layout: layout) == 3)

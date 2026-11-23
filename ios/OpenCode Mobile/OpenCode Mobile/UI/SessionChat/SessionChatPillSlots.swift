@@ -261,7 +261,12 @@ enum SessionChatPillSlots {
     /// What the bottom row folds to fit. A Working or Done pill folds first, and the secondary
     /// too if that is not enough. Attention and failed never fold, so the secondary gives way,
     /// and if the row still overflows the turn pill's label truncates.
-    static func pillRowFold(widths: SessionChatPillRowWidths, turnCanFold: Bool) -> SessionChatPillRowFold {
+    /// With `turnMergesWhenCompact` the folded turn pill takes no room at all.
+    static func pillRowFold(
+        widths: SessionChatPillRowWidths,
+        turnCanFold: Bool,
+        turnMergesWhenCompact: Bool = false
+    ) -> SessionChatPillRowFold {
         // Each left pill carries its spacing; the measured trailing width includes its own.
         func total(turn: CGFloat, secondary: CGFloat) -> CGFloat {
             let left = [turn, secondary, widths.overflow].filter { $0 > 0 }
@@ -272,7 +277,8 @@ enum SessionChatPillSlots {
             return SessionChatPillRowFold()
         }
         if turnCanFold {
-            if total(turn: min(widths.turn, widths.compact), secondary: widths.secondary) <= widths.available {
+            let foldedTurn = turnMergesWhenCompact ? 0 : min(widths.turn, widths.compact)
+            if total(turn: foldedTurn, secondary: widths.secondary) <= widths.available {
                 return SessionChatPillRowFold(turnCompact: true)
             }
             return SessionChatPillRowFold(turnCompact: true, secondaryCompact: widths.secondary > 0)
@@ -283,6 +289,17 @@ enum SessionChatPillSlots {
             fold.turnMaxWidth = max(widths.compact, widths.turn - excess)
         }
         return fold
+    }
+
+    /// A folded Working pill is a bare spinner, so beside a running activity pill it would only
+    /// repeat that pill's spinner. The activity pill stays because it is the one that opens.
+    static func turnMergesIntoActivity(
+        turnStatus: SessionChatTurnStatusSlot?,
+        turnCompact: Bool,
+        primary: SessionChatActivityItem?
+    ) -> Bool {
+        guard turnCompact, case .working = turnStatus?.phase else { return false }
+        return primary?.priority == .running
     }
 
     /// The pill row's reserve while the reader is away from the end stays what it was, so a

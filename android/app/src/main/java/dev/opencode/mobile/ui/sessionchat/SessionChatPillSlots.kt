@@ -279,11 +279,12 @@ object SessionChatPillSlots {
     /**
      * Folds the row to fit its measured widths. A Working or Done pill folds first; Attention
      * and Failed never fold, so the secondary pill gives way instead. A secondary pill that fits
-     * never folds the turn pill.
+     * never folds the turn pill. With [turnMergesWhenCompact] the folded turn pill takes no room.
      */
     internal fun pillRowFold(
         widths: SessionChatPillRowWidths,
         turnCanFold: Boolean,
+        turnMergesWhenCompact: Boolean = false,
     ): SessionChatPillRowFold {
         fun total(
             turn: Int,
@@ -305,9 +306,23 @@ object SessionChatPillSlots {
                 turnMaxWidth = if (excess > 0 && widths.turn > 0) maxOf(widths.turnCompact, widths.turn - excess) else null,
             )
         }
-        if (fits(widths.turnCompact, widths.secondary)) return SessionChatPillRowFold(turnCompact = true)
+        val foldedTurn = if (turnMergesWhenCompact) 0 else widths.turnCompact
+        if (fits(foldedTurn, widths.secondary)) return SessionChatPillRowFold(turnCompact = true)
         return SessionChatPillRowFold(turnCompact = true, secondaryCompact = widths.secondary > 0)
     }
+
+    /**
+     * A folded Working pill is a bare spinner, so beside a running activity pill it would only
+     * repeat that pill's spinner. The activity pill stays because it is the one that opens.
+     */
+    internal fun turnMergesIntoActivity(
+        turnStatus: SessionChatTurnStatusSlot?,
+        turnCompact: Boolean,
+        primary: SessionChatActivityItem?,
+    ): Boolean =
+        turnCompact &&
+            turnStatus?.phase is OpenCodeTurnStatusPillPhase.Working &&
+            primary?.priority == SessionChatActivityPriority.Running
 
     /** Away from the end with the keyboard down, the left side folds into one round pill. */
     fun collapsesActivity(
