@@ -7,6 +7,10 @@ import kotlin.math.min
 /** Turns recorded pings and events into the numbers Server Health shows. Pure; no clock of its own. */
 object ServerHealthReportBuilder {
     const val RECENT_WINDOW_MS: Long = 30L * 60_000L
+    const val ERROR_LOG_LIMIT: Int = 100
+
+    /** Failed checks further apart than three ping intervals are separate incidents. */
+    private const val ERROR_RUN_GAP_MS: Long = 90_000L
 
     private val dropTargets =
         setOf(
@@ -103,6 +107,9 @@ object ServerHealthReportBuilder {
                 .sortedBy { it.atMs }
                 .map { ServerHealthRestart(it.atMs, it.value.ifEmpty { null }, it.detail) }
 
+        val buckets = buckets(range, rangeStart, nowMs, segments, drops, rangePings)
+        val errorLog = errorLog(rangePings, events.filter { it.atMs in rangeStart..nowMs })
+
         return ServerHealthReport(
             range = range,
             rangeStartMs = rangeStart,
@@ -121,8 +128,55 @@ object ServerHealthReportBuilder {
             failuresByCategory = failuresByCategory,
             restarts = restarts,
             lastRestartAtMs = restartEvents.maxOfOrNull { it.atMs },
-            buckets = buckets(range, rangeStart, nowMs, segments, drops, rangePings),
+            buckets = buckets,
+            openBuckets = openTimeline(buckets),
+            errorLog = errorLog.take(ERROR_LOG_LIMIT),
+            errorLogTotal = errorLog.size,
             isEmpty = pings.isEmpty() && events.isEmpty(),
+        )
+    }
+
+    /** Drops closed-app time at both ends and shrinks each gap between app sessions to one bucket. */
+    fun openTimeline(buckets: List<ServerHealthBucket>): List<ServerHealthBucket> {
+        fun closed(bucket: ServerHealthBucket) = bucket.condition == ServerHealthBucketCondition.Unobserved
+        val first = buckets.indexOfFirst { !closed(it) }
+        if (first < 0) return emptyList()
+        val last = buckets.indexOfLast { !closed(it) }
+        val open = mutableListOf<ServerHealthBucket>()
+        for (index in first..last) {
+            val bucket = buckets[index]
+            if (!closed(bucket) || !closed(open.last())) open += bucket
+        }
+        return open
+    }
+
+    /** Failed checks (runs merged) and stream failures, newest first. */
+    private fun errorLog(
+        pings: List<ServerHealthPing>,
+        events: List<ServerHealthEvent>,
+    ): List<ServerHealthErrorLogEntry> {
+        val entries = mutableListOf<ServerHealthErrorLogEntry>()
+        var run: ServerHealthErrorLogEntry? = null
+        for (ping in pings.sortedBy { it.atMs }) {
+            val category = ping.failure
+            val current = run
+            if (category == null) {
+                current?.let { entries += it }
+                run = null
+            } else if (current != null && current.category == category && ping.atMs - current.lastAtMs <= ERROR_RUN_GAP_MS) {
+                run = current.copy(lastAtMs = ping.atMs, count = current.count + 1)
+            } else {
+                current?.let { entries += it }
+                run = ServerHealthErrorLogEntry(ping.atMs, ping.atMs, category, ServerHealthErrorSource.Check, 1)
+            }
+        }
+        run?.let { entries += it }
+        events.forEach { event ->
+            val category = event.failure ?: return@forEach
+            entries += ServerHealthErrorLogEntry(event.atMs, event.atMs, category, ServerHealthErrorSource.Stream, 1)
+        }
+        return entries.sortedWith(
+            compareByDescending<ServerHealthErrorLogEntry> { it.lastAtMs }.thenBy { it.source.ordinal },
         )
     }
 

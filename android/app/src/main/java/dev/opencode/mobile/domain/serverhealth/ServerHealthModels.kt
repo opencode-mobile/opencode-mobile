@@ -162,6 +162,21 @@ data class ServerHealthRestart(
     val previousVersion: String?,
 )
 
+/** Where a logged failure was seen. */
+enum class ServerHealthErrorSource {
+    Check,
+    Stream,
+}
+
+/** One line of the error log. Consecutive failed checks of one category share a line, with their [count]. */
+data class ServerHealthErrorLogEntry(
+    val firstAtMs: Long,
+    val lastAtMs: Long,
+    val category: ServerHealthFailureCategory,
+    val source: ServerHealthErrorSource,
+    val count: Int,
+)
+
 data class ServerHealthReport(
     val range: ServerHealthRange,
     val rangeStartMs: Long,
@@ -181,5 +196,11 @@ data class ServerHealthReport(
     val restarts: List<ServerHealthRestart>,
     val lastRestartAtMs: Long?,
     val buckets: List<ServerHealthBucket>,
+    /** [buckets] without closed-app time: none at the ends, and one Unobserved bucket per gap between. */
+    val openBuckets: List<ServerHealthBucket>,
+    /** Newest first, at most [ServerHealthReportBuilder.ERROR_LOG_LIMIT] lines. */
+    val errorLog: List<ServerHealthErrorLogEntry>,
+    /** Lines in the range before the limit. */
+    val errorLogTotal: Int,
     val isEmpty: Boolean,
 )

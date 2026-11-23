@@ -3,6 +3,9 @@ import Foundation
 /// Builds Server Health reports from recorded checks and events. Pure: no clock, no store.
 nonisolated enum ServerHealthReportBuilder {
     static let recentWindowMs: Int64 = 30 * 60_000
+    static let errorLogLimit = 100
+    /// Failed checks further apart than three ping intervals are separate incidents.
+    private static let errorRunGapMs: Int64 = 90_000
 
     static func build(
         pings: [ServerHealthPing],
@@ -88,6 +91,11 @@ nonisolated enum ServerHealthReportBuilder {
             ))
         }
 
+        let log = errorLog(
+            pings: rangePings,
+            events: events.filter { $0.atMs >= rangeStart && $0.atMs <= nowMs }
+        )
+
         return ServerHealthReport(
             range: range,
             rangeStartMs: rangeStart,
@@ -107,8 +115,62 @@ nonisolated enum ServerHealthReportBuilder {
             restarts: restarts,
             lastRestartAtMs: restartEvents.map(\.atMs).max(),
             buckets: buckets,
+            openBuckets: openTimeline(buckets),
+            errorLog: Array(log.prefix(errorLogLimit)),
+            errorLogTotal: log.count,
             isEmpty: pings.isEmpty && events.isEmpty
         )
+    }
+
+    /// Drops closed-app time at both ends and shrinks each gap between app sessions to one bucket.
+    static func openTimeline(_ buckets: [ServerHealthBucket]) -> [ServerHealthBucket] {
+        guard let first = buckets.firstIndex(where: { $0.condition != .unobserved }),
+              let last = buckets.lastIndex(where: { $0.condition != .unobserved })
+        else { return [] }
+        var open: [ServerHealthBucket] = []
+        for bucket in buckets[first ... last] where bucket.condition != .unobserved || open.last?.condition != .unobserved {
+            open.append(bucket)
+        }
+        return open
+    }
+
+    /// Failed checks (runs merged) and stream failures, newest first. `pings` are oldest first.
+    private static func errorLog(
+        pings: [ServerHealthPing],
+        events: [ServerHealthEvent]
+    ) -> [ServerHealthErrorLogEntry] {
+        var entries: [ServerHealthErrorLogEntry] = []
+        var run: ServerHealthErrorLogEntry?
+        for ping in pings {
+            guard let category = ping.failure else {
+                if let run { entries.append(run) }
+                run = nil
+                continue
+            }
+            if let current = run, current.category == category, ping.atMs - current.lastAtMs <= errorRunGapMs {
+                run = ServerHealthErrorLogEntry(
+                    firstAtMs: current.firstAtMs,
+                    lastAtMs: ping.atMs,
+                    category: category,
+                    source: .check,
+                    count: current.count + 1
+                )
+            } else {
+                if let run { entries.append(run) }
+                run = ServerHealthErrorLogEntry(firstAtMs: ping.atMs, lastAtMs: ping.atMs, category: category, source: .check, count: 1)
+            }
+        }
+        if let run { entries.append(run) }
+        for event in events {
+            if let category = event.failureCategory {
+                entries.append(ServerHealthErrorLogEntry(firstAtMs: event.atMs, lastAtMs: event.atMs, category: category, source: .stream, count: 1))
+            }
+        }
+        return entries.enumerated().sorted { lhs, rhs in
+            if lhs.element.lastAtMs != rhs.element.lastAtMs { return lhs.element.lastAtMs > rhs.element.lastAtMs }
+            if lhs.element.source != rhs.element.source { return lhs.element.source == .check }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
     }
 
     /// Latencies of the checks in the last `windowMs`, oldest first; a failed check is nil.

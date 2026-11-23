@@ -7689,6 +7689,83 @@
         }
       }
     },
+    "server_health.error_log" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error log"
+          }
+        }
+      }
+    },
+    "server_health.error_log_capped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Latest %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "server_health.error_log_check" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Health check"
+          }
+        }
+      }
+    },
+    "server_health.error_log_repeated" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld in a row over %2$@"
+          }
+        }
+      }
+    },
+    "server_health.error_log_show_all" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show all %lld"
+          }
+        }
+      }
+    },
+    "server_health.error_log_show_less" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show less"
+          }
+        }
+      }
+    },
+    "server_health.error_log_stream" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live connection"
+          }
+        }
+      }
+    },
     "server_health.error_rate" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7843,6 +7920,17 @@
         }
       }
     },
+    "server_health.legend_app_closed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App closed"
+          }
+        }
+      }
+    },
     "server_health.legend_down" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7872,17 +7960,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Median"
-          }
-        }
-      }
-    },
-    "server_health.legend_not_measured" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not measured"
           }
         }
       }
@@ -7938,6 +8015,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no drops"
+          }
+        }
+      }
+    },
+    "server_health.no_open_time" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app wasn't open in this range."
           }
         }
       }

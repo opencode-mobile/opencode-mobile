@@ -267,4 +267,42 @@ import Testing
         ]
         #expect(ServerHealthReportBuilder.recentPings(pings, nowMs: now) == [20, nil, 30])
     }
+
+    @Test func openBucketsDropClosedEndsAndShrinkGapsToOne() {
+        let report = build(events: [
+            state(.live, at: 10),
+            state(.stopped, at: 12),
+            state(.live, at: 30),
+            state(.stopped, at: 32)
+        ])
+        #expect(report.openBuckets.map(\.condition) == [.live, .live, .unobserved, .live, .live])
+        #expect(report.openBuckets.first?.startMs == hourStart + 10 * minute)
+    }
+
+    @Test func openBucketsAreEmptyWhenAppWasNeverOpen() {
+        #expect(build(events: [state(.stopped, at: 1)]).openBuckets.isEmpty)
+    }
+
+    @Test func errorLogMergesConsecutiveFailedChecksNewestFirst() {
+        let pings: [ServerHealthPing] = [
+            .failed(profileID: "p1", atMs: hourStart + 10 * minute, failure: .network),
+            .failed(profileID: "p1", atMs: hourStart + 10 * minute + 30_000, failure: .network),
+            .success(profileID: "p1", atMs: hourStart + 11 * minute, latencyMs: 20),
+            .failed(profileID: "p1", atMs: hourStart + 11 * minute + 30_000, failure: .network)
+        ]
+        let report = build(pings: pings, events: [.failure(.heartbeat, profileID: "p1", atMs: hourStart + 20 * minute)])
+        #expect(report.errorLog.map(\.source) == [.stream, .check, .check])
+        #expect(report.errorLog.map(\.count) == [1, 1, 2])
+        #expect(report.errorLog.last?.firstAtMs == hourStart + 10 * minute)
+        #expect(report.errorLog.last?.lastAtMs == hourStart + 10 * minute + 30_000)
+        #expect(report.errorLogTotal == 3)
+    }
+
+    @Test func errorLogSplitsFailuresAcrossAClosedAppGap() {
+        let pings: [ServerHealthPing] = [
+            .failed(profileID: "p1", atMs: hourStart + 10 * minute, failure: .timeout),
+            .failed(profileID: "p1", atMs: hourStart + 30 * minute, failure: .timeout)
+        ]
+        #expect(build(pings: pings, events: []).errorLog.map(\.count) == [1, 1])
+    }
 }

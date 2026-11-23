@@ -64,6 +64,9 @@ struct ServerHealthContent: View {
                 ServerHealthTiles(report: report)
                 ServerHealthCharts(report: report)
                 ServerHealthErrorsCard(report: report)
+                // A new identity per range collapses the log, also after a range with no errors.
+                ServerHealthErrorLogCard(report: report)
+                    .id(report.range)
                 ServerHealthServerCard(state: state, report: report)
                 footnote
             } else if state.report != nil {
@@ -222,7 +225,21 @@ private struct ServerHealthCharts: View {
     let report: ServerHealthReport
 
     var body: some View {
+        if report.openBuckets.isEmpty {
+            OpenCodeChartCard(title: OpenCodeText(LocalizedStringResource("server_health.connection", defaultValue: "Connection"))) {
+                Text("server_health.no_open_time")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textBase)
+            }
+        } else {
+            charts
+        }
+    }
+
+    @ViewBuilder
+    private var charts: some View {
         let axis = axisLabels
+        let closed = closedLegend
         OpenCodeChartCard(
             title: OpenCodeText(LocalizedStringResource("server_health.latency", defaultValue: "Latency")),
             summary: latencySummary,
@@ -230,12 +247,11 @@ private struct ServerHealthCharts: View {
             legend: [
                 OpenCodeChartLegendItem(label: OpenCodeText(LocalizedStringResource("server_health.legend_median", defaultValue: "Median")), swatch: .interactive),
                 OpenCodeChartLegendItem(label: OpenCodeText(LocalizedStringResource("server_health.legend_p95", defaultValue: "p95")), swatch: .interactiveWeak),
-                OpenCodeChartLegendItem(label: OpenCodeText(LocalizedStringResource("server_health.legend_offline", defaultValue: "Offline")), swatch: .error),
-                Self.notMeasured
-            ]
+                OpenCodeChartLegendItem(label: OpenCodeText(LocalizedStringResource("server_health.legend_offline", defaultValue: "Offline")), swatch: .error)
+            ] + closed
         ) {
             OpenCodeBandChart(
-                points: report.buckets.map { bucket in
+                points: report.openBuckets.map { bucket in
                     OpenCodeBandChartPoint(
                         median: bucket.medianMs.map(Double.init),
                         upper: bucket.p95Ms.map(Double.init),
@@ -258,11 +274,10 @@ private struct ServerHealthCharts: View {
             legend: [
                 OpenCodeChartLegendItem(label: OpenCodeText(LocalizedStringResource("server_health.legend_live", defaultValue: "Live")), swatch: .success),
                 OpenCodeChartLegendItem(label: OpenCodeText(LocalizedStringResource("server_health.legend_unsteady", defaultValue: "Unsteady")), swatch: .warning),
-                OpenCodeChartLegendItem(label: OpenCodeText(LocalizedStringResource("server_health.legend_down", defaultValue: "Down")), swatch: .error),
-                Self.notMeasured
-            ]
+                OpenCodeChartLegendItem(label: OpenCodeText(LocalizedStringResource("server_health.legend_down", defaultValue: "Down")), swatch: .error)
+            ] + closed
         ) {
-            OpenCodeStatusStrip(segments: report.buckets.map { Self.segment($0.condition) })
+            OpenCodeStatusStrip(segments: report.openBuckets.map { Self.segment($0.condition) })
         }
 
         OpenCodeChartCard(
@@ -273,15 +288,19 @@ private struct ServerHealthCharts: View {
             )),
             axisLabels: axis
         ) {
-            OpenCodeBarChart(values: report.buckets.map { Double($0.drops) }, tone: .warning)
+            OpenCodeBarChart(values: report.openBuckets.map { Double($0.drops) }, tone: .warning)
                 .frame(height: 56)
         }
     }
 
-    private static let notMeasured = OpenCodeChartLegendItem(
-        label: OpenCodeText(LocalizedStringResource("server_health.legend_not_measured", defaultValue: "Not measured")),
-        swatch: .unobserved
-    )
+    /// The closed-app legend entry, only when a chart actually shows a gap.
+    private var closedLegend: [OpenCodeChartLegendItem] {
+        guard report.openBuckets.contains(where: { $0.condition == .unobserved }) else { return [] }
+        return [OpenCodeChartLegendItem(
+            label: OpenCodeText(LocalizedStringResource("server_health.legend_app_closed", defaultValue: "App closed")),
+            swatch: .unobserved
+        )]
+    }
 
     private var latencySummary: OpenCodeText {
         OpenCodeText(LocalizedStringResource(
@@ -290,13 +309,21 @@ private struct ServerHealthCharts: View {
         ))
     }
 
-    /// "24 h ago" … "now".
+    /// When the first and last shown stretch of open-app time happened.
     private var axisLabels: OpenCodeChartAxisLabels {
-        let span = ServerHealthContent.rangeTitle(report.range).resolved
+        let first = report.openBuckets.first?.startMs ?? report.rangeStartMs
+        let last = report.openBuckets.last?.endMs ?? report.nowMs
         return OpenCodeChartAxisLabels(
-            start: OpenCodeText(LocalizedStringResource("server_health.axis_ago", defaultValue: "\(span) ago")),
-            end: OpenCodeText(LocalizedStringResource("server_health.now", defaultValue: "now"))
+            start: Self.ago(report.nowMs - first),
+            end: last >= report.nowMs
+                ? OpenCodeText(LocalizedStringResource("server_health.now", defaultValue: "now"))
+                : Self.ago(report.nowMs - last)
         )
+    }
+
+    private static func ago(_ ms: Int64) -> OpenCodeText {
+        let span = ServerHealthFormat.duration(max(0, ms))
+        return OpenCodeText(LocalizedStringResource("server_health.axis_ago", defaultValue: "\(span) ago"))
     }
 
     static func background(_ condition: ServerHealthBucketCondition) -> OpenCodeBandChartBackground {
@@ -341,6 +368,87 @@ private struct ServerHealthErrorsCard: View {
                 }
             }
         }
+    }
+}
+
+private struct ServerHealthErrorLogCard: View {
+    private static let previewCount = 8
+
+    let report: ServerHealthReport
+    @State private var showsAll = false
+
+    var body: some View {
+        if !report.errorLog.isEmpty {
+            let visible = showsAll ? report.errorLog : Array(report.errorLog.prefix(Self.previewCount))
+            OpenCodeChartCard(
+                title: OpenCodeText(LocalizedStringResource("server_health.error_log", defaultValue: "Error log")),
+                summary: cappedSummary
+            ) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(visible.enumerated()), id: \.offset) { _, entry in
+                        ServerHealthErrorLogRow(entry: entry)
+                    }
+                    if report.errorLog.count > Self.previewCount {
+                        OpenCodeButton(variant: .link(title: toggleTitle)) { showsAll.toggle() }
+                    }
+                }
+            }
+        }
+    }
+
+    private var cappedSummary: OpenCodeText? {
+        guard report.errorLogTotal > ServerHealthReportBuilder.errorLogLimit else { return nil }
+        return OpenCodeText(LocalizedStringResource(
+            "server_health.error_log_capped",
+            defaultValue: "Latest \(report.errorLog.count) of \(report.errorLogTotal)"
+        ))
+    }
+
+    private var toggleTitle: OpenCodeText {
+        showsAll
+            ? OpenCodeText(LocalizedStringResource("server_health.error_log_show_less", defaultValue: "Show less"))
+            : OpenCodeText(LocalizedStringResource("server_health.error_log_show_all", defaultValue: "Show all \(report.errorLog.count)"))
+    }
+}
+
+private struct ServerHealthErrorLogRow: View {
+    let entry: ServerHealthErrorLogEntry
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(openCode: ServerHealthText.category(entry.category))
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                Text(verbatim: detail)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+            }
+            Spacer(minLength: 0)
+            Text(verbatim: time)
+                .font(OpenCodeTypography.caption.monospacedDigit())
+                .foregroundStyle(OpenCodeColors.textBase)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var detail: String {
+        let source = switch entry.source {
+        case .check: String(localized: "server_health.error_log_check", defaultValue: "Health check")
+        case .stream: String(localized: "server_health.error_log_stream", defaultValue: "Live connection")
+        }
+        guard entry.count > 1 else { return source }
+        let span = ServerHealthFormat.duration(entry.lastAtMs - entry.firstAtMs)
+        let count = entry.count
+        let repeated = String(localized: "server_health.error_log_repeated", defaultValue: "\(count) in a row over \(span)")
+        return "\(source) · \(repeated)"
+    }
+
+    private var time: String {
+        let date = Date(timeIntervalSince1970: TimeInterval(entry.lastAtMs) / 1000)
+        return Calendar.current.isDateInToday(date)
+            ? date.formatted(date: .omitted, time: .shortened)
+            : date.formatted(date: .abbreviated, time: .shortened)
     }
 }
 
