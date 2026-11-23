@@ -2109,7 +2109,11 @@ struct SessionChatViewModelTests {
         await waitUntil { viewModel.uiState.workingIndicatorLabel == "Sending 25%" }
         repository.releaseSend()
         await task.value
-        #expect(!(viewModel.uiState.workingIndicatorLabel ?? "").hasPrefix("Sending"))
+        // The pill holds its last label until the running status arrives on its own stream.
+        let leftSending = await waitUntil {
+            !(viewModel.uiState.workingIndicatorLabel ?? "").hasPrefix("Sending")
+        }
+        #expect(leftSending)
         viewModel.stopObserving()
     }
 
