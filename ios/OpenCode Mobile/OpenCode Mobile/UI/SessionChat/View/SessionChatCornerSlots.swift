@@ -543,7 +543,7 @@ struct SessionChatTimelineActivityOnlySlot: View {
             onTap: props.onActivityTap,
             onClose: props.onActivityClose
         )
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
         .padding(.horizontal, SessionChatCornerSlotsLayout.horizontalPadding)
         .padding(.bottom, SessionChatCornerSlotsLayout.rowBottom(overlayInset: props.bottomOverlayInset))

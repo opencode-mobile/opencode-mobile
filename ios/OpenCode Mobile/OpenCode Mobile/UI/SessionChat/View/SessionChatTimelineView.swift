@@ -653,6 +653,8 @@ private struct SessionChatTimelineReadyView: View {
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { trailingPillsWidth = $0 }
         }
+        // minWidth 0: an overflowing row must still report the width it was given, or it never folds.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pillRowWidth = $0 }
         .padding(.horizontal, SessionChatCornerSlotsLayout.horizontalPadding)
         .padding(.bottom, SessionChatCornerSlotsLayout.rowBottom(overlayInset: props.bottomOverlayInset))
