@@ -100,6 +100,25 @@ class OpencodeHttpClientBindingTest {
         }
 
     @Test
+    fun sseRebind_keepsADialAlreadyOnTheBoundConnection() =
+        runTest {
+            val manager = ActiveConnectionManager(SingleProfileStore())
+            manager.applyProfile(serverA)
+            val sse = OpencodeSseHttpClient(manager, ::factory)
+            val dialA = sse.openDial(1)
+
+            manager.applyProfile(serverB)
+            val dialB = sse.openDial(2)
+            val clientB = sse.get()
+            sse.rebind()
+
+            assertFalse(dialA.isOpen())
+            assertTrue(dialB.isOpen())
+            assertTrue(clientB.isOpen())
+            assertSame(clientB, sse.get())
+        }
+
+    @Test
     fun sseRebuild_stillClosesDialsOfThePreviousConnection() =
         runTest {
             val manager = ActiveConnectionManager(SingleProfileStore())

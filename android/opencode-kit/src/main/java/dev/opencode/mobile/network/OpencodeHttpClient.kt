@@ -122,14 +122,30 @@ class OpencodeSseHttpClient
             open.forEach { it.client.close() }
         }
 
+        /** Moves to the bound connection, leaving a client or dial that already serves it open. */
+        @Synchronized
+        fun rebind() {
+            val connection = activeConnectionManager.current()
+            val live = clientKey(connection)
+            val stale = dials.filter { it.key != live }
+            dials.removeAll(stale)
+            val previous = bound
+            if (previous.key != live) {
+                bound = bindClient(connection, clientFactory)
+                previous.client.close()
+            }
+            stale.forEach { it.client.close() }
+        }
+
         @Synchronized
         fun openDial(token: Long): HttpClient {
-            val client = clientFactory(activeConnectionManager.current() ?: UNBOUND_CONNECTION)
+            val connection = activeConnectionManager.current()
+            val client = clientFactory(connection ?: UNBOUND_CONNECTION)
             if (token < retiredBefore) {
                 client.close()
                 return client
             }
-            dials.add(Dial(token, client))
+            dials.add(Dial(token, clientKey(connection), client))
             return client
         }
 
@@ -167,6 +183,7 @@ class OpencodeSseHttpClient
 
         private data class Dial(
             val token: Long,
+            val key: ClientKey?,
             val client: HttpClient,
         )
     }

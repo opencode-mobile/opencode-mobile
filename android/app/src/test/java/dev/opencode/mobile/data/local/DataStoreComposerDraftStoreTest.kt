@@ -1,11 +1,15 @@
 package dev.opencode.mobile.data.local
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -131,6 +135,34 @@ class DataStoreComposerDraftStoreTest {
             assertEquals("b", store.load(bob, "/repo", "ses-2")?.text)
         }
 
+    @Test
+    fun saveDetached_anEqualQueuedSaveStillReachesDisk() =
+        runTest {
+            val writes = Job()
+            val disk = dataStore(backgroundScope)
+            val secondWrite = CompletableDeferred<Unit>()
+            val json = Json { ignoreUnknownKeys = true }
+            val store =
+                DataStoreComposerDraftStore(
+                    HoldSecondWrite(disk, secondWrite),
+                    json,
+                    CoroutineScope(coroutineContext.minusKey(Job) + writes),
+                )
+            val alice = identity("alice")
+
+            store.saveDetached(alice, "/repo", "ses-1", draft("kept", timestamp = 10))
+            store.saveDetached(alice, "/repo", "ses-1", draft("kept", timestamp = 10))
+            val (first, second) = writes.children.toList()
+            // The replaced save finishes its cleanup while the equal one is still queued.
+            first.join()
+            secondWrite.complete(Unit)
+            second.join()
+            writes.cancel()
+
+            // A fresh store has no queued copy to read through, so this is what reached disk.
+            assertEquals("kept", DataStoreComposerDraftStore(disk, json).load(alice, "/repo", "ses-1")?.text)
+        }
+
     private fun store(scope: CoroutineScope) = DataStoreComposerDraftStore(dataStore(scope), Json { ignoreUnknownKeys = true })
 
     private fun dataStore(scope: CoroutineScope) =
@@ -138,6 +170,18 @@ class DataStoreComposerDraftStoreTest {
             scope = scope,
             produceFile = { Files.createTempDirectory("composer-draft-store").resolve("preferences.preferences_pb").toFile() },
         )
+
+    private class HoldSecondWrite(
+        private val delegate: DataStore<Preferences>,
+        private val release: CompletableDeferred<Unit>,
+    ) : DataStore<Preferences> by delegate {
+        private var calls = 0
+
+        override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+            if (++calls == 2) release.await()
+            return delegate.updateData(transform)
+        }
+    }
 
     private fun identity(username: String) = ModelSelectionConnectionIdentity("http://127.0.0.1:4096", username)
 

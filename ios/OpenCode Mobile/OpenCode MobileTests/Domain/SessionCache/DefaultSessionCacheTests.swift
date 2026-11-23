@@ -152,6 +152,29 @@ import Testing
         #expect(await store.load(key: timelineKey("profile-a", "ses-3")) != nil)
     }
 
+    @Test func swiftDataStoreEvictsEmptyPlaceholdersBeforeARealTranscript() async throws {
+        let store = SwiftDataSessionCacheStore(container: try SwiftDataSessionCacheStore.makeInMemoryContainer())
+        await assertPlaceholderGoesFirst(store)
+    }
+
+    @Test func inMemoryStoreEvictsEmptyPlaceholdersBeforeARealTranscript() async {
+        await assertPlaceholderGoesFirst(InMemorySessionCacheStore())
+    }
+
+    private func assertPlaceholderGoesFirst(_ store: any SessionCacheStore) async {
+        await store.commit(
+            key: timelineKey("profile-a", "real"),
+            value: SessionCacheValue(payloadJSON: "{}", schemaVersion: 1),
+            meta: SessionCacheCommitMeta(syncedAtEpochMs: 10)
+        )
+        await store.retain(key: timelineKey("profile-a", "placeholder"), reason: .opened, atEpochMs: 20)
+
+        let evicted = await store.evictLeastRecentTimelines(connectionId: "profile-a", keeping: 1)
+
+        #expect(evicted.map(\.entryId) == ["placeholder"])
+        #expect(await store.load(key: timelineKey("profile-a", "real")) != nil)
+    }
+
     @Test func seedAndRememberSessionsRoundTrip() async {
         let store = InMemorySessionCacheStore()
         let cache = DefaultSessionCache(

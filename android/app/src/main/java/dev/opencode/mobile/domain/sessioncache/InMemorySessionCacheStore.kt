@@ -130,9 +130,9 @@ class InMemorySessionCacheStore : SessionCacheStore {
                 rows.values
                     .filter { it.key.connectionId == connectionId && it.key.kind == SessionCacheKind.MessageTimeline }
                     .sortedWith(
-                        compareByDescending<Row> { row ->
-                            maxOf(row.retainedAtEpochMs ?: 0L, row.syncedAtEpochMs)
-                        }.thenBy { row -> row.key.cacheKey },
+                        compareBy<Row> { row -> row.syncedAtEpochMs == 0L }
+                            .thenByDescending { row -> maxOf(row.retainedAtEpochMs ?: 0L, row.syncedAtEpochMs) }
+                            .thenBy { row -> row.key.cacheKey },
                     ).drop(keep)
             excess.forEach { rows.remove(it.key.cacheKey) }
             excess.size

@@ -66,6 +66,8 @@ actor InMemorySessionCacheStore: SessionCacheStore {
         let timelines = rows.values.filter { $0.key.kind == .messageTimeline && $0.key.connectionId == connectionId }
         guard timelines.count > keeping else { return [] }
         let oldestFirst = timelines.sorted {
+            // Never committed: an empty placeholder must not push out a transcript.
+            if ($0.syncedAtEpochMs == 0) != ($1.syncedAtEpochMs == 0) { return $0.syncedAtEpochMs == 0 }
             let left = max($0.syncedAtEpochMs, $0.retainedAtEpochMs ?? 0)
             let right = max($1.syncedAtEpochMs, $1.retainedAtEpochMs ?? 0)
             return left == right ? $0.key.cacheKey < $1.key.cacheKey : left < right

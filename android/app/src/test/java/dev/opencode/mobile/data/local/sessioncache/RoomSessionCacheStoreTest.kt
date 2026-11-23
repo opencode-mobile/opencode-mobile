@@ -52,6 +52,22 @@ class RoomSessionCacheStoreTest {
             assertEquals(5L, dao.rows.getValue(key.cacheKey).retainedAtEpochMs)
         }
 
+    @Test
+    fun trimDropsEmptyPlaceholdersBeforeARealTranscript() =
+        runTest {
+            val dao = CursorWindowDao()
+            val store = RoomSessionCacheStore(dao)
+            val real = key.copy(entryId = "real")
+            val placeholder = key.copy(entryId = "placeholder")
+            store.commit(real, SessionCacheValue("{}", SessionCacheCodec.SCHEMA_VERSION), SessionCacheCommitMeta(10L))
+            store.retain(placeholder, SessionCacheRetainReason.Opened, atEpochMs = 20L)
+
+            assertEquals(1, store.trimMessageTimelines(key.connectionId, keep = 1))
+
+            assertEquals("{}", store.load(real)?.value?.payloadJson)
+            assertNull(dao.rows[placeholder.cacheKey])
+        }
+
     private fun row(
         payload: String,
         retainedAt: Long?,
@@ -80,9 +96,9 @@ private class CursorWindowDao : SessionCacheDao {
         rows.values
             .filter { it.connectionId == connectionId && it.kind == kind }
             .sortedWith(
-                compareByDescending<SessionCacheSnapshotEntity> { row ->
-                    maxOf(row.retainedAtEpochMs ?: 0L, row.syncedAtEpochMs)
-                }.thenBy { row -> row.cacheKey },
+                compareBy<SessionCacheSnapshotEntity> { row -> row.syncedAtEpochMs == 0L }
+                    .thenByDescending { row -> maxOf(row.retainedAtEpochMs ?: 0L, row.syncedAtEpochMs) }
+                    .thenBy { row -> row.cacheKey },
             ).drop(keep)
             .map { it.cacheKey }
 

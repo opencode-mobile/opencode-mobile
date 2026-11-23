@@ -280,7 +280,7 @@ class ConnectionSessionCoordinator
             withContext(NonCancellable + clientRebuildDispatcher) {
                 // A load in the gap may already use the new server's client; it must stay open.
                 httpClient.rebind()
-                sseHttpClient.rebuild()
+                sseHttpClient.rebind()
             }
         }
 

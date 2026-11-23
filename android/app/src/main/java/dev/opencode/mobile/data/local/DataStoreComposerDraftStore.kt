@@ -80,7 +80,8 @@ class DataStoreComposerDraftStore
                 } catch (error: Exception) {
                     DiagnosticLog.warning(DiagnosticLogArea.Session, "detached composer draft save failed", error)
                 } finally {
-                    pendingDetached.remove(key, stored)
+                    // By identity: an equal draft queued after this one still has to be written.
+                    pendingDetached.computeIfPresent(key) { _, queued -> queued.takeUnless { it === stored } }
                 }
             }
         }
