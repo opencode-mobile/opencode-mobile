@@ -177,6 +177,21 @@ struct SessionChatImageGalleryBlocksTests {
         #expect(blocks.map(kind) == ["attachment", "attachment"])
     }
 
+    @Test func justSentFilesGroupLikeTheServerCopy() {
+        let cases: [[FilePart]] = [
+            [image("f1")],
+            [image("f1"), image("f2")],
+            [image("f1"), image("f2"), image("f3"), image("f4"), image("f5")],
+            [image("f1"), image("f2"), document("doc"), image("f3")],
+            [document("doc"), image("f1"), image("f2")],
+        ]
+        for files in cases {
+            let sent = SessionChatTimelineBlocks.userAttachmentBlocks(files)
+            let echoed = build(role: .user, parts: files.map(MessagePart.file))
+            #expect(sent == echoed)
+        }
+    }
+
     @Test func assistantImagesGalleryFollowsTheText() {
         let blocks = build(parts: [text("t1", "Before and after"), file("f1"), file("f2")])
         #expect(blocks.map(kind) == ["text", "gallery"])
@@ -198,6 +213,14 @@ struct SessionChatImageGalleryBlocksTests {
     }
 
     // MARK: - Helpers
+
+    private func image(_ id: String) -> FilePart {
+        FilePart(id: id, filename: "\(id).png", mime: "image/png", kind: .image, dataURL: "", previewData: Data([1]))
+    }
+
+    private func document(_ id: String) -> FilePart {
+        FilePart(id: id, filename: "\(id).pdf", mime: "application/pdf", kind: .pdf, dataURL: "")
+    }
 
     private func build(role: MessageRole = .assistant, parts: [MessagePart], collapse: Bool = false) -> [SessionChatTimelineBlock] {
         guard case .ok(let blocks) = SessionChatTimelineBlocks.build(

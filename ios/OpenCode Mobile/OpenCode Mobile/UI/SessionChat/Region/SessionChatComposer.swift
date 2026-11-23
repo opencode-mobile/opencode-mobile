@@ -1112,10 +1112,9 @@ final class SessionChatComposer {
 
         let composer = state.composer
 
-        let attachmentBlocks = submittedAttachments.map { attachment in
-            SessionChatTimelineBlock.attachment(
-                blockID: PresentationBlockId.direct(attachment.id),
-                file: FilePart(
+        let attachmentBlocks = SessionChatTimelineBlocks.userAttachmentBlocks(
+            submittedAttachments.map { attachment in
+                FilePart(
                     id: attachment.id,
                     filename: attachment.filename,
                     mime: attachment.mime,
@@ -1124,8 +1123,8 @@ final class SessionChatComposer {
                     previewData: attachment.previewData,
                     serverPath: attachment.uploadedServerPath
                 )
-            )
-        }
+            }
+        )
         let collapsedDisplay =
             CommandInvocationCollapser.collapseSkillMentions(text: trimmed, skillMentions: skillsForSend)
                 ?? CommandInvocationCollapser.collapse(text: trimmed, commands: state.serverCommands)

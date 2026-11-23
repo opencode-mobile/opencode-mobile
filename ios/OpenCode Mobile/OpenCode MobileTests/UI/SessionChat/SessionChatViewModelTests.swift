@@ -2166,6 +2166,28 @@ struct SessionChatViewModelTests {
         #expect(AttachmentPresentationMapper.presentation(from: file).image != nil)
     }
 
+    @Test func sendPrompt_optimisticImages_formOneGallery() async {
+        let repository = FakeMessageRepository(failListMessagesAfterSend: true)
+        let viewModel = makeViewModel(messageRepository: repository)
+        await viewModel.loadMessages()
+        let preview = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+        viewModel.addAttachments(["one", "two"].map {
+            testAttachment(id: $0, filename: "\($0).png", kind: .image, mime: "image/png", previewData: preview)
+        })
+
+        await viewModel.sendPrompt()
+
+        let row = viewModel.uiState.messages.first(where: \.isPending)
+        #expect(row?.blocks.count == 1)
+        guard case let .imageGallery(_, gallery) = row?.blocks.first else {
+            Issue.record("Expected one gallery, got \(String(describing: row?.blocks))")
+            return
+        }
+        #expect(gallery.source == .user)
+        #expect(gallery.images.map(\.id) == ["one", "two"])
+        #expect(gallery.images.allSatisfy { $0.previewData == preview })
+    }
+
     @Test func sendPrompt_httpFailure_restoresDraftAndAttachments() async {
         let repository = FakeMessageRepository(shouldFailSend: true)
         let viewModel = makeViewModel(messageRepository: repository)
