@@ -14,7 +14,7 @@ enum OpenCodeFloatingPillLayout: Equatable {
     /// Plain short label with no mark and no close, e.g. a "+3" overflow button.
     case label(String)
     /// Round pill that stands for a whole stack of items: the mark of the lead item's state
-    /// (↑ needs attention, ! error, ✓ ready or done, a dot while live, ⋯ when `pending`) and a
+    /// (↑ needs attention, ! error, ✓ ready or done, a spinner while live, ⋯ when `pending`) and a
     /// small count badge when `count` is more than one.
     case summary(count: Int, pending: Bool = false)
 
@@ -108,7 +108,7 @@ enum OpenCodeFloatingPillStyle {
             case .needsAttention: return .icon(.arrowUpward)
             case .error: return .glyph("!")
             case .ready: return pending ? .glyph("⋯") : .icon(.check)
-            case .live: return .pulsingDot
+            case .live: return .spinner
             case .done: return .doneCheck
             }
         case .closable, .label:

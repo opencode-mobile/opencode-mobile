@@ -7,6 +7,7 @@ import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLeading
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchChangedFile
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchSummary
+import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
 import dev.opencode.mobile.ui.components.floatingPillLeading
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatActivityPillCopy
@@ -21,6 +22,65 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionChatPillSlotsTest {
+    // One spinner in the folded row
+
+    @Test
+    fun foldedWorkingPillMergesOnlyIntoARunningActivityPill() {
+        val working =
+            SessionChatTurnStatusSlot(
+                phase = OpenCodeTurnStatusPillPhase.Working("Working"),
+                compact = true,
+                leaving = false,
+            )
+        val done = working.copy(phase = OpenCodeTurnStatusPillPhase.Done)
+        val running = SessionChatActivityItem.SideQuestionsRunning(1)
+
+        assertTrue(SessionChatPillSlots.turnMergesIntoActivity(working, turnCompact = true, primary = running))
+        assertFalse(SessionChatPillSlots.turnMergesIntoActivity(working, turnCompact = false, primary = running))
+        assertFalse(SessionChatPillSlots.turnMergesIntoActivity(done, turnCompact = true, primary = running))
+        assertFalse(SessionChatPillSlots.turnMergesIntoActivity(working, turnCompact = true, primary = SessionChatActivityItem.Queued(1)))
+        assertFalse(SessionChatPillSlots.turnMergesIntoActivity(working, turnCompact = true, primary = null))
+    }
+
+    @Test
+    fun mergingTurnPillLeavesItsRoomToTheActivityLabel() {
+        val widths =
+            SessionChatPillRowWidths(
+                available = 200,
+                turn = 100,
+                turnCompact = 36,
+                secondary = 170,
+                secondaryCompact = 36,
+                overflow = 0,
+                trailing = 0,
+                spacing = 8,
+            )
+
+        assertEquals(
+            SessionChatPillRowFold(turnCompact = true),
+            SessionChatPillSlots.pillRowFold(widths, turnCanFold = true, turnMergesWhenCompact = true),
+        )
+        assertEquals(
+            SessionChatPillRowFold(turnCompact = true, secondaryCompact = true),
+            SessionChatPillSlots.pillRowFold(widths, turnCanFold = true),
+        )
+    }
+
+    @Test
+    fun trailingWidthCountsTheSpacerGapAndNavigationGap() {
+        assertEquals(0, SessionChatCornerSlotsLayout.trailingRowWidth(0, hasNavigation = false, spacingPx = 8))
+        assertEquals(108, SessionChatCornerSlotsLayout.trailingRowWidth(100, hasNavigation = false, spacingPx = 8))
+        assertEquals(116, SessionChatCornerSlotsLayout.trailingRowWidth(100, hasNavigation = true, spacingPx = 8))
+    }
+
+    @Test
+    fun mergedPillStillSpeaksTheTurnStatus() {
+        val label = SessionChatActivityPillCopy.accessibilityLabel(SessionChatActivityItem.SideQuestionsRunning(1))
+
+        assertEquals("Working. ${label.english()}", SessionChatActivityPillCopy.withMergedTurn("Working", label).english())
+        assertEquals(label.english(), SessionChatActivityPillCopy.withMergedTurn(null, label).english())
+    }
+
     // Activity priority and overflow
 
     @Test

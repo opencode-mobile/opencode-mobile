@@ -3,6 +3,36 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct SessionChatPillSlotsTests {
+    @Test func mergedPillStillSpeaksTheTurnStatus() {
+        #expect(SessionChatActivitySlotView.withMergedTurn(turnLabel: "Working", label: "1 shell") == "Working. 1 shell")
+        #expect(SessionChatActivitySlotView.withMergedTurn(turnLabel: nil, label: "1 shell") == "1 shell")
+    }
+
+    @Test func mergingTurnPillLeavesItsRoomToTheActivityLabel() {
+        let widths = SessionChatPillRowWidths(available: 200, turn: 100, secondary: 170, spacing: 8)
+
+        #expect(
+            SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: true, turnMergesWhenCompact: true)
+                == SessionChatPillRowFold(turnCompact: true)
+        )
+        #expect(
+            SessionChatPillSlots.pillRowFold(widths: widths, turnCanFold: true)
+                == SessionChatPillRowFold(turnCompact: true, secondaryCompact: true)
+        )
+    }
+
+    @Test func foldedWorkingPillMergesOnlyIntoARunningActivityPill() {
+        let working = SessionChatTurnStatusSlot(phase: .working(label: "Working"), compact: true, leaving: false)
+        let done = SessionChatTurnStatusSlot(phase: .done, compact: true, leaving: false)
+        let running = SessionChatActivityItem.sideQuestionsRunning(count: 1)
+
+        #expect(SessionChatPillSlots.turnMergesIntoActivity(turnStatus: working, turnCompact: true, primary: running))
+        #expect(!SessionChatPillSlots.turnMergesIntoActivity(turnStatus: working, turnCompact: false, primary: running))
+        #expect(!SessionChatPillSlots.turnMergesIntoActivity(turnStatus: done, turnCompact: true, primary: running))
+        #expect(!SessionChatPillSlots.turnMergesIntoActivity(turnStatus: working, turnCompact: true, primary: .queued(count: 1)))
+        #expect(!SessionChatPillSlots.turnMergesIntoActivity(turnStatus: working, turnCompact: true, primary: nil))
+    }
+
     // MARK: Activity priority and overflow
 
     @Test func priorityOrderPicksTheMostUrgentSecondaryAndStacksTheRest() {

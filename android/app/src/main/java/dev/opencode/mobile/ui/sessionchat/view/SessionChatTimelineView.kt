@@ -304,27 +304,37 @@ private fun SessionChatTimelineActivityOnlySlot(
     modifier: Modifier = Modifier,
 ) {
     var stackOpen by remember { mutableStateOf(false) }
-    SessionChatActivitySlotView(
-        slot = SessionChatPillSlots.activity(props.activityItems, props.keyboardVisible),
-        turnStatus =
-            SessionChatPillSlots.turnStatus(
-                label = props.workingIndicatorLabel,
-                fading = props.workingIndicatorFading,
-                isAwaitingUser = props.isAwaitingUser,
-                items = props.activityItems,
-                keyboardVisible = props.keyboardVisible,
-                awayFromEnd = false,
-                text = ResourcesUiTextLookup(LocalResources.current),
-            ),
-        stackOpen = stackOpen,
-        onStackOpenChange = { stackOpen = it },
-        onClick = props.onActivityClick,
-        onClose = props.onActivityClose,
+    var rowWidthPx by remember { mutableIntStateOf(0) }
+    val slot = SessionChatPillSlots.activity(props.activityItems, props.keyboardVisible)
+    val turnStatus =
+        SessionChatPillSlots.turnStatus(
+            label = props.workingIndicatorLabel,
+            fading = props.workingIndicatorFading,
+            isAwaitingUser = props.isAwaitingUser,
+            items = props.activityItems,
+            keyboardVisible = props.keyboardVisible,
+            awayFromEnd = false,
+            text = ResourcesUiTextLookup(LocalResources.current),
+        )
+    val fold = rememberSessionChatPillRowFold(turnStatus, slot, trailing = emptyList(), availablePx = rowWidthPx)
+    Box(
         modifier =
             modifier
+                .fillMaxWidth()
                 .padding(horizontal = SessionChatCornerSlotsLayout.HorizontalPadding)
-                .padding(bottom = SessionChatCornerSlotsLayout.rowBottom(props.bottomOverlayInset)),
-    )
+                .padding(bottom = SessionChatCornerSlotsLayout.rowBottom(props.bottomOverlayInset))
+                .onSizeChanged { rowWidthPx = it.width },
+    ) {
+        SessionChatActivitySlotView(
+            slot = slot,
+            turnStatus = turnStatus,
+            fold = fold,
+            stackOpen = stackOpen,
+            onStackOpenChange = { stackOpen = it },
+            onClick = props.onActivityClick,
+            onClose = props.onActivityClose,
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -845,7 +855,14 @@ private fun SessionChatTimelineReadyView(
                     )
                 }
             }
-        val pillRowFold = rememberSessionChatPillRowFold(turnStatusSlot, displayedActivitySlot, trailingPills, pillRowWidthPx)
+        val pillRowFold =
+            rememberSessionChatPillRowFold(
+                turnStatusSlot,
+                displayedActivitySlot,
+                trailingPills,
+                pillRowWidthPx,
+                hasNavigation = navigationPill != null,
+            )
         Row(
             modifier =
                 Modifier
