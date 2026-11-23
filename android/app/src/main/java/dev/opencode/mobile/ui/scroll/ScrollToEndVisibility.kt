@@ -180,37 +180,40 @@ suspend fun LazyListState.scrollToTimelineEnd() {
 internal fun LazyListState.isAtTimelineEnd(messageCount: Int): Boolean =
     firstVisibleItemIndex == BOTTOM_ANCHOR_INDEX &&
         firstVisibleItemScrollOffset == 0 &&
-        (distanceFromTimelineEnd(messageCount) ?: 0) <= 0
+        (nearbyTimelineEndScrollDeltaPx(messageCount) ?: 0) == 0
 
-private fun LazyListState.distanceFromTimelineEnd(messageCount: Int): Int? {
-    val bottomAnchor =
-        layoutInfo.visibleItemsInfo.firstOrNull { it.index == BOTTOM_ANCHOR_INDEX }
-    if (bottomAnchor != null) {
-        return bottomAnchor.offset +
-            bottomAnchor.size +
-            layoutInfo.afterContentPadding -
-            layoutInfo.viewportEndOffset
-    }
-
-    val newestMessageIndex = newestMessageIndex(messageCount)
-    if (newestMessageIndex < 0) return null
-
-    val newestMessage =
-        layoutInfo.visibleItemsInfo.firstOrNull { it.index == newestMessageIndex }
-            ?: return null
-
-    return newestMessage.offset +
-        newestMessage.size +
-        layoutInfo.afterContentPadding -
-        layoutInfo.viewportEndOffset +
-        BOTTOM_ANCHOR_HEIGHT_PX
+/**
+ * The `scrollBy` delta that reaches the end when it is within one viewport, or
+ * `null` when the caller should jump by item. Scrolling toward the end of a
+ * reverse-layout list is a negative delta.
+ */
+internal fun nearbyTimelineEndScrollDeltaPx(
+    messageCount: Int,
+    viewportHeightPx: Int,
+    visibleItems: List<TimelineVisibleItem>,
+): Int? {
+    val distance =
+        timelineEndScrollDistancePx(
+            messageCount = messageCount,
+            bottomAnchorHeightPx = BOTTOM_ANCHOR_HEIGHT_PX,
+            visibleItems = visibleItems,
+        ) ?: return null
+    return if (distance in 1..viewportHeightPx) -distance else null
 }
 
-suspend fun LazyListState.animateScrollToTimelineEndFromCurrentPosition(messageCount: Int) {
-    val distanceFromEnd = distanceFromTimelineEnd(messageCount)
+private fun LazyListState.nearbyTimelineEndScrollDeltaPx(messageCount: Int): Int? =
+    nearbyTimelineEndScrollDeltaPx(
+        messageCount = messageCount,
+        viewportHeightPx = layoutInfo.viewportSize.height,
+        visibleItems = layoutInfo.visibleItemsInfo.map { it.toTimelineVisibleItem() },
+    )
 
-    if (distanceFromEnd != null && distanceFromEnd > 0 && distanceFromEnd <= layoutInfo.viewportSize.height) {
-        animateScrollBy(distanceFromEnd.toFloat())
+suspend fun LazyListState.animateScrollToTimelineEndFromCurrentPosition(messageCount: Int) {
+    val delta = nearbyTimelineEndScrollDeltaPx(messageCount)
+    if (delta != null) {
+        animateScrollBy(delta.toFloat())
+        // The anchor's real height is density-dependent; land on it exactly.
+        scrollToTimelineEnd()
     } else {
         animateScrollToTimelineEnd()
     }
@@ -218,13 +221,7 @@ suspend fun LazyListState.animateScrollToTimelineEndFromCurrentPosition(messageC
 
 suspend fun LazyListState.scrollToTimelineEndAfterLayoutChange(messageCount: Int) {
     if (messageCount == 0) return
-
-    val distanceFromEnd = distanceFromTimelineEnd(messageCount)
-    if (distanceFromEnd != null && distanceFromEnd > 0 && distanceFromEnd <= layoutInfo.viewportSize.height) {
-        scrollBy(distanceFromEnd.toFloat())
-    } else {
-        scrollToTimelineEnd()
-    }
+    scrollToTimelineEnd()
 }
 
 private fun LazyListItemInfo.toTimelineVisibleItem(): TimelineVisibleItem = TimelineVisibleItem(index = index, offset = offset, size = size)

@@ -1,10 +1,42 @@
 package dev.opencode.mobile.ui.scroll
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ScrollToEndVisibilityTest {
+    @Test
+    fun nearbyDeltaFromInsideTallNewestMessageScrollsTowardEnd() {
+        // 300px above the end of a 1000px reply in a 400px viewport.
+        val delta =
+            nearbyTimelineEndScrollDeltaPx(
+                messageCount = 3,
+                viewportHeightPx = 400,
+                visibleItems = listOf(TimelineVisibleItem(index = 1, offset = -299, size = 1000)),
+            )
+        assertEquals(-300, delta)
+    }
+
+    @Test
+    fun nearbyDeltaIsNullAtEndAndBeyondOneViewport() {
+        assertNull(
+            nearbyTimelineEndScrollDeltaPx(
+                messageCount = 3,
+                viewportHeightPx = 400,
+                visibleItems = listOf(TimelineVisibleItem(index = 0, offset = 0, size = 1)),
+            ),
+        )
+        assertNull(
+            nearbyTimelineEndScrollDeltaPx(
+                messageCount = 3,
+                viewportHeightPx = 400,
+                visibleItems = listOf(TimelineVisibleItem(index = 1, offset = -900, size = 1000)),
+            ),
+        )
+    }
+
     @Test
     fun hideWhenBottomAnchorStillNearEnd() {
         val visible =
