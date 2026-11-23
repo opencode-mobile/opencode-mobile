@@ -64,7 +64,9 @@ struct ServerHealthContent: View {
                 ServerHealthTiles(report: report)
                 ServerHealthCharts(report: report)
                 ServerHealthErrorsCard(report: report)
+                // A new identity per range collapses the log, also after a range with no errors.
                 ServerHealthErrorLogCard(report: report)
+                    .id(report.range)
                 ServerHealthServerCard(state: state, report: report)
                 footnote
             } else if state.report != nil {
@@ -391,7 +393,6 @@ private struct ServerHealthErrorLogCard: View {
                     }
                 }
             }
-            .onChange(of: report.range) { _, _ in showsAll = false }
         }
     }
 
