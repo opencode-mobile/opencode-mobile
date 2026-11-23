@@ -62,7 +62,9 @@ const ANDROID_ONLY = new Set([
 ]);
 
 /** iOS-only catalog keys, by iOS key. */
-const IOS_ONLY = new Set([]);
+const IOS_ONLY = new Set([
+  "server_health.error_log_date_time", // iOS joins date and time itself; Android's DateUtils formats both
+]);
 
 const ANDROID_PLACEHOLDER = /%(?:\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?[sdfxXoeEgGc]/g;
 const IOS_PLACEHOLDER = /%(?:\d+\$)?[-#+ 0]*\d*(?:\.\d+)?(?:@|lld|llu|ld|lu|d|i|u|f|e|g|x|X|c|s)/g;
