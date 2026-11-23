@@ -1,18 +1,21 @@
 import SwiftUI
 
 /// Bars for counts per time slot, on a baseline, with the maximum labelled top right.
-/// A zero draws no bar.
+/// A zero draws no bar. Slots in `unobservedSlots` are striped as time that was not measured.
 struct OpenCodeBarChart: View {
     let values: [Double]
+    let unobservedSlots: Set<Int>
     let tone: OpenCodeChartTone
     let valueLabel: (Double) -> String
 
     init(
         values: [Double],
+        unobservedSlots: Set<Int> = [],
         tone: OpenCodeChartTone = .warning,
         valueLabel: @escaping (Double) -> String = OpenCodeBarChart.integerLabel
     ) {
         self.values = values
+        self.unobservedSlots = unobservedSlots
         self.tone = tone
         self.valueLabel = valueLabel
     }
@@ -34,6 +37,10 @@ struct OpenCodeBarChart: View {
             let barWidth = max(0.5, slot * 0.7)
             let top: CGFloat = 14
             let plotHeight = max(1, size.height - top - 1)
+            for index in unobservedSlots where values.indices.contains(index) {
+                let rect = CGRect(x: CGFloat(index) * slot, y: 0, width: slot, height: size.height)
+                OpenCodeChartMetrics.drawUnobserved(in: rect, context: &context)
+            }
             if maximum > 0 {
                 for (index, value) in values.enumerated() where value > 0 {
                     let height = max(1.5, plotHeight * CGFloat(value / maximum))

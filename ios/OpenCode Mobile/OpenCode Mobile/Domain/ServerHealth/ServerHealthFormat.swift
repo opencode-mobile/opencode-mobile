@@ -28,6 +28,31 @@ nonisolated enum ServerHealthFormat {
         return "\(hours / 24) d \(hours % 24) h"
     }
 
+    /// `duration` for a time axis, without a zero trailing unit: "1 h", "7 d", but "1 h 5 m".
+    static func axisDuration(_ milliseconds: Int64) -> String {
+        let text = duration(milliseconds)
+        for zero in [" 0 m", " 0 h"] where text.hasSuffix(zero) {
+            return String(text.dropLast(zero.count))
+        }
+        return text
+    }
+
+    /// An error log time: the time today, else "Nov 23, 3:04 PM". The log spans at most seven
+    /// days, so the year adds nothing.
+    static func errorLogTime(
+        _ date: Date,
+        now: Date = .now,
+        calendar: Calendar = .current,
+        locale: Locale = .current
+    ) -> String {
+        let style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+        let time = date.formatted(style.hour().minute())
+        guard !calendar.isDate(date, inSameDayAs: now) else { return time }
+        let day = date.formatted(style.month(.abbreviated).day())
+        // Its own string because the system's combined form is the longer "Nov 23 at 3:04 PM".
+        return String(localized: "server_health.error_log_date_time", defaultValue: "\(day), \(time)")
+    }
+
     /// One decimal; two decimals from 99.95 up to (not including) 100, truncated, so 99.97%
     /// never reads as 100.0%.
     static func percent(_ value: Double) -> String {

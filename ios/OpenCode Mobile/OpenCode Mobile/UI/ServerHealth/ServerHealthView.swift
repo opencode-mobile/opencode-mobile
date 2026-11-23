@@ -288,8 +288,12 @@ private struct ServerHealthCharts: View {
             )),
             axisLabels: axis
         ) {
-            OpenCodeBarChart(values: report.openBuckets.map { Double($0.drops) }, tone: .warning)
-                .frame(height: 56)
+            OpenCodeBarChart(
+                values: report.openBuckets.map { Double($0.drops) },
+                unobservedSlots: Set(report.openBuckets.indices.filter { report.openBuckets[$0].condition == .unobserved }),
+                tone: .warning
+            )
+            .frame(height: 56)
         }
     }
 
@@ -322,7 +326,7 @@ private struct ServerHealthCharts: View {
     }
 
     private static func ago(_ ms: Int64) -> OpenCodeText {
-        let span = ServerHealthFormat.duration(max(0, ms))
+        let span = ServerHealthFormat.axisDuration(max(0, ms))
         return OpenCodeText(LocalizedStringResource("server_health.axis_ago", defaultValue: "\(span) ago"))
     }
 
@@ -415,19 +419,21 @@ private struct ServerHealthErrorLogRow: View {
     let entry: ServerHealthErrorLogEntry
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        // The time shares the title's line so the detail can use the full width.
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(openCode: ServerHealthText.category(entry.category))
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textStrong)
-                Text(verbatim: detail)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textWeak)
+                Spacer(minLength: 0)
+                Text(verbatim: time)
+                    .font(OpenCodeTypography.caption.monospacedDigit())
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .fixedSize()
             }
-            Spacer(minLength: 0)
-            Text(verbatim: time)
-                .font(OpenCodeTypography.caption.monospacedDigit())
-                .foregroundStyle(OpenCodeColors.textBase)
+            Text(verbatim: detail)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textWeak)
         }
         .accessibilityElement(children: .combine)
     }
@@ -445,10 +451,7 @@ private struct ServerHealthErrorLogRow: View {
     }
 
     private var time: String {
-        let date = Date(timeIntervalSince1970: TimeInterval(entry.lastAtMs) / 1000)
-        return Calendar.current.isDateInToday(date)
-            ? date.formatted(date: .omitted, time: .shortened)
-            : date.formatted(date: .abbreviated, time: .shortened)
+        ServerHealthFormat.errorLogTime(Date(timeIntervalSince1970: TimeInterval(entry.lastAtMs) / 1000))
     }
 }
 

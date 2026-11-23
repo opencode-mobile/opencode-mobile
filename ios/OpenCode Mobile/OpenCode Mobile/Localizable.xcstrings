@@ -7722,6 +7722,18 @@
         }
       }
     },
+    "server_health.error_log_date_time" : {
+      "comment" : "An error log date and time, such as Nov 23, 3:04 PM.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
     "server_health.error_log_repeated" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -36,7 +36,9 @@ struct OpenCodeStatusStrip: View {
                 case .error:
                     context.fill(path, with: .color(OpenCodeColors.error))
                 case .unobserved:
-                    context.fill(path, with: .color(OpenCodeColors.textStrong.opacity(0.10)))
+                    var clipped = context
+                    clipped.clip(to: path)
+                    OpenCodeChartMetrics.drawUnobserved(in: rect, context: &clipped)
                 }
             }
         }

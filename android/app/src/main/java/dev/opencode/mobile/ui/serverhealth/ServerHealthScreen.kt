@@ -218,7 +218,10 @@ private fun ServerHealthTiles(report: ServerHealthReport) {
             OpenCodeStatTile(
                 label = stringResource(R.string.server_health_uptime),
                 value = report.uptimePercent?.let(ServerHealthFormat::percent) ?: unknown,
-                detail = stringResource(R.string.server_health_uptime_detail, ServerHealthFormat.duration(report.observedMs)),
+                detail =
+                    ServerHealthFormat.measuredDuration(report.observedMs)?.let {
+                        stringResource(R.string.server_health_uptime_detail, it)
+                    },
                 modifier = Modifier.weight(1f),
             )
             OpenCodeStatTile(
@@ -257,12 +260,12 @@ private fun openAxisLabels(report: ServerHealthReport): OpenCodeChartAxisLabels 
     val first = report.openBuckets.firstOrNull()?.startMs ?: report.rangeStartMs
     val last = report.openBuckets.lastOrNull()?.endMs ?: report.nowMs
     return OpenCodeChartAxisLabels(
-        start = stringResource(R.string.server_health_axis_ago, ServerHealthFormat.duration(report.nowMs - first)),
+        start = stringResource(R.string.server_health_axis_ago, ServerHealthFormat.axisDuration(report.nowMs - first)),
         end =
             if (last >= report.nowMs) {
                 stringResource(R.string.server_health_now)
             } else {
-                stringResource(R.string.server_health_axis_ago, ServerHealthFormat.duration(report.nowMs - last))
+                stringResource(R.string.server_health_axis_ago, ServerHealthFormat.axisDuration(report.nowMs - last))
             },
     )
 }
@@ -367,6 +370,10 @@ private fun ServerHealthCharts(report: ServerHealthReport) {
     ) {
         OpenCodeBarChart(
             values = report.openBuckets.map { it.drops.toDouble() },
+            unobservedSlots =
+                report.openBuckets.indices
+                    .filter { report.openBuckets[it].condition == ServerHealthBucketCondition.Unobserved }
+                    .toSet(),
             tone = OpenCodeChartTone.Warning,
             contentDescription = reconnectsSummary,
             modifier = Modifier.fillMaxWidth().height(56.dp),
