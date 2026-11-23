@@ -7,6 +7,7 @@ import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLeading
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchChangedFile
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchSummary
+import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
 import dev.opencode.mobile.ui.components.floatingPillLeading
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatActivityPillCopy
@@ -27,11 +28,11 @@ class SessionChatPillSlotsTest {
     fun foldedWorkingPillMergesOnlyIntoARunningActivityPill() {
         val working =
             SessionChatTurnStatusSlot(
-                phase = dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase.Working("Working"),
+                phase = OpenCodeTurnStatusPillPhase.Working("Working"),
                 compact = true,
                 leaving = false,
             )
-        val done = working.copy(phase = dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase.Done)
+        val done = working.copy(phase = OpenCodeTurnStatusPillPhase.Done)
         val running = SessionChatActivityItem.SideQuestionsRunning(1)
 
         assertTrue(SessionChatPillSlots.turnMergesIntoActivity(working, turnCompact = true, primary = running))

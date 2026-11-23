@@ -419,8 +419,7 @@ internal object SessionChatActivityPillCopy {
     fun withMergedTurn(
         turnLabel: String?,
         label: UiText,
-    ): UiText =
-        turnLabel?.let { UiText.resource(R.string.session_chat_activity_status_action, UiText.verbatim(it), label) } ?: label
+    ): UiText = turnLabel?.let { UiText.resource(R.string.session_chat_activity_status_action, UiText.verbatim(it), label) } ?: label
 
     /** The item's state, as read aloud. */
     private fun status(item: SessionChatActivityItem): UiText =
