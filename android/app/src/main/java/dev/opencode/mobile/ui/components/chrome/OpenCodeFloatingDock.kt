@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,8 @@ fun OpenCodeFloatingDock(
                 .padding(horizontal = 12.dp)
                 .padding(bottom = 4.dp),
         shape = RoundedCornerShape(OpenCodeFloatingDockCornerRadius),
+        // Same edge as the Session Composer, so both bottom docks read alike.
+        border = BorderStroke(1.dp, openCodeComposerEdgeColor()),
     ) {
         Column(
             modifier =

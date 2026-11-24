@@ -39,7 +39,7 @@ internal fun openCodeComposerFadeHeight(awayFromEnd: Boolean): Dp =
 /** Top corner radius of the docked composer. */
 internal val OpenCodeComposerDockedCornerRadius = 22.dp
 
-private const val COMPOSER_EDGE_BLEND = 0.2f
+private const val COMPOSER_EDGE_BLEND = 0.12f
 
 private val ComposerDockedShadowHeight = 14.dp
 
