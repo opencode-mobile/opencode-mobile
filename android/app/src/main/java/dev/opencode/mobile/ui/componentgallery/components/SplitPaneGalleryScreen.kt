@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeSplitPane
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneState
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
@@ -36,30 +37,40 @@ fun SplitPaneGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeSplitPane(
             state = state,
             onStateChange = { state = it },
-            leading = {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    OpenCodeTopBar(title = "Sessions")
-                    OpenCodeEmptyState(
-                        title = "Leading pane",
-                        message = "Drag the handle to resize between 280 and 480dp. Release below 220dp to snap closed; tap to toggle. Home, Changes, and Terminals share this range.",
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-            },
-            trailing = { control ->
-                Column(modifier = Modifier.fillMaxSize()) {
-                    OpenCodeTopBar(
-                        title = "Detail",
-                        leading = openCodeDetailLeading(control) {},
-                    )
-                    OpenCodeEmptyState(
-                        title = "Trailing pane",
-                        message = "The sidebar button shows or hides the leading pane.",
-                        icon = OpenCodeIcons.Sidebar,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-            },
+            leading = { SplitPaneGalleryLeading() },
+            trailing = { control -> SplitPaneGalleryTrailing(control) },
+        )
+    }
+}
+
+// The panes below are shared with the debug Component Capture registry.
+
+@Composable
+internal fun SplitPaneGalleryLeading() {
+    Column(modifier = Modifier.fillMaxSize()) {
+        OpenCodeTopBar(title = "Sessions")
+        OpenCodeEmptyState(
+            title = "Leading pane",
+            message =
+                "Drag the handle to resize between 280 and 480dp. Release below 220dp to snap closed; tap to toggle. " +
+                    "Home, Changes, and Terminals share this range.",
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+@Composable
+internal fun SplitPaneGalleryTrailing(control: OpenCodeSplitPaneDetailControl) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        OpenCodeTopBar(
+            title = "Detail",
+            leading = openCodeDetailLeading(control) {},
+        )
+        OpenCodeEmptyState(
+            title = "Trailing pane",
+            message = "The sidebar button shows or hides the leading pane.",
+            icon = OpenCodeIcons.Sidebar,
+            modifier = Modifier.fillMaxSize(),
         )
     }
 }

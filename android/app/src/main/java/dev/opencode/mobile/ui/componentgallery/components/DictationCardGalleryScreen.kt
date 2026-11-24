@@ -22,7 +22,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDictationCard
 import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
 import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
 
-private enum class DictationCardGalleryVariant(
+internal enum class DictationCardGalleryVariant(
     val label: String,
 ) {
     Listening("Listening"),
@@ -44,6 +44,40 @@ fun DictationCardGalleryScreen(modifier: Modifier = Modifier) {
     val variant =
         DictationCardGalleryVariant.entries.firstOrNull { it.name == variantName }
             ?: DictationCardGalleryVariant.Listening
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            DictationCardGalleryVariant.entries.forEach { value ->
+                OpenCodeChoiceBadge(
+                    label = value.label,
+                    selected = variant == value,
+                    onClick = { variantName = value.name },
+                )
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Level",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Slider(
+                value = level,
+                onValueChange = { level = it },
+            )
+        }
+        DictationCardGallerySample(variant = variant, level = level)
+    }
+}
+
+/** The card for one gallery variant; shared with the debug Component Capture registry. */
+@Composable
+internal fun DictationCardGallerySample(
+    variant: DictationCardGalleryVariant,
+    level: Float,
+) {
     val cardVariant =
         when (variant) {
             DictationCardGalleryVariant.Listening -> OpenCodeDictationCardVariant.Listening
@@ -74,47 +108,22 @@ fun DictationCardGalleryScreen(modifier: Modifier = Modifier) {
             -> null
         }
 
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            DictationCardGalleryVariant.entries.forEach { value ->
-                OpenCodeChoiceBadge(
-                    label = value.label,
-                    selected = variant == value,
-                    onClick = { variantName = value.name },
-                )
-            }
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "Level",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Slider(
-                value = level,
-                onValueChange = { level = it },
-            )
-        }
-        OpenCodeDictationCard(
-            variant = cardVariant,
-            committed = if (cardVariant == OpenCodeDictationCardVariant.Unavailable) "" else "Add a dictation card",
-            volatileTail = if (cardVariant == OpenCodeDictationCardVariant.Listening) " to the composer" else "",
-            level = level,
-            languageLabel = "English",
-            onDevice = true,
-            elapsedLabel = "0:12",
-            unavailableReason = unavailableReason,
-            errorMessage = "Dictation stopped",
-            // The level slider doubles as download progress in the Downloading state.
-            downloadProgress = if (variant == DictationCardGalleryVariant.ModelDownloading) level else null,
-            onCancel = {},
-            onInsert = {},
-            onOpenSettings = {},
-            onDownload = {},
-            onRetry = {},
-        )
-    }
+    OpenCodeDictationCard(
+        variant = cardVariant,
+        committed = if (cardVariant == OpenCodeDictationCardVariant.Unavailable) "" else "Add a dictation card",
+        volatileTail = if (cardVariant == OpenCodeDictationCardVariant.Listening) " to the composer" else "",
+        level = level,
+        languageLabel = "English",
+        onDevice = true,
+        elapsedLabel = "0:12",
+        unavailableReason = unavailableReason,
+        errorMessage = "Dictation stopped",
+        // The level slider doubles as download progress in the Downloading state.
+        downloadProgress = if (variant == DictationCardGalleryVariant.ModelDownloading) level else null,
+        onCancel = {},
+        onInsert = {},
+        onOpenSettings = {},
+        onDownload = {},
+        onRetry = {},
+    )
 }

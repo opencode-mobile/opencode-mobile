@@ -74,7 +74,7 @@ private val UploadingExamples =
         ),
     )
 
-private fun ratioImage(
+internal fun ratioImage(
     id: String,
     label: String,
     width: Int,

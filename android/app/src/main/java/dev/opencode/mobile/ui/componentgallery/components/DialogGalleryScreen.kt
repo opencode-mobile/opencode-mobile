@@ -109,13 +109,16 @@ fun DialogGalleryScreen(modifier: Modifier = Modifier) {
             },
         notes =
             if (showsNotes && !showsTextField) {
-                listOf(
-                    OpenCodeDialogNote("3 uncommitted changes will be lost.", OpenCodeDialogNoteTone.Warning),
-                    OpenCodeDialogNote("1 session uses this worktree. It stays on Home but can't run here again."),
-                )
+                dialogGalleryNotes
             } else {
                 emptyList()
             },
         onDismissRequest = { visible = false },
     )
 }
+
+internal val dialogGalleryNotes =
+    listOf(
+        OpenCodeDialogNote("3 uncommitted changes will be lost.", OpenCodeDialogNoteTone.Warning),
+        OpenCodeDialogNote("1 session uses this worktree. It stays on Home but can't run here again."),
+    )

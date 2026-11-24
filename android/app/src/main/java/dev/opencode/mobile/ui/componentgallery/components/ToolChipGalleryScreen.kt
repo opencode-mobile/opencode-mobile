@@ -22,7 +22,7 @@ import dev.opencode.mobile.ui.components.OpenCodeToolChip
 import dev.opencode.mobile.ui.components.OpenCodeToolChipStatus
 import dev.opencode.mobile.ui.components.OpenCodeToolChipVariant
 
-private enum class ToolChipGalleryVariant(
+internal enum class ToolChipGalleryVariant(
     val label: String,
 ) {
     File("File"),
@@ -34,7 +34,7 @@ private enum class ToolChipGalleryVariant(
     More("More"),
 }
 
-private fun ToolChipGalleryVariant.toVariant(): OpenCodeToolChipVariant =
+internal fun ToolChipGalleryVariant.toVariant(): OpenCodeToolChipVariant =
     when (this) {
         ToolChipGalleryVariant.File -> OpenCodeToolChipVariant.File("SessionChatTimelineView.kt")
         ToolChipGalleryVariant.Change -> OpenCodeToolChipVariant.File("SessionChatTimeline.kt", additions = 12, deletions = 3)

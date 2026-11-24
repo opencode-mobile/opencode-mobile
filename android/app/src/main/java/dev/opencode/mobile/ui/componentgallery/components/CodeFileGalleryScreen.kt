@@ -26,7 +26,7 @@ import dev.opencode.mobile.ui.components.OpenCodeCodeFile
 import dev.opencode.mobile.ui.components.OpenCodeCodeLines
 import dev.opencode.mobile.ui.components.OpenCodeCodeMark
 
-private val CodeFileSamples =
+internal val CodeFileSamples =
     listOf(
         Triple(
             "Kotlin",
@@ -55,10 +55,37 @@ fun CodeFileGalleryScreen(modifier: Modifier = Modifier) {
     var sample by rememberSaveable { mutableIntStateOf(0) }
     var wrap by rememberSaveable { mutableStateOf(false) }
     var marked by rememberSaveable { mutableStateOf(false) }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Interactive", style = MaterialTheme.typography.titleMedium)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CodeFileSamples.forEachIndexed { index, (label, _, _) ->
+                OpenCodeChoiceBadge(label = label, selected = sample == index, onClick = { sample = index })
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OpenCodeChoiceBadge(label = "Wrap lines", selected = wrap, onClick = { wrap = !wrap })
+            OpenCodeChoiceBadge(label = "Marked ranges", selected = marked, onClick = { marked = !marked })
+        }
+        CodeFileGallerySample(sample = sample, wrap = wrap, marked = marked)
+    }
+}
+
+/** One sample in its bordered frame; shared with the debug Component Capture registry. */
+@Composable
+internal fun CodeFileGallerySample(
+    sample: Int,
+    wrap: Boolean,
+    marked: Boolean,
+    highlighted: Boolean = true,
+) {
     val (_, grammar, source) = CodeFileSamples[sample]
     val lines =
-        remember(sample) {
-            val spans = grammar?.let { OpenCodeHighlightCoreCodeHighlighter.highlight(it, source).spans }.orEmpty()
+        remember(sample, highlighted) {
+            val spans =
+                grammar
+                    ?.takeIf { highlighted }
+                    ?.let { OpenCodeHighlightCoreCodeHighlighter.highlight(it, source).spans }
+                    .orEmpty()
             OpenCodeCodeLines.split(source, spans)
         }
     // Marks every other line's first word, the way the Highlighting Lab marks engine disagreements.
@@ -73,26 +100,14 @@ fun CodeFileGalleryScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Interactive", style = MaterialTheme.typography.titleMedium)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            CodeFileSamples.forEachIndexed { index, (label, _, _) ->
-                OpenCodeChoiceBadge(label = label, selected = sample == index, onClick = { sample = index })
-            }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OpenCodeChoiceBadge(label = "Wrap lines", selected = wrap, onClick = { wrap = !wrap })
-            OpenCodeChoiceBadge(label = "Marked ranges", selected = marked, onClick = { marked = !marked })
-        }
-        OpenCodeCodeFile(
-            lines = shownLines,
-            wrapLines = wrap,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(240.dp)
-                    .clip(OpenCodeSmallShape)
-                    .border(1.dp, openCodeColor("border-weaker-base"), OpenCodeSmallShape),
-        )
-    }
+    OpenCodeCodeFile(
+        lines = shownLines,
+        wrapLines = wrap,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(240.dp)
+                .clip(OpenCodeSmallShape)
+                .border(1.dp, openCodeColor("border-weaker-base"), OpenCodeSmallShape),
+    )
 }

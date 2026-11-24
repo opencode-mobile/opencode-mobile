@@ -37,66 +37,14 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
     var itemCount by rememberSaveable { mutableStateOf(2) }
 
     val entries =
-        buildList {
-            add(
-                OpenCodeOverflowMenuEntry(
-                    title = "Session context",
-                    icon = if (selectionRowsEnabled) OpenCodeIcons.Check else OpenCodeIcons.Architecture,
-                    enabled = entriesEnabled,
-                    accessibilityLabel = if (selectionRowsEnabled) "Session context, selected" else null,
-                    onClick = { menuExpanded = false },
-                ),
-            )
-            add(
-                OpenCodeOverflowMenuEntry(
-                    title = "Move to worktree\u2026",
-                    icon = OpenCodeIcons.CallSplit,
-                    enabled = false,
-                    subtitle = "Needs an opencode v2 server",
-                    onClick = { menuExpanded = false },
-                ),
-            )
-            add(
-                OpenCodeOverflowMenuEntry(
-                    title = "Copy session ID",
-                    icon = if (selectionRowsEnabled) null else OpenCodeIcons.ContentCopy,
-                    enabled = entriesEnabled,
-                    dividerAbove = showDivider,
-                    onClick = { menuExpanded = false },
-                ),
-            )
-            if (itemCount >= 3) {
-                add(
-                    OpenCodeOverflowMenuEntry(
-                        title = "Settings",
-                        icon = OpenCodeIcons.Settings,
-                        enabled = entriesEnabled,
-                        onClick = { menuExpanded = false },
-                    ),
-                )
-            }
-            if (itemCount >= 4) {
-                add(
-                    OpenCodeOverflowMenuEntry(
-                        title = "Search",
-                        icon = OpenCodeIcons.Search,
-                        enabled = entriesEnabled,
-                        onClick = { menuExpanded = false },
-                    ),
-                )
-            }
-            if (showDestructive) {
-                add(
-                    OpenCodeOverflowMenuEntry(
-                        title = "Delete",
-                        icon = OpenCodeIcons.Close,
-                        enabled = entriesEnabled,
-                        destructive = true,
-                        onClick = { menuExpanded = false },
-                    ),
-                )
-            }
-        }
+        overflowMenuGalleryEntries(
+            enabled = entriesEnabled,
+            selectionRows = selectionRowsEnabled,
+            destructive = showDestructive,
+            divider = showDivider,
+            itemCount = itemCount,
+            onClick = { menuExpanded = false },
+        )
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -205,3 +153,80 @@ private fun ControlGroup(
         }
     }
 }
+
+/**
+ * The menu's sample entries; shared with the debug Component Capture registry. [itemCount] counts the
+ * plain entries; [reason] adds the disabled entry with its reason, [textOnly] drops the icons.
+ */
+internal fun overflowMenuGalleryEntries(
+    enabled: Boolean,
+    selectionRows: Boolean,
+    destructive: Boolean,
+    divider: Boolean,
+    itemCount: Int,
+    onClick: () -> Unit,
+    reason: Boolean = true,
+    textOnly: Boolean = false,
+): List<OpenCodeOverflowMenuEntry> =
+    buildList {
+        add(
+            OpenCodeOverflowMenuEntry(
+                title = "Session context",
+                icon = if (selectionRows) OpenCodeIcons.Check else OpenCodeIcons.Architecture,
+                enabled = enabled,
+                accessibilityLabel = if (selectionRows) "Session context, selected" else null,
+                onClick = onClick,
+            ),
+        )
+        if (reason) {
+            add(
+                OpenCodeOverflowMenuEntry(
+                    title = "Move to worktree\u2026",
+                    icon = OpenCodeIcons.CallSplit,
+                    enabled = false,
+                    subtitle = "Needs an opencode v2 server",
+                    onClick = onClick,
+                ),
+            )
+        }
+        add(
+            OpenCodeOverflowMenuEntry(
+                title = "Copy session ID",
+                icon = if (selectionRows) null else OpenCodeIcons.ContentCopy,
+                enabled = enabled,
+                dividerAbove = divider,
+                onClick = onClick,
+            ),
+        )
+        if (itemCount >= 3) {
+            add(
+                OpenCodeOverflowMenuEntry(
+                    title = "Settings",
+                    icon = OpenCodeIcons.Settings,
+                    enabled = enabled,
+                    onClick = onClick,
+                ),
+            )
+        }
+        if (itemCount >= 4) {
+            add(
+                OpenCodeOverflowMenuEntry(
+                    title = "Search",
+                    icon = OpenCodeIcons.Search,
+                    enabled = enabled,
+                    onClick = onClick,
+                ),
+            )
+        }
+        if (destructive) {
+            add(
+                OpenCodeOverflowMenuEntry(
+                    title = "Delete",
+                    icon = OpenCodeIcons.Close,
+                    enabled = enabled,
+                    destructive = true,
+                    onClick = onClick,
+                ),
+            )
+        }
+    }.map { if (textOnly) it.copy(icon = null) else it }

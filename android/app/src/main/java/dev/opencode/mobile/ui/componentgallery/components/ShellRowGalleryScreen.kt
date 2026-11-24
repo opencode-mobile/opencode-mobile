@@ -24,11 +24,7 @@ fun ShellRowGalleryScreen(modifier: Modifier = Modifier) {
     var tappable by rememberSaveable { mutableStateOf(true) }
 
     val command =
-        if (longCommand) {
-            "./gradlew :app:testDebugUnitTest --tests 'dev.example.sessionchat.SessionChatViewModelTest' --info --stacktrace"
-        } else {
-            "npm test"
-        }
+        if (longCommand) SHELL_ROW_GALLERY_LONG_COMMAND else SHELL_ROW_GALLERY_SHORT_COMMAND
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -66,3 +62,7 @@ fun ShellRowGalleryScreen(modifier: Modifier = Modifier) {
         )
     }
 }
+
+internal const val SHELL_ROW_GALLERY_SHORT_COMMAND = "npm test"
+internal const val SHELL_ROW_GALLERY_LONG_COMMAND =
+    "./gradlew :app:testDebugUnitTest --tests 'dev.example.sessionchat.SessionChatViewModelTest' --info --stacktrace"

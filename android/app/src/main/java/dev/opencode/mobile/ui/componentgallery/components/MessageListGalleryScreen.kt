@@ -34,7 +34,7 @@ fun MessageListGalleryScreen(
     modifier: Modifier = Modifier,
     viewModel: MessageListGalleryViewModel = viewModel(),
 ) {
-    GalleryPreview(
+    MessageListGalleryPreview(
         messages = viewModel.messages,
         autoFollowEnabled = viewModel.autoFollowEnabled,
         onAddMessage = viewModel::addMessage,
@@ -44,8 +44,9 @@ fun MessageListGalleryScreen(
     )
 }
 
+/** The list with its gallery controls; shared with the debug Component Capture registry. */
 @Composable
-private fun GalleryPreview(
+internal fun MessageListGalleryPreview(
     messages: List<MessageListGalleryMessage>,
     autoFollowEnabled: Boolean,
     onAddMessage: () -> Unit,

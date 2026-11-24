@@ -184,18 +184,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
         height = height,
         keyboard = keyboard,
         pinnedTop = {
-            if (showsPinnedTop) {
-                OpenCodeBottomSheetEntry(
-                    title = "Go up",
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ArrowUpward),
-                    onClick = {},
-                )
-                OpenCodeBottomSheetEntry(
-                    title = "/Users/demo/Projects",
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.FolderCheck),
-                    onClick = {},
-                )
-            }
+            if (showsPinnedTop) BottomSheetGalleryPinnedTop()
         },
         pinnedBottom =
             if (showsPinnedBottom) {
@@ -211,20 +200,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     ) {
         // Keyboard policies other than Dismiss need a field to type into.
         if (keyboard != OpenCodeBottomSheetKeyboard.Dismiss) {
-            OpenCodeTextInput(
-                value = formValue,
-                onValueChange = { formValue = it },
-                hint = "Server URL",
-                kind = OpenCodeTextInputKind.Url,
-                modifier = Modifier.openCodeBottomSheetContentInset(),
-            )
-            OpenCodeTextInput(
-                value = "gallery password",
-                onValueChange = {},
-                hint = "Password",
-                kind = OpenCodeTextInputKind.Password,
-                modifier = Modifier.openCodeBottomSheetContentInset(),
-            )
+            BottomSheetGalleryForm(formValue = formValue, onFormValueChange = { formValue = it })
         }
         ActionSheetEntries(
             enabled = enabled,
@@ -240,7 +216,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun KeyboardExpandBottomSheet(
+internal fun KeyboardExpandBottomSheet(
     visible: Boolean,
     filter: String,
     onFilterChange: (String) -> Unit,
@@ -273,8 +249,9 @@ private fun KeyboardExpandBottomSheet(
     }
 }
 
+/** The sheet's sample entries; shared with the debug Component Capture registry. */
 @Composable
-private fun ActionSheetEntries(
+internal fun ActionSheetEntries(
     enabled: Boolean,
     selected: Boolean,
     tag: String?,
@@ -283,6 +260,8 @@ private fun ActionSheetEntries(
     endDecorator: BottomSheetEntryDecorator,
     itemCount: Int,
     onDismiss: () -> Unit,
+    subtitle: String? = null,
+    destructive: Boolean = false,
 ) {
     OpenCodeBottomSheetEntry(
         title = "Open current project",
@@ -291,6 +270,7 @@ private fun ActionSheetEntries(
         endDecorator = endDecorator,
         selected = selected,
         tag = tag,
+        subtitle = subtitle,
         onClick = onDismiss,
     )
     OpenCodeBottomSheetEntry(
@@ -320,6 +300,7 @@ private fun ActionSheetEntries(
         OpenCodeBottomSheetEntry(
             title = "Abort active work",
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.StopCircle),
+            destructive = destructive,
             onClick = onDismiss,
         )
     }
@@ -402,3 +383,40 @@ private inline fun <reified T : Enum<T>> galleryEnumValue(
     name: String,
     fallback: T,
 ): T = enumValues<T>().firstOrNull { it.name == name } ?: fallback
+
+/** The sheet's pinned-top sample rows; shared with the debug Component Capture registry. */
+@Composable
+internal fun BottomSheetGalleryPinnedTop() {
+    OpenCodeBottomSheetEntry(
+        title = "Go up",
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ArrowUpward),
+        onClick = {},
+    )
+    OpenCodeBottomSheetEntry(
+        title = "/Users/demo/Projects",
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.FolderCheck),
+        onClick = {},
+    )
+}
+
+/** The fields the keyboard policies need; shared with the debug Component Capture registry. */
+@Composable
+internal fun BottomSheetGalleryForm(
+    formValue: String,
+    onFormValueChange: (String) -> Unit,
+) {
+    OpenCodeTextInput(
+        value = formValue,
+        onValueChange = onFormValueChange,
+        hint = "Server URL",
+        kind = OpenCodeTextInputKind.Url,
+        modifier = Modifier.openCodeBottomSheetContentInset(),
+    )
+    OpenCodeTextInput(
+        value = "gallery password",
+        onValueChange = {},
+        hint = "Password",
+        kind = OpenCodeTextInputKind.Password,
+        modifier = Modifier.openCodeBottomSheetContentInset(),
+    )
+}

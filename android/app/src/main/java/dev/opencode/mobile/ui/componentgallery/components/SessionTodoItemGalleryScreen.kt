@@ -60,7 +60,7 @@ private val OpenCodeSessionTodoItemStatus.galleryLabel: String
             OpenCodeSessionTodoItemStatus.Cancelled -> "Cancel"
         }
 
-private val OpenCodeSessionTodoItemStatus.galleryContent: String
+internal val OpenCodeSessionTodoItemStatus.galleryContent: String
     get() =
         when (this) {
             OpenCodeSessionTodoItemStatus.Pending -> "Summarize what the README says in 2 sentences"

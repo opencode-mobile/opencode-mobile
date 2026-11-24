@@ -21,7 +21,7 @@ import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageLabel
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageSteering
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private enum class OutgoingMessageSample(
+internal enum class OutgoingMessageSample(
     val label: String,
     val text: String,
     val attachments: List<OpenCodeAttachmentPresentation> = emptyList(),

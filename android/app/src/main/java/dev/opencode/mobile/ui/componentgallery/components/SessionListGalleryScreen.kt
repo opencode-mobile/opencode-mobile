@@ -119,7 +119,7 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
     }
 }
 
-private val sessionListGallerySamples: List<SessionListSession>
+internal val sessionListGallerySamples: List<SessionListSession>
     get() {
         val now = System.currentTimeMillis()
         return listOf(
@@ -232,7 +232,7 @@ private val sessionListGallerySamples: List<SessionListSession>
         )
     }
 
-private val sessionListGalleryFilterTabs =
+internal val sessionListGalleryFilterTabs =
     listOf(
         SessionListFilterTab.all(projectCount = 3, hasSessions = true),
         SessionListFilterTab.project(
@@ -244,7 +244,7 @@ private val sessionListGalleryFilterTabs =
         SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", hasSessions = true),
     )
 
-private val sessionListGalleryOneProjectFilterTabs =
+internal val sessionListGalleryOneProjectFilterTabs =
     listOf(
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",

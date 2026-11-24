@@ -156,7 +156,7 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
     }
 }
 
-private val sessionListDockGalleryFilterTabs =
+internal val sessionListDockGalleryFilterTabs =
     listOf(
         SessionListFilterTab.all(projectCount = 3, hasSessions = true),
         SessionListFilterTab.project(
@@ -168,7 +168,7 @@ private val sessionListDockGalleryFilterTabs =
         SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", hasSessions = true),
     )
 
-private val sessionListDockGalleryOneProjectFilterTabs =
+internal val sessionListDockGalleryOneProjectFilterTabs =
     listOf(
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",

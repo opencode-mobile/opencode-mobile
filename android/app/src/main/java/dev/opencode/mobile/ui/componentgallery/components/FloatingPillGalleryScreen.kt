@@ -24,7 +24,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPill
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private val floatingPillGalleryLayouts =
+internal val floatingPillGalleryLayouts =
     listOf(
         "Icon + label" to OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.CallSplit, "+128 −14"),
         "Icon only" to OpenCodeFloatingPillLayout.IconOnly(OpenCodeIcons.ArrowDownward, "Scroll to end"),

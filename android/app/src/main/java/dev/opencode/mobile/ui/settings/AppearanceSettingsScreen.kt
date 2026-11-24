@@ -627,7 +627,7 @@ private val SyntaxSnippetRuns =
         ";\n}" to CodeTokenRole.Punctuation,
     )
 
-private fun syntaxSnippet(colors: CodeColors) =
+internal fun syntaxSnippet(colors: CodeColors) =
     buildAnnotatedString {
         SyntaxSnippetRuns.forEach { (text, role) ->
             withStyle(SpanStyle(color = colors.colorFor(role))) { append(text) }

@@ -52,7 +52,7 @@ fun TaskRowGalleryScreen(modifier: Modifier = Modifier) {
     }
 }
 
-private data class TaskRowGallerySample(
+internal data class TaskRowGallerySample(
     val title: String,
     val state: OpenCodeTaskRowState,
     val tag: String?,
@@ -61,7 +61,7 @@ private data class TaskRowGallerySample(
     val time: String?,
 )
 
-private val taskRowGallerySamples =
+internal val taskRowGallerySamples =
     listOf(
         TaskRowGallerySample("Find the session store", OpenCodeTaskRowState.Running, "explore", "Searching SessionStore", "7 tools", "0:42"),
         TaskRowGallerySample("Run the test suite", OpenCodeTaskRowState.WaitingForInput, null, "Waiting for input", null, "1:35"),

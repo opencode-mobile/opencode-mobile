@@ -27,20 +27,7 @@ fun ComposerSuggestionOverlayGalleryScreen(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         OpenCodeComposerSuggestionOverlay(
-            items =
-                (1..8).map { index ->
-                    OpenCodeComposerSuggestionItem(
-                        id = "cmd-$index",
-                        title = "/command-$index",
-                        subtitle = "Description $index",
-                        badge =
-                            when {
-                                index % 3 == 0 -> "skill"
-                                index % 2 == 0 -> "mcp"
-                                else -> null
-                            },
-                    )
-                },
+            items = composerSuggestionGalleryCommands,
             onSelect = {},
         )
 
@@ -50,27 +37,7 @@ fun ComposerSuggestionOverlayGalleryScreen(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         OpenCodeComposerSuggestionOverlay(
-            items =
-                listOf(
-                    OpenCodeComposerSuggestionItem(
-                        id = "build",
-                        title = "@build",
-                        subtitle = "Default agent",
-                        leadingIcon = OpenCodeComposerSuggestionLeadingIcon.Icon(OpenCodeIcons.Agent),
-                    ),
-                ) +
-                    listOf("Package.swift", "app/build.gradle", "src/main.kt", "web/App.tsx", "README.md", "src").map { path ->
-                        OpenCodeComposerSuggestionItem(
-                            id = "file:$path",
-                            title = path,
-                            subtitle = "File",
-                            leadingIcon =
-                                OpenCodeComposerSuggestionLeadingIcon.File(
-                                    path = path,
-                                    kind = if ('.' in path) OpenCodeFileIconKind.File else OpenCodeFileIconKind.Directory,
-                                ),
-                        )
-                    },
+            items = composerSuggestionGalleryMentions,
             onSelect = {},
         )
 
@@ -86,3 +53,40 @@ fun ComposerSuggestionOverlayGalleryScreen(modifier: Modifier = Modifier) {
         )
     }
 }
+
+internal val composerSuggestionGalleryCommands: List<OpenCodeComposerSuggestionItem> =
+    (1..8).map { index ->
+        OpenCodeComposerSuggestionItem(
+            id = "cmd-$index",
+            title = "/command-$index",
+            subtitle = "Description $index",
+            badge =
+                when {
+                    index % 3 == 0 -> "skill"
+                    index % 2 == 0 -> "mcp"
+                    else -> null
+                },
+        )
+    }
+
+internal val composerSuggestionGalleryMentions: List<OpenCodeComposerSuggestionItem> =
+    listOf(
+        OpenCodeComposerSuggestionItem(
+            id = "build",
+            title = "@build",
+            subtitle = "Default agent",
+            leadingIcon = OpenCodeComposerSuggestionLeadingIcon.Icon(OpenCodeIcons.Agent),
+        ),
+    ) +
+        listOf("Package.swift", "app/build.gradle", "src/main.kt", "web/App.tsx", "README.md", "src").map { path ->
+            OpenCodeComposerSuggestionItem(
+                id = "file:$path",
+                title = path,
+                subtitle = "File",
+                leadingIcon =
+                    OpenCodeComposerSuggestionLeadingIcon.File(
+                        path = path,
+                        kind = if ('.' in path) OpenCodeFileIconKind.File else OpenCodeFileIconKind.Directory,
+                    ),
+            )
+        }

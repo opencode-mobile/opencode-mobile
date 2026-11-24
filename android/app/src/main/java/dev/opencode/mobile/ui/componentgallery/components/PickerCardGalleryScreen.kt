@@ -14,56 +14,73 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
 fun PickerCardGalleryScreen(modifier: Modifier = Modifier) {
-    val project = OpenCodePickerCardRow("Project", "opencode-mobile", OpenCodePickerCardTile.Letter('O', LetterAccent.Teal), onClick = {})
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        OpenCodePickerCard(
-            caption = "Run session in",
-            rows =
-                listOf(
-                    project,
-                    OpenCodePickerCardRow("Worktree", "Local", OpenCodePickerCardTile.Icon(OpenCodeIcons.Terminal), onClick = {}),
-                ),
-            footnote = "/Users/example/project",
-            footnoteMonospace = true,
-        )
-        OpenCodePickerCard(
-            caption = "Run session in",
-            rows =
-                listOf(
-                    project,
-                    OpenCodePickerCardRow(
-                        "Worktree",
-                        "New worktree",
-                        OpenCodePickerCardTile.Icon(OpenCodeIcons.Add, highlighted = true),
-                        onClick = {},
-                    ),
-                    OpenCodePickerCardRow(
-                        "Starts from",
-                        "main",
-                        OpenCodePickerCardTile.Icon(OpenCodeIcons.CallSplit),
-                        monospaceValue = true,
-                        onClick = {},
-                    ),
-                ),
-            footnote = "Created when you send",
-            compact = true,
-        )
-        OpenCodePickerCard(
-            caption = "Run session in",
-            rows =
-                listOf(
-                    project,
-                    OpenCodePickerCardRow(
-                        "Worktree",
-                        "None · not a Git repo",
-                        OpenCodePickerCardTile.Icon(OpenCodeIcons.Folder),
-                        enabled = false,
-                    ),
-                ),
-        )
+        PickerCardGalleryLocal()
+        PickerCardGalleryNewWorktree()
+        PickerCardGalleryNotGit()
     }
 }
+
+@Composable
+internal fun PickerCardGalleryLocal() {
+    OpenCodePickerCard(
+        caption = "Run session in",
+        rows =
+            listOf(
+                pickerCardGalleryProject,
+                OpenCodePickerCardRow("Worktree", "Local", OpenCodePickerCardTile.Icon(OpenCodeIcons.Terminal), onClick = {}),
+            ),
+        footnote = "/Users/example/project",
+        footnoteMonospace = true,
+    )
+}
+
+@Composable
+internal fun PickerCardGalleryNewWorktree() {
+    OpenCodePickerCard(
+        caption = "Run session in",
+        rows =
+            listOf(
+                pickerCardGalleryProject,
+                OpenCodePickerCardRow(
+                    "Worktree",
+                    "New worktree",
+                    OpenCodePickerCardTile.Icon(OpenCodeIcons.Add, highlighted = true),
+                    onClick = {},
+                ),
+                OpenCodePickerCardRow(
+                    "Starts from",
+                    "main",
+                    OpenCodePickerCardTile.Icon(OpenCodeIcons.CallSplit),
+                    monospaceValue = true,
+                    onClick = {},
+                ),
+            ),
+        footnote = "Created when you send",
+        compact = true,
+    )
+}
+
+@Composable
+internal fun PickerCardGalleryNotGit() {
+    OpenCodePickerCard(
+        caption = "Run session in",
+        rows =
+            listOf(
+                pickerCardGalleryProject,
+                OpenCodePickerCardRow(
+                    "Worktree",
+                    "None · not a Git repo",
+                    OpenCodePickerCardTile.Icon(OpenCodeIcons.Folder),
+                    enabled = false,
+                ),
+            ),
+    )
+}
+
+private val pickerCardGalleryProject =
+    OpenCodePickerCardRow("Project", "opencode-mobile", OpenCodePickerCardTile.Letter('O', LetterAccent.Teal), onClick = {})

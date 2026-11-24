@@ -18,7 +18,7 @@ import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageLimit
 import dev.opencode.mobile.ui.components.OpenCodeTruncationRow
 import dev.opencode.mobile.ui.components.OpenCodeTruncationRowVariant
 
-private val TruncationRowGallerySample =
+internal val TruncationRowGallerySample =
     (1..25).joinToString("\n") { "09:41:${"%02d".format(it)} INFO worker $it finished step ok" }
 
 @Composable
