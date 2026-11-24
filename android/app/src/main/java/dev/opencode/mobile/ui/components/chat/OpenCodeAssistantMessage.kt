@@ -29,7 +29,7 @@ internal fun assistantMessageDisplayText(text: String): String = text.ifBlank { 
 
 /**
  * How the assistant text sits in the timeline: the raised bubble, or plain
- * prose for the chip timeline where the tool chips follow the paragraph.
+ * prose without the bubble chrome.
  */
 enum class OpenCodeAssistantMessagePresentation {
     Bubble,

@@ -40,15 +40,9 @@ enum class OpenCodeSkeletonIllustrationTopic {
     Unofficial,
     ConnectForm,
     SessionsLive,
-    ChipTimelineGlance,
-    ChipTimelineLongRuns,
-    ChipTimelineDetails,
 
     /** Timeline Style picker (#805): tool cards and groups between the agent's messages. */
     TimelineStandard,
-
-    /** Timeline Style picker: tools as chips under the narration (same drawing as [ChipTimelineGlance]). */
-    TimelineChips,
 
     /** Timeline Style picker: one line per step on a rail, the running step lit. */
     TimelineStepRail,
@@ -103,11 +97,7 @@ fun OpenCodeSkeletonIllustration(
                 OpenCodeSkeletonIllustrationTopic.Unofficial -> drawUnofficial(colors, textMeasurer, unofficialLabel)
                 OpenCodeSkeletonIllustrationTopic.ConnectForm -> drawConnectForm(colors, textMeasurer, connectLabel)
                 OpenCodeSkeletonIllustrationTopic.SessionsLive -> drawSessionsLive(colors, textMeasurer, runningLabel)
-                OpenCodeSkeletonIllustrationTopic.ChipTimelineGlance -> drawChipTimelineGlance(colors)
-                OpenCodeSkeletonIllustrationTopic.ChipTimelineLongRuns -> drawChipTimelineLongRuns(colors)
-                OpenCodeSkeletonIllustrationTopic.ChipTimelineDetails -> drawChipTimelineDetails(colors)
                 OpenCodeSkeletonIllustrationTopic.TimelineStandard -> drawTimelineStandard(colors)
-                OpenCodeSkeletonIllustrationTopic.TimelineChips -> drawChipTimelineGlance(colors)
                 OpenCodeSkeletonIllustrationTopic.TimelineStepRail -> drawTimelineStepRail(colors)
                 OpenCodeSkeletonIllustrationTopic.TimelineActivityCard -> drawTimelineActivityCard(colors)
             }
@@ -238,76 +228,6 @@ private fun DrawScope.drawSessionsLive(
     avatar(colors, cx = 80f, cy = 168f, live = false)
     bar(colors, x = 100f, y = 160f, w = 90f, h = 7f)
     bar(colors, x = 100f, y = 173f, w = 60f, h = 5f)
-}
-
-/** Narration with its tools as chips underneath; the first chip row is lit. */
-private fun DrawScope.drawChipTimelineGlance(colors: SkeletonIllustrationColors) {
-    frame(colors)
-    userBubble(colors)
-    bar(colors, x = 64f, y = 62f, w = 196f, h = 7f)
-    bar(colors, x = 64f, y = 75f, w = 138f, h = 7f)
-    glow(colors, x = 64f, y = 90f, w = 206f, h = 18f, cornerRadius = 6f)
-    chip(colors, x = 64f, y = 90f, w = 62f, lit = true)
-    chip(colors, x = 132f, y = 90f, w = 78f, lit = true, diff = true)
-    chip(colors, x = 216f, y = 90f, w = 54f, lit = true)
-    bar(colors, x = 64f, y = 124f, w = 176f, h = 7f)
-    bar(colors, x = 64f, y = 137f, w = 110f, h = 7f)
-    chip(colors, x = 64f, y = 152f, w = 70f)
-    chip(colors, x = 140f, y = 152f, w = 58f)
-}
-
-/** A long list of tool rows on the left collapses into a few lit chips on the right. */
-private fun DrawScope.drawChipTimelineLongRuns(colors: SkeletonIllustrationColors) {
-    frame(colors)
-    listOf(62f, 48f, 70f, 54f, 66f, 44f, 58f, 50f).forEachIndexed { index, width ->
-        val y = 30f + index * 18f
-        drawRoundRect(
-            color = colors.borderWeakerBase,
-            topLeft = Offset(64f, y),
-            size = Size(8f, 8f),
-            cornerRadius = CornerRadius(2f),
-        )
-        bar(colors, x = 78f, y = y + 1f, w = width, h = 6f, color = colors.borderWeakerBase)
-    }
-    val arrowStroke = 2f
-    drawLine(colors.textWeaker, Offset(156f, 92f), Offset(172f, 92f), arrowStroke, StrokeCap.Round)
-    drawLine(colors.textWeaker, Offset(166f, 86f), Offset(172f, 92f), arrowStroke, StrokeCap.Round)
-    drawLine(colors.textWeaker, Offset(166f, 98f), Offset(172f, 92f), arrowStroke, StrokeCap.Round)
-    bar(colors, x = 184f, y = 62f, w = 86f, h = 7f)
-    bar(colors, x = 184f, y = 75f, w = 60f, h = 7f)
-    glow(colors, x = 184f, y = 90f, w = 86f, h = 40f, cornerRadius = 6f)
-    chip(colors, x = 184f, y = 90f, w = 46f, lit = true)
-    chip(colors, x = 234f, y = 90f, w = 36f, lit = true)
-    chip(colors, x = 184f, y = 112f, w = 64f, lit = true, diff = true)
-}
-
-/** One lit chip opens its detail: a file header with diff lines. */
-private fun DrawScope.drawChipTimelineDetails(colors: SkeletonIllustrationColors) {
-    frame(colors)
-    bar(colors, x = 64f, y = 30f, w = 186f, h = 7f)
-    bar(colors, x = 64f, y = 43f, w = 124f, h = 7f)
-    chip(colors, x = 64f, y = 58f, w = 62f)
-    chip(colors, x = 132f, y = 58f, w = 84f, lit = true, diff = true)
-    card(colors, x = 64f, y = 92f, w = 208f, h = 86f, lit = false)
-    bar(colors, x = 76f, y = 102f, w = 96f, h = 7f)
-    listOf(
-        150f to null,
-        128f to colors.diffDelete,
-        160f to colors.diffAdd,
-        112f to colors.diffAdd,
-        140f to null,
-    ).forEachIndexed { index, (width, marker) ->
-        val y = 118f + index * 11f
-        if (marker != null) {
-            drawRoundRect(
-                color = marker,
-                topLeft = Offset(76f, y),
-                size = Size(3f, 6f),
-                cornerRadius = CornerRadius(1f),
-            )
-        }
-        bar(colors, x = 84f, y = y, w = width, h = 6f, color = marker?.copy(alpha = 0.45f) ?: colors.borderWeakBase)
-    }
 }
 
 /** Tool cards and groups between the agent's messages: one lit group card with three rows. */
@@ -454,34 +374,6 @@ private fun DrawScope.chevron(
         color = colors.textWeaker,
         style = Stroke(width = 1.8f, cap = StrokeCap.Round, join = StrokeJoin.Round),
     )
-}
-
-/** A tool chip: icon square plus label bar; [diff] adds green/red count bars. */
-private fun DrawScope.chip(
-    colors: SkeletonIllustrationColors,
-    x: Float,
-    y: Float,
-    w: Float,
-    lit: Boolean = false,
-    diff: Boolean = false,
-) {
-    val h = 18f
-    if (lit) {
-        spotlight(colors, x, y, w, h, cornerRadius = 6f)
-    } else {
-        card(colors, x, y, w, h, lit = false, cornerRadius = 6f)
-    }
-    drawRoundRect(
-        color = colors.borderWeakBase,
-        topLeft = Offset(x + 6f, y + 6f),
-        size = Size(6f, 6f),
-        cornerRadius = CornerRadius(1.5f),
-    )
-    bar(colors, x = x + 16f, y = y + 6f, w = w - 22f - (if (diff) 20f else 0f), h = 6f)
-    if (diff) {
-        bar(colors, x = x + w - 24f, y = y + 6f, w = 8f, h = 6f, color = colors.diffAdd)
-        bar(colors, x = x + w - 14f, y = y + 6f, w = 8f, h = 6f, color = colors.diffDelete)
-    }
 }
 
 private fun DrawScope.frame(colors: SkeletonIllustrationColors) {

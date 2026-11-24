@@ -8,7 +8,7 @@ nonisolated struct SessionChatChildSessionCandidate: Equatable, Sendable {
 }
 
 /// Fills `metadata.sessionID` on subagent tool parts that lack it, so their
-/// rows and chips can open the child session.
+/// rows and steps can open the child session.
 ///
 /// v2 reports a running child's id once, on `session.tool.progress`; the stored
 /// running part keeps empty metadata, so a history reload loses it until the

@@ -94,16 +94,16 @@ struct SessionChatActivityCardTests {
         ])[0].steps
         #expect(running.map { english($0.runningTitle) } == [
             "Reading View.swift",
-            "Searching chipTimeline",
+            "Searching timelineStyle",
             "Editing Blocks.swift",
             "Running npm test",
         ])
 
         let settled = try cards([read("r1"), grep("g1"), edit("e1"), bash("b1")])[0].steps
-        #expect(settled.map { english($0.settledTitle) } == ["View.swift", "chipTimeline", "Blocks.swift", "Ran npm test"])
+        #expect(settled.map { english($0.settledTitle) } == ["View.swift", "timelineStyle", "Blocks.swift", "Ran npm test"])
         #expect(settled.map { english($0.runningTitle) } == [
             "Reading View.swift",
-            "Searching chipTimeline",
+            "Searching timelineStyle",
             "Editing Blocks.swift",
             "Running npm test",
         ])
@@ -242,7 +242,7 @@ struct SessionChatActivityCardTests {
             row("u1", role: .user, blocks: [.text(blockID: "p:t", text: "hi", renderedMarkdown: nil)]),
             row("a1", role: .assistant, blocks: [.activityCard(blockID: card.id, card: card)]),
         ]
-        #expect(SessionChatStepParagraphExpansion.rowIDs(containingStepRails: ["ac:r1"], in: rows) == ["a1"])
+        #expect(SessionChatTimelineHostState.rowIDs(containingStepRails: ["ac:r1"], in: rows) == ["a1"])
     }
 
     @Test func otherStyles_areUnchangedWithoutActivityCard() {
@@ -511,7 +511,7 @@ struct SessionChatActivityCardTests {
         #expect(english(activity.currentAction) == "Running npm test")
         #expect(activity.toolCount == 4)
         #expect(activity.recentSteps.map(\.id) == ["g1", "b1", "r2"])
-        #expect(activity.recentSteps.map { english($0.title) } == ["chipTimeline", "Running npm test", "View.swift"])
+        #expect(activity.recentSteps.map { english($0.title) } == ["timelineStyle", "Running npm test", "View.swift"])
         #expect(activity.recentSteps.map(\.isRunning) == [false, true, true])
         #expect(SessionChatTimelineBlocks.childActivity(from: []) == .empty)
     }
@@ -610,7 +610,7 @@ struct SessionChatActivityCardTests {
     }
 
     private func grep(_ id: String, status: ToolStatus = .completed) -> MessagePart {
-        .tool(ToolPart(id: id, toolName: "grep", status: status, input: ["pattern": .string("chipTimeline")]))
+        .tool(ToolPart(id: id, toolName: "grep", status: status, input: ["pattern": .string("timelineStyle")]))
     }
 
     private func edit(_ id: String, status: ToolStatus = .completed) -> MessagePart {

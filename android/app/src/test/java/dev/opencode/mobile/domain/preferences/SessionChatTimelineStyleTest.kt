@@ -23,8 +23,8 @@ class SessionChatTimelineStyleTest {
     }
 
     @Test
-    fun migration_chipTimelineTrue_isChips() {
-        assertEquals(SessionChatTimelineStyle.Chips, SessionChatTimelineStyle.resolveStored(null, storedChipTimeline = true))
+    fun migration_chipTimelineTrue_isStandard() {
+        assertEquals(SessionChatTimelineStyle.Standard, SessionChatTimelineStyle.resolveStored(null, storedChipTimeline = true))
     }
 
     @Test
@@ -43,6 +43,20 @@ class SessionChatTimelineStyleTest {
     @Test
     fun storedStyle_winsOverOldChipKey() {
         assertEquals(SessionChatTimelineStyle.StepRail, SessionChatTimelineStyle.resolveStored("step_rail", storedChipTimeline = true))
+    }
+
+    @Test
+    fun migration_storedChips_isStandard() {
+        assertEquals(SessionChatTimelineStyle.Standard, SessionChatTimelineStyle.fromWire("chips"))
+        assertEquals(SessionChatTimelineStyle.Standard, SessionChatTimelineStyle.resolveStored("chips", storedChipTimeline = null))
+        assertEquals(SessionChatTimelineStyle.Standard, SessionChatTimelineStyle.resolveStored("chips", storedChipTimeline = true))
+    }
+
+    @Test
+    fun unknownStoredStyle_fallsBackToOldChipKeyOrInstallDefault() {
+        assertNull(SessionChatTimelineStyle.fromWire("unknown"))
+        assertEquals(SessionChatTimelineStyle.Standard, SessionChatTimelineStyle.resolveStored("unknown", storedChipTimeline = false))
+        assertNull(SessionChatTimelineStyle.resolveStored("unknown", storedChipTimeline = null))
     }
 
     @Test
@@ -71,14 +85,26 @@ class SessionChatTimelineStyleTest {
     }
 
     @Test
-    fun resolve_existingInstallWithStoredChips_keepsChipsWithPickerPending() {
+    fun resolve_existingInstallWithStoredChips_becomesStandardWithPickerPending() {
         store.values["timeline_style"] = "chips"
 
         launch(existingInstall = true)
 
-        assertEquals(SessionChatTimelineStyle.Chips, SessionChatDisplayPreferences.timelineStylePreference)
-        assertEquals("chips", store.values["timeline_style"])
+        assertEquals(SessionChatTimelineStyle.Standard, SessionChatDisplayPreferences.timelineStylePreference)
+        assertEquals("standard", store.values["timeline_style"])
         assertTrue(SessionChatDisplayPreferences.timelineStylePickerPending)
+    }
+
+    @Test
+    fun resolve_storedChipsAfterPickerAnswered_staysStandardWithoutPicker() {
+        store.values["timeline_style"] = "chips"
+        store.values["timeline_style_picker_done"] = true
+
+        launch(existingInstall = true)
+
+        assertEquals(SessionChatTimelineStyle.Standard, SessionChatDisplayPreferences.timelineStylePreference)
+        assertEquals("standard", store.values["timeline_style"])
+        assertFalse(SessionChatDisplayPreferences.timelineStylePickerPending)
     }
 
     @Test
@@ -106,14 +132,40 @@ class SessionChatTimelineStyleTest {
     }
 
     @Test
-    fun resolve_legacyChipKey_stillMigrates() {
+    fun resolve_legacyChipKeyTrue_migratesToStandard() {
         store.values["chip_timeline"] = true
 
         launch(existingInstall = true)
 
-        assertEquals(SessionChatTimelineStyle.Chips, SessionChatDisplayPreferences.timelineStylePreference)
-        assertEquals("chips", store.values["timeline_style"])
+        assertEquals(SessionChatTimelineStyle.Standard, SessionChatDisplayPreferences.timelineStylePreference)
+        assertEquals("standard", store.values["timeline_style"])
         assertTrue(SessionChatDisplayPreferences.timelineStylePickerPending)
+    }
+
+    @Test
+    fun resolve_legacyChipKeyFalse_migratesToStandard() {
+        store.values["chip_timeline"] = false
+
+        launch(existingInstall = true)
+
+        assertEquals(SessionChatTimelineStyle.Standard, SessionChatDisplayPreferences.timelineStylePreference)
+        assertEquals("standard", store.values["timeline_style"])
+        assertTrue(SessionChatDisplayPreferences.timelineStylePickerPending)
+    }
+
+    @Test
+    fun clear_removesLegacyChipKeys() {
+        store.values["chip_timeline"] = true
+        store.values["chip_timeline_intro_done"] = true
+        store.values["chip_timeline_intro_snoozed_until"] = 5L
+        launch(existingInstall = true)
+
+        SessionChatDisplayPreferences.clear()
+
+        assertFalse(store.values.containsKey("chip_timeline"))
+        assertFalse(store.values.containsKey("chip_timeline_intro_done"))
+        assertFalse(store.values.containsKey("chip_timeline_intro_snoozed_until"))
+        assertFalse(store.values.containsKey("timeline_style"))
     }
 
     @Test
@@ -125,7 +177,6 @@ class SessionChatTimelineStyleTest {
         assertFalse(SessionChatDisplayPreferences.timelineStylePickerPending)
         assertEquals(true, store.values["timeline_style_picker_done"])
         assertEquals("step_rail", store.values["timeline_style"])
-        assertTrue(SessionChatDisplayPreferences.chipTimelineIntroDone)
     }
 
     @Test
@@ -153,7 +204,6 @@ class SessionChatTimelineStyleTest {
         launch(existingInstall = true)
         assertEquals(SessionChatTimelineStyle.ActivityCard, SessionChatDisplayPreferences.timelineStylePreference)
         assertFalse(SessionChatDisplayPreferences.timelineStylePickerPending)
-        assertFalse(SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(20, 1_000L))
     }
 
     @Test
@@ -168,43 +218,29 @@ class SessionChatTimelineStyleTest {
     }
 
     @Test
-    fun chipIntro_notOfferedWhilePickerPending() {
-        launch(existingInstall = true)
-        assertTrue(SessionChatDisplayPreferences.timelineStylePickerPending)
-
-        assertFalse(
-            SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(
-                turnToolCalls = ChipTimelineIntro.MIN_TOOL_CALLS,
-                nowMillis = 0L,
-            ),
-        )
-    }
-
-    @Test
     fun pickerOptions_activityCardFirstThenUsualOrderWithTags() {
         val options =
             SessionChatTimelineStyleOption.pickerOptions(
-                available = SessionChatTimelineStyle.available(chipTimelineAvailable = true),
-                current = SessionChatTimelineStyle.Chips,
+                available = SessionChatTimelineStyle.entries,
+                current = SessionChatTimelineStyle.Standard,
             )
 
         assertEquals(
             listOf(
                 SessionChatTimelineStyle.ActivityCard,
                 SessionChatTimelineStyle.Standard,
-                SessionChatTimelineStyle.Chips,
                 SessionChatTimelineStyle.StepRail,
             ),
             options.map { it.style },
         )
-        assertEquals(listOf("Recommended", null, "Current", null), options.map { it.tag })
+        assertEquals(listOf("Recommended", "Current", null), options.map { it.tag })
     }
 
     @Test
     fun pickerOptions_currentActivityCard_onlyRecommended() {
         val options =
             SessionChatTimelineStyleOption.pickerOptions(
-                available = SessionChatTimelineStyle.available(chipTimelineAvailable = false),
+                available = SessionChatTimelineStyle.entries,
                 current = SessionChatTimelineStyle.ActivityCard,
             )
 
@@ -216,30 +252,19 @@ class SessionChatTimelineStyleTest {
     }
 
     @Test
-    fun available_hidesChipsWhileFlagIsOff() {
+    fun entries_areStandardStepRailActivityCard() {
         assertEquals(
             listOf(SessionChatTimelineStyle.Standard, SessionChatTimelineStyle.StepRail, SessionChatTimelineStyle.ActivityCard),
-            SessionChatTimelineStyle.available(chipTimelineAvailable = false),
+            SessionChatTimelineStyle.entries,
         )
-        assertEquals(SessionChatTimelineStyle.entries, SessionChatTimelineStyle.available(chipTimelineAvailable = true))
+        assertEquals(SessionChatTimelineStyle.entries, SessionChatDisplayPreferences.availableTimelineStyles)
     }
 
     @Test
     fun wireValues_roundTrip() {
         SessionChatTimelineStyle.entries.forEach { assertEquals(it, SessionChatTimelineStyle.fromWire(it.wireValue)) }
-        assertEquals(listOf("standard", "chips", "step_rail", "activity_card"), SessionChatTimelineStyle.entries.map { it.wireValue })
+        assertEquals(listOf("standard", "step_rail", "activity_card"), SessionChatTimelineStyle.entries.map { it.wireValue })
         assertEquals(SessionChatTimelineStyle.ActivityCard, SessionChatTimelineStyle.fromWire("activity_card"))
-    }
-
-    @Test
-    fun flagOff_makesChipsEffectiveStandard() {
-        assertEquals(SessionChatTimelineStyle.Standard, SessionChatTimelineStyle.effective(SessionChatTimelineStyle.Chips, false))
-        assertEquals(SessionChatTimelineStyle.Chips, SessionChatTimelineStyle.effective(SessionChatTimelineStyle.Chips, true))
-        assertEquals(SessionChatTimelineStyle.StepRail, SessionChatTimelineStyle.effective(SessionChatTimelineStyle.StepRail, false))
-        assertEquals(
-            SessionChatTimelineStyle.ActivityCard,
-            SessionChatTimelineStyle.effective(SessionChatTimelineStyle.ActivityCard, false),
-        )
     }
 
     @Test
@@ -248,20 +273,5 @@ class SessionChatTimelineStyleTest {
         assertEquals(SessionChatTimelineStyle.Standard, SessionChatDisplayPreferences.timelineStylePreference)
         assertFalse(SessionChatDisplayPreferences.stepRailTimeline)
         assertFalse(SessionChatDisplayPreferences.activityCardTimeline)
-    }
-
-    @Test
-    fun intro_notOfferedOnceStepRailIsChosen() {
-        assertFalse(
-            ChipTimelineIntro.shouldShow(
-                chipTimelineAvailable = true,
-                chipTimelineOn = false,
-                introDone = false,
-                snoozedUntilMillis = null,
-                nowMillis = 0L,
-                turnToolCalls = ChipTimelineIntro.MIN_TOOL_CALLS,
-                timelineStyleChosen = true,
-            ),
-        )
     }
 }

@@ -50,15 +50,10 @@ struct SessionChatTimelineViewProps {
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
-    let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let onUserScrollDismissKeyboard: () -> Void
     let supportsSessionMessageDiff: Bool
-    /// Chip-timeline step paragraphs expanded past `+N more`: paragraph id to
-    /// the chip count at tap time (Screen Model state).
-    let expandedStepParagraphs: [String: Int]
-    let onExpandStepParagraph: (String, Int) -> Void
     /// Step rails whose earlier settled steps are unfolded (Screen Model state).
     let unfoldedStepRails: Set<String>
     let onToggleStepRailFold: (String) -> Void
@@ -119,13 +114,10 @@ struct SessionChatTimelineViewProps {
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
         onToolGroupTap: @escaping (SessionChatToolGroupTarget) -> Void = { _ in },
-        onSkillsTap: @escaping (SessionChatSkillsTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
         onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in },
         onUserScrollDismissKeyboard: @escaping () -> Void = {},
         supportsSessionMessageDiff: Bool = true,
-        expandedStepParagraphs: [String: Int] = [:],
-        onExpandStepParagraph: @escaping (String, Int) -> Void = { _, _ in },
         unfoldedStepRails: Set<String> = [],
         onToggleStepRailFold: @escaping (String) -> Void = { _ in },
         presentedActivityCard: String? = nil,
@@ -177,13 +169,10 @@ struct SessionChatTimelineViewProps {
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
         self.onToolGroupTap = onToolGroupTap
-        self.onSkillsTap = onSkillsTap
         self.onChildSessionTap = onChildSessionTap
         self.onChangesReviewTap = onChangesReviewTap
         self.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
         self.supportsSessionMessageDiff = supportsSessionMessageDiff
-        self.expandedStepParagraphs = expandedStepParagraphs
-        self.onExpandStepParagraph = onExpandStepParagraph
         self.unfoldedStepRails = unfoldedStepRails
         self.onToggleStepRailFold = onToggleStepRailFold
         self.presentedActivityCard = presentedActivityCard
@@ -295,7 +284,6 @@ private struct SessionChatTimelineReadyView: View {
     @State private var heldPillRowReserve = false
     @State private var pillRowWidth: CGFloat = 0
     @State private var trailingPillsWidth: CGFloat = 0
-    @State private var previousExpandedStepParagraphs: [String: Int] = [:]
     @State private var previousStepRailState: SessionChatStepRailViewState = .empty
     @State private var previousNoticeModelNames: TimelineNoticeModelNames = .empty
     @State private var previousGoalRowKeys: [String: String] = [:]
@@ -468,11 +456,6 @@ private struct SessionChatTimelineReadyView: View {
             MessageListTimelineHost(
                 items: listItems,
                 applyPacket: MessageListTimelineApplyPacket.from(props.timelineFrame)
-                .addingStepParagraphExpansion(
-                    rows: props.messages,
-                    expanded: props.expandedStepParagraphs,
-                    previousExpanded: previousExpandedStepParagraphs
-                )
                 .addingStepRailState(
                     rows: props.messages,
                     state: stepRailState,
@@ -500,12 +483,9 @@ private struct SessionChatTimelineReadyView: View {
                     onMessageActionsTap: props.onMessageActionsTap,
                     onToolDetailTap: props.onToolDetailTap,
                     onToolGroupTap: props.onToolGroupTap,
-                    onSkillsTap: props.onSkillsTap,
                     onChildSessionTap: props.onChildSessionTap,
                     onChangesReviewTap: props.onChangesReviewTap,
                     supportsSessionMessageDiff: props.supportsSessionMessageDiff,
-                    expandedStepParagraphs: props.expandedStepParagraphs,
-                    onExpandStepParagraph: props.onExpandStepParagraph,
                     stepRailState: stepRailState,
                     onToggleStepRailFold: props.onToggleStepRailFold,
                     onOpenActivityCard: props.onOpenActivityCard,
@@ -571,7 +551,6 @@ private struct SessionChatTimelineReadyView: View {
             if !showScrollToEnd { heldPillRowReserve = wanted }
         }
         .onAppear {
-            previousExpandedStepParagraphs = props.expandedStepParagraphs
             previousStepRailState = stepRailState
             previousNoticeModelNames = props.noticeModelNames
             previousGoalRowKeys = goalRowKeys
@@ -584,9 +563,6 @@ private struct SessionChatTimelineReadyView: View {
         }
         .onDisappear {
             syncingPillTask?.cancel()
-        }
-        .onChange(of: props.expandedStepParagraphs) { _, newValue in
-            previousExpandedStepParagraphs = newValue
         }
         .onChange(of: stepRailState) { _, newValue in
             previousStepRailState = newValue
@@ -719,12 +695,9 @@ private struct SessionChatTimelineHostRow: View {
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
-    let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
-    let expandedStepParagraphs: [String: Int]
-    let onExpandStepParagraph: (String, Int) -> Void
     let stepRailState: SessionChatStepRailViewState
     let onToggleStepRailFold: (String) -> Void
     let onOpenActivityCard: (String) -> Void
@@ -746,12 +719,9 @@ private struct SessionChatTimelineHostRow: View {
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
                         onToolGroupTap: onToolGroupTap,
-                        onSkillsTap: onSkillsTap,
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap,
                         supportsSessionMessageDiff: supportsSessionMessageDiff,
-                        expandedStepParagraphs: expandedStepParagraphs,
-                        onExpandStepParagraph: onExpandStepParagraph,
                         stepRailState: stepRailState,
                         onToggleStepRailFold: onToggleStepRailFold,
                         onOpenActivityCard: onOpenActivityCard
@@ -764,12 +734,9 @@ private struct SessionChatTimelineHostRow: View {
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
                         onToolGroupTap: onToolGroupTap,
-                        onSkillsTap: onSkillsTap,
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap,
                         supportsSessionMessageDiff: supportsSessionMessageDiff,
-                        expandedStepParagraphs: expandedStepParagraphs,
-                        onExpandStepParagraph: onExpandStepParagraph,
                         stepRailState: stepRailState,
                         onToggleStepRailFold: onToggleStepRailFold,
                         onOpenActivityCard: onOpenActivityCard
@@ -785,12 +752,9 @@ private struct SessionChatMessageRow: View {
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
-    let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
-    let expandedStepParagraphs: [String: Int]
-    let onExpandStepParagraph: (String, Int) -> Void
     let stepRailState: SessionChatStepRailViewState
     let onToggleStepRailFold: (String) -> Void
     let onOpenActivityCard: (String) -> Void
@@ -850,12 +814,9 @@ private struct SessionChatMessageRow: View {
                     },
                     onToolDetailTap: onToolDetailTap,
                     onToolGroupTap: onToolGroupTap,
-                    onSkillsTap: onSkillsTap,
                     onChildSessionTap: onChildSessionTap,
                     onChangesReviewTap: onChangesReviewTap,
                     supportsSessionMessageDiff: supportsSessionMessageDiff,
-                    expandedStepParagraphs: expandedStepParagraphs,
-                    onExpandStepParagraph: onExpandStepParagraph,
                     stepRailState: stepRailState,
                     onToggleStepRailFold: onToggleStepRailFold,
                     onOpenActivityCard: onOpenActivityCard
@@ -933,7 +894,7 @@ private extension SessionChatMessageRow {
                 )
             case .imageGallery(let blockID, let gallery):
                 media.append(images(id: blockID, gallery.images))
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .activityCard, .stopNote,
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
                  .failureLine,
                  .notice:
                 break
@@ -993,12 +954,9 @@ private struct AssistantMessageContent: View {
     @Environment(\.hideLiveRetryFailures) private var hideLiveRetryFailures
     @Environment(\.retryCountdownBlockID) private var retryCountdownBlockID
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
-    let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
-    let expandedStepParagraphs: [String: Int]
-    let onExpandStepParagraph: (String, Int) -> Void
     let stepRailState: SessionChatStepRailViewState
     let onToggleStepRailFold: (String) -> Void
     let onOpenActivityCard: (String) -> Void
@@ -1028,18 +986,9 @@ private struct AssistantMessageContent: View {
         return textBlockCount == 1 ? message.renderedMarkdown : nil
     }
 
-    private var streamingStepParagraphBlockID: String? {
-        SessionChatTimelineBlocks.streamingStepParagraphBlockID(
-            blocks: blocks,
-            messageIsStreaming: message.isStreaming
-        )
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // A step paragraph's block id grows with every tool; identify it by
-            // its stable paragraph id so a new chip updates the row in place.
-            ForEach(blocks, id: \.rowIdentity) { block in
+            ForEach(blocks, id: \.blockID) { block in
                 switch block {
                 case .text(_, let text, let blockMarkdown):
                     let markdown = renderedMarkdown(for: blockMarkdown)
@@ -1138,36 +1087,6 @@ private struct AssistantMessageContent: View {
                             onToolDetailTap: onToolDetailTap
                         )
                     }
-                case .stepParagraph(_, let paragraph):
-                    StepParagraphBlock(
-                        paragraph: paragraph,
-                        renderedMarkdown: renderedMarkdown(for: paragraph.renderedMarkdown),
-                        isStreaming: block.blockID == streamingStepParagraphBlockID,
-                        expandedThrough: expandedStepParagraphs[paragraph.id],
-                        onOpenMessageActions: onOpenMessageActions,
-                        onExpand: { onExpandStepParagraph(paragraph.id, paragraph.chips.count) },
-                        chipAction: { chip in
-                            if chip.kind == .skill {
-                                return {
-                                    onSkillsTap(
-                                        SessionChatSkillsTarget(skills: SessionChatTimelineBlocks.skillUses(in: blocks))
-                                    )
-                                }
-                            }
-                            return toolCardAction(for: chip.card)
-                        },
-                        exploreAction: { summary in
-                            onToolGroupTap(
-                                SessionChatToolGroupTarget(
-                                    blockID: summary.blockID,
-                                    title: summary.title,
-                                    subtitle: summary.subtitle,
-                                    members: summary.members,
-                                    messageID: message.id
-                                )
-                            )
-                        }
-                    )
                 case .stepRail(_, let block):
                     stepRail(block.withLive(block.id == stepRailState.liveRailID))
                 case .activityCard(_, let block):
@@ -1322,165 +1241,6 @@ struct SessionChatStepTapActions {
     }
 }
 
-/// One step-paragraph chip; an in-flight tool also shows its live elapsed
-/// time (`m:ss`, as the child-session row does) after any trailing text.
-private struct StepParagraphToolChip: View {
-    let chip: SessionChatToolChipBlock
-    let action: (() -> Void)?
-
-    var body: some View {
-        if let start = chip.runningSinceEpochMs {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                toolChip(
-                    elapsed: SessionChatChildSessionElapsed.format(
-                        startEpochMs: start,
-                        nowEpochMs: Int64(context.date.timeIntervalSince1970 * 1000)
-                    )
-                )
-            }
-        } else {
-            toolChip(elapsed: nil)
-        }
-    }
-
-    private func toolChip(elapsed: String?) -> OpenCodeToolChip {
-        let trailing = [chip.displayTrailingText, elapsed].compactMap { $0 }.filter { !$0.isEmpty }
-        return OpenCodeToolChip(
-            variant: chip.variant,
-            status: chip.status.toolChipStatus(interrupted: chip.card.isInterrupted),
-            trailingText: trailing.isEmpty ? nil : trailing.joined(separator: " \u{00B7} "),
-            action: action
-        )
-    }
-}
-
-/// Chip timeline (OPE-260): narration, then the tools that followed it as
-/// chips (the explore summary first), then one caption per failed tool. A
-/// single trailing `+N more` reveals the chips the paragraph had at tap time;
-/// expansion lives in the Screen Model keyed by the paragraph's stable id so
-/// it survives cell reuse while scrolling.
-private struct StepParagraphBlock: View {
-    let paragraph: SessionChatStepParagraphBlock
-    let renderedMarkdown: NativeMarkdownDocument?
-    let isStreaming: Bool
-    let expandedThrough: Int?
-    let onOpenMessageActions: (OpenCodeMessageTapTarget) -> Void
-    let onExpand: () -> Void
-    let chipAction: (SessionChatToolChipBlock) -> (() -> Void)?
-    let exploreAction: (SessionChatExploreSummaryBlock) -> Void
-
-    private enum ChipRowItem: Identifiable {
-        case explore(SessionChatExploreSummaryBlock)
-        case chip(SessionChatToolChipBlock)
-        case more(count: Int)
-
-        /// Stable per tool so a new chip never re-identifies its neighbours.
-        var id: String {
-            switch self {
-            case .explore: "explore"
-            case .chip(let chip): chip.id
-            case .more: "more"
-            }
-        }
-    }
-
-    /// Limits and the lone-hidden rule live in `chipRow`.
-    private var rowItems: [ChipRowItem] {
-        let row = SessionChatTimelineBlocks.chipRow(paragraph.chips, expandedThrough: expandedThrough)
-        var items: [ChipRowItem] = []
-        if let summary = paragraph.exploreSummary {
-            items.append(.explore(summary))
-        }
-        items += row.visible.map(ChipRowItem.chip)
-        if row.hiddenCount > 0 {
-            items.append(.more(count: row.hiddenCount))
-        }
-        return items
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Self.sectionSpacing) {
-            if let text = paragraph.text {
-                AssistantMessageBubble(
-                    text: text,
-                    renderedMarkdown: renderedMarkdown,
-                    isStreaming: isStreaming,
-                    presentation: .plain
-                )
-                .modifier(
-                    SessionChatMessageActionsGestureModifier(
-                        renderedMarkdown: renderedMarkdown,
-                        accessibilityLabel: "timeline.message.assistant",
-                        onOpenMessageActions: onOpenMessageActions
-                    )
-                )
-            } else {
-                Text("timeline.step.no_commentary")
-                    .font(OpenCodeTypography.bodySecondary)
-                    .italic()
-                    .foregroundStyle(OpenCodeColors.textWeak)
-                    .padding(.horizontal, Self.placeholderHorizontalPadding)
-            }
-
-            if !paragraph.chips.isEmpty || paragraph.exploreSummary != nil {
-                OpenCodeChipFlowLayout(spacing: Self.chipSpacing, lineSpacing: Self.chipSpacing) {
-                    ForEach(rowItems) { item in
-                        switch item {
-                        case .explore(let summary):
-                            OpenCodeToolChip(
-                                variant: .explore(label: summary.label.resolved),
-                                status: summary.status.toolChipStatus(interrupted: false),
-                                action: { exploreAction(summary) }
-                            )
-                        case .chip(let chip):
-                            StepParagraphToolChip(chip: chip, action: chipAction(chip))
-                        case .more(let count):
-                            OpenCodeToolChip(
-                                variant: .more(count: count),
-                                action: onExpand
-                            )
-                        }
-                    }
-                }
-                .padding(.horizontal, Self.chipRowHorizontalPadding)
-            }
-
-            ForEach(Array(paragraph.errorLines.enumerated()), id: \.offset) { _, line in
-                Text(openCode: line.openCode)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.error)
-                    .lineLimit(3)
-                    .padding(.horizontal, Self.chipRowHorizontalPadding)
-            }
-            ForEach(Array(paragraph.declineNoteLines.enumerated()), id: \.offset) { _, line in
-                Text(openCode: line.openCode)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textWeak)
-                    .lineLimit(3)
-                    .padding(.horizontal, Self.chipRowHorizontalPadding)
-            }
-        }
-    }
-
-    private static let sectionSpacing: CGFloat = 8
-    private static let chipSpacing: CGFloat = 6
-    private static let placeholderHorizontalPadding: CGFloat = 4
-    private static let chipRowHorizontalPadding: CGFloat = 4
-}
-
-private extension SessionChatToolChipBlock {
-    /// OpenCodeToolChip takes String; the chip label is resolved here.
-    var variant: OpenCodeToolChipVariant {
-        let text = label.resolved
-        return switch kind {
-        case .file: .file(label: text, additions: additions, deletions: deletions)
-        case .command: .command(label: text)
-        case .agent: .agent(name: text, brief: brief)
-        case .skill: .skill(name: text)
-        }
-    }
-}
-
 private extension SessionChatStepRailRow {
     func railItem(actionable: (SessionChatStep) -> Bool) -> OpenCodeStepRailItem {
         switch self {
@@ -1528,17 +1288,6 @@ private extension SessionChatStep {
         case .running: .running
         case .completed: .completed
         case .failed: isInterrupted ? .interrupted : .failed
-        }
-    }
-}
-
-private extension ToolStatus {
-    func toolChipStatus(interrupted: Bool) -> OpenCodeToolChipStatus {
-        switch self {
-        case .pending: .pending
-        case .running: .running
-        case .completed: .completed
-        case .error: interrupted ? .interrupted : .error
         }
     }
 }

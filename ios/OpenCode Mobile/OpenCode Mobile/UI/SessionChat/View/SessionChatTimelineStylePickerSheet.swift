@@ -5,7 +5,6 @@ extension SessionChatTimelineStyle {
     var pickerIllustration: OpenCodeSkeletonIllustrationTopic {
         switch self {
         case .standard: .timelineStandard
-        case .chips: .timelineChips
         case .stepRail: .timelineStepRail
         case .activityCard: .timelineActivityCard
         }
@@ -15,7 +14,6 @@ extension SessionChatTimelineStyle {
     var pickerTitle: LocalizedStringResource {
         switch self {
         case .standard: LocalizedStringResource("session_chat_sheet.timeline_style_picker.standard.title", defaultValue: "Standard")
-        case .chips: LocalizedStringResource("session_chat_sheet.timeline_style_picker.chips.title", defaultValue: "Chips")
         case .stepRail: LocalizedStringResource("session_chat_sheet.timeline_style_picker.step_rail.title", defaultValue: "Step Rail")
         case .activityCard:
             LocalizedStringResource("session_chat_sheet.timeline_style_picker.activity_card.title", defaultValue: "Activity Card")
@@ -26,7 +24,6 @@ extension SessionChatTimelineStyle {
     var pickerSubtitle: OpenCodeText {
         switch self {
         case .standard: "session_chat_sheet.timeline_style_picker.standard.subtitle"
-        case .chips: "session_chat_sheet.timeline_style_picker.chips.subtitle"
         case .stepRail: "session_chat_sheet.timeline_style_picker.step_rail.subtitle"
         case .activityCard: "session_chat_sheet.timeline_style_picker.activity_card.subtitle"
         }

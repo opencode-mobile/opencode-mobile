@@ -358,12 +358,12 @@ struct SessionChatTimelineProjectorTests {
         #expect(frame.messages[0].renderedMarkdown == nil)
     }
 
-    @Test func displayFrameBuilder_chipTimeline_attachesRootAndCachedMarkdownToStepParagraph() {
+    @Test func displayFrameBuilder_stepRail_attachesRootAndCachedMarkdownToItsTextBlock() {
         let plain = "# Narration"
         let toolPart: MessagePart = .tool(
             ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string("ls -la")])
         )
-        let message = makeMessage(id: "chip-msg", parts: [text("t1", plain), toolPart], text: plain)
+        let message = makeMessage(id: "rail-msg", parts: [text("t1", plain), toolPart], text: plain)
         let root = NativeMarkdownDocument(
             sourceHash: stableMarkdownSourceHash(plain),
             blocks: [.paragraph([.text("Narration")])]
@@ -374,37 +374,39 @@ struct SessionChatTimelineProjectorTests {
             frameRevision: 1,
             sourceRevision: 1,
             displayMessages: [DisplayMessage(message: message, renderedMarkdown: root)],
-            chipTimeline: true
+            stepRail: true
         )
         #expect(frame.messages.count == 1)
-        guard case .stepParagraph(let blockID, let paragraph)? = frame.messages[0].blocks.first else {
-            Issue.record("Expected step paragraph")
+        guard case .text(let blockID, let blockText, let markdown)? = frame.messages[0].blocks.first else {
+            Issue.record("Expected the narration text block")
             return
         }
-        #expect(blockID == PresentationBlockId.stepParagraph(["t1", "b1"]))
-        #expect(paragraph.textBlockID == PresentationBlockId.direct("t1"))
-        #expect(paragraph.renderedMarkdown?.sourceHash == root.sourceHash)
-        #expect(paragraph.chips.map(\.label.resolved) == ["ls -la"])
+        #expect(blockID == PresentationBlockId.direct("t1"))
+        #expect(markdown?.sourceHash == root.sourceHash)
+        guard case .stepRail? = frame.messages[0].blocks.last else {
+            Issue.record("Expected a step rail after the narration")
+            return
+        }
 
-        // Per-block cache lookup keys on the merged-text id a `.text` block would have had.
+        // Per-block cache lookup keys on the text block id.
         let cache = BlockDecorationCache(maxEntries: 4)
         let cached = NativeMarkdownDocument(sourceHash: 77, blocks: [.paragraph([.text("Cached")])])
         cache.put(
             sessionKey: "session-a",
-            blockID: PresentationBlockId.direct("t1"),
+            blockID: blockID,
             contentRevision: ContentRevision.of(plain),
             isStreaming: false,
             document: cached
         )
         let attached = DisplayFrameBuilder.attachCachedBlockMarkdown(
-            [.stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(nil))],
+            [.text(blockID: blockID, text: blockText, renderedMarkdown: nil)],
             sessionKey: "session-a",
             isStreaming: false,
             cache: cache
         )
         #expect(attached[0].textContent?.renderedMarkdown?.sourceHash == 77)
 
-        // Projected row bridges the paragraph's markdown like a sole text block.
+        // Projected row bridges the sole text block's markdown.
         let projected = project(frame)
         #expect(projected.rows[0].renderedMarkdown?.sourceHash == root.sourceHash)
         #expect(projected.rows[0].text == plain)

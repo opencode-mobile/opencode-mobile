@@ -593,8 +593,8 @@ struct OpenCodeLiveElapsedText: View {
     }
 }
 
-/// Text with a sweeping highlight, the same clock-driven treatment as a running
-/// Tool Chip, so a re-created view never restarts it. Static under Reduce Motion.
+/// Text with a sweeping highlight, driven by the clock so a re-created view
+/// never restarts it. Static under Reduce Motion.
 struct OpenCodeRunningShimmerText: View {
     let text: String
     let font: Font

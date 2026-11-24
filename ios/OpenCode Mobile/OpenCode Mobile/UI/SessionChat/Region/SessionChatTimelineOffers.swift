@@ -1,37 +1,28 @@
 import Foundation
 
 struct SessionChatTimelineOffersRegionState: Equatable {
-    // One-time Chip timeline intro (OPE-270): offered after a long turn finishes.
-    var chipTimelineIntroVisible = false
-    var chipTimelineIntroNotice: String?
     // One-time Timeline Style picker (#805): offered once per chat when history loads.
     var timelineStylePickerVisible = false
     var timelineStylePickerNotice: String?
 }
 
-/// The two one-time offers about the timeline style, the notices they leave, and their
-/// preference writes. Analytics stay with the Screen Model: the hide calls say whether an
-/// offer was showing, so it logs exactly when one closes.
+/// The one-time Timeline Style picker, the notice it leaves, and its preference writes.
+/// Analytics stay with the Screen Model: the hide call says whether the picker was
+/// showing, so it logs exactly when it closes.
 @MainActor
 final class SessionChatTimelineOffers {
     var onChange: (() -> Void)?
     /// Session Chat is on screen.
     var isBound: () -> Bool = { false }
-    /// Something already open on the chat (`SessionChatUiState.blocksChipTimelineIntro`).
+    /// Something already open on the chat (`SessionChatUiState.blocksTimelineStylePicker`).
     var isBlocked: () -> Bool = { false }
-    /// The published session status shows a turn.
-    var isSessionBusy: () -> Bool = { false }
 
     private(set) var state = SessionChatTimelineOffersRegionState()
 
     private let clock: any SyncClock
-    private let loadedMessages: () -> [Message]
-    private var chipTimelineIntroTurnActive: Bool?
-    private var chipTimelineIntroTask: Task<Void, Never>?
     private var timelineStylePickerOffered = false
     private var timelineStylePickerTask: Task<Void, Never>?
 
-    static let chipTimelineIntroEnabledNotice = "Chip timeline is on. Turn it off in Settings."
     /// Pause after history loads so the chat is on screen before the picker.
     static let timelineStylePickerDelayMs = 600
 
@@ -39,33 +30,8 @@ final class SessionChatTimelineOffers {
         "Timeline: \(style.title). Change it any time in Settings."
     }
 
-    init(clock: any SyncClock, loadedMessages: @escaping () -> [Message]) {
+    init(clock: any SyncClock) {
         self.clock = clock
-        self.loadedMessages = loadedMessages
-    }
-
-    /// Closes the intro without a preference change. True when it was showing.
-    func hideChipTimelineIntro() -> Bool {
-        guard state.chipTimelineIntroVisible else { return false }
-        state.chipTimelineIntroVisible = false
-        return true
-    }
-
-    func enableChipTimeline() {
-        SessionChatDisplayPreferences.shared.setChipTimeline(true)
-        state.chipTimelineIntroNotice = Self.chipTimelineIntroEnabledNotice
-        notifyChange()
-    }
-
-    /// Later button, swipe, or scrim.
-    func postponeChipTimelineIntro() {
-        SessionChatDisplayPreferences.shared.postponeChipTimelineIntro(nowMs: clock.nowMs())
-        notifyChange()
-    }
-
-    func dismissChipTimelineIntro() {
-        SessionChatDisplayPreferences.shared.finishChipTimelineIntro()
-        notifyChange()
     }
 
     /// Closes the picker without a preference change. True when it was showing.
@@ -86,23 +52,17 @@ final class SessionChatTimelineOffers {
     func dismissTimelineStylePicker() {
         let preferences = SessionChatDisplayPreferences.shared
         preferences.dismissTimelineStylePicker()
-        state.timelineStylePickerNotice = Self.timelineStylePickerNotice(preferences.effectiveTimelineStyle)
+        state.timelineStylePickerNotice = Self.timelineStylePickerNotice(preferences.timelineStyle)
         notifyChange()
     }
 
     var timelineStylePickerVisible: Bool { state.timelineStylePickerVisible }
 
     func clearNotices() {
-        state.chipTimelineIntroNotice = nil
         state.timelineStylePickerNotice = nil
     }
 
     func reset() {
-        chipTimelineIntroTask?.cancel()
-        chipTimelineIntroTask = nil
-        state.chipTimelineIntroVisible = false
-        state.chipTimelineIntroNotice = nil
-        chipTimelineIntroTurnActive = nil
         timelineStylePickerTask?.cancel()
         timelineStylePickerTask = nil
         state.timelineStylePickerVisible = false
@@ -135,32 +95,8 @@ final class SessionChatTimelineOffers {
         timelineStylePickerTask = Task { [clock] in
             await clock.sleep(milliseconds: Self.timelineStylePickerDelayMs)
             guard !Task.isCancelled, isBound(), preferences.timelineStylePickerPending,
-                  !state.chipTimelineIntroVisible, !isBlocked() else { return }
+                  !isBlocked() else { return }
             state.timelineStylePickerVisible = true
-            notifyChange()
-        }
-    }
-
-    /// Called from the Screen Model's publish: mutates silently, publishes only from its task.
-    /// Offers the intro once a long turn goes busy → idle and stays settled.
-    func updateTurnActive(_ isTurnActive: Bool) {
-        let previous = chipTimelineIntroTurnActive
-        chipTimelineIntroTurnActive = isTurnActive
-        if isTurnActive {
-            chipTimelineIntroTask?.cancel()
-            chipTimelineIntroTask = nil
-            return
-        }
-        guard previous == true, !state.chipTimelineIntroVisible, isBound() else { return }
-        let toolCalls = ChipTimelineIntro.lastTurnToolCalls(loadedMessages())
-        let preferences = SessionChatDisplayPreferences.shared
-        guard preferences.shouldOfferChipTimelineIntro(turnToolCalls: toolCalls, nowMs: clock.nowMs()) else { return }
-        chipTimelineIntroTask?.cancel()
-        chipTimelineIntroTask = Task { [clock] in
-            await clock.sleep(milliseconds: Int(ChipTimelineIntro.settleDelayMs))
-            guard !Task.isCancelled, isBound(), !isSessionBusy(), !isBlocked() else { return }
-            guard preferences.shouldOfferChipTimelineIntro(turnToolCalls: toolCalls, nowMs: clock.nowMs()) else { return }
-            state.chipTimelineIntroVisible = true
             notifyChange()
         }
     }

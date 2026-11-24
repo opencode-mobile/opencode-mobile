@@ -39,85 +39,22 @@ import Testing
         #expect(defaults.object(forKey: "followUpDelivery") == nil)
     }
 
-    @Test func chipTimeline_defaultsOff() {
-        let suite = "SessionChatDisplayPreferencesTests.chipDefault"
+    @Test func clear_removesLegacyChipTimelineKeys() {
+        let suite = "SessionChatDisplayPreferencesTests.legacyClear"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
-
+        // Keys an install from before #1120 may still hold.
+        defaults.set(true, forKey: "chipTimeline")
+        defaults.set(true, forKey: "chipTimelineIntroDone")
+        defaults.set(NSNumber(value: Int64(1_000)), forKey: "chipTimelineIntroSnoozedUntilMs")
         let preferences = SessionChatDisplayPreferences(defaults: defaults)
-
-        #expect(preferences.chipTimeline == false)
-    }
-
-    @Test func chipTimeline_setPersistsAndReloads() {
-        let suite = "SessionChatDisplayPreferencesTests.chipStored"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        let preferences = SessionChatDisplayPreferences(defaults: defaults)
-
-        preferences.setChipTimeline(true)
-
-        #expect(preferences.chipTimeline == true)
-        #expect(defaults.bool(forKey: "chipTimeline") == true)
-        #expect(SessionChatDisplayPreferences(defaults: defaults).chipTimeline == true)
-    }
-
-    @Test func chipTimeline_clearResetsOff() {
-        let suite = "SessionChatDisplayPreferencesTests.chipClear"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        let preferences = SessionChatDisplayPreferences(defaults: defaults)
-        preferences.setChipTimeline(true)
 
         preferences.clear()
 
-        #expect(preferences.chipTimeline == false)
         #expect(defaults.object(forKey: "chipTimeline") == nil)
-    }
-
-    @Test func chipTimelineIntro_laterPersistsSnoozeThenSecondLaterEndsIntro() {
-        let suite = "SessionChatDisplayPreferencesTests.chipIntroLater"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        let preferences = SessionChatDisplayPreferences(defaults: defaults)
-
-        preferences.postponeChipTimelineIntro(nowMs: 1_000)
-        let reloaded = SessionChatDisplayPreferences(defaults: defaults)
-
-        #expect(reloaded.chipTimelineIntroSnoozedUntilMs == 1_000 + ChipTimelineIntro.snoozeMs)
-        #expect(reloaded.chipTimelineIntroDone == false)
-
-        reloaded.postponeChipTimelineIntro(nowMs: 1_000 + ChipTimelineIntro.snoozeMs)
-
-        #expect(SessionChatDisplayPreferences(defaults: defaults).chipTimelineIntroDone)
-    }
-
-    @Test func chipTimelineIntro_settingsChoiceEndsIntro() {
-        let suite = "SessionChatDisplayPreferencesTests.chipIntroSettings"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        let preferences = SessionChatDisplayPreferences(defaults: defaults)
-
-        preferences.setChipTimeline(false)
-
-        #expect(preferences.chipTimelineIntroDone)
-        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
-    }
-
-    @Test func chipTimelineIntro_clearResetsIntro() {
-        let suite = "SessionChatDisplayPreferencesTests.chipIntroClear"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        let preferences = SessionChatDisplayPreferences(defaults: defaults)
-        preferences.postponeChipTimelineIntro(nowMs: 1_000)
-        preferences.finishChipTimelineIntro()
-
-        preferences.clear()
-
-        #expect(preferences.chipTimelineIntroDone == false)
-        #expect(preferences.chipTimelineIntroSnoozedUntilMs == nil)
         #expect(defaults.object(forKey: "chipTimelineIntroDone") == nil)
         #expect(defaults.object(forKey: "chipTimelineIntroSnoozedUntilMs") == nil)
+        #expect(defaults.object(forKey: "timelineStyle") == nil)
     }
 
     @Test func install_freshResolvesActivityCardAndSkipsThePicker() {
@@ -134,30 +71,23 @@ import Testing
         let reloaded = SessionChatDisplayPreferences(defaults: defaults)
         #expect(reloaded.timelineStyle == .activityCard)
         #expect(reloaded.timelineStylePickerDone == true)
-        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
     }
 
     @Test func install_existingResolvesStandardAndOffersThePicker() {
         let suite = "SessionChatDisplayPreferencesTests.existingInstall"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
-        let flagDefaults = UserDefaults(suiteName: suite + ".flags")!
-        flagDefaults.removePersistentDomain(forName: suite + ".flags")
-        let flags = FeatureFlags(defaults: flagDefaults)
-        flags.setOverride(.sessionChatChipTimeline, true)
-        let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
 
         preferences.resolveTimelineForInstall(existingInstall: true)
 
         #expect(preferences.timelineStyle == .standard)
-        #expect(defaults.object(forKey: "chipTimeline") as? Bool == false)
+        #expect(defaults.string(forKey: "timelineStyle") == "standard")
         #expect(preferences.timelineStylePickerPending)
         #expect(SessionChatDisplayPreferences(defaults: defaults).timelineStylePickerPending)
-        // The picker replaces the Chip intro while it is pending.
-        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
     }
 
-    @Test func install_existingKeepsAStoredChipsStyle() {
+    @Test func install_existingWithAStoredChipsStyleResolvesStandard() {
         let suite = "SessionChatDisplayPreferencesTests.existingChips"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
@@ -166,7 +96,21 @@ import Testing
 
         preferences.resolveTimelineForInstall(existingInstall: true)
 
-        #expect(preferences.timelineStyle == .chips)
+        #expect(preferences.timelineStyle == .standard)
+        #expect(defaults.string(forKey: "timelineStyle") == "standard")
+        #expect(preferences.timelineStylePickerPending)
+    }
+
+    @Test func install_existingWithOnlyTheLegacyChipKeyStaysStandardAndOffersThePicker() {
+        let suite = "SessionChatDisplayPreferencesTests.existingLegacyChip"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set(false, forKey: "chipTimeline")
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        preferences.resolveTimelineForInstall(existingInstall: true)
+
+        #expect(preferences.timelineStyle == .standard)
         #expect(preferences.timelineStylePickerPending)
     }
 
@@ -188,7 +132,6 @@ import Testing
         relaunched.resolveTimelineForInstall(existingInstall: true)
         #expect(relaunched.timelineStyle == .activityCard)
         #expect(!relaunched.timelineStylePickerPending)
-        #expect(!relaunched.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
     }
 
     @Test func install_resolveKeepsStoredValues() {
@@ -203,7 +146,7 @@ import Testing
         #expect(preferences.timelineStyle == .activityCard)
         #expect(!preferences.timelineStylePickerPending)
 
-        preferences.setChipTimeline(false)
+        preferences.setTimelineStyle(.standard)
         preferences.resolveTimelineForInstall(existingInstall: false)
         #expect(preferences.timelineStyle == .standard)
     }
@@ -219,7 +162,6 @@ import Testing
 
         #expect(preferences.timelineStyle == .stepRail)
         #expect(!preferences.timelineStylePickerPending)
-        #expect(preferences.chipTimelineIntroDone)
         #expect(SessionChatDisplayPreferences(defaults: defaults).timelineStylePickerDone == true)
     }
 
@@ -235,7 +177,6 @@ import Testing
 
         #expect(preferences.timelineStyle == .activityCard)
         #expect(!preferences.timelineStylePickerPending)
-        #expect(preferences.chipTimelineIntroDone)
     }
 
     @Test func picker_clearResetsItToUnset() {
@@ -275,21 +216,28 @@ import Testing
         return defaults
     }
 
-    private func flags(chipsOn: Bool, _ name: String) -> FeatureFlags {
-        let flags = FeatureFlags(defaults: freshDefaults("flags.\(name)"))
-        flags.setOverride(.sessionChatChipTimeline, chipsOn)
-        return flags
-    }
-
-    @Test func timelineStyle_migratesStoredChipTrueToChips() {
+    @Test func timelineStyle_migratesStoredChipTrueToStandard() {
         let defaults = freshDefaults("migrateTrue")
         defaults.set(true, forKey: "chipTimeline")
 
-        let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags(chipsOn: true, "migrateTrue"))
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
 
-        #expect(preferences.timelineStyle == .chips)
-        #expect(defaults.string(forKey: "timelineStyle") == "chips")
+        #expect(preferences.timelineStyle == .standard)
+        #expect(defaults.string(forKey: "timelineStyle") == "standard")
+        // The legacy key stays so the install still reads as existing.
         #expect(defaults.object(forKey: "chipTimeline") as? Bool == true)
+    }
+
+    @Test func timelineStyle_storedChipsResolvesStandardAndRewritesIt() {
+        let defaults = freshDefaults("storedChips")
+        defaults.set("chips", forKey: "timelineStyle")
+
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        #expect(preferences.timelineStyle == .standard)
+        #expect(defaults.string(forKey: "timelineStyle") == "standard")
+        #expect(SessionChatTimelineStyle.fromWire("chips") == .standard)
+        #expect(SessionChatTimelineStyle.allCases == [.standard, .stepRail, .activityCard])
     }
 
     @Test func timelineStyle_migratesStoredChipFalseToStandard() {
@@ -311,7 +259,6 @@ import Testing
 
         #expect(preferences.timelineStyle == .stepRail)
         #expect(preferences.stepRailTimeline)
-        #expect(preferences.chipTimeline == false)
     }
 
     @Test func timelineStyle_missingResolvesInstallDefault() {
@@ -337,36 +284,12 @@ import Testing
         #expect(preferences.timelineStyle == .stepRail)
     }
 
-    @Test func timelineStyle_flagOffMakesChipsEffectiveStandard() {
-        let defaults = freshDefaults("flagOff")
-        let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags(chipsOn: false, "flagOff"))
-        preferences.setTimelineStyle(.chips)
-
-        #expect(preferences.timelineStyle == .chips)
-        #expect(preferences.chipTimeline == false)
-        #expect(preferences.effectiveTimelineStyle == .standard)
-        #expect(preferences.availableTimelineStyles == [.standard, .stepRail, .activityCard])
-
-        preferences.setTimelineStyle(.stepRail)
-        #expect(preferences.stepRailTimeline)
-        #expect(preferences.effectiveTimelineStyle == .stepRail)
-    }
-
-    @Test func timelineStyle_flagOnOffersAllStyles() {
-        let preferences = SessionChatDisplayPreferences(
-            defaults: freshDefaults("flagOn"),
-            featureFlags: flags(chipsOn: true, "flagOn")
-        )
-        #expect(preferences.availableTimelineStyles == [.standard, .chips, .stepRail, .activityCard])
-    }
-
-    @Test func timelineStyle_setPersistsEndsIntroAndClearResets() {
+    @Test func timelineStyle_setPersistsAndClearResets() {
         let defaults = freshDefaults("setClear")
         let preferences = SessionChatDisplayPreferences(defaults: defaults)
 
         preferences.setTimelineStyle(.stepRail)
 
-        #expect(preferences.chipTimelineIntroDone)
         #expect(SessionChatDisplayPreferences(defaults: defaults).timelineStyle == .stepRail)
 
         preferences.clear()
@@ -374,14 +297,6 @@ import Testing
         #expect(preferences.timelineStyle == .standard)
         #expect(defaults.object(forKey: "timelineStyle") == nil)
         #expect(defaults.object(forKey: "chipTimeline") == nil)
-    }
-
-    @Test func timelineStyle_stepRailNeverOffersTheChipIntro() {
-        let defaults = freshDefaults("intro")
-        defaults.set("step_rail", forKey: "timelineStyle")
-        let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags(chipsOn: true, "intro"))
-
-        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
     }
 
     @Test func timelineStyle_activityCardWireValueRoundTrips() {
@@ -393,33 +308,14 @@ import Testing
         #expect(SessionChatTimelineStyle.activityCard.wireValue == "activity_card")
         #expect(SessionChatTimelineStyle.fromWire("activity_card") == .activityCard)
         #expect(defaults.string(forKey: "timelineStyle") == "activity_card")
-        #expect(defaults.bool(forKey: "chipTimeline") == false)
         let reloaded = SessionChatDisplayPreferences(defaults: defaults)
         #expect(reloaded.timelineStyle == .activityCard)
         #expect(reloaded.activityCardTimeline)
         #expect(reloaded.stepRailTimeline == false)
-        #expect(reloaded.chipTimeline == false)
-        #expect(reloaded.effectiveTimelineStyle == .activityCard)
         #expect(SessionChatTimelineStyle.activityCard.title == "Activity Card")
         #expect(
             SessionChatTimelineStyle.activityCard.subtitle
                 == "Running steps on one live card that folds into a summary"
         )
-    }
-
-    @Test func timelineStyle_activityCardNeverOffersTheChipIntro() {
-        let defaults = freshDefaults("introCard")
-        defaults.set("activity_card", forKey: "timelineStyle")
-        let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags(chipsOn: true, "introCard"))
-
-        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
-    }
-
-    @Test func timelineStyle_chipShimMapsToChipsAndStandard() {
-        let preferences = SessionChatDisplayPreferences(defaults: freshDefaults("shim"))
-        preferences.setChipTimeline(true)
-        #expect(preferences.timelineStyle == .chips)
-        preferences.setChipTimeline(false)
-        #expect(preferences.timelineStyle == .standard)
     }
 }

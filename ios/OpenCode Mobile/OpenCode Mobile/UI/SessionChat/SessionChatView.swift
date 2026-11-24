@@ -39,7 +39,6 @@ struct SessionChatView: View {
     @State private var showPendingPromptsSheet = false
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
     @State private var toolGroupTarget: SessionChatToolGroupTarget?
-    @State private var skillsTarget: SessionChatSkillsTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
     @State private var terminalRoute: TerminalRoute?
     @State private var filesRoute: FilesRoute?
@@ -643,15 +642,6 @@ struct SessionChatView: View {
                     logChatAction(ProductAnalytics.Action.chatOpenToolGroup)
                     toolGroupTarget = target
                 },
-                onSkillsTap: { target in
-                    logChatAction(ProductAnalytics.Action.chatOpenSkills)
-                    ProductAnalytics.logScreenView(
-                        screenId: ProductAnalytics.Screen.sessionSkills,
-                        presentation: ProductAnalytics.Presentation.sheet,
-                        trigger: ProductAnalytics.Trigger.present
-                    )
-                    skillsTarget = target
-                },
                 onChildSessionTap: { sessionID, title in
                     logChatAction(ProductAnalytics.Action.chatOpenChildSession)
                     childSessionTarget = ChildSessionNavigationTarget(
@@ -680,10 +670,6 @@ struct SessionChatView: View {
                     )
                 },
                 supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
-                expandedStepParagraphs: viewModel.uiState.expandedStepParagraphs,
-                onExpandStepParagraph: { paragraphID, chipCount in
-                    viewModel.expandStepParagraph(paragraphID, chipCount: chipCount)
-                },
                 unfoldedStepRails: viewModel.uiState.unfoldedStepRails,
                 onToggleStepRailFold: { railID in viewModel.toggleStepRailFold(railID) },
                 presentedActivityCard: viewModel.uiState.presentedActivityCard,
@@ -818,18 +804,11 @@ struct SessionChatView: View {
                 },
                 onOpenLink: { SessionChatView.openServerLink($0) }
             )
-            .sessionChatSkillsSheet(target: $skillsTarget)
-            // Waits for any view-owned sheet to close so the intro never stacks on one.
-            .sessionChatChipTimelineIntro(
-                isPresented: viewModel.uiState.chipTimelineIntroVisible && !viewSheetOpen,
-                onEnable: { viewModel.enableChipTimelineFromIntro() },
-                onLater: { viewModel.postponeChipTimelineIntro() },
-                onNever: { viewModel.dismissChipTimelineIntro() }
-            )
+            // Waits for any view-owned sheet to close so the picker never stacks on one.
             .sessionChatTimelineStylePicker(
                 isPresented: viewModel.uiState.timelineStylePickerVisible && !viewSheetOpen,
-                styles: SessionChatDisplayPreferences.shared.availableTimelineStyles,
-                currentStyle: SessionChatDisplayPreferences.shared.effectiveTimelineStyle,
+                styles: SessionChatTimelineStyle.allCases,
+                currentStyle: SessionChatDisplayPreferences.shared.timelineStyle,
                 onUse: { viewModel.chooseTimelineStyleFromPicker($0) },
                 onDismiss: { viewModel.dismissTimelineStylePicker() }
             )
@@ -1398,7 +1377,6 @@ struct SessionChatView: View {
             || selectTextTarget != nil
             || showPendingPromptsSheet
             || toolDetailTarget != nil
-            || skillsTarget != nil
             || showSessionTodosSheet
             || showSubagentsSheet
             || viewModel.uiState.shellOutput != nil

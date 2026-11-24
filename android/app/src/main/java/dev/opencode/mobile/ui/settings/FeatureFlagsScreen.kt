@@ -151,7 +151,7 @@ private fun FeatureFlagsScreenPreview() {
             rows =
                 listOf(
                     FeatureFlagRow(
-                        FeatureFlag.SessionChatChipTimeline,
+                        FeatureFlag.SessionComposerDocked,
                         FeatureFlagResolution(value = false, source = FeatureFlagSource.Override),
                     ),
                 ),

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// How the assistant text sits in the timeline: the raised bubble, or plain
-/// prose for the chip timeline where the tool chips follow the paragraph.
+/// prose without one.
 enum OpenCodeAssistantMessagePresentation: Sendable {
     case bubble
     case plain

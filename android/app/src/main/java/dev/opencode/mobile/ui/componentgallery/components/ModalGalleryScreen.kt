@@ -46,7 +46,7 @@ fun ModalGalleryScreen(modifier: Modifier = Modifier) {
 
     OpenCodeModal(visible = visible, onDismissRequest = { visible = false }) {
         OpenCodeSkeletonIllustration(
-            topic = OpenCodeSkeletonIllustrationTopic.ChipTimelineGlance,
+            topic = OpenCodeSkeletonIllustrationTopic.TimelineActivityCard,
             modifier =
                 Modifier
                     .fillMaxWidth()

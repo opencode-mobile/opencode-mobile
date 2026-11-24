@@ -32,7 +32,6 @@ enum ComponentGalleryEntryID: String, Hashable {
     case truncationRow
     case assistantMessage
     case toolCallCard
-    case toolChip
     case messageNote
     case timelineNotice
     case childSessionRow
@@ -423,12 +422,6 @@ let componentGalleryEntries = [
         id: .toolCallCard,
         title: "Tool Call Card",
         description: "Collapsed tool-agnostic assistant tool row with status variants.",
-        category: .chat
-    ),
-    ComponentGalleryEntry(
-        id: .toolChip,
-        title: "Tool Chip",
-        description: "Compact tool reference under a narration paragraph, by variant and status.",
         category: .chat
     ),
     ComponentGalleryEntry(

@@ -1,7 +1,7 @@
 package dev.opencode.mobile.domain.message
 
 /**
- * One run of a message on the default timeline (no chip, step rail or activity card layout):
+ * One run of a message on the default timeline (no step rail or activity card layout):
  * merged text, a tool or tool group, attached files, a settled thought, a compaction marker or a
  * notice. The UI builder turns each into blocks; the display pipeline counts text runs.
  */

@@ -161,7 +161,6 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveCopy
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveTags
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatGoalSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
@@ -170,8 +169,6 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSelectTextSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSideQuestionSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
 import dev.opencode.mobile.ui.sessionchat.view.sessionChatPanelPulse
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineStylePickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
@@ -332,7 +329,6 @@ private fun SessionChatScreenBody(
     var selectTextTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
     var showPendingPromptsSheet by rememberSaveable { mutableStateOf(false) }
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
-    var skillsTarget by remember { mutableStateOf<SessionChatSkillsTarget?>(null) }
     var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
     var showSubagentsSheet by rememberSaveable { mutableStateOf(false) }
     var holdingFinishedTodos by remember { mutableStateOf(false) }
@@ -1183,10 +1179,6 @@ private fun SessionChatScreenBody(
                                     logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
                                     toolDetailTarget = it
                                 },
-                                onSkillsTap = {
-                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_SKILLS)
-                                    skillsTarget = it
-                                },
                                 onToolGroupTap = { target ->
                                     logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_GROUP)
                                     onToolGroupClick(
@@ -1229,8 +1221,6 @@ private fun SessionChatScreenBody(
                                     onReviewChangesClick(target)
                                 },
                                 supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
-                                expandedStepParagraphs = uiState.expandedStepParagraphs,
-                                onExpandStepParagraph = viewModel::expandStepParagraph,
                                 unfoldedStepRails = uiState.unfoldedStepRails,
                                 onToggleStepRailFold = viewModel::toggleStepRailFold,
                                 presentedActivityCard = uiState.presentedActivityCard,
@@ -1814,18 +1804,12 @@ private fun SessionChatScreenBody(
             onOpenLink = { openSessionExternalLink(sheetContext, it) },
         )
 
-        SessionChatSkillsSheet(
-            target = skillsTarget,
-            onDismiss = { skillsTarget = null },
-        )
-
-        // Waits for any screen-local sheet to close so the intro and the Timeline Style
-        // picker never stack on one.
+        // Waits for any screen-local sheet to close so the Timeline Style picker never
+        // stacks on one.
         val screenSheetOpen =
             messageActionsTarget != null ||
                 showPendingPromptsSheet ||
                 toolDetailTarget != null ||
-                skillsTarget != null ||
                 showSessionTodosSheet ||
                 showSubagentsSheet ||
                 uiState.shellOutput != null ||
@@ -1834,12 +1818,6 @@ private fun SessionChatScreenBody(
                 activePicker != null ||
                 showDeleteConfirmation
         LaunchedEffect(screenSheetOpen) { viewModel.setScreenSheetOpen(screenSheetOpen) }
-        SessionChatChipTimelineIntroModal(
-            visible = uiState.chipTimelineIntroVisible && !screenSheetOpen,
-            onEnable = viewModel::enableChipTimelineFromIntro,
-            onLater = viewModel::postponeChipTimelineIntro,
-            onNever = viewModel::dismissChipTimelineIntro,
-        )
         SessionChatTimelineStylePickerSheet(
             visible = uiState.timelineStylePickerVisible && !screenSheetOpen,
             options = uiState.timelineStylePickerOptions,

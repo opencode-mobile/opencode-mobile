@@ -20,37 +20,44 @@ import Testing
         }
     }
 
-    @Test func chipTimelineDefaultsOn() {
+    @Test func dockedComposerDefaultsOff() {
         let flags = FeatureFlags(defaults: makeDefaults("default"))
-        #expect(flags.resolution(.sessionChatChipTimeline) == FeatureFlagResolution(value: true, source: .default))
+        #expect(flags.resolution(.sessionComposerDocked) == FeatureFlagResolution(value: false, source: .default))
+    }
+
+    @Test func removedChipTimelineKeyIsUnknown() {
+        #expect(FeatureFlag(rawValue: "session_chat_chip_timeline") == nil)
     }
 
     @Test func remoteSnapshotAppliesKnownKeysOnly() {
         let flags = FeatureFlags(defaults: makeDefaults("remote"))
-        flags.applyRemote(["session_chat_chip_timeline": false, "unknown_flag": true])
-        #expect(flags.resolution(.sessionChatChipTimeline) == FeatureFlagResolution(value: false, source: .remote))
+        flags.applyRemote(["session_composer_docked": true, "session_chat_chip_timeline": true, "unknown_flag": true])
+        #expect(flags.resolution(.sessionComposerDocked) == FeatureFlagResolution(value: true, source: .remote))
         #expect(flags.remote.count == 1)
     }
 
     @Test func overridePersistsAndReloads() {
         let defaults = makeDefaults("override")
         let flags = FeatureFlags(defaults: defaults)
-        flags.applyRemote(["session_chat_chip_timeline": false])
-        flags.setOverride(.sessionChatChipTimeline, true)
-        #expect(flags.resolution(.sessionChatChipTimeline) == FeatureFlagResolution(value: true, source: .override))
+        flags.applyRemote(["session_composer_docked": false])
+        flags.setOverride(.sessionComposerDocked, true)
+        #expect(flags.resolution(.sessionComposerDocked) == FeatureFlagResolution(value: true, source: .override))
 
         let reloaded = FeatureFlags(defaults: defaults)
-        #expect(reloaded.override(.sessionChatChipTimeline) == true)
+        #expect(reloaded.override(.sessionComposerDocked) == true)
     }
 
     @Test func clearOverridesRestoresRemoteOrDefault() {
         let defaults = makeDefaults("clear")
         let flags = FeatureFlags(defaults: defaults)
-        flags.setOverride(.sessionChatChipTimeline, false)
+        flags.setOverride(.sessionComposerDocked, true)
+        // An override left behind by the removed Chip timeline flag (#1120).
+        defaults.set(true, forKey: "featureFlagOverride_session_chat_chip_timeline")
 
         flags.clearOverrides()
 
-        #expect(flags.isEnabled(.sessionChatChipTimeline) == true)
+        #expect(flags.isEnabled(.sessionComposerDocked) == false)
+        #expect(defaults.object(forKey: "featureFlagOverride_session_composer_docked") == nil)
         #expect(defaults.object(forKey: "featureFlagOverride_session_chat_chip_timeline") == nil)
     }
 }

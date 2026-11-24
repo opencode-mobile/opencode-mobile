@@ -11,12 +11,6 @@ enum class FeatureFlag(
     val description: String,
     val defaultValue: Boolean,
 ) {
-    SessionChatChipTimeline(
-        key = "session_chat_chip_timeline",
-        title = "Chip timeline",
-        description = "Session Chat chip timeline mode and its Settings toggle",
-        defaultValue = true,
-    ),
     SessionComposerDocked(
         key = "session_composer_docked",
         title = "Docked composer",
@@ -26,6 +20,9 @@ enum class FeatureFlag(
     ;
 
     companion object {
+        /** Keys of removed flags, so Clear All Data still drops their stored overrides. */
+        val RETIRED_KEYS = listOf("session_chat_chip_timeline")
+
         fun fromKey(key: String): FeatureFlag? = entries.firstOrNull { it.key == key }
     }
 }

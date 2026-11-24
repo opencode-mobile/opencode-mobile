@@ -281,38 +281,6 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         )
     }
 
-    /// Chip timeline: a step paragraph expanded past `+N more` lives in the
-    /// Screen Model, not the projected frame. Rows holding a paragraph whose
-    /// expansion changed reconfigure as a layout change (the chip row grows),
-    /// and the expansion set folds into revision like Working chrome so an
-    /// unchanged set never re-applies.
-    func addingStepParagraphExpansion(
-        rows: [SessionChatRow],
-        expanded: [String: Int],
-        previousExpanded: [String: Int]
-    ) -> MessageListTimelineApplyPacket {
-        let fingerprint = SessionChatStepParagraphExpansion.fingerprint(expanded)
-        let toggled = SessionChatStepParagraphExpansion.changedParagraphIDs(expanded, previousExpanded)
-        let rowIDs = SessionChatStepParagraphExpansion.rowIDs(containing: toggled, in: rows)
-        guard fingerprint != 0 || !rowIDs.isEmpty else { return self }
-        var nextKinds = kinds
-        if !rowIDs.isEmpty {
-            nextKinds.insert(.structure)
-            nextKinds.insert(.content)
-        }
-        return MessageListTimelineApplyPacket(
-            frameRevision: frameRevision &+ (fingerprint &* 998_244_353),
-            insertedRowIDs: insertedRowIDs,
-            changedRowIDs: changedRowIDs.union(rowIDs),
-            removedRowIDs: removedRowIDs,
-            layoutChangedRowIDs: layoutChangedRowIDs.union(rowIDs),
-            grewBottomRowIDs: grewBottomRowIDs,
-            decorateRowIDs: decorateRowIDs,
-            isRequired: isRequired,
-            kinds: nextKinds
-        )
-    }
-
     /// Step rail and activity card: fold / expansion state and the live run
     /// live in the Screen Model and the host, not the projected frame. Rows
     /// holding a rail or card whose fold, expansion or liveness changed
@@ -330,7 +298,7 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         if state.awaitingUser { keyed["awaitingUser"] = 4 }
         for (card, footer) in state.activityFooters { keyed["footer:" + card + ":" + footer.revisionKey] = 5 }
         for step in state.debouncedStepIDs { keyed["debounced:" + step] = 6 }
-        let fingerprint = SessionChatStepParagraphExpansion.fingerprint(keyed)
+        let fingerprint = SessionChatTimelineHostState.fingerprint(keyed)
         var toggled = state.unfolded.symmetricDifference(previous.unfolded)
         if state.liveRailID != previous.liveRailID {
             toggled.formUnion([state.liveRailID, previous.liveRailID].compactMap { $0 })
@@ -350,9 +318,9 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         }
         let debounceChanged = state.debouncedStepIDs.symmetricDifference(previous.debouncedStepIDs)
         if !debounceChanged.isEmpty {
-            toggled.formUnion(SessionChatStepParagraphExpansion.stepRunIDs(containingSteps: debounceChanged, in: rows))
+            toggled.formUnion(SessionChatTimelineHostState.stepRunIDs(containingSteps: debounceChanged, in: rows))
         }
-        let rowIDs = SessionChatStepParagraphExpansion.rowIDs(containingStepRails: toggled, in: rows)
+        let rowIDs = SessionChatTimelineHostState.rowIDs(containingStepRails: toggled, in: rows)
         guard fingerprint != 0 || !rowIDs.isEmpty else { return self }
         var nextKinds = kinds
         if !rowIDs.isEmpty {
@@ -388,7 +356,7 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
                       case .modelChanged(let model, _) = notice.kind
                 else { continue }
                 let name = names.name(for: model)
-                fingerprint = fingerprint &+ SessionChatStepParagraphExpansion.fingerprint([blockID + (name ?? ""): 0])
+                fingerprint = fingerprint &+ SessionChatTimelineHostState.fingerprint([blockID + (name ?? ""): 0])
                 if name != previous.name(for: model) { rowIDs.insert(row.id) }
             }
         }
@@ -536,12 +504,13 @@ struct SessionChatStepRailViewState: Equatable {
     static let empty = SessionChatStepRailViewState(unfolded: [], liveRailID: nil)
 }
 
-/// Chip-timeline `+N more` expansion helpers for the timeline host.
-enum SessionChatStepParagraphExpansion {
-    /// Order-independent, process-stable fingerprint over paragraph id and
-    /// chip count; 0 for no expansion.
-    static func fingerprint(_ expanded: [String: Int]) -> UInt64 {
-        expanded.reduce(UInt64(0)) { sum, entry in
+/// Fingerprint and row lookups for timeline state the host owns outside the
+/// projected frame (step rail folds, activity cards, notices, goal rows).
+enum SessionChatTimelineHostState {
+    /// Order-independent, process-stable fingerprint over each key and its
+    /// value; 0 for an empty map.
+    static func fingerprint(_ entries: [String: Int]) -> UInt64 {
+        entries.reduce(UInt64(0)) { sum, entry in
             var value: UInt64 = 1
             for scalar in entry.key.unicodeScalars {
                 value = value &* 31 &+ UInt64(scalar.value)
@@ -551,16 +520,6 @@ enum SessionChatStepParagraphExpansion {
         }
     }
 
-    /// Paragraphs whose expansion appeared, disappeared or changed its chip count.
-    static func changedParagraphIDs(_ expanded: [String: Int], _ previous: [String: Int]) -> Set<String> {
-        var changed: Set<String> = []
-        for key in Set(expanded.keys).union(previous.keys) where expanded[key] != previous[key] {
-            changed.insert(key)
-        }
-        return changed
-    }
-
-    /// Rows whose blocks hold a step rail or activity card with one of `railIDs`.
     /// Ids of the step rails and activity cards that hold one of `stepIDs`.
     static func stepRunIDs(containingSteps stepIDs: Set<String>, in rows: [SessionChatRow]) -> Set<String> {
         var result: Set<String> = []
@@ -579,6 +538,7 @@ enum SessionChatStepParagraphExpansion {
         return result
     }
 
+    /// Rows whose blocks hold a step rail or activity card with one of `railIDs`.
     static func rowIDs(containingStepRails railIDs: Set<String>, in rows: [SessionChatRow]) -> Set<String> {
         guard !railIDs.isEmpty else { return [] }
         var result: Set<String> = []
@@ -589,20 +549,6 @@ enum SessionChatStepParagraphExpansion {
                 case .activityCard(_, let card): return railIDs.contains(card.id)
                 default: return false
                 }
-            }
-            if holds { result.insert(row.id) }
-        }
-        return result
-    }
-
-    /// Rows whose blocks hold a step paragraph with one of `paragraphIDs`.
-    static func rowIDs(containing paragraphIDs: Set<String>, in rows: [SessionChatRow]) -> Set<String> {
-        guard !paragraphIDs.isEmpty else { return [] }
-        var result: Set<String> = []
-        for row in rows {
-            let holds = row.blocks.contains { block in
-                guard case .stepParagraph(_, let paragraph) = block else { return false }
-                return paragraphIDs.contains(paragraph.id)
             }
             if holds { result.insert(row.id) }
         }

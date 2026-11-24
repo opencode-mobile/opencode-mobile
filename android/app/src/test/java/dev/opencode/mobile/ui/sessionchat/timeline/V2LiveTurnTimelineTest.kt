@@ -34,7 +34,7 @@ import dev.opencode.mobile.ui.text.english
 /**
  * Live v2 turns end to end: wire events (shaped like the captured `/api/event`
  * stream) through the event adapter and message store into display order and
- * the chip timeline merge, then a REST reload over the live state.
+ * the step rail timeline merge, then a REST reload over the live state.
  */
 class V2LiveTurnTimelineTest {
     private val json = Json { ignoreUnknownKeys = true }
@@ -63,9 +63,9 @@ class V2LiveTurnTimelineTest {
         assertEquals("Let me look around the project.", messages[1].text)
         assertEquals("`handler` is defined in `src/app.ts`.", messages[3].text)
 
-        val merged = chipBodies(messages)
+        val merged = stepRailBodies(messages)
         assertEquals(listOf("u1", "a1"), merged.map { it.message.id })
-        val paragraphs = merged[1].blocks.filterIsInstance<SessionChatTimelineBlock.StepParagraph>()
+        val paragraphs = merged[1].blocks.narration()
         assertEquals(
             listOf("Let me look around the project.", "`handler` is defined in `src/app.ts`."),
             paragraphs.map { it.text },
@@ -90,14 +90,14 @@ class V2LiveTurnTimelineTest {
 
         val ordered = displayOrder(store.messages(SESSION))
         assertEquals(listOf("u1", "a1", "u2", "a2"), ordered.map { it.id })
-        val merged = chipBodies(ordered)
+        val merged = stepRailBodies(ordered)
         assertEquals(listOf("u1", "a1", "u2", "a2"), merged.map { it.message.id })
         assertEquals("## Reply two", merged[3].message.text)
         assertEquals(
             documentFor("a2"),
             merged[3]
                 .blocks
-                .stepParagraphs()
+                .narration()
                 .single()
                 .renderedMarkdown,
         )
@@ -123,7 +123,7 @@ class V2LiveTurnTimelineTest {
 
         val ordered = displayOrder(store.messages(SESSION))
         assertEquals(listOf("u1", "a1", "u2", "a2", "u3", "a3"), ordered.map { it.id })
-        val merged = chipBodies(ordered)
+        val merged = stepRailBodies(ordered)
         assertEquals(listOf("u1", "a1", "u2", "a2", "u3", "a3"), merged.map { it.message.id })
         assertEquals(
             listOf("Answer to the first prompt.", "Answer to the steer prompt.", "Answer to the queued prompt."),
@@ -187,7 +187,7 @@ class V2LiveTurnTimelineTest {
         assertTrue(messages.none { it.isWaitingForPickup })
         val ordered = displayOrder(messages)
         assertEquals(listOf("u1", "a1", "u2", "a2", "u3", "a3"), ordered.map { it.id })
-        val merged = chipBodies(ordered)
+        val merged = stepRailBodies(ordered)
         assertEquals(listOf("u1", "a1", "u2", "a2", "u3", "a3"), merged.map { it.message.id })
         assertEquals(
             listOf("Answer to the first prompt.", "Answer to the steer prompt.", "Answer to the queued prompt."),
@@ -320,7 +320,7 @@ class V2LiveTurnTimelineTest {
             live.map { it.notice() },
         )
         // Each notice is its own row, after the finished turn.
-        val rows = chipBodies(displayOrder(store.messages(SESSION)))
+        val rows = stepRailBodies(displayOrder(store.messages(SESSION)))
         assertEquals(listOf("u1", "a1") + ids, rows.map { it.message.id })
         rows.drop(2).forEach { row ->
             assertTrue(row.blocks.single() is SessionChatTimelineBlock.Notice)
@@ -371,10 +371,10 @@ class V2LiveTurnTimelineTest {
         assertEquals(listOf("u1", "a1", "msg_k", "a2"), live.map { it.id })
         assertEquals(MessageRole.Notice, live[2].role)
         assertEquals(goalSet, live[2].notice())
-        val rows = chipBodies(displayOrder(live))
+        val rows = stepRailBodies(displayOrder(live))
         assertEquals(listOf("u1", "a1", "msg_k", "a2"), rows.map { it.message.id })
-        assertEquals(listOf("Reply one."), rows[1].blocks.stepParagraphs().map { it.text })
-        assertEquals(listOf("Working on the goal."), rows[3].blocks.stepParagraphs().map { it.text })
+        assertEquals(listOf("Reply one."), rows[1].blocks.narration().map { it.text })
+        assertEquals(listOf("Working on the goal."), rows[3].blocks.narration().map { it.text })
 
         // REST records the kickoff under the inbox id: one row, not two.
         reload(
@@ -448,7 +448,7 @@ class V2LiveTurnTimelineTest {
     }
 
     @Test
-    fun noticeBetweenAssistantSteps_isAStandaloneRowThatSplitsTheChipMerge() {
+    fun noticeBetweenAssistantSteps_isAStandaloneRowThatSplitsTheStepMerge() {
         apply(prompt("u1", "Explore", at = 1_000))
         apply(step("a1", at = 1_100))
         apply(text("a1", "Looking around.", at = 1_110))
@@ -461,13 +461,13 @@ class V2LiveTurnTimelineTest {
         apply(idle(at = 1_230))
 
         val notice = "msg_session.moved1150"
-        val rows = chipBodies(displayOrder(store.messages(SESSION)))
+        val rows = stepRailBodies(displayOrder(store.messages(SESSION)))
         assertEquals(listOf("u1", "a1", notice, "a2"), rows.map { it.message.id })
         val block = rows[2].blocks.single() as SessionChatTimelineBlock.Notice
         assertEquals("p:$notice", block.blockID)
         assertEquals(TimelineNotice.Moved("/repo/b"), block.notice)
-        assertEquals(listOf("Looking around."), rows[1].blocks.stepParagraphs().map { it.text })
-        assertEquals(listOf("Found it."), rows[3].blocks.stepParagraphs().map { it.text })
+        assertEquals(listOf("Looking around."), rows[1].blocks.narration().map { it.text })
+        assertEquals(listOf("Found it."), rows[3].blocks.narration().map { it.text })
     }
 
     @Test
@@ -510,10 +510,9 @@ class V2LiveTurnTimelineTest {
 
         val liveTool = store.messages(SESSION).single { it.id == "a1" }.parts.filterIsInstance<MessagePart.Tool>().single()
         assertTrue(liveTool.isInterrupted)
-        val paragraph = chipBodies(store.messages(SESSION))[1].blocks.stepParagraphs().single()
-        assertTrue(paragraph.errorLines.isEmpty())
-        assertTrue(paragraph.chips.single().card.isInterrupted)
-        assertEquals("Stopped", paragraph.chips.single().card.errorText?.english())
+        val step = railSteps(stepRailBodies(store.messages(SESSION))[1]).single()
+        assertTrue(step.isInterrupted)
+        assertEquals("Stopped", step.card?.errorText?.english())
 
         val rest =
             restMessages(
@@ -555,9 +554,9 @@ class V2LiveTurnTimelineTest {
         assertTrue(card.isInterrupted)
         assertEquals("Declined", card.errorText?.english())
         assertEquals("Your note: Run the tests first", card.noteText?.english())
-        val paragraph = chipBodies(store.messages(SESSION))[1].blocks.stepParagraphs().single()
-        assertTrue(paragraph.errorLines.isEmpty())
-        assertEquals(listOf("Your note: Run the tests first"), paragraph.noteLines.map { it.english() })
+        val step = railSteps(stepRailBodies(store.messages(SESSION))[1]).single()
+        assertTrue(step.isInterrupted)
+        assertEquals("Your note: Run the tests first", step.card?.noteText?.english())
 
         val rest =
             restMessages(
@@ -617,14 +616,8 @@ class V2LiveTurnTimelineTest {
         assertEquals("ls -la /tm", toolCard("a1").subtitle?.english())
         apply(listOf(inputDelta(fields, """p/scratch","description":"List""", at = 1_123)))
         assertEquals("ls -la /tmp/scratch", toolCard("a1").subtitle?.english())
-        val chip =
-            chipBodies(store.messages(SESSION))[1]
-                .blocks
-                .stepParagraphs()
-                .single()
-                .chips
-                .single()
-        assertEquals("ls -la /tmp/scratch", chip.label.english())
+        val step = railSteps(stepRailBodies(store.messages(SESSION))[1]).single()
+        assertEquals("ls -la /tmp/scratch", step.card?.subtitle?.english())
 
         apply(
             listOf(
@@ -763,7 +756,7 @@ class V2LiveTurnTimelineTest {
 
         val live = store.messages(SESSION).single { it.id == "a1" }
         assertEquals(MessageStopReason.Length, live.stopReason)
-        val body = chipBodies(store.messages(SESSION))[1]
+        val body = stepRailBodies(store.messages(SESSION))[1]
         assertEquals(
             SessionChatTimelineBlock.StopNote(blockID = "a1:stop-note", reason = MessageStopReason.Length),
             body.blocks.last(),
@@ -794,7 +787,7 @@ class V2LiveTurnTimelineTest {
             ),
         )
         assertEquals(MessageStopReason.Interrupted, store.messages(SESSION).single { it.id == "a1" }.stopReason)
-        val merged = chipBodies(store.messages(SESSION))
+        val merged = stepRailBodies(store.messages(SESSION))
         assertTrue(merged[1].blocks.last() is SessionChatTimelineBlock.StopNote)
 
         val rest =
@@ -815,7 +808,7 @@ class V2LiveTurnTimelineTest {
         apply(text("a1", "Hi.", at = 1_110))
         apply(stepEnded("a1", "stop", at = 1_200))
         assertEquals(null, store.messages(SESSION).single { it.id == "a1" }.stopReason)
-        assertTrue(chipBodies(store.messages(SESSION))[1].blocks.none { it is SessionChatTimelineBlock.StopNote })
+        assertTrue(stepRailBodies(store.messages(SESSION))[1].blocks.none { it is SessionChatTimelineBlock.StopNote })
     }
 
     @Test
@@ -883,7 +876,7 @@ class V2LiveTurnTimelineTest {
         assertFalse(messages[2].isWaitingForPickup)
         val ordered = displayOrder(messages)
         assertEquals(listOf("u1", "a1", "u2", "a2"), ordered.map { it.id })
-        assertEquals(listOf("u1", "a1", "u2", "a2"), chipBodies(ordered).map { it.message.id })
+        assertEquals(listOf("u1", "a1", "u2", "a2"), stepRailBodies(ordered).map { it.message.id })
     }
 
     @Test
@@ -955,11 +948,11 @@ class V2LiveTurnTimelineTest {
         assertEquals(listOf(MessagePart.Compaction(id = "c1", completed = true, summary = SUMMARY)), compaction.parts)
         assertEquals("", compaction.text)
 
-        val merged = chipBodies(displayOrder(messages))
+        val merged = stepRailBodies(displayOrder(messages))
         assertEquals(listOf("u1", "a1", "c1"), merged.map { it.message.id })
         assertEquals(
             listOf("Hi there."),
-            merged[1].blocks.stepParagraphs().map { it.text },
+            merged[1].blocks.narration().map { it.text },
         )
         val marker = merged[2].blocks.single() as SessionChatTimelineBlock.ToolCard
         assertEquals(SessionCompactChrome.markerTitle, marker.title)
@@ -999,7 +992,7 @@ class V2LiveTurnTimelineTest {
             listOf(MessagePart.Compaction(id = "msg_c1", completed = true, summary = SUMMARY)),
             messages[2].parts,
         )
-        val merged = chipBodies(messages)
+        val merged = stepRailBodies(messages)
         assertEquals(listOf("u1", "a1", "msg_c1"), merged.map { it.message.id })
         assertEquals("Hi there.", merged[1].message.text)
         assertEquals(SUMMARY, (merged[2].blocks.single() as SessionChatTimelineBlock.ToolCard).detailText)
@@ -1199,8 +1192,8 @@ class V2LiveTurnTimelineTest {
     private fun displayOrder(messages: List<Message>): List<Message> =
         TimelineDisplayOrder.ordered(messages.map { DisplayMessage(message = it) }).map { it.message }
 
-    /** Per-message chip bodies, each decorated with its own document, then merged. */
-    private fun chipBodies(messages: List<Message>): List<DisplayMessageBody> =
+    /** Per-message step rail bodies, each decorated with its own document, then merged. */
+    private fun stepRailBodies(messages: List<Message>): List<DisplayMessageBody> =
         SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
             messages.map { message ->
                 val blocks =
@@ -1210,9 +1203,9 @@ class V2LiveTurnTimelineTest {
                             parts = message.parts,
                             messageId = message.id,
                             fallbackText = message.text,
-                            chipTimeline = true,
+                            stepRail = true,
                         ).map { block ->
-                            if (block is SessionChatTimelineBlock.StepParagraph && block.text != null) {
+                            if (block is SessionChatTimelineBlock.Text) {
                                 block.copy(renderedMarkdown = documentFor(message.id))
                             } else {
                                 block
@@ -1221,13 +1214,17 @@ class V2LiveTurnTimelineTest {
                 DisplayMessageBody(message = message, blocks = blocks)
             },
             collapseConsecutiveToolCalls = false,
-            chipTimeline = true,
+            stepRail = true,
         )
 
     private fun documentFor(messageId: String): MarkdownDocument = MarkdownDocument(sourceHash = messageId.hashCode(), blocks = emptyList())
 
-    private fun List<SessionChatTimelineBlock>.stepParagraphs(): List<SessionChatTimelineBlock.StepParagraph> =
-        filterIsInstance<SessionChatTimelineBlock.StepParagraph>()
+    /** Narration text blocks of a row, in order. */
+    private fun List<SessionChatTimelineBlock>.narration(): List<SessionChatTimelineBlock.Text> =
+        filterIsInstance<SessionChatTimelineBlock.Text>()
+
+    private fun railSteps(body: DisplayMessageBody): List<SessionChatStep> =
+        body.blocks.filterIsInstance<SessionChatTimelineBlock.StepRail>().flatMap { it.steps }
 
     /** Tail reload the way the message sync applies it: REST page plus inbox, merged over local rows. */
     private fun reload(

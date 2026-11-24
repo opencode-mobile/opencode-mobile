@@ -3,7 +3,7 @@ import Testing
 @testable import OpenCode_Mobile
 
 /// Live v2 turns end to end: wire events (shaped like the captured `/api/event`
-/// stream) through the event adapter and message store into the chip timeline
+/// stream) through the event adapter and message store into the step rail timeline
 /// frame, then a REST reload over the live state.
 struct V2LiveTurnTimelineTests {
     private static let session = "ses_v2"
@@ -12,7 +12,7 @@ struct V2LiveTurnTimelineTests {
     private let adapter = MessageDomainAdapter()
     private let store = InMemoryMessageStore()
 
-    @Test func multiStepTurn_keepsEachStepTextInItsOwnMessageAndParagraph() {
+    @Test func multiStepTurn_keepsEachStepTextInItsOwnMessageAndTextBlock() {
         apply(prompt("u1", "Explore the project", at: 1_000))
         apply(step("a1", at: 1_100))
         apply(text("a1", "Let me look around the project.", at: 1_110))
@@ -32,16 +32,16 @@ struct V2LiveTurnTimelineTests {
         #expect(messages[1].text == "Let me look around the project.")
         #expect(messages[3].text == "`handler` is defined in `src/app.ts`.")
 
-        let frame = chipFrame(messages)
+        let frame = railFrame(messages)
         #expect(frame.messages.map(\.id) == ["u1", "a1"])
-        let paragraphs = stepParagraphs(frame.messages[1].blocks)
-        #expect(paragraphs.map(\.paragraph.text) == [
+        let narration = narration(frame.messages[1].blocks)
+        #expect(narration.map(\.text) == [
             "Let me look around the project.",
             "`handler` is defined in `src/app.ts`.",
         ])
-        #expect(Set(paragraphs.map(\.blockID)).count == paragraphs.count)
-        // Each paragraph keeps the markdown its own message was decorated with.
-        #expect(paragraphs.map { $0.paragraph.renderedMarkdown?.sourceHash } == [
+        #expect(Set(narration.map(\.blockID)).count == narration.count)
+        // Each text block keeps the markdown its own message was decorated with.
+        #expect(narration.map { $0.markdown?.sourceHash } == [
             stableMarkdownSourceHash("Let me look around the project."),
             stableMarkdownSourceHash("`handler` is defined in `src/app.ts`."),
         ])
@@ -59,7 +59,7 @@ struct V2LiveTurnTimelineTests {
         apply(stepEnded("a2", finish: "stop", at: 2_120))
         apply(idle(at: 2_130))
 
-        let frame = chipFrame(store.messages(sessionID: Self.session))
+        let frame = railFrame(store.messages(sessionID: Self.session))
         #expect(frame.messages.map(\.id) == ["u1", "a1", "u2", "a2"])
         #expect(frame.messages[3].message.text == "## Reply two")
     }
@@ -81,7 +81,7 @@ struct V2LiveTurnTimelineTests {
         apply(stepEnded("a3", finish: "stop", at: 1_520))
         apply(idle(at: 1_530))
 
-        let frame = chipFrame(store.messages(sessionID: Self.session))
+        let frame = railFrame(store.messages(sessionID: Self.session))
         #expect(frame.messages.map(\.id) == ["u1", "a1", "u2", "a2", "u3", "a3"])
         #expect(frame.messages.filter { $0.message.role == .assistant }.map(\.message.text) == [
             "Answer to the first prompt.",
@@ -140,7 +140,7 @@ struct V2LiveTurnTimelineTests {
         let messages = store.messages(sessionID: Self.session)
         #expect(messages.allSatisfy { ($0.sentAtEpochMs ?? 0) >= 1_000 })
         #expect(messages.allSatisfy { !$0.isWaitingForPickup })
-        let frame = chipFrame(messages)
+        let frame = railFrame(messages)
         #expect(frame.messages.map(\.id) == ["u1", "a1", "u2", "a2", "u3", "a3"])
         #expect(frame.messages.filter { $0.message.role == .assistant }.map(\.message.text) == [
             "Answer to the first prompt.",
@@ -256,7 +256,7 @@ struct V2LiveTurnTimelineTests {
         #expect(live.filter { $0.role == .notice }.map(\.id) == [agentID, modelID, movedID])
         #expect(live.filter { $0.role == .user }.map(\.id) == ["u1"])
 
-        let frame = chipFrame(live)
+        let frame = railFrame(live)
         #expect(frame.messages.map(\.id) == ["u1", "a1", agentID, modelID, movedID, "a2"])
         #expect(frame.messages[2].blocks == [
             .notice(
@@ -264,8 +264,8 @@ struct V2LiveTurnTimelineTests {
                 notice: TimelineNotice(id: agentID, kind: .agentChanged(agent: "plan", previous: nil))
             ),
         ])
-        #expect(stepParagraphs(frame.messages[1].blocks).map(\.paragraph.text) == ["Planning first."])
-        #expect(stepParagraphs(frame.messages[5].blocks).map(\.paragraph.text) == ["Now building."])
+        #expect(narration(frame.messages[1].blocks).map(\.text) == ["Planning first."])
+        #expect(narration(frame.messages[5].blocks).map(\.text) == ["Now building."])
 
         try reload(
             """
@@ -292,7 +292,7 @@ struct V2LiveTurnTimelineTests {
         #expect(reloaded.map(\.id) == ["u1", "a1", agentID, modelID, movedID, "a2"])
         let agent = try #require(reloaded.first { $0.id == agentID })
         #expect(agent.parts == [.notice(TimelineNotice(id: agentID, kind: .agentChanged(agent: "plan", previous: "build")))])
-        #expect(chipFrame(reloaded).messages.map(\.id) == ["u1", "a1", agentID, modelID, movedID, "a2"])
+        #expect(railFrame(reloaded).messages.map(\.id) == ["u1", "a1", agentID, modelID, movedID, "a2"])
     }
 
     @Test func liveRestartSynthetic_isANoticeNotAPrompt() throws {
@@ -312,7 +312,7 @@ struct V2LiveTurnTimelineTests {
         let notice = try #require(messages.first { $0.role == .notice })
         #expect(notice.id == "msg_session.synthetic1500")
         #expect(notice.parts == [.notice(TimelineNotice(id: notice.id, kind: .restart))])
-        let frame = chipFrame(messages)
+        let frame = railFrame(messages)
         #expect(frame.messages.last?.blocks.count == 1)
         #expect(frame.messages.last?.message.role == .notice)
     }
@@ -338,11 +338,10 @@ struct V2LiveTurnTimelineTests {
             return nil
         }.first)
         #expect(liveTool.isInterrupted)
-        let frame = chipFrame(store.messages(sessionID: Self.session))
-        let paragraph = try #require(stepParagraphs(frame.messages[1].blocks).first?.paragraph)
-        #expect(paragraph.errorLines.isEmpty)
-        #expect(paragraph.chips.first?.card.isInterrupted == true)
-        #expect(english(paragraph.chips.first?.card.errorText) == "Stopped")
+        let frame = railFrame(store.messages(sessionID: Self.session))
+        let stepCard = try #require(railSteps(frame.messages[1].blocks).first?.card)
+        #expect(stepCard.isInterrupted)
+        #expect(english(stepCard.errorText) == "Stopped")
 
         let rest = try restMessages(
             """
@@ -380,14 +379,11 @@ struct V2LiveTurnTimelineTests {
         let liveTool = try #require(liveTool("a1"))
         #expect(liveTool.isInterrupted)
         #expect(liveTool.decline == ToolDecline(note: "Use pnpm instead"))
-        let frame = chipFrame(store.messages(sessionID: Self.session))
-        let paragraph = try #require(stepParagraphs(frame.messages[1].blocks).first?.paragraph)
-        #expect(paragraph.errorLines.isEmpty)
-        let card = try #require(paragraph.chips.first?.card)
+        let frame = railFrame(store.messages(sessionID: Self.session))
+        let card = try #require(railSteps(frame.messages[1].blocks).first?.card)
         #expect(card.isInterrupted)
         #expect(english(card.errorText) == "Declined")
         #expect(english(card.declineNote) == "Your note: Use pnpm instead")
-        #expect(paragraph.declineNoteLines.map(\.resolved) == ["Your note: Use pnpm instead"])
 
         let rest = try restMessages(
             """
@@ -443,9 +439,9 @@ struct V2LiveTurnTimelineTests {
         #expect(english(liveToolCard("a1")?.subtitle) == "ls -la /tm")
         apply([inputDelta(fields, #"p/scratch","description":"List"#, at: 1_123)])
         #expect(english(liveToolCard("a1")?.subtitle) == "ls -la /tmp/scratch")
-        let frame = chipFrame(store.messages(sessionID: Self.session))
-        let chip = try #require(stepParagraphs(frame.messages[1].blocks).first?.paragraph.chips.first)
-        #expect(english(chip.label) == "ls -la /tmp/scratch")
+        let frame = railFrame(store.messages(sessionID: Self.session))
+        let stepCard = try #require(railSteps(frame.messages[1].blocks).first?.card)
+        #expect(english(stepCard.subtitle) == "ls -la /tmp/scratch")
 
         apply([
             envelope(
@@ -571,7 +567,7 @@ struct V2LiveTurnTimelineTests {
 
         let live = try #require(store.messages(sessionID: Self.session).first { $0.id == "a1" })
         #expect(live.stopReason == .length)
-        let frame = chipFrame(store.messages(sessionID: Self.session))
+        let frame = railFrame(store.messages(sessionID: Self.session))
         #expect(frame.messages[1].blocks.last == .stopNote(blockID: "a1:stop-note", reason: .length))
 
         let rest = try restMessages(
@@ -592,7 +588,7 @@ struct V2LiveTurnTimelineTests {
             ),
         ])
         #expect(store.messages(sessionID: Self.session).first { $0.id == "a1" }?.stopReason == .interrupted)
-        let frame = chipFrame(store.messages(sessionID: Self.session))
+        let frame = railFrame(store.messages(sessionID: Self.session))
         #expect(frame.messages[1].blocks.last == .stopNote(blockID: "a1:stop-note", reason: .interrupted))
 
         let rest = try restMessages(
@@ -617,7 +613,7 @@ struct V2LiveTurnTimelineTests {
         let message = try #require(store.messages(sessionID: Self.session).first { $0.id == "a1" })
         #expect(message.text == "Partial")
         #expect(message.failure?.line() == "HTTP 401 · Sign in")
-        let frame = chipFrame(store.messages(sessionID: Self.session))
+        let frame = railFrame(store.messages(sessionID: Self.session))
         #expect(frame.messages[1].blocks.contains { block in
             if case .failureLine(_, let text, let body, let neutral, _, _, _, _) = block {
                 return text.resolved == "HTTP 401 · Sign in" && body == "denied" && neutral == false
@@ -632,7 +628,7 @@ struct V2LiveTurnTimelineTests {
         apply(text("a1", "Hi.", at: 1_110))
         apply(stepEnded("a1", finish: "stop", at: 1_200))
         #expect(store.messages(sessionID: Self.session).first { $0.id == "a1" }?.stopReason == nil)
-        let frame = chipFrame(store.messages(sessionID: Self.session))
+        let frame = railFrame(store.messages(sessionID: Self.session))
         #expect(!frame.messages[1].blocks.contains { if case .stopNote = $0 { true } else { false } })
     }
 
@@ -703,7 +699,7 @@ struct V2LiveTurnTimelineTests {
         let messages = store.messages(sessionID: Self.session)
         #expect(messages.map(\.id) == ["u1", "a1", "u2", "a2"])
         #expect(messages[2].isWaitingForPickup == false)
-        #expect(chipFrame(messages).messages.map(\.id) == ["u1", "a1", "u2", "a2"])
+        #expect(railFrame(messages).messages.map(\.id) == ["u1", "a1", "u2", "a2"])
     }
 
     @Test func liveInfoAfterRestSeed_keepsTheReloadedTimestamp() throws {
@@ -722,7 +718,7 @@ struct V2LiveTurnTimelineTests {
 
         let messages = store.messages(sessionID: Self.session)
         #expect(messages.first { $0.id == "a1" }?.sentAtEpochMs == 1_100)
-        #expect(chipFrame(messages).messages.map(\.id) == ["u1", "a1", "u2"])
+        #expect(railFrame(messages).messages.map(\.id) == ["u1", "a1", "u2"])
     }
 
     @Test func revertCommitted_dropsTheRevertedTurnAndEverythingAfterIt() {
@@ -768,9 +764,9 @@ struct V2LiveTurnTimelineTests {
         #expect(compaction.parts == [.compaction(CompactionPart(id: "c1", completed: true, summary: Self.summary))])
         #expect(compaction.text.isEmpty)
 
-        let frame = chipFrame(messages)
+        let frame = railFrame(messages)
         #expect(frame.messages.map(\.id) == ["u1", "a1", "c1"])
-        #expect(stepParagraphs(frame.messages[1].blocks).map(\.paragraph.text) == ["Hi there."])
+        #expect(narration(frame.messages[1].blocks).map(\.text) == ["Hi there."])
         let card = try #require(toolCard(frame.messages[2].blocks))
         #expect(english(card.title) == english(SessionCompactChrome.markerTitle))
         #expect(card.detailText == Self.summary)
@@ -799,7 +795,7 @@ struct V2LiveTurnTimelineTests {
         let messages = store.messages(sessionID: Self.session)
         #expect(messages.map(\.id) == ["u1", "a1", "msg_c1"])
         #expect(messages[2].parts == [.compaction(CompactionPart(id: "msg_c1", completed: true, summary: Self.summary))])
-        let frame = chipFrame(messages)
+        let frame = railFrame(messages)
         #expect(frame.messages.map(\.id) == ["u1", "a1", "msg_c1"])
         #expect(frame.messages[1].message.text == "Hi there.")
         #expect(toolCard(frame.messages[2].blocks)?.detailText == Self.summary)
@@ -955,8 +951,8 @@ struct V2LiveTurnTimelineTests {
 
     // MARK: Display
 
-    /// Chip timeline frame with every message decorated by its own document.
-    private func chipFrame(_ messages: [Message]) -> DisplayFrame {
+    /// Step rail frame with every message decorated by its own document.
+    private func railFrame(_ messages: [Message]) -> DisplayFrame {
         DisplayFrameBuilder.build(
             sessionKey: "v2-live-\(UUID().uuidString)",
             frameRevision: 1,
@@ -972,16 +968,25 @@ struct V2LiveTurnTimelineTests {
                         )
                 )
             },
-            chipTimeline: true
+            stepRail: true
         )
     }
 
-    private func stepParagraphs(
+    /// The narration text blocks of a merged step rail row, in order.
+    private func narration(
         _ blocks: [SessionChatTimelineBlock]
-    ) -> [(blockID: String, paragraph: SessionChatStepParagraphBlock)] {
+    ) -> [(blockID: String, text: String, markdown: NativeMarkdownDocument?)] {
         blocks.compactMap { block in
-            guard case .stepParagraph(_, let paragraph) = block else { return nil }
-            return (block.blockID, paragraph)
+            guard case .text(let blockID, let text, let markdown) = block else { return nil }
+            return (blockID, text, markdown)
+        }
+    }
+
+    /// Every step on the step rails of a row, in order.
+    private func railSteps(_ blocks: [SessionChatTimelineBlock]) -> [SessionChatStep] {
+        blocks.flatMap { block -> [SessionChatStep] in
+            guard case .stepRail(_, let rail) = block else { return [] }
+            return rail.steps
         }
     }
 

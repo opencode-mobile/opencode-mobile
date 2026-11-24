@@ -65,7 +65,6 @@ import dev.opencode.mobile.domain.model.ModelSelectionError
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
-import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.InMemoryPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
@@ -179,102 +178,6 @@ class SessionChatViewModelTest {
                     ),
                 ),
         )
-
-    private suspend fun TestScope.finishLongTurn(toolCalls: Int): SessionChatViewModel {
-        val repository = longTurnRepository(toolCalls)
-        val viewModel =
-            createViewModel(
-                repository = repository,
-                sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
-            )
-        viewModel.bind("ses-1", "Title", "/repo")
-        advanceUntilIdle()
-        repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
-        runCurrent()
-        return viewModel
-    }
-
-    @Test
-    fun chipTimelineIntro_longTurnFinishes_showsAfterSettleDelay() =
-        runTest(testDispatcher) {
-            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS)
-
-            testDispatcher.scheduler.advanceTimeBy(ChipTimelineIntro.SETTLE_DELAY_MILLIS - 1)
-            runCurrent()
-            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
-
-            testDispatcher.scheduler.advanceTimeBy(1)
-            runCurrent()
-            assertTrue(viewModel.uiState.value.chipTimelineIntroVisible)
-        }
-
-    @Test
-    fun chipTimelineIntro_shortTurn_doesNotShow() =
-        runTest(testDispatcher) {
-            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS - 1)
-            advanceUntilIdle()
-
-            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
-        }
-
-    @Test
-    fun chipTimelineIntro_enable_turnsOnChipTimelineAndEndsIntro() =
-        runTest(testDispatcher) {
-            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS)
-            advanceUntilIdle()
-
-            viewModel.enableChipTimelineFromIntro()
-
-            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
-            assertTrue(SessionChatDisplayPreferences.chipTimelinePreference)
-            assertTrue(SessionChatDisplayPreferences.chipTimelineIntroDone)
-            assertEquals(
-                SessionChatViewModel.CHIP_TIMELINE_INTRO_ENABLED_NOTICE,
-                viewModel.uiState.value.snackbar?.message?.english(),
-            )
-        }
-
-    @Test
-    fun chipTimelineIntro_later_snoozesThenSecondLaterEndsIntro() =
-        runTest(testDispatcher) {
-            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS)
-            advanceUntilIdle()
-
-            viewModel.postponeChipTimelineIntro()
-
-            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
-            assertFalse(SessionChatDisplayPreferences.chipTimelineIntroDone)
-            assertEquals(
-                testDispatcher.scheduler.currentTime + ChipTimelineIntro.SNOOZE_MILLIS,
-                SessionChatDisplayPreferences.chipTimelineIntroSnoozedUntilMillis,
-            )
-
-            SessionChatDisplayPreferences.postponeChipTimelineIntro(nowMillis = Long.MAX_VALUE / 2)
-            assertTrue(SessionChatDisplayPreferences.chipTimelineIntroDone)
-        }
-
-    @Test
-    fun chipTimelineIntro_dontShowAgain_endsIntroWithoutTurningOn() =
-        runTest(testDispatcher) {
-            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS)
-            advanceUntilIdle()
-
-            viewModel.dismissChipTimelineIntro()
-
-            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
-            assertTrue(SessionChatDisplayPreferences.chipTimelineIntroDone)
-            assertFalse(SessionChatDisplayPreferences.chipTimelinePreference)
-        }
-
-    @Test
-    fun chipTimelineIntro_settingsChange_endsIntro() =
-        runTest(testDispatcher) {
-            SessionChatDisplayPreferences.updateChipTimeline(false)
-            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS)
-            advanceUntilIdle()
-
-            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
-        }
 
     /** An existing install that has not answered the Timeline Style picker yet (#805). */
     private fun pendTimelineStylePicker() {
@@ -2022,33 +1925,6 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
             assertEquals(null, viewModel.uiState.value.presentedActivityCard)
             assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
-        }
-
-    @Test
-    fun expandStepParagraph_survivesRepublish_sameSessionRebind_andResetsOnSessionChange() =
-        runTest(testDispatcher) {
-            val viewModel = createViewModel(FakeMessageRepository())
-            viewModel.bind("ses-1", "First", "/repo")
-            advanceUntilIdle()
-
-            viewModel.expandStepParagraph("s:p1", chipCount = 5)
-            // A tap with fewer chips than already revealed never shrinks the expansion.
-            viewModel.expandStepParagraph("s:p1", chipCount = 4)
-            assertEquals(mapOf("s:p1" to 5), viewModel.uiState.value.expandedStepParagraphs)
-            // A later tap on the grown paragraph reveals the new chips too.
-            viewModel.expandStepParagraph("s:p1", chipCount = 9)
-            assertEquals(mapOf("s:p1" to 9), viewModel.uiState.value.expandedStepParagraphs)
-
-            // Region republishes and a same-session rebind keep the expansion.
-            viewModel.updateComposerText("draft")
-            viewModel.bind("ses-1", "First", "/repo")
-            advanceUntilIdle()
-            assertEquals(mapOf("s:p1" to 9), viewModel.uiState.value.expandedStepParagraphs)
-
-            viewModel.bind("ses-2", "Second", "/repo")
-            assertEquals(emptyMap<String, Int>(), viewModel.uiState.value.expandedStepParagraphs)
-            advanceUntilIdle()
-            assertEquals(emptyMap<String, Int>(), viewModel.uiState.value.expandedStepParagraphs)
         }
 
     @Test

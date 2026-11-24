@@ -615,7 +615,6 @@
     <string name="timeline_message_actions_hint_long_press">Long press to show message actions</string>
     <string name="timeline_message_actions_hint">Shows message actions</string>
     <string name="timeline_fallback_message">%1$s: %2$s</string>
-    <string name="timeline_step_no_commentary">Worked without commentary</string>
     <string name="timeline_failure_copy">Copy</string>
     <string name="timeline_retry_retrying_in">retrying in %1$ds</string>
     <string name="timeline_retry_attempt_retrying_in">attempt %1$d, retrying in %2$ds</string>
@@ -650,7 +649,7 @@
         <item quantity="other">%1$d deleted</item>
     </plurals>
     <!-- Session Chat timeline, tool cards, activity and chat screen messages -->
-    <!-- Tool name on a tool card, chip or step. -->
+    <!-- Tool name on a tool card or step. -->
     <string name="tool_title_read">Read</string>
     <string name="tool_title_grep">Grep</string>
     <string name="tool_title_glob">Glob</string>
@@ -752,8 +751,6 @@
     <!-- %1$d is how many times a tool ran, %2$s the tool name. -->
     <string name="tool_count_named">%1$d %2$s</string>
     <string name="tool_error_malformed">Not run: malformed tool call</string>
-    <!-- Error line under a failed tool chip. %1$s is the chip label, %2$s the error. -->
-    <string name="tool_error_line">%1$s: %2$s</string>
     <string name="tool_error_failed">Failed</string>
     <string name="tool_error_exit_code">Exited with code %1$d</string>
     <string name="tool_status_declined">Declined</string>
@@ -803,8 +800,6 @@
     <!-- %1$s is a tool title (LSP, Plan), %2$s its argument. -->
     <string name="timeline_step_tool_named">%1$s %2$s</string>
     <!-- %1$s is a list of counts, such as 4 reads · 2 greps. -->
-    <string name="timeline_explore_label">Explored · %1$s</string>
-    <string name="timeline_explore_label_running">Exploring · %1$s</string>
     <string name="timeline_explore_title">Explored — %1$s</string>
     <!-- Joins two parts of a list. -->
     <string name="timeline_list_separator">%1$s · %2$s</string>
@@ -910,15 +905,6 @@
     <string name="session_chat_sheet_pending_prompts_move_to_queue">Move to queue</string>
     <string name="session_chat_sheet_pending_prompts_steer_now">Steer now</string>
     <string name="session_chat_sheet_pending_prompts_delete">Delete</string>
-    <string name="session_chat_sheet_chip_timeline_intro_glance_title">See the work at a glance</string>
-    <string name="session_chat_sheet_chip_timeline_intro_glance_body">Tool calls show as chips under the sentence that explains them.</string>
-    <string name="session_chat_sheet_chip_timeline_intro_long_runs_title">Long runs, short timeline</string>
-    <string name="session_chat_sheet_chip_timeline_intro_long_runs_body">Twenty tool calls take a few chips instead of a screen of rows.</string>
-    <string name="session_chat_sheet_chip_timeline_intro_details_title">Details stay one tap away</string>
-    <string name="session_chat_sheet_chip_timeline_intro_details_body">Tap a chip for its diffs, command output, or files.</string>
-    <string name="session_chat_sheet_chip_timeline_intro_enable">Turn on Chip timeline</string>
-    <string name="session_chat_sheet_chip_timeline_intro_later">Later</string>
-    <string name="session_chat_sheet_chip_timeline_intro_never">Don\'t show again</string>
     <string name="session_chat_sheet_side_question_done">Done</string>
     <string name="session_chat_sheet_side_question_not_added">Not added to the conversation</string>
     <string name="session_chat_sheet_todos_title">Session todos</string>
@@ -994,9 +980,6 @@
     <string name="session_chat_goal_resume_failed_reason">Couldn’t resume the goal: %1$s</string>
     <string name="session_chat_goal_clear_failed">Couldn’t clear the goal</string>
     <string name="session_chat_goal_clear_failed_reason">Couldn’t clear the goal: %1$s</string>
-    <string name="session_chat_sheet_skills_title">Skills</string>
-    <string name="session_chat_sheet_skills_status_loading">Loading</string>
-    <string name="session_chat_sheet_skills_status_failed">Failed</string>
     <string name="session_chat_sheet_timeline_style_picker_title">New: choose your timeline</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">This update adds new ways to follow what the agent is doing.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">You can change this any time in Settings → Timeline Style.</string>
@@ -1006,8 +989,6 @@
     <string name="session_chat_sheet_timeline_style_picker_current">Current</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_title">Standard</string>
     <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">Tool cards and groups between the agent\'s messages</string>
-    <string name="session_chat_sheet_timeline_style_picker_chips_title">Chips</string>
-    <string name="session_chat_sheet_timeline_style_picker_chips_subtitle">Tools as chips under the agent\'s narration</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Step Rail</string>
     <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">One line per step on a rail, live while the agent works</string>
     <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Activity Card</string>
@@ -1140,8 +1121,6 @@
     <string name="settings_timeline_style_title">Timeline Style</string>
     <string name="settings_timeline_style_standard_title">Standard</string>
     <string name="settings_timeline_style_standard_subtitle">Tool cards and groups between the agent\'s messages</string>
-    <string name="settings_timeline_style_chips_title">Chips</string>
-    <string name="settings_timeline_style_chips_subtitle">Tools as chips under the agent\'s narration</string>
     <string name="settings_timeline_style_step_rail_title">Step Rail</string>
     <string name="settings_timeline_style_step_rail_subtitle">One line per step on a rail, live while the agent works</string>
     <string name="settings_timeline_style_activity_card_title">Activity Card</string>

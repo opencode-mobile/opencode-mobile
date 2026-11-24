@@ -19,7 +19,7 @@ struct ModalGalleryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .openCodeModal(isPresented: $isPresented) {
             VStack(alignment: .leading, spacing: 12) {
-                OpenCodeSkeletonIllustration(topic: .chipTimelineGlance)
+                OpenCodeSkeletonIllustration(topic: .timelineActivityCard)
                     .frame(maxWidth: .infinity)
                     .frame(height: 150)
                     .background(OpenCodeColors.surfaceRaisedBase)
@@ -27,7 +27,7 @@ struct ModalGalleryView: View {
                 Text("See the work at a glance")
                     .font(OpenCodeTypography.title)
                     .foregroundStyle(OpenCodeColors.textStrong)
-                Text("Tool calls show as chips under the sentence that explains them.")
+                Text("Running steps gather on one live card that folds into a summary.")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
                 OpenCodeButton(

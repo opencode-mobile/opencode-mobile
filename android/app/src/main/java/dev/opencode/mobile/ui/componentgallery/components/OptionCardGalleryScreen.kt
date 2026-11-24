@@ -68,9 +68,9 @@ fun OptionCardGalleryScreen(modifier: Modifier = Modifier) {
         GallerySectionTitle("Disabled")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OpenCodeOptionCard(
-                title = "Chips",
-                subtitle = "Tools as chips under the agent's narration",
-                preview = OpenCodeOptionCardPreview.Illustration(OpenCodeSkeletonIllustrationTopic.TimelineChips),
+                title = "Step Rail",
+                subtitle = "One line per step on a rail, live while the agent works",
+                preview = OpenCodeOptionCardPreview.Illustration(OpenCodeSkeletonIllustrationTopic.TimelineStepRail),
                 enabled = false,
                 onClick = {},
             )

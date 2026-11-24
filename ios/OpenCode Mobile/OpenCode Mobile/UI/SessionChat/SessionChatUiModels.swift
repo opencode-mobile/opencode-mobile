@@ -418,9 +418,6 @@ struct SessionChatUiState: Equatable {
     var pendingTerminalOpen: PendingTerminalOpen?
     var pendingFilesOpen: PendingFilesOpen?
     var hasPendingRevert = false
-    /// Chip-timeline step paragraphs expanded past `+N more`:
-    /// `SessionChatStepParagraphBlock.id` to the chip count at tap time.
-    var expandedStepParagraphs: [String: Int] = [:]
     /// Step rails (`SessionChatStepRailBlock.id`) the user unfolded (#779).
     var unfoldedStepRails: Set<String> = []
     /// The activity card (`SessionChatActivityCardBlock.id`) whose live sheet is open (#779).
@@ -435,8 +432,6 @@ struct SessionChatUiState: Equatable {
     var debouncedStepIDs: Set<String> = []
     /// The image viewer open over a gallery: its images and the shown page (#898).
     var imageViewer: SessionChatImageViewerState?
-    /// One-time Chip timeline intro sheet (OPE-270).
-    var chipTimelineIntroVisible = false
     /// One-time Timeline Style picker for updated installs (#805).
     var timelineStylePickerVisible = false
     var dictation: ComposerDictationUiState? = nil
@@ -451,8 +446,9 @@ struct SessionChatUiState: Equatable {
     /// The server lists a `goal` command, so a `/goal …` draft gets its hint and limit.
     var goalCommandAvailable = false
 
-    /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
-    var blocksChipTimelineIntro: Bool {
+    /// A permission, question, or Screen Model-owned sheet or dialog would sit under the
+    /// Timeline Style picker.
+    var blocksTimelineStylePicker: Bool {
         permissionRequest != nil
             || questionRequest != nil
             || commandsSheetVisible
@@ -766,9 +762,6 @@ struct SessionChatTimelineRegionState: Equatable {
     var errorMessage: String?
     /// Step rails whose earlier settled steps are shown instead of folded (#779).
     var unfoldedStepRails: Set<String> = []
-    /// Chip-timeline step paragraphs the user expanded past `+N more`:
-    /// paragraph id to the chip count at tap time.
-    var expandedStepParagraphs: [String: Int] = [:]
     /// The activity card whose live sheet is open; resolved from `messages` by id (#779).
     var presentedActivityCard: String?
     /// The presented card's step whose detail the sheet shows instead of the list.
@@ -794,10 +787,6 @@ struct SessionChatTimelineRegionState: Equatable {
                             [card.childSessionId].compactMap { $0 }
                         } else {
                             []
-                        }
-                    case .stepParagraph(_, let paragraph):
-                        paragraph.chips.compactMap { chip in
-                            chip.status == .pending || chip.status == .running ? chip.card.childSessionId : nil
                         }
                     case .stepRail(_, let rail):
                         // Same set as the standard timeline: child sessions that did not fail.

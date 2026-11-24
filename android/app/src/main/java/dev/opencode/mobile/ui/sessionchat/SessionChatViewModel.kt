@@ -287,7 +287,7 @@ class SessionChatViewModel
             ).also { region ->
                 region.canPresentAnswer = {
                     val state = _uiState.value
-                    !screenSheetOpen && !state.blocksChipTimelineIntro() && state.presentedActivityCard == null
+                    !screenSheetOpen && !state.blocksOneTimeSheet() && state.presentedActivityCard == null
                 }
             }
 
@@ -318,14 +318,11 @@ class SessionChatViewModel
                 onCommit = { transcript -> spliceDictationTranscript(transcript) },
             )
 
-        /** The one-time Chip timeline intro (OPE-270) and Timeline Style picker (#805). */
+        /** The one-time Timeline Style picker (#805). */
         private val timelineOffers =
             SessionChatTimelineOffers(
                 scope = viewModelScope,
-                nowMs = { nowMs() },
-                loadedMessages = { timeline.loadedMessages() },
-                isBlocked = { _uiState.value.blocksChipTimelineIntro() },
-                isSessionBusy = { isSessionBusy() },
+                isBlocked = { _uiState.value.blocksOneTimeSheet() },
                 onChange = { publishUiState() },
             )
 
@@ -497,7 +494,6 @@ class SessionChatViewModel
                     )
                     if (infoState.hasResolvedSessionStatus) {
                         repoStrip.updateTurnActive(isTurnActive)
-                        timelineOffers.updateTurnActive(isTurnActive)
                     }
                     commands.updateVisibility(
                         messages = timelineState.messages,
@@ -552,13 +548,6 @@ class SessionChatViewModel
                     .distinctUntilChanged()
                     .collect { enabled ->
                         timeline.updateCollapseConsecutiveToolCalls(enabled)
-                    }
-            }
-            viewModelScope.launch {
-                snapshotFlow { SessionChatDisplayPreferences.chipTimeline }
-                    .distinctUntilChanged()
-                    .collect { enabled ->
-                        timeline.updateChipTimeline(enabled)
                     }
             }
             viewModelScope.launch {
@@ -872,17 +861,6 @@ class SessionChatViewModel
             val sessionId = boundSessionId
             if (sessionId == null || OptimisticSessionCreate.isPlaceholder(sessionId)) return
             loadMessages()
-        }
-
-        /**
-         * Shows the [chipCount] chips a chip-timeline paragraph had when its
-         * `+N more` was tapped; chips that arrive later still collapse.
-         */
-        fun expandStepParagraph(
-            expansionId: String,
-            chipCount: Int,
-        ) {
-            timeline.expandStepParagraph(expansionId, chipCount)
         }
 
         fun refreshMessages() {
@@ -1384,22 +1362,6 @@ class SessionChatViewModel
             commands.consumePendingFilesOpen()
         }
 
-        fun enableChipTimelineFromIntro() {
-            if (timelineOffers.enableChipTimeline()) logChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_ENABLE)
-            publishUiState()
-        }
-
-        /** Later button, swipe, scrim, or back. */
-        fun postponeChipTimelineIntro() {
-            if (timelineOffers.postponeChipTimelineIntro(nowMs())) logChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_LATER)
-            publishUiState()
-        }
-
-        fun dismissChipTimelineIntro() {
-            if (timelineOffers.dismissChipTimelineIntro()) logChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_NEVER)
-            publishUiState()
-        }
-
         /** Use button of the Timeline Style picker. */
         fun chooseTimelineStyleFromPicker(style: SessionChatTimelineStyle) {
             if (!timelineOffers.chooseTimelineStyle(style)) return
@@ -1419,10 +1381,6 @@ class SessionChatViewModel
                 screenId = ProductAnalytics.Screen.SESSION_TIMELINE_STYLE_PICKER,
             )
             publishUiState()
-        }
-
-        private fun logChipTimelineIntro(actionId: String) {
-            logAction(actionId, screenId = ProductAnalytics.Screen.SESSION_CHIP_TIMELINE_INTRO)
         }
 
         /** The last turn moved folders, so its combined diff cannot be shown. Stay on this screen. */
@@ -2201,7 +2159,7 @@ class SessionChatViewModel
                     sideQuestions.state.value.notice,
                     TimelineText.verbatim(composerState.followUpNotice ?: worktreeMove.state.value.notice)
                         ?: commandsState.actionSuccessMessage
-                        ?: TimelineText.verbatim(branchCopiedNotice ?: timelineOffersState.chipTimelineIntroNotice),
+                        ?: TimelineText.verbatim(branchCopiedNotice ?: timelineOffersState.notice),
                 )
             val sessionStatusLabel =
                 if (isCompacting) {
@@ -2341,14 +2299,12 @@ class SessionChatViewModel
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
                 moveToWorktree = moveToWorktreeUiState(),
-                expandedStepParagraphs = timeline.expandedStepParagraphs,
                 unfoldedStepRails = timeline.unfoldedStepRails,
                 presentedActivityCard = timeline.presentedActivityCard,
                 activityCardDetailStepId = timeline.activityCardDetailStepId,
                 activityCardChildren = timeline.activityCardChildren,
                 activityCardFooters = timeline.activityCardFooters,
                 debouncedStepIds = timeline.debouncedStepIds,
-                chipTimelineIntroVisible = timelineOffersState.chipTimelineIntroVisible,
                 timelineStylePickerVisible = timelineOffersState.timelineStylePickerVisible,
                 timelineStylePickerOptions = timelineOffersState.timelineStylePickerOptions,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
@@ -2533,7 +2489,6 @@ class SessionChatViewModel
         companion object {
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
-            const val CHIP_TIMELINE_INTRO_ENABLED_NOTICE = SessionChatTimelineOffers.CHIP_TIMELINE_INTRO_ENABLED_NOTICE
             const val BRANCH_COPIED_MESSAGE = "Branch name copied"
 
             /** Pause after the first history load before the Timeline Style picker rises (#805). */

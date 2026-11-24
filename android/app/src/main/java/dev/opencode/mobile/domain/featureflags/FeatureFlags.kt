@@ -65,6 +65,7 @@ object FeatureFlags {
     fun clearOverrides() {
         val editor = prefs()?.edit()
         FeatureFlag.entries.forEach { editor?.remove(overrideKey(it)) }
+        FeatureFlag.RETIRED_KEYS.forEach { editor?.remove(OVERRIDE_KEY_PREFIX + it) }
         editor?.apply()
         overrides.clear()
     }

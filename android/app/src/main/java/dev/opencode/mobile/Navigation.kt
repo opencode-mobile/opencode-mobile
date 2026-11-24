@@ -137,7 +137,6 @@ import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextSizeSliderGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TimelineNoticeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.ToolChipGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TreeRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TruncationRowGalleryScreen
@@ -622,8 +621,6 @@ fun MainNavigation(appCovered: Boolean = false) {
                                                         settingsViewModel::setCollapseConsecutiveToolCalls,
                                                     timelineStyle = SessionChatDisplayPreferences.timelineStyle,
                                                     onTimelineStyleChange = settingsViewModel::setTimelineStyle,
-                                                    chipTimelineAvailable =
-                                                        SessionChatDisplayPreferences.chipTimelineAvailable,
                                                     followUpDelivery =
                                                         SessionChatDisplayPreferences.followUpDelivery,
                                                     onFollowUpDeliveryChange =
@@ -823,7 +820,6 @@ fun MainNavigation(appCovered: Boolean = false) {
                                                         ComponentGalleryEntryId.TruncationRow -> TruncationRowGalleryScreen()
                                                         ComponentGalleryEntryId.AssistantMessage -> AssistantMessageGalleryScreen()
                                                         ComponentGalleryEntryId.ToolCallCard -> ToolCallCardGalleryScreen()
-                                                        ComponentGalleryEntryId.ToolChip -> ToolChipGalleryScreen()
                                                         ComponentGalleryEntryId.MessageNote -> MessageNoteGalleryScreen()
                                                         ComponentGalleryEntryId.TimelineNotice -> TimelineNoticeGalleryScreen()
                                                         ComponentGalleryEntryId.ChildSessionRow -> ChildSessionRowGalleryScreen()

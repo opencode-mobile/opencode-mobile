@@ -30,7 +30,6 @@ import dev.opencode.mobile.domain.message.globFileCount
 import dev.opencode.mobile.domain.message.grepMatchCount
 import dev.opencode.mobile.domain.message.inputAgent
 import dev.opencode.mobile.domain.message.inputCommand
-import dev.opencode.mobile.domain.message.inputDescription
 import dev.opencode.mobile.domain.message.inputLine
 import dev.opencode.mobile.domain.message.inputOperation
 import dev.opencode.mobile.domain.message.inputPattern
@@ -43,14 +42,12 @@ import dev.opencode.mobile.domain.message.inputSearchPath
 import dev.opencode.mobile.domain.message.inputSkillId
 import dev.opencode.mobile.domain.message.inputTargetPath
 import dev.opencode.mobile.domain.message.inputTaskBrief
-import dev.opencode.mobile.domain.message.inputTitle
 import dev.opencode.mobile.domain.message.inputUrl
 import dev.opencode.mobile.domain.message.isBackground
 import dev.opencode.mobile.domain.message.metadataAgent
 import dev.opencode.mobile.domain.message.patchFileCount
 import dev.opencode.mobile.domain.message.patchFiles
 import dev.opencode.mobile.domain.message.questionAnswers
-import dev.opencode.mobile.domain.message.skillDirectory
 import dev.opencode.mobile.domain.message.skillName
 import dev.opencode.mobile.domain.message.summaryCallCount
 import dev.opencode.mobile.domain.message.writeContent
@@ -219,88 +216,6 @@ sealed class SessionChatTimelineBlock {
     ) : SessionChatTimelineBlock()
 
     /**
-     * Chip timeline (OPE-260): one narration paragraph plus the tools the agent
-     * used under it. [text] is null for a paragraph that only holds chips.
-     * [textBlockID] is the merged-text id the equivalent [Text] block would carry
-     * so per-block rendered-markdown lookup keeps working.
-     * [expansionID] is the paragraph's first part id: unlike [blockID] it does
-     * not change as later tools stream in, so expansion state can key on it.
-     * [exploreSummary] folds two or more explore tools (read, glob, grep,
-     * search, fetch) that did not fail into one chip; those tools are not in
-     * [chips]. [chips] holds every remaining tool, one chip per tool.
-     */
-    data class StepParagraph(
-        override val blockID: String,
-        val text: String?,
-        val renderedMarkdown: MarkdownDocument? = null,
-        val chips: List<ToolChip>,
-        val errorLines: List<UiText>,
-        /** "Your note: …" for each chip the user denied with a note; muted, after [errorLines]. */
-        val noteLines: List<UiText> = emptyList(),
-        val textBlockID: String? = null,
-        val expansionID: String = blockID,
-        val exploreSummary: ExploreSummary? = null,
-    ) : SessionChatTimelineBlock()
-
-    /**
-     * The explore tools of a [StepParagraph] as one chip: `Explored · 4 reads ·
-     * 2 greps`, or `Exploring · …` while any member is still running. Tapping
-     * it opens the tool group sheet with [title], [subtitle] and [members].
-     */
-    data class ExploreSummary(
-        val blockID: String,
-        val label: UiText,
-        val title: UiText,
-        val subtitle: UiText?,
-        val status: ToolStatus,
-        val members: List<ToolCard>,
-    )
-
-    /**
-     * One tool inside a [StepParagraph]; [card] keeps today's tap targets.
-     * [id] is the first part id behind the chip and stays put while later
-     * identical runs fold into it. [arrivalIndex] is the chip's position in
-     * arrival order before the family sort; `+N more` expansion is scoped to
-     * chips that existed at tap time by comparing against it.
-     * [repeatCount] > 1 when identical consecutive completed runs were folded
-     * into this chip; [card] is then the latest run.
-     * [runningSinceEpochMs] is the tool's start while it is in flight, so the
-     * view can show a live elapsed time; null once it settles.
-     */
-    data class ToolChip(
-        val id: String,
-        val kind: ToolChipKind,
-        val family: ToolChipFamily,
-        /** Mostly server content (a path, a command, `/skill`); app text for LSP, Plan and questions. */
-        val label: UiText,
-        /** Agent chips: first line of the description; skill chips: the skill directory. */
-        val brief: String? = null,
-        /**
-         * Skill chips only: the requested skill id, stable from the first
-         * in-flight update on, while [label] switches to the server-reported
-         * name once the run settles.
-         */
-        val skillId: String? = null,
-        val additions: Int? = null,
-        val deletions: Int? = null,
-        val status: ToolStatus,
-        val trailingText: String? = null,
-        val card: ToolCard,
-        val repeatCount: Int = 1,
-        val arrivalIndex: Int = 0,
-        val runningSinceEpochMs: Long? = null,
-    ) {
-        /** Chip trailing text with the `×N` repeat marker ahead of any existing text. */
-        val displayTrailingText: String?
-            get() {
-                val repeat = if (repeatCount > 1) "\u00d7$repeatCount" else null
-                return listOfNotNull(repeat, trailingText?.takeIf { it.isNotEmpty() })
-                    .takeIf { it.isNotEmpty() }
-                    ?.joinToString(" \u00b7 ")
-            }
-    }
-
-    /**
      * Step rail timeline (#779): a maximal run of consecutive non-text visible
      * parts (tools, child sessions, settled thoughts), one [SessionChatStep]
      * per part. [blockID] is `sr:` plus the first member part id, so the rail
@@ -350,14 +265,13 @@ sealed class SessionChatTimelineBlock {
             }
 
     /**
-     * Narration a block carries for message-level markdown: text or a paragraph with text. A
-     * cut user text has none, so the row keeps the whole message text and no markdown.
+     * Narration a block carries for message-level markdown. A cut user text has none, so the
+     * row keeps the whole message text and no markdown.
      */
     val markdownText: String?
         get() =
             when (this) {
                 is Text -> text.takeIf { limit == null }
-                is StepParagraph -> text
                 else -> null
             }
 
@@ -365,20 +279,16 @@ sealed class SessionChatTimelineBlock {
         get() =
             when (this) {
                 is Text -> renderedMarkdown
-                is StepParagraph -> renderedMarkdown
                 else -> null
             }
 
-    /** Copy with markdown attached; only [Text] and [StepParagraph] carry one. */
+    /** Copy with markdown attached; only [Text] carries one. */
     fun withRenderedMarkdown(document: MarkdownDocument?): SessionChatTimelineBlock =
         when (this) {
             is Text -> copy(renderedMarkdown = document)
-            is StepParagraph -> copy(renderedMarkdown = document)
             else -> this
         }
 }
-
-enum class ToolChipKind { File, Command, Agent, Skill }
 
 enum class SessionChatStepKind { Tool, ChildSession, Thought }
 
@@ -435,25 +345,6 @@ data class SessionChatStep(
     val card: SessionChatTimelineBlock.ToolCard? = null,
     val thoughtText: String? = null,
 )
-
-/**
- * One skill a message loaded, for the Skills sheet a skill chip opens. [id]
- * is the chip id of the first run; [directory] is the server-reported skill
- * directory once the run settled.
- */
-data class SessionChatSkillUse(
-    val id: String,
-    val label: UiText,
-    val directory: String?,
-    val status: ToolStatus,
-)
-
-/**
- * Truncation family; chips inside a paragraph are grouped in declaration order
- * (explore summary, changes, commands, agents, skills) so a new chip only
- * appends at the end of its group.
- */
-enum class ToolChipFamily { Explore, Change, Command, Agent, Skill }
 
 object SessionChatTimelineBlocks {
     /**
@@ -556,12 +447,10 @@ object SessionChatTimelineBlocks {
         role: MessageRole,
         parts: List<MessagePart>,
         collapseConsecutiveToolCalls: Boolean = false,
-        chipTimeline: Boolean = false,
         stepRail: Boolean = false,
         activityCard: Boolean = false,
     ): SessionChatTimelineBlocksResult {
         if (parts.isEmpty()) return SessionChatTimelineBlocksResult.Ok(emptyList())
-        if (chipTimeline && role == MessageRole.Assistant) return buildStepParagraphs(parts)
         if (stepRail && role == MessageRole.Assistant) {
             return buildStepSegments(parts) { steps ->
                 SessionChatTimelineBlock.StepRail(
@@ -614,116 +503,6 @@ object SessionChatTimelineBlocks {
                 is TimelineSegment.Notice -> blocks += noticeBlock(segment.part)
             }
         }
-        return SessionChatTimelineBlocksResult.Ok(blocks)
-    }
-
-    /**
-     * Chip timeline walk: displayable text accumulates into the pending
-     * paragraph, visible tools become chips under it, and text arriving after a
-     * chip closes the paragraph. Attachments and settled thoughts are emitted as
-     * today and do not close a paragraph.
-     */
-    private fun buildStepParagraphs(parts: List<MessagePart>): SessionChatTimelineBlocksResult {
-        val blocks = mutableListOf<SessionChatTimelineBlock>()
-        val pendingText = mutableListOf<Pair<String, String>>()
-        val pendingTools = mutableListOf<MessagePart.Tool>()
-
-        fun flushParagraph(): Boolean {
-            if (pendingText.isEmpty() && pendingTools.isEmpty()) return true
-            val textIds = pendingText.map { it.first }
-            val text = pendingText.joinToString("\n") { it.second }.takeIf { it.isNotEmpty() }
-            val toolIds = pendingTools.map { it.id ?: return false }
-            val summaryTools = exploreSummaryTools(pendingTools)
-            val summaryIds = summaryTools.mapTo(mutableSetOf()) { it.id }
-            val exploreSummary = if (summaryTools.isEmpty()) null else exploreSummary(summaryTools) ?: return false
-            val chips =
-                orderedChips(
-                    foldRepeatedChips(
-                        pendingTools
-                            .filter { it.id !in summaryIds }
-                            .map { toToolChip(it) ?: return false },
-                    ),
-                )
-            val partIds = textIds + toolIds
-            // A paragraph's block id grows with each tool; its expansion id does not.
-            val expansionId = PresentationBlockId.stepParagraph(listOf(partIds.first()))
-            val images = pendingTools.flatMap { it.images }.map(AttachmentPresentationMapper::from)
-            blocks +=
-                SessionChatTimelineBlock.StepParagraph(
-                    blockID = PresentationBlockId.stepParagraph(partIds),
-                    text = text,
-                    chips = chips,
-                    errorLines = chips.mapNotNull(::chipErrorLine),
-                    noteLines = chips.mapNotNull { chip -> chip.card.noteText },
-                    textBlockID = if (text != null) PresentationBlockId.mergedText(textIds) else null,
-                    expansionID = expansionId,
-                    exploreSummary = exploreSummary,
-                )
-            toolGallery(expansionId, images)?.let { blocks += it }
-            pendingText.clear()
-            pendingTools.clear()
-            return true
-        }
-
-        for (part in parts) {
-            when (part) {
-                is MessagePart.Text -> {
-                    if (!part.isDisplayable) continue
-                    val trimmed = part.text.trim()
-                    if (trimmed.isEmpty()) continue
-                    val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                    if (pendingTools.isNotEmpty() && !flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    pendingText += partId to trimmed
-                }
-                is MessagePart.Tool -> {
-                    if (!isVisibleTool(part)) continue
-                    if (part.id == null) return SessionChatTimelineBlocksResult.MissingPartIds
-                    pendingTools += part
-                }
-                is MessagePart.File ->
-                    blocks +=
-                        SessionChatTimelineBlock.Attachment(
-                            blockID = PresentationBlockId.direct(part.id),
-                            attachment = AttachmentPresentationMapper.from(part),
-                        )
-                is MessagePart.Reasoning -> {
-                    if (ThoughtPartChrome.isVisible(part) && !part.isStreaming) {
-                        val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                        val text = ThoughtPartChrome.displayText(part)
-                        val duration = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs)
-                        // Pending narration and tools have not flushed a paragraph yet, so
-                        // this thought is still consecutive with the previous row.
-                        val previous = blocks.lastOrNull() as? SessionChatTimelineBlock.Reasoning
-                        if (previous != null && !previous.isStreaming) {
-                            blocks[blocks.lastIndex] =
-                                SessionChatTimelineBlock.Reasoning(
-                                    blockID = PresentationBlockId.mergedThought(listOf(previous.blockID, partId)),
-                                    text = joinThoughts(previous.text, text),
-                                    isStreaming = false,
-                                    durationMs = sumThoughtDurations(previous.durationMs, duration),
-                                )
-                        } else {
-                            blocks +=
-                                SessionChatTimelineBlock.Reasoning(
-                                    blockID = PresentationBlockId.direct(partId),
-                                    text = text,
-                                    isStreaming = false,
-                                    durationMs = duration,
-                                )
-                        }
-                    }
-                }
-                is MessagePart.Compaction -> {
-                    if (!flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    blocks += compactionCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                }
-                is MessagePart.Notice -> {
-                    if (!flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    blocks += noticeBlock(part)
-                }
-            }
-        }
-        if (!flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
         return SessionChatTimelineBlocksResult.Ok(blocks)
     }
 
@@ -888,7 +667,7 @@ object SessionChatTimelineBlocks {
             }
         if (isChildSessionTool(name)) {
             val agent = taskAgentName(tool)
-            val description = chipBrief(tool)
+            val description = taskBrief(tool)
             val toolsSoFar = tool.summaryCallCount
             val detail =
                 when {
@@ -922,7 +701,7 @@ object SessionChatTimelineBlocks {
                 card = card,
             )
         }
-        val isChange = chipFamily(name) == ToolChipFamily.Change
+        val isChange = isChangeTool(name)
         return SessionChatStep(
             id = partId,
             kind = SessionChatStepKind.Tool,
@@ -1113,37 +892,10 @@ object SessionChatTimelineBlocks {
     private fun isCompactionBody(body: DisplayMessageBody): Boolean = body.message.parts.any { it is MessagePart.Compaction }
 
     /**
-     * Explore tools that fold into the paragraph's summary chip: two or more
-     * that did not fail. A single explore tool keeps its own chip (its path is
-     * more useful than `1 read`); a failed one stays an attention chip with
-     * its error line.
+     * Skill name: the settled server output names it in metadata; before that
+     * the request carries the skill id (older servers sent `name`).
      */
-    private fun exploreSummaryTools(tools: List<MessagePart.Tool>): List<MessagePart.Tool> {
-        val candidates =
-            tools.filter { chipFamily(it.toolName.lowercase()) == ToolChipFamily.Explore && it.status != ToolStatus.Error }
-        return if (candidates.size >= 2) candidates else emptyList()
-    }
-
-    private fun exploreSummary(tools: List<MessagePart.Tool>): SessionChatTimelineBlock.ExploreSummary? {
-        val memberIds = tools.map { it.id ?: return null }
-        val members = tools.map { toToolCard(it) ?: return null }
-        val running = tools.any { it.status == ToolStatus.Running || it.status == ToolStatus.Pending }
-        val counts = exploreCounts(tools)
-        return SessionChatTimelineBlock.ExploreSummary(
-            blockID = PresentationBlockId.toolGroup(memberIds),
-            label = UiText.resource(if (running) R.string.timeline_explore_label_running else R.string.timeline_explore_label, counts),
-            title = UiText.resource(R.string.timeline_explore_title, counts),
-            subtitle = exploredGroupSubtitle(tools),
-            status = if (running) ToolStatus.Running else ToolStatus.Completed,
-            members = members,
-        )
-    }
-
-    /** `4 reads · 2 greps` in first-encounter order. */
-    private fun exploreCounts(tools: List<MessagePart.Tool>): UiText {
-        val (order, counts) = countsByToolName(tools)
-        return TimelineText.joined(order.map { name -> exploreCountPhrase(name, counts.getValue(name)) }) ?: UiText.verbatim("")
-    }
+    private fun skillName(tool: MessagePart.Tool): String? = tool.skillName ?: tool.inputSkillId
 
     /** Tool names in first-encounter order, with how often each ran. */
     private fun countsByToolName(tools: List<MessagePart.Tool>): Pair<List<String>, Map<String, Int>> {
@@ -1157,174 +909,10 @@ object SessionChatTimelineBlocks {
         return order to counts
     }
 
-    private fun exploreCountPhrase(
-        name: String,
-        count: Int,
-    ): UiText =
-        when (name) {
-            "read" -> UiText.plural(R.plurals.tool_count_read, count)
-            "grep" -> UiText.plural(R.plurals.tool_count_grep, count)
-            "glob" -> UiText.plural(R.plurals.tool_count_glob, count)
-            "websearch" -> UiText.plural(R.plurals.tool_count_search, count)
-            "webfetch" -> UiText.plural(R.plurals.tool_count_fetch, count)
-            else -> UiText.resource(R.string.tool_count_named, count, name)
-        }
+    private fun isChangeTool(name: String): Boolean = name == "edit" || name == "write" || name == "apply_patch" || name == "patch"
 
-    /**
-     * Identical consecutive completed runs fold into one chip (`×N`) that
-     * keeps the first run's id and the latest run's card. Chips are then
-     * numbered in arrival order so expansion can be scoped to them.
-     */
-    private fun foldRepeatedChips(chips: List<SessionChatTimelineBlock.ToolChip>): List<SessionChatTimelineBlock.ToolChip> {
-        val folded = mutableListOf<SessionChatTimelineBlock.ToolChip>()
-        for (chip in chips) {
-            val previous = folded.lastOrNull()
-            if (previous != null && StepParagraphChips.canFold(previous, chip)) {
-                folded[folded.lastIndex] = StepParagraphChips.fold(previous, chip)
-            } else {
-                folded += chip
-            }
-        }
-        return folded.mapIndexed { index, chip -> chip.copy(arrivalIndex = index) }
-    }
-
-    /**
-     * Skill name: the settled server output names it in metadata; before that
-     * the request carries the skill id (older servers sent `name`).
-     */
-    private fun skillName(tool: MessagePart.Tool): String? = tool.skillName ?: requestedSkillId(tool)
-
-    /** The skill the request asked for; present from the first update on. */
-    private fun requestedSkillId(tool: MessagePart.Tool): String? = tool.inputSkillId
-
-    private fun skillDirectory(tool: MessagePart.Tool): String? = tool.skillDirectory
-
-    /**
-     * Skills a message loaded, in first-use order across its step paragraphs.
-     * Repeated loads of one skill collapse into one entry, keyed by the
-     * requested skill id (the label once no id is known), that keeps the
-     * first chip's id and the latest run's label, status and directory.
-     */
-    fun skillUses(blocks: List<SessionChatTimelineBlock>): List<SessionChatSkillUse> {
-        val uses = linkedMapOf<Any, SessionChatSkillUse>()
-        blocks
-            .filterIsInstance<SessionChatTimelineBlock.StepParagraph>()
-            .flatMap { it.chips }
-            .filter { it.kind == ToolChipKind.Skill }
-            .forEach { chip ->
-                val key = chip.skillId ?: chip.label
-                val previous = uses[key]
-                uses[key] =
-                    SessionChatSkillUse(
-                        id = previous?.id ?: chip.id,
-                        label = chip.label,
-                        directory = chip.brief ?: previous?.directory,
-                        status = chip.status,
-                    )
-            }
-        return uses.values.toList()
-    }
-
-    /** Fixed group order by [ToolChipFamily], arrival order inside a group. */
-    private fun orderedChips(chips: List<SessionChatTimelineBlock.ToolChip>): List<SessionChatTimelineBlock.ToolChip> =
-        chips.sortedBy { it.family.ordinal }
-
-    private fun chipErrorLine(chip: SessionChatTimelineBlock.ToolChip): UiText? {
-        if (chip.status != ToolStatus.Error || chip.card.isInterrupted) return null
-        if (chip.card.isMalformed) return UiText.resource(R.string.tool_error_malformed)
-        return UiText.resource(
-            R.string.tool_error_line,
-            chip.label,
-            chip.card.errorText ?: UiText.resource(R.string.tool_error_failed),
-        )
-    }
-
-    private fun toToolChip(tool: MessagePart.Tool): SessionChatTimelineBlock.ToolChip? {
-        val partId = tool.id ?: return null
-        val card = toToolCard(tool) ?: return null
-        val name = tool.toolName.lowercase()
-        val family = chipFamily(name)
-        val kind =
-            when (family) {
-                ToolChipFamily.Skill -> ToolChipKind.Skill
-                ToolChipFamily.Agent -> ToolChipKind.Agent
-                ToolChipFamily.Explore, ToolChipFamily.Change -> ToolChipKind.File
-                ToolChipFamily.Command -> ToolChipKind.Command
-            }
-        val isChange = family == ToolChipFamily.Change
-        return SessionChatTimelineBlock.ToolChip(
-            id = PresentationBlockId.direct(partId),
-            kind = kind,
-            family = family,
-            label = chipLabel(name, tool, card),
-            brief =
-                when (family) {
-                    ToolChipFamily.Agent -> chipBrief(tool)
-                    ToolChipFamily.Skill -> skillDirectory(tool)
-                    else -> null
-                },
-            skillId = if (family == ToolChipFamily.Skill) requestedSkillId(tool) else null,
-            additions = card.additions.takeIf { isChange },
-            deletions = card.deletions.takeIf { isChange },
-            status = card.status,
-            trailingText = null,
-            card = card,
-            runningSinceEpochMs = inFlightStart(tool),
-        )
-    }
-
-    /** A tool's start while it is pending or running, for live elapsed time. */
-    private fun inFlightStart(tool: MessagePart.Tool): Long? =
-        if (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running) tool.timeStartEpochMs else null
-
-    private fun chipFamily(name: String): ToolChipFamily =
-        when {
-            isChildSessionTool(name) -> ToolChipFamily.Agent
-            name == "skill" -> ToolChipFamily.Skill
-            name in TimelineSegments.contextToolNames || name == "webfetch" -> ToolChipFamily.Explore
-            name == "edit" || name == "write" || name == "apply_patch" || name == "patch" -> ToolChipFamily.Change
-            else -> ToolChipFamily.Command
-        }
-
-    private fun chipLabel(
-        name: String,
-        tool: MessagePart.Tool,
-        card: SessionChatTimelineBlock.ToolCard,
-    ): UiText {
-        val placeholder = card.subtitle.takeIf { card.isReceivingArguments }
-        val subtitle = (card.subtitle as? UiText.Verbatim)?.value
-        return when (name) {
-            "read" -> readPath(tool)?.let(::lastPathComponent)?.let(UiText::verbatim) ?: placeholder
-            "edit", "write", "apply_patch", "patch" -> subtitle?.let(::lastPathComponent)?.let(UiText::verbatim)
-            "glob", "grep" -> TimelineText.verbatim(tool.inputPattern ?: tool.inputSearchPath)
-            "websearch" -> TimelineText.verbatim(tool.inputQuery)
-            "webfetch" -> TimelineText.verbatim(tool.inputUrl?.let(::urlHost))
-            "bash", "shell" ->
-                shellCommand(tool)?.let(StepParagraphChips::commandLabel)?.let(UiText::verbatim) ?: placeholder
-            // An execute subtitle is a call preview (server content) or `N tools`, which reads as is.
-            "execute" -> subtitle?.let(StepParagraphChips::commandLabel)?.let(UiText::verbatim) ?: card.subtitle
-            "task", "subagent" -> UiText.verbatim(taskAgentName(tool))
-            "skill" -> UiText.verbatim("/" + (skillName(tool) ?: name))
-            "lsp", "plan_exit" -> card.title
-            else -> if (isQuestionTool(tool)) card.title else TimelineText.verbatim(customToolLabel(tool))
-        } ?: UiText.verbatim(tool.toolName)
-    }
-
-    /**
-     * Custom and MCP tools: the live progress title while running, then the
-     * tool's own `title` input (or the first line of its `description`). The
-     * tool name stays the fallback and the detail sheet title.
-     */
-    private fun customToolLabel(tool: MessagePart.Tool): String? =
-        runningTitleOverride(tool)
-            ?: tool.inputTitle
-            ?: tool.inputDescription
-                ?.lineSequence()
-                ?.firstOrNull()
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-
-    private fun chipBrief(tool: MessagePart.Tool): String? =
+    /** A child-session tool's brief: the first line of its description, or the child's title. */
+    private fun taskBrief(tool: MessagePart.Tool): String? =
         (tool.inputTaskBrief ?: childSessionTitle(tool))
             ?.lineSequence()
             ?.firstOrNull()
@@ -1346,7 +934,6 @@ object SessionChatTimelineBlocks {
         messageId: String,
         fallbackText: String,
         collapseConsecutiveToolCalls: Boolean = false,
-        chipTimeline: Boolean = false,
         stepRail: Boolean = false,
         activityCard: Boolean = false,
     ): List<SessionChatTimelineBlock> {
@@ -1362,23 +949,11 @@ object SessionChatTimelineBlocks {
                 emptyList()
             }
 
-        return when (val result = build(role, parts, collapseConsecutiveToolCalls, chipTimeline, stepRail, activityCard)) {
+        return when (val result = build(role, parts, collapseConsecutiveToolCalls, stepRail, activityCard)) {
             is SessionChatTimelineBlocksResult.Ok ->
                 result.blocks.ifEmpty { fallbackBlocks() }
             SessionChatTimelineBlocksResult.MissingPartIds -> fallbackBlocks()
         }
-    }
-
-    /**
-     * Only the latest narration paragraph is live. Earlier paragraphs in a
-     * merged row stay settled while a later step is still streaming.
-     */
-    fun streamingStepParagraphBlockId(
-        blocks: List<SessionChatTimelineBlock>,
-        messageIsStreaming: Boolean,
-    ): String? {
-        if (!messageIsStreaming) return null
-        return blocks.lastOrNull { it is SessionChatTimelineBlock.StepParagraph && it.text != null }?.blockID
     }
 
     /**
@@ -1454,11 +1029,9 @@ object SessionChatTimelineBlocks {
     fun mergeConsecutiveToolOnlyAssistantBodies(
         bodies: List<DisplayMessageBody>,
         collapseConsecutiveToolCalls: Boolean,
-        chipTimeline: Boolean = false,
         stepRail: Boolean = false,
         activityCard: Boolean = false,
-    ): List<DisplayMessageBody> =
-        mergeBodies(bodies, collapseConsecutiveToolCalls, chipTimeline, stepRail, activityCard).map(::withStopNote)
+    ): List<DisplayMessageBody> = mergeBodies(bodies, collapseConsecutiveToolCalls, stepRail, activityCard).map(::withStopNote)
 
     /** An assistant reply that ended early keeps a note under its last block, then any failure caption. */
     private fun withStopNote(body: DisplayMessageBody): DisplayMessageBody {
@@ -1514,14 +1087,11 @@ object SessionChatTimelineBlocks {
     private fun mergeBodies(
         bodies: List<DisplayMessageBody>,
         collapseConsecutiveToolCalls: Boolean,
-        chipTimeline: Boolean,
         stepRail: Boolean,
         activityCard: Boolean,
     ): List<DisplayMessageBody> {
-        if (chipTimeline) return mergeConsecutiveAssistantBodiesForChips(bodies, collapseConsecutiveToolCalls)
-        if (stepRail) return mergeConsecutiveAssistantBodiesForChips(bodies, collapseConsecutiveToolCalls, stepRail = true)
-        if (activityCard) {
-            return mergeConsecutiveAssistantBodiesForChips(bodies, collapseConsecutiveToolCalls, activityCard = true)
+        if (stepRail || activityCard) {
+            return mergeConsecutiveAssistantBodies(bodies, collapseConsecutiveToolCalls, stepRail = stepRail, activityCard = activityCard)
         }
         if (!collapseConsecutiveToolCalls || bodies.size < 2) return bodies
         val merged = mutableListOf<DisplayMessageBody>()
@@ -1567,19 +1137,16 @@ object SessionChatTimelineBlocks {
     }
 
     /**
-     * Chip timeline: v1 emits each model step as its own assistant message, so
-     * every run of consecutive assistant bodies (text included) becomes one body
-     * and a paragraph joins the tools that follow it in the next message. A run
-     * whose parts lack stable ids is left unmerged rather than dropped.
-     * The step rail timeline merges the same way so one turn is one row and
-     * tool-only messages join one rail ([stepRail] builds rails instead).
-     * The activity card timeline merges the same way ([activityCard]).
+     * Step rail and activity card timelines: v1 emits each model step as its own assistant
+     * message, so every run of consecutive assistant bodies (text included) becomes one body,
+     * one turn is one row, and tool-only messages join one rail ([stepRail]) or card
+     * ([activityCard]). A run whose parts lack stable ids is left unmerged rather than dropped.
      */
-    private fun mergeConsecutiveAssistantBodiesForChips(
+    private fun mergeConsecutiveAssistantBodies(
         bodies: List<DisplayMessageBody>,
         collapseConsecutiveToolCalls: Boolean,
-        stepRail: Boolean = false,
-        activityCard: Boolean = false,
+        stepRail: Boolean,
+        activityCard: Boolean,
     ): List<DisplayMessageBody> {
         if (bodies.size < 2) return bodies
         val merged = mutableListOf<DisplayMessageBody>()
@@ -1610,7 +1177,6 @@ object SessionChatTimelineBlocks {
                     role = MessageRole.Assistant,
                     parts = parts,
                     collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
-                    chipTimeline = !stepRail && !activityCard,
                     stepRail = stepRail,
                     activityCard = activityCard,
                 )
@@ -1635,7 +1201,7 @@ object SessionChatTimelineBlocks {
         return merged
     }
 
-    /** Rebuilt paragraphs reuse the markdown their source bodies already carried. */
+    /** Rebuilt text blocks reuse the markdown their source bodies already carried. */
     private fun reattachMarkdown(
         blocks: List<SessionChatTimelineBlock>,
         run: List<DisplayMessageBody>,
@@ -1644,12 +1210,7 @@ object SessionChatTimelineBlocks {
             buildMap {
                 run.forEach { body ->
                     body.blocks.forEach { block ->
-                        val id =
-                            when (block) {
-                                is SessionChatTimelineBlock.Text -> block.blockID
-                                is SessionChatTimelineBlock.StepParagraph -> block.textBlockID
-                                else -> null
-                            }
+                        val id = (block as? SessionChatTimelineBlock.Text)?.blockID
                         val document = block.decoratedMarkdown
                         if (id != null && document != null) put(id, document)
                     }
@@ -1658,8 +1219,6 @@ object SessionChatTimelineBlocks {
         if (markdownByTextId.isEmpty()) return blocks
         return blocks.map { block ->
             when {
-                block is SessionChatTimelineBlock.StepParagraph && block.renderedMarkdown == null ->
-                    markdownByTextId[block.textBlockID]?.let { block.copy(renderedMarkdown = it) } ?: block
                 block is SessionChatTimelineBlock.Text && block.renderedMarkdown == null ->
                     markdownByTextId[block.blockID]?.let { block.copy(renderedMarkdown = it) } ?: block
                 else -> block
@@ -1683,7 +1242,6 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlock.Attachment,
             is SessionChatTimelineBlock.ChildSessionRow,
             is SessionChatTimelineBlock.Reasoning,
-            is SessionChatTimelineBlock.StepParagraph,
             is SessionChatTimelineBlock.StepRail,
             is SessionChatTimelineBlock.ActivityCard,
             is SessionChatTimelineBlock.StopNote,
@@ -1704,7 +1262,6 @@ object SessionChatTimelineBlocks {
         message: Message,
         commands: List<ServerCommand>,
         collapseConsecutiveToolCalls: Boolean = false,
-        chipTimeline: Boolean = false,
         stepRail: Boolean = false,
         activityCard: Boolean = false,
     ): List<SessionChatTimelineBlock> {
@@ -1715,7 +1272,6 @@ object SessionChatTimelineBlocks {
                 messageId = message.id,
                 fallbackText = message.text,
                 collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
-                chipTimeline = chipTimeline,
                 stepRail = stepRail,
                 activityCard = activityCard,
             )
@@ -1916,26 +1472,6 @@ object SessionChatTimelineBlocks {
             }
         }
     }
-
-    private fun joinThoughts(
-        first: String,
-        second: String,
-    ): String =
-        when {
-            first.isEmpty() -> second
-            second.isEmpty() -> first
-            else -> first + "\n\n" + second
-        }
-
-    private fun sumThoughtDurations(
-        first: Long?,
-        second: Long?,
-    ): Long? =
-        when {
-            first == null -> second
-            second == null -> first
-            else -> first + second
-        }
 
     private fun thoughtDurationMs(
         start: Long?,
