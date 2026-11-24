@@ -104,12 +104,12 @@ internal val reorderableGalleryProjects =
     listOf(
         ReorderableGalleryProject("all", "All projects", "4 projects", LetterAccent.Violet),
         ReorderableGalleryProject(
-            "/Users/me/Projects/opencode-mobile",
+            "/Users/example/Projects/opencode-mobile",
             "opencode-mobile",
             "~/Projects/opencode-mobile",
             LetterAccent.Violet,
         ),
-        ReorderableGalleryProject("/Users/me/Projects/playground", "playground", "~/Projects/playground", LetterAccent.Teal),
-        ReorderableGalleryProject("/Users/me/Projects/website", "website", "~/Projects/website", LetterAccent.Amber),
-        ReorderableGalleryProject("/Users/me/Projects/docs", "docs", "~/Projects/docs", LetterAccent.Blue),
+        ReorderableGalleryProject("/Users/example/Projects/playground", "playground", "~/Projects/playground", LetterAccent.Teal),
+        ReorderableGalleryProject("/Users/example/Projects/website", "website", "~/Projects/website", LetterAccent.Amber),
+        ReorderableGalleryProject("/Users/example/Projects/docs", "docs", "~/Projects/docs", LetterAccent.Blue),
     )

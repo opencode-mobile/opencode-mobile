@@ -160,18 +160,18 @@ internal val sessionListDockGalleryFilterTabs =
     listOf(
         SessionListFilterTab.all(projectCount = 3, hasSessions = true),
         SessionListFilterTab.project(
-            worktree = "/Users/demo/opencode-mobile",
+            worktree = "/Users/example/opencode-mobile",
             title = "opencode-mobile",
             hasSessions = true,
         ),
-        SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", hasSessions = true),
-        SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", hasSessions = true),
+        SessionListFilterTab.project(worktree = "/Users/example/playground", title = "playground", hasSessions = true),
+        SessionListFilterTab.project(worktree = "/Users/example/api-client", title = "api-client", hasSessions = true),
     )
 
 internal val sessionListDockGalleryOneProjectFilterTabs =
     listOf(
         SessionListFilterTab.project(
-            worktree = "/Users/demo/opencode-mobile",
+            worktree = "/Users/example/opencode-mobile",
             title = "opencode-mobile",
             hasSessions = true,
         ),

@@ -26,18 +26,24 @@ never delete the folder wholesale (partial runs merge into the manifests).
 
 ## Prerequisites
 
+- macOS first: the scripts default to macOS paths for the Android SDK and
+  Chrome. Elsewhere set `ANDROID_HOME` and `CHROME_PATH`.
 - iOS: Xcode with an iOS simulator runtime. The script uses the newest runtime
   and its own simulator, `Component Capture iPhone 17`, created if missing and
-  **erased every run**. It never touches other simulators.
-- Android: SDK with `platform-tools`, `emulator`, `cmdline-tools` and a system
-  image. The script uses its own AVD, `component_capture_phone` (Pixel 9
-  profile, newest installed image), created if missing. It reuses that AVD if
-  already running, resets its animation, font, and display settings, and shuts
-  it down only if it booted it.
+  **erased every run**. It refuses a `CAPTURE_SIM_NAME` without
+  "Component Capture" unless `CAPTURE_ALLOW_ERASE=1`, so a personal simulator
+  is never wiped by mistake.
+- Android: SDK with `platform-tools`, `emulator`, `cmdline-tools` and a Google
+  APIs system image for the host CPU. The script uses its own AVD,
+  `component_capture_phone` (Pixel 9 profile), created if missing under
+  `ANDROID_AVD_HOME`. It reuses that AVD if already running, resets its
+  animation, font, and display settings, and shuts it down only if it booted
+  it. It refuses a `CAPTURE_AVD` without `component_capture` unless
+  `CAPTURE_ALLOW_ANY_AVD=1`.
 - HTML renders: Google Chrome (or `CHROME_PATH`).
 - Builds take most of the time. A full run takes several minutes per platform;
-  a few ids are faster. iOS prints `capture took Ns`; its log is in
-  `$TMPDIR/opencode-component-capture-ios.log`.
+  a few ids are faster. iOS prints `capture took Ns` and the path of its log,
+  one file per run in `$TMPDIR`.
 
 ## Decide: changed what → run what
 

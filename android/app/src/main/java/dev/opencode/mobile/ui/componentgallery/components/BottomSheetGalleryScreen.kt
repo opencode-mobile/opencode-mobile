@@ -393,7 +393,7 @@ internal fun BottomSheetGalleryPinnedTop() {
         onClick = {},
     )
     OpenCodeBottomSheetEntry(
-        title = "/Users/demo/Projects",
+        title = "/Users/example/Projects",
         startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.FolderCheck),
         onClick = {},
     )

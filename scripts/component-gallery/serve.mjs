@@ -22,7 +22,8 @@ watch(here, { recursive: true }, (_event, file) => {
 });
 
 createServer((req, res) => {
-  const path = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
+  let path;
+  try { path = decodeURIComponent(new URL(req.url, "http://localhost").pathname); } catch { res.writeHead(400); res.end(); return; }
   if (path === "/__reload") {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
     clients.add(res);

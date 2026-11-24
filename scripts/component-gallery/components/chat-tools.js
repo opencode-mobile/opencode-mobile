@@ -472,10 +472,6 @@
       ],
       tokens: [["toolCallCard.cornerRadius", 8], ["toolCallCard.paddingHorizontal", 12], ["toolCallCard.paddingVertical", 10], ["toolCallCard.statusDotSize", 6], ["toolCallCard.statusDotSpacing", 10], ["toolCallCard.statusDotTopPadding", 6], ["toolCallCard.contentSpacing", 4], ["toolCallCard.metaRowSpacing", 8], ["fill", "surface-raised-base"]],
       source: { ios: "Components/Chat/OpenCodeToolCallCard.swift", android: "ui/components/chat/OpenCodeToolCallCard.kt" },
-      divergences: [
-        { severity: "medium", title: "Android has a separate noteText line; iOS folds the note into errorText" },
-        { severity: "low", title: "The doc omits the interrupted status" },
-      ],
       render: toolCard, mount: mountTools,
     },
     {
@@ -490,13 +486,6 @@
       tokens: [["toolChip.cornerRadius", 8], ["toolChip.paddingBeforeIcon", 8], ["toolChip.paddingHorizontal", 10], ["toolChip.paddingVertical", 6], ["toolChip.contentSpacing", 6], ["toolChip.iconSize", 12], ["toolChip.minHeight", 36], ["toolChip.minTapTarget", "44 iOS, 48 Android"], ["toolChip.agentTile", "18, radius 5, info 14%"], ["toolChip.runningRevealDelay", "250ms"], ["toolChip.runningCycle", "1300ms"], ["toolChip.shimmerHalfWidth", 0.3], ["toolChip.runningIconMinOpacity", 0.35]],
       spec: "## Intent\nCompact evidence of one tool call under a chip-timeline paragraph.\n\n## Public API\n- `variant`: file (with optional diff counts), command, agent, skill, explore, more.\n- `status`: pending, running, completed, error, interrupted. The more variant ignores it.\n- `trailingText`: optional, such as an elapsed time.\n- `action` / `onClick`: optional. Tappable chips reach a 44pt (iOS) or 48dp (Android) target without growing.\n\n## Behavior\nA running chip looks idle for 250 ms so fast commands never flash. It then sweeps a warning band across the label every 1.3 s while the icon breathes between 100% and 35%. All running chips share one clock. Pending chips have a dashed outline. File labels truncate in the middle, other labels at the tail.",
       source: { ios: "Components/Chat/OpenCodeToolChip.swift", android: "ui/components/chat/OpenCodeToolChip.kt" },
-      divergences: [
-        { severity: "high", title: "Android keeps the running shimmer when system animations are off" },
-        { severity: "medium", title: "Error label is red on iOS for every variant, on Android for agents only" },
-        { severity: "medium", title: "Status glyph and trailing text swap order" },
-        { severity: "medium", title: "Skill label: iOS adds the slash, Android shows the name as given" },
-        { severity: "low", title: "Glyph, dash, agent border, trailing and icon tones differ" },
-      ],
       render: toolChip, mount: mountTools,
     },
     {
@@ -511,13 +500,6 @@
       tokens: [["activityCard.cornerRadius", 8], ["activityCard.paddingHorizontal", 12], ["activityCard.paddingVertical", 10], ["activityCard.summaryBottomPadding", 8], ["activityCard.tapRowMinHeight", "44 iOS, 48 Android"], ["activityCard.iconSize", 16], ["activityCard.footerPadding", "12 top, 13 bottom"], ["activityCard.agentTile", "20, radius 6"], ["activityCard.footerCrossfade", "200ms"], ["activityCard.shimmerCycle", "1600ms iOS, 1300ms Android"], ["border", "icon-weak-base"]],
       spec: "## Intent\nOne card per run of an agent's steps.\n\n## Public API\n- `state`: live (with start time) or settled (worst status and step count).\n- `summary`, `agents`, `current`, `idleText`, `onAgentTap`, `onOpen`.\n\n## Behavior\nLive shows a shimmering Working header with elapsed time, a summary, one row per running child session, and a footer band with the latest tool. A new tool crossfades over 200 ms, while +N and elapsed change in place. Settled shows one line with the worst-status dot, then any child sessions. Nothing expands inline.",
       source: { ios: "Components/Chat/OpenCodeActivityCard.swift", android: "ui/components/chat/OpenCodeActivityCard.kt" },
-      divergences: [
-        { severity: "high", title: "The live header opens the sheet on iOS only" },
-        { severity: "medium", title: "Working shimmer runs 1.6 s on iOS, 1.3 s on Android" },
-        { severity: "medium", title: "Footer band has a 6dp top margin on Android only" },
-        { severity: "medium", title: "Settled 'steps' word and agent tile tint differ" },
-        { severity: "low", title: "Skill icon, chevron size and the other-tool icon differ" },
-      ],
       render: activityCard, mount: mountTools,
     },
     {
@@ -530,11 +512,6 @@
       ],
       tokens: [["childSessionRow.cornerRadius", 8], ["childSessionRow.paddingHorizontal", 12], ["childSessionRow.paddingVertical", 10], ["childSessionRow.avatarSize", 32], ["childSessionRow.avatarGlyphSize", 14], ["childSessionRow.contentSpacing", 12], ["childSessionRow.titleRowSpacing", 8], ["childSessionRow.textStackSpacing", 2], ["childSessionRow.trailingSpacing", "6 iOS, 12 Android"], ["childSessionRow.chevronSize", 16]],
       source: { ios: "Components/Chat/OpenCodeChildSessionRow.swift", android: "ui/components/chat/OpenCodeChildSessionRow.kt" },
-      divergences: [
-        { severity: "medium", title: "Trailing items are 6pt apart on iOS, 12dp on Android" },
-        { severity: "low", title: "The doc says there is no status, but the code has five" },
-        { severity: "low", title: "Elapsed uses monospaced digits on iOS only" },
-      ],
       render: childRow, mount: mountTools,
     },
     {
@@ -545,10 +522,6 @@
       tokens: [["reasoningRow.leadingPadding", 4], ["reasoningRow.topPadding", 12], ["reasoningRow.bottomPadding", 8], ["reasoningRow.spacing", 8], ["reasoningRow.dot", 6], ["reasoningRow.checkIcon", 12], ["reasoningRow.pulse", "900ms, 1 to 0.35"], ["type", "body iOS, bodySecondary Android"]],
       spec: "## Intent\nShows a model thought in the timeline.\n\n## Public API\n- `state`: working, idle, expanded, collapsed.\n- `durationLabel`: shown when expanded.\n- `action` / `onClick`: opens the full thought.\n\n## Behavior\nWorking pulses a 6pt dot and says Thinking. Idle shows a check and says Thought. Expanded says Thought or Thought · 1.2s. Collapsed has zero height and is hidden from accessibility.",
       source: { ios: "Components/Chat/OpenCodeReasoningRow.swift", android: "ui/components/chat/OpenCodeReasoningRow.kt" },
-      divergences: [
-        { severity: "medium", title: "Label is 16pt text-weak on iOS, 14sp text-base on Android" },
-        { severity: "low", title: "Android's tap area excludes the row padding" },
-      ],
       render: reasoningRow, mount: mountTools,
     },
     {
@@ -559,11 +532,6 @@
       tokens: [["shellRow.cornerRadius", 8], ["shellRow.paddingHorizontal", 12], ["shellRow.paddingVertical", 10], ["shellRow.avatarSize", 32], ["shellRow.glyphSize", 16], ["shellRow.contentSpacing", 12], ["shellRow.textStackSpacing", 2], ["shellRow.trailingSpacing", "6 iOS, 12 Android"], ["shellRow.chevronSize", 16]],
       spec: "## Intent\nA running shell command in a list, next to Child Session Row.\n\n## Public API\n- `command` (required), `description`, `elapsed`, `action` / `onClick`.\n\n## Behavior\nA terminal glyph sits in a 32pt raised circle. The command is one monospaced line that truncates at the tail. The timer never truncates. Tappable rows show a chevron.",
       source: { ios: "Components/Chat/OpenCodeShellRow.swift", android: "ui/components/chat/OpenCodeShellRow.kt" },
-      divergences: [
-        { severity: "high", title: "A multi-line command shows only its first line on iOS" },
-        { severity: "medium", title: "Trailing items are 6pt apart on iOS, 12dp on Android" },
-        { severity: "low", title: "Only Android announces 'running'" },
-      ],
       render: shellRow, mount: mountTools,
     },
     {
@@ -578,13 +546,6 @@
       tokens: [["stepRail.leadingInset", "6 iOS, 4 Android"], ["stepRail.gutterWidth", 16], ["stepRail.branchIndent", 14], ["stepRail.lineX", 4], ["stepRail.lineWidth", 1.5], ["stepRail.dotSize", 8], ["stepRail.rowMinHeight", 36], ["stepRail.rowVerticalPadding", 4], ["stepRail.pressBleed", 8], ["stepRail.pulse", "900ms, 1 to 0.35"], ["stepRail.enterFade", "200ms"], ["stepRail.childRadius", "10 iOS, 8 Android"]],
       spec: "## Intent\nAn agent's work as one short line per step on a vertical rail.\n\n## Public API\n- `steps`: step, child session, fold, thinking.\n- `isLive`, `thinking`, `onStepTap`, `onFoldTap`, `onChildSessionTap`.\n\n## Behavior\nRunning dots pulse and tick m:ss. A running step after another running step branches off the rail. A step that joins running fades in over 200 ms. The fold row expands earlier steps.",
       source: { ios: "Components/Chat/OpenCodeStepRail.swift", android: "ui/components/chat/OpenCodeStepRail.kt" },
-      divergences: [
-        { severity: "high", title: "Android's rail drops the user's decline note" },
-        { severity: "medium", title: "iOS ignores isLive, so a settled running dot still pulses" },
-        { severity: "medium", title: "Android shows one trailing item, iOS stacks them" },
-        { severity: "medium", title: "Child card radius, tint, name case and failure tone differ" },
-        { severity: "low", title: "Branch dot center and interrupted tone differ" },
-      ],
       render: (p, ctx) => withImages(railHtml(p.sample, ctx, on(p.live)), p, ctx), mount: mountTools,
     },
     {
@@ -598,11 +559,6 @@
       tokens: [["taskRow.cornerRadius", 8], ["taskRow.paddingHorizontal", 12], ["taskRow.paddingVertical", 10], ["taskRow.glyphFrame", 32], ["taskRow.iconSize", 16], ["taskRow.dotSize", 8], ["taskRow.contentSpacing", 12], ["taskRow.titleRowSpacing", 6], ["taskRow.textStackSpacing", 2], ["taskRow.trailingSpacing", "6 iOS, 12 Android"], ["taskRow.chevronSize", 16]],
       spec: "## Intent\nA background task, such as a subagent, in a list.\n\n## Public API\n- `title`, `state` (running, waitingForInput, done, failed, stopped), `tag`, `detail`, `detailCaption`, `time`, `action` / `onClick`.\n\n## Behavior\nThe state sets the leading glyph and detail tone. Time sits over the caption in a trailing column that never truncates.",
       source: { ios: "Components/Chat/OpenCodeTaskRow.swift", android: "ui/components/chat/OpenCodeTaskRow.kt" },
-      divergences: [
-        { severity: "high", title: "Android keeps the spinner and pulse when system animations are off" },
-        { severity: "medium", title: "Trailing items are 6pt apart on iOS, 12dp on Android" },
-        { severity: "low", title: "iOS has no keyboard focus ring; time and tag sizes differ" },
-      ],
       render: taskRow, mount: mountTools,
     },
     {
@@ -616,11 +572,6 @@
       tokens: [["workingIndicator.rowHeight", 40], ["workingIndicator.leadingPadding", 4], ["workingIndicator.spacing", 8], ["workingIndicator.markBox", 12], ["pulsingDot.size", 6], ["pulsingDot.cycle", "900ms, 1 to 0.35"], ["workingIndicator.idleTransition", "220ms"], ["workingIndicator.fadingOpacity", 0.35], ["turnPill.minHeight", 36], ["turnPill.paddingHorizontal", "14, compact 10"], ["turnPill.iconSize", 16], ["turnPill.iconSpacing", 6], ["turnPill.settle", "500ms"], ["turnPill.doneHold", "3000ms"], ["turnPill.leave", "240ms, scale 0.96"], ["turnPill.spinner", "1s rotation, 1.6s breathe"], ["turnPill.morph", "540ms"]],
       spec: "## Intent\nA working, retrying or compacting status row.\n\n## Public API\n- `label`, `state` (working, idle, expanded, collapsed), `fading`.\n\n## Behavior\nWorking pulses a 6pt dot. Idle swaps it for a check over 220 ms. Collapsed has zero height.\n\n## Turn indicator\nSince #1098 Session Chat shows one floating turn pill in every timeline style, and no screen uses this row. The pill spins while working, holds the last label for 500 ms after the turn ends, bends the spinner into a check, holds Done for 3 s, then fades over 240 ms. The pill is shown here for context. Its home is Floating Pill.",
       source: { ios: "Components/Chat/OpenCodeWorkingIndicator.swift", android: "ui/components/chat/OpenCodeWorkingIndicator.kt" },
-      divergences: [
-        { severity: "medium", title: "No app screen uses this component since #1098" },
-        { severity: "medium", title: "Label is 16pt text-weak on iOS, 14sp text-base on Android" },
-        { severity: "high", title: "The pulsing dot ignores reduced motion on both platforms" },
-      ],
       render: workingIndicator, mount: mountTools,
     },
   ]);

@@ -8,6 +8,9 @@
 # given), and writes PNGs plus manifest.json to captures/ios/. The simulator is shut down at
 # the end. Env overrides: CAPTURE_OUT (output folder), CAPTURE_CONTRACT,
 # CAPTURE_DERIVED_DATA, CAPTURE_SIM_NAME, CAPTURE_DEVICE_TYPE.
+#
+# Every run erases the simulator, so CAPTURE_SIM_NAME must contain "Component Capture".
+# CAPTURE_ALLOW_ERASE=1 overrides that check for another simulator you are sure can be wiped.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -21,6 +24,10 @@ DEVICE_LABEL="iPhone 17"
 ONLY="$(IFS=,; echo "${*:-}")"
 
 [[ -f "$CONTRACT" ]] || { echo "missing $CONTRACT" >&2; exit 1; }
+if [[ "$SIM_NAME" != *"Component Capture"* && "${CAPTURE_ALLOW_ERASE:-0}" != 1 ]]; then
+  echo "refusing to erase simulator \"$SIM_NAME\": its name must contain \"Component Capture\" (or set CAPTURE_ALLOW_ERASE=1)" >&2
+  exit 1
+fi
 
 RUNTIME="$(xcrun simctl list runtimes -j | /usr/bin/python3 -c '
 import json, sys
@@ -43,7 +50,11 @@ if [[ -z "$UDID" ]]; then
   UDID="$(xcrun simctl create "$SIM_NAME" "$DEVICE_TYPE" "$RUNTIME_ID")"
 fi
 
-cleanup() { xcrun simctl shutdown "$UDID" >/dev/null 2>&1 || true; }
+STAGE=""
+cleanup() {
+  xcrun simctl shutdown "$UDID" >/dev/null 2>&1 || true
+  [[ -n "$STAGE" ]] && rm -rf "$STAGE"
+}
 trap cleanup EXIT
 
 # A clean device every run: no saved theme, text size, or appearance from earlier launches.
@@ -56,7 +67,8 @@ xcrun simctl ui "$UDID" content_size large >/dev/null 2>&1 || true
 xcrun simctl spawn "$UDID" defaults write com.apple.Accessibility ReduceMotionEnabled -bool true
 
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/component-capture-ios.XXXXXX")"
-LOG="${TMPDIR:-/tmp}/opencode-component-capture-ios.log"
+# One log per run, kept after the staging folder is removed.
+LOG="$(mktemp "${TMPDIR:-/tmp}/opencode-component-capture-ios.XXXXXX")"
 # Kept between runs so a rerun only rebuilds what changed.
 DERIVED_DATA="${CAPTURE_DERIVED_DATA:-${TMPDIR:-/tmp}/opencode-component-capture-ios-dd}"
 echo "capturing on $SIM_NAME ($UDID), log: $LOG"

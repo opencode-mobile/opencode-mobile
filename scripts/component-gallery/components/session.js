@@ -304,17 +304,6 @@
       ],
       tokens: [["sessionComposer.cornerRadius", 26], ["sessionComposer.docked.topCornerRadius", 22], ["sessionComposer.screenPaddingHorizontal", 12], ["sessionComposer.screenPaddingBottom", 4], ["sessionComposer.contentPadding", 12], ["sessionComposer.primaryContentInset", 4], ["sessionComposer.rowSpacing", 10], ["sessionComposer.actionSpacing", 8], ["sessionComposer.outlineWidth", 1], ["sessionComposer.edge", "surface-raised-base → text-strong 20%"], ["sessionComposer.scrim.opacity", 0.7], ["sessionComposer.fade.resting", 16], ["sessionComposer.fade.scrolled", 46], ["sessionComposer.docked.shadowHeight", 14], ["sessionComposer.docked.shadowOpacity", 0.1], ["sessionComposer.backCta.height", 52]],
       source: { ios: "Components/Input/OpenCodeSessionComposer.swift", android: "ui/components/input/OpenCodeSessionComposer.kt" },
-      divergences: [
-        { severity: "medium", title: "Attach, Commands, and Dictate use subtle contrast on iOS and Low on Android" },
-        { severity: "medium", title: "Argument hint exists only on Android" },
-        { severity: "medium", title: "Pending revert chip has different geometry" },
-        { severity: "medium", title: "Keyboard hint sits on opposite sides of the permission actions" },
-        { severity: "medium", title: "Mode change animation differs across platforms and docs" },
-        { severity: "medium", title: "Docs say the shell has no hairline, code draws a 1pt edge" },
-        { severity: "low", title: "Footnote type and inset differ" },
-        { severity: "low", title: "Permission code type differs" },
-        { severity: "low", title: "Docs say permission has no dismiss, code has Hide" },
-      ],
       render: live(composer),
       mount: (stage) => {
         stage.querySelectorAll(".sc-split-host").forEach((host) => {
@@ -340,7 +329,6 @@
       states: [["Compact", {}], ["Classic", { rowStyle: "classic" }], ["Project filter", { selected: "mobile" }], ["Loading", { state: "loading" }], ["Empty", { state: "empty", selected: "mobile" }]],
       tokens: [["listItem.compact.height", 66], ["listItem.compact.badge", 32], ["listItem.compact.lineSpacing", 5], ["listItem.compact.statusDot", 8], ["bottomFade.stops", "0 → 0.7 → 0.7"], ["bottomFade.overhang", 16], ["crossfade", "400 ms"]],
       source: { ios: "Components/List/SessionList.swift", android: "ui/components/list/SessionList.kt" },
-      divergences: [{ severity: "low", title: "Docs list three statuses, code has seven" }],
       render: live(sessionList) },
     { id: "session-list-dock", doc: "session-list-dock", align: "stretch", dock: true,
       params: [sel("selected", ORDER), sel("project", ["many", "one", "none"]), sel("load", ["none", "loading", "slow", "failed"]), bool("error", false, "create error")],
@@ -348,7 +336,6 @@
       sheet: [{ title: "Scope", kind: "stack", items: [["All projects", {}], ["Selected project", { selected: "mobile" }], ["One project", { project: "one" }], ["No projects, actions only", { project: "none" }]] }, { title: "Scope load", kind: "stack", base: { selected: "api" }, items: [["Loading", { load: "loading" }], ["Slow", { load: "slow" }], ["Failed", { load: "failed" }]] }, { title: "Create error", kind: "stack", items: [["Error above scope", { error: true }]] }],
       tokens: [["dock.cornerRadius", 26], ["scope.cornerRadius", 20], ["scope.minHeight", 44], ["scope.padding", "10, 8"], ["scope.mark", 32], ["cta.height", 52], ["cta.iconSize", 22], ["cta.gap", 8], ["paging.commit", "28 pt"], ["paging.switch", "450 ms"], ["paging.return", "180 ms"], ["control.wash", "iOS 0.06, Android 0.05"]],
       source: { ios: "Components/Chrome/OpenCodeSessionListDock.swift", android: "ui/components/chrome/OpenCodeSessionListDock.kt" },
-      divergences: [{ severity: "low", title: "Control wash is 0.06 on iOS and 0.05 on Android" }, { severity: "low", title: "Docs describe a count pill that code removed" }],
       render: live(dock),
       mount: (stage) => stage.querySelectorAll("[data-sl-scope]").forEach((el) => {
         if (el.dataset.bound) return; el.dataset.bound = "1";
@@ -364,7 +351,6 @@
       sheet: [{ title: "Row", kind: "stack", items: [["Accent", { mode: "row", accent: "violet" }], ["Neutral", { mode: "row", accent: "neutral" }]] }, { title: "List", kind: "stack", items: [["3 rows, slow caption", { rows: "3", slow: true }], ["6 rows", {}]] }],
       tokens: [["skeleton.avatar", 32], ["skeleton.title", 13], ["skeleton.subtitle", 10], ["skeleton.pill", "44 × 18"], ["skeleton.rowFadeStep", 0.12], ["skeleton.minRowOpacity", 0.2], ["skeleton.shimmerCycle", "1.4 s"], ["skeleton.shimmerHalfWidth", 0.35]],
       spec: SPEC.skeleton, source: { ios: "Components/List/OpenCodeSessionListSkeleton.swift", android: "ui/components/list/OpenCodeSessionListSkeleton.kt" },
-      divergences: [{ severity: "medium", title: "Bar color, radius, spacing, and caption differ" }],
       render: skeleton },
     { id: "session-status-bar", doc: "session-status-bar", align: "stretch",
       params: [sel("usage", ["0%", "50%", "70%", "85%", "unavailable"], "50%")],
@@ -378,7 +364,6 @@
       sheet: [{ title: "Pill", kind: "flow", items: Object.keys(BRANCHES).map((sample) => ["", { sample }]) }, { title: "Popover", kind: "stack", inset: true, base: { open: true }, items: [["Changes", {}], ["No changes", { sample: "noChanges" }], ["Worktree", { sample: "worktree" }], ["Many files, long name", { sample: "manyFiles" }]] }],
       tokens: [["pill.minHeight", 36], ["pill.paddingHorizontal", 14], ["pill.iconSize", 16], ["pill.iconSpacing", 6], ["popover.width", 320], ["popover.paddingHorizontal", 16], ["popover.sectionPaddingVertical", 12], ["popover.fileRowSpacing", 8], ["popover.topFiles", 3], ["popover.actionHeight", "iOS 44, Android 48"]],
       spec: SPEC.branch, source: { ios: "Components/Chat/OpenCodeSessionBranchPill.swift", android: "ui/components/chat/OpenCodeSessionBranchPill.kt" },
-      divergences: [{ severity: "low", title: "Popover action height and icon size differ" }],
       render: live((p) => { const b = BRANCHES[p.sample]; return p.open ? popover(b) : `<span class="sb-host">${branchPill(b)}<span class="sb-float" hidden>${popover(b)}</span></span>`; }),
       mount: (stage) => stage.querySelectorAll(".sb-host").forEach((host) => {
         if (host.dataset.bound) return; host.dataset.bound = "1";
@@ -404,7 +389,6 @@
       sheet: [{ title: "Listening", kind: "stack", inset: true, items: [["Listening", {}], ["Finishing", { variant: "finishing" }], ["Stopped (Android)", { variant: "stopped" }]] }, { title: "Unavailable", kind: "stack", inset: true, items: [["Permission denied", { variant: "permissionDenied" }], ["Model not installed", { variant: "modelNotInstalled" }], ["Downloading", { variant: "modelDownloading" }], ["Download starting", { variant: "modelDownloadStarting" }], ["Queued (Android)", { variant: "modelDownloadQueued" }], ["Download failed", { variant: "modelDownloadFailed" }], ["Recognizer error", { variant: "recognizerError" }]] }],
       tokens: [["orb.canvas", 148], ["orb.size", 64], ["orb.barCount", 24], ["orb.barWidth", 3], ["orb.barLength", "4–28"], ["orb.orbit", 40], ["orb.haloAlpha", 0.22], ["card.spacing", "iOS 16, Android 12"], ["transcript.maxHeight", "iOS 72, Android 78"]],
       spec: SPEC.dictation, source: { ios: "Components/Input/OpenCodeDictationCard.swift", android: "ui/components/input/OpenCodeDictationCard.kt" },
-      divergences: [{ severity: "high", title: "Stopped and download queued states exist only on Android" }, { severity: "medium", title: "Spacing, transcript height, and status style differ" }],
       render: live(dictation),
       mount: (stage) => stage.querySelectorAll(".sd-orb").forEach((el) => {
         if (el.dataset.bound) return; el.dataset.bound = "1";

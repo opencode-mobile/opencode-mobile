@@ -72,7 +72,7 @@ internal fun sessionCaptures(): List<ComponentCaptureComponent> =
         sessionTodoItemCaptures(),
     )
 
-private const val MOBILE_WORKTREE = "/Users/demo/opencode-mobile"
+private const val MOBILE_WORKTREE = "/Users/example/opencode-mobile"
 
 private fun sessionListCaptures(): ComponentCaptureComponent {
     fun state(

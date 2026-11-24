@@ -299,12 +299,6 @@
       tokens: [["Source", "shared/theme-presets + ThemeResolver"], ["row.padding", 12], ["row.cornerRadius", 12], ["swatch.height", 44], ["swatch.cornerRadius", 8], ["swatch.border", "1 border-weaker-base"], ["iOS mix", "rounds each channel"], ["Android mix", "truncates each channel"]],
       spec: "## Intent\nShows every resolved color token for the active theme, in light and dark, grouped by role.\n\n## Public API\nTokens are resolved from a preset's palette seeds and overrides by `ThemeResolver` on each platform. A code color preset can overlay `syntax-*` tokens.\n\n## Behavior\nThe native galleries list 42 theme tokens plus the two optional code-surface tokens. This page shows all 62 resolved tokens and marks those the native galleries leave out. iOS frames show iOS-rounded values. The code preset shown is Match theme, so `syntax-background` and `syntax-foreground` are unset: iOS lists them as not set and Android hides them.",
       source: { ios: "ComponentGallery/Foundation/ColorGalleryView.swift", android: "ui/componentgallery/foundation/ColorGalleryScreen.kt" },
-      divergences: [
-        { severity: "medium", title: "iOS rounds mixed colors and Android truncates, so 100 of 350 derived values differ by one RGB step" },
-        { severity: "low", title: "iOS lists unset syntax-background and syntax-foreground; Android hides them" },
-        { severity: "low", title: "Both native galleries omit 20 resolved tokens" },
-        { severity: "low", title: "Android gallery title omits the active code preset" },
-      ],
       render: renderColors,
     },
     {
@@ -313,7 +307,6 @@
       tokens: [["Catalog", "icons/manifest.yaml"], ["Library", "Lucide"], ["Count", Object.keys(window.DS.icons).length], ["glyph", 24], ["strokeWidth", 1.5], ["cell.minWidth", 80], ["cell.minHeight", 72], ["grid.columnGap", 12], ["grid.rowGap", 16], ["tint", "icon-strong-base"]],
       spec: "## Intent\nThe shared Lucide icon catalog, generated for both platforms from `icons/manifest.yaml`.\n\n## Public API\niOS: `OpenCodeIconImage(icon:size:)`. Android: `OpenCodeIcons.{Name}` with `Icon`.\n\n## Behavior\nIcons are outline strokes at 1.5 in a 24 viewBox and tint with `icon-strong-base` in product chrome. Size iOS icons with `size:` or a frame, never `.font`. The filter is a prototype aid.",
       source: { ios: "Icons/OpenCodeIcon.swift", android: "ui/icons/OpenCodeIcons.kt" },
-      divergences: [{ severity: "medium", title: "Android gallery lists 40 of the 68 catalog icons" }],
       render: renderIcons,
     },
     {
@@ -322,12 +315,6 @@
       tokens: [["Primary intent", "IBM Plex Sans (deferred)"], ["Today", "platform fallback fonts"], ["card.padding", 12], ["card.cornerRadius", 12], ["code.padding", 10], ["code.cornerRadius", 8], ["Text size steps", "0.78, 0.85, 0.92, 1, 1.12, 1.26"]],
       spec: "## Intent\nEight semantic type roles shared by both apps, drawn with platform fonts until IBM Plex ships.\n\n## Public API\niOS: `OpenCodeTypography` and `.openCodeFont(_:)`. Android: Material `Typography` plus `CodeTextStyle`.\n\n## Behavior\nAndroid roles set fixed line heights, and display and title add -0.16sp tracking. iOS roles use the system line height. Appearance text sizes multiply the phone's text size inside a text region.",
       source: { ios: "Theme/OpenCodeTypography.swift", android: "theme/Type.kt" },
-      divergences: [
-        { severity: "high", title: "Outside text regions Android follows the phone font scale and iOS stays fixed" },
-        { severity: "medium", title: "iOS caps Dynamic Type at accessibility1; Android has no cap" },
-        { severity: "medium", title: "Android sets line heights and tracking that iOS roles do not" },
-        { severity: "low", title: "Android labelSmall (12sp) is used without a type role" },
-      ],
       render: renderTypography,
     },
     {
@@ -336,7 +323,6 @@
       tokens: [["Default size (Android)", 24], ["Default size (iOS)", "fills proposed size"], ["Tree row", 18], ["Composer suggestion", 16], ["cell.minWidth", 96], ["grid.columnGap", 12], ["grid.rowGap", 16], ["mono tint", "icon-strong-base"]],
       spec: "## Intent\nA file or folder icon picked from a path, ported from opencode's `FileIcon`.\n\n## Public API\n`path`, `kind` (file or directory), `expanded`, `mono`, `size`.\n\n## Behavior\nThe basename is lowercased. Files try the exact file name, then dotted suffixes longest first, then `Document`. Folders try `name`, `.name`, `_name`, and `__name__`, then the default folder. Expanded folders use the open variant. Mono draws the icon's shape in the current foreground color.",
       source: { ios: "Icons/OpenCodeFileIcon.swift", android: "ui/icons/OpenCodeFileIcon.kt" },
-      divergences: [{ severity: "low", title: "Without a size, iOS fills the proposed space and Android draws 24dp" }],
       render: renderFileIcon, mount: mountFileIcon,
     },
     {
@@ -345,11 +331,6 @@
       tokens: [["design", "336 × 186"], ["gallery.height", 176], ["gallery.cornerRadius", 20], ["gallery.border", "1 border-weaker-base"], ["frame", "48,14 240×210 r18"], ["card.cornerRadius", 10], ["glow", "interactive 12%, outset 6"], ["label", "11 bold, fixed size"]],
       spec: "## Intent\nDecorative wireframes that explain a feature or Timeline Style in onboarding and pickers.\n\n## Public API\n`topic`, one of ten values.\n\n## Behavior\nEach drawing uses a 336 × 186 design space, scaled to fit and centered. The phone frame runs past the bottom edge and is clipped. Labels stay at a fixed design size and ignore text scaling. The illustration is hidden from accessibility. `timelineChips` reuses the `chipTimelineGlance` drawing.",
       source: { ios: "Components/Illustration/OpenCodeSkeletonIllustration.swift", android: "ui/components/illustration/OpenCodeSkeletonIllustration.kt" },
-      divergences: [
-        { severity: "low", title: "The live avatar's status dot is smaller on iOS" },
-        { severity: "low", title: "Activity card divider crosses the lit border on Android only" },
-        { severity: "low", title: "Gallery label gap is 8 on iOS and 20 on Android" },
-      ],
       render: renderSkeleton,
     },
   ]);

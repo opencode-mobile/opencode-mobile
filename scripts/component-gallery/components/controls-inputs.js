@@ -261,14 +261,6 @@
       ],
       tokens: [["textInput.cornerRadius", 8], ["textInput.minHeight", 48], ["textInput.paddingHorizontal", 12], ["multiline.paddingVertical", 12], ["border.idle", "1 border-weaker-base"], ["border.focus", "2 interactive"], ["border.error", "2 error"], ["disabled.opacity", 0.6], ["search.icon", 18], ["search.gap", 8], ["search.clear.target (iOS)", 24], ["search.clear.target (Android)", 32], ["message.gap", 6], ["type", "type.body, type.caption"]],
       source: { ios: "Components/Input/OpenCodeTextInput.swift", android: "ui/components/input/OpenCodeTextInput.kt" },
-      divergences: [
-        { severity: "high", title: "Search keyboard action is Search on iOS and Done on Android" },
-        { severity: "medium", title: "Search icon, clear button, target, and spinner differ" },
-        { severity: "medium", title: "Length limit counts characters on iOS and UTF-16 units on Android" },
-        { severity: "low", title: "Disabled dims the error text on Android only" },
-        { severity: "low", title: "iOS single-line placeholder uses the system color, not text-weaker" },
-        { severity: "low", title: "Doc omits filter, search, go, multi-line, and length limit" },
-      ],
       render: textInput, mount: mountTextInput },
 
     { id: "server-address-input", doc: "server-address-input", align: "stretch", pad: true,
@@ -280,12 +272,6 @@
       ],
       tokens: [["textInput.cornerRadius", 8], ["textInput.minHeight", 48], ["scheme.paddingStart", 16], ["scheme.paddingEnd", 8], ["scheme.iconGap", 4], ["scheme.icon", 16], ["host.paddingStart", 8], ["host.paddingEnd", 16], ["border.focus (iOS)", "2 interactive"], ["border.focus (Android)", "2 text-interactive-base"], ["error.gap (iOS)", 6], ["error.gap (Android)", 4], ["error.inset (Android)", 16]],
       source: { ios: "Components/Input/OpenCodeServerAddressInput.swift", android: "ui/components/input/OpenCodeServerAddressInput.kt" },
-      divergences: [
-        { severity: "high", title: "Return runs onSubmit on iOS; Android has no onSubmit" },
-        { severity: "medium", title: "Disabled dims the field on iOS and only the scheme label on Android" },
-        { severity: "medium", title: "Focus color, hint color, and error placement differ" },
-        { severity: "low", title: "Doc describes a vertical divider that neither platform draws" },
-      ],
       render: serverAddress, mount: mountServerAddress },
 
     { id: "text-size-slider", align: "stretch", pad: true,
@@ -298,11 +284,6 @@
       tokens: [["card.radius", 12], ["card.padding", "12 16 4"], ["row.spacing", 12], ["track.height", 2], ["tick.size", 8], ["thumb.size", 22], ["track", "border-weak-base"], ["track.active", "text-strong"], ["tick.default", "text-weaker"], ["thumb.light", "surface-raised-base"], ["thumb.dark", "text-strong"]],
       spec: "## Intent\nA card that picks one named text size for a region in Settings › Appearance.\n\n## Public API\n- `title`, `stepNames` (two or more), `selectedIndex`, `onSelectedIndexChange`\n- `defaultIndex` (defaults to the middle step), `accessibilityLabel`, `enabled`\n\n## Behavior\n- Drag or tap snaps to a step.\n- The default step's tick uses `text-weaker`; the others use `border-weak-base`.\n- Screen readers hear the label and the step name.\n- iOS has the same concept as Step Slider.",
       source: { android: "ui/components/input/OpenCodeTextSizeSlider.kt" },
-      divergences: [
-        { severity: "medium", title: "Same concept as iOS Step Slider with different structure, geometry, and colors" },
-        { severity: "medium", title: "Disabled looks identical to enabled" },
-        { severity: "low", title: "Gallery shows five steps; production has six" },
-      ],
       render: textSizeSlider, mount: mountTextSizeSlider },
 
     { id: "step-slider", align: "stretch", pad: true,
@@ -315,7 +296,6 @@
       tokens: [["track.height", 4], ["tick.size", 6], ["tick.default", 10], ["knob.size", 24], ["glyph.small", 12], ["glyph.large", 19], ["row.spacing", 12], ["minHeight", 44], ["track", "border-weaker-base"], ["track.active", "text-strong"], ["tick.inactive", "border-weak-base"], ["knob.light", "background-base"], ["knob.dark", "text-strong"], ["motion", "easeOut 120ms"]],
       spec: "## Intent\nA slider that snaps to a few named steps. Settings › Appearance uses it for text size.\n\n## Public API\n- `stepCount`, `selectedIndex`, `defaultIndex` (optional), `variant` (`textSize`)\n- `accessibilityLabel`, `accessibilityValue`, `onSelect`\n\n## Behavior\n- Drag or tap selects the nearest step, moving in 120ms ease-out.\n- Ticks at or before the selection use `text-strong`.\n- VoiceOver adjusts by one step and reads the step name.\n- The title row and sample belong to the host screen and are shown here as in the gallery.\n- Android has the same concept as Text Size Slider.",
       source: { ios: "Components/Input/OpenCodeStepSlider.swift" },
-      divergences: [{ severity: "medium", title: "Same concept as Android Text Size Slider with different structure, geometry, and colors" }],
       render: stepSlider, mount: mountStepSlider },
 
     { id: "composer-suggestion-overlay", doc: "composer-suggestion-overlay", align: "stretch", pad: true,
@@ -324,11 +304,6 @@
       sheet: [{ title: "States", kind: "stack", inset: true, items: [["Populated, scrolls past four rows", { scenario: "populated" }], ["Hugs two rows", { scenario: "short" }], ["Mentions with file icons", { scenario: "mentions" }], ["Empty", { scenario: "empty" }]] }],
       tokens: [["composerSuggestionOverlay.cornerRadius", 12], ["composerSuggestionOverlay.visibleItemLimit", 4], ["composerSuggestionOverlay.rowPaddingVertical", 10], ["composerSuggestionOverlay.rowInternalSpacing", 2], ["row.paddingHorizontal", 16], ["icon.size", 16], ["icon.gap", 8], ["badge.gap", 6], ["maxHeight (iOS)", 248], ["maxHeight (Android)", 264], ["border", "1 border-weaker-base"]],
       source: { ios: "Components/Input/OpenCodeComposerSuggestionOverlay.swift", android: "ui/components/input/OpenCodeComposerSuggestionOverlay.kt" },
-      divergences: [
-        { severity: "medium", title: "List height budget differs, and Android's is short of four subtitle rows" },
-        { severity: "low", title: "Fallback empty message is hardcoded English on both platforms" },
-        { severity: "low", title: "Doc omits the leading icon" },
-      ],
       render: suggestions },
 
     { id: "code-snippet", align: "stretch", pad: true,
@@ -338,7 +313,6 @@
       tokens: [["paddingHorizontal", 12], ["paddingVertical", 10], ["cornerRadius", 10], ["fill.raised", "surface-raised-base"], ["fill.base", "surface-base"], ["text", "text-strong"], ["type", "type.code"]],
       spec: "## Intent\nA monospace block for a command or code.\n\n## Public API\n- Plain or syntax-colored text\n- `surface`: `raised` on the page background, `base` on a raised card, or a syntax preset's editor background\n\n## Behavior\n- Fills the width and wraps long lines.\n- Syntax colors stay on their spans; other text uses `text-strong` or the preset's plain color.\n- Plain text defaults to `raised`; colored text defaults to `base`.",
       source: { ios: "Components/Feedback/OpenCodeCodeSnippet.swift", android: "ui/components/feedback/OpenCodeCodeSnippet.kt" },
-      divergences: [{ severity: "low", title: "Android rejects blank code; iOS rejects only empty code" }],
       render: codeSnippet },
 
     { id: "empty-state", doc: "empty-state", align: "stretch", cellHeight: 270,
@@ -346,10 +320,6 @@
       states: [["With icon", {}], ["No icon", { icon: false }], ["Two actions", { icon: false, title: "Unable to connect", message: "The server did not answer.", primary: "Retry", secondary: "Edit connection" }], ["One action", { icon: false, title: "Unable to connect", message: "The server did not answer.", primary: "Retry" }], ["Hugs content (sheet)", { fills: false }]],
       tokens: [["paddingHorizontal", 24], ["icon.size", 40], ["icon.gap", 16], ["title.gap", 12], ["actions.gap", 16], ["action.spacing", 8], ["title (iOS)", "type.heading 16/22"], ["title (Android)", "titleLarge 20/28"], ["message", "type.bodySecondary"]],
       source: { ios: "Components/Feedback/OpenCodeEmptyState.swift", android: "ui/components/feedback/OpenCodeEmptyState.kt" },
-      divergences: [
-        { severity: "medium", title: "Title is 16pt on iOS and 20sp on Android" },
-        { severity: "low", title: "Doc says there is no button, but both platforms support two" },
-      ],
       render: emptyState },
 
     { id: "status-stack", doc: "status-stack", align: "stretch", cellHeight: 170,
@@ -357,11 +327,6 @@
       states: [["Home copy", {}], ["Session copy", { title: "Loading messages", subtitle: "Fetching timeline…" }], ["Spinner", { style: "spinner", title: "Loading" }], ["After 300ms grace", { reveal: "afterGrace" }]],
       tokens: [["ring.size", 32], ["ring.stroke (Android)", 2.5], ["ring", "text-base"], ["track (Android)", "border-weaker-base"], ["ring.titleGap", 14], ["title.subtitleGap (iOS)", 14], ["title.subtitleGap (Android)", 4], ["paddingHorizontal", 24], ["revealGrace", "300ms"], ["reveal (iOS)", "easeOut 150ms"]],
       source: { ios: "Components/Feedback/OpenCodeStatusStack.swift", android: "ui/components/feedback/OpenCodeStatusStack.kt" },
-      divergences: [
-        { severity: "medium", title: "Title-to-subtitle gap is 14 on iOS and 4 on Android" },
-        { severity: "low", title: "Grace reveal fades on iOS and appears instantly on Android" },
-        { severity: "low", title: "Doc says single variant, but spinner and reveal exist" },
-      ],
       render: statusStack },
 
     { id: "inline-notice", align: "stretch", pad: true,
@@ -374,7 +339,6 @@
       tokens: [["row.spacing", 12], ["banner.padding", 12], ["banner.radius", 8], ["banner.neutral", "surface-raised-base"], ["banner.error", "error at 10%"], ["text.neutral", "text-base"], ["text.error", "error"], ["type", "type.caption"], ["action", "Button compactText, low"]],
       spec: "## Intent\nA short tonal message inside a screen, with an optional action.\n\n## Public API\n- `message` (required)\n- `tone`: `neutral`, `error`\n- `variant`: `plain` (type only), `banner` (padded tonal fill)\n- `action`: optional title and callback\n\n## Behavior\n- The message takes the remaining width and wraps.\n- The action is a low-contrast compact button on the same row, vertically centered.",
       source: { ios: "Components/Feedback/OpenCodeInlineNotice.swift", android: "ui/components/feedback/OpenCodeInlineNotice.kt" },
-      divergences: [],
       render: inlineNotice },
 
     { id: "keyboard-hint", align: "stretch", pad: true,
@@ -383,10 +347,6 @@
       tokens: [["paddingHorizontal", 4], ["neutral", "text-weak"], ["warning", "warning"], ["type", "type.caption"], ["lines (iOS)", 1], ["lines (Android)", "unlimited"]],
       spec: "## Intent\nOne line of caption text about a hardware-keyboard key, shown only while it applies.\n\n## Public API\n- `text` (required)\n- `tone`: `neutral` for guidance, `warning` for a pending key action\n\n## Behavior\n- A 4pt inset aligns it with prompt and composer content.\n- iOS truncates to one line; Android wraps.\n- Android announces warning hints politely; iOS does not announce them.",
       source: { ios: "Components/Feedback/OpenCodeKeyboardHint.swift", android: "ui/components/feedback/OpenCodeKeyboardHint.kt" },
-      divergences: [
-        { severity: "high", title: "Warning hint is announced on Android but not on iOS" },
-        { severity: "medium", title: "Long hints truncate on iOS and wrap on Android" },
-      ],
       render: keyboardHint },
   ]);
 })();

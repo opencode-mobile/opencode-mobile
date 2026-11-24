@@ -220,7 +220,8 @@
       b.innerHTML = `<table>${c.tokens.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("")}</table>`;
     } else {
       const s = doc ? section(doc, ["platform notes", "parity"]) : "";
-      const found = c?.divergences?.length ? `<div class="h">Divergences found</div>${c.divergences.map((d) => `<div class="div ${esc(d.severity)}"><b>${esc(d.severity)}</b> ${inline(d.title)}</div>`).join("")}` : "";
+      const divs = window.DS.divergences?.[state.id] ?? [];
+      const found = divs.length ? `<div class="h">Divergences found <span style="font-weight:400">(local, unverified)</span></div>${divs.map((d) => `<div class="div ${esc(d.severity)}"><b>${esc(d.severity)}</b> ${inline(d.title)}</div>`).join("")}` : "";
       const src = c?.source ? `<div class="h">Native source</div><table>${Object.entries(c.source).map(([k, v]) => `<tr><td>${esc(k)}</td><td style="text-align:left;word-break:break-all">${esc(v)}</td></tr>`).join("")}</table>` : "";
       b.innerHTML = found + src + (s ? `<div class="doc" style="margin-top:14px">${md(s)}</div>` : found || src ? "" : '<div class="note">No platform notes recorded for this component.</div>');
     }

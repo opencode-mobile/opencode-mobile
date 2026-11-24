@@ -175,76 +175,6 @@
     return `<div class="c-segctl-wrap" data-segctl><div class="c-segctl" style="--n:${MODES.length};--i:${i}"><span class="c-segctl-th"></span>${MODES.map(([id, t], x) => `<button class="${cx("c-segctl-i", x === i && "sel")}" data-i="${x}" data-mode="${id}">${t}</button>`).join("")}</div>${p.note ? `<div class="c-segctl-n">${MODES[i][2]}</div>` : ""}</div>`;
   };
 
-  /* ---------- Divergences: one source for the Parity tab and divergences/controls-actions.md ---------- */
-  const iP = (v, f, ...l) => `${v} (${l.map((x) => `\`ios/OpenCode Mobile/OpenCode Mobile/${f}:${x}\``).join(", ")})`;
-  const aP = (v, f, ...l) => `${v} (${l.map((x) => `\`android/app/src/main/java/dev/opencode/mobile/${f}:${x}\``).join(", ")})`;
-  const BTN_I = "Components/Input/OpenCodeButton.swift", BTN_A = "ui/components/input/OpenCodeButton.kt";
-  const TILE_I = "Components/Input/OpenCodeActionTile.swift", TILE_A = "ui/components/input/OpenCodeActionTile.kt";
-  const FP_I = "Components/Chrome/OpenCodeFloatingPill.swift", FP_A = "ui/components/chrome/OpenCodeFloatingPill.kt";
-  const TURN_I = "Components/Chrome/OpenCodeTurnStatusPill.swift", TURN_A = "ui/components/chrome/OpenCodeTurnStatusPill.kt";
-  const CHIP_I = "Components/Input/OpenCodeMenuChip.swift", CHIP_A = "ui/components/input/OpenCodeMenuChip.kt";
-  const CB_I = "Components/List/OpenCodeChoiceBadge.swift", CB_A = "ui/components/list/OpenCodeChoiceBadge.kt";
-  const FT_I = "Components/List/OpenCodeFilterTabs.swift", FT_A = "ui/components/list/OpenCodeFilterTabs.kt";
-  const TAG_I = "Components/Feedback/OpenCodeTag.swift", TAG_A = "ui/components/feedback/OpenCodeTag.kt";
-  const SEG_I = "Components/Input/OpenCodeSegmentedControl.swift";
-  const ND = "Not documented";
-  const D = (severity, title, type, ios, android, docs, prototype, why) => ({ severity, title, type, ios, android, docs, prototype, why });
-  const DV = {
-    button: [
-      D("medium", "Destructive label color differs", "iOS vs Android", iP("`surface-base`, which is dark in dark themes", BTN_I, 367), aP("`onError`, fixed white", BTN_A, 326), "Says only \"contrasting label text\"", "Each platform's real label color", "The same destructive button has dark text on iOS and white text on Android in dark mode."),
-      D("medium", "Subtle contrast exists only on iOS", "Platform-only", iP("`.subtle` well for floating chrome", BTN_I, 18), aP("Four contrasts, no Subtle", BTN_A, 84), "`docs/design-system/components/button.md:21` lists four contrasts and omits Subtle", "Subtle on iOS, an \"iOS only\" marker on Android", "Composer and dock controls cannot share one contrast across platforms, and the doc is out of date."),
-      D("medium", "Link button type size differs", "iOS vs Android", iP("`body`, 16 pt semibold", BTN_I, 106, 107), aP("`bodyMedium`, 14 sp semibold", BTN_A, 115), ND, "16 on iOS, 14 on Android", "The same inline link reads visibly larger on iOS."),
-      D("low", "Icon circle glyph type differs", "iOS vs Android", iP("18 pt semibold", BTN_I, 174), aP("`titleMedium`, 16 sp medium", BTN_A, 279), ND, "Each platform's glyph size and weight", "The composer's `/` glyph has a different size and weight per platform."),
-    ],
-    "split-button": [
-      D("low", "Menu half width differs", "iOS vs Android", iP("32 pt", BTN_I, 39), aP("30 dp", "ui/components/input/OpenCodeSplitButton.kt", 41), ND, "32 on iOS, 30 on Android", "The menu half has a slightly different width and tap area with no recorded reason."),
-    ],
-    "action-pill": [
-      D("medium", "Disabled treatment differs", "iOS vs Android", iP("Whole pill at 0.72 opacity", "Components/Chrome/OpenCodeFloatingPillChrome.swift", 20, 33), aP("Fill at 0.7 alpha and shadow removed, label stays opaque", "ui/components/input/OpenCodeActionPill.kt", 69, 73), ND, "Each platform's disabled recipe", "A disabled pill fades its label on iOS but not on Android."),
-      D("medium", "Expand Pill exists only on iOS", "Platform-only", iP("`OpenCodeExpandPill`, shown in the Action Pill gallery", "Components/Input/OpenCodeExpandPill.swift", 6), "No matching component under `android/app/src/main/java`", ND, "Rendered on iOS, an \"iOS only\" marker on Android", "Nested rows such as worktrees have no shared expand control on Android."),
-    ],
-    "action-tile": [
-      D("high", "Android tile has no button role", "iOS vs Android", iP("A SwiftUI `Button`, announced as a button", TILE_I, 48), aP("`clickable` with no `role`", TILE_A, 116), ND, "Not visible; recorded here", "TalkBack does not announce the tile as a button."),
-      D("medium", "Disabled icon and label colors differ", "iOS vs Android", iP("`icon-base` and `text-weaker`", TILE_I, 77, 81), aP("`onSurfaceVariant` (`text-base`) for both", TILE_A, 98, 104), ND, "Each platform's disabled colors", "Disabled tiles are noticeably fainter on iOS."),
-      D("low", "Count badge type differs", "iOS vs Android", iP("11 pt semibold", TILE_I, 100), aP("`labelSmall`, 12 sp regular", TILE_A, 192), ND, "Each platform's count type", "The count pill reads differently in size and weight."),
-    ],
-    "floating-pill": [
-      D("medium", "Summary layout exists only on iOS", "Platform-only", iP("`.summary(count:pending:)` with its own marks", FP_I, 19), aP("No summary layout, only a `badgeCount` argument", FP_A, 95, 274), ND, "Summary on iOS, an \"iOS only\" marker on Android", "A collapsed stack shows a state mark on iOS that Android cannot draw the same way."),
-      D("medium", "Count badge styling differs", "iOS vs Android", iP("`interactive` fill, `text-on-brand-base`, 13 pt, 1.5 pt raised ring", FP_I, 316, 317, 322, 323), aP("`primary` fill, white, 12 sp, no ring", FP_A, 403, 410, 411), ND, "Each platform's badge", "The badge has a different color, size, and edge on each platform."),
-      D("low", "Turn pill fold guard is iOS-only", "iOS vs Android", iP("Forces compact off for attention and failed", TURN_I, 130), aP("Honours `compact` in every phase; a compact failure would draw a spinner", TURN_A, 310), ND, "Each platform's rule when compact is forced on", "Android relies on its call site to keep attention and failure readable."),
-      D("low", "Close touch target differs", "iOS vs Android", iP("44 pt", FP_I, 397), aP("48 dp", FP_A, 88), ND, "Each platform's hit area", "Both are accessible, but the difference has no recorded reason."),
-    ],
-    "menu-chip": [
-      D("medium", "Padding and icon sizes differ", "iOS vs Android", iP("12 pt both sides, 14 pt icon and chevron", CHIP_I, 4, 6, 9), aP("10 dp start, 8 dp end (12 for toggle), 16 dp icons", CHIP_A, 43, 44, 46, 139), ND, "Each platform's geometry", "The same chip has a different width and icon weight."),
-      D("medium", "Title type differs", "iOS vs Android", iP("13 pt semibold", CHIP_I, 10), aP("14 sp semibold", CHIP_A, 161), ND, "Each platform's type", "Chip labels are visibly larger on Android."),
-      D("medium", "Unselected fill and border differ", "iOS vs Android", iP("`text-strong` at 0.08, no border; selected border 0.30", CHIP_I, 118, 122), aP("`surface-raised-base` with `border-weak-base`; selected border 0.32", CHIP_A, 57, 127, 132), ND, "Each platform's fill and border", "The resting chip is a borderless wash on iOS and an outlined surface on Android."),
-      D("medium", "Disabled opacity exists only on iOS", "iOS vs Android", iP("0.5 opacity plus `text-weaker`", CHIP_I, 79, 113), aP("`text-weaker` only, full-strength fill", CHIP_A, 102), ND, "Each platform's disabled recipe", "A disabled chip looks more enabled on Android."),
-      D("low", "Title width cap exists only on Android", "Platform-only", iP("One line, no cap", CHIP_I, 64), aP("240 dp cap", CHIP_A, 48, 166), ND, "Android caps at 240", "A very long project name truncates at different widths."),
-    ],
-    "choice-badge": [
-      D("high", "Android standard badge has no button role", "iOS vs Android", iP("A SwiftUI `Button`", CB_I, 42), aP("`clickable` with no `role`; the glass variant sets one", CB_A, 100, 143), ND, "Not visible; recorded here", "TalkBack does not announce standard badges as buttons."),
-      D("medium", "Glass well opacity differs from Android and docs", "Code vs docs", iP("0.06 unselected, 0.12 selected", "Components/Chrome/OpenCodeFloatingChrome.swift", 41, 43), aP("0.08 unselected, 0.14 selected", CB_A, 134), "`docs/design-system/components/choice-badge.md:29` says 0.14 and 0.08", "Each platform's real opacity", "iOS glass badges are fainter than Android and than the documented recipe."),
-      D("medium", "Disabled glass opacity exists only on iOS", "iOS vs Android", iP("0.5 opacity", CB_I, 78), aP("Label color change only", CB_A, 131), ND, "Each platform's disabled recipe", "A disabled composer chip looks more enabled on Android."),
-      D("low", "Standard minimum height exists only on iOS", "iOS vs Android", iP("32 pt minimum", CB_I, 48), aP("No minimum, height comes from padding and type", CB_A, 110), ND, "Each platform's sizing", "Standard badges can differ by a point or two in height."),
-    ],
-    "filter-tabs": [
-      D("high", "Segmented style has no keyboard focus ring", "Missing state", iP("Segments omit `openCodeKeyboardFocusable`, which scrolling tabs have", FT_I, 99, 140), aP("Segments use `openCodeControl` without `openCodeFocusRing`, which scrolling tabs have", FT_A, 137, 224), ND, "No focus ring on segments", "Hardware keyboard users cannot see which segment has focus."),
-      D("medium", "Scrolling tab type differs", "iOS vs Android", iP("`button` 14 pt, count 13 pt semibold", FT_I, 71, 76), aP("`labelMedium`, which `Type.kt` leaves at the Material default of 12 sp, count 12 sp", FT_A, 157, 177), "`docs/design-system/components/filter-tabs.md:28` allows `type.button` or label-medium, without saying which platform uses which", "Each platform's type", "Android tabs are visibly smaller and use a role outside the app's type scale."),
-      D("medium", "Segmented count color differs", "iOS vs Android", iP("`text-weaker`", FT_I, 125), aP("`onSurfaceVariant` (`text-base`)", FT_A, 245), ND, "Each platform's color", "Counts are more prominent on Android."),
-    ],
-    tag: [
-      D("medium", "Warning and success tones exist only on iOS", "Platform-only", iP("Four tones, used for goal status", TAG_I, 16, 18), aP("Neutral and Accent only, so goal status is neutral", TAG_A, 26), ND, "Warning and success on iOS, an \"iOS only\" marker on Android", "A paused or met goal has color meaning on iOS that Android does not show."),
-      D("medium", "Tag type size differs", "iOS vs Android", iP("`caption`, 13 pt", TAG_I, 56, 64), aP("`labelSmall`, 12 sp", TAG_A, 63, 84), ND, "13 on iOS, 12 on Android", "The same tag is larger on iOS."),
-      D("medium", "Regular neutral text color differs", "iOS vs Android", iP("`text-strong`", TAG_I, 58), aP("`onSurfaceVariant` (`text-base`)", TAG_A, 57), ND, "Each platform's color", "Standalone tags have stronger text on iOS."),
-    ],
-    "segmented-control": [
-      D("medium", "Component exists only on iOS", "Platform-only", iP("`OpenCodeSegmentedControl`, used by Appearance", SEG_I, 16), "No matching component; the closest is Filter Tabs `Segmented`", ND, "Rendered for iOS only", "The same exclusive choice has no shared control on Android."),
-      D("low", "Keyboard activation skips the selected guard", "Missing state", iP("Tap returns early when selected, keyboard calls `onSelect` anyway", SEG_I, 41, 68), "Not applicable", ND, "Tap behavior", "Keyboard users can re-fire a selection that a tap would ignore."),
-      D("low", "Selected shadow is hardcoded", "Hardcoded value", iP("Black at 0.08, radius 2, y 1", SEG_I, 57), "Not applicable", ND, "The same shadow", "The shadow bypasses tokens and does not adapt to themes."),
-    ],
-  };
-  const div = (id) => DV[id].map(({ severity, title }) => ({ severity, title }));
-  window.__controlsActionsDivergences = DV;
 
   /* ---------- Registry ---------- */
   const CONTRAST = ["high", "low", "subtle", "accent", "destructive"];
@@ -265,7 +195,7 @@
         { title: "Full width", kind: "stack", inset: true, base: { variant: "fullWidthText", title: "Run" }, items: [["High", { contrast: "high" }], ["Low", { contrast: "low" }], ["Subtle", { contrast: "subtle" }], ["Accent", { contrast: "accent" }], ["Destructive", { contrast: "destructive" }], ["Disabled", { disabled: true }], ["Large", { size: "large" }]] },
       ],
       tokens: [["button.cornerRadius", 8], ["button.minHeight.medium", 40], ["button.minHeight.large", 48], ["button.paddingHorizontal.text", 14], ["button.paddingVertical.text", 10], ["button.icon.size", "40 / 48 box, 18 glyph"], ["button.borderWidth", 1], ["press.scale", "0.98, quiet 0.97 (iOS)"], ["press.opacity", "0.92, quiet 1 (iOS)"], ["press.wash", "text-strong 0.14 (iOS quiet)"], ["subtle.fill", "text-strong 0.06, disabled 0.03 (iOS)"], ["accent.disabled", "interactive 0.10 on surface-raised-base, scale 0.96"], ["type", "type.button"]],
-      source: { ios: "Components/Input/OpenCodeButton.swift", android: "ui/components/input/OpenCodeButton.kt" }, divergences: div("button"), render: button },
+      source: { ios: "Components/Input/OpenCodeButton.swift", android: "ui/components/input/OpenCodeButton.kt" }, render: button },
 
     { id: "split-button", align: "center",
       params: [sel("contrast", ["low", "high", "subtle", "accent", "destructive"]), text("title", "Deny"), bool("disabled"), sel("pressed", ["none", "label", "menu"])],
@@ -277,7 +207,7 @@
       ],
       tokens: [["splitButton.gap", 2], ["splitButton.outerRadius", 8], ["splitButton.innerRadius", 3], ["splitButton.minHeight", 40], ["splitButton.menuWidth", "iOS 32, Android 30"], ["splitButton.menuIcon", 16], ["splitButton.longPress", "400 ms (iOS)"], ["type", "type.button"]],
       spec: "## Intent\nA compact text button joined to a narrow menu half, for a primary action with related alternatives, such as Deny and Deny with a note.\n\n## Public API\n- `title`, menu accessibility label, `enabled`, `contrast`, `action`, `menuAction`.\n\n## Behavior\n- The label half runs the action.\n- The ▾ half, a long-press, or a right-click on the label half opens the menu.\n- Screen readers get two buttons, and the label half exposes the menu as an action.",
-      source: { ios: "Components/Input/OpenCodeSplitButton.swift", android: "ui/components/input/OpenCodeSplitButton.kt" }, divergences: div("split-button"),
+      source: { ios: "Components/Input/OpenCodeSplitButton.swift", android: "ui/components/input/OpenCodeSplitButton.kt" }, 
       render: (p, ctx = Kit.ctx) => (p.demo === "prompt" ? `<div class="c-prompt">${split({ ...p, contrast: "low", title: "Deny" }, ctx)}<span class="c-prompt-sp"></span>${button({ variant: "compactText", title: "Always", contrast: "low", size: "medium" }, ctx)}${button({ variant: "compactText", title: "Allow once", contrast: "high", size: "medium" }, ctx)}</div>` : split(p, ctx)),
       mount: (stage) => once(stage, "[data-split]", (el) => {
         const [main, menu] = el.querySelectorAll("button");
@@ -298,7 +228,7 @@
         { title: "Expand pill", kind: "rows", base: { kind: "expandPill" }, items: [["Collapsed", {}], ["Expanded", { expanded: true }], ["Disabled", { disabled: true }]] },
       ],
       tokens: [["actionPill.minHeight", 36], ["actionPill.paddingHorizontal", 14], ["actionPill.paddingVertical", 8], ["actionPill.iconSize", 16], ["actionPill.iconSpacing", 6], ["actionPill.shadowElevation", "4, Android"], ["actionPill.disabled", "iOS 0.72 opacity, Android fill 0.7"], ["expandPill.padding", "10 × 4"], ["expandPill.icon", "14, gap 4"], ["expandPill.fill", "text-strong 0.10, disabled 0.05"], ["type", "type.button"]],
-      source: { ios: "Components/Input/OpenCodeActionPill.swift", android: "ui/components/input/OpenCodeActionPill.kt" }, divergences: div("action-pill"), render: actionPill,
+      source: { ios: "Components/Input/OpenCodeActionPill.swift", android: "ui/components/input/OpenCodeActionPill.kt" }, render: actionPill,
       mount: (stage) => once(stage, "[data-expand]:not([disabled])", (el) => el.addEventListener("click", () => { const o = el.classList.toggle("open"); el.setAttribute("aria-expanded", o); })) },
 
     { id: "action-tile", doc: "action-tile", align: "stretch", pad: true,
@@ -309,7 +239,7 @@
         { title: "Corner badge", kind: "stack", inset: true, base: { icon: "plug", label: "MCP servers" }, items: [["Dot × tone", { grid: [{ badge: "success" }, { badge: "warning" }] }], ["", { grid: [{ badge: "error" }, { badge: "neutral" }] }], ["Count × tone", { grid: [{ badge: "error", count: "2" }, { badge: "warning", count: "12" }] }], ["Capped at 99+", { grid: [{ badge: "neutral", count: "120" }, { badge: "success", count: "99" }] }], ["Disabled", { grid: [{ badge: "error", count: "2", disabled: true }, { badge: "success", disabled: true }] }]] },
       ],
       tokens: [["actionTile.cornerRadius", 14], ["actionTile.minHeight", 88], ["actionTile.paddingTop", 18], ["actionTile.paddingHorizontal", 14], ["actionTile.paddingBottom", 16], ["actionTile.iconSize", 24], ["actionTile.contentGap", 12], ["actionTile.badgeInset", 12], ["actionTile.badge.dot", 10], ["actionTile.badge.countHeight", 18], ["actionTile.press", "scale 0.97, surface-raised-base-hover"], ["actionTile.disabledContent", 0.7], ["type", "type.body"]],
-      source: { ios: "Components/Input/OpenCodeActionTile.swift", android: "ui/components/input/OpenCodeActionTile.kt" }, divergences: div("action-tile"), render: actionTile },
+      source: { ios: "Components/Input/OpenCodeActionTile.swift", android: "ui/components/input/OpenCodeActionTile.kt" }, render: actionTile },
 
     { id: "floating-pill", doc: "floating-pill-chrome", align: "center",
       params: [sel("layout", ["iconLabel", "iconOnly", "counter", "counterWaiting", "closable", "label", "summary", "turn"]), sel("state", ["live", "ready", "needsAttention", "error", "done"]), sel("phase", ["working", "attentionUp", "attentionDot", "failed", "done"], "working", "turn phase"), text("label", ""), bool("compact"), sel("count", ["1", "3"], "1", "stack count"), bool("pending")],
@@ -328,7 +258,7 @@
       ],
       tokens: [["floatingPill.minHeight", 36], ["floatingPill.paddingHorizontal", 14], ["floatingPill.paddingHorizontal.compact", 10], ["floatingPill.paddingVertical", 8], ["floatingPill.iconSize", 16], ["floatingPill.iconSpacing", 6], ["floatingPill.dotSize", 8], ["floatingPill.ringWidth", 1], ["floatingPill.badgeSize", "16, offset 4 / −4"], ["floatingPill.closeTouchTarget", "iOS 44, Android 48"], ["floatingPill.foldDuration", "260 ms"], ["floatingPill.pulse", "800 ms, 1 → 0.35"], ["spinner", "r 6, stroke 1.3, 1 s rotation, 1.6 s breathe"], ["turnPill.widthDuration", "420 ms"], ["type", "type.button"]],
       spec: "## Intent\nThe shared Session Chat floating pill: one look across its layouts and five states.\n\n## Public API\n- `layout`: icon + label, icon only, counter, closable, label, and on iOS summary.\n- `state`: live, ready, needs attention, error, done.\n- `compact`, an optional action, an optional close action, and a custom accessibility label.\n\n## Behavior\n- Without an action, the pill is a status rather than a button.\n- Compact folds to the round mark and hides the label and ✕, while still speaking the full label.\n- Needs attention adds an amber ring, and a waiting counter pulses a dot.\n- The turn pill's Working to Done change is approximated here with a crossfade between spinner and check.",
-      source: { ios: "Components/Chrome/OpenCodeFloatingPill.swift", android: "ui/components/chrome/OpenCodeFloatingPill.kt" }, divergences: div("floating-pill"), render: floatingPill,
+      source: { ios: "Components/Chrome/OpenCodeFloatingPill.swift", android: "ui/components/chrome/OpenCodeFloatingPill.kt" }, render: floatingPill,
       mount: (stage) => {
         once(stage, ".c-fp-x", (x) => x.addEventListener("click", (e) => { e.stopPropagation(); const f = x.closest("[data-fp]"); f.classList.add("c-dismissed"); window.setTimeout(() => f.classList.remove("c-dismissed"), 1100); }));
         once(stage, "[data-fold-demo]", (d) => {
@@ -355,7 +285,7 @@
       ],
       tokens: [["menuChip.minHeight", 32], ["menuChip.radius", "capsule"], ["menuChip.padding", "iOS 12 / 12, Android 10 / 8 (toggle 10 / 12)"], ["menuChip.spacing", 6], ["menuChip.iconSize", "iOS 14, Android 16"], ["menuChip.letterSize", "18, glyph 10"], ["menuChip.fill", "iOS text-strong 0.08, Android surface-raised-base"], ["menuChip.selected", "interactive 0.14, border iOS 0.30, Android 0.32"], ["menuChip.titleMaxWidth", "240, Android"], ["type", "iOS 13 semibold, Android 14 semibold"]],
       spec: "## Intent\nA capsule in a filter row that shows the current choice and opens a menu, or turns one option on and off.\n\n## Public API\n- `variant`: menu or toggle.\n- `title`, `leading` (none, icon, or letter badge), `selected`, `enabled`, and an accessibility label.\n\n## Behavior\n- Menu ends with a chevron, and `selected` marks a choice other than the default.\n- Toggle has no chevron, and `selected` means on.\n- Both draw `selected` with the interactive tint.",
-      source: { ios: "Components/Input/OpenCodeMenuChip.swift", android: "ui/components/input/OpenCodeMenuChip.kt" }, divergences: div("menu-chip"), render: menuChip,
+      source: { ios: "Components/Input/OpenCodeMenuChip.swift", android: "ui/components/input/OpenCodeMenuChip.kt" }, render: menuChip,
       mount: (stage, ctx) => once(stage, "[data-chip]:not([disabled])", (el) => el.addEventListener("click", () => {
         if (el.dataset.chip === "toggle") { el.classList.toggle("sel"); return; }
         const title = el.querySelector(".c-chip-t"), opts = ["All projects", "opencode-mobile", "acme-invoices"];
@@ -375,7 +305,7 @@
         { title: "In a row, glass", kind: "flow", base: { variant: "glass" }, items: [["", { label: "Build", selected: true }], ["", { label: "Plan", selected: false }], ["", { label: "High", selected: false }]] },
       ],
       tokens: [["choiceBadge.cornerRadius", 16], ["choiceBadge.minHeight", "32, iOS"], ["choiceBadge.paddingHorizontal", 12], ["choiceBadge.paddingVertical", 8], ["choiceBadge.borderWidth", 1], ["choiceBadge.glass.cornerRadius", "capsule"], ["choiceBadge.glass.minHeight", 36], ["choiceBadge.glass.fill", "iOS 0.06 / 0.12, Android 0.08 / 0.14"], ["choiceBadge.glass.disabled", "iOS opacity 0.5"], ["type", "type.button"]],
-      source: { ios: "Components/List/OpenCodeChoiceBadge.swift", android: "ui/components/list/OpenCodeChoiceBadge.kt" }, divergences: div("choice-badge"), render: badge },
+      source: { ios: "Components/List/OpenCodeChoiceBadge.swift", android: "ui/components/list/OpenCodeChoiceBadge.kt" }, render: badge },
 
     { id: "filter-tabs", doc: "filter-tabs", align: "stretch",
       params: [sel("style", ["scrolling", "segmented"]), sel("selected", ["all", "friends", "unread", "news", "mobile"]), sel("segment", ["running", "done"]), bool("counts", true), bool("unseen", true)],
@@ -385,7 +315,7 @@
         { title: "Segmented", kind: "stack", base: { style: "segmented" }, items: [["Running selected, Done has news", {}], ["Done selected", { segment: "done" }], ["No counts", { counts: false, unseen: false }]] },
       ],
       tokens: [["filterTabs.tab.minHeight", 36], ["filterTabs.tab.paddingHorizontal", 12], ["filterTabs.tab.paddingVertical", 8], ["filterTabs.tab.spacing", 8], ["filterTabs.tab.contentSpacing", 6], ["filterTabs.tab.borderWidth", 1.5], ["filterTabs.count.minSize", 22], ["filterTabs.row.padding", "16 × 8"], ["filterTabs.segmented.trackPadding", 3], ["filterTabs.segmented.minHeight", 32], ["filterTabs.unseenDot", 6], ["type", "iOS type.button, Android labelMedium 12"]],
-      source: { ios: "Components/List/OpenCodeFilterTabs.swift", android: "ui/components/list/OpenCodeFilterTabs.kt" }, divergences: div("filter-tabs"), render: filterTabs,
+      source: { ios: "Components/List/OpenCodeFilterTabs.swift", android: "ui/components/list/OpenCodeFilterTabs.kt" }, render: filterTabs,
       mount: (stage) => once(stage, "[data-ftabs]", (row) => row.addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (!b) return; row.querySelectorAll("[data-tab]").forEach((x) => x.classList.toggle("sel", x === b)); })) },
 
     { id: "tag", align: "center",
@@ -397,7 +327,7 @@
       ],
       tokens: [["tag.radius", "capsule"], ["tag.regular.padding", "10 × 5"], ["tag.small.padding", "6 × 1"], ["tag.fill.neutral", "surface-raised-base"], ["tag.fill.accent", "interactive 0.12"], ["tag.fill.warning", "warning 0.14, iOS"], ["tag.fill.success", "success 0.14, iOS"], ["type.regular", "iOS caption bold, Android labelSmall bold"], ["type.small", "iOS caption semibold, Android labelSmall semibold"]],
       spec: "## Intent\nA static capsule label for short metadata, such as Unofficial, git, or Recommended.\n\n## Public API\n- `title`, which must not be blank.\n- `size`: regular or small.\n- `tone`: neutral and accent on both platforms, plus warning and success on iOS.\n\n## Behavior\nTags are not interactive. The small size stays on one line beside a title.",
-      source: { ios: "Components/Feedback/OpenCodeTag.swift", android: "ui/components/feedback/OpenCodeTag.kt" }, divergences: div("tag"), render: tag },
+      source: { ios: "Components/Feedback/OpenCodeTag.swift", android: "ui/components/feedback/OpenCodeTag.kt" }, render: tag },
 
     { id: "segmented-control", align: "stretch", pad: true,
       params: [sel("selection", ["system", "light", "dark"]), bool("note", true)],
@@ -405,7 +335,7 @@
       sheet: [{ title: "Selection, tap to move", kind: "stack", inset: true, items: [["System", { selection: "system" }], ["Light", { selection: "light" }], ["Dark", { selection: "dark" }]] }],
       tokens: [["segmentedControl.height", 36], ["segmentedControl.inset", 3], ["segmentedControl.cornerRadius", 10], ["segmentedControl.thumbRadius", 7], ["segmentedControl.track", "surface-raised-base"], ["segmentedControl.thumb", "background-base"], ["segmentedControl.shadow", "black 0.08, radius 2, y 1"], ["segmentedControl.animation", "easeOut 180 ms"], ["type", "type.button"]],
       spec: "## Intent\nA short exclusive choice drawn as equal-width segments in one track, such as the Appearance mode. iOS only.\n\n## Public API\n- `options` (id, title, accessibility identifier), `selection`, `onSelect`.\n\n## Behavior\n- The raised thumb slides to the selected segment over 180 ms.\n- Tapping the selected segment does nothing.\n- Each segment is a button with the selected trait.",
-      source: { ios: "Components/Input/OpenCodeSegmentedControl.swift" }, divergences: div("segmented-control"), render: segmented,
+      source: { ios: "Components/Input/OpenCodeSegmentedControl.swift" }, render: segmented,
       mount: (stage) => once(stage, "[data-segctl]", (w) => {
         const track = w.querySelector(".c-segctl"), note = w.querySelector(".c-segctl-n");
         track.addEventListener("click", (e) => { const b = e.target.closest("[data-i]"); if (!b || b.classList.contains("sel")) return; track.querySelectorAll("[data-i]").forEach((x) => x.classList.toggle("sel", x === b)); track.style.setProperty("--i", b.dataset.i); if (note) note.textContent = MODES[+b.dataset.i][2]; });

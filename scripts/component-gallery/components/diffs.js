@@ -223,13 +223,6 @@
       ],
       tokens: [["unifiedDiff.lineMinHeight", 20], ["unifiedDiff.linePaddingHorizontal", 8], ["unifiedDiff.markerWidth", 20], ["unifiedDiff.lineNumberGutterWidth", "24 per column, +9 per digit past 2"], ["unifiedDiff.cornerRadius", 8], ["unifiedDiff.defaultContextLines", 3], ["surface", "surface-base"], ["border", "border-weaker-base"], ["addition text", "diff-add"], ["deletion text", "diff-delete"], ["hunk and metadata text", "syntax-diff-unknown"], ["hunk fill", "surface-raised-base"], ["selected hunk fill", "surface-interactive-weak"], ["addition fill iOS", "surface-success-base"], ["deletion fill iOS", "surface-critical-base"], ["addition fill Android", "diff-add at 18%"], ["deletion fill Android", "diff-delete at 16%"]],
       source: { ios: "Components/Chat/OpenCodeUnifiedDiff.swift", android: "ui/components/chat/OpenCodeUnifiedDiff.kt" },
-      divergences: [
-        { severity: "high", title: "iOS treats an indented @@ context line as a hunk header" },
-        { severity: "medium", title: "Addition and deletion row fills use different tokens" },
-        { severity: "medium", title: "Line numbers differ in alignment and color" },
-        { severity: "medium", title: "Diff surface ignores the syntax preset's code colors" },
-        { severity: "low", title: "Docs list caption type and hunk spacing that the code does not use" },
-      ],
       render: unifiedDiff,
     },
     {
@@ -243,12 +236,6 @@
       tokens: [["codeFile.lineMinHeight", 20], ["codeFile.verticalPadding", 8], ["codeFile.minGutterDigits", 2], ["codeFile.markOpacity", 0.28], ["iOS horizontalPadding", 12], ["iOS gutterSpacing", 12], ["Android gutterPadding", 8], ["Android codePadding", 12], ["Android gutter divider", "1, border-weaker-base"], ["line numbers", "text-weaker"], ["plain code", "syntax-foreground, else text-strong"], ["code surface", "syntax-background, else owner's"], ["mark", "warning at 28%"]],
       spec: "## Intent\nRead-only source file with a line-number gutter, optional syntax highlighting, optional marked ranges, and wrap on or off.\n\n## Public API\n- iOS: `lines`, `lineSpans`, `lineMarks`, `wrapsLines`, `maxLineLength`, `topLine`, `onLineAppear`.\n- Android: `lines` (`OpenCodeCodeLine` with spans and marks), `wrapLines`, `contentPadding`, `state`.\n\n## Behavior\n- Rows are lazy, so very long files stay responsive.\n- Code colors come from the shared role table: `OpenCodeCodeColors` on iOS, `CodeRoleTokens` on Android.\n- Unwrapped lines scroll sideways together. Android keeps the gutter fixed, iOS scrolls it with the code.\n- Marks draw on `warning` at 28%.\n- The HTML colors the Kotlin and JSON samples with a small tokenizer in place of the native highlighter, so spans can differ slightly from the Android gallery.",
       source: { ios: "Components/Chat/OpenCodeCodeFile.swift", android: "ui/components/chat/OpenCodeCodeFile.kt" },
-      divergences: [
-        { severity: "high", title: "Line numbers scroll away on iOS and stay fixed on Android" },
-        { severity: "medium", title: "Gutter geometry and divider differ" },
-        { severity: "low", title: "Gallery samples and controls differ" },
-        { severity: "low", title: "No component doc" },
-      ],
       render: codeFile,
     },
     {
@@ -263,11 +250,6 @@
       tokens: [["diffStat.splitSpacing", 12], ["separator.space", "1 space"], ["separator.wide", "2 spaces"], ["addition", "diff-add"], ["deletion", "diff-delete"], ["disabled", "text-base"], ["caption", "13/18 regular"], ["button", "14 medium"], ["mono", "13/18 semibold mono"], ["label iOS", "13/18 regular"], ["label Android", "12/16 medium, +0.5 tracking"]],
       spec: "## Intent\nCompact `+N` and `−M` line counts for tool rows, floating pills, branch pills, and changed-file rows.\n\n## Public API\n- `additions` and `deletions`: optional, nonnegative. A missing side is omitted, and zero is shown when passed.\n- `enabled`: disabled counts use `text-base`.\n- `style`: caption, button, mono, label.\n- `separator`: space, wide, split.\n\n## Behavior\nSpace and wide draw one text run. Split draws two labels 12 apart. The deletion mark is a true minus sign (U+2212).",
       source: { ios: "Components/Feedback/OpenCodeDiffStat.swift", android: "ui/components/feedback/OpenCodeDiffStat.kt" },
-      divergences: [
-        { severity: "medium", title: "Label style has different size, weight, and tracking" },
-        { severity: "low", title: "With no counts, Android draws nothing and iOS keeps an empty view" },
-        { severity: "low", title: "No component doc" },
-      ],
       render: diffStat,
     },
     {
@@ -282,11 +264,6 @@
       ],
       tokens: [["hunkNavigationPill.width", 132], ["hunkNavigationPill.minHeight", 44], ["hunkNavigationPill.iconButtonSize", 44], ["hunkNavigationPill.iconSize", 20], ["hunkNavigationPill.shadowElevation", 4], ["iOS fill", "surface-raised-base"], ["iOS border", "border-weaker-base"], ["Android fill", "lifted surface-raised-base"], ["Android border", "text-strong at 10%"], ["pressed", "surface-raised-base-hover"], ["icon", "icon-strong-base"], ["disabled icon", "icon-weak-base"], ["iOS press", "120 ms ease-out"]],
       source: { ios: "Components/Chrome/OpenCodeHunkNavigationPill.swift", android: "ui/components/chrome/OpenCodeHunkNavigationPill.kt" },
-      divergences: [
-        { severity: "medium", title: "Android fill and border differ from iOS and the doc" },
-        { severity: "medium", title: "Pressed state is almost invisible in dark themes on iOS" },
-        { severity: "low", title: "Pressed highlight is a full segment on iOS and a circle on Android" },
-      ],
       render: hunkPill,
       mount: (stage) => {
         stage.querySelectorAll(".c-hn-demo").forEach((demo) => {
@@ -316,11 +293,6 @@
       ],
       tokens: [["reviewChangesPill.minHeight", 36], ["reviewChangesPill.paddingHorizontal", 14], ["reviewChangesPill.paddingVertical", "8 on iOS, 0 on Android"], ["reviewChangesPill.shadowElevation", 4], ["file label", "text-strong"], ["additions", "diff-add"], ["deletions", "diff-delete"], ["disabled text", "text-base"], ["iOS fill", "surface-raised-base at 92%, disabled 70%"], ["iOS disabled opacity", 0.72], ["Android fill", "lifted surface-raised-base, disabled 70%"], ["Android border", "text-strong at 10%"], ["iOS press", "scale 0.98, opacity 0.92, 160 ms"]],
       source: { ios: "Components/Chat/OpenCodeReviewChangesPill.swift", android: "ui/components/chat/OpenCodeReviewChangesPill.kt" },
-      divergences: [
-        { severity: "medium", title: "Android fill and border differ from the documented stand-in" },
-        { severity: "medium", title: "Disabled pill dims all content on iOS and only the fill on Android" },
-        { severity: "low", title: "Android omits the documented 8 vertical padding" },
-      ],
       render: reviewPill,
     },
   ]);

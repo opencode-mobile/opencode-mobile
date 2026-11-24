@@ -11,7 +11,7 @@ extension ComponentCaptureRegistry {
 }
 
 private let captureSessionNowMs = Int64(Date().timeIntervalSince1970 * 1000)
-private let mobileWorktree = "/Users/demo/opencode-mobile"
+private let mobileWorktree = "/Users/example/opencode-mobile"
 
 // MARK: - Session list, skeleton, dock
 
@@ -89,7 +89,7 @@ private extension ComponentCaptureRegistry {
     }
 
     static var sessionListDockEntry: ComponentCaptureEntry {
-        let api = "/Users/demo/api-client"
+        let api = "/Users/example/api-client"
         return ComponentCaptureEntry(componentID: "session-list-dock", states: [
             ComponentCaptureState("all-projects") { dock() },
             ComponentCaptureState("project") { dock(selected: mobileWorktree) },

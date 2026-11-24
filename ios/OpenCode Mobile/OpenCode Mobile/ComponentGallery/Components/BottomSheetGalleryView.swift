@@ -220,7 +220,7 @@ struct BottomSheetGalleryView: View {
                         action: {}
                     )
                     OpenCodeBottomSheetEntry(
-                        title: "/Users/demo/Projects",
+                        title: "/Users/example/Projects",
                         startDecorator: .icon(.folderCheck),
                         action: {}
                     )

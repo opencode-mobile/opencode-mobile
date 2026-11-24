@@ -126,10 +126,10 @@ internal val sessionListGallerySamples: List<SessionListSession>
             SessionListSession(
                 id = "session-1",
                 title = "Refactor Navigation",
-                worktree = "/Users/demo/opencode-mobile",
+                worktree = "/Users/example/opencode-mobile",
                 letter = 'O',
                 letterAccent = LetterAccent.Violet,
-                subtitle = "/Users/demo/opencode-mobile",
+                subtitle = "/Users/example/opencode-mobile",
                 status = SessionListStatus.Running,
                 caption = UiText.verbatim("now"),
                 updatedAtEpochMs = now,
@@ -139,10 +139,10 @@ internal val sessionListGallerySamples: List<SessionListSession>
             SessionListSession(
                 id = "session-2",
                 title = "Bug: Header Clipping",
-                worktree = "/Users/demo/playground",
+                worktree = "/Users/example/playground",
                 letter = 'P',
                 letterAccent = LetterAccent.Teal,
-                subtitle = "/Users/demo/playground",
+                subtitle = "/Users/example/playground",
                 status = SessionListStatus.Idle,
                 caption = UiText.verbatim("14m ago"),
                 updatedAtEpochMs = now - 14 * 60_000L,
@@ -150,10 +150,10 @@ internal val sessionListGallerySamples: List<SessionListSession>
             SessionListSession(
                 id = "session-3",
                 title = "Add Dark Mode Assets",
-                worktree = "/Users/demo/opencode-mobile",
+                worktree = "/Users/example/opencode-mobile",
                 letter = 'O',
                 letterAccent = LetterAccent.Violet,
-                subtitle = "/Users/demo/opencode-mobile",
+                subtitle = "/Users/example/opencode-mobile",
                 status = SessionListStatus.Ready,
                 caption = UiText.verbatim("3h ago"),
                 updatedAtEpochMs = now - 3 * 3_600_000L,
@@ -162,10 +162,10 @@ internal val sessionListGallerySamples: List<SessionListSession>
             SessionListSession(
                 id = "session-done",
                 title = "Server Unread: Done",
-                worktree = "/Users/demo/playground",
+                worktree = "/Users/example/playground",
                 letter = 'P',
                 letterAccent = LetterAccent.Teal,
-                subtitle = "/Users/demo/playground",
+                subtitle = "/Users/example/playground",
                 status = SessionListStatus.Done,
                 caption = UiText.verbatim("5m ago"),
                 updatedAtEpochMs = now - 5 * 60_000L,
@@ -173,10 +173,10 @@ internal val sessionListGallerySamples: List<SessionListSession>
             SessionListSession(
                 id = "session-failed",
                 title = "Server Unread: Failed",
-                worktree = "/Users/demo/playground",
+                worktree = "/Users/example/playground",
                 letter = 'P',
                 letterAccent = LetterAccent.Teal,
-                subtitle = "/Users/demo/playground",
+                subtitle = "/Users/example/playground",
                 status = SessionListStatus.Failed,
                 caption = UiText.verbatim("8m ago"),
                 updatedAtEpochMs = now - 8 * 60_000L,
@@ -184,10 +184,10 @@ internal val sessionListGallerySamples: List<SessionListSession>
             SessionListSession(
                 id = "session-stopped",
                 title = "Server Unread: Stopped",
-                worktree = "/Users/demo/playground",
+                worktree = "/Users/example/playground",
                 letter = 'P',
                 letterAccent = LetterAccent.Teal,
-                subtitle = "/Users/demo/playground",
+                subtitle = "/Users/example/playground",
                 status = SessionListStatus.Stopped,
                 caption = UiText.verbatim("11m ago"),
                 updatedAtEpochMs = now - 11 * 60_000L,
@@ -195,10 +195,10 @@ internal val sessionListGallerySamples: List<SessionListSession>
             SessionListSession(
                 id = "session-retry",
                 title = "Retry Provider Error",
-                worktree = "/Users/demo/opencode-mobile",
+                worktree = "/Users/example/opencode-mobile",
                 letter = 'O',
                 letterAccent = LetterAccent.Violet,
-                subtitle = "/Users/demo/opencode-mobile",
+                subtitle = "/Users/example/opencode-mobile",
                 status = SessionListStatus.Retrying,
                 caption = UiText.verbatim("now"),
                 updatedAtEpochMs = now,
@@ -209,10 +209,10 @@ internal val sessionListGallerySamples: List<SessionListSession>
             SessionListSession(
                 id = "session-stale",
                 title = "Cached Working Session",
-                worktree = "/Users/demo/opencode-mobile",
+                worktree = "/Users/example/opencode-mobile",
                 letter = 'O',
                 letterAccent = LetterAccent.Violet,
-                subtitle = "/Users/demo/opencode-mobile",
+                subtitle = "/Users/example/opencode-mobile",
                 status = SessionListStatus.Running,
                 statusStale = true,
                 caption = UiText.verbatim("now"),
@@ -221,10 +221,10 @@ internal val sessionListGallerySamples: List<SessionListSession>
             SessionListSession(
                 id = "session-4",
                 title = "Review Session List",
-                worktree = "/Users/demo/api-client",
+                worktree = "/Users/example/api-client",
                 letter = 'A',
                 letterAccent = LetterAccent.Amber,
-                subtitle = "/Users/demo/api-client",
+                subtitle = "/Users/example/api-client",
                 status = SessionListStatus.Running,
                 caption = UiText.verbatim("2d ago"),
                 updatedAtEpochMs = now - 2 * 86_400_000L,
@@ -236,24 +236,24 @@ internal val sessionListGalleryFilterTabs =
     listOf(
         SessionListFilterTab.all(projectCount = 3, hasSessions = true),
         SessionListFilterTab.project(
-            worktree = "/Users/demo/opencode-mobile",
+            worktree = "/Users/example/opencode-mobile",
             title = "opencode-mobile",
             hasSessions = true,
         ),
-        SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", hasSessions = true),
-        SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", hasSessions = true),
+        SessionListFilterTab.project(worktree = "/Users/example/playground", title = "playground", hasSessions = true),
+        SessionListFilterTab.project(worktree = "/Users/example/api-client", title = "api-client", hasSessions = true),
     )
 
 internal val sessionListGalleryOneProjectFilterTabs =
     listOf(
         SessionListFilterTab.project(
-            worktree = "/Users/demo/opencode-mobile",
+            worktree = "/Users/example/opencode-mobile",
             title = "opencode-mobile",
             hasSessions = true,
         ),
     )
 
-internal const val GALLERY_NEW_PROJECT_WORKTREE = "/Users/demo/new-project"
+internal const val GALLERY_NEW_PROJECT_WORKTREE = "/Users/example/new-project"
 
 /** Gallery cycle through a new project's first-load states. */
 internal enum class GalleryScopeLoadStep(

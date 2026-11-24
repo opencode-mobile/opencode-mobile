@@ -20,7 +20,8 @@ if (!existsSync(contractFile)) { console.error("captures/contract.json is missin
 execFileSync(process.execPath, [join(here, "build.mjs")], { stdio: "ignore" });
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
 const server = createServer((req, res) => {
-  const file = normalize(join(here, decodeURIComponent(new URL(req.url, "http://localhost").pathname)));
+  let file;
+  try { file = normalize(join(here, decodeURIComponent(new URL(req.url, "http://localhost").pathname))); } catch { res.writeHead(400); res.end(); return; }
   if (!file.startsWith(here + sep) || !existsSync(file) || statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
   res.writeHead(200, { "content-type": types[extname(file)] ?? "application/octet-stream" });
   createReadStream(file).pipe(res);

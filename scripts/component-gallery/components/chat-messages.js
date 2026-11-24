@@ -4,7 +4,6 @@
   const IOS = "Components/Chat/", AND = "ui/components/chat/";
   const plat = (ctx) => ctx?.platform ?? Kit.ctx.platform;
   const na = (msg) => `<div class="cm-na">${esc(msg)}</div>`;
-  const DIV = {"outgoing-message":[{"severity":"medium","title":"Text alignment in a wrapped bubble differs"},{"severity":"medium","title":"Spacing between message parts differs"},{"severity":"medium","title":"Attachments and text are in opposite order"},{"severity":"medium","title":"Goal and steering captions use different type and rules"},{"severity":"medium","title":"Docs describe a visible footer and waiting caption that no longer exist"},{"severity":"low","title":"Docs say prompts never collapse, but long text is cut"}],"assistant-message":[{"severity":"medium","title":"A short markdown reply fills the row on iOS and hugs on Android"},{"severity":"low","title":"Docs mention a streaming cursor that is not drawn"}],"rendered-markdown":[{"severity":"medium","title":"Heading level 3 is a different size"},{"severity":"medium","title":"Inline code is a different size"},{"severity":"medium","title":"Link underline color token is ignored on Android"},{"severity":"low","title":"An empty link label falls back only on Android"},{"severity":"low","title":"Syntax roles gallery sample exists only on Android"}],"attachment":[{"severity":"high","title":"A sent image is a thumbnail card on iOS and an inline picture on Android"},{"severity":"medium","title":"Android's waiting-to-start upload has no visible hairline"},{"severity":"medium","title":"Chip geometry differs"},{"severity":"medium","title":"A sent file card hugs on iOS and fills on Android"},{"severity":"low","title":"Custom detail line is iOS-only; a locked chip is Android-only"}],"image-gallery":[{"severity":"high","title":"The +N tile disappears on iOS until its picture loads"},{"severity":"high","title":"A single image is announced differently"},{"severity":"medium","title":"Loading and failed single images have different sizes"},{"severity":"medium","title":"Mosaic width cap is iOS-only"},{"severity":"medium","title":"Tile caption and failure content differ"},{"severity":"low","title":"Android loading uses a shimmer, not the documented pulse"}],"image-viewer":[{"severity":"medium","title":"Dismiss, zoom, and position rules differ"},{"severity":"medium","title":"Share is a bottom icon on iOS and a top text button on Android"},{"severity":"low","title":"Android has the viewer but no gallery entry"}],"message-note":[],"timeline-notice":[{"severity":"medium","title":"Goal rows are a component variant on iOS and a feature row on Android"},{"severity":"medium","title":"Horizontal inset differs"},{"severity":"low","title":"Expanded rows wrap the label only on iOS"}],"truncation-row":[],"message-list":[{"severity":"medium","title":"Scroll-to-end pill hides at a different distance"},{"severity":"low","title":"Gallery harness rows use different text sizes"}]};
 
   /* Generated picture placeholders. Colors are image content, so they do not follow the theme. */
   const HUES = [["#2f6f8f", "#8fd3e8"], ["#a8693b", "#f3c48d"], ["#6d4e9a", "#c9b2ee"], ["#3b6ea8", "#a9cdf5"], ["#4e8a5b", "#b4e3bf"], ["#a14e70", "#f0b6cd"], ["#7a7a3a", "#dedd98"], ["#4a5a6a", "#b8c6d4"]];
@@ -351,7 +350,7 @@
       ],
       tokens: [["outgoingMessage.cornerRadius", 8], ["outgoingMessage.maxWidthFraction", 0.8], ["outgoingMessage.paddingHorizontal", 12], ["outgoingMessage.paddingVertical", 8], ["content spacing", "iOS 4, Android 8"], ["pending opacity", 0.6], ["pending dash", "1 wide, 4 on, 3 off, text-weaker"], ["reveal cap", 72], ["reveal follow", 0.9], ["reveal fade", "12 to 52"], ["fill", "surface-interactive-weak"], ["command token", "syntax-type"]],
       source: { ios: IOS + "OpenCodeOutgoingMessage.swift", android: AND + "OpenCodeOutgoingMessage.kt" },
-      divergences: DIV["outgoing-message"], render: outgoing,
+      render: outgoing,
       mount: (s) => s.querySelectorAll("[data-cm-reveal]").forEach(bindReveal) },
 
     { id: "assistant-message", doc: "assistant-message", align: "stretch", pad: true,
@@ -363,7 +362,6 @@
       ],
       tokens: [["assistantMessage.cornerRadius", 8], ["assistantMessage.maxWidth", 720], ["assistantMessage.paddingHorizontal", 12], ["assistantMessage.paddingVertical", 8], ["plain paddingHorizontal", 4], ["fillRowThreshold", 0.8], ["fill", "surface-raised-base"], ["type", "type.body"]],
       source: { ios: IOS + "OpenCodeAssistantMessage.swift", android: AND + "OpenCodeAssistantMessage.kt" },
-      divergences: DIV["assistant-message"],
       render: (p, ctx) => {
         const os = plat(ctx), T = { short: "The Alleskoenner is the right class for that parcel.", long: "Based on the standard 2026 pricing for DHL in Germany, compare the Alleskoenner package to the smaller parcel options and keep the recommendation practical.", empty: "…" };
         const isMd = p.content === "markdown" || p.content === "code";
@@ -387,7 +385,6 @@
       ],
       tokens: [["block spacing", "8 in messages, 12 standalone"], ["list row spacing", 4], ["list marker gap", 8], ["quote bar", "3 wide, radius 2"], ["quote text inset", 13], ["code radius", 6], ["code padding", "12 × 10"], ["diff line padding", "12 × 1, min width 320"], ["diff fills", "add .18, delete .16, header .14"], ["table cell", "min 112, padding 10 × 8, border .5"], ["links", "markdown-link-text, bold, underlined"], ["inline code", "markdown-code-text on markdown-code-bg"]],
       source: { ios: IOS + "OpenCodeRenderedMarkdown.swift", android: AND + "OpenCodeRenderedMarkdown.kt" },
-      divergences: DIV["rendered-markdown"],
       render: (p, ctx) => {
         const os = plat(ctx);
         if (p.sample === "request") return Kit.use("outgoing-message", { content: "markdown", steering: "none", time: "" }, ctx);
@@ -409,7 +406,6 @@
       ],
       tokens: [["chip radius", 8], ["chip padding", "iOS 10 × 7, Android 6 (no trailing)"], ["chip preview", "iOS 28, Android 36"], ["remove control", "iOS 20, Android 36 with 24 icon"], ["upload hairline", 2], ["sent padding", 8], ["sent gap", 10], ["sent preview", "iOS 52 image, 32 icon; Android 40"], ["sent image cap", 220], ["fill", "surface-raised-base"], ["border", "border-weaker-base"]],
       source: { ios: IOS + "OpenCodeAttachment.swift", android: AND + "OpenCodeAttachment.kt" },
-      divergences: DIV.attachment,
       render: (p, ctx) => p.mode === "sent" ? sent(p, ctx) : chip(p, ctx),
       mount: (s) => s.querySelectorAll("[data-cm-rm]").forEach((b) => { if (b.dataset.bound) return; b.dataset.bound = "1"; b.addEventListener("click", () => { const c = b.closest(".cm-chip"); c.style.display = "none"; }); }) },
 
@@ -422,7 +418,6 @@
       ],
       tokens: [["single max height", 220], ["trio height", 230], ["trio ratio", "1.4 : 1"], ["gap", 4], ["mosaic max width", "iOS 420, Android none"], ["tile radius", 8], ["tile border", "border-weaker-base"], ["overflow scrim", "black .55"], ["caption scrim", "iOS black .6, Android black .7"], ["loading", "iOS pulse .9s, Android shimmer 1.1s"]],
       source: { ios: IOS + "OpenCodeImageGallery.swift", android: AND + "OpenCodeImageGallery.kt" },
-      divergences: DIV["image-gallery"],
       render: (p, ctx) => gallery(galleryItems(p), ctx),
       mount: (s, ctx) => s.querySelectorAll("[data-cm-open]").forEach((b) => {
         if (b.dataset.bound) return; b.dataset.bound = "1";
@@ -439,7 +434,6 @@
       states: [["One image", { group: "one" }], ["5 images at the second", { group: "five" }], ["Group with a failed image", { group: "failed" }], ["Page loading", { group: "loading" }], ["Preview, full picture loading", { group: "previewLoading" }], ["Preview, full picture failed", { group: "previewFailed" }], ["Failed with Retry", { group: "failedRetry" }]],
       tokens: [["dismiss distance", 120], ["dismiss velocity", 800], ["max zoom", 4], ["double-tap zoom", 2.5], ["round button", "44, white .14"], ["close icon", 22], ["share glyph", 18], ["top bar padding", "12 × 8"], ["bottom bar padding", "16 × 12"], ["position label", "type.heading, white"], ["file name", "type.caption, white .7"]],
       source: { ios: IOS + "OpenCodeImageViewer.swift", android: AND + "OpenCodeImageGalleryViewer.kt" },
-      divergences: DIV["image-viewer"],
       render: (p, ctx) => {
         const five = items(5), three = items(3);
         const G = {
@@ -464,7 +458,6 @@
       tokens: [["icon size", 14], ["icon spacing", 6], ["paddingHorizontal", 4], ["paddingVertical", 2], ["color", "text-weak"], ["type", "type.caption"]],
       spec: "## Intent\nA small, persistent, non-interactive note under an assistant reply that ended early. It is muted on purpose: it explains state and is not an error.\n\n## Public API\n- `variant`: `truncated` (the model hit its output limit) or `interrupted` (the user or another client stopped the run). Each variant owns its copy and glyph.\n\n## Behavior\nThe icon and label read as one accessibility element whose label is the variant copy. The note has no press state.",
       source: { ios: IOS + "OpenCodeMessageNote.swift", android: AND + "OpenCodeMessageNote.kt" },
-      divergences: DIV["message-note"],
       render: (p) => { const v = { truncated: ["collapse_content", "Response cut off (length limit)"], interrupted: ["stop_circle", "Interrupted"] }[p.variant]; return `<div class="c-note" role="note" aria-label="${v[1]}">${I(v[0], 14)}<span>${v[1]}</span></div>`; } },
 
     { id: "timeline-notice", align: "stretch", pad: true,
@@ -478,7 +471,7 @@
       tokens: [["spacing", 6], ["verticalPadding", 2], ["horizontal inset", "iOS 0, Android 4"], ["goal icon", 14], ["ended opacity", "iOS .6"], ["label", "text-weak"], ["value", "info"], ["type", "type.caption"]],
       spec: "## Intent\nA quiet one-line record of a session-level change in the timeline: moved, agent, model, instructions, or restart. A weak label is followed by the value in the info tint, with no card, fill, or border.\n\n## Public API\n- `variant`: `plain`, `moved` (leads with ↳), `goal`, `goalEnded`. The goal variants are iOS component variants; Android draws the same rows in `SessionChatGoalSetRow`.\n- `label`: required, non-blank.\n- `value`: optional; blank is treated as none.\n- `state`: `collapsed` (one truncated line) or `expanded` (wraps in full).\n- `onToggle`, `onActivate` (goal only), `tag` (ended goal only).\n\n## Behavior\nA row with a value toggles between one line and the full text. The accessibility label always carries the full value.",
       source: { ios: IOS + "OpenCodeTimelineNotice.swift", android: AND + "OpenCodeTimelineNotice.kt" },
-      divergences: DIV["timeline-notice"], render: notice,
+      render: notice,
       mount: (s) => s.querySelectorAll("[data-cm-tn]").forEach((b) => { if (b.dataset.bound) return; b.dataset.bound = "1"; b.addEventListener("click", () => { const on = b.classList.toggle("is-open"); b.setAttribute("aria-expanded", String(on)); }); }) },
 
     { id: "truncation-row", align: "stretch", pad: true,
@@ -492,7 +485,6 @@
       tokens: [["minHeight", 40], ["paddingHorizontal", 12], ["paddingVertical", 8], ["spacing", 10], ["icon", 16], ["cornerRadius", 8], ["fill", "text-strong at .06"], ["title", "type.button, text-strong"], ["caption", "type.caption, text-weak"], ["press (iOS)", "text-strong wash .14, scale .97, .16s"]],
       spec: "## Intent\nA full-width row at the point where content was cut, inside the content's own surface, that opens the rest.\n\n## Public API\n- `variant`: `fullMessage(shownCharacters, totalCharacters)`, the only variant.\n- `action`: opens the whole text.\n\n## Behavior\nThe title reads \"Show full message\" over a caption with locale-formatted counts. It is one accessibility button with the caption as its value and \"Opens the whole message\" as its hint. iOS presses with a subtle wash and scale; Android uses a clipped ripple.",
       source: { ios: IOS + "OpenCodeTruncationRow.swift", android: AND + "OpenCodeTruncationRow.kt" },
-      divergences: DIV["truncation-row"],
       render: (p, ctx) => p.inBubble ? Kit.use("outgoing-message", { content: "limited", text: "Paste of a long build log, cut where the timeline stops showing it.", steering: "none", time: "" }, ctx) : truncation(+p.shown || 0, +p.total || 0, p.pressed) },
 
     { id: "message-list", doc: "message-list", align: "stretch", overlay: true, cellHeight: 460,
@@ -500,7 +492,6 @@
       states: [["Pinned to end", {}], ["Auto-follow armed", { autoFollow: true }], ["Scrolled up (pill)", { scroll: "top" }], ["Empty", { empty: true }]],
       tokens: [["horizontal padding", 16], ["top and bottom padding", 12], ["inter-item spacing", 8], ["auto-follow tolerance", 32], ["pinned tolerance", "iOS 8"], ["reveal threshold", "max(120, 20% of viewport)"], ["pill hide margin", "iOS 32, Android 16"], ["pill bottom padding", 12]],
       source: { ios: "UI/Scroll/MessageListTimeline.swift", android: "ui/scroll/MessageListTimeline.kt" },
-      divergences: DIV["message-list"],
       render: (p, ctx) => {
         const btn = (act, title) => `<span data-cm-ml="${act}">${Kit.use("button", { variant: "compactText", contrast: "low", title, size: "medium", disabled: false, pressed: false }, ctx)}</span>`;
         return `<div class="cm-ml" data-cm-list data-at="${p.scroll}"${p.autoFollow ? ' data-follow="1"' : ""}${p.empty ? ' data-empty="1"' : ""}><div class="cm-ml-scroll">${p.empty ? "" : LIST.map((m) => mlRow(m, ctx)).join("")}</div><div class="cm-ml-pill">${Kit.use("action-pill", { label: "Scroll to end" }, ctx)}</div><div class="cm-ml-flag">Threshold met</div><div class="cm-ml-ctrl">${btn("add", "+")}${btn("rm", "-")}${btn("size", "/")}</div></div>`;

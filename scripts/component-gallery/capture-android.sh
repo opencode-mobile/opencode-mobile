@@ -15,7 +15,9 @@
 # Environment:
 #   CAPTURE_OUT           output folder (default: captures/android next to this script)
 #   CAPTURE_CONTRACT      contract.json (default: next to the output folder)
-#   CAPTURE_AVD           AVD name (default: component_capture_phone)
+#   CAPTURE_AVD           AVD name (default: component_capture_phone). Runs change the
+#                         emulator's animation, keyboard, font, and display settings, so the
+#                         name must contain "component_capture" unless CAPTURE_ALLOW_ANY_AVD=1.
 #   CAPTURE_DEVICE        hardware profile for a new AVD (default: pixel_9)
 #   CAPTURE_SYSTEM_IMAGE  system image package for a new AVD (default: newest installed)
 #   CAPTURE_SKIP_BUILD=1  reuse the APKs already built
@@ -44,6 +46,8 @@ sdk_from_properties() {
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$(sdk_from_properties || true)}}"
 SDK="${SDK:-$HOME/Library/Android/sdk}"
 [[ -d "$SDK" ]] || die "Android SDK not found; set ANDROID_HOME"
+[[ "$AVD" == *component_capture* || "${CAPTURE_ALLOW_ANY_AVD:-0}" == 1 ]] || die "refusing to change settings on AVD $AVD: its name must contain component_capture (or set CAPTURE_ALLOW_ANY_AVD=1)"
+AVD_HOME="${ANDROID_AVD_HOME:-${ANDROID_USER_HOME:-$HOME/.android}/avd}"
 ADB="$SDK/platform-tools/adb"
 EMULATOR="$SDK/emulator/emulator"
 AVDMANAGER="$SDK/cmdline-tools/latest/bin/avdmanager"
@@ -74,7 +78,9 @@ if ! "$EMULATOR" -list-avds | grep -qx "$AVD"; then
   [[ -x "$AVDMANAGER" ]] || die "avdmanager not found; install the Android SDK command-line tools"
   IMAGE="${CAPTURE_SYSTEM_IMAGE:-}"
   if [[ -z "$IMAGE" ]]; then
-    IMAGE_DIR="$(ls -d "$SDK"/system-images/*/*/* 2>/dev/null | sort -V | tail -1)"
+    # Newest phone image for this machine: Google APIs or Play, matching the host CPU.
+    ABI="$([[ "$(uname -m)" == arm64 ]] && echo arm64-v8a || echo x86_64)"
+    IMAGE_DIR="$(ls -d "$SDK"/system-images/android-*/google_apis*/"$ABI" 2>/dev/null | sort -V | tail -1)"
     [[ -n "$IMAGE_DIR" ]] || die "no system image installed; set CAPTURE_SYSTEM_IMAGE"
     IMAGE="system-images;$(echo "${IMAGE_DIR#"$SDK"/system-images/}" | tr / ';')"
   fi
@@ -148,7 +154,7 @@ SRC="$PULL/component-captures"
 
 # ---- Output ----
 mkdir -p "$OUT"
-HW_NAME="$(sed -n 's/^hw\.device\.name *= *//p' "$HOME/.android/avd/$AVD.avd/config.ini" 2>/dev/null | head -1)"
+HW_NAME="$(sed -n 's/^hw\.device\.name *= *//p' "$AVD_HOME/$AVD.avd/config.ini" 2>/dev/null | head -1)"
 DEVICE_LABEL="${HW_NAME:-$HW_DEVICE} emulator ($AVD)"
 [[ -f "$CONTRACT" ]] || die "contract not found at $CONTRACT; set CAPTURE_CONTRACT"
 node - "$SRC" "$OUT" "$(git -C "$REPO_ROOT" rev-parse HEAD)" "$DEVICE_LABEL" "$CONTRACT" <<'NODE'

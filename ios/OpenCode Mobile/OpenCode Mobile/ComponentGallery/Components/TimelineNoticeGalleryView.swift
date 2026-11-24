@@ -4,7 +4,7 @@ struct TimelineNoticeGalleryView: View {
     @State private var expanded: Set<String> = []
 
     static let samples: [(id: String, variant: OpenCodeTimelineNoticeVariant, label: String, value: String?)] = [
-        ("moved", .moved, "Moved to", "/Users/me/Projects/opencode-mobile/.worktrees/feature-702-v2-timeline-notices"),
+        ("moved", .moved, "Moved to", "/Users/example/Projects/opencode-mobile/.worktrees/feature-702-v2-timeline-notices"),
         ("agent", .plain, "Agent changed", "Build \u{2192} Plan"),
         ("model", .plain, "Switched to", "Claude Opus 4.5"),
         ("variant", .plain, "Switched variant to", "high"),

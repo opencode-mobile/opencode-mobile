@@ -99,9 +99,24 @@ const iosEntries = [...iosSrc.slice(iosSrc.indexOf("let componentGalleryEntries"
 for (const e of entries) e.platforms = iosEntries.some((x) => x.id === e.id) ? ["ios", "android"] : ["android"];
 for (const e of iosEntries) if (!entries.some((x) => x.id === e.id)) entries.push({ ...e, platforms: ["ios"] });
 
+// Divergence notes are local and unverified: divergences/*.md is git-ignored. Parsed when present.
+const divergences = {};
+const divDir = join(here, "divergences");
+if (existsSync(divDir)) {
+  for (const f of readdirSync(divDir).filter((x) => x.endsWith(".md"))) {
+    for (const block of readFileSync(join(divDir, f), "utf8").split(/^(?=### )/m).filter((b) => b.startsWith("### "))) {
+      const head = block.split("\n")[0].slice(4), cut = head.indexOf(": ");
+      if (cut < 0) continue;
+      const id = head.slice(0, cut).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const severity = (block.match(/Severity:\*\*\s*(High|Medium|Low)/) || [])[1]?.toLowerCase() ?? "low";
+      (divergences[id] ??= []).push({ severity, title: head.slice(cut + 2) });
+    }
+  }
+}
+
 const duo = JSON.parse(read("docs/devices/iphone-duo/geometry.json"));
 cpSync(join(root, "icons/file-types/svg"), join(here, "assets/file-types"), { recursive: true });
 const fileIconMaps = JSON.parse(read("icons/file-types/maps.json"));
-const data = { themes, icons, docs, entries, fileIconMaps, duo: { displays: duo.displays, poses: duo.poses } };
+const data = { divergences, themes, icons, docs, entries, fileIconMaps, duo: { displays: duo.displays, poses: duo.poses } };
 writeFileSync(join(here, "data.js"), `window.DS=${JSON.stringify(data)};\n`);
 console.log(`themes ${themes.length}, icons ${Object.keys(icons).length}/${manifest.length}, docs ${Object.keys(docs).length}, entries ${entries.length}`);

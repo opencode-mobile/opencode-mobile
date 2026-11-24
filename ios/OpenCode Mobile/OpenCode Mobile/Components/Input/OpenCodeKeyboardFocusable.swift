@@ -206,7 +206,9 @@ private struct OpenCodeKeyboardFocusableModifier: ViewModifier {
     @Environment(\.openCodeFocusRequester) private var requester
     @Environment(\.openCodeFocusKey) private var explicitKey
     @Environment(\.openCodeFocusRingPreview) private var ringPreview
+    #if DEBUG
     @Environment(\.openCodeCaptureTakesFocus) private var captureTakesFocus
+    #endif
     @Environment(\.openCodeOverlayLayer) private var overlayLayer
     @FocusState private var isFocused: Bool
     @State private var autoKey = UUID()
@@ -271,12 +273,15 @@ private struct OpenCodeKeyboardFocusableModifier: ViewModifier {
                 if enabled { group?.register(key) }
                 syncTabStop(onScreen: true)
                 focusIfRequested()
-                // Focusable flips on with the Tab stop; ask again over a few frames, once it has.
+                #if DEBUG
+                // Component captures: focusable flips on with the Tab stop, so ask again over a
+                // few frames, once it has.
                 if captureTakesFocus, enabled {
                     for delay in [0.0, 0.1, 0.3, 0.6] {
                         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { isFocused = true }
                     }
                 }
+                #endif
             }
             .onDisappear {
                 group?.unregister(key)
@@ -402,9 +407,11 @@ private struct OpenCodeFocusRingPreviewKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+#if DEBUG
 private struct OpenCodeCaptureTakesFocusKey: EnvironmentKey {
     static let defaultValue = false
 }
+#endif
 
 extension EnvironmentValues {
     fileprivate var openCodeFocusGroup: OpenCodeFocusGroupModel? {
@@ -427,10 +434,12 @@ extension EnvironmentValues {
         set { self[OpenCodeFocusRingPreviewKey.self] = newValue }
     }
 
+    #if DEBUG
     fileprivate var openCodeCaptureTakesFocus: Bool {
         get { self[OpenCodeCaptureTakesFocusKey.self] }
         set { self[OpenCodeCaptureTakesFocusKey.self] = newValue }
     }
+    #endif
 }
 
 #Preview("Focus ring") {

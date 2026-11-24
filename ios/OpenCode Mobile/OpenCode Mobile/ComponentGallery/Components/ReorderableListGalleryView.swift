@@ -17,10 +17,10 @@ struct ReorderableListGalleryView: View {
     @State private var lastEvent = "Long-press a project row, then drag."
     @State private var items: [ReorderableGalleryProject] = [
         .init(id: "all", title: "All projects", path: "4 projects", accent: .violet),
-        .init(id: "/Users/me/Projects/opencode-mobile", title: "opencode-mobile", path: "~/Projects/opencode-mobile", accent: .violet),
-        .init(id: "/Users/me/Projects/playground", title: "playground", path: "~/Projects/playground", accent: .teal),
-        .init(id: "/Users/me/Projects/website", title: "website", path: "~/Projects/website", accent: .amber),
-        .init(id: "/Users/me/Projects/docs", title: "docs", path: "~/Projects/docs", accent: .blue),
+        .init(id: "/Users/example/Projects/opencode-mobile", title: "opencode-mobile", path: "~/Projects/opencode-mobile", accent: .violet),
+        .init(id: "/Users/example/Projects/playground", title: "playground", path: "~/Projects/playground", accent: .teal),
+        .init(id: "/Users/example/Projects/website", title: "website", path: "~/Projects/website", accent: .amber),
+        .init(id: "/Users/example/Projects/docs", title: "docs", path: "~/Projects/docs", accent: .blue),
     ]
 
     init(

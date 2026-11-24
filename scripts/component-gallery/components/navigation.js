@@ -167,58 +167,6 @@
     return `<div class="c-sp-frame" data-nv-split data-width="${width}" data-collapsed="${collapsed ? 1 : 0}"><div class="c-sp${p.state === "dragging" ? " dragging" : ""}"><div class="c-sp-lead"><div class="c-sp-lead-in">${bar("Leading", "none")}${list}</div></div><div class="c-sp-divider"><div class="c-sp-handle"><span></span></div></div><div class="c-sp-detail">${bar("Detail", "sidebar")}<div class="c-sp-empty">${emptyState(collapsed ? "Sidebar hidden" : "Sidebar shown", "The top-bar button toggles the leading pane.", "sidebar")}</div></div></div></div>`;
   };
 
-  const DV = {
-    topBar: [
-      { severity: "medium", title: "Bar height is 80pt on iOS and 72dp on Android with a title" },
-      { severity: "medium", title: "Session Search hand-builds its header with different spacing per platform" },
-      { severity: "low", title: "Android bar has no background; iOS paints background-base" },
-      { severity: "low", title: "Android caps subtitle width at 220dp next to a status; iOS does not" },
-    ],
-    actionBar: [
-      { severity: "medium", title: "Target title is 14pt on iOS and 16sp on Android" },
-      { severity: "low", title: "Target subtitle gap is 2pt on iOS and 0 on Android" },
-      { severity: "low", title: "Compact change animates on Android and snaps on iOS" },
-    ],
-    splitPane: [
-      { severity: "medium", title: "Split layout breakpoints differ between platforms" },
-      { severity: "low", title: "Idle grip is text-weaker on iOS and text-weak on Android" },
-      { severity: "low", title: "Toggle easing differs: ease-out on iOS, fast-out-slow-in on Android" },
-    ],
-    overflow: [
-      { severity: "high", title: "Long titles truncate at 240dp on Android but never on iOS" },
-      { severity: "medium", title: "Subtitle rows are taller on Android" },
-      { severity: "medium", title: "Android entries have no pressed feedback" },
-      { severity: "low", title: "Tokens list a 12 anchor inset and 4 elevation; code uses 4 and none" },
-      { severity: "low", title: "Below placement and context menu each exist on one platform" },
-      { severity: "low", title: "Docs call dividers and subtitles out of scope, but both ship" },
-    ],
-    sheet: [
-      { severity: "medium", title: "Docs describe header-only drag at 96/1200; code uses stops at 0.6/900 and body drag" },
-      { severity: "medium", title: "Docs omit the fitAllContent height" },
-      { severity: "low", title: "Entry subtitle is text-weak on iOS and text-base on Android" },
-      { severity: "low", title: "Half detent differs by 4 between platforms" },
-      { severity: "low", title: "Header actions support different content per platform" },
-    ],
-    dialog: [
-      { severity: "medium", title: "Android card is 48dp narrower at its width cap" },
-      { severity: "medium", title: "Android scrim comes from the window theme, not the 0.32 token" },
-      { severity: "low", title: "Docs omit dialog notes" },
-    ],
-    modal: [{ severity: "low", title: "Gallery sample omits body copy and uses other spacing on Android" }],
-    snackbar: [
-      { severity: "high", title: "Tap dismisses on iOS; Android has neither tap nor the documented swipe" },
-      { severity: "medium", title: "Error text is icon-invert on iOS and always white on Android" },
-      { severity: "medium", title: "Android error snackbar can lose its color while fading out" },
-      { severity: "medium", title: "Docs say no action button, but both platforms ship one" },
-      { severity: "low", title: "snackbar.maxWidth 560 is not applied by our code" },
-      { severity: "low", title: "Shadow differs from the 4 elevation token on Android" },
-    ],
-    fileTabs: [
-      { severity: "medium", title: "Long names truncate in the middle on iOS and at the end on Android" },
-      { severity: "low", title: "Accessibility role is button on iOS and tab on Android" },
-    ],
-    pageIndicator: [{ severity: "low", title: "Motion differs: 200 ms ease on iOS, width-only spring on Android" }],
-  };
 
   Kit.define([
     { id: "top-bar", doc: "top-bar", align: "stretch",
@@ -231,46 +179,46 @@
         { title: "Chrome", kind: "stack", base: { leading: "back", actions: "icons" }, items: [["Divider", { divider: true }], ["Title switcher", { leading: "none", title: "My workstation", status: "live", switcher: true }], ["Long title truncates", { title: "A session title long enough to truncate on one line", subtitle: "A subtitle that is also long enough to truncate on one line" }], ["iPhone Duo vertical bar (iOS only)", { duo: true, title: "Wire session project chrome", subtitle: "opencode-mobile", subtitleLeading: "letter", status: "live", actions: "labelIcons", divider: true }]] },
       ],
       tokens: [["topBar.minHeight", 56], ["topBar.paddingHorizontal", 12], ["topBar.paddingVertical", 12], ["topBar.itemSpacing", 8], ["topBar.titleSpacing", 12], ["topBar.titleEdgeInsetWhenNoLeading", 18], ["topBar.titleBlockHeight", 48], ["topBar.subtitleSpacing", 0], ["topBar.dividerThickness", 1], ["topBar.iconButton", 40], ["topBar.icon", 18], ["topBar.letterBadge", "16, radius 4, 9 bold"], ["connectionStatusLabel.dotSize", 6], ["connectionStatusLabel.dotSpacing", 4], ["verticalBar.item / pitch", "48 / 60 (iOS Duo)"], ["divider", "border-weaker-base"]],
-      source: { ios: "Components/Chrome/OpenCodeTopBar.swift", android: "ui/components/chrome/OpenCodeTopBar.kt" }, divergences: DV.topBar, render: topBar },
+      source: { ios: "Components/Chrome/OpenCodeTopBar.swift", android: "ui/components/chrome/OpenCodeTopBar.kt" }, render: topBar },
 
     { id: "action-bar", align: "stretch", dock: true,
       params: [text("name", "opencode-mobile"), text("tag", "git"), text("path", "/Users/example/Projects/opencode-mobile"), text("action", "Add this folder"), bool("target", true), bool("enabled", true), bool("compact")],
       states: [["Enabled", {}], ["Disabled reason", { enabled: false, action: "Already on Home", name: "notes", tag: "", path: "/Users/example/notes" }], ["Compact (keyboard up)", { compact: true }], ["No target", { target: false }], ["Long name and path", { name: "a-very-long-folder-name-that-does-not-fit-on-one-line", path: "/Users/example/Projects/clients/sample/monorepo/packages/a-very-long-folder-name-that-does-not-fit-on-one-line" }]],
       tokens: [["actionBar.paddingHorizontal", "layout.screenGutter (16)"], ["actionBar.paddingVertical", 12], ["actionBar.targetSpacing", 10], ["actionBar.targetIcon", 22], ["actionBar.titleTagSpacing", 6], ["actionBar.divider", "1, border-weaker-base"], ["button", "fullWidthText, large, high"]],
       spec: "## Intent\nBottom-pinned bar with one full-width primary action and, above it, the thing that action applies to.\n\n## Public API\n- `target`: optional icon, title, tag, and path-like subtitle.\n- `actionTitle`: the button label. When disabled, it states the reason.\n- `enabled`, `compact`.\n\n## Behavior\n`compact` hides the target row, for example while the keyboard is up. The button always stays. The subtitle truncates at its start so the end of a path stays readable. The fill extends under the home indicator or navigation bar.",
-      source: { ios: "Components/Chrome/OpenCodeActionBar.swift", android: "ui/components/chrome/OpenCodeActionBar.kt" }, divergences: DV.actionBar, render: actionBar },
+      source: { ios: "Components/Chrome/OpenCodeActionBar.swift", android: "ui/components/chrome/OpenCodeActionBar.kt" }, render: actionBar },
 
     { id: "split-pane", align: "stretch", pad: true,
       params: [sel("state", ["default", "min", "max", "dragging", "collapsed"])],
       states: [["Default · 360", {}], ["Minimum · 280", { state: "min" }], ["Maximum · 480", { state: "max" }], ["Dragging", { state: "dragging" }], ["Collapsed", { state: "collapsed" }]],
       tokens: [["splitPane.minLeading", 280], ["splitPane.defaultLeading", 360], ["splitPane.maxLeading", 480], ["splitPane.collapseThreshold", 220], ["splitPane.reopenThreshold", 120], ["splitPane.divider", "1, border-weak-base"], ["splitPane.handleGrip", "6 × 40"], ["splitPane.handleHit", "28 × 72"], ["splitPane.tapSlop", 4], ["splitPane.animation", "300 ms"], ["split.ios", "regular × regular, usable ≥ 681"], ["split.android", "window ≥ 720, smallest ≥ 600"]],
       spec: "## Intent\nTwo-pane container for wide windows: a resizable, collapsible leading pane, a divider with a grab handle, and a trailing detail pane.\n\n## Public API\n- `screen`: Home, Settings, Changes, Terminals, or Files. Width and collapsed state persist per screen.\n- `leading` and `trailing` content. The trailing pane receives a control for its sidebar toggle.\n\n## Behavior\nDrag the handle between 280 and 480. Releasing below 220 snaps closed and keeps the remembered width. A tap on the handle or the top-bar sidebar button toggles the pane. Changes, Terminals, and Files force an ancestor Home sidebar closed without saving that collapse. On iPhone Duo the iOS divider can sit in the fold.\n\nThis preview lays the pane out at 760 wide and scales it to the phone.",
-      source: { ios: "Components/Layout/OpenCodeSplitPane.swift", android: "ui/components/layout/OpenCodeSplitPane.kt" }, divergences: DV.splitPane, render: splitPane },
+      source: { ios: "Components/Layout/OpenCodeSplitPane.swift", android: "ui/components/layout/OpenCodeSplitPane.kt" }, render: splitPane },
 
     { id: "overflow-menu", doc: "overflow-menu", align: "stretch", cellHeight: 420,
       params: [sel("host", ["topBar", "anchored"]), sel("count", ["2", "3", "4"], "4"), bool("enabled", true), bool("selection"), bool("destructive", true), bool("divider"), bool("reason", false, "disabled with reason"), bool("textOnly", false, "text only"), bool("open", true)],
       states: [["Default", {}], ["Disabled entries", { enabled: false }], ["Selection rows", { selection: true, destructive: false }], ["Subtitle and divider", { reason: true, divider: true, count: "3" }], ["Text only", { textOnly: true, destructive: false, count: "3" }], ["Anchored to a control", { host: "anchored", count: "3", destructive: false }], ["Closed", { open: false }]],
       tokens: [["overflowMenu.cornerRadius", 8], ["overflowMenu.minWidth", 200], ["overflowMenu.paddingVertical", 4], ["overflowMenu.entry.minHeight", 48], ["overflowMenu.entry.paddingHorizontal", 12], ["overflowMenu.entry.iconSize", 20], ["overflowMenu.entry.iconSpacing", 12], ["overflowMenu.divider.paddingVertical", 4], ["overflowMenu.anchorEndInset (code)", 4], ["overflowMenu.anchorTopOffset", 8], ["disabled opacity", 0.7], ["border", "1, border-weak-base"]],
-      source: { ios: "Components/Chrome/OpenCodeOverflowMenu.swift", android: "ui/components/chrome/OpenCodeOverflowMenu.kt" }, divergences: DV.overflow, render: overflow },
+      source: { ios: "Components/Chrome/OpenCodeOverflowMenu.swift", android: "ui/components/chrome/OpenCodeOverflowMenu.kt" }, render: overflow },
 
     { id: "bottom-sheet", doc: "bottom-sheet", overlay: true, cellHeight: 500,
       params: [text("title", "Session actions"), sel("height", ["fitContent", "half", "fitAllContent"]), sel("keyboard", ["dismiss", "keep", "expand"]), sel("content", ["actions", "form", "folders"]), sel("items", ["2", "4", "6", "12"], "4"), sel("start", ["icon", "none", "illustration"]), sel("end", ["none", "icon", "illustration"]), bool("entryEnabled", true), bool("entrySelected"), bool("entryTag"), bool("entryNew"), bool("entrySubtitle"), bool("destructive"), bool("headerBack"), bool("headerEdit"), bool("running"), bool("pinnedTop"), bool("pinnedBottom"), bool("keyboardUp", true, "keyboard up")],
       states: [["Fit content", {}], ["Fit content · over limit rests at half", { items: "12" }], ["Half", { height: "half", items: "12" }], ["Fit all content", { height: "fitAllContent", items: "12" }], ["Entry states", { entrySelected: true, entryTag: true, entryNew: true, items: "6", destructive: true }], ["Disabled entry", { entryEnabled: false, items: "2" }], ["Decorators · illustration", { start: "illustration", end: "icon", entrySubtitle: true, items: "2" }], ["Header back + Edit", { headerBack: true, headerEdit: true }], ["Running title", { running: true, title: "Background work", items: "2" }], ["Pinned top and bottom", { pinnedTop: true, pinnedBottom: true, items: "6" }], ["Keyboard · keep", { keyboard: "keep", content: "form", items: "2", title: "Add server" }], ["Keyboard · expand", { keyboard: "expand", content: "folders", height: "half", title: "Choose folder" }]],
       tokens: [["bottomSheet.inset", 8], ["bottomSheet.cornerRadiusTop", 24], ["bottomSheet.cornerRadius", "display − 8 (47 fallback)"], ["bottomSheet.maxWidth (regular)", 560], ["bottomSheet.header.padding", "12 / 20 / 8"], ["bottomSheet.content.paddingBottom", 20], ["bottomSheet.footer.paddingTop", 8], ["bottomSheet.entry.minHeight", 48], ["bottomSheet.entry.padding", "12 / 20"], ["bottomSheet.entry.decorator", "24, icon 20"], ["bottomSheet.entry.illustration", "72 × 44, radius 8"], ["bottomSheet.entry.press", "scale 0.97, radius 10"], ["bottomSheet.compactMaxHeight", 420], ["bottomSheet.scrim.alpha", 0.32], ["motion.enter", "320 ms (0.4, 0, 0.2, 1)"], ["motion.exit", "280 ms (0.4, 0, 1, 1)"], ["drag.flickVelocity (code)", 900], ["drag.dismissFraction (code)", 0.6], ["drag.settle", "spring 0.31 s, damping 0.82"]],
-      source: { ios: "Components/Chrome/OpenCodeBottomSheet.swift", android: "ui/components/chrome/OpenCodeBottomSheet.kt" }, divergences: DV.sheet, render: bottomSheet },
+      source: { ios: "Components/Chrome/OpenCodeBottomSheet.swift", android: "ui/components/chrome/OpenCodeBottomSheet.kt" }, render: bottomSheet },
 
     { id: "dialog", doc: "dialog", overlay: true, cellHeight: 390,
       params: [text("title", "Clear all data?"), text("subtitle", "This cannot be undone."), text("primary", "Clear"), bool("destructive", true), bool("enabled", true), bool("field"), bool("notes")],
       states: [["Confirmation · destructive", {}], ["Confirmation · neutral", { destructive: false, title: "Fork session?", subtitle: "Creates a copy from this message.", primary: "Fork" }], ["Without subtitle", { subtitle: "" }], ["Options disabled", { enabled: false }], ["Form", { field: true, title: "Rename session", subtitle: "Choose a short title for this session.", primary: "Save" }], ["Notes", { notes: true, title: "Remove worktree?", subtitle: "Deletes the folder on the server.", primary: "Remove anyway" }]],
       tokens: [["dialog.cornerRadius", 16], ["dialog.maxWidth", 360], ["dialog.screenPaddingHorizontal", 24], ["dialog.paddingHorizontal", 20], ["dialog.paddingVertical", 20], ["dialog.contentSpacing", 16], ["dialog.titleSubtitleSpacing", 8], ["dialog.optionSpacing", 8], ["dialog.shadow.ios", "black 18%, radius 16, y 8"], ["dialog.shadowElevation.android", 8], ["scrim (iOS)", 0.32], ["presentation (iOS)", "200 ms fade"], ["surface", "surface-base"]],
-      source: { ios: "Components/Feedback/OpenCodeDialog.swift", android: "ui/components/feedback/OpenCodeDialog.kt" }, divergences: DV.dialog, render: dialog },
+      source: { ios: "Components/Feedback/OpenCodeDialog.swift", android: "ui/components/feedback/OpenCodeDialog.kt" }, render: dialog },
 
     { id: "modal", overlay: true, cellHeight: 470,
       params: [text("title", "See the work at a glance"), text("body", "Tool calls show as chips under the sentence that explains them."), text("cta", "Got it")],
       states: [["Promo", {}]],
       tokens: [["modal.cornerRadius", 24], ["modal.maxWidth", 360], ["modal.screenPadding", 24], ["modal.padding", 20], ["modal.paddingTop", 48], ["modal.closeInset", 10], ["modal.art", "150 high, radius 20"], ["shadow.ios", "black 18%, radius 16, y 8"], ["shadowElevation.android", 8], ["surface", "surface-base"]],
       spec: "## Intent\nCentered card with a close button and custom content, for promos and short walkthroughs.\n\n## Public API\n- `isPresented` on iOS, `visible` and `onDismissRequest` on Android.\n- `content`: any caller content.\n\n## Behavior\nUses the same window presentation as Dialog. Scrim tap and Close dismiss on both platforms, and system Back also dismisses on Android. The card is `min(360, screen − 48)` wide on both platforms.",
-      source: { ios: "Components/Feedback/OpenCodeModal.swift", android: "ui/components/feedback/OpenCodeModal.kt" }, divergences: DV.modal, render: modal },
+      source: { ios: "Components/Feedback/OpenCodeModal.swift", android: "ui/components/feedback/OpenCodeModal.kt" }, render: modal },
 
     { id: "snackbar", doc: "snackbar", align: "stretch", dock: true,
       params: [text("message", "Session compacted."), sel("variant", ["default", "error"]), text("actionLabel", ""), bool("live", false, "live demo")],
@@ -280,14 +228,14 @@
         { title: "Try it · 4 s, or 10 s with an action", kind: "stack", items: [["Live", { live: true }]] },
       ],
       tokens: [["snackbar.cornerRadius", 8], ["snackbar.paddingHorizontal", 16], ["snackbar.paddingVertical", 12], ["snackbar.screenMarginHorizontal", 16], ["snackbar.screenMarginBottom", 16], ["snackbar.autoDismissDuration", "4000 ms"], ["action auto-dismiss", "10000 ms"], ["snackbar.actionSpacing (iOS)", 12], ["motion (iOS)", "200 ms ease-in-out, move + fade"], ["type", "type.bodySecondary"]],
-      source: { ios: "Components/Feedback/OpenCodeSnackbar.swift", android: "ui/components/feedback/OpenCodeSnackbar.kt" }, divergences: DV.snackbar, render: snackbar },
+      source: { ios: "Components/Feedback/OpenCodeSnackbar.swift", android: "ui/components/feedback/OpenCodeSnackbar.kt" }, render: snackbar },
 
     { id: "file-tabs", align: "stretch",
       params: [sel("tabs", ["five", "two", "single"]), sel("selected", ["0", "1", "2", "3", "4"], "1"), bool("divider", true)],
       states: [["Open files", {}], ["Long name selected", { selected: "4" }], ["Two tabs", { tabs: "two", selected: "0" }], ["Single tab, no divider", { tabs: "single", divider: false }]],
       tokens: [["fileTabs.rowPadding", "6 / 8"], ["fileTabs.spacing", 4], ["fileTabs.titlePadding", "10 / 2"], ["fileTabs.titleMaxWidth", 180], ["fileTabs.closeTarget", 32], ["fileTabs.closeIcon", 14], ["fileTabs.radius", "radius.small (8)"], ["selected", "surface-raised-base, 1 border-weak-base"], ["divider", "1, border-weaker-base"], ["type", "type.button"]],
       spec: "## Intent\nHorizontally scrolling strip of open files for the tablet File Viewer.\n\n## Public API\n- `tabs`: id and file name.\n- `selectedTabId`, `showsDivider`, `onSelect`, `onClose`.\n\n## Behavior\nTap a tab to select it and × to close it. The selected tab scrolls into view. Closing the selected tab selects the last remaining tab. With no tabs, the component renders nothing.",
-      source: { ios: "Components/Chrome/OpenCodeFileTabs.swift", android: "ui/components/chrome/OpenCodeFileTabs.kt" }, divergences: DV.fileTabs, render: fileTabs },
+      source: { ios: "Components/Chrome/OpenCodeFileTabs.swift", android: "ui/components/chrome/OpenCodeFileTabs.kt" }, render: fileTabs },
 
     { id: "page-indicator", align: "center",
       params: [sel("pages", ["1", "2", "3", "4", "5"], "3"), sel("current", ["0", "1", "2", "3", "4"])],
@@ -295,7 +243,7 @@
       sheet: [{ title: "Position", kind: "rows", items: [["1 of 3", {}], ["2 of 3", { current: "1" }], ["3 of 3", { current: "2" }], ["4 of 5", { pages: "5", current: "3" }], ["1 of 1", { pages: "1" }]] }],
       tokens: [["pageIndicator.dot", "7 × 7"], ["pageIndicator.current", "18 × 7"], ["pageIndicator.spacing", 6], ["current", "text-strong"], ["other", "text-weaker"], ["motion (iOS)", "200 ms ease-in-out"], ["motion (Android)", "default spring, width only"]],
       spec: "## Intent\nPager position dots. The current page is a wide capsule and the others are short dots.\n\n## Public API\n- `pageCount`: at least 1.\n- `currentPage`: zero-based.\n\n## Behavior\nNot interactive. Assistive technology reads “Page N of M”.",
-      source: { ios: "Components/Chrome/OpenCodePageIndicator.swift", android: "ui/components/chrome/OpenCodePageIndicator.kt" }, divergences: DV.pageIndicator, render: pageIndicator },
+      source: { ios: "Components/Chrome/OpenCodePageIndicator.swift", android: "ui/components/chrome/OpenCodePageIndicator.kt" }, render: pageIndicator },
 
     { id: "bottom-fade", doc: "bottom-fade", align: "stretch",
       params: [sel("height", ["72", "48", "120"]), bool("dock")],
