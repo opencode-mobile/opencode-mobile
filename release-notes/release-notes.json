@@ -2,12 +2,117 @@
   "releases": [
     {
       "android": {
-        "version": "1.5.1",
+        "version": "1.5.2",
         "released": null
       },
       "ios": {
-        "version": "1.4.1",
+        "version": "1.4.2",
         "released": null
+      },
+      "items": [
+        {
+          "kind": "improved",
+          "icon": "chat",
+          "title": "One status for each turn",
+          "body": "A single pill shows Working, Waiting for you, Done and the rest from send to finish, in every timeline style.",
+          "prs": [
+            1098,
+            1094,
+            1115
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "image",
+          "title": "Images in every timeline style",
+          "body": "Images from tools now show in Activity Card, Step Rail and Chips, not just Standard.",
+          "prs": [
+            1097
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "keyboard",
+          "title": "Clearer composer",
+          "body": "The composer has a soft outline and the timeline fades out above it, so it stands apart in dark themes.",
+          "prs": [
+            1096,
+            1099,
+            1119
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "list",
+          "title": "Long question options",
+          "body": "Question options wrap, so you can read every option in full.",
+          "prs": [
+            1093
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "server",
+          "title": "Server Health",
+          "body": "Charts skip the time the app was closed, and a new error log lists failed checks and dropped connections.",
+          "prs": [
+            1102,
+            1116
+          ]
+        },
+        {
+          "kind": "improved",
+          "icon": "send",
+          "title": "Pending steers",
+          "body": "A steer waiting for the next step shows as pending until it is sent.",
+          "prs": [
+            1100
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "server",
+          "title": "Switching servers",
+          "body": "Drafts, new sessions and saved chats stay with their own server when you switch.",
+          "prs": [
+            1104,
+            1114
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "fix",
+          "title": "Scroll to end",
+          "body": "Scroll to end no longer moves up inside a long reply.",
+          "platforms": [
+            "android"
+          ],
+          "prs": [
+            1103
+          ]
+        },
+        {
+          "kind": "fixed",
+          "icon": "image",
+          "title": "Sending images",
+          "body": "A message with several images keeps its gallery layout after it is sent.",
+          "platforms": [
+            "ios"
+          ],
+          "prs": [
+            1101
+          ]
+        }
+      ]
+    },
+    {
+      "android": {
+        "version": "1.5.1",
+        "released": "2026-11-19"
+      },
+      "ios": {
+        "version": "1.4.1",
+        "released": "2026-11-19"
       },
       "items": [
         {
