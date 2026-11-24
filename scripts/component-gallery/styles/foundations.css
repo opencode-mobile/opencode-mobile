@@ -1,0 +1,70 @@
+/* Styles for component group: foundations. Every selector is prefixed to its component. */
+
+/* Colors */
+.c-color { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.c-color-title { color: var(--text-strong); font-size: calc(16px * var(--ts, 1)); font-weight: 500; line-height: calc(22px * var(--ts, 1)); }
+.c-color-group { display: flex; justify-content: space-between; margin: 8px 0 0; color: var(--text-base); font: 600 calc(12px * var(--ts, 1))/calc(16px * var(--ts, 1)) var(--font); }
+.c-color-group span { color: var(--text-weak); font-family: var(--mono); font-weight: 500; }
+.c-color-row { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--surface-base); }
+.c-color-name { min-width: 0; color: var(--text-strong); font-size: calc(14px * var(--ts, 1)); font-weight: 500; line-height: calc(18px * var(--ts, 1)); overflow-wrap: anywhere; }
+.c-color-name small { display: block; color: var(--text-weak); font-size: calc(11px * var(--ts, 1)); font-weight: 400; line-height: calc(14px * var(--ts, 1)); }
+.c-color-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.c-color-swatch { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.c-color-swatch i { display: block; height: 44px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--border-weaker-base); }
+.c-color-mode { color: var(--text-base); font-size: calc(13px * var(--ts, 1)); line-height: calc(18px * var(--ts, 1)); }
+html[data-platform=android] .c-color-mode { font-size: calc(12px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); }
+.c-color-hex { color: var(--text-strong); font-size: calc(13px * var(--ts, 1)); line-height: calc(18px * var(--ts, 1)); overflow-wrap: anywhere; }
+
+/* Typography */
+.c-type { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.c-type-title { color: var(--text-strong); font-size: calc(16px * var(--ts, 1)); font-weight: 500; line-height: calc(22px * var(--ts, 1)); }
+.c-type-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--surface-base); }
+.c-type-name { color: var(--text-base); font-size: calc(14px * var(--ts, 1)); font-weight: 500; line-height: calc(18px * var(--ts, 1)); }
+.c-type-name small { color: var(--text-weak); font-size: calc(11px * var(--ts, 1)); font-weight: 400; }
+.c-type-sample { color: var(--text-strong); overflow-wrap: anywhere; }
+.c-type-sample.is-code { padding: 10px; border-radius: 8px; background: var(--surface-raised-base); }
+.c-type-spec { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 8px; margin: 0; font: calc(11px * var(--ts, 1))/calc(15px * var(--ts, 1)) var(--mono); }
+.c-type-spec dt { color: var(--text-weak); }
+.c-type-spec dd { margin: 0; color: var(--text-base); overflow-wrap: anywhere; }
+.c-type-scale > div { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(72px, auto); align-items: center; gap: 8px; min-height: 30px; color: var(--text-base); font-size: calc(13px * var(--ts, 1)); }
+.c-type-scale code { color: var(--text-weak); font: calc(11px * var(--ts, 1)) var(--mono); }
+.c-type-scale b { color: var(--text-strong); font-weight: 400; text-align: right; }
+
+/* Icons */
+.c-icons { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.c-icons-intro, .c-icons-empty { margin: 0; color: var(--text-base); font-size: calc(16px * var(--ts, 1)); }
+html[data-platform=android] .c-icons-intro, html[data-platform=android] .c-icons-empty { font-size: calc(14px * var(--ts, 1)); line-height: calc(20px * var(--ts, 1)); }
+.c-icons-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 16px 12px; }
+.c-icons-cell { display: flex; min-width: 0; min-height: 72px; flex-direction: column; align-items: center; gap: 6px; }
+.c-icons-glyph { display: grid; width: 32px; height: 32px; place-items: center; color: var(--icon-strong-base); }
+html[data-platform=android] .c-icons-glyph { width: 24px; height: 24px; }
+.c-icons-glyph svg { stroke-width: 1.5; }
+.c-icons-name { display: -webkit-box; max-width: 100%; overflow: hidden; color: var(--text-base); font-size: calc(13px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); text-align: center; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+html[data-platform=android] .c-icons-name { font-size: calc(12px * var(--ts, 1)); }
+
+/* File Icon */
+.c-fi { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.c-fi-intro { margin: 0; color: var(--text-base); font-size: calc(16px * var(--ts, 1)); }
+html[data-platform=android] .c-fi-intro { font-size: calc(14px * var(--ts, 1)); line-height: calc(20px * var(--ts, 1)); }
+.c-fi-toggle { display: flex; gap: 8px; }
+.c-fi-toggle > span { display: inline-flex; cursor: pointer; }
+.c-fi-section { display: flex; flex-direction: column; gap: 12px; }
+.c-fi-title { color: var(--text-strong); font-size: calc(14px * var(--ts, 1)); font-weight: 500; line-height: calc(20px * var(--ts, 1)); }
+.c-fi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 16px 12px; }
+.c-fi-cell { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 6px; }
+.c-fi-icons { display: flex; height: 32px; align-items: center; gap: 6px; color: var(--icon-strong-base); }
+.c-fi-glyph { display: block; flex: none; width: var(--fi, 24px); height: var(--fi, 24px); object-fit: contain; }
+.c-fi-glyph.is-mono { background: currentColor; -webkit-mask-position: center; mask-position: center; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-size: contain; mask-size: contain; }
+.c-fi-label { max-width: 100%; overflow: hidden; color: var(--text-base); font-size: calc(13px * var(--ts, 1)); line-height: calc(18px * var(--ts, 1)); text-overflow: ellipsis; white-space: nowrap; }
+html[data-platform=android] .c-fi-label { font-size: calc(12px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); }
+.c-fi-lookup { align-items: stretch; }
+.c-fi-preview { display: grid; min-height: 96px; place-items: center; border-radius: 12px; background: var(--surface-raised-base); color: var(--icon-strong-base); }
+
+/* Skeleton Illustration */
+.c-sk { display: flex; flex-direction: column; gap: 20px; padding: 16px; }
+.c-sk-item { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
+html[data-platform=android] .c-sk-item { gap: 20px; }
+.c-sk-label { color: var(--text-weak); font-size: calc(13px * var(--ts, 1)); line-height: calc(18px * var(--ts, 1)); }
+html[data-platform=android] .c-sk-label { color: var(--text-base); font-size: calc(12px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); }
+.c-sk-box { height: 176px; overflow: hidden; border-radius: 20px; box-shadow: inset 0 0 0 1px var(--border-weaker-base); }
+.c-sk-svg { display: block; width: 100%; height: 176px; }

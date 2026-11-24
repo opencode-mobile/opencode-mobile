@@ -98,3 +98,10 @@ android/screenshot/src/test/snapshots/
 prototypes/
 /*.gif
 shared/markdown-core/native/
+
+# Component gallery: generated data and unverified divergence notes
+scripts/component-gallery/data.js
+scripts/component-gallery/assets/
+scripts/component-gallery/DIVERGENCES.md
+scripts/component-gallery/divergences/
+scripts/component-gallery/captures/

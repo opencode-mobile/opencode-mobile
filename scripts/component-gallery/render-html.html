@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="ds.css">
+<link rel="stylesheet" href="styles/foundations.css"><link rel="stylesheet" href="styles/controls-actions.css"><link rel="stylesheet" href="styles/controls-inputs.css"><link rel="stylesheet" href="styles/lists.css"><link rel="stylesheet" href="styles/navigation.css"><link rel="stylesheet" href="styles/chat-messages.css"><link rel="stylesheet" href="styles/chat-tools.css"><link rel="stylesheet" href="styles/session.css"><link rel="stylesheet" href="styles/diffs.css">
+<style>html,body{height:auto!important;overflow:visible!important;margin:0}#tile{padding:16px;background:var(--background-base);display:flex;flex-direction:column;align-items:flex-start}#tile.stretch{align-items:stretch}</style></head>
+<body><div id="tile"></div>
+<script src="data.js"></script><script src="kit.js"></script><script src="components/foundations.js"></script><script src="components/controls-actions.js"></script><script src="components/controls-inputs.js"></script><script src="components/lists.js"></script><script src="components/navigation.js"></script><script src="components/chat-messages.js"></script><script src="components/chat-tools.js"></script><script src="components/session.js"></script><script src="components/diffs.js"></script>
+<script>
+window.renderTile = (id, props, platform, dark, width) => {
+  const t = DS.themes.find((x) => x.id === "porcelain"), m = dark ? "dark" : "light";
+  const tokens = platform === "ios" ? t.ios[m] : t[m], root = document.documentElement;
+  root.dataset.platform = platform; root.style.colorScheme = m;
+  for (const [k, v] of Object.entries(tokens)) root.style.setProperty("--" + k, v);
+  Kit.ctx = { dark, tokens, platform };
+  const el = document.getElementById("tile"), c = COMPONENTS[id];
+  el.className = c.align === "stretch" ? "stretch" : ""; el.style.width = width + "px";
+  el.innerHTML = Kit.use(id, props, Kit.ctx);
+};
+</script></body></html>

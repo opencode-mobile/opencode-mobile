@@ -25,6 +25,10 @@
     "graphics:editor": "node scripts/launch-graphics/editor.mjs",
     "graphics:render": "node scripts/launch-graphics/render.mjs",
     "graphics:test": "node --test scripts/launch-graphics/*.test.mjs",
+    "gallery": "node scripts/component-gallery/serve.mjs",
+    "gallery:build": "node scripts/component-gallery/build.mjs",
+    "gallery:check": "node scripts/component-gallery/check.mjs",
+    "gallery:html-captures": "node scripts/component-gallery/render-html-captures.mjs",
     "themes:generate-syntax": "node scripts/generate-syntax-presets.mjs"
   },
   "devDependencies": {

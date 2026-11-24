@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="ds.css">
+<link rel="stylesheet" href="styles/foundations.css">
+<link rel="stylesheet" href="styles/controls-actions.css">
+<link rel="stylesheet" href="styles/controls-inputs.css">
+<link rel="stylesheet" href="styles/lists.css">
+<link rel="stylesheet" href="styles/navigation.css">
+<link rel="stylesheet" href="styles/chat-messages.css">
+<link rel="stylesheet" href="styles/chat-tools.css">
+<link rel="stylesheet" href="styles/session.css">
+<link rel="stylesheet" href="styles/diffs.css">
+</head>
+<body>
+<div id="screen"><div id="stage"></div></div>
+<script src="data.js"></script>
+<script src="kit.js"></script>
+<script src="components/foundations.js"></script>
+<script src="components/controls-actions.js"></script>
+<script src="components/controls-inputs.js"></script>
+<script src="components/lists.js"></script>
+<script src="components/navigation.js"></script>
+<script src="components/chat-messages.js"></script>
+<script src="components/chat-tools.js"></script>
+<script src="components/session.js"></script>
+<script src="components/diffs.js"></script>
+<script>
+// Renders one component inside a phone viewport; the shell drives it by postMessage.
+const stage = document.getElementById("stage");
+const screenEl = document.getElementById("screen");
+let cfg = null, inspecting = false, renderedKey = "", applyingScroll = false;
+const box = Object.assign(document.createElement("div"), { id: "inspect-box" });
+const pad = Object.assign(document.createElement("div"), { id: "inspect-pad" });
+const tag = Object.assign(document.createElement("div"), { id: "inspect-size" });
+
+function render() {
+  if (!cfg) return;
+  const root = document.documentElement, { platform, tokens, dark, safe, textScale } = cfg;
+  root.dataset.platform = platform;
+  for (const [k, v] of Object.entries(tokens)) root.style.setProperty("--" + k, v);
+  for (const k of ["t", "r", "b", "l"]) root.style.setProperty("--safe-" + k, safe[k] + "px");
+  root.style.colorScheme = dark ? "dark" : "light";
+  root.style.setProperty("--ts", textScale);
+  clearInspect();
+  const c = window.COMPONENTS[cfg.id];
+  if (!c) { stage.innerHTML = ""; return; }
+  const ctx = { dark, tokens, platform };
+  Kit.ctx = ctx;
+  const one = (props) => c.render({ ...c.defaults, ...props }, ctx);
+  // In the overview, only text edits carry across cells. Cell values always win.
+  const textEdits = Object.fromEntries(Object.entries(cfg.props).filter(([k]) => c.params?.find((p) => p.key === k)?.type === "text"));
+  const cell = (base, props) => one({ ...base, ...textEdits, ...props });
+  const stackItem = ([n, s], base = {}, inset = false) => {
+    const boxed = !!c.cellHeight;
+    const cls = ["st", !boxed && (c.pad || inset) && "inset", !boxed && c.align === "center" && "center"].filter(Boolean).join(" ");
+    return `<div class="${cls}"><span class="lbl">${n}</span><div class="host${boxed ? " boxed" : ""}"${boxed ? ` style="height:${c.cellHeight}px"` : ""}>${cell(base, s)}</div></div>`;
+  };
+  const section = (x) => {
+    const b = x.base ?? {};
+    const h = x.title ? `<h5>${x.title}</h5>` : "";
+    if (x.kind === "matrix") return `<section class="sec">${h}<div class="mx" style="--n:${x.cols.length}"><span></span>${x.cols.map(([l]) => `<span class="hd">${l}</span>`).join("")}${x.rows.map(([rl, rp]) => `<span class="rl">${rl}</span>${x.cols.map(([, cp]) => cell(b, { ...rp, ...cp })).join("")}`).join("")}</div></section>`;
+    if (x.kind === "rows") return `<section class="sec">${h}${x.items.map(([n, s]) => `<div class="rw"><span>${n}</span>${cell(b, s)}</div>`).join("")}</section>`;
+    if (x.kind === "flow") return `<section class="sec">${h}<div class="fl">${x.items.map(([, s]) => cell(b, s)).join("")}</div></section>`;
+    return `<section class="sec bleed">${h}${x.items.map((i) => stackItem(i, b, x.inset)).join("")}</section>`;
+  };
+  const wrap = (html) => c.pad ? `<div class="pad">${html}</div>` : html;
+  const keepScroll = renderedKey === cfg.id + cfg.view ? stage.scrollTop : 0;
+  renderedKey = cfg.id + cfg.view;
+  stage.className = "";
+  if (cfg.view === "all" && (c.sheet || c.states)) {
+    stage.innerHTML = (c.sheet ?? [{ kind: "stack", items: c.states }]).map(section).join("");
+  } else if (c.overlay) {
+    stage.innerHTML = one(cfg.props);
+  } else if (c.dock) {
+    stage.innerHTML = `<div style="flex:1"></div>${one(cfg.props)}`;
+  } else if (c.layout === "scroll") {
+    stage.innerHTML = one(cfg.props);
+  } else {
+    stage.className = "center";
+    stage.innerHTML = c.align === "center" ? `<div class="pad c">${one(cfg.props)}</div>` : wrap(one(cfg.props));
+  }
+  // Behaviour hook: each component may wire listeners on freshly rendered markup.
+  for (const x of Object.values(window.COMPONENTS)) x.mount?.(stage, ctx);
+  applyingScroll = true; stage.scrollTop = keepScroll;
+  requestAnimationFrame(() => { applyingScroll = false; });
+}
+stage.addEventListener("scroll", () => {
+  if (applyingScroll || !cfg) return;
+  const max = stage.scrollHeight - stage.clientHeight;
+  parent.postMessage({ type: "scroll", frame: cfg.frame, ratio: max > 0 ? stage.scrollTop / max : 0 }, "*");
+});
+
+function clearInspect() { box.remove(); pad.remove(); tag.remove(); }
+const hexOf = (v) => {
+  const m = v.match(/rgba?\(([^)]+)\)/); if (!m) return null;
+  const [r, g, b, a = 1] = m[1].split(/[, /]+/).map(Number); if (+a === 0) return null;
+  return "#" + [r, g, b].map((x) => Math.round(x).toString(16).padStart(2, "0")).join("").toUpperCase();
+};
+const tokenFor = (v, prefer) => { const h = hexOf(v); if (!h) return null; const hits = Object.entries(cfg.tokens).filter(([n, t]) => t.length <= 7 && t.toUpperCase() === h && !/^(syntax|markdown)/.test(n)).map(([n]) => n); const best = hits.filter((n) => prefer.test(n)); return (best.length ? best : hits).slice(0, 3).join(" / ") || h; };
+function inspect(el) {
+  const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+  const p = ["Top", "Right", "Bottom", "Left"].map((d) => parseFloat(s["padding" + d]));
+  Object.assign(box.style, { left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px" });
+  Object.assign(pad.style, { left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px",
+    clipPath: `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${p[3]}px ${p[0]}px, ${p[3]}px calc(100% - ${p[2]}px), calc(100% - ${p[1]}px) calc(100% - ${p[2]}px), calc(100% - ${p[1]}px) ${p[0]}px, ${p[3]}px ${p[0]}px)` });
+  tag.textContent = `${+r.width.toFixed(1)} × ${+r.height.toFixed(1)}`;
+  document.body.append(pad, box, tag);
+  const w = tag.offsetWidth;
+  Object.assign(tag.style, { left: Math.max(2, Math.min(innerWidth - w - 2, r.left)) + "px", top: (r.top > 18 ? r.top - 17 : r.bottom + 2) + "px" });
+  parent.postMessage({ type: "inspect", frame: cfg.frame, info: {
+    element: (el.className && typeof el.className === "string" ? el.className.split(" ")[0] : el.tagName.toLowerCase()) || el.tagName.toLowerCase(),
+    size: `${+r.width.toFixed(1)} × ${+r.height.toFixed(1)}`, padding: p.every((x) => x === p[0]) ? `${p[0]}` : p.join(" "),
+    radius: s.borderTopLeftRadius === "0px" ? "0" : parseFloat(s.borderTopLeftRadius) >= 999 ? "capsule" : parseFloat(s.borderTopLeftRadius) + "",
+    gap: s.columnGap === "normal" ? "none" : parseFloat(s.columnGap) + "",
+    font: `${parseFloat(s.fontSize)} / ${s.lineHeight === "normal" ? "auto" : parseFloat(s.lineHeight)} · ${s.fontWeight}`,
+    color: tokenFor(s.color, /^(text|icon)/), fill: tokenFor(s.backgroundColor, /^(button|surface|background)/) ?? "none",
+  } }, "*");
+}
+addEventListener("mousemove", (e) => {
+  if (!inspecting) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (el && el !== stage && el !== screenEl && stage.contains(el)) inspect(el.closest("svg")?.parentElement ?? el); else clearInspect();
+});
+addEventListener("mouseleave", clearInspect);
+addEventListener("pointerdown", (e) => {
+  const b = e.target.closest?.(".press"); if (!b || b.disabled || cfg?.platform !== "android") return;
+  const r = b.getBoundingClientRect(), d = Math.hypot(r.width, r.height) * 2, k = r.width / b.offsetWidth || 1;
+  const x = Object.assign(document.createElement("span"), { className: "ripple" });
+  Object.assign(x.style, { width: d / k + "px", height: d / k + "px", left: (e.clientX - r.left - d / 2) / k + "px", top: (e.clientY - r.top - d / 2) / k + "px" });
+  b.append(x); x.addEventListener("animationend", () => x.remove());
+});
+addEventListener("message", (e) => {
+  if (e.data?.type === "scrollTo") {
+    applyingScroll = true; stage.scrollTop = e.data.ratio * (stage.scrollHeight - stage.clientHeight);
+    requestAnimationFrame(() => { applyingScroll = false; });
+    return;
+  }
+  if (e.data?.type !== "config") return;
+  cfg = e.data.config; inspecting = cfg.inspect; render();
+  parent.postMessage({ type: "rendered", frame: cfg.frame }, "*");
+});
+parent.postMessage({ type: "ready", frame: new URLSearchParams(location.search).get("f") }, "*");
+</script>
+</body>
+</html>
