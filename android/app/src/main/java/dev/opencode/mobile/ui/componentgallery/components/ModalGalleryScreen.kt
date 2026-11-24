@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.componentgallery.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,24 +46,30 @@ fun ModalGalleryScreen(modifier: Modifier = Modifier) {
     }
 
     OpenCodeModal(visible = visible, onDismissRequest = { visible = false }) {
-        OpenCodeSkeletonIllustration(
-            topic = OpenCodeSkeletonIllustrationTopic.ChipTimelineGlance,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(150.dp)
-                    .clip(RoundedCornerShape(20.dp)),
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "See the work at a glance",
-            style = MaterialTheme.typography.titleLarge,
-            color = openCodeColor("text-strong"),
-        )
-        Spacer(Modifier.height(16.dp))
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.FullWidthText("Got it"),
-            onClick = { visible = false },
-        )
+        ModalGalleryContent(onDismiss = { visible = false })
     }
+}
+
+/** The modal's sample body; shared with the debug Component Capture registry. */
+@Composable
+internal fun ColumnScope.ModalGalleryContent(onDismiss: () -> Unit) {
+    OpenCodeSkeletonIllustration(
+        topic = OpenCodeSkeletonIllustrationTopic.ChipTimelineGlance,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+                .clip(RoundedCornerShape(20.dp)),
+    )
+    Spacer(Modifier.height(12.dp))
+    Text(
+        text = "See the work at a glance",
+        style = MaterialTheme.typography.titleLarge,
+        color = openCodeColor("text-strong"),
+    )
+    Spacer(Modifier.height(16.dp))
+    OpenCodeButton(
+        variant = OpenCodeButtonVariant.FullWidthText("Got it"),
+        onClick = onDismiss,
+    )
 }

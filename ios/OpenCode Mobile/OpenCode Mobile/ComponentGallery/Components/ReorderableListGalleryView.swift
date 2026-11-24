@@ -9,35 +9,50 @@ private struct ReorderableGalleryProject: Identifiable, Equatable {
 }
 
 struct ReorderableListGalleryView: View {
-    @State private var reorderEnabled = true
-    @State private var contextActionEnabled = true
-    @State private var dragHandles = false
+    @State private var reorderEnabled: Bool
+    @State private var contextActionEnabled: Bool
+    @State private var dragHandles: Bool
+    /// Shows the Behavior toggles; captures leave them out and show only the list.
+    private let chrome: Bool
     @State private var lastEvent = "Long-press a project row, then drag."
     @State private var items: [ReorderableGalleryProject] = [
         .init(id: "all", title: "All projects", path: "4 projects", accent: .violet),
-        .init(id: "/Users/me/Projects/opencode-mobile", title: "opencode-mobile", path: "~/Projects/opencode-mobile", accent: .violet),
-        .init(id: "/Users/me/Projects/playground", title: "playground", path: "~/Projects/playground", accent: .teal),
-        .init(id: "/Users/me/Projects/website", title: "website", path: "~/Projects/website", accent: .amber),
-        .init(id: "/Users/me/Projects/docs", title: "docs", path: "~/Projects/docs", accent: .blue),
+        .init(id: "/Users/example/Projects/opencode-mobile", title: "opencode-mobile", path: "~/Projects/opencode-mobile", accent: .violet),
+        .init(id: "/Users/example/Projects/playground", title: "playground", path: "~/Projects/playground", accent: .teal),
+        .init(id: "/Users/example/Projects/website", title: "website", path: "~/Projects/website", accent: .amber),
+        .init(id: "/Users/example/Projects/docs", title: "docs", path: "~/Projects/docs", accent: .blue),
     ]
+
+    init(
+        reorderEnabled: Bool = true,
+        contextActionEnabled: Bool = true,
+        dragHandles: Bool = false,
+        chrome: Bool = true
+    ) {
+        _reorderEnabled = State(initialValue: reorderEnabled)
+        _contextActionEnabled = State(initialValue: contextActionEnabled)
+        _dragHandles = State(initialValue: dragHandles)
+        self.chrome = chrome
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Behavior")
-                    .font(OpenCodeTypography.button)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                HStack(spacing: 8) {
-                    OpenCodeChoiceBadge(label: "Reorder", selected: reorderEnabled, action: { reorderEnabled.toggle() })
-                    OpenCodeChoiceBadge(
-                        label: "Context action",
-                        selected: contextActionEnabled,
-                        action: { contextActionEnabled.toggle() }
-                    )
-                    OpenCodeChoiceBadge(label: "Drag handles", selected: dragHandles, action: { dragHandles.toggle() })
+            if chrome {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Behavior")
+                        .font(OpenCodeTypography.button)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                    HStack(spacing: 8) {
+                        OpenCodeChoiceBadge(label: "Reorder", selected: reorderEnabled, action: { reorderEnabled.toggle() })
+                        OpenCodeChoiceBadge(
+                            label: "Context action",
+                            selected: contextActionEnabled,
+                            action: { contextActionEnabled.toggle() }
+                        )
+                        OpenCodeChoiceBadge(label: "Drag handles", selected: dragHandles, action: { dragHandles.toggle() })
+                    }
                 }
             }
-
             Text(lastEvent)
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)

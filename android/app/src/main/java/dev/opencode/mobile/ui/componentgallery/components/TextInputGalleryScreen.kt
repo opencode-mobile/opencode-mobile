@@ -82,7 +82,7 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
     }
 }
 
-private val OpenCodeTextInputKind.fieldHint: String
+internal val OpenCodeTextInputKind.fieldHint: String
     get() =
         when (this) {
             OpenCodeTextInputKind.Text -> "Project name"
@@ -93,7 +93,7 @@ private val OpenCodeTextInputKind.fieldHint: String
             OpenCodeTextInputKind.Search -> "Search in All projects"
         }
 
-private val OpenCodeTextInputKind.sampleValue: String
+internal val OpenCodeTextInputKind.sampleValue: String
     get() =
         when (this) {
             OpenCodeTextInputKind.Text -> "OpenCode Mobile"

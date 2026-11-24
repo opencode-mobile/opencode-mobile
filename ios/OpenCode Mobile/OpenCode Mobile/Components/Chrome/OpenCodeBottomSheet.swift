@@ -1348,6 +1348,52 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
     }
 }
 
+#if DEBUG
+/// Component captures: the presented sheet and its scrim laid out in this view's own bounds
+/// instead of a window overlay, so a fixed-height tile shows the whole presentation.
+struct OpenCodeBottomSheetInlinePreview<PinnedTop: View, SheetContent: View, PinnedBottom: View>: View {
+    let title: OpenCodeText
+    var titleState: OpenCodeBottomSheetTitleState = .plain
+    var leadingAction: OpenCodeBottomSheetHeaderAction?
+    var trailingAction: OpenCodeBottomSheetHeaderAction?
+    var height: OpenCodeBottomSheetHeight = .fitContent
+    var keyboard: OpenCodeBottomSheetKeyboard = .dismiss
+    @ViewBuilder let pinnedTop: () -> PinnedTop
+    @ViewBuilder let sheetContent: () -> SheetContent
+    @ViewBuilder let pinnedBottom: () -> PinnedBottom
+
+    @State private var presentation: OpenCodeBottomSheetPresentation = {
+        let presentation = OpenCodeBottomSheetPresentation()
+        presentation.revealed = true
+        return presentation
+    }()
+
+    var body: some View {
+        OpenCodeBottomSheetOverlayContent(
+            presentation: presentation,
+            title: title,
+            titleState: titleState,
+            leadingAction: leadingAction,
+            trailingAction: trailingAction,
+            scrollTargetID: nil,
+            followsBottom: false,
+            height: height,
+            keyboard: keyboard,
+            displaySafeAreaTop: 0,
+            displaySafeAreaBottom: 0,
+            displayCornerRadius: BottomSheetDisplayCornerRadius.value(
+                for: UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }.first
+            ),
+            seededKeyboardOverlap: 0,
+            onDismiss: {},
+            pinnedTop: pinnedTop,
+            sheetContent: sheetContent,
+            pinnedBottom: pinnedBottom
+        )
+    }
+}
+#endif
+
 private struct BottomSheetKeyboardHostPolicy: ViewModifier {
     func body(content: Content) -> some View {
         content.ignoresSafeArea(.keyboard)

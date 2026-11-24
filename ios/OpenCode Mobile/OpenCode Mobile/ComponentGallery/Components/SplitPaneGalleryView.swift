@@ -2,15 +2,25 @@ import SwiftUI
 
 struct SplitPaneGalleryView: View {
     /// Gallery-only store so demo drags never change the real Home or Settings panes.
-    @State private var preferences = SplitPanePreferences(
-        defaults: UserDefaults(suiteName: "OpenCodeSplitPaneGallery") ?? .standard
-    )
+    @State private var preferences: SplitPanePreferences
+    private let showsCaption: Bool
+
+    /// `state` opens the panes at a fixed width or collapsed, in a store of its own.
+    init(state: OpenCodeSplitPaneState? = nil, showsCaption: Bool = true) {
+        let suite = state == nil ? "OpenCodeSplitPaneGallery" : "OpenCodeSplitPaneCapture"
+        let preferences = SplitPanePreferences(defaults: UserDefaults(suiteName: suite) ?? .standard)
+        if let state { preferences.setState(state, for: .home) }
+        _preferences = State(initialValue: preferences)
+        self.showsCaption = showsCaption
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Drag the handle to resize between 280 and 480. Release below 220 to snap closed; tap to toggle. Home, Changes, and Terminals share this range.")
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textWeak)
+            if showsCaption {
+                Text("Drag the handle to resize between 280 and 480. Release below 220 to snap closed; tap to toggle. Home, Changes, and Terminals share this range.")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+            }
 
             OpenCodeSplitPane(screen: .home, preferences: preferences) {
                 VStack(spacing: 0) {

@@ -23,20 +23,20 @@ fun SelectableCardGalleryScreen(modifier: Modifier = Modifier) {
             blurb = "Warm paper and ink.",
             selected = false,
             onClick = {},
-            preview = { PreviewSlot() },
+            preview = { SelectableCardGalleryPreview() },
         )
         OpenCodeSelectableCard(
             title = "Porcelain",
             blurb = "Warm paper and ink.",
             selected = true,
             onClick = {},
-            preview = { PreviewSlot() },
+            preview = { SelectableCardGalleryPreview() },
         )
     }
 }
 
 @Composable
-private fun PreviewSlot() {
+internal fun SelectableCardGalleryPreview() {
     Text(
         text = "Preview",
         modifier =

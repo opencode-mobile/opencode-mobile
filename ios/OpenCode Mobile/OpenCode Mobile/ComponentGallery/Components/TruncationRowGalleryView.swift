@@ -41,6 +41,6 @@ struct TruncationRowGalleryView: View {
     }
 }
 
-private let truncationRowGallerySample = (1 ... 25)
+let truncationRowGallerySample = (1 ... 25)
     .map { "09:41:\(String(format: "%02d", $0)) INFO worker \($0) finished step ok" }
     .joined(separator: "\n")

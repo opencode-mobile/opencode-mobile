@@ -1,7 +1,9 @@
 import SwiftUI
 
-private enum ComposerSuggestionOverlayGalleryScenario: String, CaseIterable, Identifiable {
+enum ComposerSuggestionOverlayGalleryScenario: String, CaseIterable, Identifiable {
     case populated
+    /// Two rows: the overlay hugs them instead of scrolling.
+    case short
     case mentions
     case empty
 
@@ -10,6 +12,7 @@ private enum ComposerSuggestionOverlayGalleryScenario: String, CaseIterable, Ide
     var label: String {
         switch self {
         case .populated: "Populated"
+        case .short: "Two rows"
         case .mentions: "Mentions"
         case .empty: "Empty"
         }
@@ -53,8 +56,18 @@ struct ComposerSuggestionOverlayGalleryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
-    private var items: [OpenCodeComposerSuggestionItem] {
-        switch scenario {
+    private var items: [OpenCodeComposerSuggestionItem] { scenario.items }
+}
+
+#Preview {
+    ComposerSuggestionOverlayGalleryView()
+        .padding()
+        .openCodeTheme()
+}
+
+extension ComposerSuggestionOverlayGalleryScenario {
+    var items: [OpenCodeComposerSuggestionItem] {
+        switch self {
         case .populated:
             (1 ... 8).map { index in
                 OpenCodeComposerSuggestionItem(
@@ -64,6 +77,11 @@ struct ComposerSuggestionOverlayGalleryView: View {
                     badge: index.isMultiple(of: 3) ? "skill" : (index.isMultiple(of: 2) ? "mcp" : nil)
                 )
             }
+        case .short:
+            [
+                OpenCodeComposerSuggestionItem(id: "init", title: "/init", subtitle: "Create AGENTS.md"),
+                OpenCodeComposerSuggestionItem(id: "my-skill", title: "/my-skill", subtitle: "A skill", badge: "skill"),
+            ]
         case .mentions:
             [
                 OpenCodeComposerSuggestionItem(
@@ -86,10 +104,4 @@ struct ComposerSuggestionOverlayGalleryView: View {
             []
         }
     }
-}
-
-#Preview {
-    ComposerSuggestionOverlayGalleryView()
-        .padding()
-        .openCodeTheme()
 }

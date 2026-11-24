@@ -38,6 +38,15 @@ enum OpenCodeButtonSegment {
     /// Width of the trailing menu half.
     static let trailingWidth: CGFloat = 32
 
+    /// Name for `OpenCodePressedPreview.part`: `label` and `menu` halves of a split button.
+    var previewPart: String {
+        switch self {
+        case .whole: "whole"
+        case .leading: "label"
+        case .trailing: "menu"
+        }
+    }
+
     var shape: UnevenRoundedRectangle {
         let outer = OpenCodeRadius.small
         let inner = Self.innerCornerRadius
@@ -67,6 +76,7 @@ struct OpenCodeButton: View {
     let longPress: (() -> Void)?
     /// Set only by `OpenCodeSplitButton` (see `segmented(_:)`).
     private(set) var segment = OpenCodeButtonSegment.whole
+    @Environment(\.openCodePressedPreview) private var pressedPreview
 
     init(
         variant: OpenCodeButtonVariant,
@@ -127,7 +137,8 @@ struct OpenCodeButton: View {
                 enabled: enabled,
                 contrast: contrast,
                 prepareHapticOnPress: longPress != nil,
-                segment: segment
+                segment: segment,
+                pressedPreview: pressedPreview.matches(segment.previewPart)
             )
         )
         .disabled(!enabled)
@@ -190,10 +201,11 @@ private struct OpenCodeButtonStyle: ButtonStyle {
     let contrast: OpenCodeButtonContrast
     let prepareHapticOnPress: Bool
     let segment: OpenCodeButtonSegment
+    let pressedPreview: Bool
 
     @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
-        let isPressed = configuration.isPressed && enabled
+        let isPressed = (configuration.isPressed || pressedPreview) && enabled
         let maxWidth: CGFloat? = variant.isFullWidth ? .infinity : nil
         let iconSize: CGFloat = size == .large ? 48 : 40
         let iconWidth = segment == .trailing ? OpenCodeButtonSegment.trailingWidth : iconSize

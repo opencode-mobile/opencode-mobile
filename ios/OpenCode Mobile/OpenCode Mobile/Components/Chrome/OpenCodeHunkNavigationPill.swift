@@ -14,18 +14,21 @@ struct OpenCodeHunkNavigationPill: View {
             actionButton(
                 icon: .arrowUpward,
                 label: "component.hunk_navigation.previous",
+                part: "previous",
                 enabled: previousEnabled,
                 action: onPrevious
             )
             actionButton(
                 icon: contextExpanded ? .collapseContent : .expandContent,
                 label: contextExpanded ? "component.hunk_navigation.collapse_context" : "component.hunk_navigation.expand_context",
+                part: "context",
                 enabled: contextEnabled,
                 action: onToggleContext
             )
             actionButton(
                 icon: .arrowDownward,
                 label: "component.hunk_navigation.next",
+                part: "next",
                 enabled: nextEnabled,
                 action: onNext
             )
@@ -41,6 +44,7 @@ struct OpenCodeHunkNavigationPill: View {
     private func actionButton(
         icon: OpenCodeIcon,
         label: LocalizedStringKey,
+        part: String,
         enabled: Bool,
         action: @escaping () -> Void
     ) -> some View {
@@ -50,7 +54,7 @@ struct OpenCodeHunkNavigationPill: View {
                 .frame(width: Self.buttonSize, height: Self.buttonSize)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(OpenCodeHunkNavigationButtonStyle(enabled: enabled))
+        .buttonStyle(OpenCodeHunkNavigationButtonStyle(enabled: enabled, part: part))
         .disabled(!enabled)
         .accessibilityLabel(Text(label))
         .openCodeKeyboardFocusable(.circle, enabled: enabled, activate: action)
@@ -63,11 +67,14 @@ struct OpenCodeHunkNavigationPill: View {
 
 private struct OpenCodeHunkNavigationButtonStyle: ButtonStyle {
     let enabled: Bool
+    /// `previous`, `context`, or `next`, for `OpenCodePressedPreview.part`.
+    let part: String
+    @Environment(\.openCodePressedPreview) private var pressedPreview
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
-                enabled && configuration.isPressed
+                enabled && (configuration.isPressed || pressedPreview.matches(part))
                     ? OpenCodeColors.surfaceRaisedBaseHover
                     : Color.clear
             )

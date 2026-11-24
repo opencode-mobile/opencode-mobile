@@ -18,23 +18,28 @@ struct ModalGalleryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .openCodeModal(isPresented: $isPresented) {
-            VStack(alignment: .leading, spacing: 12) {
-                OpenCodeSkeletonIllustration(topic: .chipTimelineGlance)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 150)
-                    .background(OpenCodeColors.surfaceRaisedBase)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                Text("See the work at a glance")
-                    .font(OpenCodeTypography.title)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                Text("Tool calls show as chips under the sentence that explains them.")
-                    .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                OpenCodeButton(
-                    variant: .fullWidthText(title: "Got it"),
-                    action: { isPresented = false }
-                )
-            }
+            Self.promoContent(onDone: { isPresented = false })
+        }
+    }
+
+    /// The promo the modal shows; captures reuse it.
+    static func promoContent(onDone: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            OpenCodeSkeletonIllustration(topic: .chipTimelineGlance)
+                .frame(maxWidth: .infinity)
+                .frame(height: 150)
+                .background(OpenCodeColors.surfaceRaisedBase)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+            Text("See the work at a glance")
+                .font(OpenCodeTypography.title)
+                .foregroundStyle(OpenCodeColors.textStrong)
+            Text("Tool calls show as chips under the sentence that explains them.")
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
+            OpenCodeButton(
+                variant: .fullWidthText(title: "Got it"),
+                action: onDone
+            )
         }
     }
 }

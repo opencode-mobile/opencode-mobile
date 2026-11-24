@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum GalleryBottomSheetDecoratorKind: String, CaseIterable, Identifiable {
+enum GalleryBottomSheetDecoratorKind: String, CaseIterable, Identifiable {
     case none
     case icon
     case illustration
@@ -36,8 +36,8 @@ struct BottomSheetGalleryView: View {
     @State private var isExpandPresented = false
     @State private var expandFilter = ""
 
-    private var entryStartDecorator: BottomSheetEntryDecorator {
-        switch startDecorator {
+    static func startDecorator(_ kind: GalleryBottomSheetDecoratorKind) -> BottomSheetEntryDecorator {
+        switch kind {
         case .none:
             .none
         case .icon:
@@ -47,8 +47,8 @@ struct BottomSheetGalleryView: View {
         }
     }
 
-    private var entryEndDecorator: BottomSheetEntryDecorator {
-        switch endDecorator {
+    static func endDecorator(_ kind: GalleryBottomSheetDecoratorKind) -> BottomSheetEntryDecorator {
+        switch kind {
         case .none:
             .none
         case .icon:
@@ -220,7 +220,7 @@ struct BottomSheetGalleryView: View {
                         action: {}
                     )
                     OpenCodeBottomSheetEntry(
-                        title: "/Users/demo/Projects",
+                        title: "/Users/example/Projects",
                         startDecorator: .icon(.folderCheck),
                         action: {}
                     )
@@ -255,47 +255,68 @@ struct BottomSheetGalleryView: View {
         )
     }
 
-    @ViewBuilder
     private var actionEntries: some View {
+        Self.actionEntries(
+            itemCount: itemCount,
+            entryEnabled: entryEnabled,
+            entrySelected: entrySelected,
+            entryTagged: entryTagged,
+            entryNew: entryNew,
+            start: startDecorator,
+            end: endDecorator,
+            onSelect: { isPresented = false }
+        )
+    }
+
+    /// The Session actions sheet entries. 12 items add six plain extra actions;
+    /// `destructive` marks Abort active work, `entrySubtitle` gives the first entry a subtitle.
+    @ViewBuilder
+    static func actionEntries(
+        itemCount: Int,
+        entryEnabled: Bool = true,
+        entrySelected: Bool = false,
+        entryTagged: Bool = false,
+        entryNew: Bool = false,
+        entrySubtitle: Bool = false,
+        destructive: Bool = false,
+        start: GalleryBottomSheetDecoratorKind = .icon,
+        end: GalleryBottomSheetDecoratorKind = .none,
+        onSelect: @escaping () -> Void = {}
+    ) -> some View {
+        OpenCodeBottomSheetEntry(
+            title: "Open current project",
+            subtitle: entrySubtitle ? "Tool cards and groups between the agent's messages" : nil,
+            enabled: entryEnabled,
+            startDecorator: startDecorator(start),
+            endDecorator: endDecorator(end),
+            selected: entrySelected,
+            tag: entryTagged ? "Recommended" : nil,
+            isNew: entryNew,
+            action: onSelect
+        )
+        OpenCodeBottomSheetEntry(
+            title: "Create new session",
+            startDecorator: .icon(.add),
+            action: onSelect
+        )
+        if itemCount >= 4 {
+            OpenCodeBottomSheetEntry(title: "Rename session", startDecorator: .icon(.edit), action: onSelect)
+            OpenCodeBottomSheetEntry(title: "Fork session", endDecorator: .icon(.chevronRight), action: onSelect)
+        }
+        if itemCount >= 6 {
+            OpenCodeBottomSheetEntry(title: "Review diff", startDecorator: .icon(.description), action: onSelect)
             OpenCodeBottomSheetEntry(
-                title: "Open current project",
-                enabled: entryEnabled,
-                startDecorator: entryStartDecorator,
-                endDecorator: entryEndDecorator,
-                selected: entrySelected,
-                tag: entryTagged ? "Recommended" : nil,
-                isNew: entryNew,
-                action: { isPresented = false }
+                title: "Abort active work",
+                destructive: destructive,
+                startDecorator: .icon(.stopCircle),
+                action: onSelect
             )
-            OpenCodeBottomSheetEntry(
-                title: "Create new session",
-                startDecorator: .icon(.add),
-                action: { isPresented = false }
-            )
-            if itemCount >= 4 {
-                OpenCodeBottomSheetEntry(
-                    title: "Rename session",
-                    startDecorator: .icon(.edit),
-                    action: { isPresented = false }
-                )
-                OpenCodeBottomSheetEntry(
-                    title: "Fork session",
-                    endDecorator: .icon(.chevronRight),
-                    action: { isPresented = false }
-                )
+        }
+        if itemCount >= 12 {
+            ForEach(1 ... 6, id: \.self) { index in
+                OpenCodeBottomSheetEntry(title: .verbatim("Extra action \(index)"), action: onSelect)
             }
-            if itemCount >= 6 {
-                OpenCodeBottomSheetEntry(
-                    title: "Review diff",
-                    startDecorator: .icon(.description),
-                    action: { isPresented = false }
-                )
-                OpenCodeBottomSheetEntry(
-                    title: "Abort active work",
-                    startDecorator: .icon(.stopCircle),
-                    action: { isPresented = false }
-                )
-            }
+        }
     }
 }
 

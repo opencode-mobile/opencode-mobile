@@ -19,13 +19,20 @@ private let typeRoles = [
 ]
 
 struct TypographyGalleryView: View {
+    /// A slice of the roles, for captures that split the page into tiles; nil shows them all.
+    var roles: Range<Int>?
+
+    static var roleCount: Int { typeRoles.count }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Type Roles")
-                .font(OpenCodeTypography.heading)
-                .foregroundStyle(OpenCodeColors.textStrong)
+            if (roles?.lowerBound ?? 0) == 0 {
+                Text("Type Roles")
+                    .font(OpenCodeTypography.heading)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+            }
 
-            ForEach(typeRoles) { role in
+            ForEach(roles.map { typeRoles[$0.clamped(to: typeRoles.indices)] } ?? typeRoles[...]) { role in
                 TypeRoleSample(role: role)
             }
         }

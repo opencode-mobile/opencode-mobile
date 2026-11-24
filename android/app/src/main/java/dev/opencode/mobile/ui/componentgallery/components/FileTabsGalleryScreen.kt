@@ -18,7 +18,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeFileTab
 import dev.opencode.mobile.ui.components.OpenCodeFileTabs
 
-private val fileTabsGallerySamples =
+internal val fileTabsGallerySamples =
     listOf(
         "README.md",
         "src/main.kt",

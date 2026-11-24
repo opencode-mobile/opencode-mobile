@@ -85,7 +85,7 @@ fun BackgroundWorkPillGalleryScreen(modifier: Modifier = Modifier) {
     }
 }
 
-private fun gallerySubagents(
+internal fun gallerySubagents(
     needsInput: Boolean,
     nowMs: Long,
 ): List<SessionChatSubagent> {
@@ -162,7 +162,7 @@ private fun gallerySubagents(
     return if (needsInput) listOf(general) + running + finished else running + general + finished
 }
 
-private fun galleryShells(nowMs: Long): List<AgentShell> {
+internal fun galleryShells(nowMs: Long): List<AgentShell> {
     fun shell(
         id: String,
         command: String,

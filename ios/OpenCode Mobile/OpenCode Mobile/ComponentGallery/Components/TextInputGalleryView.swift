@@ -14,10 +14,10 @@ struct TextInputGalleryView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(OpenCodeTextInputKind.allCases, id: \.self) { option in
-                        OpenCodeChoiceBadge(label: .verbatim(label(option)), selected: kind == option) {
+                        OpenCodeChoiceBadge(label: .verbatim(Self.label(option)), selected: kind == option) {
                             kind = option
                             if option != .text { multiline = false }
-                            text = isEmpty ? "" : sampleValue(option)
+                            text = isEmpty ? "" : Self.sampleValue(option)
                         }
                     }
                 }
@@ -27,7 +27,7 @@ struct TextInputGalleryView: View {
                 OpenCodeChoiceBadge(label: "Error", selected: showsError) { showsError.toggle() }
                 OpenCodeChoiceBadge(label: "Empty", selected: isEmpty) {
                     isEmpty.toggle()
-                    text = isEmpty ? "" : sampleValue(kind)
+                    text = isEmpty ? "" : Self.sampleValue(kind)
                 }
                 OpenCodeChoiceBadge(label: "Multi-line", selected: multiline) {
                     multiline.toggle()
@@ -50,7 +50,7 @@ struct TextInputGalleryView: View {
         }
     }
 
-    private func label(_ kind: OpenCodeTextInputKind) -> String {
+    static func label(_ kind: OpenCodeTextInputKind) -> String {
         switch kind {
         case .text: "Text"
         case .url: "URL"
@@ -61,7 +61,9 @@ struct TextInputGalleryView: View {
         }
     }
 
-    private var fieldHint: String {
+    private var fieldHint: String { Self.hint(kind) }
+
+    static func hint(_ kind: OpenCodeTextInputKind) -> String {
         switch kind {
         case .text: "Project name"
         case .url: "Server URL"
@@ -72,9 +74,11 @@ struct TextInputGalleryView: View {
         }
     }
 
-    private var errorMessage: String { "Enter a valid \(fieldHint.lowercased())" }
+    private var errorMessage: String { Self.errorMessage(kind) }
 
-    private func sampleValue(_ kind: OpenCodeTextInputKind) -> String {
+    static func errorMessage(_ kind: OpenCodeTextInputKind) -> String { "Enter a valid \(hint(kind).lowercased())" }
+
+    static func sampleValue(_ kind: OpenCodeTextInputKind) -> String {
         switch kind {
         case .text: "OpenCode Mobile"
         case .url: "http://127.0.0.1:4096/"

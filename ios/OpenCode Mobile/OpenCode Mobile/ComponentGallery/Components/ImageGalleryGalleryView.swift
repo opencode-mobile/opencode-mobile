@@ -60,11 +60,11 @@ struct ImageGalleryGalleryView: View {
         viewer = Viewer(items: items, index: index)
     }
 
-    private static func failed(id: String, filename: String) -> OpenCodeImageGalleryItem {
+    static func failed(id: String, filename: String) -> OpenCodeImageGalleryItem {
         OpenCodeImageGalleryItem(id: id, filename: filename, source: OpenCodeImageSource { nil })
     }
 
-    private static let loadingAndFailed: [OpenCodeImageGalleryItem] = [
+    static let loadingAndFailed: [OpenCodeImageGalleryItem] = [
         SnapshotEvidenceImageMocks.items(1, prefix: "mixed")[0],
         OpenCodeImageGalleryItem(
             id: "mixed-loading",

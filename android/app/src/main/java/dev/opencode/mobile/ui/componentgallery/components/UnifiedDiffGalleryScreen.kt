@@ -26,22 +26,7 @@ fun UnifiedDiffGalleryScreen(modifier: Modifier = Modifier) {
     var sample by rememberSaveable { mutableIntStateOf(0) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     val labels = listOf("Modified", "Added", "Deleted", "Unavailable")
-    val files =
-        listOf(
-            FileDiff(
-                path = "Sources/ChangesScreen.kt",
-                patch =
-                    "@@ -1,8 +1,8 @@\n one\n two\n three\n four\n-old value\n+" +
-                        "val newValue = buildAnIntentionallyLongLineThatRequiresHorizontalScrollingToReviewSafely()\n" +
-                        " six\n seven\n eight\n@@ -20 +20 @@\n-before\n+naïve 🚀\n\\ No newline at end of file",
-                additions = 2,
-                deletions = 2,
-                status = FileDiffStatus.Modified,
-            ),
-            FileDiff("Sources/NewFile.kt", "@@ -0,0 +1,2 @@\n+val value = 1\n+println(value)", 2, 0, FileDiffStatus.Added),
-            FileDiff("Sources/OldFile.kt", "@@ -1,2 +0,0 @@\n-val value = 1\n-println(value)", 0, 2, FileDiffStatus.Deleted),
-            null,
-        )
+    val files = unifiedDiffGalleryFiles
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Interactive", style = MaterialTheme.typography.titleMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -64,3 +49,21 @@ fun UnifiedDiffGalleryScreen(modifier: Modifier = Modifier) {
         )
     }
 }
+
+/** Modified, added, deleted, then null for unavailable; shared with the debug Component Capture registry. */
+internal val unifiedDiffGalleryFiles: List<FileDiff?> =
+    listOf(
+        FileDiff(
+            path = "Sources/ChangesScreen.kt",
+            patch =
+                "@@ -1,8 +1,8 @@\n one\n two\n three\n four\n-old value\n+" +
+                    "val newValue = buildAnIntentionallyLongLineThatRequiresHorizontalScrollingToReviewSafely()\n" +
+                    " six\n seven\n eight\n@@ -20 +20 @@\n-before\n+naïve 🚀\n\\ No newline at end of file",
+            additions = 2,
+            deletions = 2,
+            status = FileDiffStatus.Modified,
+        ),
+        FileDiff("Sources/NewFile.kt", "@@ -0,0 +1,2 @@\n+val value = 1\n+println(value)", 2, 0, FileDiffStatus.Added),
+        FileDiff("Sources/OldFile.kt", "@@ -1,2 +0,0 @@\n-val value = 1\n-println(value)", 0, 2, FileDiffStatus.Deleted),
+        null,
+    )

@@ -8,7 +8,7 @@ struct SessionListGalleryView: View {
     @State private var load: SessionListDockGalleryLoad = .none
 
     /// The loading project stands in for one just added: it has no sessions yet.
-    private static let loadingWorktree = "/Users/demo/opencode"
+    private static let loadingWorktree = "/Users/example/opencode"
 
     private var filterTabs: [SessionListFilterTab] {
         let tabs = oneProject ? sessionListGalleryOneProjectFilterTabs : sessionListGalleryFilterTabs
@@ -87,16 +87,16 @@ struct SessionListGalleryView: View {
     }
 }
 
-private let sessionListGallerySamples: [SessionListSession] = {
+let sessionListGallerySamples: [SessionListSession] = {
     let now = Int64(Date().timeIntervalSince1970 * 1000)
     return [
         SessionListSession(
             id: "session-1",
             title: "Refactor Navigation",
-            worktree: "/Users/demo/opencode-mobile",
+            worktree: "/Users/example/opencode-mobile",
             letter: "O",
             letterAccent: .violet,
-            subtitle: "/Users/demo/opencode-mobile",
+            subtitle: "/Users/example/opencode-mobile",
             status: .running,
             caption: "now",
             updatedAtEpochMs: now,
@@ -106,10 +106,10 @@ private let sessionListGallerySamples: [SessionListSession] = {
         SessionListSession(
             id: "session-stale",
             title: "Resume Cached Chat",
-            worktree: "/Users/demo/opencode-mobile",
+            worktree: "/Users/example/opencode-mobile",
             letter: "O",
             letterAccent: .violet,
-            subtitle: "/Users/demo/opencode-mobile",
+            subtitle: "/Users/example/opencode-mobile",
             status: .running,
             statusIsStale: true,
             caption: "14m ago",
@@ -119,10 +119,10 @@ private let sessionListGallerySamples: [SessionListSession] = {
         SessionListSession(
             id: "session-2",
             title: "Bug: Header Clipping",
-            worktree: "/Users/demo/playground",
+            worktree: "/Users/example/playground",
             letter: "P",
             letterAccent: .teal,
-            subtitle: "/Users/demo/playground",
+            subtitle: "/Users/example/playground",
             status: .idle,
             caption: "14m ago",
             updatedAtEpochMs: now - 14 * 60_000
@@ -130,10 +130,10 @@ private let sessionListGallerySamples: [SessionListSession] = {
         SessionListSession(
             id: "session-3",
             title: "Add Dark Mode Assets",
-            worktree: "/Users/demo/opencode-mobile",
+            worktree: "/Users/example/opencode-mobile",
             letter: "O",
             letterAccent: .violet,
-            subtitle: "/Users/demo/opencode-mobile",
+            subtitle: "/Users/example/opencode-mobile",
             status: .ready,
             caption: "3h ago",
             updatedAtEpochMs: now - 3 * 3_600_000,
@@ -143,10 +143,10 @@ private let sessionListGallerySamples: [SessionListSession] = {
         SessionListSession(
             id: "session-4",
             title: "Review Session List",
-            worktree: "/Users/demo/api-client",
+            worktree: "/Users/example/api-client",
             letter: "A",
             letterAccent: .amber,
-            subtitle: "/Users/demo/api-client",
+            subtitle: "/Users/example/api-client",
             status: .retrying(attempt: 2),
             caption: "2d ago",
             updatedAtEpochMs: now - 2 * 86_400_000,
@@ -156,15 +156,15 @@ private let sessionListGallerySamples: [SessionListSession] = {
     ]
 }()
 
-private let sessionListGalleryFilterTabs: [SessionListFilterTab] = [
+let sessionListGalleryFilterTabs: [SessionListFilterTab] = [
     .all(projectCount: 3),
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
-    .project(worktree: "/Users/demo/playground", title: "playground"),
-    .project(worktree: "/Users/demo/api-client", title: "api-client"),
+    .project(worktree: "/Users/example/opencode-mobile", title: "opencode-mobile"),
+    .project(worktree: "/Users/example/playground", title: "playground"),
+    .project(worktree: "/Users/example/api-client", title: "api-client"),
 ]
 
-private let sessionListGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
+let sessionListGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
+    .project(worktree: "/Users/example/opencode-mobile", title: "opencode-mobile"),
 ]
 
 #Preview {

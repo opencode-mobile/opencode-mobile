@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenCode Design System</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="native-tab.css">
+</head>
+<body>
+<div id="app">
+  <aside id="nav">
+    <div class="brand"><span class="logo"></span><div><b>Design System</b><small>OpenCode Mobile</small></div></div>
+    <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" placeholder="Find a component" autocomplete="off" spellcheck="false"><kbd>⌘K</kbd></label>
+    <div class="cover"><div class="bar"><i id="cover-bar"></i></div><span id="cover-text"></span><label><input id="only" type="checkbox"> Built only</label></div>
+    <nav id="list"></nav>
+  </aside>
+  <main id="main">
+    <header id="bar">
+      <div class="seg" id="platform"></div>
+      <div class="pick" id="ios-pick"><span>iOS</span><select id="ios-device"></select></div>
+      <div class="pick" id="android-pick"><span>Android</span><select id="android-device"></select></div>
+      <i class="sep"></i>
+      <div class="pick"><span>Theme</span><select id="theme"></select></div>
+      <div class="seg" id="mode"></div>
+      <div class="pick"><span>Text</span><select id="scale"><option value="0.85">85%</option><option value="1" selected>100%</option><option value="1.15">115%</option><option value="1.3">130%</option></select></div>
+      <span class="grow"></span>
+      <button id="inspect" class="tool" title="Inspect element (I)"><svg viewBox="0 0 24 24"><path d="M4 4l6.5 16 2.3-6.7L19.5 11z"/></svg>Inspect</button>
+    </header>
+    <div id="title"></div>
+    <section id="stage"></section>
+  </main>
+  <aside id="panel">
+    <div class="tabs" id="tabs"></div>
+    <div id="panel-body"></div>
+  </aside>
+</div>
+<script src="data.js"></script>
+<script src="kit.js"></script>
+<script src="components/foundations.js"></script>
+<script src="components/controls-actions.js"></script>
+<script src="components/controls-inputs.js"></script>
+<script src="components/lists.js"></script>
+<script src="components/navigation.js"></script>
+<script src="components/chat-messages.js"></script>
+<script src="components/chat-tools.js"></script>
+<script src="components/session.js"></script>
+<script src="components/diffs.js"></script>
+<script src="native-tab.js"></script>
+<script src="shell.js"></script>
+</body>
+</html>

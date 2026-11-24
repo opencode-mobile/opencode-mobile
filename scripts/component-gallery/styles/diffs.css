@@ -1,0 +1,70 @@
+/* Styles for component group: diffs. Prefix selectors to the component. */
+
+/* Diff Stat */
+.c-ds { display: inline-block; white-space: pre; font-family: var(--font); font-size: calc(13px * var(--ts, 1)); font-weight: 400; line-height: calc(18px * var(--ts, 1)); }
+.c-ds-split { display: inline-flex; align-items: center; gap: 12px; }
+.c-ds-add { color: var(--diff-add); } .c-ds-del { color: var(--diff-delete); } .c-ds-off { color: var(--text-base); }
+.c-ds-button { font-size: calc(14px * var(--ts, 1)); font-weight: 500; }
+html[data-platform=ios] .c-ds-button { line-height: calc(17px * var(--ts, 1)); }
+.c-ds-mono { font-family: var(--mono); font-weight: 600; }
+html[data-platform=android] .c-ds-label { font-size: calc(12px * var(--ts, 1)); font-weight: 500; line-height: calc(16px * var(--ts, 1)); letter-spacing: .5px; }
+
+/* Review Changes Pill */
+.c-rp { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 8px 14px; border-radius: 999px; color: var(--text-strong); white-space: pre; flex: none; }
+.c-rp-t { font-family: var(--font); font-size: calc(14px * var(--ts, 1)); font-weight: 500; line-height: calc(17px * var(--ts, 1)); }
+.c-rp.is-off { color: var(--text-base); cursor: default; }
+html[data-platform=ios] .c-rp.float { background: color-mix(in srgb, var(--surface-raised-base) 92%, transparent); transition: transform .16s ease, opacity .16s ease; }
+html[data-platform=ios] .c-rp.float.is-off { background: color-mix(in srgb, var(--surface-raised-base) 70%, transparent); opacity: .72; }
+html[data-platform=android] .c-rp { padding-block: 0; }
+html[data-platform=android] .c-rp-t { line-height: calc(18px * var(--ts, 1)); }
+html[data-platform=android] .c-rp.float { background: var(--c-rp-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-strong) 10%, transparent), 0 2px 4px rgb(0 0 0 / .2); }
+html[data-platform=android] .c-rp.float.is-off { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-strong) 10%, transparent); }
+
+/* Hunk Navigation Pill */
+.c-hn { display: inline-flex; flex: none; width: 132px; min-height: 44px; border-radius: 999px; overflow: hidden; }
+html[data-platform=ios] .c-hn { background: var(--surface-raised-base); box-shadow: inset 0 0 0 1px var(--border-weaker-base), 0 2px 8px rgb(0 0 0 / .12); }
+html[data-platform=android] .c-hn { background: var(--c-hn-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-strong) 10%, transparent), 0 2px 4px rgb(0 0 0 / .2); }
+.c-hn-b { width: 44px; height: 44px; flex: none; display: grid; place-items: center; color: var(--icon-strong-base); }
+.c-hn-b:disabled { color: var(--icon-weak-base); cursor: default; }
+.c-hn-b:active:not(:disabled), .c-hn-b.is-pressed:not(:disabled) { background: var(--surface-raised-base-hover); }
+html[data-platform=ios] .c-hn-b { transition: background-color .12s ease-out; }
+html[data-platform=android] .c-hn-b { border-radius: 50%; }
+.c-hn-demo { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.c-hn-last { font-size: calc(13px * var(--ts, 1)); line-height: calc(18px * var(--ts, 1)); color: var(--text-base); }
+html[data-platform=android] .c-hn-last { font-size: calc(12px * var(--ts, 1)); font-weight: 500; line-height: calc(16px * var(--ts, 1)); letter-spacing: .5px; color: var(--text-strong); }
+
+/* Unified Diff */
+.c-ud { width: 100%; min-width: 0; background: var(--surface-base); border-radius: 8px; box-shadow: inset 0 0 0 1px var(--border-weaker-base); overflow: hidden; }
+.c-ud-scroll { overflow-x: auto; scrollbar-width: none; }
+.c-ud-scroll::-webkit-scrollbar { display: none; }
+.c-ud-rows { display: inline-flex; flex-direction: column; align-items: flex-start; min-width: 100%; vertical-align: top; }
+.c-ud-row { display: flex; width: max-content; min-height: calc(20px * var(--ts, 1)); font: calc(14px * var(--ts, 1))/calc(20px * var(--ts, 1)) var(--mono); color: var(--c-ud-fg); white-space: pre; }
+.c-ud-ln { flex: none; width: calc(var(--c-ud-g) * 1px * var(--ts, 1)); overflow: hidden; text-align: right; }
+.c-ud-m { flex: none; width: calc(20px * var(--ts, 1)); text-align: center; }
+.c-ud-tx { padding-inline: 8px; }
+.c-ud-hunk { background: var(--surface-raised-base); }
+.c-ud-hunk.is-sel { background: var(--surface-interactive-weak); }
+html[data-platform=ios] .c-ud-addition { background: var(--surface-success-base); }
+html[data-platform=ios] .c-ud-deletion { background: var(--surface-critical-base); }
+html[data-platform=android] .c-ud-addition { background: color-mix(in srgb, var(--diff-add) 18%, transparent); }
+html[data-platform=android] .c-ud-deletion { background: color-mix(in srgb, var(--diff-delete) 16%, transparent); }
+html[data-platform=android] .c-ud-ln { text-align: left; color: var(--text-strong); }
+html[data-platform=android] .c-ud-m { text-align: left; }
+.c-ud-none { font-size: calc(14px * var(--ts, 1)); line-height: calc(20px * var(--ts, 1)); color: var(--text-base); }
+
+/* Code File */
+.c-cf { width: 100%; min-width: 0; height: var(--c-cf-h); background: var(--surface-base); border-radius: 8px; overflow: hidden; }
+.c-cf.is-box { box-shadow: inset 0 0 0 1px var(--border-weaker-base); }
+.c-cf-scroll { height: 100%; overflow: auto; scrollbar-width: none; background: var(--syntax-background, transparent); }
+.c-cf-scroll::-webkit-scrollbar { display: none; }
+.c-cf-rows { display: inline-block; min-width: 100%; padding-block: 8px; vertical-align: top; }
+.c-cf.is-wrap .c-cf-rows { display: block; width: 100%; }
+.c-cf-row { display: flex; min-height: calc(20px * var(--ts, 1)); font: calc(14px * var(--ts, 1))/calc(20px * var(--ts, 1)) var(--mono); color: var(--syntax-foreground, var(--text-strong)); }
+.c-cf-n { flex: none; color: var(--text-weaker); text-align: right; }
+.c-cf-tx { white-space: pre; }
+.c-cf.is-wrap .c-cf-tx { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+html[data-platform=ios] .c-cf-row { gap: 12px; padding-inline: 12px; }
+html[data-platform=ios] .c-cf-n { width: calc(var(--c-cf-d) * 1ch); }
+html[data-platform=android] .c-cf-n { position: sticky; left: 0; z-index: 1; box-sizing: content-box; width: calc(var(--c-cf-d) * 1ch); padding-inline: 8px; background: var(--syntax-background, var(--surface-base)); box-shadow: inset -1px 0 0 var(--border-weaker-base), 12px 0 0 var(--syntax-background, var(--surface-base)); }
+html[data-platform=android] .c-cf-tx { padding-left: 12px; }
+html[data-platform=android] .c-cf.is-wrap .c-cf-tx { padding-right: 12px; }

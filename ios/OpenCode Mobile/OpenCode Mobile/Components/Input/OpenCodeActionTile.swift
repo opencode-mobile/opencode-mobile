@@ -124,18 +124,20 @@ private struct OpenCodeActionTileBadgeView: View {
 
 private struct OpenCodeActionTilePressStyle: ButtonStyle {
     let enabled: Bool
+    @Environment(\.openCodePressedPreview) private var pressedPreview
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let isPressed = configuration.isPressed || pressedPreview.matches()
+        return configuration.label
             .background {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(
-                        enabled && configuration.isPressed
+                        enabled && isPressed
                             ? OpenCodeColors.surfaceRaisedBaseHover
                             : OpenCodeColors.surfaceRaisedBase
                     )
             }
-            .scaleEffect(configuration.isPressed && enabled ? 0.97 : 1)
+            .scaleEffect(isPressed && enabled ? 0.97 : 1)
             .animation(.spring(response: 0.26, dampingFraction: 0.62), value: configuration.isPressed)
     }
 }

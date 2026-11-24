@@ -47,7 +47,12 @@ struct BackgroundWorkPillGalleryView: View {
 
     private var shells: [AgentShell] {
         guard showShells else { return [] }
-        return [
+        return Self.sampleShells(openedAtMs: openedAtMs)
+    }
+
+    /// The gallery's two running shells.
+    static func sampleShells(openedAtMs: Int64) -> [AgentShell] {
+        [
             AgentShell(
                 id: "sh_1",
                 sessionID: "ses-gallery",
@@ -134,7 +139,7 @@ struct BackgroundWorkPillGalleryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private static func row(
+    static func row(
         _ id: String,
         _ agent: String,
         _ title: String,

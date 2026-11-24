@@ -45,10 +45,13 @@ enum OpenCodeFloatingPillBacking: Equatable {
 }
 
 struct OpenCodeFloatingPillPressStyle: ButtonStyle {
+    @Environment(\.openCodePressedPreview) private var pressedPreview
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .opacity(configuration.isPressed ? 0.92 : 1)
+        let isPressed = configuration.isPressed || pressedPreview.matches()
+        return configuration.label
+            .scaleEffect(isPressed ? 0.98 : 1)
+            .opacity(isPressed ? 0.92 : 1)
             .animation(.smooth(duration: 0.16), value: configuration.isPressed)
     }
 }

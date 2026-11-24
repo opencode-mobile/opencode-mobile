@@ -66,8 +66,8 @@ private enum class SessionComposerGalleryScenario(
     SubagentQuestion("Q Subagent"),
 }
 
-private const val MentionGalleryText = "Ask @explore about this"
-private val MentionGalleryRanges = listOf(4 until 12)
+internal const val MENTION_GALLERY_TEXT = "Ask @explore about this"
+internal val MentionGalleryRanges = listOf(4 until 12)
 
 private val SampleQuestionOptions =
     listOf(
@@ -89,7 +89,7 @@ private val SampleQuestionOptions =
 fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
     var scenarioName by rememberSaveable { mutableStateOf(SessionComposerGalleryScenario.Empty.name) }
     var draftText by rememberSaveable { mutableStateOf("Summarize the current changes") }
-    var mentionText by rememberSaveable { mutableStateOf(MentionGalleryText) }
+    var mentionText by rememberSaveable { mutableStateOf(MENTION_GALLERY_TEXT) }
     var mentionsCleared by rememberSaveable { mutableStateOf(false) }
     var shellText by rememberSaveable { mutableStateOf("!git status") }
     var sideQuestionText by rememberSaveable { mutableStateOf("What did we change so far?") }
@@ -424,7 +424,8 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
     }
 }
 
-private fun promptState(
+// The sample-state builders below are shared with the debug Component Capture registry.
+internal fun promptState(
     text: String,
     mentionRanges: List<IntRange> = emptyList(),
     attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
@@ -450,7 +451,7 @@ private fun promptState(
     sideQuestionMode = sideQuestionMode,
 )
 
-private fun permissionState(
+internal fun permissionState(
     queuePosition: Int = 1,
     queueCount: Int = 1,
     attribution: OpenCodeSessionComposerState.RequestAttribution? = null,
@@ -483,7 +484,7 @@ private fun permissionState(
     otherPendingInSessionCount = otherPendingInSessionCount,
 )
 
-private fun questionState(
+internal fun questionState(
     questionIndex: Int,
     questionCount: Int,
     header: String = "Approach",

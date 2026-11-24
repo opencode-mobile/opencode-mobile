@@ -1,0 +1,51 @@
+/* Native tab: native captures in the side panel. */
+#main { position: relative; }
+.nt-tools { display: flex; gap: 6px; margin-bottom: 8px; }
+.nt-seg { display: inline-flex; padding: 2px; border-radius: 7px; background: var(--bg3); }
+.nt-seg button { border: 0; background: none; padding: 3px 8px; border-radius: 5px; color: var(--tx2); cursor: pointer; font-size: 12px; }
+.nt-seg button.on { background: #36363c; color: #fff; }
+.nt-meta { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); color: var(--tx3); font-size: 11px; }
+.nt-meta b { color: var(--tx2); font-weight: 600; margin-right: 2px; }
+.nt-meta code { font: 10px var(--mono); color: var(--tx2); }
+.nt-tile { display: block; width: 100%; padding: 0; border: 0; border-radius: 6px; overflow: hidden; background: #000; cursor: zoom-in; box-shadow: 0 0 0 1px var(--line); }
+.nt-tile:hover { box-shadow: 0 0 0 2px var(--acc); }
+.nt-tile img { display: block; width: 100%; height: auto; }
+.nt-miss { display: grid; place-items: center; min-height: 40px; border: 1px dashed #3a3a40; border-radius: 6px; color: var(--tx3); font-size: 11px; }
+.nt-lab { margin: 6px 0 4px; color: var(--tx3); font: 600 10px var(--mono); text-transform: uppercase; letter-spacing: .04em; }
+.nt-state { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.nt-state h4 { display: flex; justify-content: space-between; margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--tx); }
+.nt-state h4 small { color: var(--tx3); font: 10px var(--mono); }
+
+/* Swipe */
+.nt-swipe { position: relative; border-radius: 6px; overflow: hidden; background: #000; box-shadow: 0 0 0 1px var(--line); user-select: none; }
+.nt-swipe img { display: block; width: 100%; height: auto; }
+.nt-swipe img.top { position: absolute; left: 0; top: 0; }
+.nt-swipe .bar { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--acc); pointer-events: none; }
+.nt-swipe .l, .nt-swipe .r { position: absolute; bottom: 4px; padding: 0 5px; border-radius: 3px; background: rgb(0 0 0 / .65); color: #fff; font: 600 9px/15px var(--mono); pointer-events: none; }
+.nt-swipe .l { left: 4px; } .nt-swipe .r { right: 4px; background: rgb(40 60 140 / .85); }
+.nt-swipe input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
+
+/* Lightbox over the canvas */
+.nt-lightbox { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; padding: 28px; background: rgb(0 0 0 / .62); }
+.nt-lightbox[hidden] { display: none; }
+.nt-lb { width: min(860px, 100%); max-height: 100%; overflow: auto; padding: 16px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--line); box-shadow: 0 24px 70px rgb(0 0 0 / .55); }
+.nt-lb header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.nt-lb header span { flex: 1; color: var(--tx3); }
+.nt-lb .x { border: 0; background: var(--bg3); color: var(--tx); width: 26px; height: 26px; border-radius: 6px; cursor: pointer; font-size: 16px; }
+.nt-lb-ap { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.nt-lb p { margin: 10px 0 0; color: var(--tx3); font-size: 12px; }
+
+.nt-empty { padding: 12px; border-radius: 8px; background: var(--bg3); color: var(--tx2); }
+.nt-empty p { margin: 6px 0; }
+.nt-empty code { display: block; margin-top: 4px; font: 11px var(--mono); color: #c9d4f5; word-break: break-all; }
+
+.nt-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.nt-chips button { border: 1px solid var(--line); background: var(--bg3); border-radius: 5px; padding: 3px 7px; color: var(--tx2); font-size: 12px; cursor: pointer; }
+.nt-chips button.on { border-color: var(--acc); color: #fff; }
+.nt-check { display: flex; align-items: center; gap: 6px; color: var(--tx2); font-size: 12px; cursor: pointer; }
+.nt-check input { margin: 0; accent-color: var(--acc); }
+.nt-check.off { opacity: .5; cursor: not-allowed; }
+.nt-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.nt-count { color: var(--tx3); font-size: 11px; }
+.nt-empty code { display: inline; }
+.nt-empty code:not(p code) { display: block; }

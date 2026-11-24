@@ -145,6 +145,20 @@ enum RenderedMarkdownGalleryMocks {
     ```
     """
 
+    private static let headingsMarkdown = """
+    # Heading one
+
+    ## Heading two
+
+    ### Heading three
+
+    Body text with *emphasis*, **strong**, `inline code`, a [link](https://example.com), and https://example.com/bare.
+    """
+
+    static func sample(_ id: String) -> Sample? {
+        samples.first { $0.id == id }
+    }
+
     static let samples: [Sample] = [
         Sample(
             id: "assistant",
@@ -202,5 +216,13 @@ enum RenderedMarkdownGalleryMocks {
             document: OpenCodeRenderedMarkdownParser.parse(diffMarkdown),
             usesOutgoingMessage: false
         ),
+        Sample(
+            id: "headings",
+            label: "Headings",
+            variant: .assistantMessage,
+            rawMarkdown: headingsMarkdown,
+            document: OpenCodeRenderedMarkdownParser.parse(headingsMarkdown),
+            usesOutgoingMessage: false
+        )
     ]
 }

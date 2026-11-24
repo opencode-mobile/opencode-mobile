@@ -2,6 +2,8 @@ import SwiftUI
 
 struct FileIconGalleryView: View {
     @State private var mono = false
+    /// Shows the Colour and Mono choice; captures leave it out.
+    var showsModeChoice = true
 
     private static let files = [
         "Package.swift", "App.swift", "build.gradle", "Main.kt", "package.json", "index.ts",
@@ -16,9 +18,11 @@ struct FileIconGalleryView: View {
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textBase)
 
-            HStack(spacing: 8) {
-                OpenCodeChoiceBadge(label: "Colour", selected: !mono, action: { mono = false })
-                OpenCodeChoiceBadge(label: "Mono", selected: mono, action: { mono = true })
+            if showsModeChoice {
+                HStack(spacing: 8) {
+                    OpenCodeChoiceBadge(label: "Colour", selected: !mono, action: { mono = false })
+                    OpenCodeChoiceBadge(label: "Mono", selected: mono, action: { mono = true })
+                }
             }
 
             section("Files") {

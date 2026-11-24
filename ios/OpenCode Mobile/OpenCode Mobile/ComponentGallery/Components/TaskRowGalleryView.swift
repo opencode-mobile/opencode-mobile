@@ -35,7 +35,7 @@ struct TaskRowGalleryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private struct Sample {
+    struct Sample {
         let title: String
         let state: OpenCodeTaskRowState
         let tag: String?
@@ -44,7 +44,7 @@ struct TaskRowGalleryView: View {
         let time: String?
     }
 
-    private static let samples: [Sample] = [
+    static let samples: [Sample] = [
         Sample(title: "Find the session store", state: .running, tag: "explore", detail: "Searching SessionStore", detailCaption: "7 tools", time: "0:42"),
         Sample(title: "Run the test suite", state: .waitingForInput, tag: nil, detail: "Waiting for input", detailCaption: nil, time: "1:35"),
         Sample(title: "Review the diff", state: .done, tag: "review", detail: "No blocking issues; two nits in the parser", detailCaption: "4m ago", time: "1:20"),

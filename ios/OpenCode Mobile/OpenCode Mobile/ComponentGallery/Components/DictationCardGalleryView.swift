@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DictationCardGalleryView: View {
-    private enum Sample: String, CaseIterable, Identifiable {
+    enum Sample: String, CaseIterable, Identifiable {
         case listening = "Listening"
         case finishing = "Finishing"
         case permissionDenied = "Permission denied"

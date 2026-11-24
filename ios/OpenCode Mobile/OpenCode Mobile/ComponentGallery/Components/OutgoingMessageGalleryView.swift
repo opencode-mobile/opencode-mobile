@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum OutgoingMessageSample: String, CaseIterable {
+enum OutgoingMessageSample: String, CaseIterable {
     case short = "Short"
     case long = "Long"
     case attachments = "Attachments"

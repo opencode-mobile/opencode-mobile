@@ -7,10 +7,11 @@ struct ShellRowGalleryView: View {
     /// Fixed so the timer ticks instead of restarting on every redraw.
     @State private var startedAtMs = Int64(Date().timeIntervalSince1970 * 1_000) - 72_000
 
+    static let shortCommand = "npm test"
+    static let longCommand = "for i in $(seq 1 40); do echo line $i; sleep 0.5; done && ./scripts/build.sh --release --verbose"
+
     private var command: String {
-        longCommand
-            ? "for i in $(seq 1 40); do echo line $i; sleep 0.5; done && ./scripts/build.sh --release --verbose"
-            : "npm test"
+        longCommand ? Self.longCommand : Self.shortCommand
     }
 
     var body: some View {

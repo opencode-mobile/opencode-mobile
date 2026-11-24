@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 
-private enum class AssistantMessageSample(
+internal enum class AssistantMessageSample(
     val label: String,
     val text: String,
 ) {

@@ -1,0 +1,235 @@
+/* Styles for component group: chat-tools. Every selector is prefixed .ct-. */
+@property --ct-c { syntax: "<percentage>"; inherits: true; initial-value: -30%; }
+@property --ct-r { syntax: "<number>"; inherits: true; initial-value: 0; }
+
+.ct-btn { display: flex; width: 100%; text-align: left; color: inherit; }
+html[data-platform=ios] .ct-btn.press { transition: opacity .12s; }
+html[data-platform=ios] .ct-btn.press:active:not([disabled]), html[data-platform=ios] .ct-btn.press.is-pressed { transform: none; opacity: .7; }
+.ct-ell { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-weaker { color: var(--text-weaker); white-space: nowrap; }
+.ct-base { color: var(--text-base); }
+.ct-chev { display: inline-flex; flex: none; }
+.ct-time, .ct-digits { flex: none; white-space: nowrap; color: var(--text-weaker); font-variant-numeric: tabular-nums; }
+.ct-with-img { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.ct-with-img-g { width: 100%; min-width: 0; }
+.ct-tag-host { display: inline-flex; flex: none; }
+
+/* Pulsing dot: 900 ms each way, 1 to .35. Native easing per platform. */
+@keyframes ct-pulse { from { opacity: 1; } to { opacity: .35; } }
+.ct-pulse { animation: ct-pulse .9s infinite alternate; }
+html[data-platform=ios] .ct-pulse { animation-timing-function: ease-in-out; }
+html[data-platform=android] .ct-pulse { animation-timing-function: cubic-bezier(.4, 0, .2, 1); }
+
+/* Tool images */
+.ct-img { width: 100%; max-width: 420px; display: grid; gap: 4px; }
+.ct-img-tile { position: relative; display: grid; place-items: center; min-height: 0; overflow: hidden; border-radius: 8px; color: var(--icon-weak-base); background: linear-gradient(135deg, var(--surface-raised-base), var(--surface-base-hover)); box-shadow: inset 0 0 0 1px var(--border-weaker-base); }
+.ct-img-1 { width: min(100%, 280px); }
+.ct-img-1 .ct-img-tile { aspect-ratio: 4 / 3; max-height: 220px; }
+.ct-img-2 { grid-template-columns: 1fr 1fr; }
+.ct-img-2 .ct-img-tile { aspect-ratio: 3 / 4; }
+.ct-img-3 { height: 230px; grid-template-columns: 1.4fr 1fr; grid-template-rows: 1fr 1fr; }
+.ct-img-3 .ct-img-lead { grid-row: span 2; }
+.ct-img-4 { grid-template-columns: 1fr 1fr; }
+.ct-img-4 .ct-img-tile { aspect-ratio: 4 / 3; }
+.ct-img-over { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / .5); color: #fff; font-size: calc(16px * var(--ts, 1)); font-weight: 600; }
+
+/* Tool Call Card */
+.ct-tc { width: 100%; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface-raised-base); text-align: left; }
+.ct-tc-dot { flex: none; width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; }
+.ct-tc-bd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ct-tc-title { display: block; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-tc-meta { display: flex; align-items: center; gap: 8px; }
+.ct-tc-sub { flex: 1; min-width: 0; color: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-tc-diff { flex: none; white-space: nowrap; }
+.ct-tc-err { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; white-space: pre-line; }
+
+/* Tool Chip */
+.ct-chip { position: relative; display: inline-flex; width: auto; max-width: 100%; min-width: 0; min-height: 36px; align-items: center; gap: 6px; padding: 6px 10px 6px 8px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--ct-bd); text-align: left; --ct-r: 0; }
+html[data-platform=android] .ct-btn.ct-chip.press { overflow: hidden; }
+.ct-chip-noicon { padding-left: 10px; }
+.ct-chip-pending { box-shadow: none; }
+.ct-chip-dash { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; fill: none; stroke-width: 1; }
+.ct-chip-dash rect { width: calc(100% - 1px); height: calc(100% - 1px); }
+.ct-chip-ic, .ct-chip-g { display: inline-flex; flex: none; }
+.ct-chip-tile { flex: none; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 5px; background: color-mix(in srgb, var(--info) 14%, transparent); }
+.ct-chip-lb { flex: 0 1 auto; min-width: 0; font-size: calc(13px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); white-space: nowrap; }
+.ct-chip-file .ct-chip-lb, .ct-chip-command .ct-chip-lb, .ct-chip-skill .ct-chip-lb { font-family: var(--mono); }
+.ct-chip-agent .ct-chip-lb { flex-shrink: 0; font-weight: 600; }
+.ct-chip-text { display: block; overflow: hidden; text-overflow: ellipsis; }
+.ct-mid { display: flex; min-width: 0; }
+.ct-mid .h { flex: 0 1 auto; min-width: 1ch; overflow: hidden; text-overflow: ellipsis; }
+.ct-mid .t { flex: none; }
+.ct-chip-brief { flex: 0 1000 auto; min-width: 0; color: var(--text-base); font-size: calc(12px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-platform=android] .ct-chip-brief { max-width: 160px; }
+.ct-chip-diff { flex: none; font-size: calc(12px * var(--ts, 1)); font-weight: 600; line-height: calc(16px * var(--ts, 1)); white-space: nowrap; }
+.ct-chip-trail { flex: none; font-size: calc(12px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); white-space: nowrap; font-variant-numeric: tabular-nums; }
+html[data-platform=ios] .ct-chip-trail { color: var(--text-weak); }
+html[data-platform=android] .ct-chip-trail { color: var(--text-base); font-variant-numeric: normal; }
+
+/* Running chip: a warning band two 0.3 label-widths wide sweeps every 1.3 s after a 250 ms reveal. */
+@keyframes ct-sweep { from { --ct-c: -30%; } to { --ct-c: 130%; } }
+@keyframes ct-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.ct-chip-run { transition: --ct-r 0s; }
+html[data-platform=ios] .ct-chip-run { transition: --ct-r .25s ease-out; }
+.ct-chip-run.revealed { --ct-r: 1; }
+.ct-chip-run.revealed .ct-chip-ic { color: var(--warning) !important; animation: ct-breathe 1.3s cubic-bezier(.37, 0, .63, 1) infinite; }
+.ct-chip-run.revealed .ct-chip-lb { --ct-low: color-mix(in srgb, var(--text-base) calc(var(--ct-r) * 100%), var(--ct-rest)); --ct-high: color-mix(in srgb, var(--warning) calc(var(--ct-r) * 100%), var(--ct-rest)); color: transparent; background: linear-gradient(90deg, var(--ct-low) calc(var(--ct-c) - 30%), var(--ct-high) var(--ct-c), var(--ct-low) calc(var(--ct-c) + 30%)); -webkit-background-clip: text; background-clip: text; animation: ct-sweep 1.3s linear infinite; }
+
+/* Activity Card */
+.ct-ac { width: 100%; overflow: hidden; border-radius: 8px; background: var(--surface-raised-base); box-shadow: inset 0 0 0 1px var(--icon-weak-base); text-align: left; }
+.ct-ac-head { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px 12px 8px; }
+html[data-platform=android] .ct-ac-head { gap: 0; padding-bottom: 8px; }
+.ct-ac-headrow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; }
+html[data-platform=android] .ct-ac-headrow { align-items: center; padding-bottom: 2px; }
+.ct-ac-work { flex: none; font-weight: 600; --ct-low: var(--text-base); --ct-high: var(--text-strong); color: transparent; background: linear-gradient(90deg, var(--ct-low) calc(var(--ct-c) - 30%), var(--ct-high) var(--ct-c), var(--ct-low) calc(var(--ct-c) + 30%)); -webkit-background-clip: text; background-clip: text; animation: ct-sweep 1.6s linear infinite; }
+html[data-platform=android] .ct-ac-work { animation-duration: 1.3s; }
+.ct-ac-time { color: var(--text-base); font-size: calc(13px * var(--ts, 1)); line-height: calc(18px * var(--ts, 1)); }
+html[data-platform=android] .ct-ac-time { font-family: var(--mono); font-size: calc(12px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); }
+.ct-ac-sum { display: block; width: 100%; color: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-ac-hair { display: block; height: 1px; background: var(--border-weak-base); }
+.ct-ac-inset { margin-inline: 12px; }
+html[data-platform=android] .ct-ac-inset { margin-inline: 0; }
+.ct-ac-agents { display: flex; flex-direction: column; }
+html[data-platform=android] .ct-ac-agents { padding-inline: 12px; }
+html[data-platform=android] .ct-ac-hasagents { padding-bottom: 4px; }
+.ct-ac-label { padding: 6px 12px 2px; color: var(--text-base); font-size: calc(10.5px * var(--ts, 1)); font-weight: 500; letter-spacing: .8px; line-height: calc(14px * var(--ts, 1)); }
+html[data-platform=android] .ct-ac-label { padding-inline: 0; font-weight: 400; letter-spacing: .08em; }
+.ct-ac-agent { align-items: center; gap: 8px; min-height: 44px; padding: 9px 12px; }
+html[data-platform=android] .ct-ac-agent { width: calc(100% + 16px); margin-inline: -8px; padding-inline: 8px; border-radius: 8px; }
+.ct-ac-tile { flex: none; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 6px; color: var(--info); font-size: 11px; font-weight: 700; line-height: 11px; }
+html[data-platform=ios] .ct-ac-tile { background: color-mix(in srgb, var(--info) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--info) 35%, transparent); }
+html[data-platform=android] .ct-ac-tile { background: color-mix(in srgb, var(--info) 8%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--info) 40%, transparent); }
+.ct-ac-name { flex: none; color: var(--info); font-weight: 600; white-space: nowrap; }
+.ct-ac-act { flex: 1; min-width: 0; color: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-ac-foot { position: relative; display: block; width: calc(100% - 2px); min-height: 44px; margin: 0 1px 1px; padding: 12px 12px 13px; border-radius: 0 0 7px 7px; background: var(--surface-base-hover); box-shadow: inset 0 1px 0 var(--border-weak-base); }
+html[data-platform=android] .ct-ac-foot { width: 100%; min-height: 48px; margin: 6px 0 0; border-radius: 0; }
+.ct-ac-fbody { display: flex; align-items: center; gap: 8px; width: 100%; transition: opacity .2s ease-in-out; }
+.ct-ac-ficon { display: inline-flex; flex: none; color: var(--text-base); }
+.ct-ac-ftitle { flex: 1; min-width: 0; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-ac-idle { color: var(--text-base); font-style: italic; }
+.ct-ac-extra { flex: none; color: var(--text-base); }
+.ct-ac-settled { align-items: center; gap: 8px; min-height: 44px; padding: 11px 12px; }
+html[data-platform=android] .ct-ac-settled { min-height: 48px; padding-block: 10px; }
+.ct-ac-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.ct-ac-stext { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-ac-count { color: var(--text-strong); font-weight: 600; }
+.ct-ac-strong { color: var(--text-strong); }
+.ct-ac-base { color: var(--text-base); }
+.ct-ac-note { margin-top: 6px; color: var(--text-weaker); }
+
+/* Child Session, Shell and Task rows */
+.ct-lr { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; background: var(--surface-base); box-shadow: inset 0 0 0 1px var(--border-weaker-base); text-align: left; }
+.ct-avatar { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--surface-raised-base); color: var(--text-strong); font-size: 14px; font-weight: 700; }
+html[data-platform=ios] .ct-avatar { font-family: ui-rounded, var(--font); }
+.ct-lr-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ct-lr-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; color: var(--text-strong); }
+.ct-task-title { align-items: center; gap: 6px; }
+.ct-lr-trail { flex: none; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+html[data-platform=android] .ct-lr-trail { gap: 12px; }
+html[data-platform=android] .ct-lr .ct-digits { font-variant-numeric: normal; }
+.ct-task-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+html[data-platform=android] .ct-task-side .ct-digits { font-family: var(--mono); font-size: calc(12px * var(--ts, 1)); }
+.ct-tag { flex: none; padding: 1px 6px; border-radius: 999px; background: var(--surface-raised-base); color: var(--text-weak); font-size: calc(13px * var(--ts, 1)); font-weight: 600; line-height: calc(18px * var(--ts, 1)); white-space: nowrap; }
+html[data-platform=android] .ct-tag { font-size: calc(12px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); }
+.ct-task-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
+.ct-task-bang { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--error); color: var(--error); font-family: var(--font); font-size: 11px; font-weight: 700; line-height: 1; }
+.ct-spin-ios { position: relative; width: 20px; height: 20px; animation: ct-steps 1s steps(8) infinite; }
+.ct-spin-ios i { position: absolute; left: 9px; top: 2px; width: 2px; height: 5px; border-radius: 1px; background: var(--text-strong); opacity: var(--o); transform-origin: 1px 8px; transform: rotate(var(--a)); }
+@keyframes ct-steps { to { transform: rotate(360deg); } }
+.ct-spin-android { width: 14px; height: 14px; overflow: visible; fill: none; stroke-width: 2; animation: ct-steps 1.4s linear infinite; }
+.ct-spin-android .tr { stroke: color-mix(in srgb, var(--text-strong) 25%, transparent); }
+.ct-spin-android .hd { stroke: var(--text-strong); stroke-linecap: round; stroke-dasharray: 10 37.7; animation: ct-dash 1.4s ease-in-out infinite; transform-origin: center; }
+@keyframes ct-dash { 0% { stroke-dasharray: 3 37.7; stroke-dashoffset: 0; } 50% { stroke-dasharray: 26 37.7; stroke-dashoffset: -6; } 100% { stroke-dasharray: 3 37.7; stroke-dashoffset: -37.7; } }
+
+/* Step Rail */
+.ct-rail { width: 100%; display: flex; flex-direction: column; padding-left: 6px; }
+html[data-platform=android] .ct-rail { padding-inline: 4px; }
+.ct-rail-row { position: relative; display: flex; align-items: center; width: 100%; min-height: 36px; padding: 4px 0 4px 16px; text-align: left; color: inherit; }
+.ct-rail-row.branch { padding-left: 30px; }
+.ct-rail-line { position: absolute; left: 3.25px; top: 0; bottom: 0; width: 1.5px; background: var(--border-weak-base); }
+.ct-rail-row.first > .ct-rail-line { top: 50%; }
+.ct-rail-row.last > .ct-rail-line { bottom: 50%; }
+.ct-rail-row.first.last > .ct-rail-line { display: none; }
+.ct-rail-conn { position: absolute; left: 4px; top: calc(50% - .75px); width: 14px; height: 1.5px; background: var(--border-weak-base); }
+.ct-rail-dot, .ct-rail-pend { position: absolute; left: 0; top: calc(50% - 4px); width: 8px; height: 8px; border-radius: 50%; }
+.ct-rail-row.branch > .ct-rail-dot, .ct-rail-row.branch > .ct-rail-pend { left: 14px; }
+html[data-platform=android] .ct-rail-row.branch > .ct-rail-dot, html[data-platform=android] .ct-rail-row.branch > .ct-rail-pend { left: 18px; }
+.ct-rail-pend { fill: var(--background-base); stroke: var(--text-weaker); stroke-width: 1; }
+html[data-platform=android] .ct-rail-pend { fill: none; }
+.ct-rail-c { position: relative; z-index: 0; flex: 1; min-width: 0; display: flex; }
+.ct-rail-tap > .ct-rail-c::before { content: ""; position: absolute; z-index: -1; inset: -4px -8px; border-radius: 8px; background: color-mix(in srgb, var(--surface-raised-base) 92%, transparent); opacity: 0; transition: opacity .15s ease-out; }
+.ct-rail-tap:active > .ct-rail-c::before { opacity: 1; transition: none; }
+html[data-platform=android] .ct-rail-tap:active > .ct-rail-c::before { background: color-mix(in srgb, var(--text-strong) 10%, transparent); }
+@keyframes ct-enter { from { opacity: 0; } to { opacity: 1; } }
+html[data-platform=ios] .ct-rail-enter { animation: ct-enter .2s ease-in-out; }
+html[data-platform=android] .ct-rail-enter > .ct-rail-c, html[data-platform=android] .ct-rail-enter > .ct-rail-dot { animation: ct-enter .2s cubic-bezier(.4, 0, .2, 1); }
+.ct-rail-stack { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ct-rail-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ct-rail-lead { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.ct-rail-title { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-rail-detail { flex: 0 1 auto; min-width: 0; color: var(--text-weaker); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-platform=ios] .ct-rail-title { flex-shrink: .2; }
+html[data-platform=android] .ct-rail-detail { flex: none; max-width: 140px; }
+.ct-rail-time, .ct-rail-diff, .ct-rail-word { flex: none; white-space: nowrap; font-size: calc(13px * var(--ts, 1)); line-height: calc(18px * var(--ts, 1)); }
+.ct-rail-time { color: var(--text-weaker); font-variant-numeric: tabular-nums; }
+.ct-rail-diff { font-variant-numeric: tabular-nums; }
+html[data-platform=android] .ct-rail-time, html[data-platform=android] .ct-rail-diff { font-family: var(--mono); font-size: calc(12px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); }
+html[data-platform=android] .ct-rail-diff { display: inline-flex; gap: 4px; }
+html[data-platform=android] .ct-rail-word { font-size: calc(12px * var(--ts, 1)); line-height: calc(16px * var(--ts, 1)); }
+.ct-rail-note { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--text-weaker); }
+.ct-rail-fold { display: inline-flex; align-items: center; gap: 4px; color: var(--text-weaker); white-space: nowrap; }
+.ct-rail-think { color: var(--text-weak); font-style: italic; }
+.ct-rail-child { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border-radius: 10px; background: color-mix(in srgb, var(--info) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--info) 30%, transparent); }
+html[data-platform=android] .ct-rail-child { border-radius: 8px; background: color-mix(in srgb, var(--info) 8%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--info) 40%, transparent); }
+.ct-rail-chead { display: flex; align-items: center; gap: 6px; min-width: 0; }
+html[data-platform=android] .ct-rail-chead { gap: 8px; }
+.ct-rail-agent { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Reasoning Row and Working Indicator */
+.ct-rs { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 0 8px 4px; text-align: left; }
+.ct-collapsed { height: 0 !important; min-height: 0 !important; padding-block: 0 !important; overflow: hidden; }
+.ct-wi-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
+.ct-wi-check { display: inline-flex; flex: none; }
+.ct-wi { width: 100%; height: 40px; display: flex; align-items: center; gap: 8px; padding-left: 4px; overflow: hidden; transition: height .22s ease-in-out, opacity .22s ease-in-out; }
+.ct-wi.fading { opacity: .35; }
+.ct-wi.ct-collapsed { opacity: 0; }
+.ct-wi-mark { position: relative; flex: none; width: 12px; height: 12px; display: grid; place-items: center; }
+.ct-wi-mark > * { grid-area: 1 / 1; transition: opacity .22s ease-in-out, transform .22s ease-in-out; }
+.ct-wi-mark .ct-wi-check { opacity: 0; transform: scale(.4); }
+.ct-wi.idle .ct-wi-mark .ct-wi-dot { opacity: 0; animation: none; }
+.ct-wi.idle .ct-wi-mark .ct-wi-check { opacity: 1; transform: scale(1); }
+.ct-wi-label { white-space: nowrap; }
+
+/* Turn pill (context for Working Indicator; its home is Floating Pill) */
+.ct-tp { position: relative; display: inline-flex; align-items: center; min-height: 36px; padding: 8px 14px; border-radius: 999px; font-size: calc(14px * var(--ts, 1)); font-weight: 500; line-height: calc(20px * var(--ts, 1)); }
+.ct-tp.compact { padding-inline: 10px; }
+.ct-tp.compact .ct-tp-l { display: none; }
+.ct-tp.compact .ct-tp-m { margin-right: 0; }
+.ct-tp-ring::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--warning); pointer-events: none; }
+.ct-tp-m { flex: none; width: 16px; height: 16px; margin-right: 6px; display: grid; place-items: center; }
+.ct-tp-l { position: relative; display: inline-block; white-space: nowrap; }
+.ct-tp-l.rolling { transition: width .42s cubic-bezier(.3, 1.18, .5, 1); }
+.ct-tp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
+.ct-arc { width: 16px; height: 16px; overflow: visible; }
+.ct-arc path { fill: none; stroke: var(--text-base); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.ct-tp-live { display: inline-flex; transition: opacity .24s ease-in-out, transform .24s ease-in-out; }
+.ct-roll { position: absolute; left: 0; top: 0; }
+.ct-roll.out { color: var(--text-base); }
+.ct-tp-l.rolling .ct-roll.out { opacity: 0; transform: translateY(-9px); transition: opacity .22s cubic-bezier(.3, 0, .2, 1), transform .22s cubic-bezier(.3, 0, .2, 1); }
+.ct-roll.in { opacity: 0; transform: translateY(9px); color: var(--text-strong); }
+.ct-tp-l.rolling .ct-roll.in { opacity: 1; transform: none; transition: opacity .3s cubic-bezier(.2, .8, .2, 1) .11s, transform .3s cubic-bezier(.2, .8, .2, 1) .11s; }
+.ct-tp-l:has(.ct-roll) { min-height: calc(20px * var(--ts, 1)); }
+
+/* Reduced motion. iOS honors it everywhere these components animate. Android honors it for the
+   rail, activity card and turn pill, but not for the chip, task row or working dot. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-platform=ios] .ct-chip-run.revealed .ct-chip-ic { animation: none; }
+  html[data-platform=ios] .ct-chip-run.revealed .ct-chip-lb { animation: none; color: var(--ct-rest); background: none; }
+  .ct-ac-work { animation: none; background: none; }
+  html[data-platform=ios] .ct-ac-work { color: var(--text-strong); }
+  html[data-platform=android] .ct-ac-work { color: var(--text-base); }
+  .ct-rail-dot.ct-pulse, .ct-tp-dot.ct-pulse, html[data-platform=ios] .ct-task-dot.ct-pulse { animation: none; }
+  .ct-rail-enter, .ct-rail-enter > * { animation: none !important; }
+  .ct-ac-fbody, .ct-tp-live { transition: none; }
+  html[data-platform=ios] .ct-spin-ios { animation: none; }
+}

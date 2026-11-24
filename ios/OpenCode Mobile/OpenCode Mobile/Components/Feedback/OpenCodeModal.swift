@@ -22,7 +22,8 @@ struct OpenCodeModal<ModalContent: View>: ViewModifier {
     }
 }
 
-private struct OpenCodeModalCard<ModalContent: View>: View {
+/// The modal's centered card; captures draw it inside `OpenCodeDialogOverlayContent` in place.
+struct OpenCodeModalCard<ModalContent: View>: View {
     let onClose: () -> Void
     @ViewBuilder let content: () -> ModalContent
 

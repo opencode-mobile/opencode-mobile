@@ -69,7 +69,7 @@ fun ReviewChangesPillGalleryScreen(modifier: Modifier = Modifier) {
     }
 }
 
-private enum class ReviewChangesPillGallerySummary(
+internal enum class ReviewChangesPillGallerySummary(
     val changedFileCount: Int,
     val additions: Int,
     val deletions: Int,

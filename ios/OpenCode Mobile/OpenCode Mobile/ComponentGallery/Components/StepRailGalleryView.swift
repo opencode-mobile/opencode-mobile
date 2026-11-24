@@ -1,11 +1,14 @@
 import SwiftUI
 
 struct StepRailGalleryView: View {
-    private enum Sample: String, CaseIterable, Identifiable {
+    enum Sample: String, CaseIterable, Identifiable {
         case oneRunning = "One running"
         case parallel = "Parallel + child"
         case folded = "Folded, failed"
         case finished = "Finished"
+        case declined = "Declined with note"
+        case pending = "Pending"
+        case failedChild = "Failed child"
 
         var id: String { rawValue }
     }
@@ -35,14 +38,19 @@ struct StepRailGalleryView: View {
             }
 
             ForEach(Sample.allCases.filter { $0 == sample }) { current in
-                rail(for: current)
+                Self.rail(for: current, startMs: startMs, unfolded: unfolded, onFoldTap: { unfolded.toggle() })
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
-    private func rail(for sample: Sample) -> some View {
+    static func rail(
+        for sample: Sample,
+        startMs: Int64,
+        unfolded: Bool = false,
+        onFoldTap: @escaping () -> Void = {}
+    ) -> some View {
         switch sample {
         case .oneRunning:
             OpenCodeStepRail(
@@ -89,7 +97,7 @@ struct StepRailGalleryView: View {
                     ],
                 isLive: true,
                 thinking: true,
-                onFoldTap: { unfolded.toggle() }
+                onFoldTap: onFoldTap
             )
         case .finished:
             OpenCodeStepRail(
@@ -104,6 +112,38 @@ struct StepRailGalleryView: View {
                         detail: "Standards review of #779"
                     ),
                     .step(id: "3", title: "Ran xcodebuild test", status: .interrupted),
+                ]
+            )
+        case .declined:
+            OpenCodeStepRail(
+                steps: [
+                    .step(
+                        id: "1", title: "Ran npm test", detail: "Declined", status: .interrupted,
+                        note: "Your note: Run the tests with --watch=false instead"
+                    ),
+                    .step(id: "2", title: "Thought · 2.1s", status: .completed),
+                ]
+            )
+        case .pending:
+            OpenCodeStepRail(
+                steps: [
+                    .step(id: "1", title: "Package.swift", status: .completed),
+                    .step(id: "2", title: "Running npm test", status: .pending, startedAtMs: startMs - 1_000),
+                ],
+                isLive: true
+            )
+        case .failedChild:
+            OpenCodeStepRail(
+                steps: [
+                    .step(id: "1", title: "Package.swift", status: .completed),
+                    .childSession(
+                        id: "child",
+                        agent: "explore",
+                        status: .failed,
+                        startedAtMs: startMs - 18_000,
+                        endedAtMs: startMs,
+                        detail: "Rate limited"
+                    ),
                 ]
             )
         }

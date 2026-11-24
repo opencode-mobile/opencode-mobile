@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum AssistantMessageSample: String, CaseIterable {
+enum AssistantMessageSample: String, CaseIterable {
     case compact = "Compact"
     case short = "Short"
     case long = "Long"

@@ -16,27 +16,42 @@ import dev.opencode.mobile.ui.components.OpenCodeDropOverlayVariant
 fun DropOverlayGalleryScreen(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(Modifier.fillMaxWidth().height(320.dp)) {
-            OpenCodeDropOverlay(
-                variant = OpenCodeDropOverlayVariant.Accept,
-                title = "Drop to attach 3 images",
-                subtitle = "Adds them to the message you are writing",
-                previews = List(3) { OpenCodeAttachmentVariant.Image },
-            )
+            DropOverlayGalleryImages()
         }
         Box(Modifier.fillMaxWidth().height(320.dp)) {
-            OpenCodeDropOverlay(
-                variant = OpenCodeDropOverlayVariant.Accept,
-                title = "Drop to attach 2 files",
-                subtitle = "1 will be skipped · Folders can't be attached.",
-                previews = listOf(OpenCodeAttachmentVariant.Image, OpenCodeAttachmentVariant.Text),
-            )
+            DropOverlayGalleryMixed()
         }
         Box(Modifier.fillMaxWidth().height(320.dp)) {
-            OpenCodeDropOverlay(
-                variant = OpenCodeDropOverlayVariant.Reject,
-                title = "Can't attach this",
-                subtitle = "Folders can't be attached.",
-            )
+            DropOverlayGalleryReject()
         }
     }
+}
+
+@Composable
+internal fun DropOverlayGalleryImages() {
+    OpenCodeDropOverlay(
+        variant = OpenCodeDropOverlayVariant.Accept,
+        title = "Drop to attach 3 images",
+        subtitle = "Adds them to the message you are writing",
+        previews = List(3) { OpenCodeAttachmentVariant.Image },
+    )
+}
+
+@Composable
+internal fun DropOverlayGalleryMixed() {
+    OpenCodeDropOverlay(
+        variant = OpenCodeDropOverlayVariant.Accept,
+        title = "Drop to attach 2 files",
+        subtitle = "1 will be skipped · Folders can't be attached.",
+        previews = listOf(OpenCodeAttachmentVariant.Image, OpenCodeAttachmentVariant.Text),
+    )
+}
+
+@Composable
+internal fun DropOverlayGalleryReject() {
+    OpenCodeDropOverlay(
+        variant = OpenCodeDropOverlayVariant.Reject,
+        title = "Can't attach this",
+        subtitle = "Folders can't be attached.",
+    )
 }

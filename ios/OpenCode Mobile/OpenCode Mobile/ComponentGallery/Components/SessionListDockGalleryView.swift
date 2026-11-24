@@ -139,15 +139,15 @@ enum SessionListDockGalleryLoad: CaseIterable {
     }
 }
 
-private let sessionListDockGalleryFilterTabs: [SessionListFilterTab] = [
+let sessionListDockGalleryFilterTabs: [SessionListFilterTab] = [
     .all(projectCount: 3),
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
-    .project(worktree: "/Users/demo/playground", title: "playground"),
-    .project(worktree: "/Users/demo/api-client", title: "api-client"),
+    .project(worktree: "/Users/example/opencode-mobile", title: "opencode-mobile"),
+    .project(worktree: "/Users/example/playground", title: "playground"),
+    .project(worktree: "/Users/example/api-client", title: "api-client"),
 ]
 
-private let sessionListDockGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
+let sessionListDockGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
+    .project(worktree: "/Users/example/opencode-mobile", title: "opencode-mobile"),
 ]
 
 #if DEBUG

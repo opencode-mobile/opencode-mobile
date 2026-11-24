@@ -33,7 +33,7 @@ struct SessionTodoItemGalleryView: View {
     }
 }
 
-private extension OpenCodeSessionTodoItemStatus {
+extension OpenCodeSessionTodoItemStatus {
     var galleryLabel: String {
         switch self {
         case .pending: "Pending"

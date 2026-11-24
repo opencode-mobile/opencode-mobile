@@ -8,7 +8,7 @@ struct UnifiedDiffGalleryView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Interactive").font(OpenCodeTypography.heading)
             HStack {
-                ForEach(["Modified", "Added", "Deleted", "Unavailable"], id: \.self) { label in
+                ForEach(Self.labels, id: \.self) { label in
                     OpenCodeChoiceBadge(label: .verbatim(label), selected: sample == labels.firstIndex(of: label)) {
                         sample = labels.firstIndex(of: label) ?? 0
                     }
@@ -30,8 +30,12 @@ struct UnifiedDiffGalleryView: View {
         }
     }
 
-    private let labels = ["Modified", "Added", "Deleted", "Unavailable"]
-    private let files: [FileDiff?] = [
+    private let labels = Self.labels
+    static let labels = ["Modified", "Added", "Deleted", "Large line numbers", "Unavailable"]
+    private let files = Self.files
+
+    /// One sample per label; nil is a file without a text preview.
+    static let files: [FileDiff?] = [
         FileDiff(
             path: "Sources/ChangesView.swift",
             patch: "@@ -1,8 +1,8 @@\n one\n two\n three\n four\n-old value\n+let newValue = buildAnIntentionallyLongLineThatRequiresHorizontalScrollingToReviewSafely()\n six\n seven\n eight\n@@ -20 +20 @@\n-before\n+naïve 🚀\n\\ No newline at end of file",
@@ -41,6 +45,13 @@ struct UnifiedDiffGalleryView: View {
         ),
         FileDiff(path: "Sources/NewFile.swift", patch: "@@ -0,0 +1,2 @@\n+let value = 1\n+print(value)", additions: 2, deletions: 0, status: .added),
         FileDiff(path: "Sources/OldFile.swift", patch: "@@ -1,2 +0,0 @@\n-let value = 1\n-print(value)", additions: 0, deletions: 2, status: .deleted),
+        FileDiff(
+            path: "Sources/LongFile.swift",
+            patch: "@@ -1204,3 +1204,3 @@\n let first = 1\n-let second = 2\n+let second = 3\n let third = 4",
+            additions: 1,
+            deletions: 1,
+            status: .modified
+        ),
         nil,
     ]
 }

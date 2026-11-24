@@ -8,7 +8,7 @@ import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 
 @Composable
 fun ListGroupGalleryScreen(modifier: Modifier = Modifier) {
-    val files = listOf("Sources/App.kt", "README.md", "Tests/AppTest.kt")
+    val files = listGroupGalleryFiles
     OpenCodeListGroup(itemCount = files.size, modifier = modifier) { index ->
         OpenCodeListItem(
             title = files[index],
@@ -16,3 +16,5 @@ fun ListGroupGalleryScreen(modifier: Modifier = Modifier) {
         )
     }
 }
+
+internal val listGroupGalleryFiles = listOf("Sources/App.kt", "README.md", "Tests/AppTest.kt")

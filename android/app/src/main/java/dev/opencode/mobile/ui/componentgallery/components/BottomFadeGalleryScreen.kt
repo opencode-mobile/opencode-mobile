@@ -9,17 +9,27 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 
 @Composable
 fun BottomFadeGalleryScreen(modifier: Modifier = Modifier) {
+    BottomFadeGallerySample(fadeHeight = 72.dp, modifier = modifier)
+}
+
+/** Content with the fade over its bottom edge; shared with the debug Component Capture registry. */
+@Composable
+internal fun BottomFadeGallerySample(
+    fadeHeight: Dp,
+    modifier: Modifier = Modifier,
+) {
     Box(modifier = modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.BottomCenter) {
         Text(
             text = "Content under the dock",
             modifier = Modifier.align(Alignment.TopStart).padding(top = 16.dp),
             style = MaterialTheme.typography.bodyLarge,
         )
-        OpenCodeBottomFade(height = 72.dp)
+        OpenCodeBottomFade(height = fadeHeight)
     }
 }

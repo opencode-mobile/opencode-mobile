@@ -35,7 +35,7 @@ struct FileTabsGalleryView: View {
     }
 }
 
-private let fileTabsGallerySamples: [OpenCodeFileTab] = [
+let fileTabsGallerySamples: [OpenCodeFileTab] = [
     OpenCodeFileTab(id: "README.md", title: "README.md"),
     OpenCodeFileTab(id: "ios/OpenCode Mobile/UI/Files/FilesView.swift", title: "FilesView.swift"),
     OpenCodeFileTab(id: "ios/OpenCode Mobile/UI/Files/FilesViewModel.swift", title: "FilesViewModel.swift"),

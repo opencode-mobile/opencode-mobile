@@ -22,7 +22,7 @@ import dev.opencode.mobile.ui.components.ReorderableListMath
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private data class ReorderableGalleryProject(
+internal data class ReorderableGalleryProject(
     val id: String,
     val title: String,
     val path: String,
@@ -38,18 +38,7 @@ fun ReorderableListGalleryScreen(modifier: Modifier = Modifier) {
     var lastEvent by rememberSaveable { mutableStateOf("Long-press a project row, then drag.") }
     var items by remember {
         mutableStateOf(
-            listOf(
-                ReorderableGalleryProject("all", "All projects", "4 projects", LetterAccent.Violet),
-                ReorderableGalleryProject(
-                    "/Users/me/Projects/opencode-mobile",
-                    "opencode-mobile",
-                    "~/Projects/opencode-mobile",
-                    LetterAccent.Violet,
-                ),
-                ReorderableGalleryProject("/Users/me/Projects/playground", "playground", "~/Projects/playground", LetterAccent.Teal),
-                ReorderableGalleryProject("/Users/me/Projects/website", "website", "~/Projects/website", LetterAccent.Amber),
-                ReorderableGalleryProject("/Users/me/Projects/docs", "docs", "~/Projects/docs", LetterAccent.Blue),
-            ),
+            reorderableGalleryProjects,
         )
     }
 
@@ -110,3 +99,17 @@ fun ReorderableListGalleryScreen(modifier: Modifier = Modifier) {
         }
     }
 }
+
+internal val reorderableGalleryProjects =
+    listOf(
+        ReorderableGalleryProject("all", "All projects", "4 projects", LetterAccent.Violet),
+        ReorderableGalleryProject(
+            "/Users/example/Projects/opencode-mobile",
+            "opencode-mobile",
+            "~/Projects/opencode-mobile",
+            LetterAccent.Violet,
+        ),
+        ReorderableGalleryProject("/Users/example/Projects/playground", "playground", "~/Projects/playground", LetterAccent.Teal),
+        ReorderableGalleryProject("/Users/example/Projects/website", "website", "~/Projects/website", LetterAccent.Amber),
+        ReorderableGalleryProject("/Users/example/Projects/docs", "docs", "~/Projects/docs", LetterAccent.Blue),
+    )

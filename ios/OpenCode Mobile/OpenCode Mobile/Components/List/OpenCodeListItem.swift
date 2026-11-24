@@ -903,16 +903,18 @@ private struct InsetRoundedHighlight: InsettableShape {
 private struct OpenCodeListItemPressStyle: ButtonStyle {
     let enabled: Bool
     let style: OpenCodeListItemStyle
+    @Environment(\.openCodePressedPreview) private var pressedPreview
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let isPressed = configuration.isPressed || pressedPreview.matches()
+        return configuration.label
             .background {
-                if configuration.isPressed && enabled {
+                if isPressed && enabled {
                     listItemHighlightShape(style: style)
                         .fill(OpenCodeColors.surfaceRaisedBase.opacity(0.92))
                 }
             }
-            .scaleEffect(configuration.isPressed && enabled ? listItemPressedScale : 1)
+            .scaleEffect(isPressed && enabled ? listItemPressedScale : 1)
             .animation(listItemPressAnimation, value: configuration.isPressed)
     }
 }
