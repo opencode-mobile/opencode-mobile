@@ -1,6 +1,6 @@
 import SwiftUI
 
-private let tokenNames = [
+let colorGalleryTokenNames = [
     "background-base",
     "surface-base",
     "surface-base-hover",
@@ -48,13 +48,23 @@ private let tokenNames = [
 ]
 
 struct ColorGalleryView: View {
+    /// A slice of the tokens, for captures that split the page into tiles; nil shows them all.
+    var tokens: Range<Int>?
+
+    private var shownTokens: ArraySlice<String> {
+        tokens.map { colorGalleryTokenNames[$0.clamped(to: colorGalleryTokenNames.indices)] }
+            ?? colorGalleryTokenNames[...]
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Theme tokens (\(ThemeManager.shared.currentTheme.name), code: \(ThemeManager.shared.currentSyntaxPreset.name))")
-                .font(OpenCodeTypography.heading)
-                .foregroundStyle(OpenCodeColors.textStrong)
+            if (tokens?.lowerBound ?? 0) == 0 {
+                Text("Theme tokens (\(ThemeManager.shared.currentTheme.name), code: \(ThemeManager.shared.currentSyntaxPreset.name))")
+                    .font(OpenCodeTypography.heading)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+            }
 
-            ForEach(tokenNames, id: \.self) { name in
+            ForEach(shownTokens, id: \.self) { name in
                 ColorTokenRow(tokenName: name)
             }
         }

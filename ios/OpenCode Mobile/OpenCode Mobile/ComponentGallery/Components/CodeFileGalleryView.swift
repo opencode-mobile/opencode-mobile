@@ -32,7 +32,7 @@ struct CodeFileGalleryView: View {
         }
     }
 
-    private static let lines = [
+    static let lines = [
         "import SwiftUI",
         "",
         "// Lists one project folder.",
@@ -45,7 +45,7 @@ struct CodeFileGalleryView: View {
     ]
 
     /// Every other line's first word, the way the Highlighting Lab marks engine disagreements.
-    private static let marks: [Int: [Range<Int>]] = Dictionary(
+    static let marks: [Int: [Range<Int>]] = Dictionary(
         uniqueKeysWithValues: lines.indices.compactMap { index -> (Int, [Range<Int>])? in
             let line = lines[index]
             guard index % 2 == 1,
@@ -56,7 +56,7 @@ struct CodeFileGalleryView: View {
         }
     )
 
-    private static let spans: [Int: [NativeCodeSpan]] = [
+    static let spans: [Int: [NativeCodeSpan]] = [
         0: [NativeCodeSpan(start: 0, end: 6, role: .keyword), NativeCodeSpan(start: 7, end: 14, role: .type)],
         2: [NativeCodeSpan(start: 0, end: 29, role: .comment)],
         3: [NativeCodeSpan(start: 0, end: 6, role: .keyword), NativeCodeSpan(start: 7, end: 16, role: .type)],

@@ -87,7 +87,7 @@ struct SessionListGalleryView: View {
     }
 }
 
-private let sessionListGallerySamples: [SessionListSession] = {
+let sessionListGallerySamples: [SessionListSession] = {
     let now = Int64(Date().timeIntervalSince1970 * 1000)
     return [
         SessionListSession(
@@ -156,14 +156,14 @@ private let sessionListGallerySamples: [SessionListSession] = {
     ]
 }()
 
-private let sessionListGalleryFilterTabs: [SessionListFilterTab] = [
+let sessionListGalleryFilterTabs: [SessionListFilterTab] = [
     .all(projectCount: 3),
     .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
     .project(worktree: "/Users/demo/playground", title: "playground"),
     .project(worktree: "/Users/demo/api-client", title: "api-client"),
 ]
 
-private let sessionListGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
+let sessionListGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
     .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
 ]
 

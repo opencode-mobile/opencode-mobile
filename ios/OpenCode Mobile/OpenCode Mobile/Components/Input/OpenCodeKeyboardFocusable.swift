@@ -71,6 +71,13 @@ extension View {
     func openCodeFocusRingPreview(_ shown: Bool = true) -> some View {
         environment(\.openCodeFocusRingPreview, shown)
     }
+
+    #if DEBUG
+    /// Component captures: the control inside takes real keyboard focus when it appears.
+    func openCodeCaptureTakesFocus() -> some View {
+        environment(\.openCodeCaptureTakesFocus, true)
+    }
+    #endif
 }
 
 /// Reports which control inside it has keyboard focus. (iPadOS SwiftUI cannot
@@ -199,6 +206,7 @@ private struct OpenCodeKeyboardFocusableModifier: ViewModifier {
     @Environment(\.openCodeFocusRequester) private var requester
     @Environment(\.openCodeFocusKey) private var explicitKey
     @Environment(\.openCodeFocusRingPreview) private var ringPreview
+    @Environment(\.openCodeCaptureTakesFocus) private var captureTakesFocus
     @Environment(\.openCodeOverlayLayer) private var overlayLayer
     @FocusState private var isFocused: Bool
     @State private var autoKey = UUID()
@@ -263,6 +271,12 @@ private struct OpenCodeKeyboardFocusableModifier: ViewModifier {
                 if enabled { group?.register(key) }
                 syncTabStop(onScreen: true)
                 focusIfRequested()
+                // Focusable flips on with the Tab stop; ask again over a few frames, once it has.
+                if captureTakesFocus, enabled {
+                    for delay in [0.0, 0.1, 0.3, 0.6] {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { isFocused = true }
+                    }
+                }
             }
             .onDisappear {
                 group?.unregister(key)
@@ -388,6 +402,10 @@ private struct OpenCodeFocusRingPreviewKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+private struct OpenCodeCaptureTakesFocusKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
     fileprivate var openCodeFocusGroup: OpenCodeFocusGroupModel? {
         get { self[OpenCodeFocusGroupKey.self] }
@@ -407,6 +425,11 @@ extension EnvironmentValues {
     fileprivate var openCodeFocusRingPreview: Bool {
         get { self[OpenCodeFocusRingPreviewKey.self] }
         set { self[OpenCodeFocusRingPreviewKey.self] = newValue }
+    }
+
+    fileprivate var openCodeCaptureTakesFocus: Bool {
+        get { self[OpenCodeCaptureTakesFocusKey.self] }
+        set { self[OpenCodeCaptureTakesFocusKey.self] = newValue }
     }
 }
 

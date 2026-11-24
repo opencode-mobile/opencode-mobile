@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ActivityCardGalleryView: View {
-    private enum Sample: String, CaseIterable, Identifiable {
+    enum Sample: String, CaseIterable, Identifiable {
         case oneTool = "One running tool"
         case twoAgents = "Two agents, +1"
         case justFinished = "Last tool just finished"
@@ -9,6 +9,7 @@ struct ActivityCardGalleryView: View {
         case settled = "Settled"
         case settledAgents = "Settled with agents"
         case settledFailure = "Settled, failed"
+        case settledStopped = "Settled, stopped"
 
         var id: String { rawValue }
     }
@@ -38,7 +39,7 @@ struct ActivityCardGalleryView: View {
             }
 
             ForEach(Sample.allCases.filter { $0 == sample }) { current in
-                card(for: current)
+                Self.card(for: current, startMs: startMs, onAgentTap: tapped, onOpen: opened)
             }
             Text(lastTap ?? "Tap the card to open the activity sheet; tap an agent row to open its child session.")
                 .font(OpenCodeTypography.caption)
@@ -48,7 +49,12 @@ struct ActivityCardGalleryView: View {
     }
 
     @ViewBuilder
-    private func card(for sample: Sample) -> some View {
+    static func card(
+        for sample: Sample,
+        startMs: Int64,
+        onAgentTap: @escaping (String) -> Void = { _ in },
+        onOpen: @escaping () -> Void = {}
+    ) -> some View {
         switch sample {
         case .oneTool:
             OpenCodeActivityCard(
@@ -60,8 +66,8 @@ struct ActivityCardGalleryView: View {
                     extraRunning: 0,
                     startedAtMs: startMs
                 ),
-                onAgentTap: tapped,
-                onOpen: opened
+                onAgentTap: onAgentTap,
+                onOpen: onOpen
             )
         case .twoAgents:
             OpenCodeActivityCard(
@@ -87,8 +93,8 @@ struct ActivityCardGalleryView: View {
                     extraRunning: 1,
                     startedAtMs: startMs - 3_000
                 ),
-                onAgentTap: tapped,
-                onOpen: opened
+                onAgentTap: onAgentTap,
+                onOpen: onOpen
             )
         case .justFinished:
             OpenCodeActivityCard(
@@ -101,8 +107,8 @@ struct ActivityCardGalleryView: View {
                     startedAtMs: nil,
                     running: false
                 ),
-                onAgentTap: tapped,
-                onOpen: opened
+                onAgentTap: onAgentTap,
+                onOpen: onOpen
             )
         case .waiting:
             OpenCodeActivityCard(
@@ -117,14 +123,14 @@ struct ActivityCardGalleryView: View {
                     ),
                 ],
                 idleText: "Waiting for agents",
-                onAgentTap: tapped,
-                onOpen: opened
+                onAgentTap: onAgentTap,
+                onOpen: onOpen
             )
         case .settled:
             OpenCodeActivityCard(
                 state: .settled(worstStatus: .completed, stepCount: 6),
                 summary: "Read, Grep, Edit",
-                onOpen: opened
+                onOpen: onOpen
             )
         case .settledAgents:
             OpenCodeActivityCard(
@@ -144,14 +150,20 @@ struct ActivityCardGalleryView: View {
                         startedAtMs: nil
                     ),
                 ],
-                onAgentTap: tapped,
-                onOpen: opened
+                onAgentTap: onAgentTap,
+                onOpen: onOpen
             )
         case .settledFailure:
             OpenCodeActivityCard(
                 state: .settled(worstStatus: .failed, stepCount: 5),
                 summary: "Read, Edit, Shell",
-                onOpen: opened
+                onOpen: onOpen
+            )
+        case .settledStopped:
+            OpenCodeActivityCard(
+                state: .settled(worstStatus: .interrupted, stepCount: 2),
+                summary: "Read, Shell",
+                onOpen: onOpen
             )
         }
     }

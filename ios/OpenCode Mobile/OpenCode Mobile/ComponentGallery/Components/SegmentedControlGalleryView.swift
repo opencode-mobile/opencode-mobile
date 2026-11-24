@@ -1,7 +1,11 @@
 import SwiftUI
 
 struct SegmentedControlGalleryView: View {
-    @State private var mode = AppearanceMode.system
+    @State private var mode: AppearanceMode
+
+    init(mode: AppearanceMode = .system) {
+        _mode = State(initialValue: mode)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

@@ -56,18 +56,23 @@ struct SessionBranchPillGalleryView: View {
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .padding(.top, 8)
-            OpenCodeSessionBranchPopoverContent(summary: sample.summary, onViewAllChanges: {}, onCopyBranchName: {})
-                .frame(maxWidth: OpenCodeSessionBranchPill.popoverWidth)
-                .background(
-                    OpenCodeColors.surfaceRaisedBase,
-                    in: RoundedRectangle(cornerRadius: OpenCodeAnchoredCardLayout.cornerRadius, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: OpenCodeAnchoredCardLayout.cornerRadius, style: .continuous)
-                        .strokeBorder(OpenCodeColors.borderWeakBase)
-                )
+            Self.popover(summary: sample.summary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The pill's popover card as it opens under the pill.
+    static func popover(summary: OpenCodeSessionBranchSummary) -> some View {
+        OpenCodeSessionBranchPopoverContent(summary: summary, onViewAllChanges: {}, onCopyBranchName: {})
+            .frame(maxWidth: OpenCodeSessionBranchPill.popoverWidth)
+            .background(
+                OpenCodeColors.surfaceRaisedBase,
+                in: RoundedRectangle(cornerRadius: OpenCodeAnchoredCardLayout.cornerRadius, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: OpenCodeAnchoredCardLayout.cornerRadius, style: .continuous)
+                    .strokeBorder(OpenCodeColors.borderWeakBase)
+            )
     }
 }
 

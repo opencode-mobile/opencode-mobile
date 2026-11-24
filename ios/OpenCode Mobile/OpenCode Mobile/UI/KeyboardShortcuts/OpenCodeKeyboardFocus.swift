@@ -50,6 +50,15 @@ final class OpenCodeKeyboardFocusState {
         observeKeyPresses()
     }
 
+    #if DEBUG
+    /// Component captures run on a simulator with no hardware keyboard; the capture host treats
+    /// one as connected while it shows a keyboard focus state, then restores the real value.
+    func setCaptureHardwareKeyboard(_ connected: Bool) {
+        hardwareKeyboardConnected = connected || GCKeyboard.coalesced != nil
+        if connected { lastInputWasKeyboard = true }
+    }
+    #endif
+
     private func refreshKeyboard() {
         let connected = GCKeyboard.coalesced != nil
         if connected != hardwareKeyboardConnected { hardwareKeyboardConnected = connected }

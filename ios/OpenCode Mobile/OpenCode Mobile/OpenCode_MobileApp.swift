@@ -16,6 +16,9 @@ struct OpenCode_MobileApp: App {
         _ = OpenCodeKeyboardFocusState.shared
         OpenCodeReleaseObservability.initialize()
         MainThreadHangWatchdog.shared.start()
+        #if DEBUG
+        ComponentCaptureLaunch.prepareIfRequested()
+        #endif
     }
 
     var body: some Scene {
@@ -67,7 +70,9 @@ struct OpenCode_MobileApp: App {
     @ViewBuilder
     private var rootView: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_CHANGES"] == "1" {
+        if let capture = ComponentCaptureLaunch.requested {
+            ComponentCaptureHost(launch: capture)
+        } else if ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_CHANGES"] == "1" {
             NavigationStack {
                 ChangesView(
                     sessionID: "ui-test-session",

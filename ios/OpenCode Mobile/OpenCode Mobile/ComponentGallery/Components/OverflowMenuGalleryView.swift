@@ -10,57 +10,73 @@ struct OverflowMenuGalleryView: View {
     @State private var itemCount = 2
 
     private var entries: [OpenCodeOverflowMenuEntry] {
+        Self.entries(
+            enabled: entriesEnabled,
+            selectionRows: selectionRowsEnabled,
+            destructive: showDestructive,
+            divider: showDivider,
+            count: itemCount
+        )
+    }
+
+    /// The gallery's menu entries; `disabledReason` adds a disabled entry with a subtitle and
+    /// `textOnly` drops every icon.
+    static func entries(
+        enabled: Bool = true,
+        selectionRows: Bool = false,
+        destructive: Bool = false,
+        divider: Bool = false,
+        count: Int = 2,
+        disabledReason: Bool = false,
+        textOnly: Bool = false
+    ) -> [OpenCodeOverflowMenuEntry] {
+        func icon(_ icon: OpenCodeIcon?) -> OpenCodeIcon? { textOnly ? nil : icon }
         var items: [OpenCodeOverflowMenuEntry] = [
             OpenCodeOverflowMenuEntry(
                 title: "Session context",
-                icon: selectionRowsEnabled ? .check : .architecture,
-                enabled: entriesEnabled,
-                accessibilityLabel: selectionRowsEnabled ? "Session context, selected" : nil,
-                action: {}
-            ),
-            OpenCodeOverflowMenuEntry(
-                title: "Copy session ID",
-                icon: selectionRowsEnabled ? nil : .contentCopy,
-                enabled: entriesEnabled,
-                dividerAbove: showDivider,
+                icon: icon(selectionRows ? .check : .architecture),
+                enabled: enabled,
+                accessibilityLabel: selectionRows ? "Session context, selected" : nil,
                 action: {}
             ),
         ]
-
-        if itemCount >= 3 {
+        if disabledReason {
             items.append(
                 OpenCodeOverflowMenuEntry(
-                    title: "Settings",
-                    icon: .settings,
-                    enabled: entriesEnabled,
+                    title: "Move to worktree…",
+                    subtitle: "Needs an opencode v2 server",
+                    icon: icon(.callSplit),
+                    enabled: false,
                     action: {}
                 )
             )
         }
-
-        if itemCount >= 4 {
-            items.append(
-                OpenCodeOverflowMenuEntry(
-                    title: "Search",
-                    icon: .search,
-                    enabled: entriesEnabled,
-                    action: {}
-                )
+        items.append(
+            OpenCodeOverflowMenuEntry(
+                title: "Copy session ID",
+                icon: icon(selectionRows ? nil : .contentCopy),
+                enabled: enabled,
+                dividerAbove: divider,
+                action: {}
             )
+        )
+        if count >= 3 {
+            items.append(OpenCodeOverflowMenuEntry(title: "Settings", icon: icon(.settings), enabled: enabled, action: {}))
         }
-
-        if showDestructive {
+        if count >= 4 {
+            items.append(OpenCodeOverflowMenuEntry(title: "Search", icon: icon(.search), enabled: enabled, action: {}))
+        }
+        if destructive {
             items.append(
                 OpenCodeOverflowMenuEntry(
                     title: "Delete",
-                    icon: .close,
-                    enabled: entriesEnabled,
+                    icon: icon(.close),
+                    enabled: enabled,
                     destructive: true,
                     action: {}
                 )
             )
         }
-
         return items
     }
 

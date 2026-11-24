@@ -3,7 +3,7 @@ import SwiftUI
 struct TimelineNoticeGalleryView: View {
     @State private var expanded: Set<String> = []
 
-    private let samples: [(id: String, variant: OpenCodeTimelineNoticeVariant, label: String, value: String?)] = [
+    static let samples: [(id: String, variant: OpenCodeTimelineNoticeVariant, label: String, value: String?)] = [
         ("moved", .moved, "Moved to", "/Users/me/Projects/opencode-mobile/.worktrees/feature-702-v2-timeline-notices"),
         ("agent", .plain, "Agent changed", "Build \u{2192} Plan"),
         ("model", .plain, "Switched to", "Claude Opus 4.5"),
@@ -21,7 +21,7 @@ struct TimelineNoticeGalleryView: View {
             Text("A session-level change between turns. Tap a row with a value to show it in full.")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
-            ForEach(samples, id: \.id) { sample in
+            ForEach(Self.samples, id: \.id) { sample in
                 OpenCodeTimelineNotice(
                     variant: sample.variant,
                     label: sample.label,
@@ -52,7 +52,7 @@ struct TimelineNoticeGalleryView: View {
                 OpenCodeTimelineNotice(
                     variant: .moved,
                     label: "Moved to",
-                    value: samples[0].value,
+                    value: Self.samples[0].value,
                     state: state
                 )
             }

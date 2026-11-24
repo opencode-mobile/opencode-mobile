@@ -9,7 +9,7 @@ struct SelectableCardGalleryView: View {
                 selected: false,
                 action: {}
             ) {
-                previewSlot
+                Self.previewSlot
             }
             OpenCodeSelectableCard(
                 title: "Porcelain",
@@ -17,12 +17,12 @@ struct SelectableCardGalleryView: View {
                 selected: true,
                 action: {}
             ) {
-                previewSlot
+                Self.previewSlot
             }
         }
     }
 
-    private var previewSlot: some View {
+    static var previewSlot: some View {
         Text("Preview")
             .font(OpenCodeTypography.caption)
             .foregroundStyle(OpenCodeColors.textBase)

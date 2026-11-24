@@ -571,7 +571,8 @@ private func tokenColor(_ tokens: ResolvedTokens?, _ key: String) -> Color {
 }
 
 /// A short sample with every colored role, drawn through the same role table as code in chat.
-private let syntaxSample: [(String, NativeCodeTokenRole)] = [
+/// The code the syntax preset cards show; also the Code Snippet capture's syntax sample.
+let syntaxSample: [(String, NativeCodeTokenRole)] = [
     ("// refresh before the request\n", .comment),
     ("async function ", .keyword),
     ("read", .function),
@@ -600,7 +601,7 @@ private let syntaxSample: [(String, NativeCodeTokenRole)] = [
     (";\n}", .punctuation),
 ]
 
-private func syntaxSnippet(_ tokens: [String: String]) -> AttributedString {
+func syntaxSnippet(_ tokens: [String: String]) -> AttributedString {
     var result = AttributedString()
     for (text, role) in syntaxSample {
         var part = AttributedString(text)

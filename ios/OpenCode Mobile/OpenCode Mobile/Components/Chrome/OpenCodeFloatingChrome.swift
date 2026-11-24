@@ -74,10 +74,14 @@ struct OpenCodeSubtleControlPress<S: Shape>: ViewModifier {
 
 struct OpenCodeSubtleControlPressStyle<S: Shape>: ButtonStyle {
     var shape: S
+    @Environment(\.openCodePressedPreview) private var pressedPreview
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .modifier(OpenCodeSubtleControlPress(isPressed: configuration.isPressed, shape: shape))
+            .modifier(OpenCodeSubtleControlPress(
+                isPressed: configuration.isPressed || pressedPreview.matches(),
+                shape: shape
+            ))
     }
 }
 

@@ -217,7 +217,8 @@ struct OpenCodeDialogOverlayContent<Card: View>: View {
     }
 }
 
-private struct OpenCodeDialogCard: View {
+/// The dialog's centered card; captures draw it inside `OpenCodeDialogOverlayContent` in place.
+struct OpenCodeDialogCard: View {
     let title: OpenCodeText
     let subtitle: OpenCodeText?
     let primaryOption: OpenCodeDialogOption

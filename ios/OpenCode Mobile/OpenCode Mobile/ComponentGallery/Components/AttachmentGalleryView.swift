@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct AttachmentGalleryView: View {
-    private static let sampleImage = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image { context in
+    static let sampleImage = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image { context in
         UIColor(red: 0.35, green: 0.45, blue: 0.55, alpha: 1).setFill()
         context.fill(CGRect(origin: .zero, size: CGSize(width: 64, height: 64)))
     }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ToolChipGalleryView: View {
-    private enum VariantChoice: String, CaseIterable, Identifiable {
+    enum VariantChoice: String, CaseIterable, Identifiable {
         case file
         case edit
         case command
