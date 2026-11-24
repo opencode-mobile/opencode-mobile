@@ -16,6 +16,12 @@ struct OpenCodeFloatingDock<Content: View>: View {
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: openCodeFloatingDockCornerRadius, style: .continuous))
             .openCodeFloatingChrome(cornerRadius: openCodeFloatingDockCornerRadius)
+            // Same edge as the Session Composer, so both bottom docks read alike.
+            .overlay {
+                RoundedRectangle(cornerRadius: openCodeFloatingDockCornerRadius, style: .continuous)
+                    .stroke(OpenCodeColors.sessionComposerEdge, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
             .padding(.horizontal, 12)
             .padding(.bottom, 4)
     }
