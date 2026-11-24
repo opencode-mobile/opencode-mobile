@@ -59,7 +59,7 @@ extension View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .openCodeModal(isPresented: .constant(true)) {
             VStack(alignment: .leading, spacing: 12) {
-                OpenCodeSkeletonIllustration(topic: .chipTimelineGlance)
+                OpenCodeSkeletonIllustration(topic: .timelineActivityCard)
                     .frame(height: 150)
                     .clipShape(RoundedRectangle(cornerRadius: 20))
                 Text("See the work at a glance")

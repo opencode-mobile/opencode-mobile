@@ -163,19 +163,6 @@ class SessionChatImageGalleryBlocksTest {
     }
 
     @Test
-    fun chips_galleryFollowsItsParagraph_withAnIdThatSurvivesNewTools() {
-        val first = styled(listOf(readTool("t1", images = 1)), chips = true)
-        val grown = styled(listOf(readTool("t1", images = 1), readTool("t2", images = 1)), chips = true)
-
-        assertTrue(first[0] is SessionChatTimelineBlock.StepParagraph)
-        assertTrue(grown[0] is SessionChatTimelineBlock.StepParagraph)
-        val before = first[1] as SessionChatTimelineBlock.ImageGallery
-        val after = grown[1] as SessionChatTimelineBlock.ImageGallery
-        assertEquals(before.blockID, after.blockID)
-        assertEquals(2, after.images.size)
-    }
-
-    @Test
     fun liveRun_staysLiveWithItsGalleryBelowIt() {
         for (activityCard in listOf(false, true)) {
             val blocks = styled(listOf(readTool("t1", images = 1), readTool("t2", images = 0)), stepRail = !activityCard, activityCard = activityCard)
@@ -190,7 +177,6 @@ class SessionChatImageGalleryBlocksTest {
 
     private fun styled(
         parts: List<MessagePart>,
-        chips: Boolean = false,
         stepRail: Boolean = false,
         activityCard: Boolean = false,
     ): List<SessionChatTimelineBlock> =
@@ -198,7 +184,6 @@ class SessionChatImageGalleryBlocksTest {
             SessionChatTimelineBlocks.build(
                 MessageRole.Assistant,
                 parts,
-                chipTimeline = chips,
                 stepRail = stepRail,
                 activityCard = activityCard,
             ) as SessionChatTimelineBlocksResult.Ok

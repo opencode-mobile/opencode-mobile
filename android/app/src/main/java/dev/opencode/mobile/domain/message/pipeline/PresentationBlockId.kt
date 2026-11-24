@@ -19,12 +19,6 @@ object PresentationBlockId {
         }
     }
 
-    /** Chip timeline paragraph: narration text part ids followed by tool part ids. */
-    fun stepParagraph(orderedPartIds: List<String>): String {
-        require(orderedPartIds.isNotEmpty()) { "step paragraph requires at least one part id" }
-        return "s:" + orderedPartIds.joinToString(SEP)
-    }
-
     /**
      * Step rail timeline: keyed on the first member part only, never on all
      * members, so the rail keeps its id while later steps append.
@@ -33,12 +27,6 @@ object PresentationBlockId {
 
     /** Activity card timeline: keyed on the first member part only, like [stepRail]. */
     fun activityCard(firstPartId: String): String = "ac:$firstPartId"
-
-    /**
-     * Chip timeline: a run of settled thoughts rendered as one row. The id is the
-     * previous row id followed by the new part id, so a growing run keeps a stable prefix.
-     */
-    fun mergedThought(ids: List<String>): String = "th:" + ids.joinToString("+")
 
     fun toolGroup(orderedMemberIds: List<String>): String {
         require(orderedMemberIds.size >= 2) { "tool group requires at least two member ids" }

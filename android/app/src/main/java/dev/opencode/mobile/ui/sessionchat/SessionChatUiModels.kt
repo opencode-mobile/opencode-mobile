@@ -345,11 +345,6 @@ data class SessionChatUiState(
     val projectLetterAccent: dev.opencode.mobile.theme.LetterAccent? = null,
     /** True when the subtitle is a worktree checkout name instead of the project letter. */
     val worktreeCheckout: Boolean = false,
-    /**
-     * Chip-timeline paragraphs expanded past `+N more`:
-     * [SessionChatTimelineBlock.StepParagraph.expansionID] to the chip count at tap time.
-     */
-    val expandedStepParagraphs: Map<String, Int> = emptyMap(),
     /** Step rails unfolded past their `N earlier steps` row, by rail id (#779). */
     val unfoldedStepRails: Set<String> = emptySet(),
     /** Timeline gallery open in the full-screen image viewer, and its page (#898). */
@@ -364,8 +359,6 @@ data class SessionChatUiState(
     val activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap(),
     /** In-flight steps not rendered yet: seen running for less than the entry debounce (#779). */
     val debouncedStepIds: Set<String> = emptySet(),
-    /** One-time Chip timeline intro sheet (OPE-270). */
-    val chipTimelineIntroVisible: Boolean = false,
     /** One-time Timeline Style picker sheet (#805). */
     val timelineStylePickerVisible: Boolean = false,
     /** Styles the Timeline Style picker offers, with their tags; empty until it first shows. */
@@ -381,8 +374,11 @@ data class SessionChatUiState(
     /** The draft's Add project sheet (#1021); null when closed. */
     val newSessionAddProjectSheet: AddProjectSheetUi? = null,
 ) {
-    /** A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet. */
-    fun blocksChipTimelineIntro(): Boolean =
+    /**
+     * A permission, question, or Screen Model-owned sheet or dialog would sit under a one-time
+     * sheet such as the Timeline Style picker or a side-question answer.
+     */
+    fun blocksOneTimeSheet(): Boolean =
         permissionRequest != null ||
             questionRequest != null ||
             commandsSheetVisible ||
@@ -601,8 +597,6 @@ fun SessionChatTimelineRegionState.knownChildSessionIds(): Set<String> =
                 when (block) {
                     is SessionChatTimelineBlock.ChildSessionRow -> listOfNotNull(block.childSessionId)
                     is SessionChatTimelineBlock.ToolCard -> listOfNotNull(block.liveChildSessionId())
-                    is SessionChatTimelineBlock.StepParagraph ->
-                        block.chips.mapNotNull { chip -> chip.card.liveChildSessionId() }
                     else -> emptyList()
                 }
             }

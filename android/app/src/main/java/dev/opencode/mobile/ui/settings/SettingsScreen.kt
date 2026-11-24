@@ -90,7 +90,6 @@ fun SettingsScreen(
     onCollapseConsecutiveToolCallsChange: (Boolean) -> Unit,
     timelineStyle: SessionChatTimelineStyle,
     onTimelineStyleChange: (SessionChatTimelineStyle) -> Unit,
-    chipTimelineAvailable: Boolean = true,
     followUpDelivery: FollowUpDelivery,
     onFollowUpDeliveryChange: (FollowUpDelivery) -> Unit,
     supportsFollowUpDelivery: Boolean,
@@ -602,26 +601,17 @@ fun SettingsScreen(
         title = stringResource(R.string.settings_timeline_style_title),
         onDismissRequest = { showTimelineStylePicker = false },
     ) {
-        SessionChatTimelineStyle
-            .available(chipTimelineAvailable)
-            .forEach { style ->
-                OpenCodeBottomSheetEntry(
-                    title = stringResource(style.settingsTitleRes()),
-                    subtitle = stringResource(style.settingsSubtitleRes()),
-                    selected = style == timelineStyle,
-                    onClick = {
-                        // Chips keeps the existing toggle event; leaving Chips logs it disabled.
-                        if (style == SessionChatTimelineStyle.Chips || timelineStyle == SessionChatTimelineStyle.Chips) {
-                            logSettingsToggle(
-                                ProductAnalytics.Action.SETTINGS_TOGGLE_CHIP_TIMELINE,
-                                style == SessionChatTimelineStyle.Chips,
-                            )
-                        }
-                        onTimelineStyleChange(style)
-                        showTimelineStylePicker = false
-                    },
-                )
-            }
+        SessionChatTimelineStyle.entries.forEach { style ->
+            OpenCodeBottomSheetEntry(
+                title = stringResource(style.settingsTitleRes()),
+                subtitle = stringResource(style.settingsSubtitleRes()),
+                selected = style == timelineStyle,
+                onClick = {
+                    onTimelineStyleChange(style)
+                    showTimelineStylePicker = false
+                },
+            )
+        }
     }
 
     OpenCodeBottomSheet(
@@ -754,7 +744,6 @@ private fun HomeSessionRowStyle.settingsSubtitleRes(): Int =
 internal fun SessionChatTimelineStyle.settingsTitleRes(): Int =
     when (this) {
         SessionChatTimelineStyle.Standard -> R.string.settings_timeline_style_standard_title
-        SessionChatTimelineStyle.Chips -> R.string.settings_timeline_style_chips_title
         SessionChatTimelineStyle.StepRail -> R.string.settings_timeline_style_step_rail_title
         SessionChatTimelineStyle.ActivityCard -> R.string.settings_timeline_style_activity_card_title
     }
@@ -762,7 +751,6 @@ internal fun SessionChatTimelineStyle.settingsTitleRes(): Int =
 internal fun SessionChatTimelineStyle.settingsSubtitleRes(): Int =
     when (this) {
         SessionChatTimelineStyle.Standard -> R.string.settings_timeline_style_standard_subtitle
-        SessionChatTimelineStyle.Chips -> R.string.settings_timeline_style_chips_subtitle
         SessionChatTimelineStyle.StepRail -> R.string.settings_timeline_style_step_rail_subtitle
         SessionChatTimelineStyle.ActivityCard -> R.string.settings_timeline_style_activity_card_subtitle
     }

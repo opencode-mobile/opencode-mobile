@@ -4,28 +4,27 @@ import Foundation
 /// namespace with Android; keys and bundled defaults must match on both
 /// platforms. Feature code reads flags through `FeatureFlags`, never Firebase.
 enum FeatureFlag: String, CaseIterable, Sendable {
-    case sessionChatChipTimeline = "session_chat_chip_timeline"
     case sessionComposerDocked = "session_composer_docked"
 
     var key: String { rawValue }
 
+    /// Keys of removed flags, so Clear All Data still drops their stored overrides.
+    static let retiredKeys = ["session_chat_chip_timeline"]
+
     var title: String {
         switch self {
-        case .sessionChatChipTimeline: "Chip timeline"
         case .sessionComposerDocked: "Docked composer"
         }
     }
 
     var flagDescription: String {
         switch self {
-        case .sessionChatChipTimeline: "Session Chat chip timeline mode and its Settings toggle"
         case .sessionComposerDocked: "Session Composer becomes a full-width bar attached to the bottom edge"
         }
     }
 
     var defaultValue: Bool {
         switch self {
-        case .sessionChatChipTimeline: true
         case .sessionComposerDocked: false
         }
     }

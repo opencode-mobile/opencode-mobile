@@ -129,9 +129,6 @@ class SessionChatTimeline(
     var collapseConsecutiveToolCalls: Boolean = false
 
     @Volatile
-    var chipTimeline: Boolean = false
-
-    @Volatile
     var stepRailTimeline: Boolean = false
 
     @Volatile
@@ -218,23 +215,6 @@ class SessionChatTimeline(
                 sourceWorktree = worktree,
                 fromQuietRefresh = true,
                 source = "revert-boundary",
-                messagesFromCache = _state.value.messagesFromCache,
-            )
-        }
-    }
-
-    fun updateChipTimeline(enabled: Boolean) {
-        if (enabled == chipTimeline) return
-        chipTimeline = enabled
-        val sessionId = boundSessionId ?: return
-        val worktree = boundWorktree ?: return
-        if (lastLoadedDisplayMessages.isNotEmpty()) {
-            applyLoadedDisplayMessages(
-                displayMessages = lastLoadedDisplayMessages,
-                sourceSessionId = sessionId,
-                sourceWorktree = worktree,
-                fromQuietRefresh = true,
-                source = "chip-pref",
                 messagesFromCache = _state.value.messagesFromCache,
             )
         }
@@ -888,7 +868,6 @@ class SessionChatTimeline(
                             displayMessageBody(display, previousById[display.id])
                         },
                         collapseConsecutiveToolCalls,
-                        chipTimeline,
                         stepRailTimeline,
                         activityCardTimeline,
                     )
@@ -1054,7 +1033,6 @@ class SessionChatTimeline(
         source != SOURCE_PENDING_PROMPT &&
             source != "commands-ready" &&
             source != "collapse-pref" &&
-            source != "chip-pref" &&
             source != SOURCE_SESSION_RUN &&
             source != SOURCE_CHILD_SESSIONS
 
@@ -1133,7 +1111,7 @@ class SessionChatTimeline(
     /**
      * Looks up this session's children when a subagent part has no child id
      * (history reloads drop the one-shot `tool.progress` id), then re-projects
-     * so its row or chip can open the child. Each unlinked part is looked up
+     * so its row or step can open the child. Each unlinked part is looked up
      * once; a later reload with a new unlinked part looks up again. A failed
      * fetch retries with backoff.
      */
@@ -1214,7 +1192,6 @@ class SessionChatTimeline(
                         message = message,
                         commands = serverCommands,
                         collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
-                        chipTimeline = chipTimeline,
                         stepRail = stepRailTimeline,
                         activityCard = activityCardTimeline,
                     ),
@@ -1225,14 +1202,8 @@ class SessionChatTimeline(
         val isStreaming = display.isStreaming
         val blocksWithCache =
             resolvedBlocks.map { block ->
-                // Per-block cache is keyed by the merged-text id; a step
-                // paragraph looks up the id its text block would have carried.
-                val cacheBlockID =
-                    when (block) {
-                        is SessionChatTimelineBlock.Text -> block.blockID
-                        is SessionChatTimelineBlock.StepParagraph -> block.textBlockID
-                        else -> null
-                    }
+                // Per-block cache is keyed by the merged-text id.
+                val cacheBlockID = (block as? SessionChatTimelineBlock.Text)?.blockID
                 val text = block.markdownText
                 if (cacheBlockID == null || text == null || block.decoratedMarkdown != null) {
                     block
@@ -1334,11 +1305,6 @@ class SessionChatTimeline(
     // them. Kept out of [state] on purpose: these changes patch the published UI state in place
     // instead of triggering a full publish.
 
-    // Chip-timeline paragraphs the user expanded past `+N more`, keyed by
-    // expansion id with the chip count at tap time; reset per session.
-    var expandedStepParagraphs: Map<String, Int> = emptyMap()
-        private set
-
     // Step rails the user unfolded past `N earlier steps`, keyed by rail id; reset per session.
     var unfoldedStepRails: Set<String> = emptySet()
         private set
@@ -1387,19 +1353,6 @@ class SessionChatTimeline(
         liveRailActive = isTurnActive
         liveRailMarked = marked
         return marked
-    }
-
-    /**
-     * Shows the [chipCount] chips a chip-timeline paragraph had when its
-     * `+N more` was tapped; chips that arrive later still collapse.
-     */
-    fun expandStepParagraph(
-        expansionId: String,
-        chipCount: Int,
-    ) {
-        if ((expandedStepParagraphs[expansionId] ?: -1) >= chipCount) return
-        expandedStepParagraphs = expandedStepParagraphs + (expansionId to chipCount)
-        presentationHost.patchUiState(presentationHost.publishedUiState.copy(expandedStepParagraphs = expandedStepParagraphs))
     }
 
     /** Opens the full-screen viewer on image [index] of timeline gallery [galleryId] (#898). */
@@ -1468,9 +1421,8 @@ class SessionChatTimeline(
         presentationHost.patchUiState(presentationHost.publishedUiState.copy(activityCardDetailStepId = null))
     }
 
-    /** A new session or draft: paragraphs, rails, the image viewer and activity cards start over. */
+    /** A new session or draft: rails, the image viewer and activity cards start over. */
     fun resetPresentation() {
-        expandedStepParagraphs = emptyMap()
         unfoldedStepRails = emptySet()
         imageViewer.dismiss()
         resetActivityCards()

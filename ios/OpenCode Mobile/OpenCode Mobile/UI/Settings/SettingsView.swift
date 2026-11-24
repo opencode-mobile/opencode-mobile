@@ -115,17 +115,15 @@ struct SettingsView: View {
             }
         }
         .openCodeBottomSheet(isPresented: $showTimelineStylePicker, title: "settings.timeline_style.title") {
-            ForEach(sessionChatDisplayPreferences.availableTimelineStyles, id: \.self) { style in
+            ForEach(SessionChatTimelineStyle.allCases, id: \.self) { style in
                 OpenCodeBottomSheetEntry(
                     title: style.settingsTitle,
                     subtitle: style.settingsSubtitle,
-                    selected: style == sessionChatDisplayPreferences.effectiveTimelineStyle,
+                    selected: style == sessionChatDisplayPreferences.timelineStyle,
                     action: {
                         ProductAnalytics.logUserAction(
                             screenId: ProductAnalytics.Screen.settings,
-                            actionId: style == .chips
-                                ? ProductAnalytics.Action.settingsToggleChipTimeline
-                                : ProductAnalytics.Action.settingsTimelineStyle,
+                            actionId: ProductAnalytics.Action.settingsTimelineStyle,
                             parameters: [ProductAnalytics.Param.mode: style.wireValue]
                         )
                         sessionChatDisplayPreferences.setTimelineStyle(style)
@@ -370,7 +368,7 @@ struct SettingsView: View {
 
             OpenCodeListItem(
                 title: "settings.timeline_style.title",
-                subtitle: sessionChatDisplayPreferences.effectiveTimelineStyle.settingsTitle,
+                subtitle: sessionChatDisplayPreferences.timelineStyle.settingsTitle,
                 style: .card,
                 startDecorator: .icon(.widgets, accessibilityLabel: "settings.timeline_style.title"),
                 accessory: .disclosure,
@@ -839,7 +837,6 @@ extension SessionChatTimelineStyle {
     var settingsTitle: OpenCodeText {
         switch self {
         case .standard: "settings.timeline_style.standard.title"
-        case .chips: "settings.timeline_style.chips.title"
         case .stepRail: "settings.timeline_style.step_rail.title"
         case .activityCard: "settings.timeline_style.activity_card.title"
         }
@@ -848,7 +845,6 @@ extension SessionChatTimelineStyle {
     var settingsSubtitle: OpenCodeText {
         switch self {
         case .standard: "settings.timeline_style.standard.subtitle"
-        case .chips: "settings.timeline_style.chips.subtitle"
         case .stepRail: "settings.timeline_style.step_rail.subtitle"
         case .activityCard: "settings.timeline_style.activity_card.subtitle"
         }

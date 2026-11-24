@@ -48,7 +48,7 @@ struct StepRailGalleryView: View {
             OpenCodeStepRail(
                 steps: [
                     .step(id: "read", title: "SessionChatView.swift", status: .completed),
-                    .step(id: "grep", title: "chipTimeline", detail: "14 matches", status: .completed),
+                    .step(id: "grep", title: "timelineStyle", detail: "14 matches", status: .completed),
                     .step(id: "bash", title: "Running xcodebuild test -scheme OpenCode…", status: .running, startedAtMs: startMs),
                 ],
                 isLive: true

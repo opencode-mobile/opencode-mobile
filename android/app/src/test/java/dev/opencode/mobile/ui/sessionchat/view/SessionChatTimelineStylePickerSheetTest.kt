@@ -14,7 +14,7 @@ class SessionChatTimelineStylePickerSheetTest {
     fun tagTone_recommendedIsAccentCurrentAndUntaggedAreNeutral() {
         val options =
             SessionChatTimelineStyleOption.pickerOptions(
-                available = SessionChatTimelineStyle.available(chipTimelineAvailable = true),
+                available = SessionChatTimelineStyle.entries,
                 current = SessionChatTimelineStyle.StepRail,
             )
 
@@ -22,7 +22,6 @@ class SessionChatTimelineStylePickerSheetTest {
             listOf(
                 SessionChatTimelineStyle.ActivityCard to OpenCodeTagTone.Accent,
                 SessionChatTimelineStyle.Standard to OpenCodeTagTone.Neutral,
-                SessionChatTimelineStyle.Chips to OpenCodeTagTone.Neutral,
                 SessionChatTimelineStyle.StepRail to OpenCodeTagTone.Neutral,
             ),
             options.map { it.style to it.tagTone },
@@ -33,7 +32,7 @@ class SessionChatTimelineStylePickerSheetTest {
     @Test
     fun pickerText_namesEachStyleAndTag() {
         assertEquals(
-            listOf("Standard", "Chips", "Step Rail", "Activity Card"),
+            listOf("Standard", "Step Rail", "Activity Card"),
             SessionChatTimelineStyle.entries.map { UiText.resource(it.pickerTitle).english() },
         )
         assertEquals(
@@ -42,7 +41,7 @@ class SessionChatTimelineStylePickerSheetTest {
         )
         val options =
             SessionChatTimelineStyleOption.pickerOptions(
-                available = SessionChatTimelineStyle.available(chipTimelineAvailable = false),
+                available = SessionChatTimelineStyle.entries,
                 current = SessionChatTimelineStyle.StepRail,
             )
         assertEquals(
@@ -56,7 +55,6 @@ class SessionChatTimelineStylePickerSheetTest {
         assertEquals(
             listOf(
                 OpenCodeSkeletonIllustrationTopic.TimelineStandard,
-                OpenCodeSkeletonIllustrationTopic.TimelineChips,
                 OpenCodeSkeletonIllustrationTopic.TimelineStepRail,
                 OpenCodeSkeletonIllustrationTopic.TimelineActivityCard,
             ),

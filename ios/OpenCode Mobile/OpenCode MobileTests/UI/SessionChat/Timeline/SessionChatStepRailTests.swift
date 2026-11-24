@@ -133,7 +133,7 @@ struct SessionChatStepRailTests {
         ])[0].steps
         #expect(running.map(\.title.resolved) == [
             "Reading View.swift",
-            "Searching chipTimeline",
+            "Searching timelineStyle",
             "Editing Blocks.swift",
             "Running npm test",
             "explore",
@@ -142,7 +142,7 @@ struct SessionChatStepRailTests {
         let settled = try rails([read("r1"), grep("g1"), edit("e1"), bash("b1"), child("c1")])[0].steps
         #expect(settled.map(\.title.resolved) == [
             "View.swift",
-            "chipTimeline",
+            "timelineStyle",
             "Blocks.swift",
             "Ran npm test",
             "explore",
@@ -354,7 +354,7 @@ struct SessionChatStepRailTests {
     }
 
     private func grep(_ id: String, status: ToolStatus = .completed) -> MessagePart {
-        .tool(ToolPart(id: id, toolName: "grep", status: status, input: ["pattern": .string("chipTimeline")]))
+        .tool(ToolPart(id: id, toolName: "grep", status: status, input: ["pattern": .string("timelineStyle")]))
     }
 
     private func edit(_ id: String, status: ToolStatus = .completed) -> MessagePart {

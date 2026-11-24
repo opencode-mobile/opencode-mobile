@@ -290,7 +290,6 @@ class SessionChatActivityCardTest {
         val parts = listOf(tool("p1"), tool("p2"))
         listOf(
             SessionChatTimelineBlocks.build(MessageRole.Assistant, parts),
-            SessionChatTimelineBlocks.build(MessageRole.Assistant, parts, chipTimeline = true),
             SessionChatTimelineBlocks.build(MessageRole.Assistant, parts, stepRail = true),
         ).forEach { result ->
             assertTrue((result as SessionChatTimelineBlocksResult.Ok).blocks.none { it is SessionChatTimelineBlock.ActivityCard })

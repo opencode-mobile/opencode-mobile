@@ -17,12 +17,7 @@ class FeatureFlagTest {
 
     @Test
     fun `fromKey resolves known keys only`() {
-        assertEquals(FeatureFlag.SessionChatChipTimeline, FeatureFlag.fromKey("session_chat_chip_timeline"))
+        assertEquals(FeatureFlag.SessionComposerDocked, FeatureFlag.fromKey("session_composer_docked"))
         assertNull(FeatureFlag.fromKey("unknown_flag"))
-    }
-
-    @Test
-    fun `chip timeline defaults on`() {
-        assertTrue(FeatureFlag.SessionChatChipTimeline.defaultValue)
     }
 }

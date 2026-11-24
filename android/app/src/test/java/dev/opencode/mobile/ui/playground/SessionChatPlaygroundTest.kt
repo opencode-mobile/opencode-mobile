@@ -608,17 +608,14 @@ class SessionChatPlaygroundTest {
         assertTrue(SessionChatDisplayPreferences.timelineStylePickerPending)
         try {
             val isolation = PlaygroundIsolation.begin()
-            // The one-time offers stay for the real app.
+            // The one-time picker stays for the real app.
             assertFalse(SessionChatDisplayPreferences.timelineStylePickerPending)
-            assertFalse(SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(20, NOW))
             // What Session Chat writes when the user answers them or switches delivery.
             SessionChatDisplayPreferences.dismissTimelineStylePicker()
-            SessionChatDisplayPreferences.updateTimelineStyle(SessionChatTimelineStyle.Chips)
-            SessionChatDisplayPreferences.postponeChipTimelineIntro(NOW)
-            SessionChatDisplayPreferences.finishChipTimelineIntro()
+            SessionChatDisplayPreferences.updateTimelineStyle(SessionChatTimelineStyle.StepRail)
             SessionChatDisplayPreferences.updateFollowUpDelivery(FollowUpDelivery.Queue)
             SessionChatDisplayPreferences.updateCollapseConsecutiveToolCalls(false)
-            assertEquals(SessionChatTimelineStyle.Chips, SessionChatDisplayPreferences.timelineStylePreference)
+            assertEquals(SessionChatTimelineStyle.StepRail, SessionChatDisplayPreferences.timelineStylePreference)
             isolation.close()
             isolation.close()
 
@@ -627,7 +624,6 @@ class SessionChatPlaygroundTest {
             assertEquals(SessionChatTimelineStyle.Standard, SessionChatDisplayPreferences.timelineStylePreference)
             assertEquals(FollowUpDelivery.Steer, SessionChatDisplayPreferences.followUpDelivery)
             assertTrue(SessionChatDisplayPreferences.collapseConsecutiveToolCalls)
-            assertFalse(SessionChatDisplayPreferences.chipTimelineIntroDone)
             assertFalse(SessionChatDisplayPreferences.isSandboxed)
         } finally {
             SessionChatDisplayPreferences.initialize(InMemoryPreferences())

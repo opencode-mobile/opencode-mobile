@@ -120,8 +120,6 @@ struct ComponentGalleryDetailView: View {
             AssistantMessageGalleryView()
         case .toolCallCard:
             ToolCallCardGalleryView()
-        case .toolChip:
-            ToolChipGalleryView()
         case .messageNote:
             MessageNoteGalleryView()
         case .timelineNotice:

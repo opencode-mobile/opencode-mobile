@@ -63,7 +63,6 @@ nonisolated enum DisplayFrameBuilder {
         displayMessages: [DisplayMessage],
         serverCommands: [ServerCommand] = [],
         collapseConsecutiveToolCalls: Bool = false,
-        chipTimeline: Bool = false,
         stepRail: Bool = false,
         activityCard: Bool = false,
         childSessions: [SessionChatChildSessionCandidate] = [],
@@ -82,7 +81,6 @@ nonisolated enum DisplayFrameBuilder {
                 message: message,
                 commands: serverCommands,
                 collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-                chipTimeline: chipTimeline,
                 stepRail: stepRail,
                 activityCard: activityCard
             )
@@ -111,11 +109,10 @@ nonisolated enum DisplayFrameBuilder {
         bodies = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
             bodies,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline,
             stepRail: stepRail,
             activityCard: activityCard
         )
-        if chipTimeline || stepRail || activityCard {
+        if stepRail || activityCard {
             // Merged runs rebuilt their paragraphs; pick up per-block cache hits again.
             bodies = bodies.map { body in
                 DisplayMessageBody(

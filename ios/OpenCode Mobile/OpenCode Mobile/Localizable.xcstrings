@@ -10760,105 +10760,6 @@
         }
       }
     },
-    "session_chat_sheet.chip_timeline_intro.details.body" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap a chip for its diffs, command output, or files."
-          }
-        }
-      }
-    },
-    "session_chat_sheet.chip_timeline_intro.details.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Details stay one tap away"
-          }
-        }
-      }
-    },
-    "session_chat_sheet.chip_timeline_intro.enable" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn on Chip timeline"
-          }
-        }
-      }
-    },
-    "session_chat_sheet.chip_timeline_intro.glance.body" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tool calls show as chips under the sentence that explains them."
-          }
-        }
-      }
-    },
-    "session_chat_sheet.chip_timeline_intro.glance.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "See the work at a glance"
-          }
-        }
-      }
-    },
-    "session_chat_sheet.chip_timeline_intro.later" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Later"
-          }
-        }
-      }
-    },
-    "session_chat_sheet.chip_timeline_intro.long_runs.body" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Twenty tool calls take a few chips instead of a screen of rows."
-          }
-        }
-      }
-    },
-    "session_chat_sheet.chip_timeline_intro.long_runs.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Long runs, short timeline"
-          }
-        }
-      }
-    },
-    "session_chat_sheet.chip_timeline_intro.never" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Don't show again"
-          }
-        }
-      }
-    },
     "session_chat_sheet.copy" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11369,39 +11270,6 @@
         }
       }
     },
-    "session_chat_sheet.skills.status.failed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Failed"
-          }
-        }
-      }
-    },
-    "session_chat_sheet.skills.status.loading" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loading"
-          }
-        }
-      }
-    },
-    "session_chat_sheet.skills.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Skills"
-          }
-        }
-      }
-    },
     "session_chat_sheet.timeline_style_picker.activity_card.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11420,28 +11288,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Activity Card"
-          }
-        }
-      }
-    },
-    "session_chat_sheet.timeline_style_picker.chips.subtitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tools as chips under the agent's narration"
-          }
-        }
-      }
-    },
-    "session_chat_sheet.timeline_style_picker.chips.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chips"
           }
         }
       }
@@ -13366,28 +13212,6 @@
         }
       }
     },
-    "settings.timeline_style.chips.subtitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tools as chips under the agent's narration"
-          }
-        }
-      }
-    },
-    "settings.timeline_style.chips.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chips"
-          }
-        }
-      }
-    },
     "settings.timeline_style.standard.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14154,29 +13978,6 @@
         }
       }
     },
-    "timeline.explore.label" : {
-      "comment" : "%1$s is a list of counts, such as 4 reads · 2 greps.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Explored · %@"
-          }
-        }
-      }
-    },
-    "timeline.explore.label_running" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Exploring · %@"
-          }
-        }
-      }
-    },
     "timeline.explore.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14618,17 +14419,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Loading skill %@"
-          }
-        }
-      }
-    },
-    "timeline.step.no_commentary" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Worked without commentary"
           }
         }
       }
@@ -15328,18 +15118,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Failed"
-          }
-        }
-      }
-    },
-    "tool.error.line" : {
-      "comment" : "Error line under a failed tool chip. %1$s is the chip label, %2$s the error.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@: %2$@"
           }
         }
       }

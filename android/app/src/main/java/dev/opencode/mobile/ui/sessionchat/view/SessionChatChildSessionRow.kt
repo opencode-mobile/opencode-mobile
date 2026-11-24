@@ -29,7 +29,7 @@ fun SessionChatChildSessionRow(
 
 /**
  * Live `m:ss` since [startEpochMs], ticking once a second; null without a
- * start. Shared by in-flight child-session rows and tool chips.
+ * start. Used by in-flight child-session rows.
  */
 @Composable
 internal fun rememberElapsedLabel(startEpochMs: Long?): String? {

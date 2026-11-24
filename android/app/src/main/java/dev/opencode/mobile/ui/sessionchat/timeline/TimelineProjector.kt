@@ -304,20 +304,7 @@ object TimelineProjector {
         val attachments = body.blocks.flatMap(::messageAttachments)
         // Prefer sole narration copy so slash-command collapse is what chat shows
         // and copies, not the server-expanded template still on Message.text.
-        // A chip-merged run spans messages; Message.text only covers the first.
-        val displayText =
-            run {
-                val texts = body.blocks.mapNotNull { it.markdownText }
-                if (texts.size == 1) {
-                    texts[0]
-                } else {
-                    val paragraphTexts =
-                        body.blocks.mapNotNull { block ->
-                            (block as? SessionChatTimelineBlock.StepParagraph)?.text
-                        }
-                    if (paragraphTexts.size > 1) paragraphTexts.joinToString("\n\n") else message.text
-                }
-            }
+        val displayText = body.blocks.mapNotNull { it.markdownText }.singleOrNull() ?: message.text
         val draft =
             TimelineRow(
                 id = message.id,
@@ -411,8 +398,6 @@ object TimelineProjector {
                 "r:${block.blockID}:${block.childSessionId != null}"
             is SessionChatTimelineBlock.Reasoning ->
                 "n:${block.blockID}"
-            is SessionChatTimelineBlock.StepParagraph ->
-                "s:${block.blockID}:${block.renderedMarkdown != null}:${stepParagraphChipFingerprint(block)}"
             is SessionChatTimelineBlock.StepRail ->
                 "sr:${block.blockID}:${stepRailFingerprint(block)}:${block.thinking}"
             is SessionChatTimelineBlock.ActivityCard ->
@@ -424,12 +409,6 @@ object TimelineProjector {
             is SessionChatTimelineBlock.Notice -> "o:${block.blockID}:${block.notice.hashCode()}"
             is SessionChatTimelineBlock.GoalStatus -> "gs:${block.blockID}"
         }
-
-    /** Chip status / counts change chip width and error captions, so they are layout. */
-    private fun stepParagraphChipFingerprint(block: SessionChatTimelineBlock.StepParagraph): String =
-        block.chips.joinToString(",") { chip ->
-            "${chip.status.ordinal}:${chip.additions}:${chip.deletions}:${chip.trailingText != null}"
-        } + ":${block.errorLines.size}:${block.noteLines.size}"
 
     /** Step count, status, branch and detail presence change rail rows and their height. */
     private fun stepRailFingerprint(block: SessionChatTimelineBlock.StepRail): String =
@@ -714,8 +693,6 @@ object TimelineProjector {
                 "r:${block.blockID}:${block.childSessionId != null}"
             is SessionChatTimelineBlock.Reasoning ->
                 "n:${block.blockID}"
-            is SessionChatTimelineBlock.StepParagraph ->
-                "s:${block.blockID}:${stepParagraphChipFingerprint(block)}"
             is SessionChatTimelineBlock.StepRail -> "sr:${block.blockID}:${stepRailFingerprint(block)}"
             is SessionChatTimelineBlock.ActivityCard -> "ac:${block.blockID}:${activityCardFingerprint(block)}"
             is SessionChatTimelineBlock.StopNote -> "x:${block.blockID}:${block.reason}"

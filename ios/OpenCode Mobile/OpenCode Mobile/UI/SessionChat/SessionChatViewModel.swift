@@ -269,10 +269,7 @@ final class SessionChatViewModel {
             },
             reportError: { boundCommands.reportActionError($0) }
         )
-        self.timelineOffers = SessionChatTimelineOffers(
-            clock: clock,
-            loadedMessages: { boundTimeline.loadedMessages() }
-        )
+        self.timelineOffers = SessionChatTimelineOffers(clock: clock)
         self.inbox = SessionChatInbox(
             sessionID: sessionID,
             worktree: worktree,
@@ -311,8 +308,7 @@ final class SessionChatViewModel {
         turnStatus.onWake = { [weak self] in self?.publishUiState() }
         timelineOffers.onChange = { [weak self] in self?.publishUiState() }
         timelineOffers.isBound = { [weak self] in self?.isSessionBound ?? false }
-        timelineOffers.isBlocked = { [weak self] in self?.uiState.blocksChipTimelineIntro ?? false }
-        timelineOffers.isSessionBusy = { [weak self] in self?.uiState.sessionStatusLabel != nil }
+        timelineOffers.isBlocked = { [weak self] in self?.uiState.blocksTimelineStylePicker ?? false }
         // The meter's level only: no full publish.
         dictation.onLevelChange = { [weak self] current in self?.uiState.dictation = current }
         dictation.onCommit = { [weak self] transcript in self?.spliceDictationTranscript(transcript) }
@@ -965,22 +961,6 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
-    func enableChipTimelineFromIntro() {
-        logChipTimelineIntroHidden(ProductAnalytics.Action.chipTimelineIntroEnable)
-        timelineOffers.enableChipTimeline()
-    }
-
-    /// Later button, swipe, or scrim.
-    func postponeChipTimelineIntro() {
-        logChipTimelineIntroHidden(ProductAnalytics.Action.chipTimelineIntroLater)
-        timelineOffers.postponeChipTimelineIntro()
-    }
-
-    func dismissChipTimelineIntro() {
-        logChipTimelineIntroHidden(ProductAnalytics.Action.chipTimelineIntroNever)
-        timelineOffers.dismissChipTimelineIntro()
-    }
-
     /// Use button of the Timeline Style picker.
     func chooseTimelineStyleFromPicker(_ style: SessionChatTimelineStyle) {
         logTimelineStylePickerHidden(
@@ -1004,14 +984,6 @@ final class SessionChatViewModel {
             screenId: ProductAnalytics.Screen.sessionTimelineStylePicker,
             actionId: actionId,
             parameters: parameters
-        )
-    }
-
-    private func logChipTimelineIntroHidden(_ actionId: String) {
-        guard timelineOffers.hideChipTimelineIntro() else { return }
-        ProductAnalytics.logUserAction(
-            screenId: ProductAnalytics.Screen.sessionChipTimelineIntro,
-            actionId: actionId
         )
     }
 
@@ -1057,12 +1029,6 @@ final class SessionChatViewModel {
         )
         guard isConnectionLive else { return }
         await sessionInfo.confirmRenameSession()
-    }
-
-    /// Chip timeline: show the `chipCount` chips one step paragraph had when
-    /// its `+N more` was tapped; chips that arrive later still collapse.
-    func expandStepParagraph(_ paragraphID: String, chipCount: Int) {
-        timeline.expandStepParagraph(paragraphID, chipCount: chipCount)
     }
 
     /// Activity card: open its live activity sheet.
@@ -1505,7 +1471,6 @@ final class SessionChatViewModel {
         timeline.updateCollapseConsecutiveToolCalls(
             SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
         )
-        timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
         timeline.updateStepRailTimeline(SessionChatDisplayPreferences.shared.stepRailTimeline)
         timeline.updateActivityCardTimeline(SessionChatDisplayPreferences.shared.activityCardTimeline)
         observeCollapsePreference()
@@ -1518,7 +1483,6 @@ final class SessionChatViewModel {
         let generation = collapsePreferenceGeneration
         withObservationTracking {
             _ = SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
-            _ = SessionChatDisplayPreferences.shared.chipTimeline
             _ = SessionChatDisplayPreferences.shared.stepRailTimeline
             _ = SessionChatDisplayPreferences.shared.activityCardTimeline
         } onChange: { [weak self] in
@@ -1527,7 +1491,6 @@ final class SessionChatViewModel {
                 self.timeline.updateCollapseConsecutiveToolCalls(
                     SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
                 )
-                self.timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
                 self.timeline.updateStepRailTimeline(SessionChatDisplayPreferences.shared.stepRailTimeline)
                 self.timeline.updateActivityCardTimeline(
                     SessionChatDisplayPreferences.shared.activityCardTimeline
@@ -1764,7 +1727,6 @@ final class SessionChatViewModel {
         newSessionDraft.end()
         sessionID = id
         sessionTitle = title
-        timeline.resetExpandedStepParagraphs()
         turnStatus.reset()
         if movedCheckout {
             worktree = directory
@@ -1835,7 +1797,6 @@ final class SessionChatViewModel {
         )
         if infoState.hasResolvedSessionStatus {
             repoStrip.updateTurnActive(isTurnActive)
-            timelineOffers.updateTurnActive(isTurnActive)
         }
         timelineOffers.observeTimelineLoad(timelineState.timeline)
         let reviewChangesState = reviewChanges.state
@@ -1870,7 +1831,6 @@ final class SessionChatViewModel {
                 ?? commandsState.actionSuccessMessage
                 ?? worktreeMoveState.moveNotice
                 ?? branchCopiedNotice
-                ?? timelineOffersState.chipTimelineIntroNotice
                 ?? timelineOffersState.timelineStylePickerNotice
         )
         // Reuse the current TimelineFrame when only composer / session-info /
@@ -2034,7 +1994,6 @@ final class SessionChatViewModel {
             pendingTerminalOpen: commandsState.pendingTerminalOpen,
             pendingFilesOpen: commandsState.pendingFilesOpen,
             hasPendingRevert: commandsState.hasPendingRevert,
-            expandedStepParagraphs: timelineState.expandedStepParagraphs,
             unfoldedStepRails: timelineState.unfoldedStepRails,
             presentedActivityCard: timelineState.presentedActivityCard,
             activityCardDetailStepId: timelineState.activityCardDetailStepId,
@@ -2042,7 +2001,6 @@ final class SessionChatViewModel {
             activityCardFooters: timelineState.activityCardFooters,
             debouncedStepIDs: timelineState.debouncedStepIDs,
             imageViewer: timelineState.imageViewer,
-            chipTimelineIntroVisible: timelineOffersState.chipTimelineIntroVisible,
             timelineStylePickerVisible: timelineOffersState.timelineStylePickerVisible,
             dictation: dictation.state.dictation,
             sideQuestions: {
@@ -2181,7 +2139,6 @@ final class SessionChatViewModel {
         return steers + queued
     }
 
-    static let chipTimelineIntroEnabledNotice = SessionChatTimelineOffers.chipTimelineIntroEnabledNotice
     /// Pause after history loads so the chat is on screen before the picker.
     static let timelineStylePickerDelayMs = SessionChatTimelineOffers.timelineStylePickerDelayMs
 

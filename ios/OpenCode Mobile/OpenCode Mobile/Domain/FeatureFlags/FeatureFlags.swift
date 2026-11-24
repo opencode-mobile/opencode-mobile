@@ -69,6 +69,9 @@ nonisolated final class FeatureFlags {
         for flag in FeatureFlag.allCases {
             defaults.removeObject(forKey: Self.overrideKey(flag))
         }
+        for key in FeatureFlag.retiredKeys {
+            defaults.removeObject(forKey: Self.overrideKeyPrefix + key)
+        }
         overrides = [:]
     }
 

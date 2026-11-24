@@ -5,8 +5,6 @@ import Observation
 nonisolated enum SessionChatTimelineStyle: String, CaseIterable, Sendable {
     /// Tool cards and tool groups between the agent's messages.
     case standard
-    /// Narration paragraphs with the tools each one used as chips (OPE-260).
-    case chips
     /// One short line per step on a vertical rail with live status.
     case stepRail = "step_rail"
     /// Running steps on one live card per segment that settles into a summary line.
@@ -14,14 +12,17 @@ nonisolated enum SessionChatTimelineStyle: String, CaseIterable, Sendable {
 
     var wireValue: String { rawValue }
 
+    /// Wire value of the removed Chips style (#1120); read as Standard.
+    static let removedChipsWireValue = "chips"
+
     static func fromWire(_ value: String?) -> SessionChatTimelineStyle? {
-        value.flatMap(SessionChatTimelineStyle.init(rawValue:))
+        if value == removedChipsWireValue { return .standard }
+        return value.flatMap(SessionChatTimelineStyle.init(rawValue:))
     }
 
     var title: String {
         switch self {
         case .standard: "Standard"
-        case .chips: "Chips"
         case .stepRail: "Step Rail"
         case .activityCard: "Activity Card"
         }
@@ -30,7 +31,6 @@ nonisolated enum SessionChatTimelineStyle: String, CaseIterable, Sendable {
     var subtitle: String {
         switch self {
         case .standard: "Tool cards and groups between the agent's messages"
-        case .chips: "Tools as chips under the agent's narration"
         case .stepRail: "One line per step on a rail, live while the agent works"
         case .activityCard: "Running steps on one live card that folds into a summary"
         }
@@ -43,23 +43,23 @@ nonisolated enum SessionChatTimelineStyle: String, CaseIterable, Sendable {
 nonisolated final class SessionChatDisplayPreferences {
     static let shared = SessionChatDisplayPreferences()
     static let defaultCollapseConsecutiveToolCalls = true
-    static let defaultChipTimeline = false
     static let defaultTimelineStyle = SessionChatTimelineStyle.standard
     static let defaultFollowUpDelivery = FollowUpDelivery.steer
 
     private enum StorageKeys {
         static let collapseConsecutiveToolCalls = "collapseConsecutiveToolCalls"
-        /// Legacy boolean (OPE-260). Read once to migrate; still mirrored on writes.
+        /// Legacy Chip timeline boolean (OPE-260); the style is gone (#1120). Its
+        /// presence still marks an existing install; Clear All Data removes it.
         static let chipTimeline = "chipTimeline"
         static let timelineStyle = "timelineStyle"
         static let followUpDelivery = "followUpDelivery"
+        /// Legacy Chip timeline intro keys; removed by Clear All Data only.
         static let chipTimelineIntroDone = "chipTimelineIntroDone"
         static let chipTimelineIntroSnoozedUntilMs = "chipTimelineIntroSnoozedUntilMs"
         static let timelineStylePickerDone = "timelineStylePickerDone"
     }
 
     private let defaults: UserDefaults
-    private let featureFlags: FeatureFlags
 
     /// Values to put back when the last sandbox ends; set while one is open.
     @ObservationIgnored private var sandboxSnapshot: Snapshot?
@@ -68,8 +68,6 @@ nonisolated final class SessionChatDisplayPreferences {
     private struct Snapshot {
         let collapseConsecutiveToolCalls: Bool
         let timelineStyle: SessionChatTimelineStyle
-        let chipTimelineIntroDone: Bool
-        let chipTimelineIntroSnoozedUntilMs: Int64?
         let timelineStylePickerDone: Bool?
         let followUpDelivery: FollowUpDelivery
     }
@@ -81,51 +79,17 @@ nonisolated final class SessionChatDisplayPreferences {
     /// assistant message collapses into one summary tool group.
     private(set) var collapseConsecutiveToolCalls: Bool
 
-    /// Stored Timeline Style, independent of the remote flag.
+    /// The Timeline Style Session Chat renders.
     private(set) var timelineStyle: SessionChatTimelineStyle
 
-    /// Stored "Chip timeline" choice, independent of the remote flag.
-    var chipTimelinePreference: Bool {
-        timelineStyle == .chips
-    }
-
-    /// True once the Chip timeline intro sheet has been answered for good (OPE-270).
-    private(set) var chipTimelineIntroDone: Bool
-
-    /// Epoch ms until which a Later answer hides the intro sheet, or nil if never snoozed.
-    private(set) var chipTimelineIntroSnoozedUntilMs: Int64?
-
-    /// True while the `session_chat_chip_timeline` flag allows the mode at all (OPE-269).
-    var chipTimelineAvailable: Bool {
-        featureFlags.isEnabled(.sessionChatChipTimeline)
-    }
-
-    /// When true, Session Chat shows an assistant turn as narration paragraphs
-    /// with the tools each one used as chips (OPE-260). Effective value: the
-    /// stored preference gated by `chipTimelineAvailable`; a remotely disabled
-    /// flag renders the standard timeline regardless of the stored preference.
-    var chipTimeline: Bool {
-        timelineStyle == .chips && chipTimelineAvailable
-    }
-
-    /// When true, Session Chat shows an assistant turn as a step rail (#779). Not flag-gated.
+    /// When true, Session Chat shows an assistant turn as a step rail (#779).
     var stepRailTimeline: Bool {
         timelineStyle == .stepRail
     }
 
-    /// When true, Session Chat shows each run of steps as one activity card (#779). Not flag-gated.
+    /// When true, Session Chat shows each run of steps as one activity card (#779).
     var activityCardTimeline: Bool {
         timelineStyle == .activityCard
-    }
-
-    /// The style Session Chat renders: Chips falls back to Standard while the flag is off.
-    var effectiveTimelineStyle: SessionChatTimelineStyle {
-        timelineStyle == .chips && !chipTimelineAvailable ? .standard : timelineStyle
-    }
-
-    /// Styles the Settings picker offers; Chips only while its flag allows it.
-    var availableTimelineStyles: [SessionChatTimelineStyle] {
-        SessionChatTimelineStyle.allCases.filter { $0 != .chips || chipTimelineAvailable }
     }
 
     /// One-time Timeline Style picker (#805): nil until this version settles it,
@@ -139,30 +103,30 @@ nonisolated final class SessionChatDisplayPreferences {
 
     private(set) var followUpDelivery: FollowUpDelivery
 
-    init(defaults: UserDefaults = .standard, featureFlags: FeatureFlags = .shared) {
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.featureFlags = featureFlags
         if defaults.object(forKey: StorageKeys.collapseConsecutiveToolCalls) == nil {
             collapseConsecutiveToolCalls = Self.defaultCollapseConsecutiveToolCalls
         } else {
             collapseConsecutiveToolCalls = defaults.bool(forKey: StorageKeys.collapseConsecutiveToolCalls)
         }
-        if let stored = SessionChatTimelineStyle.fromWire(defaults.string(forKey: StorageKeys.timelineStyle)) {
+        let storedWire = defaults.string(forKey: StorageKeys.timelineStyle)
+        if let stored = SessionChatTimelineStyle.fromWire(storedWire) {
             timelineStyle = stored
+            if storedWire == SessionChatTimelineStyle.removedChipsWireValue {
+                // Chips is gone (#1120): rewrite the stored choice as Standard.
+                defaults.set(stored.wireValue, forKey: StorageKeys.timelineStyle)
+            }
         } else if defaults.object(forKey: StorageKeys.chipTimeline) != nil {
-            // Migrate the old Chip timeline boolean once; the old key stays.
-            let migrated: SessionChatTimelineStyle =
-                defaults.bool(forKey: StorageKeys.chipTimeline) ? .chips : .standard
-            timelineStyle = migrated
-            defaults.set(migrated.wireValue, forKey: StorageKeys.timelineStyle)
+            // Migrate the old Chip timeline boolean once, on or off, to Standard;
+            // the old key stays so the install still reads as existing.
+            timelineStyle = .standard
+            defaults.set(SessionChatTimelineStyle.standard.wireValue, forKey: StorageKeys.timelineStyle)
         } else {
             timelineStyle = Self.defaultTimelineStyle
         }
         followUpDelivery = FollowUpDelivery.fromWire(defaults.string(forKey: StorageKeys.followUpDelivery))
             ?? Self.defaultFollowUpDelivery
-        chipTimelineIntroDone = defaults.bool(forKey: StorageKeys.chipTimelineIntroDone)
-        chipTimelineIntroSnoozedUntilMs =
-            (defaults.object(forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs) as? NSNumber)?.int64Value
         timelineStylePickerDone = (defaults.object(forKey: StorageKeys.timelineStylePickerDone) as? NSNumber)?.boolValue
     }
 
@@ -171,16 +135,9 @@ nonisolated final class SessionChatDisplayPreferences {
         persist { $0.set(value, forKey: StorageKeys.collapseConsecutiveToolCalls) }
     }
 
-    /// Intro sheet shim: true picks Chips, false Standard. Ends the intro.
-    func setChipTimeline(_ value: Bool) {
-        setTimelineStyle(value ? .chips : .standard)
-    }
-
-    /// Any explicit choice, from Settings, the picker, or the intro sheet, also
-    /// ends the Chip intro and the Timeline Style picker.
+    /// Any explicit choice, from Settings or the picker, also ends the Timeline Style picker.
     func setTimelineStyle(_ style: SessionChatTimelineStyle) {
         storeTimelineStyle(style)
-        finishChipTimelineIntro()
         storeTimelineStylePickerDone(true)
     }
 
@@ -196,11 +153,7 @@ nonisolated final class SessionChatDisplayPreferences {
 
     private func storeTimelineStyle(_ style: SessionChatTimelineStyle) {
         timelineStyle = style
-        persist { defaults in
-            defaults.set(style.wireValue, forKey: StorageKeys.timelineStyle)
-            // Mirror the legacy key so an older build reading it agrees on Chips.
-            defaults.set(style == .chips, forKey: StorageKeys.chipTimeline)
-        }
+        persist { $0.set(style.wireValue, forKey: StorageKeys.timelineStyle) }
     }
 
     /// Settles the starting Timeline Style and the Timeline Style picker once
@@ -219,56 +172,19 @@ nonisolated final class SessionChatDisplayPreferences {
         }
     }
 
-    /// Intro sheet "Don't show again", or a second Later.
-    func finishChipTimelineIntro() {
-        chipTimelineIntroDone = true
-        persist { $0.set(true, forKey: StorageKeys.chipTimelineIntroDone) }
-    }
-
-    /// Intro sheet Later: snooze the first time, end the intro the second time.
-    func postponeChipTimelineIntro(nowMs: Int64) {
-        guard let until = ChipTimelineIntro.laterSnoozeUntil(
-            snoozedUntilMs: chipTimelineIntroSnoozedUntilMs,
-            nowMs: nowMs
-        ) else {
-            finishChipTimelineIntro()
-            return
-        }
-        chipTimelineIntroSnoozedUntilMs = until
-        persist { $0.set(NSNumber(value: until), forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs) }
-    }
-
-    /// Whether a finished turn with `turnToolCalls` tool calls should offer the intro sheet.
-    func shouldOfferChipTimelineIntro(turnToolCalls: Int, nowMs: Int64) -> Bool {
-        // The Timeline Style picker replaces the intro (#805); never pitch Chips before it.
-        guard !isSandboxed, !timelineStylePickerPending else { return false }
-        return ChipTimelineIntro.shouldShow(
-            chipTimelineAvailable: chipTimelineAvailable,
-            // Step Rail and Activity Card are explicit style choices too: never pitch Chips over them.
-            chipTimelineOn: timelineStyle != .standard,
-            introDone: chipTimelineIntroDone,
-            snoozedUntilMs: chipTimelineIntroSnoozedUntilMs,
-            nowMs: nowMs,
-            turnToolCalls: turnToolCalls
-        )
-    }
-
     func setFollowUpDelivery(_ value: FollowUpDelivery) {
         followUpDelivery = value
         persist { $0.set(value.wireValue, forKey: StorageKeys.followUpDelivery) }
     }
 
     /// Keeps every change in memory until the returned handle ends, then restores the values
-    /// from before. While a sandbox is open the one-time Timeline Style picker and Chip intro
-    /// are not offered. The Session Chat Playground holds one: nothing it does may change the
+    /// from before. While a sandbox is open the one-time Timeline Style picker is not offered. The Session Chat Playground holds one: nothing it does may change the
     /// real preferences.
     func beginSandbox() -> Sandbox {
         if sandboxDepth == 0 {
             sandboxSnapshot = Snapshot(
                 collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
                 timelineStyle: timelineStyle,
-                chipTimelineIntroDone: chipTimelineIntroDone,
-                chipTimelineIntroSnoozedUntilMs: chipTimelineIntroSnoozedUntilMs,
                 timelineStylePickerDone: timelineStylePickerDone,
                 followUpDelivery: followUpDelivery
             )
@@ -283,8 +199,6 @@ nonisolated final class SessionChatDisplayPreferences {
         sandboxSnapshot = nil
         collapseConsecutiveToolCalls = snapshot.collapseConsecutiveToolCalls
         timelineStyle = snapshot.timelineStyle
-        chipTimelineIntroDone = snapshot.chipTimelineIntroDone
-        chipTimelineIntroSnoozedUntilMs = snapshot.chipTimelineIntroSnoozedUntilMs
         timelineStylePickerDone = snapshot.timelineStylePickerDone
         followUpDelivery = snapshot.followUpDelivery
     }
@@ -319,8 +233,6 @@ nonisolated final class SessionChatDisplayPreferences {
         collapseConsecutiveToolCalls = Self.defaultCollapseConsecutiveToolCalls
         timelineStyle = Self.defaultTimelineStyle
         followUpDelivery = Self.defaultFollowUpDelivery
-        chipTimelineIntroDone = false
-        chipTimelineIntroSnoozedUntilMs = nil
         timelineStylePickerDone = nil
     }
 }

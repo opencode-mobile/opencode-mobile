@@ -31,8 +31,6 @@ final class SessionChatTimeline {
     private(set) var serverCommands: [ServerCommand] = []
     /// Collapse-consecutive-tool-calls preference (OPE-144); widens grouping.
     private(set) var collapseConsecutiveToolCalls = false
-    /// Chip-timeline preference (OPE-260); narration paragraphs with tool chips.
-    private(set) var chipTimeline = false
     /// Step rail timeline preference (#779); one line per step on a rail.
     private(set) var stepRailTimeline = false
     /// Activity card timeline preference (#779); one live card per run of steps.
@@ -126,23 +124,6 @@ final class SessionChatTimeline {
     func updateCollapseConsecutiveToolCalls(_ enabled: Bool) {
         guard enabled != collapseConsecutiveToolCalls else { return }
         collapseConsecutiveToolCalls = enabled
-        guard !lastLoadedDisplayMessages.isEmpty else { return }
-        let snapshot = lastLoadedDisplayMessages
-        let fromCache = state.messagesFromCache
-        Task {
-            await applyLoadedDisplayMessagesTransform(
-                snapshot,
-                isRefreshing: false,
-                fromQuietRefresh: true,
-                messagesFromCache: fromCache,
-                expirePendingPromptPatches: false
-            )
-        }
-    }
-
-    func updateChipTimeline(_ enabled: Bool) {
-        guard enabled != chipTimeline else { return }
-        chipTimeline = enabled
         guard !lastLoadedDisplayMessages.isEmpty else { return }
         let snapshot = lastLoadedDisplayMessages
         let fromCache = state.messagesFromCache
@@ -312,20 +293,6 @@ final class SessionChatTimeline {
         notifyChange()
     }
 
-    /// Chip timeline: show the `chipCount` chips one step paragraph had when
-    /// its `+N more` was tapped; chips that arrive later still collapse.
-    /// Republishes without a step timing pass: expanding chips changes no step.
-    func expandStepParagraph(_ paragraphID: String, chipCount: Int) {
-        guard state.expandedStepParagraphs[paragraphID, default: -1] < chipCount else { return }
-        state.expandedStepParagraphs[paragraphID] = chipCount
-        onChange?()
-    }
-
-    /// A draft became a session: its expansions do not carry over. Silent; the caller publishes.
-    func resetExpandedStepParagraphs() {
-        state.expandedStepParagraphs = [:]
-    }
-
     func updateRevertBoundary(_ messageID: String?) {
         guard messageID != revertBoundaryMessageID else { return }
         revertBoundaryMessageID = messageID
@@ -364,7 +331,7 @@ final class SessionChatTimeline {
 
     /// Looks up this session's children when a subagent part has no child id
     /// (history reloads drop the one-shot `tool.progress` id), then re-projects
-    /// so its row or chip can open the child. Each unlinked part is looked up
+    /// so its row or step can open the child. Each unlinked part is looked up
     /// once; a later reload with a new unlinked part looks up again. A failed
     /// fetch retries with backoff.
     private func scheduleChildSessionLookup() {
@@ -557,7 +524,6 @@ final class SessionChatTimeline {
             displayMessages: Self.hidingReverted(displayMessages, from: revertBoundaryMessageID),
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline,
             stepRail: stepRailTimeline,
             activityCard: activityCardTimeline,
             childSessions: childSessions,
@@ -899,7 +865,6 @@ final class SessionChatTimeline {
             displayMessages: [display],
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline,
             stepRail: stepRailTimeline,
             activityCard: activityCardTimeline,
             childSessions: childSessions
@@ -969,7 +934,6 @@ final class SessionChatTimeline {
         let sessionKey = sessionID
         let commands = serverCommands
         let collapse = collapseConsecutiveToolCalls
-        let chips = chipTimeline
         let stepRail = stepRailTimeline
         let activityCard = activityCardTimeline
         let children = childSessions
@@ -1003,7 +967,6 @@ final class SessionChatTimeline {
                 displayMessages: visibleDisplayMessages,
                 serverCommands: commands,
                 collapseConsecutiveToolCalls: collapse,
-                chipTimeline: chips,
                 stepRail: stepRail,
                 activityCard: activityCard,
                 childSessions: children,
@@ -1123,7 +1086,6 @@ final class SessionChatTimeline {
             displayMessages: lastLoadedDisplayMessages,
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline,
             stepRail: stepRailTimeline,
             activityCard: activityCardTimeline,
             childSessions: childSessions

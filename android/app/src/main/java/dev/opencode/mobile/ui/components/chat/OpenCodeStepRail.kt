@@ -595,7 +595,7 @@ object OpenCodeStepRailSamples {
             OpenCodeStepRailItem.Step(id = "a", title = "Thought · 3.2s", status = OpenCodeStepRailStatus.Completed),
             OpenCodeStepRailItem.Step(
                 id = "b",
-                title = "Reading OpenCodeToolChip.kt",
+                title = "Reading OpenCodeStepRail.kt",
                 status = OpenCodeStepRailStatus.Running,
                 startedAtMs = nowMs - 3_000,
             ),

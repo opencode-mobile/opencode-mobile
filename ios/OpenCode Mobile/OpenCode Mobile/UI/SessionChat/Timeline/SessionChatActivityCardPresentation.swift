@@ -140,8 +140,11 @@ struct SessionChatActivityCardPresentation: Equatable {
 }
 
 extension SessionChatStep {
+    /// The agent name with its first letter upper-cased (`explore` reads `Explore`).
     var agentDisplayName: String {
-        OpenCodeToolChip.displayAgentName(childSession?.agent ?? title.resolved)
+        let name = childSession?.agent ?? title.resolved
+        guard let first = name.first else { return name }
+        return first.uppercased() + name.dropFirst()
     }
 
     var activityIcon: OpenCodeActivityLineIcon {

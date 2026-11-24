@@ -190,13 +190,7 @@ nonisolated enum SessionChatTimelineProjector {
         // and copies, not the server-expanded template still on Message.text.
         let displayText: String = {
             let texts = body.blocks.compactMap { $0.textContent?.text }
-            if texts.count == 1 { return texts[0] }
-            // A chip-merged run spans messages; `Message.text` only covers the first.
-            let paragraphTexts = body.blocks.compactMap { block -> String? in
-                if case .stepParagraph = block { return block.textContent?.text }
-                return nil
-            }
-            return paragraphTexts.count > 1 ? paragraphTexts.joined(separator: "\n\n") : message.text
+            return texts.count == 1 ? texts[0] : message.text
         }()
         let contentRevision = ContentRevision.of(displayText, blocks: body.blocks)
         let bridgeMarkdown = bridgeRenderedMarkdown(body: body, previous: previous)
@@ -538,11 +532,6 @@ nonisolated enum SessionChatTimelineProjector {
                 "r:\(id):\(row.childSessionId != nil)"
             case .reasoning(let id, _, _, _):
                 "n:\(id)"
-            case .stepParagraph(let id, let paragraph):
-                "s:\(id):\(paragraph.text != nil):\(paragraph.renderedMarkdown != nil):\(paragraph.errorLines.count):\(paragraph.declineNoteLines.count):"
-                    + paragraph.chips.map {
-                        "\($0.status.rawValue)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
-                    }.joined(separator: ",")
             case .stepRail(let id, let rail):
                 "sr:\(id):"
                     + rail.steps.map {
@@ -604,8 +593,6 @@ nonisolated enum SessionChatTimelineProjector {
                 "r:\(id):\(row.childSessionId != nil)"
             case .reasoning(let id, _, _, _):
                 "n:\(id)"
-            case .stepParagraph(let id, let paragraph):
-                "s:\(id):\(paragraph.chips.count)"
             case .stepRail(let id, let rail):
                 "sr:\(id):\(rail.steps.count)"
             case .activityCard(let id, let card):

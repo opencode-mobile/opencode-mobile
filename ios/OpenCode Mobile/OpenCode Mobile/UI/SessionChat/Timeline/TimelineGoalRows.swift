@@ -17,7 +17,7 @@ extension MessageListTimelineApplyPacket {
             default: changed.insert(id)
             }
         }
-        let fingerprint = SessionChatStepParagraphExpansion.fingerprint(
+        let fingerprint = SessionChatTimelineHostState.fingerprint(
             Dictionary(uniqueKeysWithValues: keys.map { ("goal:" + $0.key + ":" + $0.value, 7) })
         )
         guard fingerprint != 0 || !changed.isEmpty || !inserted.isEmpty || !removed.isEmpty else { return self }

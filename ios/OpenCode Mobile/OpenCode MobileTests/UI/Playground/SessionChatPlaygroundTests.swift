@@ -511,17 +511,14 @@ struct SessionChatPlaygroundTests {
         #expect(preferences.timelineStylePickerPending)
 
         let model = SessionChatPlaygroundModel(preferences: preferences)
-        // The one-time offers stay for the real app.
+        // The one-time picker stays for the real app.
         #expect(!preferences.timelineStylePickerPending)
-        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: now))
-        // What Session Chat writes when the user answers them or switches delivery.
+        // What Session Chat writes when the user answers it or switches delivery.
         preferences.dismissTimelineStylePicker()
-        preferences.setTimelineStyle(.chips)
-        preferences.postponeChipTimelineIntro(nowMs: now)
-        preferences.finishChipTimelineIntro()
+        preferences.setTimelineStyle(.stepRail)
         preferences.setFollowUpDelivery(.queue)
         preferences.setCollapseConsecutiveToolCalls(false)
-        #expect(preferences.timelineStyle == .chips)
+        #expect(preferences.timelineStyle == .stepRail)
         model.close()
 
         let after = defaults.dictionaryRepresentation().filter { Self.preferenceKeys.contains($0.key) }
@@ -530,12 +527,11 @@ struct SessionChatPlaygroundTests {
         #expect(preferences.timelineStyle == .standard)
         #expect(preferences.followUpDelivery == .steer)
         #expect(preferences.collapseConsecutiveToolCalls)
-        #expect(!preferences.chipTimelineIntroDone)
     }
 
     private static let preferenceKeys: Set<String> = [
         "collapseConsecutiveToolCalls", "chipTimeline", "timelineStyle", "followUpDelivery",
-        "chipTimelineIntroDone", "chipTimelineIntroSnoozedUntilMs", "timelineStylePickerDone",
+        "timelineStylePickerDone",
     ]
 
     private func freshDefaults(_ name: String) -> UserDefaults {

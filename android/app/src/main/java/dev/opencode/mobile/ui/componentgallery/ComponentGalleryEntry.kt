@@ -32,7 +32,6 @@ enum class ComponentGalleryEntryId {
     TruncationRow,
     AssistantMessage,
     ToolCallCard,
-    ToolChip,
     MessageNote,
     TimelineNotice,
     ChildSessionRow,
@@ -429,12 +428,6 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ToolCallCard,
             title = "Tool Call Card",
             description = "Collapsed tool-agnostic assistant tool row with status variants.",
-            category = ComponentGalleryCategory.Chat,
-        ),
-        ComponentGalleryEntry(
-            id = ComponentGalleryEntryId.ToolChip,
-            title = "Tool Chip",
-            description = "Compact file, command, agent, and skill chip under a chip-timeline paragraph.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(

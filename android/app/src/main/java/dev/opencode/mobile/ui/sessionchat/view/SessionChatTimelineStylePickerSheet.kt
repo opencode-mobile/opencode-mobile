@@ -40,7 +40,6 @@ internal val SessionChatTimelineStyle.illustrationTopic: OpenCodeSkeletonIllustr
     get() =
         when (this) {
             SessionChatTimelineStyle.Standard -> OpenCodeSkeletonIllustrationTopic.TimelineStandard
-            SessionChatTimelineStyle.Chips -> OpenCodeSkeletonIllustrationTopic.TimelineChips
             SessionChatTimelineStyle.StepRail -> OpenCodeSkeletonIllustrationTopic.TimelineStepRail
             SessionChatTimelineStyle.ActivityCard -> OpenCodeSkeletonIllustrationTopic.TimelineActivityCard
         }
@@ -51,7 +50,6 @@ internal val SessionChatTimelineStyle.pickerTitle: Int
     get() =
         when (this) {
             SessionChatTimelineStyle.Standard -> R.string.session_chat_sheet_timeline_style_picker_standard_title
-            SessionChatTimelineStyle.Chips -> R.string.session_chat_sheet_timeline_style_picker_chips_title
             SessionChatTimelineStyle.StepRail -> R.string.session_chat_sheet_timeline_style_picker_step_rail_title
             SessionChatTimelineStyle.ActivityCard -> R.string.session_chat_sheet_timeline_style_picker_activity_card_title
         }
@@ -62,7 +60,6 @@ internal val SessionChatTimelineStyle.pickerSubtitle: Int
     get() =
         when (this) {
             SessionChatTimelineStyle.Standard -> R.string.session_chat_sheet_timeline_style_picker_standard_subtitle
-            SessionChatTimelineStyle.Chips -> R.string.session_chat_sheet_timeline_style_picker_chips_subtitle
             SessionChatTimelineStyle.StepRail -> R.string.session_chat_sheet_timeline_style_picker_step_rail_subtitle
             SessionChatTimelineStyle.ActivityCard -> R.string.session_chat_sheet_timeline_style_picker_activity_card_subtitle
         }
@@ -163,7 +160,7 @@ private fun SessionChatTimelineStylePickerSheetPreview() {
             visible = true,
             options =
                 SessionChatTimelineStyleOption.pickerOptions(
-                    available = SessionChatTimelineStyle.available(chipTimelineAvailable = true),
+                    available = SessionChatTimelineStyle.entries,
                     current = SessionChatTimelineStyle.Standard,
                 ),
             onUse = {},

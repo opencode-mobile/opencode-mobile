@@ -119,19 +119,6 @@ struct SessionChatImageGalleryBlocksTests {
         #expect(second.images.map(\.id) == ["t2:file:0"])
     }
 
-    @Test func chipGalleryFollowsItsParagraphWithAnIdThatSurvivesNewTools() {
-        let before = styled([tool("t1", name: "bash", images: 1)], chips: true)
-        let after = styled([tool("t1", name: "bash", images: 1), tool("t2", name: "bash", images: 1)], chips: true)
-        guard case .stepParagraph = before.first, case .imageGallery(let beforeID, _) = before.last,
-              case .stepParagraph = after.first, case .imageGallery(let afterID, let gallery) = after.last
-        else {
-            Issue.record("Expected a paragraph then a gallery")
-            return
-        }
-        #expect(beforeID == afterID)
-        #expect(gallery.images.count == 2)
-    }
-
     // MARK: - Attached images
 
     @Test func userWithOneImageKeepsTheAttachmentBlock() {
@@ -236,14 +223,12 @@ struct SessionChatImageGalleryBlocksTests {
 
     private func styled(
         _ parts: [MessagePart],
-        chips: Bool = false,
         stepRail: Bool = false,
         activityCard: Bool = false
     ) -> [SessionChatTimelineBlock] {
         guard case .ok(let blocks) = SessionChatTimelineBlocks.build(
             role: .assistant,
             parts: parts,
-            chipTimeline: chips,
             stepRail: stepRail,
             activityCard: activityCard
         ) else {

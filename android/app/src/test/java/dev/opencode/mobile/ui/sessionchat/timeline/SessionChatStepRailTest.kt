@@ -219,13 +219,14 @@ class SessionChatStepRailTest {
     }
 
     @Test
-    fun standardAndChipTimelines_produceNoRails() {
+    fun otherTimelines_produceNoRails() {
         val parts = listOf(tool("p1"), tool("p2"))
-        val standard = (SessionChatTimelineBlocks.build(MessageRole.Assistant, parts) as SessionChatTimelineBlocksResult.Ok).blocks
-        val chipsResult = SessionChatTimelineBlocks.build(MessageRole.Assistant, parts, chipTimeline = true)
-        val chips = (chipsResult as SessionChatTimelineBlocksResult.Ok).blocks
-        assertTrue(standard.none { it is SessionChatTimelineBlock.StepRail })
-        assertTrue(chips.none { it is SessionChatTimelineBlock.StepRail })
+        listOf(
+            SessionChatTimelineBlocks.build(MessageRole.Assistant, parts),
+            SessionChatTimelineBlocks.build(MessageRole.Assistant, parts, activityCard = true),
+        ).forEach { result ->
+            assertTrue((result as SessionChatTimelineBlocksResult.Ok).blocks.none { it is SessionChatTimelineBlock.StepRail })
+        }
     }
 
     // Fold
