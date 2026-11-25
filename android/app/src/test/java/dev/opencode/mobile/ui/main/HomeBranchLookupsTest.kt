@@ -54,12 +54,42 @@ class HomeBranchLookupsTest {
             assertEquals(3, calls)
             assertEquals(emptyMap<String, String>(), lookups.branches)
 
-            // Nothing asks again on its own; the next inventory change or refresh does.
+            // Nothing asks again on its own, and neither does another lookUp (every Home content
+            // change calls one): only an explicit refresh does.
             advanceTimeBy(60_000)
             assertEquals(3, calls)
             lookups.lookUp(listOf("/plain"))
             advanceUntilIdle()
+            assertEquals(3, calls)
+            lookups.refresh()
+            lookups.lookUp(listOf("/plain"))
+            advanceUntilIdle()
             assertEquals(6, calls)
+        }
+
+    @Test
+    fun atMostThreeLookupsAreInFlightAtOnce() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            var inFlight = 0
+            var peak = 0
+            val lookups =
+                lookups {
+                    inFlight += 1
+                    peak = maxOf(peak, inFlight)
+                    gate.await()
+                    inFlight -= 1
+                    Outcome.Branch("dev")
+                }
+
+            lookups.lookUp((1..10).map { "/wt/$it" })
+            runCurrent()
+            assertEquals(3, peak)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(3, peak)
+            assertEquals(10, lookups.branches.size)
         }
 
     @Test

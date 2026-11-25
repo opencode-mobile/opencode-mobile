@@ -1304,6 +1304,53 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
+    fun v2GetVcsInfo_aMissingLocationIsAnHttp404NotADecodeFailure() =
+        runTest {
+            // A directory the server cannot open answers 404 with a typed error body and no `data`.
+            val client =
+                testClient {
+                    respond(
+                        """{"_tag":"LocationNotFoundError","location":{"directory":"/gone"},"message":"Location not found: /gone"}""",
+                        HttpStatusCode.NotFound,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val error = runCatching { repository.getVcsInfo("/gone") }.exceptionOrNull()
+
+            assertEquals(404, (error as? SessionError.Http)?.statusCode)
+        }
+
+    @Test
+    fun v1GetVcsInfo_aMissingDirectoryIsAnHttp404() =
+        runTest {
+            val client =
+                testClient {
+                    respond(
+                        """{"name":"NotFoundError","data":{"message":"no such directory"}}""",
+                        HttpStatusCode.NotFound,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            val error = runCatching { repository.getVcsInfo("/gone") }.exceptionOrNull()
+
+            assertEquals(404, (error as? SessionError.Http)?.statusCode)
+        }
+
+    @Test
     fun v2GetVcsDiff_mapsGitModeToWorking() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()

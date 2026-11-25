@@ -173,6 +173,7 @@ class MainScreenViewModel
                 scope = viewModelScope,
                 serverBaseUrl = { serverBaseUrl },
                 projects = { projectList.projects() },
+                sections = { (projectList.content as? MainScreenUiState.Loaded)?.sections.orEmpty() },
                 observedWorktrees = { projectList.observedWorktrees },
                 observing = { projectList.observing },
                 observeRows = { directory -> projectList.observeHomeRows(directory) },

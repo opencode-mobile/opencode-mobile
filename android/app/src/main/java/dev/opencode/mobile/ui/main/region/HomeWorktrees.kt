@@ -20,10 +20,12 @@ import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.ui.main.HomeBranchLookups
+import dev.opencode.mobile.ui.main.HomeBranchWindow
 import dev.opencode.mobile.ui.main.HomeDirectoryRows
 import dev.opencode.mobile.ui.main.HomePathLoad
 import dev.opencode.mobile.ui.main.HomeWorktreeIndex
 import dev.opencode.mobile.ui.main.HomeWorktreeLoader
+import dev.opencode.mobile.ui.main.ProjectSectionUi
 import dev.opencode.mobile.ui.main.homeExtraDirectories
 import dev.opencode.mobile.ui.main.withSessionMoved
 import kotlinx.coroutines.CancellationException
@@ -62,6 +64,8 @@ internal class HomeWorktrees(
     private val serverBaseUrl: () -> String,
     /** Home's current projects (from the Loaded content). */
     private val projects: () -> List<HomeProject>,
+    /** Home's current sections (from the Loaded content); their rows decide which branches to look up. */
+    private val sections: () -> List<ProjectSectionUi>,
     /** Added paths with running live observations; empty while none run. */
     private val observedWorktrees: () -> List<String>,
     /** Whether Home's live observations run. */
@@ -378,13 +382,13 @@ internal class HomeWorktrees(
         }
     }
 
-    /** Branch names for every project worktree not answered since the last reload. */
-    private fun requestBranches() {
-        branchLookups.lookUp(
-            projects()
-                .filter { it.projectId != null }
-                .flatMap { project -> project.worktrees.map { it.directory } },
-        )
+    /**
+     * Branch names for the directories Home shows ([HomeBranchWindow]) not asked since the last
+     * reload. Runs on every inventory change and every content change, so rows that arrive later
+     * get their lookup; a directory already asked is not asked again.
+     */
+    fun requestBranches() {
+        branchLookups.lookUp(HomeBranchWindow.directories(projects(), sections(), index.extraSessions))
     }
 
     /**

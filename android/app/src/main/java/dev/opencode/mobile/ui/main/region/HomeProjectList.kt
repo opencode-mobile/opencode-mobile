@@ -161,6 +161,8 @@ internal class HomeProjectList(
     fun replaceContent(next: MainScreenUiState) {
         state = state.copy(content = next)
         onChange(state)
+        // New rows may name directories whose branch is not known yet.
+        homeWorktrees.requestBranches()
     }
 
     fun updateContent(transform: (MainScreenUiState) -> MainScreenUiState) {

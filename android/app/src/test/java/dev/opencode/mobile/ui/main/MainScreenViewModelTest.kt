@@ -57,6 +57,7 @@ import dev.opencode.mobile.domain.session.SessionActivityEntry
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
@@ -3192,6 +3193,58 @@ class MainScreenViewModelTest {
             assertEquals(2, sessionRepository.vcsCalls)
         }
 
+    @Test
+    fun aBranchLookupTheServerRefusesIsDecidedAndNotAskedAgain() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            sessionRepository.vcsError = SessionError.Http(404, "Location not found")
+            createViewModel(
+                connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                sessionRepository = sessionRepository,
+            )
+            advanceUntilIdle()
+            advanceTimeBy(60_000)
+            runCurrent()
+
+            assertEquals(1, sessionRepository.vcsCalls)
+        }
+
+    @Test
+    fun branchLookupsCoverOnlyTheMainCheckoutAndTheDirectoriesOfListedRows() =
+        runTest(testDispatcher) {
+            val inventory = listOf("/repo") + (0 until 40).map { "/wt/w%02d".format(it) }
+            val worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun loadRefreshed(
+                        addedPath: String,
+                        projectId: String?,
+                        mainWorktree: String?,
+                    ): WorktreeLoad = WorktreeLoad.Loaded(inventory, listsSessions = false)
+                }
+            val sessionRepository =
+                FakeSessionRepository(
+                    mutableMapOf(
+                        "/repo" to
+                            listOf(
+                                Session(id = "a", title = "A", directory = "/wt/w03", updatedAtEpochMs = 3L),
+                                Session(id = "b", title = "B", directory = "/wt/w07", updatedAtEpochMs = 2L),
+                                Session(id = "c", title = "C", directory = "/repo", updatedAtEpochMs = 1L),
+                            ),
+                    ),
+                )
+            createViewModel(
+                connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                sessionRepository = sessionRepository,
+                worktreeRepository = worktrees,
+            )
+            advanceUntilIdle()
+
+            assertEquals(setOf("/repo", "/wt/w03", "/wt/w07"), sessionRepository.vcsDirectories.toSet())
+            assertEquals(3, sessionRepository.vcsDirectories.size)
+        }
+
     private val repoProjects =
         mapOf(
             "/repo" to Project(id = "proj", worktree = "/repo", displayName = "repo", isRepository = true),
@@ -3407,12 +3460,14 @@ private class FakeSessionRepository(
     /** Overrides [branches] when set: one scripted answer per call. */
     var vcsAnswers: ArrayDeque<VcsInfo>? = null
     var vcsCalls = 0
+    val vcsDirectories = mutableListOf<String?>()
 
     /** Thrown by every VCS lookup when set. */
     var vcsError: Throwable? = null
 
     override suspend fun getVcsInfo(directory: String?): VcsInfo {
         vcsCalls += 1
+        vcsDirectories += directory
         vcsError?.let { throw it }
         vcsAnswers?.let { answers -> return answers.removeFirstOrNull() ?: answers.lastOrNull() ?: VcsInfo(null, null) }
         return VcsInfo(currentBranch = branches[directory], defaultBranch = "main")

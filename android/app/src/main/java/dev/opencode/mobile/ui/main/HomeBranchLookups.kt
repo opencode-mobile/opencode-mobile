@@ -5,6 +5,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.yield
 
 /**
@@ -13,14 +15,16 @@ import kotlinx.coroutines.yield
  * Only the newest lookup of a directory may write it, so a lookup that started before a Home
  * reload (and answers late) never overwrites a newer answer. An unknown answer (the server is
  * still detecting the VCS, or the request failed) keeps the last known branch and asks again
- * after each of [retryDelaysMs]; then the directory waits for the next [lookUp] after a
- * [refresh] or an inventory change, so a folder without git stops asking.
+ * after each of [retryDelaysMs]; then the directory stays unknown until the next [refresh], so a
+ * folder without git, or a server that keeps failing, stops asking. At most [maxInFlight]
+ * requests run at once, because every directory a server is asked about opens a location there.
  */
 internal class HomeBranchLookups(
     private val scope: CoroutineScope,
     private val fetch: suspend (String) -> Outcome,
     private val onChange: (Map<String, String>) -> Unit,
     private val retryDelaysMs: List<Long> = DEFAULT_RETRY_DELAYS_MS,
+    maxInFlight: Int = MAX_IN_FLIGHT,
 ) {
     sealed interface Outcome {
         /** The server decided: the branch, or null for a detached HEAD or no branch. */
@@ -38,6 +42,7 @@ internal class HomeBranchLookups(
     private val requested = mutableSetOf<String>()
     private val generations = mutableMapOf<String, Int>()
     private val jobs = mutableMapOf<String, Job>()
+    private val inFlight = Semaphore(maxInFlight)
 
     /** Directories the server answered since the last [clear]. */
     private val answered = mutableSetOf<String>()
@@ -54,7 +59,7 @@ internal class HomeBranchLookups(
         onChange(branches)
     }
 
-    /** Asks for every directory not already answered or in flight since the last [refresh]. */
+    /** Asks for every directory not already asked (answered, gave up, or in flight) since the last [refresh]. */
     fun lookUp(directories: Collection<String>) {
         for (directory in directories) {
             if (directory !in requested) start(directory)
@@ -92,7 +97,7 @@ internal class HomeBranchLookups(
             scope.launch {
                 var attempt = 0
                 while (true) {
-                    val outcome = fetch(directory)
+                    val outcome = inFlight.withPermit { fetch(directory) }
                     if (!isActive || generations[directory] != generation) return@launch
                     if (outcome is Outcome.Branch) {
                         store(directory, outcome.name)
@@ -101,8 +106,7 @@ internal class HomeBranchLookups(
                     }
                     val wait = retryDelaysMs.getOrNull(attempt)
                     if (wait == null) {
-                        // Unknown for now; the next lookUp after a refresh or inventory change asks again.
-                        requested -= directory
+                        // Unknown for now; stays asked, so only the next refresh asks again.
                         jobs.remove(directory)
                         return@launch
                     }
@@ -125,5 +129,8 @@ internal class HomeBranchLookups(
 
     companion object {
         val DEFAULT_RETRY_DELAYS_MS = listOf(1_000L, 3_000L)
+
+        /** Each lookup can make the server open a location, so only a few run together. */
+        const val MAX_IN_FLIGHT = 3
     }
 }
