@@ -41,11 +41,6 @@ object HomeSessionLadder {
         )
     }
 
-    fun formatWindowHoursLabel(hours: Int): String {
-        val sanitized = sanitizeWindowHours(hours)
-        return if (sanitized == 1) "1 hour" else "$sanitized hours"
-    }
-
     fun <T> group(
         sessions: List<T>,
         updatedAtEpochMs: (T) -> Long?,

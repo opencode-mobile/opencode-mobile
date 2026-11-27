@@ -53,11 +53,6 @@ enum HomeSessionLadder {
         } ?? defaultWindowHours
     }
 
-    static func formatWindowHoursLabel(_ hours: Int) -> String {
-        let sanitized = sanitizeWindowHours(hours)
-        return sanitized == 1 ? "1 hour" : "\(sanitized) hours"
-    }
-
     static func group<Item: Hashable>(
         sessions: [Item],
         updatedAtEpochMs: (Item) -> Int64?,
