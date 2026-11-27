@@ -1126,6 +1126,7 @@ object SessionChatTimelineBlocks {
                 DisplayMessageBody(
                     message =
                         first.message.copy(
+                            text = mergedText(run),
                             stopReason = run.last().message.stopReason,
                             failure = run.lastOrNull { it.message.failure != null }?.message?.failure,
                         ),
@@ -1188,6 +1189,7 @@ object SessionChatTimelineBlocks {
                         DisplayMessageBody(
                             message =
                                 first.message.copy(
+                                    text = mergedText(run),
                                     parts = parts,
                                     stopReason = run.last().message.stopReason,
                                     failure = run.lastOrNull { it.message.failure != null }?.message?.failure,
@@ -1200,6 +1202,13 @@ object SessionChatTimelineBlocks {
         }
         return merged
     }
+
+    /**
+     * The text of every merged message, so Copy message and Select text cover the
+     * whole turn rather than its first step.
+     */
+    private fun mergedText(run: List<DisplayMessageBody>): String =
+        run.map { it.message.text }.filter { it.isNotBlank() }.joinToString("\n\n")
 
     /** Rebuilt text blocks reuse the markdown their source bodies already carried. */
     private fun reattachMarkdown(
