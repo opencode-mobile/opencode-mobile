@@ -9724,6 +9724,18 @@
         }
       }
     },
+    "session_chat.branch_copied" : {
+      "comment" : "Snackbar after the branch pill copied the branch name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branch name copied"
+          }
+        }
+      }
+    },
     "session_chat.commands.back" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11463,6 +11475,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No matches"
+          }
+        }
+      }
+    },
+    "session_chat.timeline_style_notice" : {
+      "comment" : "Snackbar after the Timeline Style picker; the argument is the chosen style's name (Standard, Step Rail, Activity Card).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timeline: %@. Change it any time in Settings."
           }
         }
       }

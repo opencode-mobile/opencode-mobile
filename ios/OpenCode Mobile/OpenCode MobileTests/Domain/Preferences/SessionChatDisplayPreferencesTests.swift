@@ -312,9 +312,9 @@ import Testing
         #expect(reloaded.timelineStyle == .activityCard)
         #expect(reloaded.activityCardTimeline)
         #expect(reloaded.stepRailTimeline == false)
-        #expect(SessionChatTimelineStyle.activityCard.title == "Activity Card")
+        #expect(SessionChatTimelineStyle.activityCard.settingsTitle.resolved == "Activity Card")
         #expect(
-            SessionChatTimelineStyle.activityCard.subtitle
+            SessionChatTimelineStyle.activityCard.settingsSubtitle.resolved
                 == "Running steps on one live card that folds into a summary"
         )
     }

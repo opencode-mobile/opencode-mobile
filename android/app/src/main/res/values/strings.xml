@@ -1045,6 +1045,10 @@
     <string name="session_chat_goal_resume_failed_reason">Couldn’t resume the goal: %1$s</string>
     <string name="session_chat_goal_clear_failed">Couldn’t clear the goal</string>
     <string name="session_chat_goal_clear_failed_reason">Couldn’t clear the goal: %1$s</string>
+    <!-- Snackbar after the Timeline Style picker; the argument is the chosen style's name (Standard, Step Rail, Activity Card). -->
+    <string name="session_chat_timeline_style_notice">Timeline: %1$s. Change it any time in Settings.</string>
+    <!-- Snackbar after the branch pill copied the branch name. -->
+    <string name="session_chat_branch_copied">Branch name copied</string>
     <string name="session_chat_sheet_timeline_style_picker_title">New: choose your timeline</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">This update adds new ways to follow what the agent is doing.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">You can change this any time in Settings → Timeline Style.</string>

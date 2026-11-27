@@ -7811,14 +7811,14 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             viewModel.branchNameCopied()
-            assertEquals(SessionChatViewModel.BRANCH_COPIED_MESSAGE, viewModel.uiState.value.snackbar?.message?.english())
+            assertEquals("Branch name copied", viewModel.uiState.value.snackbar?.message?.english())
             val firstId = viewModel.uiState.value.snackbar?.id
 
             viewModel.consumeSnackbar()
             assertNull(viewModel.uiState.value.snackbar)
 
             viewModel.branchNameCopied()
-            assertEquals(SessionChatViewModel.BRANCH_COPIED_MESSAGE, viewModel.uiState.value.snackbar?.message?.english())
+            assertEquals("Branch name copied", viewModel.uiState.value.snackbar?.message?.english())
             assertNotEquals(firstId, viewModel.uiState.value.snackbar?.id)
         }
 

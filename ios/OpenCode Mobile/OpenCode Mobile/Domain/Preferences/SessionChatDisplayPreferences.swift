@@ -20,21 +20,7 @@ nonisolated enum SessionChatTimelineStyle: String, CaseIterable, Sendable {
         return value.flatMap(SessionChatTimelineStyle.init(rawValue:))
     }
 
-    var title: String {
-        switch self {
-        case .standard: "Standard"
-        case .stepRail: "Step Rail"
-        case .activityCard: "Activity Card"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .standard: "Tool cards and groups between the agent's messages"
-        case .stepRail: "One line per step on a rail, live while the agent works"
-        case .activityCard: "Running steps on one live card that folds into a summary"
-        }
-    }
+    // Names and descriptions are app text, keyed in the UI (`settingsTitle`, `settingsSubtitle`).
 }
 
 /// Session Chat display preferences (OPE-144).

@@ -26,8 +26,10 @@ final class SessionChatTimelineOffers {
     /// Pause after history loads so the chat is on screen before the picker.
     static let timelineStylePickerDelayMs = 600
 
+    /// "Timeline: Step Rail. Change it any time in Settings.", with the keyed style name.
     static func timelineStylePickerNotice(_ style: SessionChatTimelineStyle) -> String {
-        "Timeline: \(style.title). Change it any time in Settings."
+        let title = style.settingsTitle.resolved
+        return String(localized: "session_chat.timeline_style_notice", defaultValue: "Timeline: \(title). Change it any time in Settings.")
     }
 
     init(clock: any SyncClock) {

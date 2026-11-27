@@ -11,14 +11,13 @@ import dev.opencode.mobile.domain.message.FollowUpDelivery
  * How Session Chat lays out an assistant turn (#779): tool cards and groups,
  * one line per step on a rail, or one live activity card per run of steps.
  */
+/** Names and descriptions are app text, keyed in the UI (`settings_timeline_style_*`). */
 enum class SessionChatTimelineStyle(
     val wireValue: String,
-    val title: String,
-    val subtitle: String,
 ) {
-    Standard("standard", "Standard", "Tool cards and groups between the agent's messages"),
-    StepRail("step_rail", "Step Rail", "One line per step on a rail, live while the agent works"),
-    ActivityCard("activity_card", "Activity Card", "Running steps on one live card that folds into a summary"),
+    Standard("standard"),
+    StepRail("step_rail"),
+    ActivityCard("activity_card"),
     ;
 
     companion object {

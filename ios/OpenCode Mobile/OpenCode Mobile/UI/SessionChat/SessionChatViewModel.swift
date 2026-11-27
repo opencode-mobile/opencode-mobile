@@ -947,7 +947,9 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
-    static let branchCopiedMessage = "Branch name copied"
+    static var branchCopiedMessage: String {
+        String(localized: "session_chat.branch_copied", defaultValue: "Branch name copied")
+    }
     static let sendStalledMessage = "Still sending…"
 
     /// Retry on the "Still sending…" snackbar.

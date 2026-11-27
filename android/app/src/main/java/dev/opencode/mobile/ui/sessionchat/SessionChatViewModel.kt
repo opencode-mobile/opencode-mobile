@@ -428,7 +428,7 @@ class SessionChatViewModel
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
         private var turnDiffNotice: String? = null
-        private var branchCopiedNotice: String? = null
+        private var branchCopiedNotice: UiText? = null
 
         internal var dictationFinishDelayMs: Long
             get() = dictation.finishDelayMs
@@ -2180,7 +2180,8 @@ class SessionChatViewModel
                     TimelineText.verbatim(composerState.followUpNotice)
                         ?: worktreeMove.state.value.notice
                         ?: commandsState.actionSuccessMessage
-                        ?: TimelineText.verbatim(branchCopiedNotice ?: timelineOffersState.notice),
+                        ?: branchCopiedNotice
+                        ?: timelineOffersState.notice,
                 )
             val sessionStatusLabel =
                 if (isCompacting) {
@@ -2521,12 +2522,12 @@ class SessionChatViewModel
         companion object {
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
-            const val BRANCH_COPIED_MESSAGE = "Branch name copied"
+            val BRANCH_COPIED_MESSAGE: UiText = UiText.resource(R.string.session_chat_branch_copied)
 
             /** Pause after the first history load before the Timeline Style picker rises (#805). */
             const val TIMELINE_STYLE_PICKER_DELAY_MILLIS = SessionChatTimelineOffers.TIMELINE_STYLE_PICKER_DELAY_MILLIS
 
-            fun timelineStylePickerNotice(style: SessionChatTimelineStyle): String =
+            fun timelineStylePickerNotice(style: SessionChatTimelineStyle): UiText =
                 SessionChatTimelineOffers.timelineStylePickerNotice(style)
         }
     }
