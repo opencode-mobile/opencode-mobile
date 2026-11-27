@@ -521,7 +521,7 @@ fun SettingsScreen(
                 val starOnGitHubTitle = stringResource(R.string.settings_star_on_github_title)
                 OpenCodeListItem(
                     title = starOnGitHubTitle,
-                    subtitle = "opencode-mobile/opencode-mobile",
+                    subtitle = SourceCode.REPOSITORY,
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Star, starOnGitHubTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
