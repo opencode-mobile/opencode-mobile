@@ -105,7 +105,7 @@ class DefaultWorktreeRepository(
         }
 
     private suspend fun createV2(request: CreateWorktreeRequest): CreatedWorktree {
-        val projectId = request.projectId?.trim()?.takeIf { it.isNotEmpty() } ?: throw WorktreeCreateError(WorktreeCreateCopy.NOT_GIT)
+        val projectId = request.projectId?.trim()?.takeIf { it.isNotEmpty() } ?: throw WorktreeCreateError.notGit()
         val directory =
             createCall(notFoundMeansUnsupported = false) {
                 remote.createV2(
@@ -129,7 +129,7 @@ class DefaultWorktreeRepository(
                 createCall(notFoundMeansUnsupported = true) { remote.createV1(request.sourceDirectory, request.name) }
             } catch (_: V1CreateNotFound) {
                 _canCreate.value = false
-                throw WorktreeCreateError(WorktreeCreateCopy.UNSUPPORTED)
+                throw WorktreeCreateError.unsupported()
             }
         val canonical = ServerPathPolicy.canonical(created.directory.trim())
         return CreatedWorktree(
@@ -155,7 +155,7 @@ class DefaultWorktreeRepository(
             val failure = httpFailure(error.statusCode, error.body)
             throw WorktreeCreateError(failure.message, failure.text)
         } catch (error: Exception) {
-            throw WorktreeCreateError(error.message?.trim()?.takeIf { it.isNotEmpty() } ?: "Unknown error")
+            throw error.message?.trim()?.takeIf { it.isNotEmpty() }?.let(::WorktreeCreateError) ?: WorktreeCreateError.unknown()
         }
 
     private class V1CreateNotFound : Exception()
