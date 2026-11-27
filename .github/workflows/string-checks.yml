@@ -77,18 +77,26 @@ jobs:
       - name: Release notes
         run: node scripts/release-notes.mjs validate
 
-      # Warning only while existing text is extracted; becomes --strict once done (#886).
-      - name: Hardcoded text (warning only)
+      # Fails on any user-facing literal in feature code (#886). The step summary lists
+      # every finding (path:line) and is written before the step's exit status is returned.
+      - name: Hardcoded text
         run: |
-          node scripts/check-hardcoded-text.mjs | tee hardcoded-text.txt
-          total=$(sed -n 's/^Total: //p' hardcoded-text.txt)
-          echo "::warning title=Hardcoded text::${total} user-facing literal(s) still in feature code"
+          set +e
+          node scripts/check-hardcoded-text.mjs --strict --list > hardcoded-text.txt 2>&1
+          status=$?
+          set -e
+          cat hardcoded-text.txt
           {
             echo '### Hardcoded text'
             echo '```'
             cat hardcoded-text.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            total=$(sed -n 's/^Total: //p' hardcoded-text.txt)
+            echo "::error title=Hardcoded text::${total:-Some} user-facing literal(s) in feature code. Move them to strings.xml / Localizable.xcstrings with matching keys."
+          fi
+          exit "$status"
 
   generated-assets:
     # Theme presets and icons are generated from shared sources; fail when the
