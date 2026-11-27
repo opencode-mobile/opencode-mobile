@@ -229,6 +229,8 @@ struct SessionChatActivitySlotView: View {
             .counter(label: count > 1 ? "/btw \u{00D7}\(count)" : "/btw")
         case let .queued(count):
             .label(String(localized: "session_chat.activity.queued", defaultValue: "\(count) queued"))
+        case .thinking:
+            .label(OpenCodeActivityText.thinking)
         }
     }
 
@@ -257,7 +259,8 @@ struct SessionChatActivitySlotView: View {
 
     static func isTappable(_ item: SessionChatActivityItem) -> Bool {
         switch item {
-        case .reviewPermission, .answerQuestion, .subagents, .requestFailed, .sideQuestionsFailed, .sideQuestionsReady, .queued:
+        case .reviewPermission, .answerQuestion, .subagents, .requestFailed, .sideQuestionsFailed, .sideQuestionsReady, .queued,
+             .thinking:
             true
         case .sideQuestionsRunning: false
         }
@@ -342,6 +345,8 @@ struct SessionChatActivitySlotView: View {
                 : String(localized: "session_chat.activity.side_question_running", defaultValue: "Side question running")
         case let .queued(count):
             String(localized: "session_chat.activity.queued_prompts", defaultValue: "\(count) queued prompts")
+        case .thinking:
+            OpenCodeActivityText.thinking
         }
     }
 
@@ -362,6 +367,8 @@ struct SessionChatActivitySlotView: View {
             LocalizedStringResource("session_chat.activity.action.open", defaultValue: "Open")
         case .queued:
             LocalizedStringResource("session_chat.activity.action.open_up_next", defaultValue: "Open Up next")
+        case .thinking:
+            LocalizedStringResource("session_chat.activity.action.show_thought", defaultValue: "Show thought")
         }
     }
 }
@@ -536,7 +543,8 @@ struct SessionChatTimelineActivityOnlySlot: View {
                 isAwaitingUser: props.isAwaitingUser,
                 items: props.activityItems,
                 keyboardVisible: props.keyboardVisible,
-                awayFromEnd: false
+                awayFromEnd: false,
+                thinking: props.isThinking
             ),
             rowWidth: rowWidth,
             stackOpen: $stackOpen,

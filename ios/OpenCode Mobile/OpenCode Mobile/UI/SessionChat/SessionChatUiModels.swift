@@ -324,6 +324,12 @@ struct SessionChatUiState: Equatable {
     var workingIndicatorFading: Bool = false
     /// The turn is running and not waiting on the user: what makes a rail or card live.
     var isTurnWorking: Bool = false
+    /// The thought streaming at the end of the working turn. The turn pill reads Thinking and
+    /// opens it (#1118).
+    var liveThoughtPartID: String? = nil
+    /// The thought sheet opened from the turn pill, resolved again on every publish so it
+    /// streams and then settles in place.
+    var presentedThought: SessionChatThoughtSheetState? = nil
     /// Bottom-right Syncing pill label while cached or catching-up messages wait for network confirmation.
     var syncingIndicatorLabel: String? = nil
     var sessionTodos: [SessionTodo] = []

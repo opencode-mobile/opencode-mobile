@@ -195,6 +195,8 @@ internal data class SessionChatTimelineViewProps(
     val syncingIndicatorLabel: UiText? = null,
     val workingIndicatorLabel: String? = null,
     val workingIndicatorFading: Boolean = false,
+    /** A thought streams at the end of the turn: the turn pill reads Thinking and opens it (#1118). */
+    val isThinking: Boolean = false,
     val sessionTodosVisible: Boolean = false,
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,
@@ -299,6 +301,7 @@ private fun SessionChatTimelineActivityOnlySlot(
             keyboardVisible = props.keyboardVisible,
             awayFromEnd = false,
             text = ResourcesUiTextLookup(LocalResources.current),
+            thinking = props.isThinking,
         )
     val fold = rememberSessionChatPillRowFold(turnStatus, slot, trailing = emptyList(), availablePx = rowWidthPx)
     Box(
@@ -406,6 +409,7 @@ private fun SessionChatTimelineStateContent(
                 syncingIndicatorLabel = props.syncingIndicatorLabel?.resolve(),
                 workingIndicatorLabel = props.workingIndicatorLabel,
                 workingIndicatorFading = props.workingIndicatorFading,
+                isThinking = props.isThinking,
                 sessionTodosVisible = props.sessionTodosVisible,
                 sessionTodoCompletedCount = props.sessionTodoCompletedCount,
                 sessionTodoTotalCount = props.sessionTodoTotalCount,
@@ -466,6 +470,7 @@ private fun SessionChatTimelineReadyView(
     syncingIndicatorLabel: String?,
     workingIndicatorLabel: String?,
     workingIndicatorFading: Boolean,
+    isThinking: Boolean,
     sessionTodosVisible: Boolean,
     sessionTodoCompletedCount: Int,
     sessionTodoTotalCount: Int,
@@ -534,6 +539,7 @@ private fun SessionChatTimelineReadyView(
                 keyboardVisible = keyboardVisible,
                 awayFromEnd = false,
                 text = pillText,
+                thinking = isThinking,
             )?.reservesRow == true
     val hasActivityRow = activitySlot.primary != null || turnStatusHoldsRow
     var reservesActivityRow by remember { mutableStateOf(hasActivityRow) }
@@ -815,6 +821,7 @@ private fun SessionChatTimelineReadyView(
                 keyboardVisible = keyboardVisible,
                 awayFromEnd = awayFromEnd,
                 text = pillText,
+                thinking = isThinking,
             )
         // Kept while Syncing animates out, so it does not flash the default text on exit.
         val syncingText = rememberLastNonNull(displayedSyncingLabel, stringResource(R.string.timeline_syncing))
@@ -1453,7 +1460,7 @@ private class ToolTapTargets(
     }
 }
 
-private fun thoughtDetailTarget(
+internal fun thoughtDetailTarget(
     text: String,
     durationLabel: String?,
 ): SessionChatToolDetailTarget {

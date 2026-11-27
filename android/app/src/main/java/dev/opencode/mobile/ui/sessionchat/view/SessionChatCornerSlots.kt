@@ -377,6 +377,8 @@ internal object SessionChatActivityPillCopy {
                 OpenCodeFloatingPillLayout.Counter(if (item.count > 1) "/btw ×${item.count}" else "/btw")
             is SessionChatActivityItem.Queued ->
                 OpenCodeFloatingPillLayout.Label(UiText.plural(R.plurals.session_chat_activity_queued, item.count).resolve(text))
+            SessionChatActivityItem.Thinking ->
+                OpenCodeFloatingPillLayout.Label(UiText.resource(R.string.component_thinking).resolve(text))
         }
 
     fun state(item: SessionChatActivityItem): OpenCodeFloatingPillState =
@@ -447,6 +449,7 @@ internal object SessionChatActivityPillCopy {
                     R.plurals.session_chat_activity_side_questions_running,
                 )
             is SessionChatActivityItem.Queued -> UiText.plural(R.plurals.session_chat_activity_queued_prompts, item.count)
+            SessionChatActivityItem.Thinking -> UiText.resource(R.string.component_thinking)
         }
 
     /** What a tap does, read after the state; null when the pill does nothing. */
@@ -467,6 +470,7 @@ internal object SessionChatActivityPillCopy {
             is SessionChatActivityItem.SideQuestionsFailed -> R.string.session_chat_activity_action_retry
             is SessionChatActivityItem.SideQuestionsReady -> R.string.session_chat_activity_action_open
             is SessionChatActivityItem.Queued -> R.string.session_chat_activity_action_open_up_next
+            SessionChatActivityItem.Thinking -> R.string.session_chat_activity_action_show_thought
         }
 
     /** [one] for a single item, [many] with the count otherwise. */

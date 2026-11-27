@@ -13,6 +13,8 @@ struct SessionChatTimelineViewProps {
     let syncingIndicatorLabel: String?
     let workingIndicatorLabel: String?
     let workingIndicatorFading: Bool
+    /// A thought streams at the end of the turn: the turn pill reads Thinking and opens it (#1118).
+    let isThinking: Bool
     /// The turn is running and not waiting on the user: what makes a rail or card live.
     let isTurnWorking: Bool
     /// The server reports the session busy (or compacting), whether or not the turn waits on the user.
@@ -88,6 +90,7 @@ struct SessionChatTimelineViewProps {
         syncingIndicatorLabel: String? = nil,
         workingIndicatorLabel: String? = nil,
         workingIndicatorFading: Bool = false,
+        isThinking: Bool = false,
         isTurnWorking: Bool = false,
         isTurnActive: Bool = false,
         isAwaitingUser: Bool = false,
@@ -143,6 +146,7 @@ struct SessionChatTimelineViewProps {
         self.syncingIndicatorLabel = syncingIndicatorLabel
         self.workingIndicatorLabel = workingIndicatorLabel
         self.workingIndicatorFading = workingIndicatorFading
+        self.isThinking = isThinking
         self.isTurnWorking = isTurnWorking
         self.isTurnActive = isTurnActive
         self.isAwaitingUser = isAwaitingUser
@@ -342,7 +346,8 @@ private struct SessionChatTimelineReadyView: View {
             isAwaitingUser: props.isAwaitingUser,
             items: activityItems,
             keyboardVisible: props.keyboardVisible,
-            awayFromEnd: showScrollToEnd
+            awayFromEnd: showScrollToEnd,
+            thinking: props.isThinking
         )
     }
 

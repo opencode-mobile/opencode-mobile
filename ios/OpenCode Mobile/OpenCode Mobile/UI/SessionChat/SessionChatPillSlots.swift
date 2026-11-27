@@ -33,6 +33,9 @@ enum SessionChatActivityItem: Equatable, Identifiable {
     case sideQuestionsRunning(count: Int)
     /// Prompts waiting to be sent after the current turn.
     case queued(count: Int)
+    /// The turn pill while a thought streams; tapping opens the live thought sheet (#1118).
+    /// Only the turn pill carries it, never the secondary pills.
+    case thinking
 
     var id: String {
         switch self {
@@ -44,6 +47,7 @@ enum SessionChatActivityItem: Equatable, Identifiable {
         case .sideQuestionsReady: "btw-ready"
         case .sideQuestionsRunning: "btw-running"
         case .queued: "queued"
+        case .thinking: "thinking"
         }
     }
 
@@ -55,6 +59,7 @@ enum SessionChatActivityItem: Equatable, Identifiable {
         case .sideQuestionsReady: .answerReady
         case .sideQuestionsRunning: .running
         case .queued: .queued
+        case .thinking: .running
         }
     }
 }
@@ -163,7 +168,7 @@ enum SessionChatPillSlots {
     static func secondaryItems(_ items: [SessionChatActivityItem]) -> [SessionChatActivityItem] {
         items.compactMap { item in
             switch item {
-            case .reviewPermission, .answerQuestion, .requestFailed:
+            case .reviewPermission, .answerQuestion, .requestFailed, .thinking:
                 nil
             case let .subagents(pill):
                 pill.secondary.map { .subagents($0) }
@@ -204,13 +209,16 @@ enum SessionChatPillSlots {
 
     /// The turn pill, highest priority first: a failure, a collapsed request, a request whose
     /// panel is open, a subagent that needs input, then the turn's own label and Done.
+    /// `thinking`: a thought streams at the end of the turn, so a plain Working reads Thinking
+    /// and opens that thought. Compacting, Retrying and Sending keep their own label.
     static func turnStatus(
         label: String?,
         fading: Bool,
         isAwaitingUser: Bool,
         items: [SessionChatActivityItem],
         keyboardVisible: Bool,
-        awayFromEnd: Bool
+        awayFromEnd: Bool,
+        thinking: Bool = false
     ) -> SessionChatTurnStatusSlot? {
         if let failure = items.first(where: { if case .requestFailed = $0 { true } else { false } }) {
             return SessionChatTurnStatusSlot(
@@ -251,6 +259,15 @@ enum SessionChatPillSlots {
             )
         }
         guard let label else { return nil }
+        if thinking, !fading, label == OpenCodeActivityText.working {
+            return SessionChatTurnStatusSlot(
+                phase: .working(label: OpenCodeActivityText.thinking),
+                compact: awayFromEnd || keyboardVisible,
+                leaving: false,
+                tapItem: .thinking,
+                accessibilityLabel: SessionChatActivitySlotView.accessibilityLabel(.thinking)
+            )
+        }
         return SessionChatTurnStatusSlot(
             phase: WorkingTurnIndicator.showsIdleMark(label: label) ? .done : .working(label: label),
             compact: awayFromEnd || keyboardVisible,

@@ -8552,6 +8552,17 @@
         }
       }
     },
+    "session_chat.activity.action.show_thought" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show thought"
+          }
+        }
+      }
+    },
     "session_chat.activity.answer_question" : {
       "extractionState" : "manual",
       "localizations" : {

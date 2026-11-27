@@ -73,6 +73,8 @@ final class SessionChatViewModel {
     private var branchCopiedNotice: String?
     /// Shown instead of opening Changes when the last turn moved folders.
     private var turnDiffNotice: String?
+    /// The thought the thought sheet follows; nil while the sheet is closed.
+    private var presentedThoughtPartID: String?
     /// A sheet or dialog the view owns is up; see `setScreenSheetOpen`.
     @ObservationIgnored private var screenSheetOpen = false
     /// Tests set this to 0 to commit an insert synchronously.
@@ -1292,6 +1294,20 @@ final class SessionChatViewModel {
         inbox.showPermissionDock()
     }
 
+    /// Opens the sheet on the thought streaming now. It keeps following that thought, also
+    /// after it ends, until `closeThought`.
+    func openLiveThought() {
+        guard let partID = uiState.liveThoughtPartID else { return }
+        presentedThoughtPartID = partID
+        publishUiState()
+    }
+
+    func closeThought() {
+        guard presentedThoughtPartID != nil else { return }
+        presentedThoughtPartID = nil
+        publishUiState()
+    }
+
     /// Opens the panel on the request of the subagent the needs-input pill names.
     /// Returns false when no subagent request waits, so the caller opens the subagents panel.
     func openWaitingSubagentRequest() -> Bool {
@@ -1877,6 +1893,15 @@ final class SessionChatViewModel {
             shells.transcriptChanged(loadedMessages)
         }
         let shellsState = shells.state
+        let liveThoughtPartID = turnStatusResolution.isTurnWorking
+            ? SessionChatLiveThought.streamingPartID(in: loadedMessages)
+            : nil
+        let presentedThought = presentedThoughtPartID.flatMap {
+            SessionChatLiveThought.sheet(partID: $0, in: loadedMessages)
+        }
+        if presentedThought == nil {
+            presentedThoughtPartID = nil
+        }
         let runningShells = SessionChatBackgroundWork.runningShells(shellsState.shells)
         goalRegion.setConnected(infoState.connectionStatus == .live)
         let goalState = SessionChatGoalUiState.resolve(
@@ -1920,6 +1945,8 @@ final class SessionChatViewModel {
             isRetrying: infoState.isRetrying,
             workingIndicatorFading: turnStatusResolution.workingIndicatorFading,
             isTurnWorking: turnStatusResolution.isTurnWorking,
+            liveThoughtPartID: liveThoughtPartID,
+            presentedThought: presentedThought,
             syncingIndicatorLabel: timelineState.isSyncingMessages
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,
