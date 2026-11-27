@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
@@ -178,12 +177,9 @@ fun OpenCodeServerAddressInput(
                         },
                 )
                 Icon(
-                    imageVector = OpenCodeIcons.ChevronRight,
+                    imageVector = OpenCodeIcons.KeyboardArrowDown,
                     contentDescription = null,
-                    modifier =
-                        Modifier
-                            .size(SchemeIconSize)
-                            .rotate(90f),
+                    modifier = Modifier.size(SchemeIconSize),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadManifest, REPO_ROOT } from "./lib/utils.mjs";
+import { loadManifest, manifestHash, REPO_ROOT } from "./lib/utils.mjs";
 
 const MANIFEST_HASH_FILE = join(REPO_ROOT, "icons/.manifest-hash");
 const ANDROID_OUTPUT = join(
@@ -10,13 +10,9 @@ const ANDROID_OUTPUT = join(
 );
 const IOS_ENUM_OUTPUT = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Icons/OpenCodeIcon.swift");
 
-function expectedHash(icons) {
-  return icons.map((i) => `${i.source}/${i.lucide}/${i.name}:${i.iosAssetName}`).join("\n") + "\n";
-}
-
 function main() {
   const icons = loadManifest();
-  const expected = expectedHash(icons);
+  const expected = manifestHash(icons);
 
   if (!existsSync(MANIFEST_HASH_FILE)) {
     console.error("icons/.manifest-hash missing — run: npm run icons:sync");

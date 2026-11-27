@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { generateAndroidIcons } from "./lib/android-generator.mjs";
 import { generateIosAssets, generateIosSwiftEnum } from "./lib/ios-generator.mjs";
-import { loadManifest, lucideSvgSourcePath, REPO_ROOT } from "./lib/utils.mjs";
+import { loadManifest, lucideSvgSourcePath, manifestHash, REPO_ROOT } from "./lib/utils.mjs";
 
 const require = createRequire(import.meta.url);
 const svgPackageRoot = dirname(require.resolve("lucide-static/package.json"));
@@ -46,8 +46,7 @@ function readCachedSvgs(icons) {
 }
 
 function writeManifestHash(icons) {
-  const payload = icons.map((i) => `${i.source}/${i.lucide}/${i.name}:${i.iosAssetName}`).join("\n");
-  writeFileSync(MANIFEST_HASH_FILE, `${payload}\n`, "utf8");
+  writeFileSync(MANIFEST_HASH_FILE, manifestHash(icons), "utf8");
 }
 
 function main() {

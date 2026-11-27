@@ -121,7 +121,7 @@ function escapeKotlinString(value) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-function generateIconProperty(iconName, svgText) {
+function generateIconProperty(iconName, svgText, mirrorsInRtl) {
   const pascal = toPascalCase(iconName);
   const privateName = `_${iconName}`;
   const { viewportMinX, viewportMinY, viewportWidth, viewportHeight, strokeWidth, paths } =
@@ -160,7 +160,7 @@ ${pathBlocks}
         defaultWidth = 24.dp,
         defaultHeight = 24.dp,
         viewportWidth = ${viewportWidth}f,
-        viewportHeight = ${viewportHeight}f,
+        viewportHeight = ${viewportHeight}f,${mirrorsInRtl ? "\n        autoMirror = true," : ""}
       ).apply {
 ${body}
       }.build()
@@ -174,7 +174,7 @@ export function generateAndroidIcons(icons, svgByName, outputFile) {
     .map((icon) => {
       const svgText = svgByName.get(icon.name);
       if (!svgText) throw new Error(`Missing SVG for ${icon.name}`);
-      return generateIconProperty(icon.name, svgText);
+      return generateIconProperty(icon.name, svgText, icon.mirrorsInRtl);
     })
     .join("\n\n");
 

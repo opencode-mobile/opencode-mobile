@@ -121,6 +121,7 @@ private var _message_square: ImageVector? = null
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f,
+        autoMirror = true,
       ).apply {
     addPath(
       pathData = PathParser().parsePathString("m12 19-7-7 7-7").toNodes(),
@@ -153,6 +154,7 @@ private var _message_square: ImageVector? = null
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f,
+        autoMirror = true,
       ).apply {
     addPath(
       pathData = PathParser().parsePathString("M5 12h14").toNodes(),
@@ -304,6 +306,7 @@ private var _message_square: ImageVector? = null
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f,
+        autoMirror = true,
       ).apply {
     addPath(
       pathData = PathParser().parsePathString("m9 18 6-6-6-6").toNodes(),
@@ -1168,6 +1171,7 @@ private var _message_square: ImageVector? = null
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f,
+        autoMirror = true,
       ).apply {
     addPath(
       pathData = PathParser().parsePathString("M 5 3 h 14 a 2 2 0 0 1 2 2 v 14 a 2 2 0 0 1 -2 2 h -14 a 2 2 0 0 1 -2 -2 v -14 a 2 2 0 0 1 2 -2 z").toNodes(),
@@ -1469,6 +1473,7 @@ private var _message_square: ImageVector? = null
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f,
+        autoMirror = true,
       ).apply {
     addPath(
       pathData = PathParser().parsePathString("m15 10 5 5-5 5").toNodes(),
@@ -1501,6 +1506,7 @@ private var _message_square: ImageVector? = null
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f,
+        autoMirror = true,
       ).apply {
     addPath(
       pathData = PathParser().parsePathString("M9 14 4 9l5-5").toNodes(),
@@ -1533,6 +1539,7 @@ private var _message_square: ImageVector? = null
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f,
+        autoMirror = true,
       ).apply {
     addPath(
       pathData = PathParser().parsePathString("m15 14 5-5-5-5").toNodes(),
@@ -2043,6 +2050,7 @@ private var _message_square: ImageVector? = null
         defaultHeight = 24.dp,
         viewportWidth = 24f,
         viewportHeight = 24f,
+        autoMirror = true,
       ).apply {
     addPath(
       pathData = PathParser().parsePathString("m15 18-6-6 6-6").toNodes(),

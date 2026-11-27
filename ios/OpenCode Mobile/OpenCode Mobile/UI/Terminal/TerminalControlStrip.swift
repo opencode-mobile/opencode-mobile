@@ -25,26 +25,31 @@ struct TerminalControlStrip: View {
                 action: { onSend("\t") }
             )
             Spacer(minLength: 0)
-            OpenCodeButton(
-                variant: .iconSquare(.arrowUpward, accessibilityLabel: "terminal.key.up"),
-                contrast: .low,
-                action: { onSend("\u{001b}[A") }
-            )
-            OpenCodeButton(
-                variant: .iconSquare(.arrowDownward, accessibilityLabel: "terminal.key.down"),
-                contrast: .low,
-                action: { onSend("\u{001b}[B") }
-            )
-            OpenCodeButton(
-                variant: .iconSquare(.arrowBack, accessibilityLabel: "terminal.key.left"),
-                contrast: .low,
-                action: { onSend("\u{001b}[D") }
-            )
-            OpenCodeButton(
-                variant: .iconSquare(.arrowForward, accessibilityLabel: "terminal.key.right"),
-                contrast: .low,
-                action: { onSend("\u{001b}[C") }
-            )
+            // Cursor keys are physical: Left sends ESC [ D whatever the reading order, so
+            // the cluster stays left-to-right and its arrows do not mirror.
+            HStack(spacing: 6) {
+                OpenCodeButton(
+                    variant: .iconSquare(.arrowUpward, accessibilityLabel: "terminal.key.up"),
+                    contrast: .low,
+                    action: { onSend("\u{001b}[A") }
+                )
+                OpenCodeButton(
+                    variant: .iconSquare(.arrowDownward, accessibilityLabel: "terminal.key.down"),
+                    contrast: .low,
+                    action: { onSend("\u{001b}[B") }
+                )
+                OpenCodeButton(
+                    variant: .iconSquare(.arrowBack, accessibilityLabel: "terminal.key.left"),
+                    contrast: .low,
+                    action: { onSend("\u{001b}[D") }
+                )
+                OpenCodeButton(
+                    variant: .iconSquare(.arrowForward, accessibilityLabel: "terminal.key.right"),
+                    contrast: .low,
+                    action: { onSend("\u{001b}[C") }
+                )
+            }
+            .environment(\.layoutDirection, .leftToRight)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)

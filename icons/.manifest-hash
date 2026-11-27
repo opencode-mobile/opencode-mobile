@@ -1,11 +1,11 @@
 lucide/plus/add:lucide_add
-lucide/arrow-left/arrow_back:lucide_arrow_back
-lucide/arrow-right/arrow_forward:lucide_arrow_forward
+lucide/arrow-left/arrow_back:lucide_arrow_back:mirrors-in-rtl
+lucide/arrow-right/arrow_forward:lucide_arrow_forward:mirrors-in-rtl
 lucide/arrow-up/arrow_upward:lucide_arrow_upward
 lucide/arrow-up-right/arrow_warm_up:lucide_arrow_warm_up
 lucide/arrow-down/arrow_downward:lucide_arrow_downward
 lucide/check/check:lucide_check
-lucide/chevron-right/chevron_right:lucide_chevron_right
+lucide/chevron-right/chevron_right:lucide_chevron_right:mirrors-in-rtl
 lucide/chevron-down/keyboard_arrow_down:lucide_keyboard_arrow_down
 lucide/x/close:lucide_close
 lucide/copy/content_copy:lucide_content_copy
@@ -23,7 +23,7 @@ lucide/list/list:lucide_list
 lucide/ellipsis-vertical/more_vert:lucide_more_vert
 lucide/search/search:lucide_search
 lucide/settings/settings:lucide_settings
-lucide/panel-left/sidebar:lucide_sidebar
+lucide/panel-left/sidebar:lucide_sidebar:mirrors-in-rtl
 lucide/square-terminal/terminal:lucide_terminal
 lucide/component/architecture:lucide_architecture
 lucide/archive/archive:lucide_archive
@@ -31,9 +31,9 @@ lucide/archive-restore/unarchive:lucide_unarchive
 lucide/cloud/cloud:lucide_cloud
 lucide/square/stop:lucide_stop
 lucide/circle-stop/stop_circle:lucide_stop_circle
-lucide/corner-down-right/subdirectory_arrow_right:lucide_subdirectory_arrow_right
-lucide/undo-2/undo:lucide_undo
-lucide/redo-2/redo:lucide_redo
+lucide/corner-down-right/subdirectory_arrow_right:lucide_subdirectory_arrow_right:mirrors-in-rtl
+lucide/undo-2/undo:lucide_undo:mirrors-in-rtl
+lucide/redo-2/redo:lucide_redo:mirrors-in-rtl
 lucide/git-fork/call_split:lucide_call_split
 lucide/fold-vertical/vertical_align_center:lucide_vertical_align_center
 lucide/circle-dot/radio_button_checked:lucide_radio_button_checked
@@ -45,7 +45,7 @@ lucide/plug/plug:lucide_plug
 lucide/code/code:lucide_code
 lucide/lock/lock:lucide_lock
 lucide/git-branch/git_branch:lucide_git_branch
-lucide/chevron-left/chevron_left:lucide_chevron_left
+lucide/chevron-left/chevron_left:lucide_chevron_left:mirrors-in-rtl
 lucide/play/play:lucide_play
 lucide/pause/pause:lucide_pause
 lucide/skip-forward/skip_next:lucide_skip_next

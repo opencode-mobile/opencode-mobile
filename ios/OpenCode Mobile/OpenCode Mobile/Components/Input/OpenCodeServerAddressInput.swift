@@ -59,8 +59,7 @@ struct OpenCodeServerAddressInput: View {
                         Text(scheme.label)
                             .font(OpenCodeTypography.body)
                             .foregroundStyle(OpenCodeColors.textStrong)
-                        OpenCodeIconImage(icon: .chevronRight, size: schemeIconSize)
-                            .rotationEffect(.degrees(90))
+                        OpenCodeIconImage(icon: .keyboardArrowDown, size: schemeIconSize)
                     }
                     .padding(.leading, fieldStartPadding)
                     .padding(.trailing, schemeEndPadding)

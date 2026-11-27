@@ -72,6 +72,17 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case messageSquare = "lucide_message_square"
 
     var accessibilityIdentifier: String { rawValue }
+
+    /// Directional glyphs (back, forward, disclosure) that point the other way in
+    /// right-to-left layouts. Set by `mirrors_in_rtl` in icons/manifest.yaml.
+    var mirrorsInRightToLeft: Bool {
+        switch self {
+        case .arrowBack, .arrowForward, .chevronRight, .sidebar, .subdirectoryArrowRight, .undo, .redo, .chevronLeft:
+            true
+        default:
+            false
+        }
+    }
 }
 
 /// Lucide catalog icon rendered as a template asset.
@@ -93,6 +104,7 @@ struct OpenCodeIconImage: View {
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
+            .flipsForRightToLeftLayoutDirection(icon.mirrorsInRightToLeft)
             .frame(width: explicitSize, height: explicitSize)
     }
 }
