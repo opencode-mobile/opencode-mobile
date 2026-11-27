@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.live.PermissionLiveStore
@@ -11,6 +12,7 @@ import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.InboxRequestPaging
 import dev.opencode.mobile.ui.sessionchat.PermissionNoteDraft
 import dev.opencode.mobile.ui.sessionchat.QuestionAnswerDraft
@@ -440,7 +442,7 @@ class SessionChatInbox(
                     _state.update { state ->
                         state.copy(
                             permissionSubmittingId = null,
-                            permissionError = "Permission request is no longer available",
+                            permissionError = UiText.resource(R.string.session_chat_permission_unavailable),
                         )
                     }
                 } else {
@@ -485,7 +487,7 @@ class SessionChatInbox(
                         },
                         onFailure = {
                             sessions = emptyList()
-                            "Unable to refresh permission session tree"
+                            UiText.resource(R.string.session_chat_permission_tree_failed)
                         },
                     )
             } else {
@@ -538,7 +540,7 @@ class SessionChatInbox(
                         },
                         onFailure = {
                             sessions = emptyList()
-                            "Unable to refresh question session tree"
+                            UiText.resource(R.string.session_chat_question_tree_failed)
                         },
                     )
             } else {
@@ -587,7 +589,7 @@ class SessionChatInbox(
                     return@launch
                 }
                 if (_state.value.visibleQuestionRequest?.id == requestId) {
-                    _state.update { it.copy(questionError = "Question request is no longer available") }
+                    _state.update { it.copy(questionError = UiText.resource(R.string.session_chat_question_unavailable)) }
                 }
             }
             return

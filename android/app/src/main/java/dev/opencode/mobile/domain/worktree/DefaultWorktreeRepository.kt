@@ -252,9 +252,11 @@ internal fun httpFailure(
     statusCode: Int,
     body: String,
 ): WorktreeHttpFailure {
+    ServerErrorMessage.reason(body)?.let { reason ->
+        return WorktreeHttpFailure(reason.serverText ?: "HTTP $statusCode", reason.text)
+    }
     val serverText =
-        ServerErrorMessage.userFacing(body)
-            ?: body.trim().takeIf { it.isNotEmpty() && !it.startsWith("{") && !it.startsWith("[") && it.length <= 200 && !it.contains('\n') }
+        body.trim().takeIf { it.isNotEmpty() && !it.startsWith("{") && !it.startsWith("[") && it.length <= 200 && !it.contains('\n') }
     return if (serverText != null) {
         WorktreeHttpFailure(serverText, UiText.verbatim(serverText))
     } else {

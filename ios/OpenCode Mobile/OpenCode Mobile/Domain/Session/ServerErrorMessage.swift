@@ -1,22 +1,59 @@
 import Foundation
 
+/// Why a server request failed, read from its HTTP error body. The server's own words stay
+/// verbatim (`server`); the cases the app explains in its own words are typed and keyed.
+nonisolated enum ServerErrorReason: Equatable, Sendable {
+    /// `UnauthorizedError`: the pairing is no longer valid.
+    case pairingExpired
+    /// `LocationNotFoundError` / `FileNotFoundError`, with the server's path when it sent one.
+    case notFound(path: String?)
+    /// `SessionBusyError` / `BusyError`: the session is running a turn.
+    case sessionBusy
+    /// The server's own message, with its error ref when it sent one.
+    case server(message: String, ref: String?)
+
+    /// What the app shows, in the reader's language; the server's words stay as they are.
+    var text: String {
+        switch self {
+        case .pairingExpired:
+            return String(localized: "server_error.pairing_expired", defaultValue: "Pairing expired, pair again")
+        case let .notFound(path):
+            guard let path, !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return String(localized: "server_error.not_found", defaultValue: "Folder or file not found")
+            }
+            return String(localized: "server_error.not_found_path", defaultValue: "Folder or file not found · \(path)")
+        case .sessionBusy:
+            return String(localized: "server_error.session_busy", defaultValue: "Session is busy")
+        case let .server(message, ref):
+            guard let ref, !ref.isEmpty else { return message }
+            return String(localized: "server_error.with_ref", defaultValue: "\(message) (\(ref))")
+        }
+    }
+}
+
 /// The server's own error text from an HTTP error body, when it is worth showing a
 /// user (e.g. `{"_tag":"FormInvalidAnswerError","message":"Too many selections …"}`).
 /// Request-schema failures (`InvalidRequestError`, multi-line decoder paths) are
 /// client bugs, not something the user can act on, so they return nil.
 nonisolated enum ServerErrorMessage {
     private static let maxLength = 200
-    /// The text a busy-session reply maps to; the composer matches it to queue instead.
-    static let sessionBusy = "Session is busy"
+    /// The text a busy-session reply maps to; the composer matches it (in the same language)
+    /// to queue instead.
+    static var sessionBusy: String { ServerErrorReason.sessionBusy.text }
 
     static func from(_ error: Error) -> String? {
         guard case let .http(_, body)? = error as? SessionError else { return nil }
         return userFacing(body)
     }
 
-    /// Copy for a non-2xx JSON body. Known tags get a fixed sentence. Schema
-    /// failures stay hidden. Other tags use `fromBody`.
+    /// Text for a non-2xx JSON body: `reason(_:)` as the app shows it.
     static func userFacing(_ body: String?) -> String? {
+        reason(body)?.text
+    }
+
+    /// The reason for a non-2xx JSON body. Known tags are typed. Schema failures stay
+    /// hidden. Other tags use `fromBody`.
+    static func reason(_ body: String?) -> ServerErrorReason? {
         let trimmed = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard trimmed.hasPrefix("{"),
               let data = trimmed.data(using: .utf8),
@@ -28,27 +65,22 @@ nonisolated enum ServerErrorMessage {
         case "InvalidRequestError":
             return nil
         case "UnauthorizedError":
-            return "Pairing expired, pair again"
+            return .pairingExpired
         case "LocationNotFoundError", "FileNotFoundError":
             let path = (root["path"] as? String)
                 ?? (root["location"] as? String)
                 ?? (nested?["path"] as? String)
                 ?? (nested?["location"] as? String)
-            if let path, !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Folder or file not found · \(path)"
-            }
-            return "Folder or file not found"
+            return .notFound(path: path)
         case "SessionBusyError", "BusyError":
-            return sessionBusy
+            return .sessionBusy
         case "UnknownError":
-            let ref = (root["ref"] as? String) ?? (nested?["ref"] as? String)
-            let message = fromBody(trimmed)
-            if let message, let ref, !ref.isEmpty { return "\(message) (\(ref))" }
-            if let message { return message }
-            if let ref, !ref.isEmpty { return ref }
+            let ref = ((root["ref"] as? String) ?? (nested?["ref"] as? String)).flatMap { $0.isEmpty ? nil : $0 }
+            if let message = fromBody(trimmed) { return .server(message: message, ref: ref) }
+            if let ref { return .server(message: ref, ref: nil) }
             return nil
         default:
-            return fromBody(trimmed)
+            return fromBody(trimmed).map { .server(message: $0, ref: nil) }
         }
     }
 

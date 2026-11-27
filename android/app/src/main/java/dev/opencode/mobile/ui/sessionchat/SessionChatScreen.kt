@@ -1434,7 +1434,7 @@ private fun SessionChatScreenBody(
                                             },
                                         submitting = uiState.permissionSubmitting,
                                         actionsEnabled = uiState.canMutate,
-                                        errorMessage = uiState.permissionErrorMessage,
+                                        errorMessage = uiState.permissionErrorMessage?.resolve(),
                                         note = uiState.permissionNote?.text,
                                         otherPendingInSessionCount = uiState.permissionOtherPendingInSession,
                                     )
@@ -1480,7 +1480,7 @@ private fun SessionChatScreenBody(
                                         nextEnabled = answered && index < questionCount - 1 && !submitting,
                                         submitEnabled = answered && index == questionCount - 1 && !submitting,
                                         submitting = submitting,
-                                        errorMessage = uiState.questionErrorMessage,
+                                        errorMessage = uiState.questionErrorMessage?.resolve(),
                                         requestPosition = uiState.questionQueuePosition,
                                         requestCount = uiState.questionQueueCount,
                                         attribution =

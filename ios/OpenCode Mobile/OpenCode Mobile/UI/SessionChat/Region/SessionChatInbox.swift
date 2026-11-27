@@ -385,7 +385,7 @@ final class SessionChatInbox {
                     notifyChange()
                     return
                 }
-                state.permissionError = "Permission request is no longer available"
+                state.permissionError = String(localized: "session_chat.permission_unavailable", defaultValue: "Permission request is no longer available")
             } else {
                 OpenCodeLog.sessionChat.warning(
                     "permission reply failed request=\(request.id) decision=\(decision) error=\(error.localizedDescription)"
@@ -426,7 +426,7 @@ final class SessionChatInbox {
                 state.permissionTopologyError = nil
             } catch {
                 state.permissionSessions = []
-                state.permissionTopologyError = "Unable to refresh permission session tree"
+                state.permissionTopologyError = String(localized: "session_chat.permission_tree_failed", defaultValue: "Unable to refresh permission session tree")
             }
         } else {
             state.permissionTopologyError = nil
@@ -456,7 +456,7 @@ final class SessionChatInbox {
                 state.questionTopologyError = nil
             } catch {
                 state.questionSessions = []
-                state.questionTopologyError = "Unable to refresh question session tree"
+                state.questionTopologyError = String(localized: "session_chat.question_tree_failed", defaultValue: "Unable to refresh question session tree")
             }
         } else {
             state.questionTopologyError = nil
@@ -490,7 +490,7 @@ final class SessionChatInbox {
                 return
             }
             if state.visibleQuestionRequest?.id == requestID {
-                state.questionError = "Question request is no longer available"
+                state.questionError = String(localized: "session_chat.question_unavailable", defaultValue: "Question request is no longer available")
             }
         } else {
             OpenCodeLog.sessionChat.warning(

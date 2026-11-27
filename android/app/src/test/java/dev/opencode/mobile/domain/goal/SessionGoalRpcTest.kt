@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.goal
 import dev.opencode.mobile.data.remote.HttpBodyResponseException
 import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import dev.opencode.mobile.domain.text.UiText
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandler
@@ -176,7 +177,7 @@ class SessionGoalRpcTest {
                 api.runSessionCommandV2("ses_1", SessionGoalLimits.COMMAND, SessionGoalAction.Pause.commandText)
                 fail("expected failure")
             } catch (error: HttpBodyResponseException) {
-                assertEquals("No active goal to pause", SessionGoalDomainAdapter.errorMessage(error))
+                assertEquals(UiText.verbatim("No active goal to pause"), SessionGoalDomainAdapter.errorMessage(error))
             }
         }
 

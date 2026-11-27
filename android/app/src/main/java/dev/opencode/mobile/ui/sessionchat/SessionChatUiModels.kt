@@ -316,7 +316,7 @@ data class SessionChatUiState(
     /** The permission dock is collapsed to a "Review permission" pill above the composer. */
     val permissionDockHidden: Boolean = false,
     val permissionSubmitting: Boolean = false,
-    val permissionErrorMessage: String? = null,
+    val permissionErrorMessage: UiText? = null,
     /** "Deny with a note" draft for [permissionRequest]; non-null shows the note step. */
     val permissionNote: PermissionNoteDraft? = null,
     /** Other waiting permission requests of [permissionRequest]'s session, which a deny also rejects. */
@@ -336,7 +336,7 @@ data class SessionChatUiState(
     val questionCustomText: String = "",
     val questionCustomSelected: Boolean = false,
     val questionSubmitting: Boolean = false,
-    val questionErrorMessage: String? = null,
+    val questionErrorMessage: UiText? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
     /** Parent of the loaded session; a child opened without a navigation parent still locks the composer. */
@@ -827,8 +827,8 @@ data class SessionChatInboxRegionState(
     /** The pending permission the user tucked away to reach the composer (never rejects it). */
     val permissionHiddenId: String? = null,
     val permissionSubmittingId: String? = null,
-    val permissionError: String? = null,
-    val permissionTopologyError: String? = null,
+    val permissionError: UiText? = null,
+    val permissionTopologyError: UiText? = null,
     /**
      * The note the user is writing to deny a permission request with ("Deny with a note").
      * Non-null swaps that request's prompt for the note step; paging, the request going away,
@@ -843,8 +843,8 @@ data class SessionChatInboxRegionState(
     /** The pending question the user collapsed to an "Answer question" pill (never dismisses it). */
     val questionHiddenId: String? = null,
     val questionSubmittingId: String? = null,
-    val questionError: String? = null,
-    val questionTopologyError: String? = null,
+    val questionError: UiText? = null,
+    val questionTopologyError: UiText? = null,
     val questionSessions: List<Session> = emptyList(),
     val questionWizardIndex: Int = 0,
     val questionDrafts: Map<Int, QuestionAnswerDraft> = emptyMap(),

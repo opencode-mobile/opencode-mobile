@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.session.ServerErrorMessage
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.text.UiText
@@ -363,7 +364,10 @@ class HomeSessionActions(
     /** Server text stays verbatim; the app's own fallbacks are keyed. */
     private fun mutationErrorMessage(throwable: Throwable): UiText =
         when (throwable) {
-            is SessionError.Http -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_request_failed)
+            is SessionError.Http ->
+                ServerErrorMessage.text(throwable)
+                    ?: throwable.message?.let(UiText::verbatim)
+                    ?: UiText.resource(R.string.home_session_error_request_failed)
             is SessionError.Transport -> UiText.resource(R.string.connection_error_unreachable)
             is SessionError.Decoding -> UiText.resource(R.string.home_session_error_unreadable_response)
             else -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_generic)

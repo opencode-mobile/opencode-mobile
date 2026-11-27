@@ -57,6 +57,8 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.model.modelSelectionIdentity
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.ServerErrorMessage
+import dev.opencode.mobile.domain.session.ServerErrorReason
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
@@ -2268,9 +2270,9 @@ class SessionChatComposer(
     /** Server text stays verbatim; the app's own fallbacks are keyed. */
     private fun errorMessage(throwable: Throwable): UiText =
         when (throwable) {
-            is MessageError.Http -> serverOrRequestFailed(throwable.message)
+            is MessageError.Http -> ServerErrorMessage.text(throwable) ?: serverOrRequestFailed(throwable.message)
             is CommandError.Http -> serverOrRequestFailed(throwable.message)
-            is SessionError.Http -> serverOrRequestFailed(throwable.message)
+            is SessionError.Http -> ServerErrorMessage.text(throwable) ?: serverOrRequestFailed(throwable.message)
             is MessageError.Transport,
             is CommandError.Transport,
             is SessionError.Transport,
@@ -2285,12 +2287,11 @@ class SessionChatComposer(
     private fun serverOrRequestFailed(message: String?): UiText =
         message?.let(UiText::verbatim) ?: UiText.resource(R.string.session_chat_activity_request_failed)
 
-    /** The server's own "Session is busy" reply, matched on server text (never on app copy). */
+    /** The server's busy reply: its typed reason, or a command error's own "Session is busy" text. */
     private fun isSessionBusy(throwable: Throwable): Boolean =
         when (throwable) {
-            is MessageError.Http -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
+            is MessageError.Http, is SessionError.Http -> ServerErrorMessage.from(throwable) == ServerErrorReason.SessionBusy
             is CommandError.Http -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
-            is SessionError.Http -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
             is MessageError, is CommandError, is SessionError -> false
             else -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
         }

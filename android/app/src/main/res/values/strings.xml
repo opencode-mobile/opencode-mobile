@@ -77,6 +77,14 @@
     <string name="connection_error_duplicate_profile">A server with this host and username is already saved</string>
     <string name="connection_error_qr_scan_failed">QR didn\'t connect. OpenCode 2\'s pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too.</string>
     <string name="connection_error_unreachable">Unable to reach the server</string>
+    <!-- The app's own words for server errors it recognises; other server errors show the server's text. -->
+    <string name="server_error_pairing_expired">Pairing expired, pair again</string>
+    <string name="server_error_not_found">Folder or file not found</string>
+    <!-- The argument is the server's path. -->
+    <string name="server_error_not_found_path">Folder or file not found · %1$s</string>
+    <string name="server_error_session_busy">Session is busy</string>
+    <!-- The server's error message, then its error reference id. -->
+    <string name="server_error_with_ref">%1$s (%2$s)</string>
     <string name="connection_error_auth_failed">Authentication failed</string>
     <string name="connection_error_unhealthy">Server reported unhealthy</string>
 
@@ -1049,6 +1057,17 @@
     <string name="session_chat_timeline_style_notice">Timeline: %1$s. Change it any time in Settings.</string>
     <!-- Snackbar after the branch pill copied the branch name. -->
     <string name="session_chat_branch_copied">Branch name copied</string>
+    <!-- A permission or question reply failed. The _reason forms end with the server's reason. -->
+    <string name="session_chat_reply_error_permission">Couldn\'t send your reply. Try again.</string>
+    <string name="session_chat_reply_error_permission_reason">Couldn\'t send your reply. %1$s.</string>
+    <string name="session_chat_reply_error_question">Couldn\'t send your answer. Try again.</string>
+    <string name="session_chat_reply_error_question_reason">Couldn\'t send your answer. %1$s.</string>
+    <string name="session_chat_reply_error_dismiss">Couldn\'t dismiss the question. Try again.</string>
+    <string name="session_chat_reply_error_dismiss_reason">Couldn\'t dismiss the question. %1$s.</string>
+    <string name="session_chat_permission_unavailable">Permission request is no longer available</string>
+    <string name="session_chat_question_unavailable">Question request is no longer available</string>
+    <string name="session_chat_permission_tree_failed">Unable to refresh permission session tree</string>
+    <string name="session_chat_question_tree_failed">Unable to refresh question session tree</string>
     <string name="session_chat_sheet_timeline_style_picker_title">New: choose your timeline</string>
     <string name="session_chat_sheet_timeline_style_picker_explainer">This update adds new ways to follow what the agent is doing.</string>
     <string name="session_chat_sheet_timeline_style_picker_footnote">You can change this any time in Settings → Timeline Style.</string>

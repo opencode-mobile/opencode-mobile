@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.isSessionRunEnd
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
+import dev.opencode.mobile.domain.session.ServerErrorMessage
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.VcsDiffMode
@@ -607,6 +608,7 @@ private fun Throwable.isUnsupportedVcs() = this is SessionError.Http && statusCo
 /** The moved-folders text, the server's own message verbatim, or a fallback when it has none. */
 private fun Throwable.userMessage(): UiText {
     if (TurnDiffUnavailable.userFacing(this) != null) return UiText.resource(R.string.changes_error_turn_moved_folders)
+    ServerErrorMessage.text(this)?.let { return it }
     val serverMessage =
         when (this) {
             is SessionError.Transport -> cause.message

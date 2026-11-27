@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.sessionchat
 import dev.opencode.mobile.domain.session.QuestionInfo
 import dev.opencode.mobile.domain.session.QuestionOption
 import dev.opencode.mobile.domain.session.QuestionRequest
+import dev.opencode.mobile.domain.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -35,7 +36,7 @@ class SyncedQuestionDraftsTest {
         val paged = onA.copy(questionSelectedId = "question-b")
 
         assertEquals(syncedQuestionDrafts(paged), syncedQuestionDrafts(paged))
-        val snapshotDuringPage = paged.copy(questionError = "stale")
+        val snapshotDuringPage = paged.copy(questionError = UiText.verbatim("stale"))
         assertEquals(emptyMap<Int, QuestionAnswerDraft>(), syncedQuestionDrafts(snapshotDuringPage).questionDrafts)
     }
 

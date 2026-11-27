@@ -8374,6 +8374,66 @@
         }
       }
     },
+    "server_error.not_found" : {
+      "comment" : "The app's own words for a server error it recognises; other server errors show the server's text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folder or file not found"
+          }
+        }
+      }
+    },
+    "server_error.not_found_path" : {
+      "comment" : "The argument is the server's path.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folder or file not found · %@"
+          }
+        }
+      }
+    },
+    "server_error.pairing_expired" : {
+      "comment" : "The app's own words for a server error it recognises; other server errors show the server's text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pairing expired, pair again"
+          }
+        }
+      }
+    },
+    "server_error.session_busy" : {
+      "comment" : "The app's own words for a server error it recognises; other server errors show the server's text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session is busy"
+          }
+        }
+      }
+    },
+    "server_error.with_ref" : {
+      "comment" : "The server's error message, then its error reference id.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (%2$@)"
+          }
+        }
+      }
+    },
     "server_health.30_min_ago" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11275,6 +11335,50 @@
         }
       }
     },
+    "session_chat.permission_tree_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to refresh permission session tree"
+          }
+        }
+      }
+    },
+    "session_chat.permission_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permission request is no longer available"
+          }
+        }
+      }
+    },
+    "session_chat.question_tree_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to refresh question session tree"
+          }
+        }
+      }
+    },
+    "session_chat.question_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Question request is no longer available"
+          }
+        }
+      }
+    },
     "session_chat.rename_dialog.save" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11293,6 +11397,78 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rename session"
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.dismiss" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't dismiss the question. Try again."
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.dismiss_reason" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't dismiss the question. %@."
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.permission" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send your reply. Try again."
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.permission_reason" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send your reply. %@."
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.question" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send your answer. Try again."
+          }
+        }
+      }
+    },
+    "session_chat.reply_error.question_reason" : {
+      "comment" : "A permission or question reply failed. The _reason forms end with the server's reason.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send your answer. %@."
           }
         }
       }

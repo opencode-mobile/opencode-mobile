@@ -2164,9 +2164,9 @@ class SessionChatViewModel
                         turnDiffNotice != null -> TimelineText.verbatim(turnDiffNotice)
                         infoState.errorMessage != null -> UiText.verbatim(infoState.errorMessage)
                         inboxSnapshot.permissionRequests.isEmpty() &&
-                            inboxSnapshot.permissionTopologyError != null -> TimelineText.verbatim(inboxSnapshot.permissionTopologyError)
+                            inboxSnapshot.permissionTopologyError != null -> inboxSnapshot.permissionTopologyError
                         inboxSnapshot.questionRequests.isEmpty() &&
-                            inboxSnapshot.questionTopologyError != null -> TimelineText.verbatim(inboxSnapshot.questionTopologyError)
+                            inboxSnapshot.questionTopologyError != null -> inboxSnapshot.questionTopologyError
                         timelineState.errorMessage != null -> timelineState.errorMessage
                         else -> null
                     }

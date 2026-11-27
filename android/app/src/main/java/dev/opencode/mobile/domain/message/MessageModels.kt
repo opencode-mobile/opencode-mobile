@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.json.serverPayloadJson
+import dev.opencode.mobile.domain.session.ServerErrorReason
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -461,9 +462,14 @@ sealed class MessageError : Exception() {
         override val cause: Throwable,
     ) : MessageError()
 
+    /**
+     * [message] is the server's readable text; null when it sent none or when [reason] is one
+     * the app explains in its own words (`ServerErrorMessage.text`).
+     */
     data class Http(
         val statusCode: Int,
         override val message: String?,
+        val reason: ServerErrorReason? = null,
     ) : MessageError()
 
     data class Decoding(

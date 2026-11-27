@@ -339,12 +339,15 @@ class SessionDomainAdapter {
     fun mapError(throwable: Throwable): SessionError =
         when (throwable) {
             is SessionError -> throwable
-            is HttpBodyResponseException ->
+            is HttpBodyResponseException -> {
+                // A reason the app explains leaves no message: the UI keys it from the body.
+                val reason = ServerErrorMessage.reason(throwable.bodyText)
                 SessionError.Http(
                     statusCode = throwable.response.status.value,
-                    message = ServerErrorMessage.userFacing(throwable.bodyText) ?: throwable.message,
+                    message = if (reason != null) reason.serverText else throwable.message,
                     body = throwable.bodyText,
                 )
+            }
             is ResponseException ->
                 SessionError.Http(
                     statusCode = throwable.response.status.value,

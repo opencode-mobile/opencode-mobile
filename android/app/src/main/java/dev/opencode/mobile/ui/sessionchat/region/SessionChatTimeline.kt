@@ -18,6 +18,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ServerFilePreviews
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.domain.message.UnavailableServerFilePreviews
+import dev.opencode.mobile.domain.session.ServerErrorMessage
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
@@ -1291,7 +1292,9 @@ class SessionChatTimeline(
     private fun errorMessage(throwable: Throwable): UiText =
         when (throwable) {
             is MessageError.Http ->
-                throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.session_chat_activity_request_failed)
+                ServerErrorMessage.text(throwable)
+                    ?: throwable.message?.let(UiText::verbatim)
+                    ?: UiText.resource(R.string.session_chat_activity_request_failed)
             is MessageError.Transport -> UiText.resource(R.string.connection_error_unreachable)
             is MessageError.Decoding -> UiText.resource(R.string.home_session_error_unreadable_response)
             else -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_generic)
