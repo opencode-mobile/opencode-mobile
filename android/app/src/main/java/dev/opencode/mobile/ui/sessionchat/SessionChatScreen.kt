@@ -1489,7 +1489,7 @@ private fun SessionChatScreenBody(
                                 }
                                 SessionChatComposerKind.ChildLockout ->
                                     OpenCodeSessionComposerState.ChildLockout(
-                                        selectedModelLabel = uiState.composer.selectedModelLabel,
+                                        selectedModelLabel = uiState.composer.selectedModelLabel.resolve(),
                                         selectedVariantLabel = uiState.composer.selectedVariantLabel.resolve(),
                                         showVariant = uiState.composer.canSelectVariant,
                                     )
@@ -1503,7 +1503,7 @@ private fun SessionChatScreenBody(
                                         attachments =
                                             uiState.composer.attachments.map(AttachmentPresentationMapper::from),
                                         showPendingRevert = uiState.hasPendingRevert,
-                                        selectedModelLabel = uiState.composer.selectedModelLabel,
+                                        selectedModelLabel = uiState.composer.selectedModelLabel.resolve(),
                                         selectedModeLabel = uiState.composer.selectedModeLabel,
                                         selectedVariantLabel = uiState.composer.selectedVariantLabel.resolve(),
                                         showVariant = uiState.composer.canSelectVariant,

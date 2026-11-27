@@ -10909,6 +10909,28 @@
         }
       }
     },
+    "session_chat.model_chip.loading" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading model…"
+          }
+        }
+      }
+    },
+    "session_chat.model_chip.placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model"
+          }
+        }
+      }
+    },
     "session_chat.model_notice.load_failed" : {
       "extractionState" : "manual",
       "localizations" : {

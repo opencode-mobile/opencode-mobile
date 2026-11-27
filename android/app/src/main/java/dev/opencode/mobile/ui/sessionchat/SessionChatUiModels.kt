@@ -98,8 +98,13 @@ data class SessionChatComposerState(
             selectableAgents.firstOrNull { it.id.equals(selectedMode, ignoreCase = true) }?.displayName
                 ?: SelectableAgent.displayNameFor(selectedMode)
 
-    val selectedModelLabel: String
-        get() = if (isModelSelectionReady) selectedModel?.modelLabel ?: "Model" else "Loading model…"
+    /** The model chip: the server's model name, or app text while none is chosen or it loads. */
+    val selectedModelLabel: UiText
+        get() =
+            when {
+                !isModelSelectionReady -> UiText.resource(R.string.session_chat_model_chip_loading)
+                else -> selectedModel?.modelLabel?.let(UiText::verbatim) ?: UiText.resource(R.string.session_chat_model_chip_placeholder)
+            }
 
     /** The server's variant name, or the app's own "Default". */
     val selectedVariantLabel: UiText

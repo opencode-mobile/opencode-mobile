@@ -11,7 +11,8 @@ enum OpenCodeSessionComposerState {
         let selectionRevision: Int
         let attachments: [OpenCodeAttachmentPresentation]
         let showPendingRevert: Bool
-        let selectedModelLabel: String
+        /// Server model name, or app text while none is chosen or it loads.
+        let selectedModelLabel: OpenCodeText
         let selectedModeLabel: String
         /// Server variant name, or the app's "Default".
         let selectedVariantLabel: OpenCodeText
@@ -48,7 +49,7 @@ enum OpenCodeSessionComposerState {
             selectionRevision: Int = 0,
             attachments: [OpenCodeAttachmentPresentation] = [],
             showPendingRevert: Bool = false,
-            selectedModelLabel: String,
+            selectedModelLabel: OpenCodeText,
             selectedModeLabel: String,
             selectedVariantLabel: OpenCodeText,
             showVariant: Bool,
@@ -268,7 +269,7 @@ enum OpenCodeSessionComposerState {
     }
 
     struct ChildLockout {
-        let selectedModelLabel: String
+        let selectedModelLabel: OpenCodeText
         let selectedVariantLabel: OpenCodeText
         let showVariant: Bool
     }
@@ -983,7 +984,7 @@ struct OpenCodeSessionComposer: View {
                     .accessibilityHint(Text("component.composer.leave_shell_mode"))
                 } else {
                     OpenCodeChoiceBadge(
-                        label: .verbatim(prompt.selectedModelLabel),
+                        label: prompt.selectedModelLabel,
                         selected: false,
                         variant: .glass,
                         action: { onAction(.selectModel) }
@@ -1058,7 +1059,7 @@ struct OpenCodeSessionComposer: View {
     }
 
     private func lockoutAccessibilityLabel(_ lockout: OpenCodeSessionComposerState.ChildLockout) -> String {
-        let model = lockout.selectedModelLabel
+        let model = lockout.selectedModelLabel.resolved
         if lockout.showVariant {
             let effort = lockout.selectedVariantLabel.resolved
             return String(localized: LocalizedStringResource(
@@ -1812,7 +1813,7 @@ private struct QuestionCustomTextField: View {
             .init(
                 text: "Add a dark mode toggle to Settings",
                 showPendingRevert: true,
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedModeLabel: "Build",
                 selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
@@ -1832,7 +1833,7 @@ private struct QuestionCustomTextField: View {
             .init(
                 text: "Add a dark mode toggle to Settings",
                 showPendingRevert: true,
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedModeLabel: "Build",
                 selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
@@ -1852,7 +1853,7 @@ private struct QuestionCustomTextField: View {
         state: .prompt(
             .init(
                 text: "!git status",
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedModeLabel: "Build",
                 selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
@@ -1873,7 +1874,7 @@ private struct QuestionCustomTextField: View {
         state: .prompt(
             .init(
                 text: "!git status",
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedModeLabel: "Build",
                 selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
@@ -1896,7 +1897,7 @@ private struct QuestionCustomTextField: View {
             .init(
                 text: "Ask @explore about this",
                 mentionRanges: [4 ..< 12],
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedModeLabel: "Build",
                 selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
@@ -1916,7 +1917,7 @@ private struct QuestionCustomTextField: View {
             .init(
                 text: "Ask @explore about this",
                 mentionRanges: [4 ..< 12],
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedModeLabel: "Build",
                 selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
@@ -1982,7 +1983,7 @@ private struct QuestionCustomTextField: View {
     OpenCodeSessionComposer(
         state: .childLockout(
             .init(
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedVariantLabel: .verbatim("High"),
                 showVariant: true
             )
@@ -1996,7 +1997,7 @@ private struct QuestionCustomTextField: View {
     OpenCodeSessionComposer(
         state: .childLockout(
             .init(
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedVariantLabel: .verbatim("High"),
                 showVariant: true
             )

@@ -107,7 +107,7 @@ enum SnapshotEvidenceMocks {
         .prompt(
             .init(
                 text: "",
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedModeLabel: "Build",
                 selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
@@ -154,7 +154,7 @@ enum SnapshotEvidenceMocks {
     static var childLockoutComposer: OpenCodeSessionComposerState {
         .childLockout(
             .init(
-                selectedModelLabel: "Claude Sonnet 4",
+                selectedModelLabel: .verbatim("Claude Sonnet 4"),
                 selectedVariantLabel: .verbatim("High"),
                 showVariant: true
             )

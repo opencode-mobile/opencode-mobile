@@ -19,6 +19,24 @@ struct SessionChatComposerStateTests {
         #expect(state.selectedVariantLabel.resolved == "Default")
     }
 
+    /// The model chip is app text only while loading or with no model chosen.
+    @Test func selectedModelLabel_keysOnlyLoadingAndPlaceholder() {
+        var state = SessionChatComposerState(text: "", selectedModel: nil, modelOptions: [], selectedMode: SelectableAgent.defaultID)
+        guard case let .localized(loading) = state.selectedModelLabel.storage else {
+            Issue.record("loading is not localised")
+            return
+        }
+        #expect(loading.key == "session_chat.model_chip.loading")
+        #expect(String(localized: loading) == "Loading model\u{2026}")
+        state.isModelSelectionReady = true
+        guard case let .localized(placeholder) = state.selectedModelLabel.storage else {
+            Issue.record("placeholder is not localised")
+            return
+        }
+        #expect(placeholder.key == "session_chat.model_chip.placeholder")
+        #expect(String(localized: placeholder) == "Model")
+    }
+
     /// The server's variant names stay verbatim; only the app's own Default is looked up.
     @Test func variantText_keysOnlyTheAppDefault() {
         #expect(SessionChatVariantText.label("high") == .verbatim("High"))
@@ -47,6 +65,6 @@ struct SessionChatComposerStateTests {
             selectedMode: SelectableAgent.defaultID,
             isModelSelectionReady: true
         )
-        #expect(state.selectedModelLabel == "Grok 4.6")
+        #expect(state.selectedModelLabel == .verbatim("Grok 4.6"))
     }
 }

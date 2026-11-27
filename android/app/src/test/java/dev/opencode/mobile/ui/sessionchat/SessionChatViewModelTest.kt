@@ -8340,7 +8340,7 @@ class SessionChatViewModelTest {
 
             assertEquals(callsBefore + 1, models.calls)
             assertEquals(true, second.uiState.value.composer.isModelSelectionReady)
-            assertEquals(gpt4Option.modelLabel, second.uiState.value.composer.selectedModelLabel)
+            assertEquals(UiText.verbatim(gpt4Option.modelLabel), second.uiState.value.composer.selectedModelLabel)
         }
 
     @Test
@@ -8503,7 +8503,7 @@ class SessionChatViewModelTest {
             runCurrent()
 
             assertEquals(false, second.uiState.value.composer.isModelSelectionReady)
-            assertEquals("Loading model…", second.uiState.value.composer.selectedModelLabel)
+            assertEquals("Loading model…", second.uiState.value.composer.selectedModelLabel.english())
         }
 
     @Test

@@ -189,8 +189,15 @@ struct SessionChatComposerState: Equatable {
             ?? SelectableAgent.displayName(for: selectedMode)
     }
 
-    var selectedModelLabel: String {
-        isModelSelectionReady ? selectedModel?.modelLabel ?? "Model" : "Loading model…"
+    /// The model chip: the server's model name, or app text while none is chosen or it loads.
+    var selectedModelLabel: OpenCodeText {
+        guard isModelSelectionReady else {
+            return OpenCodeText(LocalizedStringResource("session_chat.model_chip.loading", defaultValue: "Loading model\u{2026}"))
+        }
+        guard let label = selectedModel?.modelLabel else {
+            return OpenCodeText(LocalizedStringResource("session_chat.model_chip.placeholder", defaultValue: "Model"))
+        }
+        return .verbatim(label)
     }
 
     var selectedVariantLabel: OpenCodeText {

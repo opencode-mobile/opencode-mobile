@@ -19,6 +19,16 @@ class SessionChatComposerStateTest {
         assertEquals("Default", SessionChatComposerState().selectedVariantLabel.english())
     }
 
+    /** The model chip is app text only while loading or with no model chosen. */
+    @Test
+    fun selectedModelLabel_keysOnlyLoadingAndPlaceholder() {
+        assertEquals(UiText.resource(R.string.session_chat_model_chip_loading), SessionChatComposerState().selectedModelLabel)
+        assertEquals("Loading model…", SessionChatComposerState().selectedModelLabel.english())
+        val ready = SessionChatComposerState(isModelSelectionReady = true)
+        assertEquals(UiText.resource(R.string.session_chat_model_chip_placeholder), ready.selectedModelLabel)
+        assertEquals("Model", ready.selectedModelLabel.english())
+    }
+
     /** The server's variant names stay verbatim; only the app's own Default is a resource. */
     @Test
     fun variantText_keysOnlyTheAppDefault() {
@@ -42,6 +52,6 @@ class SessionChatComposerStateTest {
                 selectedModel = ModelSelection(option),
                 isModelSelectionReady = true,
             )
-        assertEquals("Grok 4.6", state.selectedModelLabel)
+        assertEquals(UiText.verbatim("Grok 4.6"), state.selectedModelLabel)
     }
 }

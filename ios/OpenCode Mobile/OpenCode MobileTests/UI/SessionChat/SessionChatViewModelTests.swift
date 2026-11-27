@@ -2742,7 +2742,7 @@ struct SessionChatViewModelTests {
         }
 
         #expect(second.uiState.composer.isModelSelectionReady)
-        #expect(second.uiState.composer.selectedModelLabel == pickedOption.modelLabel)
+        #expect(second.uiState.composer.selectedModelLabel == .verbatim(pickedOption.modelLabel))
         #expect(second.uiState.composer.modelOptions == catalog.options)
 
         // The quiet refresh is still blocked; the chip never falls back to "Loading model…".
@@ -2787,7 +2787,7 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.modelOptions == catalog.options)
         #expect(viewModel.uiState.composer.isModelSelectionReady == false)
         #expect(viewModel.uiState.composer.selectedModel == nil)
-        #expect(viewModel.uiState.composer.selectedModelLabel == "Loading model…")
+        #expect(viewModel.uiState.composer.selectedModelLabel.resolved == "Loading model…")
 
         let load = Task { await viewModel.loadMessages() }
         _ = await waitUntil { models.calls >= 2 }

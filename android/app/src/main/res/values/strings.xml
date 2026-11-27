@@ -532,6 +532,8 @@
     <string name="session_chat_move_worktree_moves_after_turn">Moves to %1$s after this turn.</string>
     <string name="session_chat_move_worktree_failed">Couldn\'t move the session: %1$s</string>
     <string name="session_chat_variant_default">Default</string>
+    <string name="session_chat_model_chip_placeholder">Model</string>
+    <string name="session_chat_model_chip_loading">Loading model…</string>
     <string name="session_chat_model_notice_load_failed">Unable to load models. Tap Model to retry.</string>
     <string name="session_chat_model_notice_none_usable">No usable models are available. Tap Model to retry.</string>
     <string name="session_chat_model_notice_variant_unavailable">Remembered Variant is unavailable. Using Default.</string>
