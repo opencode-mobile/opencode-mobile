@@ -619,6 +619,77 @@
         }
       }
     },
+    "appearance.syntax_blurb.citrus" : {
+      "comment" : "Built-in code highlight preset description: the editor theme family it follows (proper name).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solarized family"
+          }
+        }
+      }
+    },
+    "appearance.syntax_blurb.match" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the UI theme’s own tokens"
+          }
+        }
+      }
+    },
+    "appearance.syntax_blurb.neon" : {
+      "comment" : "Built-in code highlight preset description: the editor theme family it follows (proper name).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dracula family"
+          }
+        }
+      }
+    },
+    "appearance.syntax_blurb.nocturne" : {
+      "comment" : "Built-in code highlight preset description: the editor theme family it follows (proper name).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One Dark family"
+          }
+        }
+      }
+    },
+    "appearance.syntax_blurb.paper" : {
+      "comment" : "Built-in code highlight preset description: the editor theme family it follows (proper name).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub family"
+          }
+        }
+      }
+    },
+    "appearance.syntax_name.match" : {
+      "comment" : "The code highlight preset that uses the UI theme's own syntax colors.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Match theme"
+          }
+        }
+      }
+    },
     "appearance.text_code_note" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13574,6 +13645,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "App Lock"
+          }
+        }
+      }
+    },
+    "settings.appearance.subtitle" : {
+      "comment" : "Appearance row subtitle: the UI theme's name, then the code highlight preset's name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@"
           }
         }
       }

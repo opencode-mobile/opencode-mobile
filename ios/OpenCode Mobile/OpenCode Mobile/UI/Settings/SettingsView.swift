@@ -772,10 +772,11 @@ struct SettingsView: View {
             : "settings.follow_up.subtitle_queue"
     }
 
-    /// Preset names are theme data, shown as is.
+    /// Theme and syntax preset names are theme data, except the keyed Match theme.
     private var appearanceSubtitle: OpenCodeText {
-        let names = [themeManager.currentTheme.name, themeManager.currentSyntaxPreset.name]
-        return .verbatim(names.joined(separator: " · "))
+        let theme = themeManager.currentTheme.name
+        let syntax = themeManager.currentSyntaxPreset.displayName
+        return OpenCodeText(LocalizedStringResource("settings.appearance.subtitle", defaultValue: "\(theme) · \(syntax)"))
     }
 
     /// The active profile name is user content and stays an argument.

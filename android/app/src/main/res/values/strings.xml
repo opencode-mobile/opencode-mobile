@@ -1165,6 +1165,8 @@
     <string name="settings_section_server">Server</string>
     <string name="settings_section_help_feedback">Help &amp; Feedback</string>
     <string name="settings_section_appearance">Appearance</string>
+    <!-- Appearance row subtitle: the UI theme's name, then the code highlight preset's name. -->
+    <string name="settings_appearance_subtitle">%1$s · %2$s</string>
     <string name="settings_section_home">Home</string>
     <string name="settings_section_session_cache">Session Cache</string>
     <string name="settings_section_privacy">Privacy</string>
@@ -1288,6 +1290,14 @@
     <string name="appearance_theme_blurb_signal">True white / true black</string>
     <string name="appearance_theme_blurb_hotline">Neutral chrome, loud pink</string>
     <string name="appearance_theme_blurb_phosphor">Neutral chrome, CRT green</string>
+    <!-- The code highlight preset that uses the UI theme's own syntax colors. -->
+    <string name="appearance_syntax_name_match">Match theme</string>
+    <string name="appearance_syntax_blurb_match">Use the UI theme’s own tokens</string>
+    <!-- Built-in code highlight presets' descriptions: the editor theme family each one follows (proper names). -->
+    <string name="appearance_syntax_blurb_nocturne">One Dark family</string>
+    <string name="appearance_syntax_blurb_citrus">Solarized family</string>
+    <string name="appearance_syntax_blurb_paper">GitHub family</string>
+    <string name="appearance_syntax_blurb_neon">Dracula family</string>
     <string name="appearance_preview_light">Light</string>
     <string name="appearance_preview_dark">Dark</string>
     <string name="appearance_preview_sample_message">Walk the token store.</string>

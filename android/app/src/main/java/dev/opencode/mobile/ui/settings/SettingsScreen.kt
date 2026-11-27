@@ -194,7 +194,7 @@ fun SettingsScreen(
                     title = appearanceTitle,
                     selected = selectedDetail == SettingsDetail.Appearance,
                     // Preset names are theme data, shown as is.
-                    subtitle = listOf(currentTheme.name, currentSyntax.name).joinToString(" · "),
+                    subtitle = stringResource(R.string.settings_appearance_subtitle, currentTheme.name, currentSyntax.displayName()),
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, appearanceTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
