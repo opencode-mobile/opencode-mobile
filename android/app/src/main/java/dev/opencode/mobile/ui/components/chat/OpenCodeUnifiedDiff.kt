@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -574,8 +575,8 @@ private fun FileDiff.summary(): String =
             FileDiffStatus.Modified -> R.string.component_unified_diff_summary_modified
         },
         path,
-        additions,
-        deletions,
+        pluralStringResource(R.plurals.changes_count_additions, additions, additions),
+        pluralStringResource(R.plurals.changes_count_deletions, deletions, deletions),
     )
 
 private fun UnifiedDiffRowKind.marker() =

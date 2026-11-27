@@ -749,8 +749,11 @@
         <item quantity="one">%1$d path</item>
         <item quantity="other">%1$d paths</item>
     </plurals>
-    <!-- %1$d is how many times a tool ran, %2$s the tool name. -->
-    <string name="tool_count_named">%1$d %2$s</string>
+    <!-- %1$d is how many times a tool ran (two or more), %2$s the tool name as the server sends it, such as mcp_lookup. Known tools have their own plurals, such as tool_count_read. -->
+    <plurals name="tool_count_named">
+        <item quantity="one">%1$d %2$s</item>
+        <item quantity="other">%1$d %2$s</item>
+    </plurals>
     <string name="tool_error_malformed">Not run: malformed tool call</string>
     <string name="tool_error_failed">Failed</string>
     <string name="tool_error_exit_code">Exited with code %1$d</string>
@@ -889,8 +892,11 @@
     <string name="session_chat_sheet_mcp_error_message">The MCP server list didn\'t load.</string>
     <string name="session_chat_sheet_mcp_empty_title">No MCP servers</string>
     <string name="session_chat_sheet_mcp_empty_message">None are configured on this opencode server.</string>
-    <!-- %1$d connected MCP servers, %2$d configured. -->
-    <string name="session_chat_sheet_mcp_headline">%1$d of %2$d connected</string>
+    <!-- %1$d connected MCP servers, %2$d configured. The plural follows %2$d. -->
+    <plurals name="session_chat_sheet_mcp_headline">
+        <item quantity="one">%1$d of %2$d connected</item>
+        <item quantity="other">%1$d of %2$d connected</item>
+    </plurals>
     <string name="session_chat_sheet_mcp_status_connected">Connected</string>
     <string name="session_chat_sheet_mcp_status_connecting">Connecting</string>
     <string name="session_chat_sheet_mcp_status_disabled">Disabled</string>
@@ -1106,7 +1112,11 @@
         <item quantity="one">%1$d saved</item>
         <item quantity="other">%1$d saved</item>
     </plurals>
-    <string name="settings_servers_summary_saved_active">%1$d saved · %2$s active</string>
+    <!-- %1$d is how many servers are saved, %2$s the active server's name. -->
+    <plurals name="settings_servers_summary_saved_active">
+        <item quantity="one">%1$d saved · %2$s active</item>
+        <item quantity="other">%1$d saved · %2$s active</item>
+    </plurals>
     <string name="settings_send_feedback_title">Send Feedback</string>
     <string name="settings_send_feedback_subtitle">Report a bug or share an idea</string>
     <string name="settings_hide_user_directory_title">Hide User Directory</string>
@@ -1430,7 +1440,14 @@
     <string name="changes_accessibility_summary">%1$s, %2$s, %3$s</string>
     <!-- Accessibility label of a changed file. %1$s path, %2$s status (Added, Deleted, Modified), %3$d position, %4$d file count, %5$s additions, %6$s deletions. -->
     <string name="changes_accessibility_file">%1$s, %2$s, file %3$d of %4$d, %5$s, %6$s</string>
-    <string name="component_unified_diff_summary_added">Added file %1$s, %2$d additions, %3$d deletions</string>
+    <!-- Visible label and accessibility part of the Review Changes pill. -->
+    <plurals name="component_review_changes_pill_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <string name="component_review_changes_pill_title">Review changes</string>
+    <!-- Accessibility label of a diff. %1$s is the path, %2$s the additions (changes_count_additions), %3$s the deletions (changes_count_deletions). -->
+    <string name="component_unified_diff_summary_added">Added file %1$s, %2$s, %3$s</string>
     <string name="component_activity_status_running">running</string>
     <!-- Accessibility: read after a filter tab that has something new since it was last viewed. -->
     <string name="component_filter_tabs_unseen">new</string>
@@ -1441,7 +1458,8 @@
     <string name="theme_error_preset_not_found">Theme preset not found</string>
     <string name="component_composer_submit">Submit</string>
     <string name="component_composer_select_all_that_apply">Select all that apply</string>
-    <string name="component_unified_diff_summary_modified">Modified file %1$s, %2$d additions, %3$d deletions</string>
+    <!-- Accessibility label of a diff. %1$s is the path, %2$s the additions (changes_count_additions), %3$s the deletions (changes_count_deletions). -->
+    <string name="component_unified_diff_summary_modified">Modified file %1$s, %2$s, %3$s</string>
     <string name="component_hunk_navigation_collapse_context">Collapse context</string>
     <!-- %1$s is the project letter, %2$s the subtitle. -->
     <string name="component_top_bar_project_subtitle">Project %1$s %2$s</string>
@@ -1559,7 +1577,8 @@
         <item quantity="other">%1$d steps</item>
     </plurals>
     <string name="theme_error_apply_failed">Failed to apply theme preset</string>
-    <string name="component_unified_diff_summary_deleted">Deleted file %1$s, %2$d additions, %3$d deletions</string>
+    <!-- Accessibility label of a diff. %1$s is the path, %2$s the additions (changes_count_additions), %3$s the deletions (changes_count_deletions). -->
+    <string name="component_unified_diff_summary_deleted">Deleted file %1$s, %2$s, %3$s</string>
     <string name="session_list_status_running">Running</string>
     <!-- %1$s is the number of earlier steps, such as 3 earlier steps. -->
     <string name="component_step_rail_expands">%1$s, expands</string>
@@ -1589,7 +1608,7 @@
     </plurals>
     <!-- Shown for two or more agents. -->
     <plurals name="component_activity_card_agent_count">
-        <item quantity="one">%1$d agents</item>
+        <item quantity="one">%1$d agent</item>
         <item quantity="other">%1$d agents</item>
     </plurals>
     <string name="theme_error_syntax_preset_not_found">Syntax highlight preset not found</string>

@@ -1731,7 +1731,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld agents"
+                  "value" : "%lld agent"
                 }
               },
               "other" : {
@@ -3076,6 +3076,41 @@
         }
       }
     },
+    "component.review_changes_pill.files" : {
+      "comment" : "Visible label and accessibility part of the Review Changes pill.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "component.review_changes_pill.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review changes"
+          }
+        }
+      }
+    },
     "component.section_header.item_count" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3361,34 +3396,37 @@
       }
     },
     "component.unified_diff.summary_added" : {
+      "comment" : "Accessibility label of a diff. %1$s is the path, %2$s the additions (changes.count.additions), %3$s the deletions (changes.count.deletions).",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Added file %1$@, %2$lld additions, %3$lld deletions"
+            "value" : "Added file %1$@, %2$@, %3$@"
           }
         }
       }
     },
     "component.unified_diff.summary_deleted" : {
+      "comment" : "Accessibility label of a diff. %1$s is the path, %2$s the additions (changes.count.additions), %3$s the deletions (changes.count.deletions).",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deleted file %1$@, %2$lld additions, %3$lld deletions"
+            "value" : "Deleted file %1$@, %2$@, %3$@"
           }
         }
       }
     },
     "component.unified_diff.summary_modified" : {
+      "comment" : "Accessibility label of a diff. %1$s is the path, %2$s the additions (changes.count.additions), %3$s the deletions (changes.count.deletions).",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Modified file %1$@, %2$lld additions, %3$lld deletions"
+            "value" : "Modified file %1$@, %2$@, %3$@"
           }
         }
       }
@@ -10838,13 +10876,25 @@
       }
     },
     "session_chat_sheet.mcp.headline" : {
-      "comment" : "%1$lld connected MCP servers, %2$lld configured.",
+      "comment" : "%1$s connected MCP servers, %2$d configured. The plural follows %2$d.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld of %2$lld connected"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ of %2$lld connected"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ of %2$lld connected"
+                }
+              }
+            }
           }
         }
       }
@@ -13026,12 +13076,25 @@
       }
     },
     "settings.servers_summary.saved_active" : {
+      "comment" : "%1$d is how many servers are saved, %2$s the active server's name.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld saved · %2$@ active"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld saved · %2$@ active"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld saved · %2$@ active"
+                }
+              }
+            }
           }
         }
       }
@@ -14870,13 +14933,25 @@
       }
     },
     "tool.count.named" : {
-      "comment" : "%1$d is how many times a tool ran, %2$s the tool name.",
+      "comment" : "%1$d is how many times a tool ran (two or more), %2$s the tool name as the server sends it, such as mcp_lookup. Known tools have their own plurals, such as tool.count.read.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld %2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld %2$@"
+                }
+              }
+            }
           }
         }
       }

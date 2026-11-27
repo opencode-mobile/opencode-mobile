@@ -44,8 +44,12 @@ struct SessionChatMcpServersSheetContent: View {
 
     /// "2 of 3 connected".
     private var headline: OpenCodeText {
-        let connected = summary.connected
-        let total = summary.total
+        Self.headline(connected: summary.connected, total: summary.total)
+    }
+
+    static func headline(connected: Int, total: Int) -> OpenCodeText {
+        // The connected count goes in as text so the plural follows the configured count.
+        let connected = String(connected)
         return OpenCodeText(LocalizedStringResource(
             "session_chat_sheet.mcp.headline",
             defaultValue: "\(connected) of \(total) connected"

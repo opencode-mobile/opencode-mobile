@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
@@ -63,7 +64,13 @@ fun SessionChatMcpServersSheetContent(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 OpenCodeSectionHeader(
-                    title = stringResource(R.string.session_chat_sheet_mcp_headline, summary.connected, summary.total),
+                    title =
+                        pluralStringResource(
+                            R.plurals.session_chat_sheet_mcp_headline,
+                            summary.total,
+                            summary.connected,
+                            summary.total,
+                        ),
                     variant = OpenCodeSectionHeaderVariant.Plain,
                 )
                 servers.forEach { server ->

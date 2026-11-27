@@ -340,26 +340,30 @@ enum UnifiedDiffParser {
 struct OpenCodeUnifiedDiff: View {
     let file: FileDiff
 
-    /// "Modified file src/a.swift, 3 additions, 1 deletions".
+    /// "Modified file src/a.swift, 3 additions, 1 deletion".
     private var fileSummary: LocalizedStringResource {
+        Self.fileSummary(file)
+    }
+
+    static func fileSummary(_ file: FileDiff) -> LocalizedStringResource {
         let path = file.path
-        let additions = file.additions
-        let deletions = file.deletions
+        let additions = String(localized: "changes.count.additions", defaultValue: "\(file.additions) additions")
+        let deletions = String(localized: "changes.count.deletions", defaultValue: "\(file.deletions) deletions")
         return switch file.status {
         case .added:
             LocalizedStringResource(
                 "component.unified_diff.summary_added",
-                defaultValue: "Added file \(path), \(additions) additions, \(deletions) deletions"
+                defaultValue: "Added file \(path), \(additions), \(deletions)"
             )
         case .deleted:
             LocalizedStringResource(
                 "component.unified_diff.summary_deleted",
-                defaultValue: "Deleted file \(path), \(additions) additions, \(deletions) deletions"
+                defaultValue: "Deleted file \(path), \(additions), \(deletions)"
             )
         case .modified:
             LocalizedStringResource(
                 "component.unified_diff.summary_modified",
-                defaultValue: "Modified file \(path), \(additions) additions, \(deletions) deletions"
+                defaultValue: "Modified file \(path), \(additions), \(deletions)"
             )
         }
     }
