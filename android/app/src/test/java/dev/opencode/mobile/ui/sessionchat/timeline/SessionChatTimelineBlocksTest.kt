@@ -21,6 +21,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import dev.opencode.mobile.ui.text.english
+import java.util.Locale
 
 class SessionChatTimelineBlocksTest {
     @Test
@@ -318,10 +319,13 @@ class SessionChatTimelineBlocksTest {
 
     @Test
     fun thoughtDurationLabel_matchesTuiBuckets() {
-        assertEquals("438ms", SessionChatTimelineBlocks.thoughtDurationLabel(438))
-        assertEquals("6.4s", SessionChatTimelineBlocks.thoughtDurationLabel(6400))
-        assertEquals("2m 7s", SessionChatTimelineBlocks.thoughtDurationLabel(127_000))
-        assertNull(SessionChatTimelineBlocks.thoughtDurationLabel(null))
+        assertEquals("438ms", SessionChatTimelineBlocks.thoughtDurationLabel(438, Locale.US))
+        assertEquals("6.4s", SessionChatTimelineBlocks.thoughtDurationLabel(6400, Locale.US))
+        assertEquals("2m 7s", SessionChatTimelineBlocks.thoughtDurationLabel(127_000, Locale.US))
+        assertNull(SessionChatTimelineBlocks.thoughtDurationLabel(null, Locale.US))
+        // The decimal follows the reader's locale; the TUI's unit letters stay.
+        assertEquals("6,4s", SessionChatTimelineBlocks.thoughtDurationLabel(6400, Locale.GERMANY))
+        assertEquals(UiText.Number(6.4, 1, 1, suffix = "s"), SessionChatTimelineBlocks.thoughtDuration(6400))
     }
 
     @Test

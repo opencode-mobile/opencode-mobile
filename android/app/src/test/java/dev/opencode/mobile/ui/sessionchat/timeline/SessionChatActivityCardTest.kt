@@ -19,6 +19,7 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import dev.opencode.mobile.ui.text.english
+import java.util.Locale
 
 class SessionChatActivityCardTest {
     private fun tool(
@@ -649,14 +650,14 @@ class SessionChatActivityCardTest {
         val steps = cards(parts).single().steps.associateBy { it.id }
         val details = toolDetailsFor(parts)
 
-        val thought = sessionChatStepDetail(steps.getValue("r1"), supportsSessionMessageDiff = true, details)
+        val thought = sessionChatStepDetail(steps.getValue("r1"), supportsSessionMessageDiff = true, details, Locale.US)
         assertEquals("Thought", thought?.title?.english())
         assertEquals("Plan the fix", thought?.body)
 
-        val shell = sessionChatStepDetail(steps.getValue("b1"), supportsSessionMessageDiff = true, details)
+        val shell = sessionChatStepDetail(steps.getValue("b1"), supportsSessionMessageDiff = true, details, Locale.US)
         assertTrue(shell?.body.orEmpty().contains("a.txt"))
 
-        val failed = sessionChatStepDetail(steps.getValue("f1"), supportsSessionMessageDiff = true, details)
+        val failed = sessionChatStepDetail(steps.getValue("f1"), supportsSessionMessageDiff = true, details, Locale.US)
         assertTrue(failed?.body.orEmpty().contains("make: no target"))
 
         val questions = buildJsonArray { add(buildJsonObject { put("question", "Where?") }) }
@@ -673,6 +674,7 @@ class SessionChatActivityCardTest {
                 cards(listOf(question)).single().steps.single(),
                 supportsSessionMessageDiff = true,
                 toolDetailsFor(listOf(question)),
+                Locale.US,
             )
         assertTrue(answered?.body.orEmpty().contains("Invoice field"))
 
@@ -680,12 +682,12 @@ class SessionChatActivityCardTest {
         val editCard = steps.getValue("e1").card!!
         assertEquals(
             editCard.openDetail(parts)?.body,
-            sessionChatStepDetail(steps.getValue("e1"), supportsSessionMessageDiff = false, details)?.body,
+            sessionChatStepDetail(steps.getValue("e1"), supportsSessionMessageDiff = false, details, Locale.US)?.body,
         )
 
         // A child session and an edit with Changes navigate instead.
-        assertEquals(null, sessionChatStepDetail(steps.getValue("c1"), supportsSessionMessageDiff = true, details))
-        assertEquals(null, sessionChatStepDetail(steps.getValue("e1"), supportsSessionMessageDiff = true, details))
+        assertEquals(null, sessionChatStepDetail(steps.getValue("c1"), supportsSessionMessageDiff = true, details, Locale.US))
+        assertEquals(null, sessionChatStepDetail(steps.getValue("e1"), supportsSessionMessageDiff = true, details, Locale.US))
     }
 
     @Test

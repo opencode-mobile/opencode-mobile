@@ -105,10 +105,13 @@ struct SessionChatTimelineBlocksTests {
     }
 
     @Test func thoughtDurationLabel_matchesTuiBuckets() {
-        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(438) == "438ms")
-        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400) == "6.4s")
-        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(127_000) == "2m 7s")
-        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(nil) == nil)
+        let en = Locale(identifier: "en_US")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(438, locale: en) == "438ms")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400, locale: en) == "6.4s")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(127_000, locale: en) == "2m 7s")
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(nil, locale: en) == nil)
+        // The decimal follows the locale; the TUI's unit letters stay.
+        #expect(SessionChatTimelineBlocks.thoughtDurationLabel(6400, locale: Locale(identifier: "de_DE")) == "6,4s")
     }
 
     @Test func build_hidesBlankReasoning() {
