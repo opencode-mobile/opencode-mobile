@@ -1364,9 +1364,7 @@ struct OpenCodeSessionComposer: View {
         if file.additions > 0 || file.deletions > 0 {
             line = line
                 + Text("  ")
-                + Text("+\(file.additions)").foregroundColor(OpenCodeColors.diffAdd)
-                + Text(" ")
-                + Text("\u{2212}\(file.deletions)").foregroundColor(OpenCodeColors.diffDelete)
+                + OpenCodeDiffStat.text(additions: file.additions, deletions: file.deletions)
         }
         return line
             .font(OpenCodeTypography.code)

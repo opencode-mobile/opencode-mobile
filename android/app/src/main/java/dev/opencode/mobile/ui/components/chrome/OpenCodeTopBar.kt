@@ -24,8 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -40,7 +38,6 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.R
@@ -416,8 +413,7 @@ private fun LeadingControl(leading: OpenCodeTopBarLeading) {
     when (leading) {
         OpenCodeTopBarLeading.None -> Unit
         is OpenCodeTopBarLeading.Back -> {
-            // Back points toward the leading edge, so it flips in right-to-left layouts.
-            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+            // ArrowBack auto-mirrors (icons/manifest.yaml), so it points to the leading edge in RTL.
             OpenCodeButton(
                 variant =
                     OpenCodeButtonVariant.IconCircle(
@@ -426,7 +422,6 @@ private fun LeadingControl(leading: OpenCodeTopBarLeading) {
                     ),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = leading.onClick,
-                modifier = if (rtl) Modifier.graphicsLayer { scaleX = -1f } else Modifier,
             )
         }
         is OpenCodeTopBarLeading.Close ->

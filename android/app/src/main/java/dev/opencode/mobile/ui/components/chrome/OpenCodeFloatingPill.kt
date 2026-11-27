@@ -62,6 +62,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
@@ -369,7 +370,8 @@ fun OpenCodeFloatingPill(
                     AnimatedVisibility(visible = labelShown, enter = foldIn, exit = foldOut) {
                         Text(
                             text = layout.label,
-                            style = MaterialTheme.typography.labelLarge,
+                            // Direction follows the label, so "+12 −5" stays left to right in RTL.
+                            style = MaterialTheme.typography.labelLarge.copy(textDirection = TextDirection.ContentOrLtr),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(start = if (hasFullMark) FloatingPillIconSpacing else 0.dp),

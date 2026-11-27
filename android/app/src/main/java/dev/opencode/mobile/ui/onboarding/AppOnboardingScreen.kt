@@ -52,6 +52,7 @@ import dev.opencode.mobile.ui.components.OpenCodeCodeSnippet
 import dev.opencode.mobile.ui.components.OpenCodePageIndicator
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemTextFlow
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSkeletonIllustration
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -282,6 +283,7 @@ private fun AppOnboardingFeatureList(
         OpenCodeListItem(
             title = stringResource(row.title),
             subtitle = stringResource(row.detail),
+            textFlow = OpenCodeListItemTextFlow.Wrapped,
             startDecorator =
                 StartDecorator.Icon(
                     imageVector = featureIcon(row.id),

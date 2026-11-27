@@ -1,4 +1,11 @@
 # Lucide catalog — see docs/design-system/icons.md
+#
+# mirrors_in_rtl: true marks a glyph whose direction follows reading order
+# (back / forward arrows, disclosure chevrons, leading-pane and indent marks,
+# undo / redo). Generated code mirrors it in right-to-left layouts: Android
+# ImageVector autoMirror, iOS flipsForRightToLeftLayoutDirection in
+# OpenCodeIconImage. Leave it off for up/down glyphs, media and time glyphs
+# (play, skip, rotate), brands, and anything whose direction is physical.
 icons:
   - name: add
     lucide: plus
@@ -6,9 +13,11 @@ icons:
   - name: arrow_back
     lucide: arrow-left
     notes: Back navigation; Terminal control strip Left
+    mirrors_in_rtl: true
   - name: arrow_forward
     lucide: arrow-right
     notes: Pair of arrow_back; Terminal control strip Right
+    mirrors_in_rtl: true
   - name: arrow_upward
     lucide: arrow-up
     notes: Queue / default Send; Go up row in Add project sheet
@@ -23,6 +32,7 @@ icons:
     notes: Selected / complete mark
   - name: chevron_right
     lucide: chevron-right
+    mirrors_in_rtl: true
   - name: keyboard_arrow_down
     lucide: chevron-down
     notes: Title switcher chevron after home server name
@@ -72,6 +82,7 @@ icons:
   - name: sidebar
     lucide: panel-left
     notes: Tablet split view — show / hide the leading pane (Home list, Settings list)
+    mirrors_in_rtl: true
   - name: terminal
     lucide: square-terminal
     notes: open Terminal from home
@@ -95,12 +106,15 @@ icons:
   - name: subdirectory_arrow_right
     lucide: corner-down-right
     notes: Subdirectory rows in Add project sheet
+    mirrors_in_rtl: true
   - name: undo
     lucide: undo-2
     notes: Commands tile Undo
+    mirrors_in_rtl: true
   - name: redo
     lucide: redo-2
     notes: Commands tile Redo; pair of undo
+    mirrors_in_rtl: true
   - name: call_split
     lucide: git-fork
     notes: Commands tile Fork
@@ -137,6 +151,7 @@ icons:
   - name: chevron_left
     lucide: chevron-left
     notes: Pair of chevron_right; previous scenario in the Session Chat Playground sheet
+    mirrors_in_rtl: true
   - name: play
     lucide: play
     notes: Session Chat Playground playback capsule

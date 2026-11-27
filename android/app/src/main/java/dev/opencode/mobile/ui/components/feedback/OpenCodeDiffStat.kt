@@ -1,21 +1,26 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -68,6 +73,8 @@ fun openCodeDiffStatAnnotatedString(
             OpenCodeDiffStatSeparator.Space, OpenCodeDiffStatSeparator.Split -> " "
         }
     return buildAnnotatedString {
+        // Isolated left to right, so "+12 −5" keeps its sign order inside right-to-left text.
+        append(LEFT_TO_RIGHT_ISOLATE)
         if (additions != null) {
             withStyle(SpanStyle(color = additionColor)) { append("+$additions") }
         }
@@ -75,7 +82,24 @@ fun openCodeDiffStatAnnotatedString(
         if (deletions != null) {
             withStyle(SpanStyle(color = deletionColor)) { append("−$deletions") }
         }
+        append(POP_DIRECTIONAL_ISOLATE)
     }
+}
+
+/** U+2066 LEFT-TO-RIGHT ISOLATE; closed by [POP_DIRECTIONAL_ISOLATE]. */
+const val LEFT_TO_RIGHT_ISOLATE = "\u2066"
+
+/** U+2069 POP DIRECTIONAL ISOLATE. */
+const val POP_DIRECTIONAL_ISOLATE = "\u2069"
+
+/**
+ * Lays signed counts out left to right inside a right-to-left layout, so "+12 −5" keeps
+ * its order and each sign stays before its number. Text inside resolves its direction
+ * from content, falling back to left to right.
+ */
+@Composable
+fun OpenCodeLeftToRightCounts(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr, content = content)
 }
 
 /** `+N` and `−M` counts. A null side is omitted. Zero is shown when passed. */
@@ -93,26 +117,10 @@ fun OpenCodeDiffStat(
     if (deletions != null) require(deletions >= 0) { "Diff Stat deletions must be nonnegative" }
     val textStyle = style.textStyle()
     if (separator == OpenCodeDiffStatSeparator.Split) {
-        Row(
-            modifier = modifier,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (additions != null) {
-                Text(
-                    text = "+$additions",
-                    style = textStyle,
-                    color = diffStatAdditionColor(enabled),
-                    maxLines = 1,
-                )
-            }
-            if (deletions != null) {
-                Text(
-                    text = "−$deletions",
-                    style = textStyle,
-                    color = diffStatDeletionColor(enabled),
-                    maxLines = 1,
-                )
+        // The caller's modifier stays outside, in the caller's layout direction.
+        Box(modifier = modifier) {
+            OpenCodeLeftToRightCounts {
+                SplitDiffStat(additions, deletions, enabled, textStyle)
             }
         }
     } else {
@@ -125,9 +133,39 @@ fun OpenCodeDiffStat(
                     separator = separator,
                 ),
             modifier = modifier,
-            style = textStyle,
+            style = textStyle.copy(textDirection = TextDirection.Ltr),
             maxLines = 1,
         )
+    }
+}
+
+@Composable
+private fun SplitDiffStat(
+    additions: Int?,
+    deletions: Int?,
+    enabled: Boolean,
+    textStyle: TextStyle,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (additions != null) {
+            Text(
+                text = "+$additions",
+                style = textStyle,
+                color = diffStatAdditionColor(enabled),
+                maxLines = 1,
+            )
+        }
+        if (deletions != null) {
+            Text(
+                text = "−$deletions",
+                style = textStyle,
+                color = diffStatDeletionColor(enabled),
+                maxLines = 1,
+            )
+        }
     }
 }
 

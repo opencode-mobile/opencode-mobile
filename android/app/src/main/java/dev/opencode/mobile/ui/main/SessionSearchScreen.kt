@@ -26,14 +26,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
@@ -113,13 +110,10 @@ internal fun SessionSearchScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            // Back points toward the leading edge, so it flips in right-to-left layouts.
-            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowBack, stringResource(R.string.top_bar_back)),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = callbacks.onClose,
-                modifier = if (rtl) Modifier.graphicsLayer { scaleX = -1f } else Modifier,
             )
             OpenCodeTextInput(
                 value = state.query,

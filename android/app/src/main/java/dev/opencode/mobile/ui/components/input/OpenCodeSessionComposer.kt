@@ -1790,9 +1790,11 @@ private fun PermissionFileLine(file: OpenCodeSessionComposerState.PermissionFile
                 append(file.path)
                 if (file.additions > 0 || file.deletions > 0) {
                     append("  ")
+                    append(LEFT_TO_RIGHT_ISOLATE)
                     withStyle(SpanStyle(color = openCodeColor("diff-add"))) { append("+${file.additions}") }
                     append(" ")
                     withStyle(SpanStyle(color = openCodeColor("diff-delete"))) { append("\u2212${file.deletions}") }
+                    append(POP_DIRECTIONAL_ISOLATE)
                 }
             },
         style = PermissionCodeStyle,

@@ -6,11 +6,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -49,26 +52,32 @@ fun TerminalControlStrip(
             onClick = { onSend("\t") },
         )
         Spacer(modifier = Modifier.weight(1f))
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, stringResource(R.string.terminal_key_up)),
-            contrast = OpenCodeButtonContrast.Low,
-            onClick = { onSend("\u001b[A") },
-        )
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowDownward, stringResource(R.string.terminal_key_down)),
-            contrast = OpenCodeButtonContrast.Low,
-            onClick = { onSend("\u001b[B") },
-        )
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowBack, stringResource(R.string.terminal_key_left)),
-            contrast = OpenCodeButtonContrast.Low,
-            onClick = { onSend("\u001b[D") },
-        )
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowForward, stringResource(R.string.terminal_key_right)),
-            contrast = OpenCodeButtonContrast.Low,
-            onClick = { onSend("\u001b[C") },
-        )
+        // Cursor keys are physical: Left sends ESC [ D whatever the reading order, so the
+        // cluster stays left-to-right and its arrows do not mirror.
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, stringResource(R.string.terminal_key_up)),
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = { onSend("\u001b[A") },
+                )
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowDownward, stringResource(R.string.terminal_key_down)),
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = { onSend("\u001b[B") },
+                )
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowBack, stringResource(R.string.terminal_key_left)),
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = { onSend("\u001b[D") },
+                )
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowForward, stringResource(R.string.terminal_key_right)),
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = { onSend("\u001b[C") },
+                )
+            }
+        }
     }
 }
 
