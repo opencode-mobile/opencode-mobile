@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.theme.openCodeColor
@@ -57,6 +58,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 
 object WorktreesTags {
     const val LIST = "worktreesList"
@@ -358,7 +360,9 @@ private fun WorktreesSnackbar(
             is WorktreesSnackbarUi.Failed ->
                 OpenCodeSnackbarMessage(
                     text =
-                        snackbar.message?.let { resources.getString(R.string.worktrees_remove_failed, snackbar.name, it) }
+                        snackbar.message?.let {
+                            resources.getString(R.string.worktrees_remove_failed, snackbar.name, it.resolve(ResourcesUiTextLookup(resources)))
+                        }
                             ?: resources.getString(R.string.worktrees_remove_failed_connection, snackbar.name),
                     variant = OpenCodeSnackbarVariant.Error,
                     actionLabel = resources.getString(R.string.common_retry),

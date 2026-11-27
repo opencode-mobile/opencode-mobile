@@ -303,7 +303,7 @@ data class SessionChatUiState(
     val pendingSend: PendingSend? = null,
     val messagesFromCache: Boolean = false,
     val contextUsageFraction: Float? = null,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
     val snackbar: SessionChatSnackbar? = null,
     val isLifecycleActionInFlight: Boolean = false,
     val shouldLeaveSession: Boolean = false,
@@ -625,7 +625,7 @@ data class SessionChatTimelineRegionState(
     val isSyncingMessages: Boolean = false,
     val hasOlder: Boolean = false,
     val isLoadingOlder: Boolean = false,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
 )
 
 /** Child session ids visible in the timeline (running subagent/task rows). */
@@ -682,7 +682,7 @@ data class SessionChatComposerRegionState(
     val isAborting: Boolean = false,
     /** Attachment rejections are keyed text; send and command failures are the server's words. */
     val errorMessage: UiText? = null,
-    val abortErrorMessage: String? = null,
+    val abortErrorMessage: UiText? = null,
     val serverCommands: List<ServerCommand> = emptyList(),
     val mentionableAgents: List<MentionableAgent> = emptyList(),
     val slashSuggestionsVisible: Boolean = false,

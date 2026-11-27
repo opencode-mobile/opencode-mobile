@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
@@ -18,6 +19,7 @@ import dev.opencode.mobile.domain.message.ServerFilePreviews
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.domain.message.UnavailableServerFilePreviews
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.sessionchat.ContentRevision
 import dev.opencode.mobile.ui.sessionchat.DisplayFrame
@@ -526,7 +528,7 @@ class SessionChatTimeline(
     fun failOptimisticSend(
         optimisticId: String,
         /** Null when the failure is reported elsewhere (an app-text snackbar). */
-        error: String?,
+        error: UiText?,
     ) {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
@@ -1285,12 +1287,14 @@ class SessionChatTimeline(
         soleText: String,
     ): Boolean = message.role == MessageRole.User && soleText != message.text
 
-    private fun errorMessage(throwable: Throwable): String =
+    /** Server text stays verbatim; the app's own fallbacks are keyed. */
+    private fun errorMessage(throwable: Throwable): UiText =
         when (throwable) {
-            is MessageError.Http -> throwable.message ?: "Request failed"
-            is MessageError.Transport -> "Unable to reach the server"
-            is MessageError.Decoding -> "Unable to read server response"
-            else -> throwable.message ?: "Something went wrong"
+            is MessageError.Http ->
+                throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.session_chat_activity_request_failed)
+            is MessageError.Transport -> UiText.resource(R.string.connection_error_unreachable)
+            is MessageError.Decoding -> UiText.resource(R.string.home_session_error_unreadable_response)
+            else -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_generic)
         }
 
     private fun logI(message: String) {

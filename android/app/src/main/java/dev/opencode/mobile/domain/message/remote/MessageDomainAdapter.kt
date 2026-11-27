@@ -1085,11 +1085,12 @@ class MessageDomainAdapter(
         completedAtEpochMs: Long?,
     ): Long? = if (retryAfterMs == null) null else completedAtEpochMs ?: nowEpochMs()
 
-    private fun httpMessage(body: String?): String {
+    /** The server's readable error text, or null so the app shows its own keyed fallback. */
+    private fun httpMessage(body: String?): String? {
         val friendly = ServerErrorMessage.userFacing(body)
         if (friendly != null) return friendly
         val plain = body?.trim().orEmpty()
-        if (plain.isEmpty() || plain.startsWith("{") || plain.length > 200) return "Request failed"
+        if (plain.isEmpty() || plain.startsWith("{") || plain.length > 200) return null
         return plain
     }
 

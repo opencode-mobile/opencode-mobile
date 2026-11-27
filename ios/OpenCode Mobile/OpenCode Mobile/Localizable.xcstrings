@@ -16861,6 +16861,18 @@
         }
       }
     },
+    "worktree.request_failed_http" : {
+      "comment" : "A worktree request failed and the server sent no readable message. The number is the HTTP status code.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request failed (HTTP %lld)"
+          }
+        }
+      }
+    },
     "worktree.run_in_subtitle" : {
       "extractionState" : "manual",
       "localizations" : {

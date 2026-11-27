@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
@@ -1236,8 +1237,11 @@ class SessionChatComposer(
         worktree: String,
         onOptimisticRows: suspend (List<SessionChatMessageItem>) -> Unit,
         onSendAccepted: suspend () -> Unit,
-        /** [error] is app text for a failure the app caused, else the server or transport error as is. */
-        onSendFailed: (optimisticId: String, error: UiText) -> Unit,
+        /**
+         * [error] is the failure text. [appCaused] marks a failure the app caused (shown as a
+         * notice); otherwise it is the server or transport error, shown on the timeline.
+         */
+        onSendFailed: (optimisticId: String, error: UiText, appCaused: Boolean) -> Unit,
         isSessionBusy: Boolean,
         supportsFollowUp: Boolean,
         commandKeepsClientMessageId: Boolean = false,
@@ -1389,7 +1393,7 @@ class SessionChatComposer(
                     )
                     _state.update { it.copy(isSending = false, sendProgressPercent = null) }
                     firstSend?.settleFailed(sendJobActive = isActive)
-                    onSendFailed(display.id, UiText.verbatim(PENDING_SEND_TIMEOUT_ERROR))
+                    onSendFailed(display.id, UiText.verbatim(PENDING_SEND_TIMEOUT_ERROR), false)
                     return@launchSend
                 }
                 val hasAttachments = attachments.isNotEmpty()
@@ -1438,7 +1442,7 @@ class SessionChatComposer(
                             if (
                                 supportsFollowUp &&
                                 composer.followUpDelivery != FollowUpDelivery.Queue &&
-                                errorMessage(busy) == "Session is busy"
+                                isSessionBusy(busy)
                             ) {
                                 send(FollowUpDelivery.Queue)
                             } else {
@@ -1519,10 +1523,8 @@ class SessionChatComposer(
                 )
                 _state.update { it.copy(isSending = false, sendProgressPercent = null) }
                 firstSend?.settleFailed(sendJobActive = isActive)
-                onSendFailed(
-                    display.id,
-                    (throwable as? SessionChatRevertCommitFailure)?.text ?: UiText.verbatim(errorMessage(throwable)),
-                )
+                val revertFailure = (throwable as? SessionChatRevertCommitFailure)?.text
+                onSendFailed(display.id, revertFailure ?: errorMessage(throwable), revertFailure != null)
             }
         }
         return true
@@ -1590,7 +1592,7 @@ class SessionChatComposer(
                     submittedAttachments = emptyList(),
                     submittedAttachmentRevisions = emptyMap(),
                 )
-                _state.update { it.copy(errorMessage = UiText.verbatim(errorMessage(throwable))) }
+                _state.update { it.copy(errorMessage = errorMessage(throwable)) }
             }
         }
         return true
@@ -2263,18 +2265,34 @@ class SessionChatComposer(
     private fun isTransportFailure(throwable: Throwable): Boolean =
         throwable is MessageError.Transport || throwable is CommandError.Transport
 
-    private fun errorMessage(throwable: Throwable): String =
+    /** Server text stays verbatim; the app's own fallbacks are keyed. */
+    private fun errorMessage(throwable: Throwable): UiText =
         when (throwable) {
-            is MessageError.Http -> throwable.message ?: "Request failed"
-            is MessageError.Transport -> "Unable to reach the server"
-            is MessageError.Decoding -> "Unable to read server response"
-            is CommandError.Http -> throwable.message ?: "Request failed"
-            is CommandError.Transport -> "Unable to reach the server"
-            is CommandError.Decoding -> "Unable to read server response"
-            is SessionError.Http -> throwable.message ?: "Request failed"
-            is SessionError.Transport -> "Unable to reach the server"
-            is SessionError.Decoding -> "Unable to read server response"
-            else -> throwable.message ?: "Something went wrong"
+            is MessageError.Http -> serverOrRequestFailed(throwable.message)
+            is CommandError.Http -> serverOrRequestFailed(throwable.message)
+            is SessionError.Http -> serverOrRequestFailed(throwable.message)
+            is MessageError.Transport,
+            is CommandError.Transport,
+            is SessionError.Transport,
+            -> UiText.resource(R.string.connection_error_unreachable)
+            is MessageError.Decoding,
+            is CommandError.Decoding,
+            is SessionError.Decoding,
+            -> UiText.resource(R.string.home_session_error_unreadable_response)
+            else -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_generic)
+        }
+
+    private fun serverOrRequestFailed(message: String?): UiText =
+        message?.let(UiText::verbatim) ?: UiText.resource(R.string.session_chat_activity_request_failed)
+
+    /** The server's own "Session is busy" reply, matched on server text (never on app copy). */
+    private fun isSessionBusy(throwable: Throwable): Boolean =
+        when (throwable) {
+            is MessageError.Http -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
+            is CommandError.Http -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
+            is SessionError.Http -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
+            is MessageError, is CommandError, is SessionError -> false
+            else -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
         }
 
     private fun logSendFailure(throwable: Throwable) {
@@ -2295,6 +2313,7 @@ class SessionChatComposer(
         internal const val CATALOG_REFRESH_DEBOUNCE_MS = 300L
         const val ModelFilterThreshold = 10
         const val PENDING_SEND_TIMEOUT_ERROR = "Couldn't send. Try again."
+        private const val SESSION_BUSY_SERVER_MESSAGE = "Session is busy"
         const val SHELL_CANNOT_QUEUE_ERROR = "Shell commands can't be queued. Switch to Steer to run it now."
     }
 

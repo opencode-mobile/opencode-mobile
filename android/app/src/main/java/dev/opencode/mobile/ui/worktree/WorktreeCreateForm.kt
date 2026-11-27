@@ -282,8 +282,8 @@ class WorktreeCreateForm(
             } catch (error: Exception) {
                 // The server's own text stays verbatim.
                 val message =
-                    ((error as? WorktreeCreateError)?.message ?: error.message?.takeIf { it.isNotBlank() })
-                        ?.let(UiText::verbatim)
+                    (error as? WorktreeCreateError)?.text
+                        ?: error.message?.takeIf { it.isNotBlank() }?.let(UiText::verbatim)
                         ?: UiText.resource(R.string.worktree_unknown_error)
                 _state.update { state ->
                     if (state == null || state.origin != current.origin) {

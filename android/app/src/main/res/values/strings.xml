@@ -387,6 +387,8 @@
     <string name="worktree_submitting">Creating…</string>
     <string name="worktree_create_failed">Couldn\'t create the worktree: %1$s</string>
     <string name="worktree_unknown_error">Unknown error</string>
+    <!-- A worktree request failed and the server sent no readable message. The number is the HTTP status code. -->
+    <string name="worktree_request_failed_http">Request failed (HTTP %1$d)</string>
     <!-- Files and Terminal -->
     <string name="files_title">Files</string>
     <string name="files_more_options">More options</string>

@@ -67,8 +67,10 @@ nonisolated enum WorktreeCreateCopy {
     static let noCommitError = "Needs a git repository with a commit"
     static let unsupportedError = "This server can't create worktrees"
 
+    /// "Request failed (HTTP 500)": the server answered `statusCode` with nothing readable.
+    /// App text, keyed; the repository returns it as a `String` like the server's own words.
     static func requestFailed(_ statusCode: Int) -> String {
-        "Request failed (HTTP \(statusCode))"
+        String(localized: LocalizedStringResource("worktree.request_failed_http", defaultValue: "Request failed (HTTP \(statusCode))"))
     }
 
     /// v1 branch shown for a name: `opencode/<name>`, `opencode/…` while empty. A branch name, not app text.

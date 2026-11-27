@@ -10,11 +10,13 @@ import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.VcsFileStatus
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.worktree.RemoveWorktreeRequest
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRemoveError
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.ui.text.EnglishStrings
+import java.lang.reflect.Proxy
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -32,7 +34,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.lang.reflect.Proxy
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorktreesViewModelTest {
@@ -206,7 +207,7 @@ class WorktreesViewModelTest {
             advanceUntilIdle()
 
             val failed = model.state.value.snackbar as WorktreesSnackbarUi.Failed
-            assertEquals("Invalid worktree directory", failed.message)
+            assertEquals(UiText.verbatim("Invalid worktree directory"), failed.message)
             val row = model.state.value.groups.first().worktrees.single { it.name == "typo" }
             assertFalse(row.isRemoving)
             assertTrue(feed.removed.value.isEmpty())

@@ -1580,13 +1580,13 @@ class SessionChatViewModel
                     )
                     publishUiState()
                 },
-                onSendFailed = { optimisticId, error ->
+                onSendFailed = { optimisticId, error, appCaused ->
                     newSessionDraft.endCreating()
                     armedSendAcceptance = null
                     pendingSend = null
                     // Server and transport errors stay the timeline error; app text goes to the snackbar.
-                    timeline.failOptimisticSend(optimisticId, (error as? UiText.Verbatim)?.value)
-                    if (error !is UiText.Verbatim) commands.reportActionError(error)
+                    timeline.failOptimisticSend(optimisticId, error.takeUnless { appCaused })
+                    if (appCaused) commands.reportActionError(error)
                     publishUiState()
                 },
                 serverAlreadyAccepted = ::serverAlreadyAccepted,
@@ -2158,7 +2158,7 @@ class SessionChatViewModel
                         infoState.lifecycleErrorMessage != null -> UiText.verbatim(infoState.lifecycleErrorMessage)
                         worktreeMove.state.value.errorMessage != null -> worktreeMove.state.value.errorMessage
                         composerState.errorMessage != null -> composerState.errorMessage
-                        composerState.abortErrorMessage != null -> UiText.verbatim(composerState.abortErrorMessage)
+                        composerState.abortErrorMessage != null -> composerState.abortErrorMessage
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
                         goal.state.value.notice != null -> goal.state.value.notice
                         turnDiffNotice != null -> TimelineText.verbatim(turnDiffNotice)
@@ -2167,7 +2167,7 @@ class SessionChatViewModel
                             inboxSnapshot.permissionTopologyError != null -> TimelineText.verbatim(inboxSnapshot.permissionTopologyError)
                         inboxSnapshot.questionRequests.isEmpty() &&
                             inboxSnapshot.questionTopologyError != null -> TimelineText.verbatim(inboxSnapshot.questionTopologyError)
-                        timelineState.errorMessage != null -> UiText.verbatim(timelineState.errorMessage)
+                        timelineState.errorMessage != null -> timelineState.errorMessage
                         else -> null
                     }
                 }

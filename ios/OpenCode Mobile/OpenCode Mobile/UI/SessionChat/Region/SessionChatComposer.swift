@@ -1256,7 +1256,7 @@ final class SessionChatComposer {
                         } catch {
                             if supportsFollowUp,
                                composer.followUpDelivery != .queue,
-                               errorMessage(error) == "Session is busy"
+                               Self.isSessionBusy(error)
                             {
                                 try await send(delivery: .queue)
                             } else {
@@ -2082,31 +2082,44 @@ final class SessionChatComposer {
         return false
     }
 
+    /// Server text stays verbatim; the app's own fallbacks are keyed.
     private func errorMessage(_ error: Error) -> String {
         if let messageError = error as? MessageError {
-            return messageError.localizedDescription
+            return messageError.displayMessage
         }
         if let commandError = error as? CommandError {
             switch commandError {
             case let .http(_, message):
-                return message ?? "Request failed"
+                return message ?? MessageError.requestFailedText
             case .transport:
-                return "Unable to reach the server"
+                return String(localized: "connection.error.unreachable", defaultValue: "Unable to reach the server")
             case .decoding:
-                return "Unable to read server response"
+                return String(localized: "home.session_error.unreadable_response", defaultValue: "Unable to read server response")
             }
         }
         if let sessionError = error as? SessionError {
             switch sessionError {
             case let .http(_, message):
-                return message ?? "Request failed"
+                return message ?? MessageError.requestFailedText
             case .transport:
-                return "Unable to reach the server"
+                return String(localized: "connection.error.unreachable", defaultValue: "Unable to reach the server")
             case .decoding:
-                return "Unable to read server response"
+                return String(localized: "home.session_error.unreadable_response", defaultValue: "Unable to read server response")
             }
         }
         return error.localizedDescription
+    }
+
+    /// The server's busy reply, matched on the server's mapped text (never on keyed app copy).
+    private static func isSessionBusy(_ error: Error) -> Bool {
+        let message: String? = switch error {
+        case let MessageError.http(_, message): message
+        case let CommandError.http(_, message): message
+        case let SessionError.http(_, message): message
+        case is MessageError, is CommandError, is SessionError: nil
+        default: error.localizedDescription
+        }
+        return message == ServerErrorMessage.sessionBusy
     }
 
     private func notifyChange() {

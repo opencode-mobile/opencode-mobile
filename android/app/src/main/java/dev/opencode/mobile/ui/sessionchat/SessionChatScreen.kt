@@ -1103,7 +1103,7 @@ private fun SessionChatScreenBody(
                                 isRefreshing = uiState.isRefreshing,
                                 hasOlder = uiState.hasOlder,
                                 isLoadingOlder = uiState.isLoadingOlder,
-                                errorMessage = uiState.errorMessage,
+                                errorMessage = uiState.errorMessage?.resolve(),
                                 sessionBranchPill = uiState.sessionBranchPill,
                                 syncingIndicatorLabel = uiState.syncingIndicatorLabel,
                                 workingIndicatorLabel = uiState.workingIndicatorLabel,

@@ -30,7 +30,7 @@ extension TerminalError: LocalizedError {
         case let .transport(message):
             return message
         case let .http(_, message):
-            return message ?? "Request failed"
+            return message ?? MessageError.requestFailedText
         case let .decoding(message):
             return message
         }

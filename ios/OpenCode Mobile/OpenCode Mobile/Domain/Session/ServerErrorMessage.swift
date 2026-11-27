@@ -6,6 +6,8 @@ import Foundation
 /// client bugs, not something the user can act on, so they return nil.
 nonisolated enum ServerErrorMessage {
     private static let maxLength = 200
+    /// The text a busy-session reply maps to; the composer matches it to queue instead.
+    static let sessionBusy = "Session is busy"
 
     static func from(_ error: Error) -> String? {
         guard case let .http(_, body)? = error as? SessionError else { return nil }
@@ -37,7 +39,7 @@ nonisolated enum ServerErrorMessage {
             }
             return "Folder or file not found"
         case "SessionBusyError", "BusyError":
-            return "Session is busy"
+            return sessionBusy
         case "UnknownError":
             let ref = (root["ref"] as? String) ?? (nested?["ref"] as? String)
             let message = fromBody(trimmed)

@@ -538,8 +538,8 @@ class SessionChatNewSessionDraft(
             } catch (error: Exception) {
                 if (!isOnDraftProfile()) throw NewSessionProfileChanged()
                 val message =
-                    ((error as? WorktreeCreateError)?.message ?: error.message?.takeIf { it.isNotBlank() })
-                        ?.let(UiText::verbatim)
+                    (error as? WorktreeCreateError)?.text
+                        ?: error.message?.takeIf { it.isNotBlank() }?.let(UiText::verbatim)
                         ?: UiText.resource(R.string.worktree_unknown_error)
                 throw NewSessionDraftWorktreeFailure(UiText.resource(R.string.worktree_create_failed, message))
             }

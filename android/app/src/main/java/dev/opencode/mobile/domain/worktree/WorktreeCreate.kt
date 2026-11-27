@@ -1,5 +1,8 @@
 package dev.opencode.mobile.domain.worktree
 
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+
 /** A new checkout of a project. V1 ignores [projectId] and [baseRef]; V2 needs [projectId]. */
 data class CreateWorktreeRequest(
     val projectId: String?,
@@ -20,9 +23,13 @@ data class CreatedWorktree(
     val branch: String?,
 )
 
-/** Create failed; [message] is the server's own text when it gave one. */
+/**
+ * Create failed. [text] is what the app shows: the server's own words verbatim when it gave
+ * some, else keyed app text. [message] is the same for logs (no app text).
+ */
 class WorktreeCreateError(
     override val message: String,
+    val text: UiText = UiText.verbatim(message),
 ) : Exception(message)
 
 /**
@@ -34,5 +41,6 @@ object WorktreeCreateCopy {
     const val NOT_GIT = "Needs a git repository"
     const val UNSUPPORTED = "This server can't create worktrees"
 
-    fun requestFailed(statusCode: Int): String = "Request failed (HTTP $statusCode)"
+    /** "Request failed (HTTP 500)": the server answered [statusCode] with nothing readable. */
+    fun requestFailed(statusCode: Int): UiText = UiText.resource(R.string.worktree_request_failed_http, statusCode)
 }
