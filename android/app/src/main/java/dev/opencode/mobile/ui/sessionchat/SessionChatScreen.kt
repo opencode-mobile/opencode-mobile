@@ -746,7 +746,7 @@ private fun SessionChatScreenBody(
     OpenCodeDialog(
         visible = showDeleteConfirmation,
         title = stringResource(R.string.session_chat_delete_dialog_title),
-        subtitle = stringResource(R.string.session_chat_delete_dialog_message, uiState.sessionTitle),
+        subtitle = stringResource(R.string.session_chat_delete_dialog_message, OptimisticSessionCreate.displayTitle(uiState.sessionTitle).resolve()),
         primaryOption =
             OpenCodeDialogOption(
                 title = stringResource(R.string.session_chat_delete_dialog_confirm),
@@ -976,7 +976,7 @@ private fun SessionChatScreenBody(
                         if (drafting) {
                             stringResource(R.string.new_session_title)
                         } else {
-                            titleMenu?.title ?: uiState.sessionTitle.ifBlank { sessionTitle }
+                            titleMenu?.title ?: OptimisticSessionCreate.displayTitle(uiState.sessionTitle.ifBlank { sessionTitle }).resolve()
                         },
                     onTitleClick = titleMenu?.onClick,
                     subtitle = if (drafting) stringResource(R.string.new_session_draft_subtitle) else uiState.projectLabel,

@@ -282,6 +282,9 @@ object SessionChatPillSlots {
                 thinking && !fading && label == SessionActivity.Running.chatStatusLabel() ->
                     OpenCodeTurnStatusPillPhase.Working(UiText.resource(R.string.component_thinking).resolve(text)) to
                         SessionChatActivityItem.Thinking
+                // The status pipeline carries Compacting as an English sentinel; show the keyed text.
+                label == SessionCompactChrome.STATUS_LABEL ->
+                    OpenCodeTurnStatusPillPhase.Working(SessionCompactChrome.statusLabel.resolve(text)) to null
                 else -> OpenCodeTurnStatusPillPhase.Working(label) to null
             }
         val canFold = SessionChatTurnStatusSlot.canFold(phase)
