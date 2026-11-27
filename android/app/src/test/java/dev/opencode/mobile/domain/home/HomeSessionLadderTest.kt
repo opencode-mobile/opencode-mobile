@@ -2,11 +2,11 @@ package dev.opencode.mobile.domain.home
 
 import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.text.EnglishStrings
+import dev.opencode.mobile.ui.text.GermanFormatsStrings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class HomeSessionLadderTest {
@@ -17,7 +17,6 @@ class HomeSessionLadderTest {
     )
 
     private val zone = ZoneId.of("America/Los_Angeles")
-    private val locale = Locale.US
 
     // Wednesday 2026-08-05 15:00 local PDT (UTC-7)
     private val now = 1_785_967_200_000L
@@ -112,6 +111,16 @@ class HomeSessionLadderTest {
     }
 
     @Test
+    fun group_namesOlderDaysInTheReadersLocaleWhenShown() {
+        // Three days before Wednesday 2026-08-05: Sunday 2026-08-02.
+        val sections =
+            group(listOf(Item(id = "sunday", updatedAtEpochMs = now - TimeUnit.DAYS.toMillis(3))), windowHours = 1)
+
+        assertEquals("Sunday, Aug 2", sections.single().title.resolve(EnglishStrings))
+        assertEquals("Sonntag, 2. Aug.", sections.single().title.resolve(GermanFormatsStrings))
+    }
+
+    @Test
     fun group_bucketsOlderSessionsByWeek() {
         val todayStart =
             java.time.Instant
@@ -129,7 +138,9 @@ class HomeSessionLadderTest {
             )
         assertEquals(1, sections.size)
         assertEquals(HomeSessionLadderKind.Week, sections[0].kind)
-        assertTrue(sections[0].title.resolve(EnglishStrings).startsWith("Week of "))
+        // 2026-07-22 is a Wednesday: its week runs Monday Jul 20 to Sunday Jul 26.
+        assertEquals("Week of Jul 20 – Jul 26", sections[0].title.resolve(EnglishStrings))
+        assertTrue(sections[0].title.resolve(GermanFormatsStrings).contains("20. Juli"))
         assertEquals(listOf("old"), sections[0].items.map { it.id })
     }
 
@@ -149,6 +160,5 @@ class HomeSessionLadderTest {
             recentWindowHours = windowHours,
             nowEpochMs = now,
             zoneId = zone,
-            locale = locale,
         )
 }

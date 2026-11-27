@@ -101,6 +101,8 @@ enum HomeSessionLadder {
 
         let weekdayFormatter = DateFormatter()
         weekdayFormatter.locale = locale
+        // The calendar's zone, the one the day buckets use, so the title names the same day.
+        weekdayFormatter.timeZone = calendar.timeZone
         weekdayFormatter.setLocalizedDateFormatFromTemplate("EEEEMMMd")
 
         for offset in 0 ..< dayWindowCount {
@@ -146,6 +148,7 @@ enum HomeSessionLadder {
 
         let weekFormatter = DateFormatter()
         weekFormatter.locale = locale
+        weekFormatter.timeZone = calendar.timeZone
         weekFormatter.setLocalizedDateFormatFromTemplate("MMMd")
 
         var weekBuckets: [(weekStart: Date, items: [Item])] = []
