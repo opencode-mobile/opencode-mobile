@@ -15,7 +15,7 @@ struct SessionStatusLiveStoreTests {
         let collector = ActivityCollector(store: store, directory: "/repo")
         let seeded = try await collector.awaitEmission { $0.seeded }
         #expect(seeded.entries.isEmpty)
-        #expect(seeded.statusLabel(for: "ses-1") == nil)
+        #expect(seeded.busyStatus(for: "ses-1") == nil)
 
         eventStream.emit(busyStatusEvent("ses-1"))
         let running = try await collector.awaitEmission { $0.entries["ses-1"]?.activity == .running }
@@ -23,7 +23,7 @@ struct SessionStatusLiveStoreTests {
 
         #expect(running.seeded)
         #expect(running.entries["ses-1"]?.source == .server)
-        #expect(running.statusLabel(for: "ses-1") == "Working")
+        #expect(running.busyStatus(for: "ses-1") == .running)
     }
 
     @Test func observeActivity_dropsAnAnswerFromTheServerThatWasLeft() async throws {
@@ -158,7 +158,7 @@ struct SessionStatusLiveStoreTests {
 
         #expect(snapshot.entries.isEmpty)
         #expect(snapshot.seeded)
-        #expect(snapshot.statusLabel(for: "ses-1") == nil)
+        #expect(snapshot.busyStatus(for: "ses-1") == nil)
     }
 
     @Test func observeActivity_keepsPriorWhenStatusLoadFails() async throws {
@@ -611,7 +611,7 @@ struct SessionStatusLiveStoreTests {
         let cached = try await collector.awaitEmission {
             $0.fromCache && !$0.seeded && $0.entries["ses-1"]?.source == .cached
         }
-        #expect(cached.statusLabel(for: "ses-1") == "Working")
+        #expect(cached.busyStatus(for: "ses-1") == .running)
         repository.resumeStatuses()
         let server = try await collector.awaitEmission {
             $0.seeded && $0.entries["ses-1"]?.source == .server
@@ -703,7 +703,7 @@ struct SessionStatusLiveStoreTests {
         }
         second.cancel()
         repository.resumeStatuses()
-        #expect(reseeded.statusLabel(for: "ses-1") == "Working")
+        #expect(reseeded.busyStatus(for: "ses-1") == .running)
     }
 }
 

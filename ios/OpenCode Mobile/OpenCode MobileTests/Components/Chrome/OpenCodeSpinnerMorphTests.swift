@@ -68,7 +68,7 @@ struct SessionChatTurnStatusSlotTests {
     private let failure = SessionChatActivityItem.requestFailed(rowID: "r", blockID: "b")
 
     private func slot(
-        label: String? = "Working",
+        label: SessionTurnLabel? = .working,
         fading: Bool = false,
         awaiting: Bool = false,
         items: [SessionChatActivityItem] = [],
@@ -88,7 +88,7 @@ struct SessionChatTurnStatusSlotTests {
     @Test func aloneIsAFullPill() {
         #expect(slot() == SessionChatTurnStatusSlot(phase: .working(label: "Working"), compact: false, leaving: false))
         #expect(slot(label: WorkingTurnIndicator.idleLabel)?.phase == .done)
-        #expect(slot(label: "Compacting…")?.phase == .working(label: "Compacting…"))
+        #expect(slot(label: .text("Compacting…"))?.phase == .working(label: "Compacting…"))
         #expect(slot(label: nil) == nil)
     }
 
@@ -102,7 +102,7 @@ struct SessionChatTurnStatusSlotTests {
         let subagent = [SessionChatActivityItem.subagents(waitingPill)]
         #expect(slot(awaiting: true, items: subagent)?.phase == .attention(label: "Waiting for you", mark: .pulsingDot))
         #expect(slot(items: subagent)?.phase == .attention(label: "general needs input", mark: .pulsingDot))
-        #expect(slot(label: "Retrying", items: [.queued(count: 1)])?.phase == .working(label: "Retrying"))
+        #expect(slot(label: .text("Retrying"), items: [.queued(count: 1)])?.phase == .working(label: "Retrying"))
     }
 
     @Test func blockersShowWithNoTurnMounted() {
@@ -165,7 +165,7 @@ struct SessionChatTurnStatusSlotTests {
 
     @Test func reserveStaysThroughCardAndWaitingChanges() {
         let phases = [
-            slot(), slot(label: "Compacting…"), slot(awaiting: true), slot(items: [.reviewPermission]),
+            slot(), slot(label: .text("Compacting…")), slot(awaiting: true), slot(items: [.reviewPermission]),
             slot(items: [.subagents(waitingPill)]), slot(), slot(label: WorkingTurnIndicator.idleLabel),
         ]
         #expect(phases.allSatisfy { $0?.reservesRow == true })

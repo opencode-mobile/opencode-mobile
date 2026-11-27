@@ -80,6 +80,31 @@ struct SessionStatus: Sendable, Equatable {
     let raw: [String: String]
 }
 
+/// What a session row says about a busy session. Typed, so rows map it to their status pill
+/// without reading text, and equal while only the server's retry reason changes.
+nonisolated enum SessionBusyStatus: Sendable, Hashable {
+    case running
+    case retrying(attempt: Int?)
+}
+
+/// The turn pill's label. Typed so status logic never compares display text: Working and the
+/// ended turn are cases; Retrying, Compacting and Sending arrive already in the reader's language.
+nonisolated enum SessionTurnLabel: Hashable, Sendable {
+    case working
+    /// Shown as is.
+    case text(String)
+    /// The turn ended. Never shown as text: the pill shows Done for it.
+    case idle
+
+    var text: String {
+        switch self {
+        case .working: String(localized: "component.activity_card.working", defaultValue: "Working")
+        case let .text(text): text
+        case .idle: String(localized: "session_list.status.idle", defaultValue: "Idle")
+        }
+    }
+}
+
 nonisolated enum SessionActivity: Sendable, Equatable {
     case idle
     case running
@@ -99,30 +124,26 @@ nonisolated enum SessionActivity: Sendable, Equatable {
         }
     }
 
-    var statusLabel: String? {
+    /// The busy state a session row shows, without the server's retry text.
+    var busyStatus: SessionBusyStatus? {
         switch self {
         case .idle:
             nil
         case .running:
-            "Working"
+            .running
         case let .retrying(attempt, _, _, _, _, _):
-            if let attempt {
-                "Retrying · \(attempt)"
-            } else {
-                "Retrying"
-            }
+            .retrying(attempt: attempt)
         }
     }
 
-    /// In-chat label, in the reader's language; the server's retry reason stays verbatim. The
-    /// home list keeps `statusLabel` ("Retrying · N") because it parses the attempt off that
-    /// exact prefix.
-    var chatStatusLabel: String? {
+    /// In-chat label: Working, or Retrying in the reader's language with the server's retry
+    /// reason verbatim.
+    var chatStatus: SessionTurnLabel? {
         switch self {
         case .idle:
             return nil
         case .running:
-            return String(localized: "component.activity_card.working", defaultValue: "Working")
+            return .working
         case let .retrying(attempt, _, message, _, _, _):
             let base =
                 if let attempt {
@@ -131,10 +152,10 @@ nonisolated enum SessionActivity: Sendable, Equatable {
                     String(localized: "session_list.status.retrying", defaultValue: "Retrying")
                 }
             guard let reason = message?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else {
-                return base
+                return .text(base)
             }
             let text = String(reason.prefix(80))
-            return String(localized: "timeline.list_separator", defaultValue: "\(base) · \(text)")
+            return .text(String(localized: "timeline.list_separator", defaultValue: "\(base) · \(text)"))
         }
     }
 
@@ -219,16 +240,16 @@ nonisolated struct SessionActivitySnapshot: Sendable, Equatable {
         self.fromCache = fromCache
     }
 
-    func statusLabel(for sessionID: String) -> String? {
+    func busyStatus(for sessionID: String) -> SessionBusyStatus? {
         guard let entry = entries[sessionID] else { return nil }
         guard seeded || entry.source == .cached else { return nil }
-        return entry.activity.statusLabel
+        return entry.activity.busyStatus
     }
 
-    func chatStatusLabel(for sessionID: String) -> String? {
+    func chatStatus(for sessionID: String) -> SessionTurnLabel? {
         guard let entry = entries[sessionID] else { return nil }
         guard seeded || entry.source == .cached else { return nil }
-        return entry.activity.chatStatusLabel
+        return entry.activity.chatStatus
     }
 
     func isBusy(for sessionID: String) -> Bool {

@@ -76,7 +76,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
     func listItem(
         from session: Session,
         worktree: String,
-        statusLabel: String? = nil,
+        busyStatus: SessionBusyStatus? = nil,
         isReady: Bool = false,
         unreadOutcome: SessionIdleOutcome? = nil,
         statusIsStale: Bool = false
@@ -85,7 +85,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
             id: session.id,
             title: session.title,
             worktree: worktree,
-            statusLabel: statusLabel,
+            busyStatus: busyStatus,
             updatedAtEpochMs: session.updatedAtEpochMs,
             isReady: isReady,
             unreadOutcome: unreadOutcome,

@@ -376,7 +376,7 @@ final class SessionInfo {
                 var isRetrying = false
                 if snapshot.seeded, case .retrying = activity { isRetrying = true }
                 state.applyStatus(
-                    authoritative: snapshot.chatStatusLabel(for: state.sessionID),
+                    authoritative: snapshot.chatStatus(for: state.sessionID),
                     hasResolved: snapshot.seeded,
                     retryCard: card,
                     isRetrying: isRetrying

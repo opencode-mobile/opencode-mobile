@@ -1425,7 +1425,8 @@ nonisolated struct SessionListItem: Identifiable, Hashable {
     let id: String
     let title: String
     let worktree: String
-    let statusLabel: String?
+    /// What the row says about a busy session; nil while it is idle.
+    let busyStatus: SessionBusyStatus?
     let updatedAtEpochMs: Int64?
     let isReady: Bool
     /// v2 server unread: how the unseen run ended (Done / Failed / Stopped). Nil when read,
@@ -1442,7 +1443,7 @@ nonisolated struct SessionListItem: Identifiable, Hashable {
         id: String,
         title: String,
         worktree: String,
-        statusLabel: String? = nil,
+        busyStatus: SessionBusyStatus? = nil,
         updatedAtEpochMs: Int64? = nil,
         isReady: Bool = false,
         unreadOutcome: SessionIdleOutcome? = nil,
@@ -1454,7 +1455,7 @@ nonisolated struct SessionListItem: Identifiable, Hashable {
         self.id = id
         self.title = title
         self.worktree = worktree
-        self.statusLabel = statusLabel
+        self.busyStatus = busyStatus
         self.updatedAtEpochMs = updatedAtEpochMs
         self.isReady = isReady
         self.unreadOutcome = unreadOutcome
@@ -1468,15 +1469,12 @@ nonisolated struct SessionListItem: Identifiable, Hashable {
 extension SessionListItem {
     func sessionListStatus(hasPendingPermission: Bool = false) -> SessionListStatus {
         _ = hasPendingPermission // Reserved for a future home Needs approval pill.
-        switch statusLabel {
-        case "Working":
+        switch busyStatus {
+        case .running:
             return SessionListStatus.running
-        case "Retrying":
-            return SessionListStatus.retrying(attempt: nil)
-        case let label? where label.hasPrefix("Retrying · "):
-            let attempt = Int(label.dropFirst("Retrying · ".count))
+        case let .retrying(attempt):
             return SessionListStatus.retrying(attempt: attempt)
-        default:
+        case nil:
             switch unreadOutcome {
             case .succeeded: return SessionListStatus.done
             case .failed: return SessionListStatus.failed

@@ -82,7 +82,7 @@ struct SessionModelsTests {
         let rollup = snapshot.homeActivityRollup { ancestry(sessions).root(of: $0) }
         #expect(rollup.sourceByRoot == ["root": "child", "other": "other-child"])
         #expect(rollup.unresolved.isEmpty)
-        #expect(snapshot.statusLabel(for: "child") == "Working")
+        #expect(snapshot.busyStatus(for: "child") == .running)
     }
 
     @Test func homeActivity_nestedChildRollsUpToRoot() {

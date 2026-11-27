@@ -109,7 +109,7 @@ struct SessionChatLiveThoughtTests {
     // MARK: Turn pill
 
     private func slot(
-        label: String? = "Working",
+        label: SessionTurnLabel? = .working,
         fading: Bool = false,
         awaiting: Bool = false,
         items: [SessionChatActivityItem] = [],
@@ -140,8 +140,8 @@ struct SessionChatLiveThoughtTests {
     }
 
     @Test func otherTurnLabelsAndRequestsWinOverThinking() {
-        #expect(slot(label: "Compacting\u{2026}")?.phase == .working(label: "Compacting\u{2026}"))
-        #expect(slot(label: "Compacting\u{2026}")?.tapItem == nil)
+        #expect(slot(label: .text("Compacting\u{2026}"))?.phase == .working(label: "Compacting\u{2026}"))
+        #expect(slot(label: .text("Compacting\u{2026}"))?.tapItem == nil)
         #expect(slot(label: WorkingTurnIndicator.idleLabel)?.phase == .done)
         #expect(slot(label: nil) == nil)
         #expect(slot(awaiting: true)?.phase == .attention(label: "Waiting for you", mark: .pulsingDot))

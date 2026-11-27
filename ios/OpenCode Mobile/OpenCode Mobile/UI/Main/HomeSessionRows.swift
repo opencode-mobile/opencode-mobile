@@ -47,11 +47,11 @@ nonisolated enum HomeSessionRows {
         let seeded = input.activity?.seeded == true
         let items = roots.map { session in
             let sourceID = rollup.sourceByRoot[session.id] ?? session.id
-            let label = input.activity?.statusLabel(for: sourceID)
+            let busyStatus = input.activity?.busyStatus(for: sourceID)
             return adapter.listItem(
                 from: session,
                 worktree: input.worktree,
-                statusLabel: label,
+                busyStatus: busyStatus,
                 isReady: !input.readsServerUnread && seeded && input.readyIDs.contains(session.id),
                 unreadOutcome: unreadOutcome(session, seeded: seeded, readsServerUnread: input.readsServerUnread),
                 statusIsStale: input.activity?.statusIsStale(for: sourceID) ?? false

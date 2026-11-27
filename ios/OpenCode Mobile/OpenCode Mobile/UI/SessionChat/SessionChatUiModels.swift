@@ -360,9 +360,9 @@ struct SessionChatUiState: Equatable {
     var hasOlder: Bool = false
     var isLoadingOlder: Bool = false
     var isAborting: Bool = false
-    var sessionStatusLabel: String?
-    /// The turn pill's Working/Retrying/Compacting label; the Done marker after the turn ends.
-    var workingIndicatorLabel: String? = nil
+    var sessionStatusLabel: SessionTurnLabel?
+    /// The turn pill's Working/Retrying/Compacting label; `.idle` (shown as Done) after the turn ends.
+    var workingIndicatorLabel: SessionTurnLabel? = nil
     /// Live rate-limit countdown. Hidden for content-filter retries.
     var retryCard: SessionRetryCard? = nil
     /// The session is in `retry` status: the composer owns the countdown, failure marks show none.
@@ -979,7 +979,7 @@ extension ProjectEntry {
 struct SessionInfoRegionState: Equatable {
     var sessionID: String = ""
     var sessionTitle: String = ""
-    var sessionStatusLabel: String?
+    var sessionStatusLabel: SessionTurnLabel?
     var retryCard: SessionRetryCard?
     var isRetrying = false
     var hasResolvedSessionStatus = false
@@ -997,7 +997,7 @@ struct SessionInfoRegionState: Equatable {
     var archivedAtEpochMs: Int64?
 
     mutating func applyStatus(
-        authoritative: String?,
+        authoritative: SessionTurnLabel?,
         hasResolved: Bool = true,
         retryCard: SessionRetryCard? = nil,
         isRetrying: Bool = false

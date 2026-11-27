@@ -1338,8 +1338,8 @@ nonisolated struct EventDomainAdapter: Sendable {
         }
     }
 
-    func statusLabel(from status: SessionStatus) -> String? {
-        SessionActivity(raw: status.raw).statusLabel
+    func busyStatus(from status: SessionStatus) -> SessionBusyStatus? {
+        SessionActivity(raw: status.raw).busyStatus
     }
 
     func sessionActivity(from status: SessionStatus) -> SessionActivity {

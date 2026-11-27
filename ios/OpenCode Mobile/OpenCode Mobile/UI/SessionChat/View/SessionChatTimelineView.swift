@@ -11,7 +11,7 @@ struct SessionChatTimelineViewProps {
     let errorMessage: String?
     let sessionBranchPill: SessionChatBranchPillUiState?
     let syncingIndicatorLabel: String?
-    let workingIndicatorLabel: String?
+    let workingIndicatorLabel: SessionTurnLabel?
     let workingIndicatorFading: Bool
     /// A thought streams at the end of the turn: the turn pill reads Thinking and opens it (#1118).
     let isThinking: Bool
@@ -88,7 +88,7 @@ struct SessionChatTimelineViewProps {
         errorMessage: String?,
         sessionBranchPill: SessionChatBranchPillUiState? = nil,
         syncingIndicatorLabel: String? = nil,
-        workingIndicatorLabel: String? = nil,
+        workingIndicatorLabel: SessionTurnLabel? = nil,
         workingIndicatorFading: Bool = false,
         isThinking: Bool = false,
         isTurnWorking: Bool = false,

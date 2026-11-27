@@ -1869,7 +1869,7 @@ final class SessionChatViewModel {
             ? uiState.timelineFrame
             : nextTimelineFrame
         let sessionStatusLabel =
-            isCompacting ? SessionCompactChrome.statusLabel : infoState.sessionStatusLabel
+            isCompacting ? .text(SessionCompactChrome.statusLabel) : infoState.sessionStatusLabel
         let turnStatusResolution = turnStatus.resolve(
             SessionChatTurnStatusInputs(
                 sessionStatusLabel: sessionStatusLabel,
@@ -2139,7 +2139,7 @@ final class SessionChatViewModel {
         )
     }
 
-    private func effectiveCompacting(localCompacting: Bool, sessionStatusLabel: String?) -> Bool {
+    private func effectiveCompacting(localCompacting: Bool, sessionStatusLabel: SessionTurnLabel?) -> Bool {
         if localCompacting { return true }
         return SessionCompactionPresence.isActive(
             messages: timeline.loadedMessages(),

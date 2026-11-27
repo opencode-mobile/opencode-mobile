@@ -2052,7 +2052,7 @@ struct ProjectListHomeViewModelTests {
         let deadline = Date().addingTimeInterval(0.4)
         while Date() < deadline {
             if homeSession(viewModel, id: "ses-1")?.isReady == true,
-               homeSession(viewModel, id: "ses-1")?.statusLabel == nil
+               homeSession(viewModel, id: "ses-1")?.busyStatus == nil
             {
                 flashedReady = true
                 break
@@ -2066,7 +2066,7 @@ struct ProjectListHomeViewModelTests {
             statuses: ["ses-1": SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
         )
         let working = await waitUntil {
-            homeSession(viewModel, id: "ses-1")?.statusLabel == "Working"
+            homeSession(viewModel, id: "ses-1")?.busyStatus == .running
         }
         #expect(working)
     }
@@ -2094,12 +2094,12 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         let working = await waitUntil {
-            homeSession(viewModel, id: "ses-1")?.statusLabel == "Working"
+            homeSession(viewModel, id: "ses-1")?.busyStatus == .running
         }
         #expect(working)
 
         await viewModel.refresh()
-        #expect(homeSession(viewModel, id: "ses-1")?.statusLabel == "Working")
+        #expect(homeSession(viewModel, id: "ses-1")?.busyStatus == .running)
         #expect(homeSession(viewModel, id: "ses-1")?.isReady == true)
     }
 
@@ -2131,7 +2131,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
 
         let working = await waitUntil(timeoutMs: ancestryWaitMs) {
-            homeSession(viewModel, id: "root")?.statusLabel == "Working"
+            homeSession(viewModel, id: "root")?.busyStatus == .running
         }
         #expect(working)
         #expect(homeSession(viewModel, id: "child") == nil)
@@ -2170,11 +2170,11 @@ struct ProjectListHomeViewModelTests {
         // for the walk to reach the root rather than for whatever the first rebuild showed.
         let working = await waitUntil(timeoutMs: ancestryWaitMs) {
             repository.fetchedIDs == ["grandchild", "child"]
-                && homeSession(viewModel, id: "root")?.statusLabel == "Working"
+                && homeSession(viewModel, id: "root")?.busyStatus == .running
         }
         #expect(working)
         #expect(repository.fetchedIDs == ["grandchild", "child"])
-        #expect(homeSession(viewModel, id: "other")?.statusLabel == nil)
+        #expect(homeSession(viewModel, id: "other")?.busyStatus == nil)
     }
 
     @Test func liveStatus_busyRootOutsideTheWindowIsListedUntilItsFamilyIdles() async {
@@ -2207,7 +2207,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
 
         let merged = await waitUntil(timeoutMs: ancestryWaitMs) {
-            homeSession(viewModel, id: "old")?.statusLabel == "Working"
+            homeSession(viewModel, id: "old")?.busyStatus == .running
         }
         #expect(merged)
         // Busy in another directory: not this section's row.
@@ -2327,7 +2327,7 @@ struct ProjectListHomeViewModelTests {
             homeSession(viewModel, id: "ses-1") != nil
         }
         #expect(unseeded)
-        #expect(homeSession(viewModel, id: "ses-1")?.statusLabel == nil)
+        #expect(homeSession(viewModel, id: "ses-1")?.busyStatus == nil)
         #expect(homeSession(viewModel, id: "ses-1")?.isReady == false)
 
         statusLive.emit(
@@ -2335,7 +2335,7 @@ struct ProjectListHomeViewModelTests {
             statuses: ["ses-1": SessionStatus(sessionID: "ses-1", raw: ["type": "retry", "attempt": "2"])]
         )
         let retrying = await waitUntil {
-            homeSession(viewModel, id: "ses-1")?.statusLabel == "Retrying · 2"
+            homeSession(viewModel, id: "ses-1")?.busyStatus == .retrying(attempt: 2)
         }
         #expect(retrying)
         #expect(homeSession(viewModel, id: "ses-1")?.isReady == true)
@@ -2370,7 +2370,7 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         let cached = await waitUntil {
-            homeSession(viewModel, id: "ses-1")?.statusLabel == "Working"
+            homeSession(viewModel, id: "ses-1")?.busyStatus == .running
                 && homeSession(viewModel, id: "ses-1")?.statusIsStale == true
         }
         #expect(cached)
@@ -2381,7 +2381,7 @@ struct ProjectListHomeViewModelTests {
             statuses: ["ses-1": SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
         )
         let live = await waitUntil {
-            homeSession(viewModel, id: "ses-1")?.statusLabel == "Working"
+            homeSession(viewModel, id: "ses-1")?.busyStatus == .running
                 && homeSession(viewModel, id: "ses-1")?.statusIsStale == false
         }
         #expect(live)
