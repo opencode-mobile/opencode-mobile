@@ -52,17 +52,11 @@ class SessionChatTurnStatusSlotTest {
     @Test
     fun compactingShowsTheKeyedStatus() {
         val marked =
-            object : UiTextLookup {
+            object : UiTextLookup by EnglishStrings {
                 override fun string(
                     id: Int,
                     args: Array<out Any>,
                 ) = "keyed:" + EnglishStrings.string(id, args)
-
-                override fun plural(
-                    id: Int,
-                    count: Int,
-                    args: Array<out Any>,
-                ) = EnglishStrings.plural(id, count, args)
             }
 
         assertEquals(
