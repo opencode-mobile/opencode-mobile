@@ -389,5 +389,5 @@ private fun lampLogName(label: UiText?): String =
         SessionCompactChrome.statusLabel -> "compacting"
         is UiText.Resource -> "res:${Integer.toHexString(label.id)}"
         is UiText.Plural -> "plural:${Integer.toHexString(label.id)}"
-        is UiText.Verbatim, is UiText.DateTime -> "text"
+        is UiText.Verbatim, is UiText.DateTime, is UiText.Number -> "text"
     }
