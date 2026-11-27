@@ -2155,7 +2155,7 @@ class SessionChatViewModel
                         draftSendError != null -> draftSendError
                         infoState.unarchiveFailed -> UiText.resource(R.string.archived_sessions_unarchive_failed)
                         infoState.lifecycleErrorMessage != null -> UiText.verbatim(infoState.lifecycleErrorMessage)
-                        worktreeMove.state.value.errorMessage != null -> TimelineText.verbatim(worktreeMove.state.value.errorMessage)
+                        worktreeMove.state.value.errorMessage != null -> worktreeMove.state.value.errorMessage
                         composerState.errorMessage != null -> UiText.verbatim(composerState.errorMessage)
                         composerState.abortErrorMessage != null -> UiText.verbatim(composerState.abortErrorMessage)
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
@@ -2176,7 +2176,8 @@ class SessionChatViewModel
                     transientError,
                     retryNewSessionDraft = transientError != null && transientError == draftSendError,
                     sideQuestions.state.value.notice,
-                    TimelineText.verbatim(composerState.followUpNotice ?: worktreeMove.state.value.notice)
+                    TimelineText.verbatim(composerState.followUpNotice)
+                        ?: worktreeMove.state.value.notice
                         ?: commandsState.actionSuccessMessage
                         ?: TimelineText.verbatim(branchCopiedNotice ?: timelineOffersState.notice),
                 )
@@ -2426,7 +2427,7 @@ class SessionChatViewModel
                     lastSnackbarKey = key
                 }
                 return SessionChatSnackbar(
-                    message = UiText.verbatim(sideQuestionNotice.message),
+                    message = sideQuestionNotice.message,
                     tone = if (sideQuestionNotice.isError) SessionChatSnackbarTone.Error else SessionChatSnackbarTone.Default,
                     id = snackbarSequence,
                     action = sideQuestionNotice.retryId?.let { SessionChatSnackbarAction.RetrySideQuestion(it) },

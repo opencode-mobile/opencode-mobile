@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusAttentionMark
 import dev.opencode.mobile.ui.components.OpenCodeTurnStatusPillPhase
 import dev.opencode.mobile.ui.text.EnglishStrings
@@ -46,6 +47,24 @@ class SessionChatTurnStatusSlotTest {
         label: String,
         mark: OpenCodeTurnStatusAttentionMark,
     ) = OpenCodeTurnStatusPillPhase.Attention(label, mark)
+
+    /** Compacting reaches the pill as an English sentinel; the pill shows the keyed text. */
+    @Test
+    fun compactingShowsTheKeyedStatus() {
+        val marked =
+            object : UiTextLookup by EnglishStrings {
+                override fun string(
+                    id: Int,
+                    args: Array<out Any>,
+                ) = "keyed:" + EnglishStrings.string(id, args)
+            }
+
+        assertEquals(
+            OpenCodeTurnStatusPillPhase.Working("keyed:Compacting…"),
+            SessionChatPillSlots.turnStatus(SessionCompactChrome.STATUS_LABEL, false, false, emptyList(), false, false, marked)?.phase,
+        )
+        assertEquals(OpenCodeTurnStatusPillPhase.Working("Compacting…"), slot(label = SessionCompactChrome.STATUS_LABEL)?.phase)
+    }
 
     // Priority ladder
 

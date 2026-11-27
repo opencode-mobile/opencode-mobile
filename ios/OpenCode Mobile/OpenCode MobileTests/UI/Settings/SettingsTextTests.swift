@@ -13,6 +13,7 @@ struct SettingsTextTests {
         let text = SettingsView.serversSubtitle(count: 2, activeName: "servers.title")
 
         #expect(text.resolved == "2 saved · servers.title active")
+        #expect(SettingsView.serversSubtitle(count: 1, activeName: "servers.title").resolved == "1 saved · servers.title active")
     }
 
     @Test func serversSubtitle_noActive_countsSaved() {

@@ -1619,7 +1619,7 @@ object SessionChatTimelineBlocks {
                     return if (count == 1) {
                         UiText.verbatim(name)
                     } else {
-                        UiText.resource(R.string.tool_count_named, count, name)
+                        UiText.plural(R.plurals.tool_count_named, count, count, name)
                     }
             }
         return if (count == 1) UiText.resource(title) else UiText.plural(plural, count)

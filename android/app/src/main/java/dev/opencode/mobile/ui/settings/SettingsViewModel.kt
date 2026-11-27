@@ -172,7 +172,12 @@ data class ServersSummary(
             when {
                 count == 0 -> UiText.resource(R.string.settings_servers_summary_none)
                 activeName != null ->
-                    UiText.resource(R.string.settings_servers_summary_saved_active, count, UiText.verbatim(activeName))
+                    UiText.plural(
+                        R.plurals.settings_servers_summary_saved_active,
+                        count,
+                        count,
+                        UiText.verbatim(activeName),
+                    )
                 else -> UiText.plural(R.plurals.settings_servers_summary_saved, count)
             }
 }

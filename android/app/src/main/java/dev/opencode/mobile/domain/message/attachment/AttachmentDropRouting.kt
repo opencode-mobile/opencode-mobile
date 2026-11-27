@@ -1,5 +1,8 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+
 /** What a pasted or dropped item is, decided before its bytes are read (#870). */
 enum class AttachmentDropKind {
     Image,
@@ -34,8 +37,9 @@ sealed interface AttachmentDropRoute {
 
 /** The drag-over card: what a drop would attach, or why nothing can be. */
 data class AttachmentDropSummary(
-    val title: String,
-    val subtitle: String,
+    val title: UiText,
+    /** Why items are skipped carries the routing reason; see [AttachmentDropRoute.Skipped]. */
+    val subtitle: UiText,
     /** Kinds of the first accepted items, at most [AttachmentDropRouting.MAX_PREVIEWS]. */
     val previews: List<AttachmentDropKind>,
     /** Nothing in the drag can be attached: the card shows its error style. */
@@ -55,7 +59,6 @@ object AttachmentDropRouting {
     /** `DocumentsContract.Document.MIME_TYPE_DIR`, without pulling the Android class into the domain. */
     const val DIRECTORY_MIME = "vnd.android.document/directory"
     private const val INODE_DIRECTORY_MIME = "inode/directory"
-    private const val ADDS_TO_DRAFT = "Adds them to the message you are writing"
     private val pastedImageName = Regex("""^Pasted image (\d+)\.png$""")
 
     fun route(
@@ -105,24 +108,39 @@ object AttachmentDropRouting {
         val skipped = routed.size - accepted.size
         if (accepted.isEmpty()) {
             return AttachmentDropSummary(
-                title = if (countKnown && items.size == 1) "Can't attach this" else "Can't attach these",
-                subtitle = firstReason.orEmpty(),
+                title =
+                    UiText.resource(
+                        if (countKnown && items.size == 1) R.string.attachment_drop_reject_one else R.string.attachment_drop_reject_many,
+                    ),
+                subtitle = UiText.verbatim(firstReason.orEmpty()),
                 previews = emptyList(),
                 rejected = true,
             )
         }
-        val noun = if (accepted.all { it.kind == AttachmentDropKind.Image }) "image" else "file"
+        val images = accepted.all { it.kind == AttachmentDropKind.Image }
         val title =
-            if (countKnown) {
-                "Drop to attach ${accepted.size} $noun${if (accepted.size == 1) "" else "s"}"
-            } else {
-                "Drop to attach ${noun}s"
+            when {
+                countKnown && images -> UiText.plural(R.plurals.attachment_drop_attach_images_count, accepted.size)
+                countKnown -> UiText.plural(R.plurals.attachment_drop_attach_files_count, accepted.size)
+                images -> UiText.resource(R.string.attachment_drop_attach_images)
+                else -> UiText.resource(R.string.attachment_drop_attach_files)
             }
+        // The reason is still English routing text (#886 follow-up), passed as an argument.
         val subtitle =
             when {
-                firstReason == null -> ADDS_TO_DRAFT
-                countKnown -> "$skipped will be skipped · $firstReason"
-                else -> "Some will be skipped · $firstReason"
+                firstReason == null -> UiText.resource(R.string.attachment_drop_adds_to_draft)
+                countKnown ->
+                    UiText.resource(
+                        R.string.attachment_drop_skipped_detail,
+                        UiText.plural(R.plurals.attachment_drop_skipped_count, skipped),
+                        UiText.verbatim(firstReason),
+                    )
+                else ->
+                    UiText.resource(
+                        R.string.attachment_drop_skipped_detail,
+                        UiText.resource(R.string.attachment_drop_some_skipped),
+                        UiText.verbatim(firstReason),
+                    )
             }
         return AttachmentDropSummary(
             title = title,

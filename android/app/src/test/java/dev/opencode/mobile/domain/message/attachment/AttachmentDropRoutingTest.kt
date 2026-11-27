@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.ui.text.english
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -53,13 +54,13 @@ class AttachmentDropRoutingTest {
             val fields = expected.jsonObject
             assertEquals(
                 case.name(),
-                AttachmentDropSummary(
-                    title = fields.getValue("title").jsonPrimitive.content,
-                    subtitle = fields.getValue("subtitle").jsonPrimitive.content,
-                    previews = fields.getValue("previews").jsonArray.map { kind(it.jsonPrimitive.content) },
-                    rejected = fields.getValue("rejected").jsonPrimitive.boolean,
+                listOf(
+                    fields.getValue("title").jsonPrimitive.content,
+                    fields.getValue("subtitle").jsonPrimitive.content,
+                    fields.getValue("previews").jsonArray.map { kind(it.jsonPrimitive.content) },
+                    fields.getValue("rejected").jsonPrimitive.boolean,
                 ),
-                summary,
+                summary?.let { listOf(it.title.english(), it.subtitle.english(), it.previews, it.rejected) },
             )
         }
     }

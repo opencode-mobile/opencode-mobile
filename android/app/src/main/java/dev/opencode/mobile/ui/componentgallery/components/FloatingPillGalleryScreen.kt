@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPill
@@ -51,7 +52,7 @@ fun FloatingPillGalleryScreen(modifier: Modifier = Modifier) {
                 OpenCodeFloatingPillState.entries.forEach { state ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = state.spokenName,
+                            text = stringResource(state.spokenName),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.width(104.dp),
@@ -59,7 +60,7 @@ fun FloatingPillGalleryScreen(modifier: Modifier = Modifier) {
                         OpenCodeFloatingPill(
                             layout = layout,
                             state = state,
-                            onClick = { log = "Tapped ${layout.label}, ${state.spokenName}" },
+                            onClick = { log = "Tapped ${layout.label}, ${state.name}" },
                             onClose = { log = "Dismissed ${layout.label}" },
                         )
                     }
@@ -138,7 +139,7 @@ fun FloatingPillGalleryScreen(modifier: Modifier = Modifier) {
             OpenCodeFloatingPillState.entries.forEach { state ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = state.spokenName,
+                        text = stringResource(state.spokenName),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.width(96.dp),
@@ -149,7 +150,7 @@ fun FloatingPillGalleryScreen(modifier: Modifier = Modifier) {
                                 layout = layout,
                                 state = state,
                                 compact = true,
-                                onClick = { log = "Tapped compact ${layout.label}, ${state.spokenName}" },
+                                onClick = { log = "Tapped compact ${layout.label}, ${state.name}" },
                             )
                         }
                     }

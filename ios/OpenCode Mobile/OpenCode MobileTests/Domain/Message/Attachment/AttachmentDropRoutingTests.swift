@@ -110,6 +110,14 @@ struct AttachmentDropRoutingTests {
         }
     }
 
+    /// A summary as English text, to compare with the shared vectors.
+    private struct EnglishSummary: Equatable {
+        let title: String
+        let subtitle: String
+        let previews: [AttachmentDropKind]
+        let rejected: Bool
+    }
+
     @Test func sharedSummaryVectors() throws {
         let cases = try Self.vectors().summaries
         #expect(!cases.isEmpty)
@@ -120,14 +128,22 @@ struct AttachmentDropRoutingTests {
                 countKnown: vector.countKnown ?? true
             )
             let expected = try vector.expected.map { fields in
-                AttachmentDropSummary(
+                EnglishSummary(
                     title: fields.title,
                     subtitle: fields.subtitle,
                     previews: try fields.previews.map { try #require(AttachmentDropKind(rawValue: $0)) },
                     rejected: fields.rejected
                 )
             }
-            #expect(summary == expected, "\(vector.name)")
+            let resolved = summary.map {
+                EnglishSummary(
+                    title: String(localized: $0.title),
+                    subtitle: $0.subtitle.resolved,
+                    previews: $0.previews,
+                    rejected: $0.rejected
+                )
+            }
+            #expect(resolved == expected, "\(vector.name)")
         }
     }
 

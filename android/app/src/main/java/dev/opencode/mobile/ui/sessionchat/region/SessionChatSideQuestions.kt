@@ -1,9 +1,11 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.session.SideQuestion
 import dev.opencode.mobile.domain.session.SideQuestionEntry
 import dev.opencode.mobile.domain.session.SideQuestionEvent
 import dev.opencode.mobile.domain.session.SideQuestionStore
+import dev.opencode.mobile.domain.text.UiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,13 +14,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** `/btw` app text; the question is the user's own words and stays an argument. */
 object SessionChatSideQuestionsCopy {
-    const val UNSUPPORTED =
-        "/btw needs an opencode v2 server that answers side questions. This server can't answer without adding to the conversation."
-    const val UNAVAILABLE = "/btw needs a newer opencode server."
-    const val COPIED = "Answer copied"
+    val unsupported: UiText get() = UiText.resource(R.string.session_chat_side_question_unsupported)
+    val unavailable: UiText get() = UiText.resource(R.string.session_chat_side_question_unavailable)
+    val copied: UiText get() = UiText.resource(R.string.session_chat_side_question_copied)
 
-    fun failed(question: String): String = "/btw failed: “$question”"
+    fun failed(question: String): UiText = UiText.resource(R.string.session_chat_side_question_failed, UiText.verbatim(question))
 }
 
 /** One `/btw` answer shown in the answer sheet. */
@@ -40,7 +42,7 @@ data class SessionChatSideQuestionsUiState(
     /** The answer sheet's content; null while it is closed. */
     val presentedAnswer: SessionChatSideQuestionAnswer? = null,
     /** Shown above the composer when the draft is a `/btw` this server cannot answer. */
-    val unsupportedNotice: String? = null,
+    val unsupportedNotice: UiText? = null,
 ) {
     val hasChips: Boolean
         get() = pendingCount > 0 || readyCount > 0 || failedCount > 0
@@ -49,7 +51,7 @@ data class SessionChatSideQuestionsUiState(
 /** A one-shot snackbar from a `/btw` request. */
 data class SessionChatSideQuestionNotice(
     val id: Long,
-    val message: String,
+    val message: UiText,
     val isError: Boolean,
     /** The failed question Retry asks again; null when asking again cannot work. */
     val retryId: String?,
@@ -168,7 +170,7 @@ class SessionChatSideQuestions(
     }
 
     fun answerCopied() {
-        post(SessionChatSideQuestionNotice(nextNoticeId(), SessionChatSideQuestionsCopy.COPIED, isError = false, retryId = null))
+        post(SessionChatSideQuestionNotice(nextNoticeId(), SessionChatSideQuestionsCopy.copied, isError = false, retryId = null))
     }
 
     fun retry(id: String) {
@@ -194,7 +196,7 @@ class SessionChatSideQuestions(
     /** The composer draft changed: say when a typed `/btw` cannot be asked here. */
     fun updateDraft(text: String) {
         val notice =
-            SessionChatSideQuestionsCopy.UNSUPPORTED.takeIf { !supported() && SideQuestion.questionInDraft(text) != null }
+            SessionChatSideQuestionsCopy.unsupported.takeIf { !supported() && SideQuestion.questionInDraft(text) != null }
         if (notice == _state.value.ui.unsupportedNotice) return
         _state.update { it.copy(ui = it.ui.copy(unsupportedNotice = notice)) }
     }
@@ -212,7 +214,7 @@ class SessionChatSideQuestions(
                             if (event.retryable) {
                                 SessionChatSideQuestionsCopy.failed(event.question)
                             } else {
-                                SessionChatSideQuestionsCopy.UNAVAILABLE
+                                SessionChatSideQuestionsCopy.unavailable
                             },
                         isError = true,
                         retryId = event.id.takeIf { event.retryable },

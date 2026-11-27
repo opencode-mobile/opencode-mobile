@@ -120,6 +120,46 @@ private extension SessionChatRow {
     }
 }
 
+/// The composer's model notices (`session_chat.model_notice.*`, same keys on Android). Model
+/// names come from the server and stay arguments.
+nonisolated enum SessionChatModelNotice {
+    static var loadFailed: LocalizedStringResource {
+        LocalizedStringResource("session_chat.model_notice.load_failed", defaultValue: "Unable to load models. Tap Model to retry.")
+    }
+
+    static var noneUsable: LocalizedStringResource {
+        LocalizedStringResource(
+            "session_chat.model_notice.none_usable",
+            defaultValue: "No usable models are available. Tap Model to retry."
+        )
+    }
+
+    static var variantUnavailable: LocalizedStringResource {
+        LocalizedStringResource(
+            "session_chat.model_notice.variant_unavailable",
+            defaultValue: "Remembered Variant is unavailable. Using Default."
+        )
+    }
+
+    static func modelUnavailable(using modelLabel: String) -> LocalizedStringResource {
+        LocalizedStringResource(
+            "session_chat.model_notice.model_unavailable",
+            defaultValue: "Selected model is unavailable. Using \(modelLabel)."
+        )
+    }
+}
+
+/// A model variant as shown in the composer chip and picker: the server's variant name verbatim,
+/// or the app's own "Default" (`session_chat.variant_default`, same key on Android).
+enum SessionChatVariantText {
+    static func label(_ variant: String?) -> OpenCodeText {
+        guard let variant,
+              variant.compare(ModelSelection.defaultVariantLabel, options: .caseInsensitive) != .orderedSame
+        else { return OpenCodeText(LocalizedStringResource("session_chat.variant_default", defaultValue: "Default")) }
+        return .verbatim(TitleCaseIdentifier.displayName(for: variant))
+    }
+}
+
 struct SessionChatComposerState: Equatable {
     var text: String
     var attachments: [Attachment] = []
@@ -128,9 +168,9 @@ struct SessionChatComposerState: Equatable {
     var selectedMode: String
     var selectableAgents: [SelectableAgent] = SelectableAgent.fallback
     var selectedVariant: String?
-    var modelNotice: String?
+    var modelNotice: LocalizedStringResource?
     var isModelSelectionReady = false
-    var modelCatalogError: String?
+    var modelCatalogError: LocalizedStringResource?
     var agentMentions: [AgentMention] = []
     var fileMentions: [FileMention] = []
     var skillMentions: [SkillMention] = []
@@ -153,8 +193,8 @@ struct SessionChatComposerState: Equatable {
         isModelSelectionReady ? selectedModel?.modelLabel ?? "Model" : "Loading model…"
     }
 
-    var selectedVariantLabel: String {
-        TitleCaseIdentifier.displayName(for: selectedVariant ?? ModelSelection.defaultVariantLabel)
+    var selectedVariantLabel: OpenCodeText {
+        SessionChatVariantText.label(selectedVariant)
     }
 
     var variantOptions: [String] {
@@ -229,7 +269,7 @@ struct SessionRenameUiState: Equatable {
     var isDialogVisible = false
     var draftTitle = ""
     var isSubmitting = false
-    var errorMessage: String?
+    var errorMessage: OpenCodeText?
 }
 
 enum SessionChatSnackbarTone: Equatable {

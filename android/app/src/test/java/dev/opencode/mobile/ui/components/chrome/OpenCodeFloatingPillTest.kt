@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.components
 
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.EnglishStrings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -79,16 +80,20 @@ class OpenCodeFloatingPillTest {
     fun accessibility_speaksLabelAndState() {
         assertEquals(
             "3 subagents, In progress",
-            floatingPillDescription(OpenCodeFloatingPillLayout.Counter("3 subagents"), OpenCodeFloatingPillState.Live),
+            floatingPillDescription(OpenCodeFloatingPillLayout.Counter("3 subagents"), OpenCodeFloatingPillState.Live, EnglishStrings),
         )
         assertEquals(
             "Scroll to end, Ready",
             floatingPillDescription(
                 OpenCodeFloatingPillLayout.IconOnly(OpenCodeIcons.ArrowDownward, "Scroll to end"),
                 OpenCodeFloatingPillState.Ready,
+                EnglishStrings,
             ),
         )
-        assertEquals("Dismiss Request failed", floatingPillCloseDescription(OpenCodeFloatingPillLayout.Closable("Request failed")))
+        assertEquals(
+            "Dismiss Request failed",
+            floatingPillCloseDescription(OpenCodeFloatingPillLayout.Closable("Request failed"), EnglishStrings),
+        )
     }
 
     @Test
@@ -98,12 +103,17 @@ class OpenCodeFloatingPillTest {
             floatingPillDescription(
                 OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.CallSplit, "+128 −14"),
                 OpenCodeFloatingPillState.Ready,
+                EnglishStrings,
                 override = "Branch changes, 128 added, 14 removed",
             ),
         )
         assertEquals(
             "Dismiss Side question failed",
-            floatingPillCloseDescription(OpenCodeFloatingPillLayout.Closable("/btw failed"), override = "Side question failed"),
+            floatingPillCloseDescription(
+                OpenCodeFloatingPillLayout.Closable("/btw failed"),
+                EnglishStrings,
+                override = "Side question failed",
+            ),
         )
     }
 
@@ -157,11 +167,22 @@ class OpenCodeFloatingPillTest {
     }
 
     @Test
+    fun accessibility_stateWords() {
+        assertEquals(
+            listOf("In progress", "Ready", "Needs attention", "Error", "Done"),
+            OpenCodeFloatingPillState.entries.map { EnglishStrings.string(it.spokenName, emptyArray()) },
+        )
+    }
+
+    @Test
     fun labelLayout_isPlainText() {
         OpenCodeFloatingPillState.entries.filter { it != OpenCodeFloatingPillState.Done }.forEach { state ->
             assertEquals(OpenCodeFloatingPillLeading.None, floatingPillLeading(OpenCodeFloatingPillLayout.Label("+3"), state))
         }
-        assertEquals("+3, Ready", floatingPillDescription(OpenCodeFloatingPillLayout.Label("+3"), OpenCodeFloatingPillState.Ready))
+        assertEquals(
+            "+3, Ready",
+            floatingPillDescription(OpenCodeFloatingPillLayout.Label("+3"), OpenCodeFloatingPillState.Ready, EnglishStrings),
+        )
     }
 
     @Test

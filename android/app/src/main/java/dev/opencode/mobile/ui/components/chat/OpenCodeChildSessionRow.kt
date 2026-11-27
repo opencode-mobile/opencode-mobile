@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -29,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -47,19 +50,19 @@ private val ChildSessionRowChevronSize = 16.dp
 
 /** Where a child session row's subagent is, shown beside the elapsed time. */
 enum class OpenCodeChildSessionRowStatus(
-    val label: String,
+    @param:StringRes val labelRes: Int,
 ) {
-    Running("running"),
+    Running(R.string.component_subagent_state_running),
 
     /** Amber: the subagent waits on a permission or question. */
-    WaitingForInput("waiting for input"),
-    Done("done"),
+    WaitingForInput(R.string.component_subagent_state_waiting_for_input),
+    Done(R.string.component_subagent_state_done),
 
     /** Error token: the subagent's call failed. */
-    Failed("failed"),
+    Failed(R.string.component_subagent_state_failed),
 
     /** The run was stopped before the subagent finished. */
-    Stopped("stopped"),
+    Stopped(R.string.component_subagent_state_stopped),
 }
 
 @Composable
@@ -72,13 +75,14 @@ fun OpenCodeChildSessionRow(
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    val statusLabel = status?.let { stringResource(it.labelRes) }
     val accessibilityLabel =
         buildChildSessionRowAccessibilityLabel(
             title = title,
             caption = caption,
             subtitle = subtitle,
             elapsed = elapsed,
-            status = status?.label,
+            status = statusLabel,
         )
     val shape = RoundedCornerShape(ChildSessionRowCornerRadius)
 
@@ -167,9 +171,9 @@ fun OpenCodeChildSessionRow(
                 }
             }
 
-            if (status != null) {
+            if (status != null && statusLabel != null) {
                 Text(
-                    text = status.label,
+                    text = statusLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color =
                         when (status) {

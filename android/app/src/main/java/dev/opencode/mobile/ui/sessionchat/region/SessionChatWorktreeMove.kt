@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import androidx.compose.runtime.snapshotFlow
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.event.SessionMovedUpdate
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
@@ -9,8 +10,10 @@ import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.home.HomeWorktreeCopy
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.ServerErrorMessage
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
+import dev.opencode.mobile.ui.main.HomeText
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
 import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
@@ -31,16 +34,19 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Move to worktree app text; worktree titles and server errors stay verbatim arguments. */
 object SessionChatWorktreeMoveCopy {
-    const val MENU_TITLE = "Move to worktree…"
-    const val SHEET_TITLE = "Move to worktree"
-    const val NEEDS_V2 = "Needs an opencode v2 server"
-    const val TURN_ON_WORKTREES = "Turn on Worktrees in Settings"
-    const val NO_OTHER_WORKTREES = "This project has no other worktrees"
+    val menuTitle: UiText get() = UiText.resource(R.string.session_chat_move_worktree_menu_title)
+    val sheetTitle: UiText get() = UiText.resource(R.string.session_chat_move_worktree_sheet_title)
+    val needsV2: UiText get() = UiText.resource(R.string.worktree_needs_v2)
+    val turnOnWorktrees: UiText get() = UiText.resource(R.string.worktree_turn_on)
+    val noOtherWorktrees: UiText get() = UiText.resource(R.string.session_chat_move_worktree_no_other)
 
-    fun movesAfterTurn(worktreeTitle: String): String = "Moves to $worktreeTitle after this turn."
+    fun movesAfterTurn(worktreeTitle: String): UiText =
+        UiText.resource(R.string.session_chat_move_worktree_moves_after_turn, UiText.verbatim(worktreeTitle))
 
-    fun failed(message: String): String = "Couldn't move the session: $message"
+    /** [message] is the server's words, or the app's unknown-error text. */
+    fun failed(message: UiText): UiText = UiText.resource(R.string.session_chat_move_worktree_failed, message)
 }
 
 /** Stable test tags of Move to worktree (UI tests and real-app evidence). */
@@ -53,7 +59,7 @@ object SessionChatWorktreeMoveTags {
 /** Whether Session Chat's "Move to worktree…" entry works, and why not. */
 data class SessionChatWorktreeMoveAvailability(
     val enabled: Boolean,
-    val subtitle: String? = null,
+    val subtitle: UiText? = null,
 ) {
     companion object {
         /**
@@ -68,11 +74,11 @@ data class SessionChatWorktreeMoveAvailability(
             canCreateWorktree: Boolean = false,
         ): SessionChatWorktreeMoveAvailability =
             when {
-                !supportsSessionMove -> SessionChatWorktreeMoveAvailability(false, SessionChatWorktreeMoveCopy.NEEDS_V2)
-                !worktreesEnabled -> SessionChatWorktreeMoveAvailability(false, SessionChatWorktreeMoveCopy.TURN_ON_WORKTREES)
+                !supportsSessionMove -> SessionChatWorktreeMoveAvailability(false, SessionChatWorktreeMoveCopy.needsV2)
+                !worktreesEnabled -> SessionChatWorktreeMoveAvailability(false, SessionChatWorktreeMoveCopy.turnOnWorktrees)
                 !sessionCreated -> SessionChatWorktreeMoveAvailability(false)
                 worktreeCount < 2 && !canCreateWorktree ->
-                    SessionChatWorktreeMoveAvailability(false, SessionChatWorktreeMoveCopy.NO_OTHER_WORKTREES)
+                    SessionChatWorktreeMoveAvailability(false, SessionChatWorktreeMoveCopy.noOtherWorktrees)
                 else -> SessionChatWorktreeMoveAvailability(true)
             }
     }
@@ -81,8 +87,10 @@ data class SessionChatWorktreeMoveAvailability(
 /** One worktree in the Move to worktree sheet; the session's current one is checked and inert. */
 data class SessionChatWorktreeMoveRow(
     val directory: String,
+    /** The branch or folder name: server content. */
     val title: String,
-    val subtitle: String,
+    /** "main checkout", else the folder name. */
+    val subtitle: UiText,
     val isCurrent: Boolean,
 ) {
     companion object {
@@ -97,7 +105,7 @@ data class SessionChatWorktreeMoveRow(
                 SessionChatWorktreeMoveRow(
                     directory = worktree.directory,
                     title = HomeWorktreeCopy.worktreeTitle(worktree),
-                    subtitle = HomeWorktreeCopy.worktreeSubtitle(worktree),
+                    subtitle = HomeText.worktreeSubtitle(worktree),
                     isCurrent = worktree.directory == current,
                 )
             }
@@ -111,7 +119,7 @@ data class SessionChatWorktreeMoveRow(
             SessionChatWorktreeMoveRow(
                 directory = directory,
                 title = title,
-                subtitle = ServerPathPolicy.name(directory).ifBlank { directory },
+                subtitle = UiText.verbatim(ServerPathPolicy.name(directory).ifBlank { directory }),
                 isCurrent = false,
             )
     }
@@ -134,8 +142,8 @@ data class SessionChatWorktreeMoveRegionState(
     val sheetVisible: Boolean = false,
     val submittingDirectory: String? = null,
     /** "Moves to … after this turn." after a move the server parks until the turn ends. */
-    val notice: String? = null,
-    val errorMessage: String? = null,
+    val notice: UiText? = null,
+    val errorMessage: UiText? = null,
 )
 
 /**
@@ -351,7 +359,10 @@ class SessionChatWorktreeMove(
                 } catch (cancellation: CancellationException) {
                     throw cancellation
                 } catch (error: Exception) {
-                    val message = ServerErrorMessage.from(error) ?: error.message?.takeIf { it.isNotBlank() } ?: "Unknown error"
+                    val message =
+                        (ServerErrorMessage.from(error) ?: error.message?.takeIf { it.isNotBlank() })
+                            ?.let(UiText::verbatim)
+                            ?: UiText.resource(R.string.worktree_unknown_error)
                     _state.update {
                         it.copy(
                             sheetVisible = false,

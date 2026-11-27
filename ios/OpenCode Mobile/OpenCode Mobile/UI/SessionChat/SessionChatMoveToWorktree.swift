@@ -2,18 +2,32 @@ import Foundation
 
 /// Session Chat ⋯ "Move to worktree…": when it is offered and what its sheet lists.
 enum SessionChatMoveToWorktree {
-    static let menuTitle = "Move to worktree\u{2026}"
-    static let sheetTitle = "Move to worktree"
-    static let needsV2 = "Needs an opencode v2 server"
-    static let turnOnWorktrees = "Turn on Worktrees in Settings"
-    static let noOtherWorktrees = "This project has no other worktrees"
-
-    static func movesAfterTurn(_ worktreeTitle: String) -> String {
-        "Moves to \(worktreeTitle) after this turn."
+    static var menuTitle: LocalizedStringResource {
+        LocalizedStringResource("session_chat.move_worktree.menu_title", defaultValue: "Move to worktree\u{2026}")
+    }
+    static var sheetTitle: LocalizedStringResource {
+        LocalizedStringResource("session_chat.move_worktree.sheet_title", defaultValue: "Move to worktree")
+    }
+    static var needsV2: LocalizedStringResource { WorktreeCreateCopy.needsV2 }
+    static var turnOnWorktrees: LocalizedStringResource { WorktreeCreateCopy.turnOnWorktrees }
+    static var noOtherWorktrees: LocalizedStringResource {
+        LocalizedStringResource("session_chat.move_worktree.no_other", defaultValue: "This project has no other worktrees")
     }
 
+    /// Snackbar notice; the worktree title (branch or folder) stays an argument.
+    static func movesAfterTurn(_ worktreeTitle: String) -> String {
+        String(localized: LocalizedStringResource(
+            "session_chat.move_worktree.moves_after_turn",
+            defaultValue: "Moves to \(worktreeTitle) after this turn."
+        ))
+    }
+
+    /// Snackbar error; `message` is the server's words.
     static func failure(_ message: String) -> String {
-        "Couldn't move the session: \(message)"
+        String(localized: LocalizedStringResource(
+            "session_chat.move_worktree.failed",
+            defaultValue: "Couldn't move the session: \(message)"
+        ))
     }
 
     /// The server's own words for a failed move. A 400 is `InvalidRequestError`
@@ -33,7 +47,7 @@ enum SessionChatMoveToWorktree {
     struct Availability: Equatable {
         let enabled: Bool
         /// Why it is disabled; nil while enabled, or while the session is still being created.
-        let subtitle: String?
+        let subtitle: LocalizedStringResource?
 
         static let available = Availability(enabled: true, subtitle: nil)
     }
@@ -91,7 +105,9 @@ enum SessionChatMoveToWorktree {
     struct Option: Identifiable, Equatable {
         var id: String { directory }
         let directory: String
+        /// Branch or folder name: server content.
         let title: String
+        /// "main checkout" (already localised), else the folder name.
         let subtitle: String
         /// Where the session runs now: checked and not tappable.
         let isCurrent: Bool

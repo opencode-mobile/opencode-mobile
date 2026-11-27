@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -27,11 +28,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 
 private val ShellRowCornerRadius = OpenCodeRadius.small
 private val ShellRowPaddingHorizontal = 12.dp
@@ -55,7 +61,8 @@ fun OpenCodeShellRow(
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val accessibilityLabel = buildShellRowAccessibilityLabel(command, description, elapsed)
+    val accessibilityLabel =
+        buildShellRowAccessibilityLabel(command, description, elapsed, ResourcesUiTextLookup(LocalResources.current))
     val shape = RoundedCornerShape(ShellRowCornerRadius)
 
     Surface(
@@ -159,12 +166,13 @@ internal fun buildShellRowAccessibilityLabel(
     command: String,
     description: String?,
     elapsed: String?,
+    lookup: UiTextLookup,
 ): String =
     buildList {
-        add("Shell")
+        add(UiText.resource(R.string.tool_title_shell).resolve(lookup))
         add(shellRowCommandLine(command))
         if (!description.isNullOrEmpty()) add(description)
-        add("running")
+        add(UiText.resource(R.string.component_activity_status_running).resolve(lookup))
         if (!elapsed.isNullOrEmpty()) add(elapsed)
     }.joinToString(", ")
 

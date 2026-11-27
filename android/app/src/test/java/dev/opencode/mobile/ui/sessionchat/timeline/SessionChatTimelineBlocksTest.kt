@@ -1890,6 +1890,22 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun build_collapseOn_unknownToolCountsKeepTheServerName() {
+        val group =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                collapseConsecutiveToolCalls = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "mcp_lookup", status = ToolStatus.Completed, id = "mcp-1"),
+                        MessagePart.Tool(toolName = "mcp_lookup", status = ToolStatus.Completed, id = "mcp-2"),
+                        MessagePart.Tool(toolName = "mcp_other", status = ToolStatus.Completed, id = "mcp-3"),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolGroup
+        assertEquals("2 mcp_lookup · mcp_other", group.subtitle?.english())
+    }
+
+    @Test
     fun build_collapseOn_hiddenToolDoesNotBreakGroup() {
         val group =
             buildBlocks(

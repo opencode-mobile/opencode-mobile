@@ -1019,6 +1019,152 @@
         }
       }
     },
+    "attachment_drop.adds_to_draft" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds them to the message you are writing"
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_files" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop to attach files"
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_files_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_images" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop to attach images"
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_images_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld image"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld images"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "attachment_drop.reject_many" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't attach these"
+          }
+        }
+      }
+    },
+    "attachment_drop.reject_one" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't attach this"
+          }
+        }
+      }
+    },
+    "attachment_drop.skipped_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld will be skipped"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld will be skipped"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "attachment_drop.skipped_detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "attachment_drop.some_skipped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some will be skipped"
+          }
+        }
+      }
+    },
     "bottom_sheet.close" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1626,6 +1772,18 @@
         }
       }
     },
+    "common.collapsed" : {
+      "comment" : "Accessibility state of a folder or a toggling row.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collapsed"
+          }
+        }
+      }
+    },
     "common.delete" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1655,6 +1813,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Edit"
+          }
+        }
+      }
+    },
+    "common.expanded" : {
+      "comment" : "Accessibility state of a folder or a toggling row.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expanded"
           }
         }
       }
@@ -1779,7 +1949,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld agents"
+                  "value" : "%lld agent"
                 }
               },
               "other" : {
@@ -1969,6 +2139,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "stopped"
+          }
+        }
+      }
+    },
+    "component.attachment.accessibility_label" : {
+      "comment" : "Accessibility label of an attachment. %1$s is the file name, %2$s its kind or detail, such as Image.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
           }
         }
       }
@@ -2834,6 +3016,86 @@
         }
       }
     },
+    "component.floating_pill.accessibility_label" : {
+      "comment" : "%1$s is the pill's label, %2$s its state, such as Ready.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "component.floating_pill.dismiss" : {
+      "comment" : "Close button of a floating pill. %1$s is the pill's label.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss %@"
+          }
+        }
+      }
+    },
+    "component.floating_pill.state.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "component.floating_pill.state.error" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error"
+          }
+        }
+      }
+    },
+    "component.floating_pill.state.live" : {
+      "comment" : "Accessibility: a floating pill's state, read after its label.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In progress"
+          }
+        }
+      }
+    },
+    "component.floating_pill.state.needs_attention" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs attention"
+          }
+        }
+      }
+    },
+    "component.floating_pill.state.ready" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready"
+          }
+        }
+      }
+    },
     "component.hunk_navigation.collapse_context" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3114,6 +3376,30 @@
         }
       }
     },
+    "component.reasoning_row.shows_thought_hint" : {
+      "comment" : "Accessibility hint on a thought row that opens the full thought.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the full thought"
+          }
+        }
+      }
+    },
+    "component.reasoning_row.thought_duration" : {
+      "comment" : "A settled thought. %1$s is how long it took, such as 4s.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thought · %@"
+          }
+        }
+      }
+    },
     "component.reorderable_list.move_down" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3132,6 +3418,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Move up"
+          }
+        }
+      }
+    },
+    "component.review_changes_pill.files" : {
+      "comment" : "Visible label and accessibility part of the Review Changes pill.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "component.review_changes_pill.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review changes"
           }
         }
       }
@@ -3341,6 +3662,62 @@
         }
       }
     },
+    "component.subagent_state.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "done"
+          }
+        }
+      }
+    },
+    "component.subagent_state.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "failed"
+          }
+        }
+      }
+    },
+    "component.subagent_state.running" : {
+      "comment" : "Where a subagent is, on task and child session rows; shown and spoken in lowercase after the title.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "running"
+          }
+        }
+      }
+    },
+    "component.subagent_state.stopped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "stopped"
+          }
+        }
+      }
+    },
+    "component.subagent_state.waiting_for_input" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "waiting for input"
+          }
+        }
+      }
+    },
     "component.text_size_slider.sample_letter" : {
       "comment" : "One letter drawn small before the text size slider and large after it, to show smaller and larger text. Not read aloud. Use a common capital letter of your script.",
       "extractionState" : "manual",
@@ -3375,6 +3752,110 @@
         }
       }
     },
+    "component.timeline_notice.shows_full_value_hint" : {
+      "comment" : "Accessibility hints of a timeline notice whose value can expand.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the full value"
+          }
+        }
+      }
+    },
+    "component.timeline_notice.shows_one_line_hint" : {
+      "comment" : "Accessibility hints of a timeline notice whose value can expand.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows one line"
+          }
+        }
+      }
+    },
+    "component.todo_item.accessibility_label" : {
+      "comment" : "Spoken after a todo's text. %1$s is the todo, %2$s its status, such as in progress.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "component.todo_item.status.cancelled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancelled"
+          }
+        }
+      }
+    },
+    "component.todo_item.status.completed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "completed"
+          }
+        }
+      }
+    },
+    "component.todo_item.status.in_progress" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in progress"
+          }
+        }
+      }
+    },
+    "component.todo_item.status.pending" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pending"
+          }
+        }
+      }
+    },
+    "component.todos_pill.accessibility_label" : {
+      "comment" : "Accessibility label of the todos pill. %1$d completed todos, %2$d todos in total.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session todos, %1$lld of %2$lld completed"
+          }
+        }
+      }
+    },
+    "component.todos_pill.accessibility_label_active" : {
+      "comment" : "Accessibility label of the todos pill. %1$d completed todos, %2$d todos in total, %3$s the todo in progress.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session todos, %1$lld of %2$lld completed, %3$@"
+          }
+        }
+      }
+    },
     "component.top_bar.project_subtitle" : {
       "comment" : "%1$s is the project letter, %2$s the subtitle.",
       "extractionState" : "manual",
@@ -3395,6 +3876,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Worktree %@"
+          }
+        }
+      }
+    },
+    "component.tree_row.loading" : {
+      "comment" : "Accessibility value of a folder that is loading its children.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading"
           }
         }
       }
@@ -3432,35 +3925,116 @@
         }
       }
     },
-    "component.unified_diff.summary_added" : {
+    "component.unified_diff.new_line" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Added file %1$@, %2$lld additions, %3$lld deletions"
+            "value" : "new line %lld"
+          }
+        }
+      }
+    },
+    "component.unified_diff.old_line" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "old line %lld"
+          }
+        }
+      }
+    },
+    "component.unified_diff.row_kind.addition" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "addition"
+          }
+        }
+      }
+    },
+    "component.unified_diff.row_kind.context" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "context"
+          }
+        }
+      }
+    },
+    "component.unified_diff.row_kind.deletion" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deletion"
+          }
+        }
+      }
+    },
+    "component.unified_diff.row_kind.hunk" : {
+      "comment" : "Accessibility: a diff row's kind, read before its line numbers.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hunk"
+          }
+        }
+      }
+    },
+    "component.unified_diff.row_kind.metadata" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "metadata"
+          }
+        }
+      }
+    },
+    "component.unified_diff.summary_added" : {
+      "comment" : "Accessibility label of a diff. %1$s is the path, %2$s the additions (changes.count.additions), %3$s the deletions (changes.count.deletions).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Added file %1$@, %2$@, %3$@"
           }
         }
       }
     },
     "component.unified_diff.summary_deleted" : {
+      "comment" : "Accessibility label of a diff. %1$s is the path, %2$s the additions (changes.count.additions), %3$s the deletions (changes.count.deletions).",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deleted file %1$@, %2$lld additions, %3$lld deletions"
+            "value" : "Deleted file %1$@, %2$@, %3$@"
           }
         }
       }
     },
     "component.unified_diff.summary_modified" : {
+      "comment" : "Accessibility label of a diff. %1$s is the path, %2$s the additions (changes.count.additions), %3$s the deletions (changes.count.deletions).",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Modified file %1$@, %2$lld additions, %3$lld deletions"
+            "value" : "Modified file %1$@, %2$@, %3$@"
           }
         }
       }
@@ -5762,6 +6336,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Check the connection to the server and try again."
+          }
+        }
+      }
+    },
+    "files.error.server_status" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server responded with %lld."
           }
         }
       }
@@ -10274,6 +10859,50 @@
         }
       }
     },
+    "session_chat.model_notice.load_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to load models. Tap Model to retry."
+          }
+        }
+      }
+    },
+    "session_chat.model_notice.model_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected model is unavailable. Using %@."
+          }
+        }
+      }
+    },
+    "session_chat.model_notice.none_usable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usable models are available. Tap Model to retry."
+          }
+        }
+      }
+    },
+    "session_chat.model_notice.variant_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remembered Variant is unavailable. Using Default."
+          }
+        }
+      }
+    },
     "session_chat.more_options" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10292,6 +10921,61 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Current worktree"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't move the session: %@"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.menu_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to worktree…"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.moves_after_turn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moves to %@ after this turn."
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.no_other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This project has no other worktrees"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.sheet_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to worktree"
           }
         }
       }
@@ -10540,6 +11224,50 @@
         }
       }
     },
+    "session_chat.side_question.copied" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Answer copied"
+          }
+        }
+      }
+    },
+    "session_chat.side_question.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/btw failed: “%@”"
+          }
+        }
+      }
+    },
+    "session_chat.side_question.unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/btw needs a newer opencode server."
+          }
+        }
+      }
+    },
+    "session_chat.side_question.unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/btw needs an opencode v2 server that answers side questions. This server can't answer without adding to the conversation."
+          }
+        }
+      }
+    },
     "session_chat.suggestion.badge_mcp" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10614,6 +11342,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "session_chat.variant_default" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
           }
         }
       }
@@ -10910,13 +11649,25 @@
       }
     },
     "session_chat_sheet.mcp.headline" : {
-      "comment" : "%1$lld connected MCP servers, %2$lld configured.",
+      "comment" : "%1$s connected MCP servers, %2$d configured. The plural follows %2$d.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld of %2$lld connected"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ of %2$lld connected"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ of %2$lld connected"
+                }
+              }
+            }
           }
         }
       }
@@ -12601,17 +13352,19 @@
       }
     },
     "settings.app_lock.subtitle_available" : {
+      "comment" : "Uses Apple's names for the unlock methods. Android words the same key with its own names.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Require your face, fingerprint or device passcode when the app returns from the background"
+            "value" : "Require Face ID, Touch ID or your passcode when the app returns from the background"
           }
         }
       }
     },
     "settings.app_lock.subtitle_unavailable" : {
+      "comment" : "Uses Apple's word passcode. Android words the same key as a screen lock.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -13098,12 +13851,25 @@
       }
     },
     "settings.servers_summary.saved_active" : {
+      "comment" : "%1$d is how many servers are saved, %2$s the active server's name.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld saved · %2$@ active"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld saved · %2$@ active"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld saved · %2$@ active"
+                }
+              }
+            }
           }
         }
       }
@@ -14909,13 +15675,25 @@
       }
     },
     "tool.count.named" : {
-      "comment" : "%1$d is how many times a tool ran, %2$s the tool name.",
+      "comment" : "%1$d is how many times a tool ran (two or more), %2$s the tool name as the server sends it, such as mcp_lookup. Known tools have their own plurals, such as tool.count.read.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld %2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld %2$@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld %2$@"
+                }
+              }
+            }
           }
         }
       }

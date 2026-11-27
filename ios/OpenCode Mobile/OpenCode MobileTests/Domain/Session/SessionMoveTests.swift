@@ -173,7 +173,7 @@ struct SessionChatMoveToWorktreeTests {
             supportsMove: false, worktreesEnabled: false, sessionCreated: false, project: nil, newWorktree: rowEnabled
         )
         #expect(!availability.enabled)
-        #expect(availability.subtitle == "Needs an opencode v2 server")
+        #expect(availability.subtitle.map { String(localized: $0) } == "Needs an opencode v2 server")
     }
 
     @Test func worktreesOffIsDisabled() {
@@ -181,7 +181,7 @@ struct SessionChatMoveToWorktreeTests {
             supportsMove: true, worktreesEnabled: false, sessionCreated: true, project: repo, newWorktree: rowEnabled
         )
         #expect(!availability.enabled)
-        #expect(availability.subtitle == "Turn on Worktrees in Settings")
+        #expect(availability.subtitle.map { String(localized: $0) } == "Turn on Worktrees in Settings")
     }
 
     @Test func uncreatedSessionIsDisabledWithoutASubtitle() {
@@ -215,7 +215,7 @@ struct SessionChatMoveToWorktreeTests {
                 supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: project, newWorktree: newWorktree
             )
             #expect(!availability.enabled)
-            #expect(availability.subtitle == "This project has no other worktrees")
+            #expect(availability.subtitle.map { String(localized: $0) } == "This project has no other worktrees")
         }
         let unsupported = SessionChatMoveToWorktree.newWorktreeAvailability(
             supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: singleRepo, serverCanCreate: false
@@ -224,7 +224,7 @@ struct SessionChatMoveToWorktreeTests {
         #expect(
             SessionChatMoveToWorktree.availability(
                 supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: singleRepo, newWorktree: unsupported
-            ).subtitle == "This project has no other worktrees"
+            ).subtitle.map { String(localized: $0) } == "This project has no other worktrees"
         )
     }
 
@@ -250,8 +250,8 @@ struct SessionChatMoveToWorktreeTests {
     }
 
     @Test func copyMatchesTheContract() {
-        #expect(SessionChatMoveToWorktree.menuTitle == "Move to worktree\u{2026}")
-        #expect(SessionChatMoveToWorktree.sheetTitle == "Move to worktree")
+        #expect(String(localized: SessionChatMoveToWorktree.menuTitle) == "Move to worktree\u{2026}")
+        #expect(String(localized: SessionChatMoveToWorktree.sheetTitle) == "Move to worktree")
         #expect(SessionChatMoveToWorktree.movesAfterTurn("feature/x") == "Moves to feature/x after this turn.")
         #expect(SessionChatMoveToWorktree.failure("Nope") == "Couldn't move the session: Nope")
     }

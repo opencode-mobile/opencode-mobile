@@ -1609,6 +1609,22 @@ struct SessionChatTimelineBlocksTests {
         #expect(english(group.subtitle) == "2 shells")
     }
 
+    @Test func build_collapseOn_unknownToolCountsKeepTheServerName() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "mcp-1", toolName: "mcp_lookup", status: .completed)),
+                .tool(ToolPart(id: "mcp-2", toolName: "mcp_lookup", status: .completed)),
+                .tool(ToolPart(id: "mcp-3", toolName: "mcp_other", status: .completed)),
+            ],
+            collapseConsecutiveToolCalls: true
+        )
+        guard case .toolGroup(_, let group) = blocks.single else {
+            Issue.record("Expected tool group")
+            return
+        }
+        #expect(english(group.subtitle) == "2 mcp_lookup · mcp_other")
+    }
+
     @Test func build_collapseOn_hiddenToolDoesNotBreakGroup() {
         let blocks = okBlocks(
             parts: [

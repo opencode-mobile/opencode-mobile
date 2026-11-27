@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -69,6 +70,7 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -332,7 +334,11 @@ internal fun OpenCodeTurnStatusPill(
                 exit = shrinkHorizontally(closeSpec, shrinkTowards = Alignment.Start, clip = false) + fadeOut(),
             ) {
                 FloatingPillClose(
-                    description = floatingPillCloseDescription(OpenCodeFloatingPillLayout.Closable(activeLabel)),
+                    description =
+                        floatingPillCloseDescription(
+                            OpenCodeFloatingPillLayout.Closable(activeLabel),
+                            ResourcesUiTextLookup(LocalResources.current),
+                        ),
                     onClose = { latestOnClose?.invoke() },
                 )
             }

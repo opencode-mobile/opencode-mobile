@@ -976,7 +976,7 @@ struct SessionChatViewModelTests {
 
         #expect(sessionRepository.updateRequest == nil)
         #expect(viewModel.uiState.rename.isDialogVisible)
-        #expect(viewModel.uiState.rename.errorMessage == "Enter a session title")
+        #expect(viewModel.uiState.rename.errorMessage?.resolved == "Enter a session title")
         #expect(viewModel.uiState.sessionTitle == "Title")
     }
 
@@ -1022,7 +1022,7 @@ struct SessionChatViewModelTests {
 
         #expect(viewModel.uiState.rename.isDialogVisible)
         #expect(!viewModel.uiState.rename.isSubmitting)
-        #expect(viewModel.uiState.rename.errorMessage == "boom")
+        #expect(viewModel.uiState.rename.errorMessage?.resolved == "boom")
         #expect(viewModel.uiState.sessionTitle == "Title")
     }
 
@@ -2613,7 +2613,7 @@ struct SessionChatViewModelTests {
         defer { viewModel.stopObserving() }
 
         await viewModel.loadMessages()
-        #expect(viewModel.uiState.composer.modelCatalogError == "No usable models are available. Tap Model to retry.")
+        #expect(viewModel.uiState.composer.modelCatalogError.map { String(localized: $0) } == "No usable models are available. Tap Model to retry.")
         #expect(viewModel.uiState.composer.isModelSelectionReady == false)
 
         events.emit(OpencodeEvent(type: "provider.updated", sessionID: nil))
@@ -2670,7 +2670,7 @@ struct SessionChatViewModelTests {
         try? await Task.sleep(for: .milliseconds(100))
 
         #expect(models.calls == 3)
-        #expect(viewModel.uiState.composer.modelCatalogError == "No usable models are available. Tap Model to retry.")
+        #expect(viewModel.uiState.composer.modelCatalogError.map { String(localized: $0) } == "No usable models are available. Tap Model to retry.")
     }
 
     @Test func reconnectRefreshThatComesBackEmpty_keepsTheLoadedCatalog() async {
@@ -2935,7 +2935,7 @@ struct SessionChatViewModelTests {
 
         #expect(viewModel.uiState.composer.selectedModel?.option == defaultOption)
         #expect(viewModel.uiState.composer.modelOptions == [defaultOption])
-        #expect(viewModel.uiState.composer.modelNotice == "Selected model is unavailable. Using Claude Sonnet.")
+        #expect(viewModel.uiState.composer.modelNotice.map { String(localized: $0) } == "Selected model is unavailable. Using Claude Sonnet.")
         #expect(viewModel.uiState.composer.isModelSelectionReady)
     }
 
@@ -3158,7 +3158,7 @@ struct SessionChatViewModelTests {
         await viewModel.loadMessages()
 
         #expect(viewModel.uiState.composer.selectedModel?.option.providerID == "anthropic")
-        #expect(viewModel.uiState.composer.modelNotice == "Selected model is unavailable. Using Claude Sonnet.")
+        #expect(viewModel.uiState.composer.modelNotice.map { String(localized: $0) } == "Selected model is unavailable. Using Claude Sonnet.")
     }
 
     @Test func loadMessages_initializesModelFromLatestMessage() async {
