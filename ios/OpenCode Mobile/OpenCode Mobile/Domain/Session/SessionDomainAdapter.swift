@@ -86,7 +86,6 @@ nonisolated struct SessionDomainAdapter: Sendable {
             title: session.title,
             worktree: worktree,
             statusLabel: statusLabel,
-            updatedAtLabel: session.updatedAtEpochMs.map(Self.updatedAtLabel),
             updatedAtEpochMs: session.updatedAtEpochMs,
             isReady: isReady,
             unreadOutcome: unreadOutcome,
@@ -340,13 +339,5 @@ private extension SessionDomainAdapter {
 private extension SessionDomainAdapter {
     nonisolated static func displayTitle(_ title: String) -> String {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? OptimisticSessionCreate.placeholderTitle : title
-    }
-
-    nonisolated static func updatedAtLabel(epochMs: Int64) -> String {
-        let date = Date(timeIntervalSince1970: TimeInterval(epochMs) / 1000)
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "MMM d • h:mm a"
-        return formatter.string(from: date)
     }
 }

@@ -108,7 +108,6 @@ final class HomeWorktrees {
                         title: item.title,
                         worktree: item.worktree,
                         statusLabel: item.statusLabel,
-                        updatedAtLabel: item.updatedAtLabel,
                         updatedAtEpochMs: item.updatedAtEpochMs,
                         isReady: item.isReady,
                         unreadOutcome: item.unreadOutcome,

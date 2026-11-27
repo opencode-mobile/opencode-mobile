@@ -1426,7 +1426,6 @@ nonisolated struct SessionListItem: Identifiable, Hashable {
     let title: String
     let worktree: String
     let statusLabel: String?
-    let updatedAtLabel: String?
     let updatedAtEpochMs: Int64?
     let isReady: Bool
     /// v2 server unread: how the unseen run ended (Done / Failed / Stopped). Nil when read,
@@ -1444,7 +1443,6 @@ nonisolated struct SessionListItem: Identifiable, Hashable {
         title: String,
         worktree: String,
         statusLabel: String? = nil,
-        updatedAtLabel: String? = nil,
         updatedAtEpochMs: Int64? = nil,
         isReady: Bool = false,
         unreadOutcome: SessionIdleOutcome? = nil,
@@ -1457,7 +1455,6 @@ nonisolated struct SessionListItem: Identifiable, Hashable {
         self.title = title
         self.worktree = worktree
         self.statusLabel = statusLabel
-        self.updatedAtLabel = updatedAtLabel
         self.updatedAtEpochMs = updatedAtEpochMs
         self.isReady = isReady
         self.unreadOutcome = unreadOutcome
