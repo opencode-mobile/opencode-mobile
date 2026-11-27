@@ -8,7 +8,18 @@ private struct RefreshHomeWorktreesKey: EnvironmentKey {
     static let defaultValue: @MainActor @Sendable (String) async -> Void = { _ in }
 }
 
+private struct ShowHomeWorktreeBranchesKey: EnvironmentKey {
+    static let defaultValue: @MainActor @Sendable (String, [String]) -> Void = { _, _ in }
+}
+
 extension EnvironmentValues {
+    /// Tells Home which worktrees a screen (by owner id) shows a branch for now; Home looks up
+    /// only shown worktrees (#1124). An empty list withdraws the owner.
+    var showHomeWorktreeBranches: @MainActor @Sendable (String, [String]) -> Void {
+        get { self[ShowHomeWorktreeBranchesKey.self] }
+        set { self[ShowHomeWorktreeBranchesKey.self] = newValue }
+    }
+
     /// Reloads the checkouts of the Home project that owns a directory (Session Chat after it
     /// created a worktree).
     var refreshHomeWorktrees: @MainActor @Sendable (String) async -> Void {

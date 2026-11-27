@@ -146,6 +146,49 @@ private struct SessionListNearEndRow: Hashable {
     let sessionId: String
 }
 
+/// Rows on screen, by filter id and session id. A plain holder rather than view state, so a
+/// scroll that brings rows in and out does not re-render the list; it reports the selected
+/// filter's rows once they settle (#1124).
+@MainActor
+final class SessionListVisibleRows {
+    nonisolated static let settleDelay: Duration = .milliseconds(150)
+
+    private var rows: [String: [String: SessionListSession]] = [:]
+    private var reported: Set<String>?
+    private var task: Task<Void, Never>?
+
+    func appeared(_ session: SessionListSession, filterId: String) {
+        rows[filterId, default: [:]][session.id] = session
+    }
+
+    func disappeared(_ session: SessionListSession, filterId: String) {
+        rows[filterId]?[session.id] = nil
+    }
+
+    /// Reports `filterId`'s rows to `report` after they settle, when they changed.
+    func schedule(filterId: String, report: (([SessionListSession]) -> Void)?) {
+        guard let report else { return }
+        task?.cancel()
+        task = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.settleDelay)
+            guard !Task.isCancelled, let self else { return }
+            let visible = Array(self.rows[filterId, default: [:]].values)
+            let ids = Set(visible.map(\.id))
+            guard ids != self.reported else { return }
+            self.reported = ids
+            report(visible)
+        }
+    }
+
+    /// The list left the screen: nothing is on it.
+    func clear(report: (([SessionListSession]) -> Void)?) {
+        task?.cancel()
+        rows.removeAll()
+        reported = []
+        report?([])
+    }
+}
+
 /// A project scope whose first server load has not landed yet.
 enum SessionListScopeLoad: Hashable {
     case loading(isSlow: Bool)
@@ -383,6 +426,9 @@ struct SessionList<EmptyContent: View>: View {
     /// Rendered sessions under the selected filter, top to bottom, whenever the
     /// rendered order changes. Empty while nothing is rendered.
     let onDisplayedSessionsChange: (([SessionListSession]) -> Void)?
+    /// Rows of the selected filter on screen now, once a scroll settles; again whenever that set
+    /// changes, and empty when the list leaves the screen.
+    let onVisibleSessionsChange: (([SessionListSession]) -> Void)?
     /// A row within ``nearEndRowCount`` of the end of the list appeared, or the list shows no
     /// rows, while `canLoadMore`: load older sessions.
     let onNearEnd: (() -> Void)?
@@ -412,6 +458,7 @@ struct SessionList<EmptyContent: View>: View {
     @State private var listCrossfadeTask: Task<Void, Never>?
     /// Near-end rows on screen, by filter id and session id.
     @State private var shownNearEndRows: Set<SessionListNearEndRow> = []
+    @State private var visibleRows = SessionListVisibleRows()
 
     init(
         sessions: [SessionListSession],
@@ -432,6 +479,7 @@ struct SessionList<EmptyContent: View>: View {
         revealNewestToken: Int = 0,
         revealSelectedSessionToken: Int = 0,
         onDisplayedSessionsChange: (([SessionListSession]) -> Void)? = nil,
+        onVisibleSessionsChange: (([SessionListSession]) -> Void)? = nil,
         onNearEnd: (() -> Void)? = nil,
         showsLoadingFooter: Bool = false,
         canLoadMore: Bool = false,
@@ -457,6 +505,7 @@ struct SessionList<EmptyContent: View>: View {
         self.revealNewestToken = revealNewestToken
         self.revealSelectedSessionToken = revealSelectedSessionToken
         self.onDisplayedSessionsChange = onDisplayedSessionsChange
+        self.onVisibleSessionsChange = onVisibleSessionsChange
         self.onNearEnd = onNearEnd
         self.showsLoadingFooter = showsLoadingFooter
         self.canLoadMore = canLoadMore
@@ -520,7 +569,13 @@ struct SessionList<EmptyContent: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
         .accessibilityIdentifier("homeContent")
-        .onDisappear { onDisplayedSessionsChange?([]) }
+        .onDisappear {
+            onDisplayedSessionsChange?([])
+            visibleRows.clear(report: onVisibleSessionsChange)
+        }
+        .onChange(of: incomingFilterId) { _, filterId in
+            visibleRows.schedule(filterId: filterId, report: onVisibleSessionsChange)
+        }
         .background {
             GeometryReader { geometry in
                 Color.clear
@@ -699,11 +754,15 @@ struct SessionList<EmptyContent: View>: View {
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }
         )
         .onAppear {
+            visibleRows.appeared(session, filterId: filterId)
+            visibleRows.schedule(filterId: incomingFilterId, report: onVisibleSessionsChange)
             guard nearEnd.contains(session.id) else { return }
             shownNearEndRows.insert(SessionListNearEndRow(filterId: filterId, sessionId: session.id))
             if canLoadMore { onNearEnd?() }
         }
         .onDisappear {
+            visibleRows.disappeared(session, filterId: filterId)
+            visibleRows.schedule(filterId: incomingFilterId, report: onVisibleSessionsChange)
             shownNearEndRows.remove(SessionListNearEndRow(filterId: filterId, sessionId: session.id))
         }
         .background {

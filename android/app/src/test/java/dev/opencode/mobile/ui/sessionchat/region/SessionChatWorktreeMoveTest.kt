@@ -2,11 +2,14 @@ package dev.opencode.mobile.ui.sessionchat.region
 
 import dev.opencode.mobile.domain.event.SessionMovedUpdate
 import dev.opencode.mobile.domain.home.HomeProject
+import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.home.HomeWorktree
 import dev.opencode.mobile.domain.session.SessionError
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -177,6 +180,28 @@ class SessionChatWorktreeMoveTest {
             move.onSessionMoved(SessionMovedUpdate("ses-1", "/repo-feature"), boundSessionId = "ses-1", boundDirectory = "/repo")
 
             assertNull(move.state.value.notice)
+        }
+
+    @Test
+    fun theOpenSheetAsksHomeForTheBranchesItListsUntilItCloses() =
+        runTest {
+            val snapshot = HomeProjectsSnapshot()
+            snapshot.publish(listOf(project))
+            val shown = mutableListOf<Set<String>>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { snapshot.shownBranchDirectories.collect { shown += it } }
+            val move =
+                SessionChatWorktreeMove(moveSession = { _, _ -> }, scope = this, homeProjectsSnapshot = snapshot).apply {
+                    ioDispatcher = StandardTestDispatcher(testScheduler)
+                }
+            advanceUntilIdle()
+
+            move.openSheet("/repo")
+            advanceUntilIdle()
+            assertEquals(setOf("/repo", "/repo-feature", "/repo-detached"), shown.last())
+
+            move.dismissSheet()
+            advanceUntilIdle()
+            assertEquals(emptySet<String>(), shown.last())
         }
 
     private fun row(

@@ -489,6 +489,31 @@ final class ProjectListHomeViewModel {
         await servers.refreshChrome()
     }
 
+    /// `directories` are what `source` on Home shows a branch for now; only those are looked up
+    /// (#1124).
+    func showBranches(_ source: HomeBranchLookups.Source, _ directories: [String]) {
+        worktrees.showBranches(source, directories)
+    }
+
+    /// Branches other screens show (Session Chat's Move and New session lists), by owner.
+    @ObservationIgnored private var sessionChatBranchClaims: [String: [String]] = [:]
+
+    /// `owner` (a Session Chat) shows the branches of `directories` now; empty withdraws it.
+    func showSessionChatBranches(owner: String, _ directories: [String]) {
+        if directories.isEmpty {
+            sessionChatBranchClaims[owner] = nil
+        } else {
+            sessionChatBranchClaims[owner] = directories
+        }
+        var union: [String] = []
+        for directory in sessionChatBranchClaims.keys.sorted().flatMap({ sessionChatBranchClaims[$0] ?? [] })
+            where !union.contains(directory)
+        {
+            union.append(directory)
+        }
+        worktrees.showBranches(.sessionChat, union)
+    }
+
     /// Soft reload for pull-to-refresh: keeps Loaded/Empty UI, no full-screen spinner.
     func pullToRefresh() async {
         switch content {

@@ -124,6 +124,13 @@ internal class HomeWorktrees(
         homeProjectsSnapshot.worktreeRefreshRequests.collect(::refreshProjectWorktrees)
     }
 
+    /** Session Chat's worktree lists ask for the branches they show. */
+    suspend fun followShownBranches() {
+        homeProjectsSnapshot.shownBranchDirectories.collect { directories ->
+            showBranches(HomeBranchLookups.Source.SessionChat, directories)
+        }
+    }
+
     /** The Worktrees screen lists Home's projects and sessions. */
     suspend fun publishWorktrees(snapshots: Flow<HomeWorktreesSnapshot>) {
         snapshots
@@ -378,13 +385,26 @@ internal class HomeWorktrees(
         }
     }
 
-    /** Branch names for every project worktree not answered since the last reload. */
+    /**
+     * Branch lookups for each project's main checkout: v2 only knows a project is a repository
+     * from a known branch, and the New session label names it. Runs on every inventory change;
+     * every other directory is looked up only while something shows it ([showBranches]).
+     */
     private fun requestBranches() {
-        branchLookups.lookUp(
+        branchLookups.show(
+            HomeBranchLookups.Source.MainCheckouts,
             projects()
                 .filter { it.projectId != null }
-                .flatMap { project -> project.worktrees.map { it.directory } },
+                .flatMap { project -> project.worktrees.filter { it.isMain }.map { it.directory } },
         )
+    }
+
+    /** [directories] are what [source] shows now (Home rows, the picker, Session Chat's lists). */
+    fun showBranches(
+        source: HomeBranchLookups.Source,
+        directories: Collection<String>,
+    ) {
+        branchLookups.show(source, directories.map { ServerPathPolicy.canonical(it.trim()) })
     }
 
     /**

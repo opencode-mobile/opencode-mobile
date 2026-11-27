@@ -479,6 +479,10 @@ struct ProjectListHomeView: View {
         .environment(\.refreshHomeWorktrees, { [viewModel] directory in
             await viewModel.refreshWorktreeInventory(containing: directory)
         })
+        // …and tells Home which worktree branches its lists show (#1124).
+        .environment(\.showHomeWorktreeBranches, { [viewModel] owner, directories in
+            viewModel.showSessionChatBranches(owner: owner, directories)
+        })
         // A New session draft's Project sheet adds projects through Home (#1004)…
         .environment(\.homeAddProject, HomeAddProjectAction { onAdded in
             draftAddProjectCallback = onAdded
@@ -1386,6 +1390,9 @@ struct ProjectListHomeView: View {
                     displayedSessions = rendered
                 }
             },
+            onVisibleSessionsChange: { visible in
+                viewModel.showBranches(.homeRows, visible.map(\.directory))
+            },
             onNearEnd: { viewModel.loadMoreSessions(scopeId: selectedFilterId) },
             showsLoadingFooter: viewModel.showsLoadMoreFooter(scopeId: selectedFilterId),
             canLoadMore: viewModel.canLoadMoreSessions(scopeId: selectedFilterId),
@@ -1398,6 +1405,19 @@ struct ProjectListHomeView: View {
                 selectedSessionFilterId = resolved
             }
         }
+        .onChange(
+            of: SessionListHomeChrome.shownBranchDirectories(
+                projects: projects,
+                state: projectPickerState,
+                pickerShown: showProjectPicker,
+                selectedFilterId: selectedFilterId,
+                worktreesEnabled: worktreesEnabled
+            ),
+            initial: true
+        ) { _, directories in
+            viewModel.showBranches(.picker, directories)
+        }
+        .onDisappear { viewModel.showBranches(.picker, []) }
     }
 }
 

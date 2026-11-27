@@ -17,11 +17,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -172,6 +174,7 @@ fun MainScreen(
         onRetryProjectLoad = viewModel::retryProjectLoad,
         loadingMoreScopeId = home.paging.loadingMoreScopeId,
         onLoadMoreSessions = viewModel::loadMoreSessions,
+        onShowBranches = viewModel::showBranches,
         canLoadMoreSessions = { scopeId, worktreesEnabled ->
             viewModel.canLoadMoreSessions(moreSessionDirectories, scopeId, worktreesEnabled)
         },
@@ -305,6 +308,8 @@ internal fun MainScreen(
     /** Scope whose older sessions are loading; its list shows a spinner at the end. */
     loadingMoreScopeId: String? = null,
     onLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Unit = { _, _ -> },
+    /** Worktree directories a Home surface shows a branch for now; only those are looked up (#1124). */
+    onShowBranches: (HomeBranchLookups.Source, List<String>) -> Unit = { _, _ -> },
     /** Whether a scope has older sessions to load; an empty scope keeps loading until it shows rows. */
     canLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Boolean = { _, _ -> false },
     serversChrome: HomeServersChrome = HomeServersChrome(),
@@ -623,6 +628,7 @@ internal fun MainScreen(
                         onSelectedFilterIdChange = { selectedFilterId = it },
                         loadingMoreScopeId = loadingMoreScopeId,
                         onLoadMoreSessions = onLoadMoreSessions,
+                        onShowBranches = onShowBranches,
                         canLoadMoreSessions = canLoadMoreSessions,
                         selectedSessionId = selectedSessionId,
                         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
@@ -962,6 +968,7 @@ private fun HomeProjectsContent(
     onSelectedFilterIdChange: (String) -> Unit,
     loadingMoreScopeId: String? = null,
     onLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Unit = { _, _ -> },
+    onShowBranches: (HomeBranchLookups.Source, List<String>) -> Unit = { _, _ -> },
     /** Whether a scope has older sessions to load; an empty scope keeps loading until it shows rows. */
     canLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Boolean = { _, _ -> false },
     selectedSessionId: String? = null,
@@ -1029,6 +1036,24 @@ private fun HomeProjectsContent(
         LaunchedEffect(resolvedFilterId) {
             if (selectedFilterId != resolvedFilterId) {
                 onSelectedFilterIdChange(resolvedFilterId)
+            }
+        }
+        val currentOnShowBranches by rememberUpdatedState(onShowBranches)
+        val pickerBranchDirectories =
+            SessionListHomeChrome.shownBranchDirectories(
+                projects = chromeProjects,
+                state = pickerState,
+                pickerShown = showProjectPicker,
+                selectedFilterId = resolvedFilterId,
+                worktreesEnabled = worktreesEnabled,
+            )
+        LaunchedEffect(pickerBranchDirectories) {
+            currentOnShowBranches(HomeBranchLookups.Source.Picker, pickerBranchDirectories)
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                currentOnShowBranches(HomeBranchLookups.Source.Picker, emptyList())
+                currentOnShowBranches(HomeBranchLookups.Source.HomeRows, emptyList())
             }
         }
         // Ctrl+N: the dock's New session for the current scope. A Session Chat open beside Home
@@ -1104,6 +1129,9 @@ private fun HomeProjectsContent(
             },
             onSessionSelected = openSession,
             onDisplayedSessionsChange = { displayedSessions.value = it },
+            onVisibleSessionsChange = { visible ->
+                currentOnShowBranches(HomeBranchLookups.Source.HomeRows, visible.map { it.directory })
+            },
             onAddProject = onBrowseProjectsClick,
             onNewSession = {
                 onNewSessionAction(

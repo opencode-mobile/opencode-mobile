@@ -389,6 +389,33 @@ class SessionListHomeChromeTest {
         assertEquals(null, SessionListScopePaging.neighborIndex(reversed, lastProjectWorktree, SessionListScopePaging.Direction.Next))
     }
 
+    @Test
+    fun shownBranchDirectories_coverTheExpandedProjectsListedWorktreesAndTheSelectedScope() {
+        val big = manyWorktrees(8)
+        val projects = listOf(worktreed, big)
+        val collapsed = HomeProjectPickerState()
+        val expanded = collapsed.toggleExpanded("big")
+        val selected = HomeScope.worktreeId("proj", "/repo-723")
+
+        fun shown(
+            state: HomeProjectPickerState,
+            pickerShown: Boolean,
+            selectedFilterId: String = "proj",
+            worktreesEnabled: Boolean = true,
+        ) = SessionListHomeChrome.shownBranchDirectories(projects, state, pickerShown, selectedFilterId, worktreesEnabled)
+
+        // Closed picker, project scope: nothing beyond the main checkouts Home always asks for.
+        assertEquals(emptyList<String>(), shown(expanded, pickerShown = false))
+        // The dock pill shows the selected worktree's branch.
+        assertEquals(listOf("/repo-723"), shown(collapsed, pickerShown = false, selectedFilterId = selected))
+        // An expanded project lists its first five; Show all lists the rest.
+        assertEquals(listOf("/big", "/big-1", "/big-2", "/big-3", "/big-4"), shown(expanded, pickerShown = true))
+        assertEquals(8, shown(expanded.toggleShowAll("big"), pickerShown = true).size)
+        // Editing collapses every project; worktrees off shows no branch at all.
+        assertEquals(emptyList<String>(), shown(expanded.setEditing(true), pickerShown = true))
+        assertEquals(emptyList<String>(), shown(expanded, pickerShown = true, selectedFilterId = selected, worktreesEnabled = false))
+    }
+
     private fun manyWorktrees(count: Int) =
         SessionListHomeChrome.Project(
             worktree = "/big",

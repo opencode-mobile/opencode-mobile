@@ -324,7 +324,7 @@ class SessionsApi private constructor(
             .get()
             .get("vcs") {
                 applyDirectory(directory)
-            }.body()
+            }.bodyOnSuccess()
 
     suspend fun getVcsStatus(directory: String? = null): List<VcsFileStatusDto> =
         httpClient
@@ -871,7 +871,7 @@ class SessionsApi private constructor(
             .get()
             .get("api/vcs") {
                 applyLocationDirectory(directory)
-            }.body<ApiLocatedEnvelope<V2VcsInfoDto>>()
+            }.bodyOnSuccess<ApiLocatedEnvelope<V2VcsInfoDto>>()
             .data
 
     suspend fun getVcsStatusV2(directory: String? = null): List<VcsFileStatusDto> =

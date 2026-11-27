@@ -1322,7 +1322,7 @@ class SessionChatViewModel
                 actionId = ProductAnalytics.Action.CHAT_OVERFLOW_MOVE_TO_WORKTREE,
                 screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
             )
-            worktreeMove.openSheet()
+            worktreeMove.openSheet(boundWorktree)
         }
 
         fun dismissMoveToWorktree() {

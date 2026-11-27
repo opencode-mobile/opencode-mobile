@@ -55,6 +55,34 @@ enum SessionListHomeChrome {
         }
     }
 
+    /// Worktrees whose branch the picker and dock show now (#1124): the expanded project's listed
+    /// worktrees while the picker is open, and the selected worktree scope (the dock pill).
+    static func shownBranchDirectories(
+        projects: [HomeProject],
+        state: HomeProjectPickerState,
+        pickerShown: Bool,
+        selectedFilterId: String,
+        worktreesEnabled: Bool = true
+    ) -> [String] {
+        guard worktreesEnabled else { return [] }
+        var directories: [String] = []
+        if pickerShown, !state.isEditing {
+            for project in projects where project.hasManyWorktrees && state.isExpanded(project.key) {
+                let limit = HomeProjectPickerState.collapsedWorktreeLimit
+                let listed = project.worktrees.count <= limit || state.showsAll(project.key)
+                    ? project.worktrees
+                    : Array(project.worktrees.prefix(limit))
+                directories += listed.map(\.directory)
+            }
+        }
+        if case let .worktree(_, directory)? = HomeScope.resolve(id: selectedFilterId, projects: projects),
+           !directories.contains(directory)
+        {
+            directories.append(directory)
+        }
+        return directories
+    }
+
     /// Dock tab of a worktree scope selection, which `filterTabs` does not list. Nil otherwise.
     static func selectedScopeTab(
         selectedId: String,

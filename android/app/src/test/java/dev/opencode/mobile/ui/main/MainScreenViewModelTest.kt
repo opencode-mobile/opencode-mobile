@@ -57,6 +57,7 @@ import dev.opencode.mobile.domain.session.SessionActivityEntry
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
@@ -2917,18 +2918,21 @@ class MainScreenViewModelTest {
                         mainWorktree: String?,
                     ): WorktreeLoad = WorktreeLoad.Loaded(listOf("/repo", "/wt/tax"), listsSessions = false)
                 }
-            createViewModel(
-                connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
-                sessionRepository =
-                    FakeSessionRepository(
-                        mutableMapOf("/repo" to sessions),
-                        branches = mapOf("/repo" to "main", "/wt/tax" to "feature/tax-rounding"),
-                    ),
-                sessionCache = cache,
-                worktreeRepository = listedWorktrees,
-                serverProtocol = ServerProtocol.V2,
-            )
+            val live =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionRepository =
+                        FakeSessionRepository(
+                            mutableMapOf("/repo" to sessions),
+                            branches = mapOf("/repo" to "main", "/wt/tax" to "feature/tax-rounding"),
+                        ),
+                    sessionCache = cache,
+                    worktreeRepository = listedWorktrees,
+                    serverProtocol = ServerProtocol.V2,
+                )
+            advanceUntilIdle()
+            live.showRowsOnScreen()
             advanceUntilIdle()
             assertEquals(
                 WorktreeLayout(
@@ -2990,6 +2994,8 @@ class MainScreenViewModelTest {
                             branches = mapOf("/repo" to "dev", "/repo-wt" to "feature/x"),
                         ),
                 )
+            advanceUntilIdle()
+            viewModel.showRowsOnScreen()
             advanceUntilIdle()
 
             val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
@@ -3191,6 +3197,75 @@ class MainScreenViewModelTest {
             )
             assertEquals(2, sessionRepository.vcsCalls)
         }
+
+    @Test
+    fun aBranchLookupTheServerRefusesIsDecidedAndNotAskedAgain() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            sessionRepository.vcsError = SessionError.Http(404, "Location not found")
+            createViewModel(
+                connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                sessionRepository = sessionRepository,
+            )
+            advanceUntilIdle()
+            advanceTimeBy(60_000)
+            runCurrent()
+
+            assertEquals(1, sessionRepository.vcsCalls)
+        }
+
+    @Test
+    fun branchLookupsAskTheMainCheckoutAndThenOnlyWhatHomeShows() =
+        runTest(testDispatcher) {
+            // #1124: a repository with dozens of worktrees must not make the server open a
+            // location for each of them.
+            val inventory = listOf("/repo") + (0 until 40).map { "/wt/w%02d".format(it) }
+            val worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun loadRefreshed(
+                        addedPath: String,
+                        projectId: String?,
+                        mainWorktree: String?,
+                    ): WorktreeLoad = WorktreeLoad.Loaded(inventory, listsSessions = false)
+                }
+            val sessionRepository =
+                FakeSessionRepository(
+                    mutableMapOf(
+                        "/repo" to
+                            listOf(
+                                Session(id = "a", title = "A", directory = "/wt/w03", updatedAtEpochMs = 3L),
+                                Session(id = "b", title = "B", directory = "/wt/w07", updatedAtEpochMs = 2L),
+                                Session(id = "c", title = "C", directory = "/repo", updatedAtEpochMs = 1L),
+                            ),
+                    ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionRepository = sessionRepository,
+                    worktreeRepository = worktrees,
+                )
+            advanceUntilIdle()
+            assertEquals(listOf<String?>("/repo"), sessionRepository.vcsDirectories)
+
+            // The list reports the rows on screen; the picker lists the first five worktrees.
+            viewModel.showRowsOnScreen()
+            viewModel.showBranches(HomeBranchLookups.Source.Picker, inventory.take(5))
+            advanceUntilIdle()
+            assertEquals(
+                setOf("/repo", "/wt/w00", "/wt/w01", "/wt/w02", "/wt/w03", "/wt/w07"),
+                sessionRepository.vcsDirectories.toSet(),
+            )
+            assertEquals(6, sessionRepository.vcsDirectories.size)
+        }
+
+    /** What Home's list reports once its rows are on screen. */
+    private fun MainScreenViewModel.showRowsOnScreen() {
+        val loaded = uiState.value.content as MainScreenUiState.Loaded
+        showBranches(HomeBranchLookups.Source.HomeRows, loaded.homeSessions().map { it.directory })
+    }
 
     private val repoProjects =
         mapOf(
@@ -3407,12 +3482,14 @@ private class FakeSessionRepository(
     /** Overrides [branches] when set: one scripted answer per call. */
     var vcsAnswers: ArrayDeque<VcsInfo>? = null
     var vcsCalls = 0
+    val vcsDirectories = mutableListOf<String?>()
 
     /** Thrown by every VCS lookup when set. */
     var vcsError: Throwable? = null
 
     override suspend fun getVcsInfo(directory: String?): VcsInfo {
         vcsCalls += 1
+        vcsDirectories += directory
         vcsError?.let { throw it }
         vcsAnswers?.let { answers -> return answers.removeFirstOrNull() ?: answers.lastOrNull() ?: VcsInfo(null, null) }
         return VcsInfo(currentBranch = branches[directory], defaultBranch = "main")

@@ -1,12 +1,16 @@
 package dev.opencode.mobile.domain.home
 
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,6 +41,24 @@ class HomeProjectsSnapshot
 
         /** Paths the New session draft's Add project sheet saved (#1021); Home lists them. */
         val projectAddedRequests: SharedFlow<HomeProjectAdded> = _projectAddedRequests.asSharedFlow()
+
+        private val branchClaims = MutableStateFlow<Map<Any, Set<String>>>(emptyMap())
+
+        /**
+         * Worktree directories other screens show a branch for now (Session Chat's Move, Run in
+         * and New session lists); Home looks up only shown directories (#1124).
+         */
+        val shownBranchDirectories: Flow<Set<String>> =
+            branchClaims.map { claims -> claims.values.flatMapTo(LinkedHashSet()) { it } }.distinctUntilChanged()
+
+        /** [owner] shows the branches of [directories] now, replacing its earlier set; empty withdraws it. */
+        fun showBranches(
+            owner: Any,
+            directories: Collection<String>,
+        ) {
+            val next = directories.mapNotNullTo(LinkedHashSet()) { it.trim().takeIf(String::isNotEmpty)?.let(ServerPathPolicy::canonical) }
+            branchClaims.update { claims -> if (next.isEmpty()) claims - owner else claims + (owner to next) }
+        }
 
         fun publish(projects: List<HomeProject>) {
             _projects.value = projects

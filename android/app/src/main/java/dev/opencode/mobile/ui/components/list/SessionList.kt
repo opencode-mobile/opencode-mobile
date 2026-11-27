@@ -320,6 +320,8 @@ fun SessionList(
     selectedSessionId: String? = null,
     /** Rows of [selectedFilterId] in display order (sections flattened, top to bottom). */
     onDisplayedSessionsChange: ((List<SessionListSession>) -> Unit)? = null,
+    /** Rows of [selectedFilterId] on screen now, top to bottom; again whenever that set changes. */
+    onVisibleSessionsChange: ((List<SessionListSession>) -> Unit)? = null,
     /** Retry for a scope whose [SessionListFilterTab.load] failed; receives the tab id. */
     onRetryScopeLoad: (String) -> Unit = {},
     /** Selectable scopes outside [filterTabs] (worktrees); the dock shows them but never swipes to them. */
@@ -379,6 +381,7 @@ fun SessionList(
                     onSessionLongPress = onSessionLongPress,
                     onDisplayedSessionsChange =
                         onDisplayedSessionsChange.takeIf { filterId == selectedFilterId },
+                    onVisibleSessionsChange = onVisibleSessionsChange.takeIf { filterId == selectedFilterId },
                     rowStyle = rowStyle,
                     loadingMore = loadingMore && filterId == selectedFilterId,
                     canLoadMore = canLoadMore && filterId == selectedFilterId,
@@ -432,6 +435,7 @@ private fun SessionListFeedPage(
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
     onDisplayedSessionsChange: ((List<SessionListSession>) -> Unit)?,
+    onVisibleSessionsChange: ((List<SessionListSession>) -> Unit)?,
     rowStyle: HomeSessionRowStyle,
     loadingMore: Boolean,
     canLoadMore: Boolean,
@@ -512,6 +516,17 @@ private fun SessionListFeedPage(
             )
         }.distinctUntilChanged()
             .collect { trigger -> if (trigger.loadsMore) currentOnNearEnd?.invoke() }
+    }
+    val currentOnVisibleSessions by rememberUpdatedState(onVisibleSessionsChange)
+    val visibleLadderSections by rememberUpdatedState(ladderSections)
+    val reportsVisibleSessions = onVisibleSessionsChange != null
+    LaunchedEffect(listState, reportsVisibleSessions) {
+        if (!reportsVisibleSessions) return@LaunchedEffect
+        // Only rows on screen get their worktree branch looked up (#1124).
+        snapshotFlow {
+            sessionsAtItemIndices(visibleLadderSections, listState.layoutInfo.visibleItemsInfo.map { it.index })
+        }.distinctUntilChanged()
+            .collect { visible -> currentOnVisibleSessions?.invoke(visible) }
     }
     LaunchedEffect(newcomerId) {
         if (newcomerId != null &&
@@ -948,6 +963,25 @@ internal fun sessionListItemIndex(
         }
     }
     return null
+}
+
+/** Rows at LazyColumn [indices] (headers and the footer skipped), in [sections] order. */
+internal fun sessionsAtItemIndices(
+    sections: List<HomeSessionLadderSection<SessionListSession>>,
+    indices: Collection<Int>,
+): List<SessionListSession> {
+    if (indices.isEmpty()) return emptyList()
+    val wanted = indices.toSet()
+    val rows = mutableListOf<SessionListSession>()
+    var index = 0
+    sections.forEach { section ->
+        index += 1
+        section.items.forEach { session ->
+            if (index in wanted) rows += session
+            index += 1
+        }
+    }
+    return rows
 }
 
 private class HomeSessionOrderHold {
