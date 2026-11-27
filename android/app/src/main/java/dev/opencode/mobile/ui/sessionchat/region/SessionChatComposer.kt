@@ -57,6 +57,8 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.model.modelSelectionIdentity
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.ServerErrorMessage
+import dev.opencode.mobile.domain.session.ServerErrorReason
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
@@ -1393,7 +1395,7 @@ class SessionChatComposer(
                     )
                     _state.update { it.copy(isSending = false, sendProgressPercent = null) }
                     firstSend?.settleFailed(sendJobActive = isActive)
-                    onSendFailed(display.id, UiText.verbatim(PENDING_SEND_TIMEOUT_ERROR), false)
+                    onSendFailed(display.id, PENDING_SEND_TIMEOUT_ERROR, false)
                     return@launchSend
                 }
                 val hasAttachments = attachments.isNotEmpty()
@@ -1551,7 +1553,7 @@ class SessionChatComposer(
         if (_state.value.isSending || !composer.isModelSelectionReady) return false
         // Like the TUI and web app, a command runs now or not at all; it cannot wait in the queue.
         if (supportsFollowUp && isSessionBusy && composer.followUpDelivery == FollowUpDelivery.Queue) {
-            _state.update { it.copy(errorMessage = UiText.verbatim(SHELL_CANNOT_QUEUE_ERROR)) }
+            _state.update { it.copy(errorMessage = SHELL_CANNOT_QUEUE_ERROR) }
             return false
         }
         val submittedText = composer.text
@@ -2268,9 +2270,9 @@ class SessionChatComposer(
     /** Server text stays verbatim; the app's own fallbacks are keyed. */
     private fun errorMessage(throwable: Throwable): UiText =
         when (throwable) {
-            is MessageError.Http -> serverOrRequestFailed(throwable.message)
+            is MessageError.Http -> ServerErrorMessage.text(throwable) ?: serverOrRequestFailed(throwable.message)
             is CommandError.Http -> serverOrRequestFailed(throwable.message)
-            is SessionError.Http -> serverOrRequestFailed(throwable.message)
+            is SessionError.Http -> ServerErrorMessage.text(throwable) ?: serverOrRequestFailed(throwable.message)
             is MessageError.Transport,
             is CommandError.Transport,
             is SessionError.Transport,
@@ -2285,12 +2287,11 @@ class SessionChatComposer(
     private fun serverOrRequestFailed(message: String?): UiText =
         message?.let(UiText::verbatim) ?: UiText.resource(R.string.session_chat_activity_request_failed)
 
-    /** The server's own "Session is busy" reply, matched on server text (never on app copy). */
+    /** The server's busy reply: its typed reason, or a command error's own "Session is busy" text. */
     private fun isSessionBusy(throwable: Throwable): Boolean =
         when (throwable) {
-            is MessageError.Http -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
+            is MessageError.Http, is SessionError.Http -> ServerErrorMessage.from(throwable) == ServerErrorReason.SessionBusy
             is CommandError.Http -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
-            is SessionError.Http -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
             is MessageError, is CommandError, is SessionError -> false
             else -> throwable.message == SESSION_BUSY_SERVER_MESSAGE
         }
@@ -2312,9 +2313,9 @@ class SessionChatComposer(
         private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
         internal const val CATALOG_REFRESH_DEBOUNCE_MS = 300L
         const val ModelFilterThreshold = 10
-        const val PENDING_SEND_TIMEOUT_ERROR = "Couldn't send. Try again."
+        val PENDING_SEND_TIMEOUT_ERROR: UiText = UiText.resource(R.string.session_chat_send_timed_out)
         private const val SESSION_BUSY_SERVER_MESSAGE = "Session is busy"
-        const val SHELL_CANNOT_QUEUE_ERROR = "Shell commands can't be queued. Switch to Steer to run it now."
+        val SHELL_CANNOT_QUEUE_ERROR: UiText = UiText.resource(R.string.session_chat_shell_cannot_queue)
     }
 
     private sealed interface InitialSelection {

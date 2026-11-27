@@ -683,7 +683,9 @@ struct ReviewChangesSummary: Equatable {
 
 /// Copy for a last-turn diff the server will not build because the turn moved folders.
 enum TurnDiffUnavailable {
-    static let message = "This turn moved folders, so its changes can't be shown together."
+    static var message: String {
+        String(localized: "changes.error.turn_moved_folders", defaultValue: "This turn moved folders, so its changes can't be shown together.")
+    }
     private static let serverMarker = "Turn range spans a location change"
 
     static func userFacing(_ error: Error) -> String? {

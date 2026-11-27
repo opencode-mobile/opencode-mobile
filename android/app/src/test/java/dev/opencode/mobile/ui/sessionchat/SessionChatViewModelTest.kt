@@ -8300,7 +8300,7 @@ class SessionChatViewModelTest {
             assertFalse(repository.sendPromptAsyncCalled)
             assertEquals(false, viewModel.uiState.value.isSending)
             assertEquals(
-                SessionChatComposer.PENDING_SEND_TIMEOUT_ERROR,
+                "Couldn't send. Try again.",
                 viewModel.uiState.value.snackbar
                     ?.message
                     ?.english(),
@@ -8658,7 +8658,7 @@ class SessionChatViewModelTest {
             viewModel.dictationInsert()
             viewModel.beginDictationUnavailable(
                 ComposerDictationPhase.RecognizerError,
-                "late",
+                UiText.verbatim("late"),
             )
 
             assertEquals(ComposerDictationPhase.Finishing, viewModel.uiState.value.dictation?.phase)

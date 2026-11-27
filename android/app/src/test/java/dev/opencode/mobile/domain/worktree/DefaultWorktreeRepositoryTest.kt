@@ -222,7 +222,7 @@ class DefaultWorktreeRepositoryTest {
             repository.onConnection("http://mac")
             assertTrue(repository.canCreate.value)
 
-            assertEquals(WorktreeCreateCopy.UNSUPPORTED, createFailure(repository))
+            assertEquals("This server can't create worktrees", createFailure(repository))
             assertFalse(repository.canCreate.value)
 
             repository.onConnection("http://mac")

@@ -1473,25 +1473,25 @@ object SessionChatTimelineBlocks {
 
     /**
      * How long a thought took, in the TUI's buckets ("438ms", "6.4s", "2m 7s", "1h 5m"). The
-     * seconds with a decimal are a keyed unit around a [UiText.Number], so the number follows
-     * the reader's locale and the unit can be translated.
+     * units are keyed format strings; the seconds with a decimal take a [UiText.Number], so
+     * the number follows the reader's locale.
      */
     fun thoughtDuration(durationMs: Long?): UiText? {
         val duration = durationMs ?: return null
         if (duration < 0) return null
         return when {
-            duration < 1_000 -> UiText.verbatim("${duration}ms")
+            duration < 1_000 -> UiText.resource(R.string.component_reasoning_row_duration_ms, duration)
             duration < 60_000 ->
                 UiText.resource(R.string.component_reasoning_row_duration_seconds, UiText.Number(duration / 1000.0, 1, 1))
             duration < 3_600_000 -> {
                 val minutes = duration / 60_000
                 val seconds = (duration % 60_000) / 1_000
-                UiText.verbatim("${minutes}m ${seconds}s")
+                UiText.resource(R.string.component_reasoning_row_duration_minutes_seconds, minutes, seconds)
             }
             else -> {
                 val hours = duration / 3_600_000
                 val minutes = (duration % 3_600_000) / 60_000
-                UiText.verbatim("${hours}h ${minutes}m")
+                UiText.resource(R.string.component_reasoning_row_duration_hours_minutes, hours, minutes)
             }
         }
     }

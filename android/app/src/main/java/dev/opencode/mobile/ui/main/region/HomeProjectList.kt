@@ -3,7 +3,6 @@ package dev.opencode.mobile.ui.main.region
 import androidx.annotation.StringRes
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
-import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
@@ -779,8 +778,20 @@ internal class HomeProjectList(
         )
     }
 
-    /** The domain's probe message, shown as is (the shared domain messages are not keyed yet). */
-    private fun probeErrorMessage(error: ServerProbeError): UiText = UiText.verbatim(error.userMessage())
+    /** A probe failure in the app's own words; the kit returns only the typed error. */
+    private fun probeErrorMessage(error: ServerProbeError): UiText =
+        UiText.resource(
+            when (error) {
+                is ServerProbeError.Http ->
+                    if (error.statusCode == 401 || error.statusCode == 403) {
+                        R.string.connection_error_auth_failed
+                    } else {
+                        R.string.connection_error_unreachable
+                    }
+                is ServerProbeError.Transport -> R.string.connection_error_unreachable
+                is ServerProbeError.Unhealthy -> R.string.connection_error_unhealthy
+            },
+        )
 
     /** The error's own text, verbatim, else the keyed [fallback]. */
     private fun serverMessage(

@@ -360,8 +360,8 @@ class SessionChatWorktreeMove(
                     throw cancellation
                 } catch (error: Exception) {
                     val message =
-                        (ServerErrorMessage.from(error) ?: error.message?.takeIf { it.isNotBlank() })
-                            ?.let(UiText::verbatim)
+                        ServerErrorMessage.text(error)
+                            ?: error.message?.takeIf { it.isNotBlank() }?.let(UiText::verbatim)
                             ?: UiText.resource(R.string.worktree_unknown_error)
                     _state.update {
                         it.copy(

@@ -1,8 +1,7 @@
 import Foundation
 
-/// New worktree text. App text is keyed (`worktree.*`, same keys on Android); the
-/// repository's own error text stays English and is shown inside "Couldn't create the
-/// worktree: …".
+/// New worktree text, keyed (`worktree.*`, same keys on Android). The repository's error
+/// text is shown inside "Couldn't create the worktree: …".
 nonisolated enum WorktreeCreateCopy {
     static var newWorktreeRow: LocalizedStringResource { LocalizedStringResource("worktree.new_row", defaultValue: "New worktree\u{2026}") }
     static var runInRowSubtitle: LocalizedStringResource {
@@ -63,9 +62,9 @@ nonisolated enum WorktreeCreateCopy {
         LocalizedStringResource("worktree.create_failed", defaultValue: "Couldn't create the worktree: \(message)")
     }
 
-    // Repository errors (domain text, shown verbatim inside `failed(_:)`).
-    static let noCommitError = "Needs a git repository with a commit"
-    static let unsupportedError = "This server can't create worktrees"
+    // Repository errors, resolved when thrown and shown inside `failed(_:)`; same keys as the rows.
+    static var noCommitError: String { String(localized: noCommit) }
+    static var unsupportedError: String { String(localized: unsupported) }
 
     /// "Request failed (HTTP 500)": the server answered `statusCode` with nothing readable.
     /// App text, keyed; the repository returns it as a `String` like the server's own words.

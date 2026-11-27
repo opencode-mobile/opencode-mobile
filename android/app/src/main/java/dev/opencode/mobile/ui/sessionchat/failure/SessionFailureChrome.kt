@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.SessionFailure
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.delay
 
 /**
@@ -99,7 +100,7 @@ private fun SessionFailureRetryAfter(
     }
     val label = SessionFailure.retryAfterLabel(retryAtEpochMs - nowMs) ?: return
     Text(
-        text = label,
+        text = label.resolve(),
         modifier = Modifier.padding(start = CaptionDotSize + CaptionDotGap, top = 2.dp),
         style = MaterialTheme.typography.bodySmall,
         color = openCodeColor("text-weak"),

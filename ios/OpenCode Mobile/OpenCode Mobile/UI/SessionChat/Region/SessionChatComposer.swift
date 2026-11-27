@@ -1196,7 +1196,10 @@ final class SessionChatComposer {
                     submittedAttachments: submittedAttachments,
                     submittedAttachmentRevisions: submittedAttachmentRevisions
                 )
-                let message = "Couldn't send. Retry when the connection is live."
+                let message = String(
+                    localized: "session_chat.send_failed_offline",
+                    defaultValue: "Couldn't send. Retry when the connection is live."
+                )
                 setSendError(message)
                 onSendFailed(optimistic.id, message)
                 return
@@ -2165,7 +2168,9 @@ final class SessionChatComposer {
     }
 
     private static let draftPersistDebounceMs = 300
-    static let shellCannotQueueError = "Shell commands can't be queued. Switch to Steer to run it now."
+    static var shellCannotQueueError: String {
+        String(localized: "session_chat.shell_cannot_queue", defaultValue: "Shell commands can't be queued. Switch to Steer to run it now.")
+    }
 
     private enum InitialSelection {
         case cached(SessionModelSelection)

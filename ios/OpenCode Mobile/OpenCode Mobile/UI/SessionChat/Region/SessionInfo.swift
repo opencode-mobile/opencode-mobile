@@ -107,7 +107,9 @@ final class SessionInfo {
                         return
                     }
                     if let boundError {
-                        sessionInfo.state.errorMessage = boundError
+                        sessionInfo.state.errorMessage = boundError.isEmpty
+                            ? String(localized: "timeline.failure.session_work_failed", defaultValue: "Session work failed")
+                            : boundError
                         sessionInfo.notifyChange()
                     }
                     if hasTitleUpdate {
@@ -452,6 +454,10 @@ final class SessionInfo {
     }
 
     private static let emptyTitleError: OpenCodeText = "home.session_error.empty_title"
-    private static let archiveError = "Couldn't archive session."
-    private static let deleteError = "Couldn't delete session."
+    private static var archiveError: String {
+        String(localized: "session_chat.archive_failed", defaultValue: "Couldn't archive session.")
+    }
+    private static var deleteError: String {
+        String(localized: "session_chat.delete_failed", defaultValue: "Couldn't delete session.")
+    }
 }

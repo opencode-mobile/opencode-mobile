@@ -17,10 +17,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
@@ -43,12 +45,15 @@ fun OpenCodeSessionStatusBar(
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val contextDescription =
+            contextUsageFraction?.let { stringResource(R.string.component_session_status_bar_context_usage, (it * 100).toInt()) }
+                ?: stringResource(R.string.component_session_status_bar_context_usage_unavailable)
         Surface(
             onClick = onContextClick,
             modifier =
                 Modifier
                     .size(SessionStatusTouchSize)
-                    .semantics { contentDescription = contextUsageDescription(contextUsageFraction) }
+                    .semantics { contentDescription = contextDescription }
                     .openCodeControl(),
             shape = CircleShape,
             color = Color.Transparent,
@@ -75,10 +80,6 @@ private fun contextUsageColor(fraction: Float?): Color =
         fraction >= 0.7f -> openCodeColor("warning")
         else -> openCodeColor("icon-strong-base")
     }
-
-private fun contextUsageDescription(fraction: Float?): String =
-    fraction?.let { "Context usage ${(it * 100).toInt()} percent" }
-        ?: "Context usage unavailable"
 
 fun copySessionIdToClipboard(
     context: Context,

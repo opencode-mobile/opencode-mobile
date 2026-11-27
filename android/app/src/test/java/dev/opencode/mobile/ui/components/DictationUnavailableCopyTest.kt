@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.text.EnglishStrings
 import org.junit.Assert.assertEquals
@@ -37,9 +38,9 @@ class DictationUnavailableCopyTest {
     fun recognizerError_usesTheMessageOrDefault() {
         assertEquals(
             "Busy",
-            unavailableCopy(OpenCodeDictationUnavailableReason.RecognizerError, "Busy", "English").title.resolve(EnglishStrings),
+            unavailableCopy(OpenCodeDictationUnavailableReason.RecognizerError, UiText.verbatim("Busy"), "English").title.resolve(EnglishStrings),
         )
-        val fallback = unavailableCopy(OpenCodeDictationUnavailableReason.RecognizerError, " ", "English")
+        val fallback = unavailableCopy(OpenCodeDictationUnavailableReason.RecognizerError, UiText.verbatim(" "), "English")
         assertEquals("Dictation stopped", fallback.title.resolve(EnglishStrings))
         assertNull(fallback.detail)
     }

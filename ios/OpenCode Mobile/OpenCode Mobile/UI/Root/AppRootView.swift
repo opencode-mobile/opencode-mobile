@@ -245,7 +245,9 @@ extension AppRootView {
             privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false, enabled: false)
             return
         }
-        if await appLockAuthenticator.authenticate(reason: "Unlock OpenCode Mobile") {
+        if await appLockAuthenticator.authenticate(
+            reason: String(localized: "app_lock.prompt_title", defaultValue: "Unlock OpenCode Mobile")
+        ) {
             locked = false
             privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false, enabled: appLockPreferences.enabled)
         }

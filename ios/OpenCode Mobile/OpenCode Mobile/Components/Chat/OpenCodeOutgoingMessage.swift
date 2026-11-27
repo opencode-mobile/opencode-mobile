@@ -37,7 +37,9 @@ enum OpenCodeOutgoingMessageSteering: Equatable {
     case delivered(showsLabel: Bool)
 
     static let label = "↱ Steering"
-    static let pendingCaption = "Pending · sends at the next step"
+    static var pendingCaption: String {
+        String(localized: "component.outgoing_message.pending_caption", defaultValue: "Pending · sends at the next step")
+    }
 
     var isPending: Bool {
         if case .pending = self { return true }

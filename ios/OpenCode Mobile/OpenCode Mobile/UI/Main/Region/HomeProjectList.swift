@@ -275,7 +275,7 @@ final class HomeProjectList {
                     return
                 } catch {
                     guard isCurrent(ticket), probeFailureIsFinal(probedBaseURL: probedBaseURL) else { return }
-                    state.content = .probeFailed(error.localizedDescription)
+                    state.content = .probeFailed(Self.probeFailureText(error))
                 }
             }
             return
@@ -292,7 +292,7 @@ final class HomeProjectList {
             } catch {
                 guard isCurrent(ticket), !preserveContent else { return }
                 stopLiveObservations()
-                state.content = .probeFailed(error.localizedDescription)
+                state.content = .probeFailed(Self.probeFailureText(error))
                 return
             }
             guard isCurrent(ticket) else { return }
@@ -352,7 +352,7 @@ final class HomeProjectList {
         } catch {
             if preserveContent { return }
             stopLiveObservations()
-            state.content = .probeFailed(error.localizedDescription)
+            state.content = .probeFailed(Self.probeFailureText(error))
         }
     }
 
@@ -1068,4 +1068,14 @@ private struct ProjectLoadTracker {
     var timers: [Task<Void, Never>] = []
 
     var isPending: Bool { !failed && !completing }
+}
+
+extension HomeProjectList {
+    /// A probe failure in the app's own words (keyed); other errors keep their own text.
+    static func probeFailureText(_ error: Error) -> String {
+        if let probe = error as? ServerProbeError {
+            return ConnectionSetupViewModel.probeFailureMessage(probe)
+        }
+        return error.localizedDescription
+    }
 }

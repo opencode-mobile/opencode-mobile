@@ -398,7 +398,7 @@ class FeedbackViewModel
 
         fun beginDictationUnavailable(
             phase: ComposerDictationPhase,
-            message: String? = null,
+            message: UiText? = null,
             languageLabel: String = "",
         ) {
             if (!phase.isUnavailable) return

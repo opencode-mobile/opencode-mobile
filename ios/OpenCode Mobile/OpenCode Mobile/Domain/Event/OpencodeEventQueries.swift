@@ -96,7 +96,7 @@ nonisolated extension OpencodeEvent {
         )
     }
 
-    /// What a `session.error` says went wrong, or nil for any other event.
+    /// What a `session.error` says went wrong (empty when it names nothing), or nil for any other event.
     var sessionErrorMessage: String? {
         guard type == OpencodeEventTypes.sessionError else { return nil }
         let error = rawProperties?["error"]?.dictionaryValue
@@ -111,7 +111,7 @@ nonisolated extension OpencodeEvent {
         if let message = candidates.compactMap({ $0 }).first(where: { !$0.isEmpty }) {
             return message
         }
-        return "Session work failed"
+        return ""
     }
 
     /// Title change carried by a `session.updated` event for a concrete session id.

@@ -427,7 +427,7 @@ class SessionChatViewModel
         private var lastSnackbarKey: String? = null
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
-        private var turnDiffNotice: String? = null
+        private var turnDiffNotice: UiText? = null
         private var branchCopiedNotice: UiText? = null
 
         internal var dictationFinishDelayMs: Long
@@ -1006,7 +1006,7 @@ class SessionChatViewModel
 
         fun beginDictationUnavailable(
             phase: ComposerDictationPhase,
-            message: String? = null,
+            message: UiText? = null,
             languageLabel: String = "",
         ) {
             dictation.beginUnavailable(phase, message, languageLabel)
@@ -1389,7 +1389,7 @@ class SessionChatViewModel
 
         /** The last turn moved folders, so its combined diff cannot be shown. Stay on this screen. */
         fun presentTurnDiffUnavailable() {
-            turnDiffNotice = TurnDiffUnavailable.MESSAGE
+            turnDiffNotice = UiText.resource(R.string.changes_error_turn_moved_folders)
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             publishUiState()
@@ -2155,18 +2155,20 @@ class SessionChatViewModel
                     when {
                         draftSendError != null -> draftSendError
                         infoState.unarchiveFailed -> UiText.resource(R.string.archived_sessions_unarchive_failed)
-                        infoState.lifecycleErrorMessage != null -> UiText.verbatim(infoState.lifecycleErrorMessage)
+                        infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
                         worktreeMove.state.value.errorMessage != null -> worktreeMove.state.value.errorMessage
                         composerState.errorMessage != null -> composerState.errorMessage
                         composerState.abortErrorMessage != null -> composerState.abortErrorMessage
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
                         goal.state.value.notice != null -> goal.state.value.notice
-                        turnDiffNotice != null -> TimelineText.verbatim(turnDiffNotice)
-                        infoState.errorMessage != null -> UiText.verbatim(infoState.errorMessage)
+                        turnDiffNotice != null -> turnDiffNotice
+                        infoState.errorMessage != null ->
+                            infoState.errorMessage.takeIf { it.isNotBlank() }?.let(UiText::verbatim)
+                                ?: UiText.resource(R.string.timeline_failure_session_work_failed)
                         inboxSnapshot.permissionRequests.isEmpty() &&
-                            inboxSnapshot.permissionTopologyError != null -> TimelineText.verbatim(inboxSnapshot.permissionTopologyError)
+                            inboxSnapshot.permissionTopologyError != null -> inboxSnapshot.permissionTopologyError
                         inboxSnapshot.questionRequests.isEmpty() &&
-                            inboxSnapshot.questionTopologyError != null -> TimelineText.verbatim(inboxSnapshot.questionTopologyError)
+                            inboxSnapshot.questionTopologyError != null -> inboxSnapshot.questionTopologyError
                         timelineState.errorMessage != null -> timelineState.errorMessage
                         else -> null
                     }
@@ -2177,7 +2179,7 @@ class SessionChatViewModel
                     transientError,
                     retryNewSessionDraft = transientError != null && transientError == draftSendError,
                     sideQuestions.state.value.notice,
-                    TimelineText.verbatim(composerState.followUpNotice)
+                    composerState.followUpNotice
                         ?: worktreeMove.state.value.notice
                         ?: commandsState.actionSuccessMessage
                         ?: branchCopiedNotice

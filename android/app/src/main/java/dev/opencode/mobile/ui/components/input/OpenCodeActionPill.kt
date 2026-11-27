@@ -14,10 +14,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -42,7 +44,7 @@ fun OpenCodeActionPill(
 ) {
     val label =
         when (variant) {
-            OpenCodeActionPillVariant.ScrollToEnd -> "Scroll to end"
+            OpenCodeActionPillVariant.ScrollToEnd -> stringResource(R.string.session_chat_navigation_scroll_to_end)
         }
     val icon: ImageVector? =
         when (variant) {

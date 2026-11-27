@@ -45,6 +45,16 @@ struct ServerErrorMessageTests {
         #expect(ServerErrorMessage.userFacing(#"{"_tag":"InvalidRequestError","message":"Missing key"}"#) == nil)
     }
 
+    @Test func knownTags_areTyped() {
+        #expect(ServerErrorMessage.reason(#"{"_tag":"UnauthorizedError"}"#) == .pairingExpired)
+        #expect(ServerErrorMessage.reason(#"{"_tag":"FileNotFoundError"}"#) == .notFound(path: nil))
+        #expect(ServerErrorMessage.reason(#"{"_tag":"FileNotFoundError"}"#)?.text == "Folder or file not found")
+        #expect(ServerErrorMessage.reason(#"{"_tag":"BusyError"}"#) == .sessionBusy)
+        #expect(
+            ServerErrorMessage.reason(#"{"_tag":"UnknownError","ref":"ref-9"}"#) == .server(message: "ref-9", ref: nil)
+        )
+    }
+
     @Test func interactionReplyError_copy() {
         let form = SessionError.http(
             statusCode: 400,

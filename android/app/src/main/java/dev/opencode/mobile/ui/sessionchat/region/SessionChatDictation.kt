@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationUiState
 import kotlinx.coroutines.CoroutineScope
@@ -60,7 +61,7 @@ class SessionChatDictation(
 
     fun beginUnavailable(
         phase: ComposerDictationPhase,
-        message: String?,
+        message: UiText?,
         languageLabel: String,
     ) {
         if (!phase.isUnavailable) return

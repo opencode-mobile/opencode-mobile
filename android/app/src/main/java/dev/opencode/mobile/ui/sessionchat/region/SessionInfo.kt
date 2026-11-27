@@ -19,6 +19,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.ServerErrorMessage
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionError
@@ -544,7 +545,10 @@ class SessionInfo(
     /** Server text stays verbatim; the app's own fallbacks are keyed (same keys as Home). */
     private fun renameErrorMessage(throwable: Throwable): UiText =
         when (throwable) {
-            is SessionError.Http -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_request_failed)
+            is SessionError.Http ->
+                ServerErrorMessage.text(throwable)
+                    ?: throwable.message?.let(UiText::verbatim)
+                    ?: UiText.resource(R.string.home_session_error_request_failed)
             is SessionError.Transport -> UiText.resource(R.string.connection_error_unreachable)
             is SessionError.Decoding -> UiText.resource(R.string.home_session_error_unreadable_response)
             else -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_generic)
@@ -568,7 +572,7 @@ class SessionInfo(
 
     companion object {
         private const val TAG = "SessionInfo"
-        const val ARCHIVE_ERROR = "Couldn't archive session."
-        const val DELETE_ERROR = "Couldn't delete session."
+        val ARCHIVE_ERROR: UiText = UiText.resource(R.string.session_chat_archive_failed)
+        val DELETE_ERROR: UiText = UiText.resource(R.string.session_chat_delete_failed)
     }
 }

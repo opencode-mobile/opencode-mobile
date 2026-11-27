@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.session
 
+import dev.opencode.mobile.domain.text.resolve
+import dev.opencode.mobile.ui.text.EnglishStrings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -36,24 +38,24 @@ class ServerErrorMessageTest {
     }
 
     @Test
-    fun knownTags_useFixedCopy() {
+    fun knownTags_areTypedAndKeyed() {
+        val pairing = ServerErrorMessage.reason("""{"_tag":"UnauthorizedError","message":"nope"}""")
+        assertEquals(ServerErrorReason.PairingExpired, pairing)
+        assertEquals("Pairing expired, pair again", pairing?.text?.resolve(EnglishStrings))
+        assertNull(pairing?.serverText)
+        val notFound = ServerErrorMessage.reason("""{"_tag":"LocationNotFoundError","location":"/repo"}""")
+        assertEquals(ServerErrorReason.NotFound("/repo"), notFound)
+        assertEquals("Folder or file not found · /repo", notFound?.text?.resolve(EnglishStrings))
         assertEquals(
-            "Pairing expired, pair again",
-            ServerErrorMessage.userFacing("""{"_tag":"UnauthorizedError","message":"nope"}"""),
+            "Folder or file not found",
+            ServerErrorMessage.reason("""{"_tag":"FileNotFoundError"}""")?.text?.resolve(EnglishStrings),
         )
-        assertEquals(
-            "Folder or file not found · /repo",
-            ServerErrorMessage.userFacing("""{"_tag":"LocationNotFoundError","location":"/repo"}"""),
-        )
-        assertEquals(
-            "Session is busy",
-            ServerErrorMessage.userFacing("""{"_tag":"SessionBusyError","sessionID":"ses-1"}"""),
-        )
-        assertEquals(
-            "Something went wrong (ref-9)",
-            ServerErrorMessage.userFacing("""{"_tag":"UnknownError","message":"Something went wrong","ref":"ref-9"}"""),
-        )
-        assertNull(ServerErrorMessage.userFacing("""{"_tag":"InvalidRequestError","message":"Missing key"}"""))
+        assertEquals(ServerErrorReason.SessionBusy, ServerErrorMessage.reason("""{"_tag":"SessionBusyError","sessionID":"ses-1"}"""))
+        val unknown = ServerErrorMessage.reason("""{"_tag":"UnknownError","message":"Something went wrong","ref":"ref-9"}""")
+        assertEquals(ServerErrorReason.Server("Something went wrong", "ref-9"), unknown)
+        assertEquals("Something went wrong (ref-9)", unknown?.text?.resolve(EnglishStrings))
+        assertEquals("Something went wrong (ref-9)", unknown?.serverText)
+        assertNull(ServerErrorMessage.reason("""{"_tag":"InvalidRequestError","message":"Missing key"}"""))
     }
 
     @Test
@@ -64,7 +66,7 @@ class ServerErrorMessageTest {
                 message = "Bad response: HttpResponse[http://host/api/…, 400 Bad Request]",
                 body = """{"_tag":"FormInvalidAnswerError","message":"Too many selections for form field: environment"}""",
             )
-        assertEquals("Too many selections for form field: environment", ServerErrorMessage.from(error))
+        assertEquals(ServerErrorReason.Server("Too many selections for form field: environment"), ServerErrorMessage.from(error))
         assertNull(ServerErrorMessage.from(IllegalStateException("boom")))
     }
 }

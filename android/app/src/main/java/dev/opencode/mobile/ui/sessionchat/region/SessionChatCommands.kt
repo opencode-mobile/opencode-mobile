@@ -243,7 +243,7 @@ class SessionChatCommands(
                         _state.update {
                             it.copy(
                                 mcpLoading = false,
-                                mcpErrorMessage = "Couldn't load MCP servers. Check the connection and try again.",
+                                mcpErrorMessage = UiText.resource(R.string.session_chat_mcp_load_failed),
                             )
                         }
                     }

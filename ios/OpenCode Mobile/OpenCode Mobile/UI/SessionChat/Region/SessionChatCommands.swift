@@ -195,7 +195,10 @@ final class SessionChatCommands {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning("mcp servers load failed error=\(error.localizedDescription)")
                 state.mcpLoading = false
-                state.mcpErrorMessage = "Couldn't load MCP servers. Check the connection and try again."
+                state.mcpErrorMessage = String(
+                    localized: "session_chat.mcp_load_failed",
+                    defaultValue: "Couldn't load MCP servers. Check the connection and try again."
+                )
             }
             notifyChange()
         }

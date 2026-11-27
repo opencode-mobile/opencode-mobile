@@ -414,15 +414,18 @@ class MessageDomainAdapter(
     fun mapError(throwable: Throwable): MessageError =
         when (throwable) {
             is MessageError -> throwable
-            is HttpBodyResponseException ->
+            is HttpBodyResponseException -> {
+                val reason = ServerErrorMessage.reason(throwable.bodyText)
                 MessageError.Http(
                     statusCode = throwable.response.status.value,
-                    message = httpMessage(throwable.bodyText),
+                    message = if (reason != null) reason.serverText else plainBodyMessage(throwable.bodyText),
+                    reason = reason,
                 )
+            }
             is ResponseException ->
                 MessageError.Http(
                     statusCode = throwable.response.status.value,
-                    message = httpMessage(throwable.message),
+                    message = plainBodyMessage(throwable.message),
                 )
             is JsonConvertException -> MessageError.Decoding(throwable)
             else -> MessageError.Transport(throwable)
@@ -1085,10 +1088,8 @@ class MessageDomainAdapter(
         completedAtEpochMs: Long?,
     ): Long? = if (retryAfterMs == null) null else completedAtEpochMs ?: nowEpochMs()
 
-    /** The server's readable error text, or null so the app shows its own keyed fallback. */
-    private fun httpMessage(body: String?): String? {
-        val friendly = ServerErrorMessage.userFacing(body)
-        if (friendly != null) return friendly
+    /** A short plain-text error body, or null so the app shows its own keyed fallback. */
+    private fun plainBodyMessage(body: String?): String? {
         val plain = body?.trim().orEmpty()
         if (plain.isEmpty() || plain.startsWith("{") || plain.length > 200) return null
         return plain

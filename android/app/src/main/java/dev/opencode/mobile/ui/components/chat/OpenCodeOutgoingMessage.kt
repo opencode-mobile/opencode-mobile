@@ -75,7 +75,6 @@ sealed interface OpenCodeOutgoingMessageSteering {
 
     companion object {
         const val LABEL = "↱ Steering"
-        const val PENDING_CAPTION = "Pending · sends at the next step"
     }
 }
 
@@ -329,7 +328,7 @@ fun OpenCodeOutgoingMessage(
                 }
                 if (isPending) {
                     Text(
-                        text = OpenCodeOutgoingMessageSteering.PENDING_CAPTION,
+                        text = stringResource(R.string.component_outgoing_message_pending_caption),
                         style = MaterialTheme.typography.labelMedium,
                         color = captionColor,
                     )

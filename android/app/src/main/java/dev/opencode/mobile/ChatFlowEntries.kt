@@ -10,10 +10,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.changes.ChangesScreen
 import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
@@ -220,6 +222,7 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
             }
             val members = (membersState as? SessionToolGroupMembersState.Ready)?.members.orEmpty()
             val toolDetails = remember(viewModel) { SessionChatToolDetailResolver(viewModel::toolDetail) }
+            val movedFoldersText = stringResource(R.string.changes_error_turn_moved_folders)
             var toolDetailTarget by remember {
                 mutableStateOf<SessionChatToolDetailTarget?>(null)
             }
@@ -263,7 +266,7 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
                             if (key.lastTurnDiffUnavailable) {
                                 blockedTurnDiff =
                                     OpenCodeSnackbarMessage(
-                                        text = TurnDiffUnavailable.MESSAGE,
+                                        text = movedFoldersText,
                                         variant = OpenCodeSnackbarVariant.Error,
                                     )
                                 return@changesReview

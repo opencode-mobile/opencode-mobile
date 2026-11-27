@@ -30,16 +30,26 @@ data class CreatedWorktree(
 class WorktreeCreateError(
     override val message: String,
     val text: UiText = UiText.verbatim(message),
-) : Exception(message)
+) : Exception(message) {
+    companion object {
+        /** The project has no v2 id: it is not a git repository. */
+        fun notGit(): WorktreeCreateError = WorktreeCreateError("not a git project", UiText.resource(R.string.worktree_not_git))
+
+        /** The server has no worktree create route. */
+        fun unsupported(): WorktreeCreateError = WorktreeCreateError("unsupported", WorktreeCreateCopy.unsupported)
+
+        /** A failure with no text of its own. */
+        fun unknown(): WorktreeCreateError = WorktreeCreateError("unknown error", UiText.resource(R.string.worktree_unknown_error))
+    }
+}
 
 /**
- * Domain error text the worktree repository throws. The form shows it inside its own keyed
+ * Keyed error text the worktree repository throws. The form shows it inside its own keyed
  * "Couldn't create the worktree: …" message; app text of New worktree lives in strings.xml
  * (`worktree_*`).
  */
 object WorktreeCreateCopy {
-    const val NOT_GIT = "Needs a git repository"
-    const val UNSUPPORTED = "This server can't create worktrees"
+    val unsupported: UiText = UiText.resource(R.string.worktree_unsupported)
 
     /** "Request failed (HTTP 500)": the server answered [statusCode] with nothing readable. */
     fun requestFailed(statusCode: Int): UiText = UiText.resource(R.string.worktree_request_failed_http, statusCode)

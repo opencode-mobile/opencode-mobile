@@ -2212,7 +2212,7 @@ private fun PromptKeyboardColumn(
 private fun PromptKeyboardHint(focus: PromptKeyboardFocus) {
     if (!KeyboardNavigationRules.promptHintVisible(focus.hardwareKeyboard, focus.focusInside)) return
     OpenCodeKeyboardHint(
-        text = KeyboardNavigationRules.PROMPT_KEYBOARD_HINT,
+        text = stringResource(R.string.component_keyboard_hint_prompt),
         modifier = Modifier.testTag("sessionComposerPromptKeyboardHint"),
     )
 }

@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.session.ServerErrorMessage
+import dev.opencode.mobile.domain.text.UiText
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -83,11 +84,11 @@ object SessionGoalDomainAdapter {
     }
 
     /** The command's own error ("No active goal to pause."), when the server sent one. */
-    fun errorMessage(error: Throwable): String? {
+    fun errorMessage(error: Throwable): UiText? {
         val body = (error as? HttpBodyResponseException)?.bodyText ?: return null
-        ServerErrorMessage.userFacing(body)?.let { return it }
+        ServerErrorMessage.reason(body)?.let { return it.text }
         val text = body.trim()
-        return text.takeIf { it.isNotEmpty() && !it.startsWith("{") && !it.contains('\n') && it.length <= 200 }
+        return text.takeIf { it.isNotEmpty() && !it.startsWith("{") && !it.contains('\n') && it.length <= 200 }?.let(UiText::verbatim)
     }
 
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull

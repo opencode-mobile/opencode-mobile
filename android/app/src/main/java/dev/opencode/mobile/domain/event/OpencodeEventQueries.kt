@@ -88,7 +88,7 @@ val OpencodeEvent.isUserAbortSessionError: Boolean
         )
     }
 
-/** What a `session.error` says went wrong, or null for any other event. */
+/** What a `session.error` says went wrong (empty when it names nothing), or null for any other event. */
 fun OpencodeEvent.sessionErrorMessage(): String? {
     if (type != OpencodeEventTypes.SESSION_ERROR) return null
     val properties = rawProperties
@@ -100,7 +100,7 @@ fun OpencodeEvent.sessionErrorMessage(): String? {
         (properties?.get("message") as? JsonPrimitive)?.contentOrNull,
         (error?.get("name") as? JsonPrimitive)?.contentOrNull,
         (error?.get("type") as? JsonPrimitive)?.contentOrNull,
-    ).firstOrNull { !it.isNullOrBlank() } ?: "Session work failed"
+    ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
 }
 
 /**

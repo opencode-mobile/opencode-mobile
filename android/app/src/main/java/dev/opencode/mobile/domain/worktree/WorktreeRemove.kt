@@ -26,7 +26,7 @@ sealed class WorktreeRemoveError(
     ) : WorktreeRemoveError(message)
 
     /** The server has no worktree remove route, or the project has no v2 id. */
-    class Unsupported : WorktreeRemoveError(WorktreeCreateCopy.UNSUPPORTED)
+    class Unsupported : WorktreeRemoveError("unsupported", WorktreeCreateCopy.unsupported)
 
     class Failed(
         message: String,

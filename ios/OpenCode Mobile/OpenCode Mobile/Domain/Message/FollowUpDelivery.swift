@@ -8,8 +8,8 @@ nonisolated enum FollowUpDelivery: String, Sendable, Equatable, Hashable, CaseIt
 
     var switchedSnackbar: String {
         switch self {
-        case .steer: "Switched to Steer"
-        case .queue: "Switched to Queue"
+        case .steer: String(localized: "session_chat.follow_up.switched_steer", defaultValue: "Switched to Steer")
+        case .queue: String(localized: "session_chat.follow_up.switched_queue", defaultValue: "Switched to Queue")
         }
     }
 
