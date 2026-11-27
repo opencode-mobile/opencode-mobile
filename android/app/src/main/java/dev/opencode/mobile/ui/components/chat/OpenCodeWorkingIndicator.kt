@@ -34,7 +34,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator
 
 /** Shared activity state for the working row and the reasoning row. */
 enum class OpenCodeChatActivityState {
@@ -89,16 +88,20 @@ fun OpenCodePulsingDot(
     )
 }
 
-/** Working, retrying, or compacting status row. Idle swaps the dot for a check. */
+/**
+ * Working, retrying, or compacting status row. Idle swaps the dot for a check. [turnEnded]
+ * animates a collapse out instead of snapping it.
+ */
 @Composable
 fun OpenCodeWorkingIndicator(
     label: String,
     state: OpenCodeChatActivityState,
     modifier: Modifier = Modifier,
     fading: Boolean = false,
+    turnEnded: Boolean = false,
 ) {
     val collapsed = state == OpenCodeChatActivityState.Collapsed
-    val animateOut = collapsed && label == WorkingTurnIndicator.IDLE_LABEL
+    val animateOut = collapsed && turnEnded
     val collapseSpec = if (animateOut) tween<Float>(durationMillis = 220) else snap<Float>()
     val contentAlpha by animateFloatAsState(
         targetValue =
@@ -137,7 +140,7 @@ fun OpenCodeWorkingIndicator(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OpenCodeWorkingStatusMark(isIdle = markIsIdle(state, label))
+                OpenCodeWorkingStatusMark(isIdle = markIsIdle(state, turnEnded))
                 Text(
                     text = label,
                     style = MaterialTheme.typography.bodyMedium,
@@ -157,11 +160,11 @@ fun OpenCodeWorkingIndicator(
 
 private fun markIsIdle(
     state: OpenCodeChatActivityState,
-    label: String,
+    turnEnded: Boolean,
 ): Boolean =
     when (state) {
         OpenCodeChatActivityState.Idle -> true
-        OpenCodeChatActivityState.Collapsed -> WorkingTurnIndicator.showsIdleMark(label)
+        OpenCodeChatActivityState.Collapsed -> turnEnded
         OpenCodeChatActivityState.Working, OpenCodeChatActivityState.Expanded -> false
     }
 

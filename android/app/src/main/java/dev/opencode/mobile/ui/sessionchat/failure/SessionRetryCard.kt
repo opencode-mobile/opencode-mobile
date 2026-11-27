@@ -6,7 +6,8 @@ package dev.opencode.mobile.domain.session
  * without the rest of the session models.
  */
 data class SessionRetryCard(
-    val message: String,
+    /** The server's reason; null when it sent none, so the card shows the app's Retrying. */
+    val message: String?,
     val attempt: Int?,
     val nextAtMs: Long,
     val actionLabel: String?,

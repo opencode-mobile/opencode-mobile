@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionActivityEntry
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionActivitySource
+import dev.opencode.mobile.domain.session.SessionBusyStatus
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -36,7 +37,7 @@ class HomeSessionRowsTest {
             val rows = build(ancestry, SessionListSnapshot(window), busy("child"))
 
             assertEquals(listOf("root"), rows.summaries.map { it.id })
-            assertEquals("Working", rows.summaries.single().statusLabel)
+            assertEquals(SessionBusyStatus.Running, rows.summaries.single().busyStatus)
             assertTrue(rows.unresolvedBusyIds.isEmpty())
         }
 
@@ -57,14 +58,14 @@ class HomeSessionRowsTest {
 
             val before = build(ancestry, snapshot, busy("grandchild"))
             assertEquals(listOf("grandchild"), before.unresolvedBusyIds)
-            assertTrue(before.summaries.all { it.statusLabel == null })
+            assertTrue(before.summaries.all { it.busyStatus == null })
 
             ancestry.requestRoots(before.unresolvedBusyIds, "/repo")
             advanceUntilIdle()
             val after = build(ancestry, snapshot, busy("grandchild"))
 
             assertEquals(listOf("grandchild", "child"), lookup.fetched)
-            assertEquals(mapOf("root-a" to null, "root-b" to "Working"), after.summaries.associate { it.id to it.statusLabel })
+            assertEquals(mapOf("root-a" to null, "root-b" to SessionBusyStatus.Running), after.summaries.associate { it.id to it.busyStatus })
             assertTrue(after.unresolvedBusyIds.isEmpty())
         }
 
@@ -87,7 +88,7 @@ class HomeSessionRowsTest {
             advanceUntilIdle()
             val running = build(ancestry, snapshot, busy("agent"))
             assertEquals(listOf("new", "old-root"), running.summaries.map { it.id })
-            assertEquals("Working", running.summaries.last().statusLabel)
+            assertEquals(SessionBusyStatus.Running, running.summaries.last().busyStatus)
 
             val idle = build(ancestry, snapshot, SessionActivitySnapshot(seeded = true))
             assertEquals(listOf("new"), idle.summaries.map { it.id })
@@ -130,7 +131,7 @@ class HomeSessionRowsTest {
             assertEquals(5_000, rows.summaries.size)
             val working =
                 rows.summaries
-                    .filter { it.statusLabel == "Working" }
+                    .filter { it.busyStatus == SessionBusyStatus.Running }
                     .map { it.id }
                     .toSet()
             assertEquals((0 until 50).map { "root-${it * 100}" }.toSet(), working)

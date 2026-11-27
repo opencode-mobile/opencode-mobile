@@ -114,15 +114,28 @@ nonisolated enum SessionActivity: Sendable, Equatable {
         }
     }
 
-    /// In-chat label. The home list keeps `statusLabel` ("Retrying · N") because
-    /// it parses the attempt off that exact prefix.
+    /// In-chat label, in the reader's language; the server's retry reason stays verbatim. The
+    /// home list keeps `statusLabel` ("Retrying · N") because it parses the attempt off that
+    /// exact prefix.
     var chatStatusLabel: String? {
-        guard case let .retrying(_, _, message, _, _, _) = self else { return statusLabel }
-        let base = statusLabel
-        guard let reason = message?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else {
-            return base
+        switch self {
+        case .idle:
+            return nil
+        case .running:
+            return String(localized: "component.activity_card.working", defaultValue: "Working")
+        case let .retrying(attempt, _, message, _, _, _):
+            let base =
+                if let attempt {
+                    String(localized: "session_list.status.retrying_attempt", defaultValue: "Retrying · \(attempt)")
+                } else {
+                    String(localized: "session_list.status.retrying", defaultValue: "Retrying")
+                }
+            guard let reason = message?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else {
+                return base
+            }
+            let text = String(reason.prefix(80))
+            return String(localized: "timeline.list_separator", defaultValue: "\(base) · \(text)")
         }
-        return "\(base ?? "Retrying") · \(reason.prefix(80))"
     }
 
     /// Live countdown card. Content-filter retries stay a caption only.
@@ -133,7 +146,10 @@ nonisolated enum SessionActivity: Sendable, Equatable {
         if errorType?.caseInsensitiveCompare("provider.content-filter") == .orderedSame { return nil }
         guard let nextAtMs else { return nil }
         let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let text = trimmed.isEmpty ? "Retrying" : String(trimmed.prefix(80))
+        let text =
+            trimmed.isEmpty
+                ? String(localized: "session_list.status.retrying", defaultValue: "Retrying")
+                : String(trimmed.prefix(80))
         return SessionRetryCard(
             message: text,
             attempt: attempt,

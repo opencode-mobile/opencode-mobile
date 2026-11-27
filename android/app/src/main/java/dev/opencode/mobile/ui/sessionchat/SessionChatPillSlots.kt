@@ -2,7 +2,6 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.domain.text.resolve
@@ -244,7 +243,7 @@ object SessionChatPillSlots {
      * request, a subagent's request, then the active label or Done. Null with no turn to show.
      */
     internal fun turnStatus(
-        label: String?,
+        label: UiText?,
         fading: Boolean,
         isAwaitingUser: Boolean,
         items: List<SessionChatActivityItem>,
@@ -279,13 +278,10 @@ object SessionChatPillSlots {
                 WorkingTurnIndicator.showsIdleMark(label) -> OpenCodeTurnStatusPillPhase.Done to null
                 // A thought streams at the end of the turn: a plain Working reads Thinking and
                 // opens it. Compacting, Retrying and Sending keep their own label.
-                thinking && !fading && label == SessionActivity.Running.chatStatusLabel() ->
+                thinking && !fading && label == SessionChatStatusText.working ->
                     OpenCodeTurnStatusPillPhase.Working(UiText.resource(R.string.component_thinking).resolve(text)) to
                         SessionChatActivityItem.Thinking
-                // The status pipeline carries Compacting as an English sentinel; show the keyed text.
-                label == SessionCompactChrome.STATUS_LABEL ->
-                    OpenCodeTurnStatusPillPhase.Working(SessionCompactChrome.statusLabel.resolve(text)) to null
-                else -> OpenCodeTurnStatusPillPhase.Working(label) to null
+                else -> OpenCodeTurnStatusPillPhase.Working(label.resolve(text)) to null
             }
         val canFold = SessionChatTurnStatusSlot.canFold(phase)
         return SessionChatTurnStatusSlot(

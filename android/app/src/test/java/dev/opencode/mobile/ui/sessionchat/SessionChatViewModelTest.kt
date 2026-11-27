@@ -2962,11 +2962,12 @@ class SessionChatViewModelTest {
             viewModel.addAttachments(listOf(testAttachment()))
             viewModel.sendPrompt()
             runCurrent()
-            assertEquals("Sending 25%", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Sending 25%", viewModel.uiState.value.workingIndicatorLabel?.english())
             sendGate.complete(Unit)
             advanceUntilIdle()
             assertFalse(
                 viewModel.uiState.value.workingIndicatorLabel
+                    ?.english()
                     .orEmpty()
                     .startsWith("Sending"),
             )
@@ -7538,8 +7539,8 @@ class SessionChatViewModelTest {
                 )
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel?.english())
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             viewModel.abort()
             runCurrent()
@@ -7646,8 +7647,8 @@ class SessionChatViewModelTest {
             viewModel.runClientSlashAction(ClientSlashAction.Compact)
             advanceUntilIdle()
 
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.workingIndicatorLabel)
 
             hold.complete(Unit)
             runCurrent()
@@ -7660,12 +7661,12 @@ class SessionChatViewModelTest {
             )
             assertNull(viewModel.uiState.value.sessionStatusLabel)
             // The last active label holds through the settle, then Done.
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.idleLabel, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
         }
 
@@ -7682,7 +7683,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             // POST /compact returned (enqueued): no success yet, still Compacting….
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
             assertNull(viewModel.uiState.value.snackbar)
 
             repository.messages =
@@ -7751,7 +7752,7 @@ class SessionChatViewModelTest {
 
             viewModel.runClientSlashAction(ClientSlashAction.Compact)
             advanceUntilIdle()
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
 
             // The live compaction item completes while POST /compact is still in flight.
             repository.messages = repository.messages + completedCompactionMessage(summary = "## Goal\nShip it")
@@ -7794,7 +7795,7 @@ class SessionChatViewModelTest {
             repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
             advanceUntilIdle()
             // Enqueue not confirmed yet: idle alone does not end the compaction.
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
 
             hold.complete(Unit)
             advanceUntilIdle()
@@ -7875,7 +7876,7 @@ class SessionChatViewModelTest {
             // The post-enqueue re-check must see the session still busy, not treat it as idle.
             hold.complete(Unit)
             advanceUntilIdle()
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
             assertNull(viewModel.uiState.value.snackbar)
 
             repository.messages = repository.messages + completedCompactionMessage(summary = "## Goal\nShip it")
@@ -7920,26 +7921,26 @@ class SessionChatViewModelTest {
                 )
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
             repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
             runCurrent()
             assertNull(viewModel.uiState.value.sessionStatusLabel)
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS - 1)
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             testDispatcher.scheduler.advanceTimeBy(1)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.idleLabel, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_DONE_HOLD_MS)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.idleLabel, viewModel.uiState.value.workingIndicatorLabel)
             assertTrue(viewModel.uiState.value.workingIndicatorFading)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_FADE_MS)
@@ -7966,11 +7967,11 @@ class SessionChatViewModelTest {
             runCurrent()
             repository.eventStream.emit(busyStatusEvent())
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS + WorkingTurnIndicator.TURN_DONE_HOLD_MS)
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
         }
 
@@ -8003,7 +8004,7 @@ class SessionChatViewModelTest {
             runCurrent()
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertTrue(viewModel.uiState.value.workingIndicatorFading)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_FADE_MS)
@@ -8031,7 +8032,7 @@ class SessionChatViewModelTest {
                 )
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             liveUpdates.set(liveChrome(LiveUpdatesLabel.Offline))
             runCurrent()
@@ -8040,15 +8041,15 @@ class SessionChatViewModelTest {
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS * 4)
             runCurrent()
             // Offline the pill keeps its last state.
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
             liveUpdates.set(liveChrome(LiveUpdatesLabel.Live))
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertTrue(viewModel.uiState.value.workingIndicatorFading)
 
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_FADE_MS)
@@ -8081,7 +8082,7 @@ class SessionChatViewModelTest {
             runCurrent()
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.idleLabel, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
         }
 
@@ -8102,7 +8103,7 @@ class SessionChatViewModelTest {
                 )
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
 
             // A momentarily null status with a request pending is still an active turn.
             repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
@@ -8110,15 +8111,15 @@ class SessionChatViewModelTest {
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS + WorkingTurnIndicator.TURN_DONE_HOLD_MS)
             runCurrent()
             assertNull(viewModel.uiState.value.sessionStatusLabel)
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             assertFalse(viewModel.uiState.value.workingIndicatorFading)
 
             permissions.requests.value = emptyList()
             runCurrent()
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
             testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.TURN_SETTLE_MS)
             runCurrent()
-            assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(WorkingTurnIndicator.idleLabel, viewModel.uiState.value.workingIndicatorLabel)
         }
 
     @Test
@@ -8185,8 +8186,8 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
-            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(SessionCompactChrome.statusLabel, viewModel.uiState.value.workingIndicatorLabel)
         }
 
     @Test
@@ -8223,8 +8224,8 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel)
-            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals("Working", viewModel.uiState.value.sessionStatusLabel?.english())
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel?.english())
         }
 
     @Test

@@ -68,7 +68,7 @@ fun SessionRetryCountdown(
                     ),
         ) {
             Text(
-                text = card.message,
+                text = card.message ?: stringResource(R.string.session_list_status_retrying),
                 style = MaterialTheme.typography.bodyMedium,
                 color = openCodeColor("text-strong"),
                 maxLines = 1,

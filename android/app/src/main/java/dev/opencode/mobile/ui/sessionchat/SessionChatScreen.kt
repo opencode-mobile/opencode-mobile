@@ -1744,7 +1744,9 @@ private fun SessionChatScreenBody(
                                                 {
                                                     toolDetailTarget =
                                                         sessionFailureDetailTarget(
-                                                            text = UiText.verbatim(card.message),
+                                                            text =
+                                                                card.message?.let(UiText::verbatim)
+                                                                    ?: UiText.resource(R.string.session_list_status_retrying),
                                                             providerBody = body,
                                                             action = null,
                                                             actionLabel = null,

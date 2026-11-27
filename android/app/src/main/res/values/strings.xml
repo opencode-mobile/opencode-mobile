@@ -894,6 +894,8 @@
     <string name="timeline_failure_pick_model">Pick a model</string>
     <string name="timeline_failure_compact">Compact</string>
     <string name="session_chat_compact_status">Compacting…</string>
+    <string name="session_chat_turn_sending">Sending…</string>
+    <string name="session_chat_turn_sending_percent">Sending %1$d%%</string>
     <string name="session_chat_compact_success">Session compacted.</string>
     <!-- Context usage before and after, in percent. -->
     <string name="session_chat_compact_success_usage">Context compacted · %1$d%% → %2$d%%</string>

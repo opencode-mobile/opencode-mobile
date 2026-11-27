@@ -53,6 +53,7 @@ import dev.opencode.mobile.domain.home.HomeWorktreeSession
 import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.NewSessionDraftStart
+import dev.opencode.mobile.domain.session.SessionBusyStatus
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.text.UiText
@@ -1388,8 +1389,8 @@ internal fun ProjectFirstLoad.toScopeLoad(): SessionListScopeLoad =
 @Suppress("UNUSED_PARAMETER")
 internal fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =
     when {
-        statusLabel == "Working" -> SessionListStatus.Running
-        statusLabel?.startsWith("Retrying") == true -> SessionListStatus.Retrying
+        busyStatus == SessionBusyStatus.Running -> SessionListStatus.Running
+        busyStatus is SessionBusyStatus.Retrying -> SessionListStatus.Retrying
         // v2: server read state. Only set on servers that track it, so v1 keeps Ready.
         unreadOutcome != null ->
             when (unreadOutcome) {
@@ -1401,11 +1402,7 @@ internal fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = 
         else -> SessionListStatus.Idle
     }
 
-private fun SessionSummary.retryAttempt(): Int? =
-    statusLabel
-        ?.removePrefix("Retrying · ")
-        ?.takeIf { it != statusLabel }
-        ?.toIntOrNull()
+private fun SessionSummary.retryAttempt(): Int? = (busyStatus as? SessionBusyStatus.Retrying)?.attempt
 
 private fun showsLiveUpdatesStatus(uiState: MainScreenUiState): Boolean =
     when (uiState) {

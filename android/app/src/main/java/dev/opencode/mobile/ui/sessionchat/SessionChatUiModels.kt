@@ -260,9 +260,9 @@ data class SessionChatUiState(
     val hasOlder: Boolean = false,
     val isLoadingOlder: Boolean = false,
     val isAborting: Boolean = false,
-    val sessionStatusLabel: String? = null,
+    val sessionStatusLabel: UiText? = null,
     /** The turn pill's active label (Working, Retrying, Compacting…, Sending), or Idle for Done. */
-    val workingIndicatorLabel: String? = null,
+    val workingIndicatorLabel: UiText? = null,
     /** Live rate-limit countdown. Hidden for content-filter retries. */
     val retryCard: SessionRetryCard? = null,
     /** The session is in `retry` status: the composer owns the countdown, failure marks show none. */
@@ -741,7 +741,8 @@ data class SessionInfoRegionState(
     val sessionTitle: String = "",
     /** The loaded session's parent; set even when navigation did not say it is a child. */
     val parentId: String? = null,
-    val sessionStatusLabel: String? = null,
+    /** Working or Retrying while the session is busy; null while it is idle. */
+    val sessionStatusLabel: UiText? = null,
     val retryCard: SessionRetryCard? = null,
     val isRetrying: Boolean = false,
     val hasResolvedSessionStatus: Boolean = false,
@@ -762,7 +763,7 @@ data class SessionInfoRegionState(
 )
 
 fun SessionInfoRegionState.withStatus(
-    authoritative: String?,
+    authoritative: UiText?,
     hasResolved: Boolean = true,
     retryCard: SessionRetryCard? = null,
     isRetrying: Boolean = false,

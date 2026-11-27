@@ -15,7 +15,9 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionLinker
 import dev.opencode.mobile.ui.sessionchat.SessionChatInboxRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatPillSlots
+import dev.opencode.mobile.ui.sessionchat.SessionChatStatusText
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagent
+import dev.opencode.mobile.ui.sessionchat.SessionCompactChrome
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
 import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator
@@ -31,7 +33,7 @@ import kotlinx.coroutines.withContext
 
 /** What the open session's turn shows, resolved once per publish. */
 data class SessionChatTurnStatusResolution(
-    val workingIndicatorLabel: String?,
+    val workingIndicatorLabel: UiText?,
     val workingIndicatorFading: Boolean,
     val pendingPrompts: List<PendingPrompt>,
     val subagents: List<SessionChatSubagent>,
@@ -109,7 +111,7 @@ class SessionChatTurnStatus(
      * @param previousSubagents the rows the last publish showed.
      */
     fun resolve(
-        sessionStatusLabel: String?,
+        sessionStatusLabel: UiText?,
         isCompacting: Boolean,
         sendProgressPercent: Int?,
         isBound: Boolean,
@@ -165,7 +167,7 @@ class SessionChatTurnStatus(
         val workingIndicatorLabel = workingResolution.chrome.label
         val workingIndicatorFading = workingResolution.chrome.fading
         val workingLampKey =
-            "${workingIndicatorLabel ?: "none"}:" +
+            "${lampLogName(workingIndicatorLabel)}:" +
                 "${if (workingIndicatorFading) 1 else 0}:" +
                 "${if (workingHold != null) 1 else 0}"
         if (!loggedWorkingLamp || lastWorkingLamp != workingLampKey) {
@@ -173,10 +175,10 @@ class SessionChatTurnStatus(
             lastWorkingLamp = workingLampKey
             DiagnosticLog.info(
                 DiagnosticLogArea.Chat,
-                "workingLamp label=${workingIndicatorLabel ?: "none"} " +
+                "workingLamp label=${lampLogName(workingIndicatorLabel)} " +
                     "fading=${if (workingIndicatorFading) 1 else 0} " +
                     "hold=${if (workingHold != null) 1 else 0} " +
-                    "status=${sessionStatusLabel ?: "none"} " +
+                    "status=${lampLogName(sessionStatusLabel)} " +
                     "awaitingUser=${if (awaitingUser) 1 else 0} " +
                     "ending=$ending",
             )
@@ -377,3 +379,15 @@ class SessionChatTurnStatus(
             }
     }
 }
+
+/** The working lamp's label for the diagnostic log: which app text, never the server's retry reason. */
+private fun lampLogName(label: UiText?): String =
+    when (label) {
+        null -> "none"
+        WorkingTurnIndicator.idleLabel -> "idle"
+        SessionChatStatusText.working -> "working"
+        SessionCompactChrome.statusLabel -> "compacting"
+        is UiText.Resource -> "res:${Integer.toHexString(label.id)}"
+        is UiText.Plural -> "plural:${Integer.toHexString(label.id)}"
+        is UiText.Verbatim, is UiText.DateTime -> "text"
+    }

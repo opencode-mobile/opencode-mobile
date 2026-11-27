@@ -2184,7 +2184,7 @@ class SessionChatViewModel
                 )
             val sessionStatusLabel =
                 if (isCompacting) {
-                    SessionCompactChrome.STATUS_LABEL
+                    SessionCompactChrome.statusLabel
                 } else {
                     infoState.sessionStatusLabel
                 }
@@ -2474,7 +2474,7 @@ class SessionChatViewModel
 
         private fun effectiveCompacting(
             localCompacting: Boolean,
-            sessionStatusLabel: String?,
+            sessionStatusLabel: UiText?,
         ): Boolean {
             if (localCompacting) return true
             return SessionCompactionPresence.isActive(

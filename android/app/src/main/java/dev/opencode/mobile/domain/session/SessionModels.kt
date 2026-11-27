@@ -73,7 +73,8 @@ fun List<Session>.rootSessions(): List<Session> = filter { it.parentId == null }
 data class SessionSummary(
     val id: String,
     val title: String,
-    val statusLabel: String? = null,
+    /** What the row shows for a busy session; null while it is idle. */
+    val busyStatus: SessionBusyStatus? = null,
     val updatedAtEpochMs: Long? = null,
     val isReady: Boolean = false,
     val statusStale: Boolean = false,
@@ -106,9 +107,8 @@ sealed class SessionActivity {
         fun retryCard(): SessionRetryCard? {
             if (errorType.equals("provider.content-filter", ignoreCase = true)) return null
             val at = nextAtMs ?: return null
-            val text = message?.trim()?.take(80)?.takeIf { it.isNotEmpty() } ?: "Retrying"
             return SessionRetryCard(
-                message = text,
+                message = message?.trim()?.take(80)?.takeIf { it.isNotEmpty() },
                 attempt = attempt,
                 nextAtMs = at,
                 actionLabel = actionLabel?.trim()?.takeIf { it.isNotEmpty() },
@@ -119,23 +119,25 @@ sealed class SessionActivity {
 
     fun isBusy(): Boolean = this is Running || this is Retrying
 
-    fun statusLabel(): String? =
+    /** The busy state a session row shows, without the server's retry text. */
+    fun busyStatus(): SessionBusyStatus? =
         when (this) {
             Idle -> null
-            Running -> "Working"
-            is Retrying -> if (attempt != null) "Retrying · $attempt" else "Retrying"
+            Running -> SessionBusyStatus.Running
+            is Retrying -> SessionBusyStatus.Retrying(attempt)
         }
+}
 
-    /**
-     * In-chat label. The home list keeps [statusLabel] ("Retrying · N") because
-     * it parses the attempt off that exact prefix.
-     */
-    fun chatStatusLabel(): String? {
-        val base = statusLabel()
-        if (this !is Retrying) return base
-        val reason = message?.trim()?.take(80)?.takeIf { it.isNotEmpty() } ?: return base
-        return "${base ?: "Retrying"} · $reason"
-    }
+/**
+ * What a session row says about a busy session. Typed, so rows map it to their status pill
+ * without reading text, and equal while only the server's retry reason changes.
+ */
+sealed interface SessionBusyStatus {
+    data object Running : SessionBusyStatus
+
+    data class Retrying(
+        val attempt: Int?,
+    ) : SessionBusyStatus
 }
 
 enum class SessionActivitySource {

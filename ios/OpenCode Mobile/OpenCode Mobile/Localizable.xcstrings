@@ -11418,6 +11418,30 @@
         }
       }
     },
+    "session_chat.turn.sending" : {
+      "comment" : "The turn pill while a large prompt starts uploading.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending…"
+          }
+        }
+      }
+    },
+    "session_chat.turn.sending_percent" : {
+      "comment" : "The turn pill while a large prompt uploads. %1$d is the percent sent.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending %lld%%"
+          }
+        }
+      }
+    },
     "session_chat.variant_default" : {
       "extractionState" : "manual",
       "localizations" : {

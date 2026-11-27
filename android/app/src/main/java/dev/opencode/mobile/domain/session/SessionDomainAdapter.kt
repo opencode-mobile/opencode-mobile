@@ -105,7 +105,7 @@ class SessionDomainAdapter {
 
     fun toSessionSummary(
         session: Session,
-        statusLabel: String? = null,
+        busyStatus: SessionBusyStatus? = null,
         isReady: Boolean = false,
         statusStale: Boolean = false,
         unreadOutcome: SessionIdleOutcome? = null,
@@ -113,7 +113,7 @@ class SessionDomainAdapter {
         SessionSummary(
             id = session.id,
             title = session.title,
-            statusLabel = statusLabel,
+            busyStatus = busyStatus,
             updatedAtEpochMs = session.updatedAtEpochMs,
             isReady = isReady,
             statusStale = statusStale,

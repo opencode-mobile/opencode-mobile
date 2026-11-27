@@ -193,7 +193,7 @@ internal data class SessionChatTimelineViewProps(
     val errorMessage: String?,
     val sessionBranchPill: SessionBranchPillUiState? = null,
     val syncingIndicatorLabel: UiText? = null,
-    val workingIndicatorLabel: String? = null,
+    val workingIndicatorLabel: UiText? = null,
     val workingIndicatorFading: Boolean = false,
     /** A thought streams at the end of the turn: the turn pill reads Thinking and opens it (#1118). */
     val isThinking: Boolean = false,
@@ -468,7 +468,7 @@ private fun SessionChatTimelineReadyView(
     isLoadingOlder: Boolean,
     sessionBranchPill: SessionBranchPillUiState?,
     syncingIndicatorLabel: String?,
-    workingIndicatorLabel: String?,
+    workingIndicatorLabel: UiText?,
     workingIndicatorFading: Boolean,
     isThinking: Boolean,
     sessionTodosVisible: Boolean,

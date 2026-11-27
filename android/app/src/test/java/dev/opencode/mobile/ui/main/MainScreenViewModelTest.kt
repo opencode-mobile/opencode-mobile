@@ -56,6 +56,7 @@ import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionActivityEntry
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionActivitySource
+import dev.opencode.mobile.domain.session.SessionBusyStatus
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
@@ -2472,12 +2473,12 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(
-                "Retrying · 2",
+                SessionBusyStatus.Retrying(2),
                 loaded.sections
                     .single()
                     .allSessions
                     .single()
-                    .statusLabel,
+                    .busyStatus,
             )
         }
 
@@ -2495,12 +2496,12 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
             assertEquals(
-                "Working",
+                SessionBusyStatus.Running,
                 loaded.sections
                     .single()
                     .allSessions
                     .single()
-                    .statusLabel,
+                    .busyStatus,
             )
         }
 
@@ -2536,7 +2537,7 @@ class MainScreenViewModelTest {
                     .single()
                     .allSessions
                     .single()
-                    .statusLabel,
+                    .busyStatus,
             )
         }
 
@@ -2573,7 +2574,7 @@ class MainScreenViewModelTest {
                     .single()
                     .allSessions
                     .single()
-            assertEquals("Working", summary.statusLabel)
+            assertEquals(SessionBusyStatus.Running, summary.busyStatus)
             assertTrue(summary.statusStale)
         }
 
@@ -2630,7 +2631,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             val byId = homeSummaries(viewModel)
-            assertEquals("Working", byId.getValue("root").statusLabel)
+            assertEquals(SessionBusyStatus.Running, byId.getValue("root").busyStatus)
             assertEquals(SessionListStatus.Running, byId.getValue("root").toSessionListStatus())
             assertNull(byId["child"])
         }
@@ -2669,7 +2670,7 @@ class MainScreenViewModelTest {
 
             val byId = homeSummaries(viewModel)
             assertEquals(51, byId.size)
-            assertEquals("Working", byId.getValue("old").statusLabel)
+            assertEquals(SessionBusyStatus.Running, byId.getValue("old").busyStatus)
             assertNull(byId["agent"])
 
             activity.value = SessionActivitySnapshot(seeded = true)

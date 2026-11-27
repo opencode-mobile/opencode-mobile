@@ -25,6 +25,7 @@ import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatStatusText
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionRenameUiState
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
@@ -372,7 +373,7 @@ class SessionInfo(
                             if (!isCurrentBinding(sessionId, worktree)) return@collect
                             val entry = snapshot.entries[sessionId]
                             val activity = if (snapshot.seeded) entry?.activity else null
-                            val label = activity?.chatStatusLabel()
+                            val label = activity?.let(SessionChatStatusText::label)
                             val retryCard = (activity as? SessionActivity.Retrying)?.retryCard()
                             logD(
                                 "live status session=$sessionId activity=${entry?.activity ?: "-"} seeded=${snapshot.seeded}",
