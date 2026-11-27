@@ -109,7 +109,7 @@ enum SnapshotEvidenceMocks {
                 text: "",
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
-                selectedVariantLabel: "Default",
+                selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
                 sendEnabled: false,
                 showStop: false,
@@ -155,7 +155,7 @@ enum SnapshotEvidenceMocks {
         .childLockout(
             .init(
                 selectedModelLabel: "Claude Sonnet 4",
-                selectedVariantLabel: "High",
+                selectedVariantLabel: .verbatim("High"),
                 showVariant: true
             )
         )

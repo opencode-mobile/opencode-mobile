@@ -18,7 +18,6 @@ import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.ModelSelectionProvider
-import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
@@ -29,7 +28,9 @@ import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.components.openCodeBottomSheetScrollTarget
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.sessionchat.SessionChatVariantText
 import dev.opencode.mobile.ui.sessionchat.SessionChatViewModel
+import dev.opencode.mobile.ui.text.resolve
 
 internal enum class ComposerPickerKind(
     @StringRes val sheetTitle: Int,
@@ -196,7 +197,7 @@ internal fun SessionChatPickerSheet(
             ComposerPickerKind.Variant ->
                 variantOptions.forEach { variant ->
                     OpenCodeBottomSheetEntry(
-                        title = TitleCaseIdentifier.displayName(variant),
+                        title = SessionChatVariantText.label(variant).resolve(),
                         selected =
                             variant.equals(
                                 selectedVariant ?: ModelSelection.DefaultVariantLabel,

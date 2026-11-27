@@ -69,6 +69,7 @@ import dev.opencode.mobile.domain.message.PresentationBlockId
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerState
+import dev.opencode.mobile.ui.sessionchat.SessionChatModelNotice
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
@@ -532,8 +533,8 @@ class SessionChatComposer(
                     updateComposer {
                         it.copy(
                             isModelSelectionReady = false,
-                            modelCatalogError = "Unable to load models. Tap Model to retry.",
-                            modelNotice = "Unable to load models. Tap Model to retry.",
+                            modelCatalogError = SessionChatModelNotice.loadFailed,
+                            modelNotice = SessionChatModelNotice.loadFailed,
                         )
                     }
                 }
@@ -620,7 +621,7 @@ class SessionChatComposer(
         val variantNotice =
             rememberedVariant
                 ?.takeIf { !ModelVariants.isDefault(it, option.variants) && it !in option.variants }
-                ?.let { "Remembered Variant is unavailable. Using Default." }
+                ?.let { SessionChatModelNotice.variantUnavailable }
         initialSelectionState = resolvedInitialSelectionState()
         val droppedForModel =
             _state.value.composer.attachments
@@ -649,7 +650,7 @@ class SessionChatComposer(
                         modelCatalogError = null,
                         modelNotice =
                             when {
-                                staleCached != null -> "Selected model is unavailable. Using ${option.modelLabel}."
+                                staleCached != null -> SessionChatModelNotice.modelUnavailable(option.modelLabel)
                                 variantNotice != null -> variantNotice
                                 else -> null
                             },
@@ -2034,8 +2035,8 @@ class SessionChatComposer(
             updateComposer {
                 it.copy(
                     isModelSelectionReady = false,
-                    modelCatalogError = "No usable models are available. Tap Model to retry.",
-                    modelNotice = "No usable models are available. Tap Model to retry.",
+                    modelCatalogError = SessionChatModelNotice.noneUsable,
+                    modelNotice = SessionChatModelNotice.noneUsable,
                 )
             }
             return
@@ -2064,7 +2065,7 @@ class SessionChatComposer(
                 attachments = composer.attachments.filter { option.acceptsAttachmentKind(it.kind) },
                 modelNotice =
                     if (refreshed == null) {
-                        "Selected model is unavailable. Using ${option.modelLabel}."
+                        SessionChatModelNotice.modelUnavailable(option.modelLabel)
                     } else {
                         composer.modelNotice
                     },

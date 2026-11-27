@@ -2313,7 +2313,7 @@ class SessionChatViewModelTest {
 
             assertEquals(null, sessionRepository.updateRequest)
             assertTrue(viewModel.uiState.value.rename.isDialogVisible)
-            assertEquals("Enter a session title", viewModel.uiState.value.rename.errorMessage)
+            assertEquals("Enter a session title", viewModel.uiState.value.rename.errorMessage?.english())
             assertEquals("Original title", viewModel.uiState.value.sessionTitle)
         }
 
@@ -2379,7 +2379,7 @@ class SessionChatViewModelTest {
 
             assertTrue(viewModel.uiState.value.rename.isDialogVisible)
             assertFalse(viewModel.uiState.value.rename.isSubmitting)
-            assertEquals("boom", viewModel.uiState.value.rename.errorMessage)
+            assertEquals("boom", viewModel.uiState.value.rename.errorMessage?.english())
             assertEquals("Original title", viewModel.uiState.value.sessionTitle)
         }
 
@@ -3986,7 +3986,7 @@ class SessionChatViewModelTest {
 
             assertEquals(
                 "No usable models are available. Tap Model to retry.",
-                viewModel.uiState.value.composer.modelCatalogError,
+                viewModel.uiState.value.composer.modelCatalogError?.english(),
             )
             assertEquals(false, viewModel.uiState.value.composer.isModelSelectionReady)
 
@@ -4068,7 +4068,7 @@ class SessionChatViewModelTest {
             assertEquals(3, models.calls)
             assertEquals(
                 "No usable models are available. Tap Model to retry.",
-                viewModel.uiState.value.composer.modelCatalogError,
+                viewModel.uiState.value.composer.modelCatalogError?.english(),
             )
         }
 
@@ -4298,7 +4298,7 @@ class SessionChatViewModelTest {
             )
             assertEquals(
                 "Selected model is unavailable. Using Claude Sonnet.",
-                viewModel.uiState.value.composer.modelNotice,
+                viewModel.uiState.value.composer.modelNotice?.english(),
             )
         }
 
@@ -4965,7 +4965,7 @@ class SessionChatViewModelTest {
             val v1 = createViewModel(repository = FakeMessageRepository(), homeProjectsSnapshot = moveProjectsSnapshot())
             v1.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("Needs an opencode v2 server", v1.uiState.value.moveToWorktree.availability.subtitle)
+            assertEquals("Needs an opencode v2 server", v1.uiState.value.moveToWorktree.availability.subtitle?.english())
             assertFalse(v1.uiState.value.moveToWorktree.availability.enabled)
 
             // One checkout: the sheet still opens while "New worktree…" can make another.
@@ -4988,7 +4988,7 @@ class SessionChatViewModelTest {
                 )
             singlePlain.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("This project has no other worktrees", singlePlain.uiState.value.moveToWorktree.availability.subtitle)
+            assertEquals("This project has no other worktrees", singlePlain.uiState.value.moveToWorktree.availability.subtitle?.english())
             assertEquals("Needs a git repository", singlePlain.uiState.value.moveToWorktree.newWorktree.subtitle?.english())
 
             val v2 =
@@ -5011,7 +5011,7 @@ class SessionChatViewModelTest {
                 androidx.compose.runtime.snapshots.Snapshot
                     .sendApplyNotifications()
                 advanceUntilIdle()
-                assertEquals("Turn on Worktrees in Settings", v2.uiState.value.moveToWorktree.availability.subtitle)
+                assertEquals("Turn on Worktrees in Settings", v2.uiState.value.moveToWorktree.availability.subtitle?.english())
             } finally {
                 HomeDisplayPreferences.updateShowsWorktrees(true)
             }
@@ -5194,7 +5194,7 @@ class SessionChatViewModelTest {
 
                 viewModel.updateComposerText("/btw why?")
                 advanceUntilIdle()
-                assertEquals(SessionChatSideQuestionsCopy.UNSUPPORTED, viewModel.uiState.value.sideQuestions.unsupportedNotice)
+                assertEquals(SessionChatSideQuestionsCopy.unsupported, viewModel.uiState.value.sideQuestions.unsupportedNotice)
                 assertFalse(viewModel.uiState.value.sideQuestions.composerMode)
 
                 viewModel.sendPrompt()
@@ -5499,7 +5499,7 @@ class SessionChatViewModelTest {
 
             val composer = viewModel.uiState.value.composer
             assertEquals("gpt-5", composer.selectedModel?.option?.modelId)
-            assertEquals("Selected model is unavailable. Using ${gpt.modelLabel}.", composer.modelNotice)
+            assertEquals("Selected model is unavailable. Using ${gpt.modelLabel}.", composer.modelNotice?.english())
         }
 
     @Test
@@ -8529,7 +8529,7 @@ class SessionChatViewModelTest {
             )
             assertEquals(
                 "Selected model is unavailable. Using ${sonnetOption.modelLabel}.",
-                viewModel.uiState.value.composer.modelNotice,
+                viewModel.uiState.value.composer.modelNotice?.english(),
             )
         }
 

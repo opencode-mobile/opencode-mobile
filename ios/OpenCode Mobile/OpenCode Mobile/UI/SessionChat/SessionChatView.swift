@@ -253,8 +253,8 @@ struct SessionChatView: View {
                 if let summary = attachmentDropSummary {
                     OpenCodeDropOverlay(
                         variant: summary.rejected ? .reject : .accept,
-                        title: .unlocalized(summary.title),
-                        subtitle: .unlocalized(summary.subtitle),
+                        title: OpenCodeText(summary.title),
+                        subtitle: summary.subtitle.openCodeText,
                         previews: summary.previews.map(\.attachmentVariant)
                     )
                     .allowsHitTesting(false)
@@ -398,7 +398,7 @@ struct SessionChatView: View {
             }
 
             if let notice = viewModel.uiState.composer.modelNotice {
-                OpenCodeInlineNotice(message: .unlocalized(notice))
+                OpenCodeInlineNotice(message: OpenCodeText(notice))
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
                     .openCodeReadableColumn()
@@ -531,7 +531,7 @@ struct SessionChatView: View {
                     // Suggestions float above this stack. Corner pills float over the
                     // timeline, which reserves their row (`SessionChatCornerSlotsLayout`).
                     if let notice = viewModel.uiState.sideQuestions.unsupportedNotice {
-                        OpenCodeInlineNotice(message: .unlocalized(notice), variant: .banner)
+                        OpenCodeInlineNotice(message: OpenCodeText(notice), variant: .banner)
                             .padding(.horizontal, 12)
                             .padding(.bottom, 6)
                     }
@@ -1249,7 +1249,7 @@ struct SessionChatView: View {
                     ),
                     hint: "session_chat.title_hint",
                     enabled: !viewModel.uiState.rename.isSubmitting,
-                    errorMessage: .unlocalized(ifPresent: viewModel.uiState.rename.errorMessage)
+                    errorMessage: viewModel.uiState.rename.errorMessage
                 )
             )
             .openCodeDialog(
@@ -1629,8 +1629,8 @@ struct SessionChatView: View {
             newWorktree: newWorktreeAvailability(sessionCreated: sessionCreated)
         )
         return OpenCodeOverflowMenuEntry(
-            title: .unlocalized(SessionChatMoveToWorktree.menuTitle),
-            subtitle: .unlocalized(ifPresent: availability.subtitle),
+            title: OpenCodeText(SessionChatMoveToWorktree.menuTitle),
+            subtitle: availability.subtitle.map(OpenCodeText.init),
             icon: .callSplit,
             enabled: availability.enabled,
             accessibilityIdentifier: "sessionMoveToWorktree",
@@ -1655,7 +1655,7 @@ struct SessionChatView: View {
         content
             .openCodeBottomSheet(
                 isPresented: moveSheetBinding,
-                title: viewModel.worktreeCreate.state?.title ?? .unlocalized(SessionChatMoveToWorktree.sheetTitle),
+                title: viewModel.worktreeCreate.state?.title ?? OpenCodeText(SessionChatMoveToWorktree.sheetTitle),
                 leadingAction: WorktreeCreateSheetChrome.backAction(viewModel.worktreeCreate),
                 keyboard: WorktreeCreateSheetChrome.keyboard(viewModel.worktreeCreate)
             ) {
@@ -1672,8 +1672,8 @@ struct SessionChatView: View {
                         SessionChatMoveToWorktree.options(project: project, currentDirectory: boundSession.worktree)
                     ) { option in
                         OpenCodeListItem(
-                            title: .unlocalized(option.title),
-                            subtitle: .unlocalized(option.subtitle),
+                            title: .verbatim(option.title),
+                            subtitle: .localized(option.subtitle),
                             selected: option.isCurrent,
                             enabled: option.isCurrent || !viewModel.uiState.moveInFlight,
                             startDecorator: .icon(.callSplit),

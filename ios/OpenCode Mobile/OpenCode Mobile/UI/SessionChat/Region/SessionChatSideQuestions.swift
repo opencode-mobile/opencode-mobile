@@ -19,7 +19,7 @@ struct SessionChatSideQuestionsUiState: Equatable {
     /// The answer sheet's content; nil while it is closed.
     var presentedAnswer: SessionChatSideQuestionAnswer?
     /// Shown above the composer when the draft is a `/btw` this server cannot answer.
-    var unsupportedNotice: String?
+    var unsupportedNotice: LocalizedStringResource?
 }
 
 /// A one-shot snackbar from a `/btw` request.
@@ -37,13 +37,26 @@ struct SessionChatSideQuestionNotice: Equatable {
 /// waits behind the one already open); answers that arrived while away wait as a chip.
 @MainActor
 final class SessionChatSideQuestions {
-    static let unsupportedNotice =
-        "/btw needs an opencode v2 server that answers side questions. This server can't answer without adding to the conversation."
-    static let unavailableNotice = "/btw needs a newer opencode server."
-    static let copiedNotice = "Answer copied"
+    // `session_chat.side_question.*`, same keys on Android. The question is the user's own
+    // words and stays an argument.
+    static var unsupportedNotice: LocalizedStringResource {
+        LocalizedStringResource(
+            "session_chat.side_question.unsupported",
+            defaultValue: "/btw needs an opencode v2 server that answers side questions. This server can't answer without adding to the conversation."
+        )
+    }
+    static var unavailableNotice: String {
+        String(localized: "session_chat.side_question.unavailable", defaultValue: "/btw needs a newer opencode server.")
+    }
+    static var copiedNotice: String {
+        String(localized: "session_chat.side_question.copied", defaultValue: "Answer copied")
+    }
 
     static func failedNotice(question: String) -> String {
-        "/btw failed: “\(question)”"
+        String(localized: LocalizedStringResource(
+            "session_chat.side_question.failed",
+            defaultValue: "/btw failed: “\(question)”"
+        ))
     }
 
     var onChange: (() -> Void)?

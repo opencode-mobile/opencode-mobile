@@ -13,7 +13,8 @@ enum OpenCodeSessionComposerState {
         let showPendingRevert: Bool
         let selectedModelLabel: String
         let selectedModeLabel: String
-        let selectedVariantLabel: String
+        /// Server variant name, or the app's "Default".
+        let selectedVariantLabel: OpenCodeText
         let showVariant: Bool
         let sendEnabled: Bool
         /// When hardware-keyboard Return sends, decided from the live draft text.
@@ -49,7 +50,7 @@ enum OpenCodeSessionComposerState {
             showPendingRevert: Bool = false,
             selectedModelLabel: String,
             selectedModeLabel: String,
-            selectedVariantLabel: String,
+            selectedVariantLabel: OpenCodeText,
             showVariant: Bool,
             sendEnabled: Bool,
             returnKeyRule: OpenCodeReturnKeyRule? = nil,
@@ -268,7 +269,7 @@ enum OpenCodeSessionComposerState {
 
     struct ChildLockout {
         let selectedModelLabel: String
-        let selectedVariantLabel: String
+        let selectedVariantLabel: OpenCodeText
         let showVariant: Bool
     }
 
@@ -996,7 +997,7 @@ struct OpenCodeSessionComposer: View {
                     )
                     if prompt.showVariant {
                         OpenCodeChoiceBadge(
-                            label: .unlocalized(prompt.selectedVariantLabel),
+                            label: prompt.selectedVariantLabel,
                             selected: false,
                             variant: .glass,
                             action: { onAction(.selectVariant) }
@@ -1042,7 +1043,11 @@ struct OpenCodeSessionComposer: View {
     }
 
     private func lockoutChip(_ label: String) -> some View {
-        Text(label)
+        lockoutChip(.verbatim(label))
+    }
+
+    private func lockoutChip(_ label: OpenCodeText) -> some View {
+        Text(openCode: label)
             .font(OpenCodeTypography.button)
             .foregroundStyle(OpenCodeColors.textStrong)
             .lineLimit(1)
@@ -1055,7 +1060,7 @@ struct OpenCodeSessionComposer: View {
     private func lockoutAccessibilityLabel(_ lockout: OpenCodeSessionComposerState.ChildLockout) -> String {
         let model = lockout.selectedModelLabel
         if lockout.showVariant {
-            let effort = lockout.selectedVariantLabel
+            let effort = lockout.selectedVariantLabel.resolved
             return String(localized: LocalizedStringResource(
                 "component.composer.model_effort",
                 defaultValue: "Model \(model), effort \(effort)"
@@ -1809,7 +1814,7 @@ private struct QuestionCustomTextField: View {
                 showPendingRevert: true,
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
-                selectedVariantLabel: "Default",
+                selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
                 sendEnabled: true,
                 showStop: false,
@@ -1829,7 +1834,7 @@ private struct QuestionCustomTextField: View {
                 showPendingRevert: true,
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
-                selectedVariantLabel: "Default",
+                selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
                 sendEnabled: true,
                 showStop: false,
@@ -1849,7 +1854,7 @@ private struct QuestionCustomTextField: View {
                 text: "!git status",
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
-                selectedVariantLabel: "Default",
+                selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
                 sendEnabled: true,
                 attachEnabled: false,
@@ -1870,7 +1875,7 @@ private struct QuestionCustomTextField: View {
                 text: "!git status",
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
-                selectedVariantLabel: "Default",
+                selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
                 sendEnabled: true,
                 attachEnabled: false,
@@ -1893,7 +1898,7 @@ private struct QuestionCustomTextField: View {
                 mentionRanges: [4 ..< 12],
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
-                selectedVariantLabel: "Default",
+                selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
                 sendEnabled: true,
                 showStop: false,
@@ -1913,7 +1918,7 @@ private struct QuestionCustomTextField: View {
                 mentionRanges: [4 ..< 12],
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
-                selectedVariantLabel: "Default",
+                selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
                 sendEnabled: true,
                 showStop: false,
@@ -1978,7 +1983,7 @@ private struct QuestionCustomTextField: View {
         state: .childLockout(
             .init(
                 selectedModelLabel: "Claude Sonnet 4",
-                selectedVariantLabel: "High",
+                selectedVariantLabel: .verbatim("High"),
                 showVariant: true
             )
         ),
@@ -1992,7 +1997,7 @@ private struct QuestionCustomTextField: View {
         state: .childLockout(
             .init(
                 selectedModelLabel: "Claude Sonnet 4",
-                selectedVariantLabel: "High",
+                selectedVariantLabel: .verbatim("High"),
                 showVariant: true
             )
         ),

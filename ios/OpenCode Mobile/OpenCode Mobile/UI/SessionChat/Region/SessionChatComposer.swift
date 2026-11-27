@@ -303,8 +303,8 @@ final class SessionChatComposer {
             if loadedCatalog?.options.isEmpty == false { return }
             updateComposer {
                 $0.isModelSelectionReady = false
-                $0.modelCatalogError = "Unable to load models. Tap Model to retry."
-                $0.modelNotice = "Unable to load models. Tap Model to retry."
+                $0.modelCatalogError = SessionChatModelNotice.loadFailed
+                $0.modelNotice = SessionChatModelNotice.loadFailed
             }
         }
     }
@@ -450,7 +450,7 @@ final class SessionChatComposer {
         let variant = resolvedVariant(remembered: rememberedVariant, for: option)
         let variantNotice = rememberedVariant.flatMap {
             !ModelVariants.isDefault($0, available: option.variants) && !option.variants.contains($0)
-                ? "Remembered Variant is unavailable. Using Default."
+                ? SessionChatModelNotice.variantUnavailable
                 : nil
         }
         initialSelectionState = initialSelectionState == .waitingForFallback ? .failedWithFallback : .resolved
@@ -477,7 +477,7 @@ final class SessionChatComposer {
             $0.isModelSelectionReady = true
             $0.modelCatalogError = nil
             if staleCached != nil {
-                $0.modelNotice = "Selected model is unavailable. Using \(option.modelLabel)."
+                $0.modelNotice = SessionChatModelNotice.modelUnavailable(using: option.modelLabel)
             } else {
                 $0.modelNotice = variantNotice
             }
@@ -1783,8 +1783,8 @@ final class SessionChatComposer {
         guard !catalog.options.isEmpty else {
             updateComposer {
                 $0.isModelSelectionReady = false
-                $0.modelCatalogError = "No usable models are available. Tap Model to retry."
-                $0.modelNotice = "No usable models are available. Tap Model to retry."
+                $0.modelCatalogError = SessionChatModelNotice.noneUsable
+                $0.modelNotice = SessionChatModelNotice.noneUsable
             }
             return
         }
@@ -1819,7 +1819,7 @@ final class SessionChatComposer {
             $0.attachments.removeAll { !fallback.accepts($0) }
             $0.selectedModel = ModelSelection(option: fallback, selectedVariant: nil)
             $0.selectedVariant = nil
-            $0.modelNotice = "Selected model is unavailable. Using \(fallback.modelLabel)."
+            $0.modelNotice = SessionChatModelNotice.modelUnavailable(using: fallback.modelLabel)
         }
         discardStoredAttachments(dropped)
     }

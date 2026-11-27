@@ -193,7 +193,7 @@ struct SessionComposerGalleryView: View {
             .childLockout(
                 .init(
                     selectedModelLabel: "Claude Sonnet 4",
-                    selectedVariantLabel: "High",
+                    selectedVariantLabel: .verbatim("High"),
                     showVariant: true
                 )
             )
@@ -317,7 +317,7 @@ struct SessionComposerGalleryView: View {
                 showPendingRevert: showPendingRevert,
                 selectedModelLabel: "Claude Sonnet 4",
                 selectedModeLabel: "Build",
-                selectedVariantLabel: "Default",
+                selectedVariantLabel: .verbatim("Default"),
                 showVariant: true,
                 sendEnabled: shellMode
                     ? ComposerShellCommand.command(text) != nil

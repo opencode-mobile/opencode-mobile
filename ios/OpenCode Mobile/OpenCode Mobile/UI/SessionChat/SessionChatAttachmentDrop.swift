@@ -175,3 +175,14 @@ extension AttachmentDropKind {
         }
     }
 }
+
+extension AttachmentDropText {
+    /// Design-system text for the drag-over card. Skip reasons are still English routing text
+    /// (#886 follow-up), so they stay marked as not yet extracted.
+    @MainActor var openCodeText: OpenCodeText {
+        switch self {
+        case let .localized(resource): OpenCodeText(resource)
+        case let .reason(reason): .unlocalized(reason)
+        }
+    }
+}
