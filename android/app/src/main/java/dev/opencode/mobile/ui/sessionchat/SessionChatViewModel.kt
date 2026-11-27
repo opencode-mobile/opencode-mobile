@@ -410,6 +410,9 @@ class SessionChatViewModel
 
         /** A sheet or dialog the screen owns is up; see [setScreenSheetOpen]. */
         private var screenSheetOpen = false
+
+        /** The thought the thought sheet follows; null while the sheet is closed. */
+        private var presentedThoughtPartId: String? = null
         private var boundSessionTitle: String? = null
         private var boundWorktree: String? = null
 
@@ -1848,6 +1851,22 @@ class SessionChatViewModel
         }
 
         /**
+         * Opens the sheet on the thought streaming now. It keeps following that thought, also
+         * after it ends, until [closeThought].
+         */
+        fun openLiveThought() {
+            val partId = _uiState.value.liveThoughtPartId ?: return
+            presentedThoughtPartId = partId
+            publishUiState()
+        }
+
+        fun closeThought() {
+            if (presentedThoughtPartId == null) return
+            presentedThoughtPartId = null
+            publishUiState()
+        }
+
+        /**
          * Opens the panel on the request of the subagent the needs-input pill names.
          * Returns false when no subagent request waits, so the caller opens the subagents panel.
          */
@@ -2190,6 +2209,15 @@ class SessionChatViewModel
             val subagents = turn.subagents
             val shellsState = shells.state.value
             val projectIdentity = projectHeader.identity
+            val loadedMessages = timeline.loadedMessages()
+            val turnWorking =
+                boundSessionId != null &&
+                    sessionStatusLabel != null &&
+                    inboxSnapshot.permissionRequests.isEmpty() &&
+                    inboxSnapshot.questionRequests.isEmpty()
+            val liveThoughtPartId = if (turnWorking) SessionChatLiveThought.streamingPartId(loadedMessages) else null
+            val presentedThought = presentedThoughtPartId?.let { SessionChatLiveThought.sheet(it, loadedMessages) }
+            if (presentedThought == null) presentedThoughtPartId = null
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
@@ -2213,6 +2241,8 @@ class SessionChatViewModel
                 retryCard = infoState.retryCard,
                 isRetrying = infoState.isRetrying,
                 workingIndicatorFading = turn.workingIndicatorFading,
+                liveThoughtPartId = liveThoughtPartId,
+                presentedThought = presentedThought,
                 syncingIndicatorLabel = syncingIndicatorLabel,
                 sessionTodos = inboxSnapshot.sessionTodos,
                 sessionTodosVisible = SessionTodoList.isVisible(inboxSnapshot.sessionTodos),

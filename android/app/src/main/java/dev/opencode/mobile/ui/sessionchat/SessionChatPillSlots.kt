@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.domain.text.resolve
@@ -88,6 +89,15 @@ sealed interface SessionChatActivityItem {
     ) : SessionChatActivityItem {
         override val id = "queued"
         override val priority = SessionChatActivityPriority.Queued
+    }
+
+    /**
+     * The turn pill while a thought streams; tapping opens the live thought sheet (#1118).
+     * Only the turn pill carries it, never the secondary pills.
+     */
+    data object Thinking : SessionChatActivityItem {
+        override val id = "thinking"
+        override val priority = SessionChatActivityPriority.Running
     }
 }
 
@@ -221,6 +231,7 @@ object SessionChatPillSlots {
                 SessionChatActivityItem.ReviewPermission,
                 SessionChatActivityItem.AnswerQuestion,
                 is SessionChatActivityItem.RequestFailed,
+                SessionChatActivityItem.Thinking,
                 -> null
                 is SessionChatActivityItem.Subagents ->
                     if (item.pill.needsInput) item.pill.stillRunning?.let(SessionChatActivityItem::Subagents) else item
@@ -240,6 +251,7 @@ object SessionChatPillSlots {
         keyboardVisible: Boolean,
         awayFromEnd: Boolean,
         text: UiTextLookup,
+        thinking: Boolean = false,
     ): SessionChatTurnStatusSlot? {
         fun attention(
             label: UiText,
@@ -265,6 +277,11 @@ object SessionChatPillSlots {
                         SessionChatActivityItem.Subagents(blockedSubagent.blocker)
                 label == null -> return null
                 WorkingTurnIndicator.showsIdleMark(label) -> OpenCodeTurnStatusPillPhase.Done to null
+                // A thought streams at the end of the turn: a plain Working reads Thinking and
+                // opens it. Compacting, Retrying and Sending keep their own label.
+                thinking && !fading && label == SessionActivity.Running.chatStatusLabel() ->
+                    OpenCodeTurnStatusPillPhase.Working(UiText.resource(R.string.component_thinking).resolve(text)) to
+                        SessionChatActivityItem.Thinking
                 else -> OpenCodeTurnStatusPillPhase.Working(label) to null
             }
         val canFold = SessionChatTurnStatusSlot.canFold(phase)

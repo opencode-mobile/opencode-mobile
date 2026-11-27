@@ -58,9 +58,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @Composable
-internal fun ToolResultPinnedHeader(presentation: ToolResultPresentation) {
+internal fun ToolResultPinnedHeader(
+    presentation: ToolResultPresentation,
+    modifier: Modifier = Modifier,
+) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        modifier = modifier.fillMaxWidth().padding(bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         presentation.eyebrow?.let { eyebrow ->

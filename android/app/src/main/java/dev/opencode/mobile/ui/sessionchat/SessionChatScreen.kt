@@ -1107,6 +1107,7 @@ private fun SessionChatScreenBody(
                                 syncingIndicatorLabel = uiState.syncingIndicatorLabel,
                                 workingIndicatorLabel = uiState.workingIndicatorLabel,
                                 workingIndicatorFading = uiState.workingIndicatorFading,
+                                isThinking = uiState.liveThoughtPartId != null,
                                 sessionTodosVisible = sessionTodosPillVisible,
                                 sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
                                 sessionTodoTotalCount = uiState.sessionTodoTotalCount,
@@ -1149,6 +1150,7 @@ private fun SessionChatScreenBody(
                                         is SessionChatActivityItem.SideQuestionsFailed -> viewModel.retrySideQuestions()
                                         is SessionChatActivityItem.SideQuestionsReady -> viewModel.openSideQuestionAnswer()
                                         is SessionChatActivityItem.Queued -> showPendingPromptsSheet = true
+                                        SessionChatActivityItem.Thinking -> viewModel.openLiveThought()
                                         else -> Unit
                                     }
                                 },
@@ -1803,6 +1805,14 @@ private fun SessionChatScreenBody(
             },
             onOpenLink = { openSessionExternalLink(sheetContext, it) },
         )
+        // The thought opened from the Thinking pill. The Screen Model owns it, so the text keeps
+        // streaming in and settles in place (#1118).
+        val thinkingLabel = stringResource(R.string.component_thinking_ellipsis)
+        SessionChatToolDetailSheet(
+            target = uiState.presentedThought?.detailTarget(thinkingLabel),
+            onDismiss = viewModel::closeThought,
+            onOpenLink = { openSessionExternalLink(sheetContext, it) },
+        )
 
         // Waits for any screen-local sheet to close so the Timeline Style picker never
         // stacks on one.
@@ -1810,6 +1820,7 @@ private fun SessionChatScreenBody(
             messageActionsTarget != null ||
                 showPendingPromptsSheet ||
                 toolDetailTarget != null ||
+                uiState.presentedThought != null ||
                 showSessionTodosSheet ||
                 showSubagentsSheet ||
                 uiState.shellOutput != null ||

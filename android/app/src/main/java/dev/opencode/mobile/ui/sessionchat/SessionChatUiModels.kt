@@ -240,6 +240,16 @@ data class SessionChatUiState(
     val isRetrying: Boolean = false,
     /** True while the turn pill fades out; the timeline gives its row back. */
     val workingIndicatorFading: Boolean = false,
+    /**
+     * The thought streaming at the end of the working turn. The turn pill reads Thinking and
+     * opens it (#1118).
+     */
+    val liveThoughtPartId: String? = null,
+    /**
+     * The thought sheet opened from the turn pill, resolved again on every publish so it streams
+     * and then settles in place.
+     */
+    val presentedThought: SessionChatThoughtSheetState? = null,
     /** Top Syncing pill label while cached or catching-up messages wait for network confirmation. */
     val syncingIndicatorLabel: UiText? = null,
     val sessionTodos: List<SessionTodo> = emptyList(),

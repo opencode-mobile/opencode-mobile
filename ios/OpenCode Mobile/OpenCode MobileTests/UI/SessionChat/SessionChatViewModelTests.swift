@@ -1358,6 +1358,74 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.messages.allSatisfy { !$0.isPending })
     }
 
+    // MARK: Live thought sheet (#1118)
+
+    private static func thoughtTurn(streaming: Bool, followedByText: Bool = false) -> [Message] {
+        var parts: [MessagePart] = [
+            .reasoning(ReasoningPart(
+                id: "r1",
+                text: streaming ? "Checking the retry" : "Checking the retry clock.",
+                isStreaming: streaming,
+                timeStartEpochMs: 1_000,
+                timeEndEpochMs: streaming ? nil : 3_000
+            )),
+        ]
+        if followedByText {
+            parts.append(.text(TextPart(id: "t1", text: "Found it.", isStreaming: true)))
+        }
+        return [
+            Message(id: "user-1", role: .user, text: "Why is it flaky?", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "assistant-1", role: .assistant, text: "", parts: parts, model: nil, mode: nil, sentAtEpochMs: 2),
+        ]
+    }
+
+    @Test func liveThought_pillOpensTheThoughtWhichStreamsThenSettlesInPlace() async throws {
+        let messageRepository = FakeMessageRepository(messages: Self.thoughtTurn(streaming: true))
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(
+            messageRepository: messageRepository,
+            eventStream: eventStream,
+            sessionRepository: FakeChatSessionRepository(sessionStatusType: "busy")
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        try #require(await waitUntil { viewModel.uiState.liveThoughtPartID == "r1" })
+        #expect(viewModel.uiState.presentedThought == nil)
+
+        viewModel.openLiveThought()
+        #expect(viewModel.uiState.presentedThought == SessionChatThoughtSheetState(
+            partID: "r1",
+            text: "Checking the retry",
+            isStreaming: true,
+            durationMs: nil
+        ))
+
+        messageRepository.messages = Self.thoughtTurn(streaming: false, followedByText: true)
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        try #require(await waitUntil { viewModel.uiState.presentedThought?.isStreaming == false })
+        #expect(viewModel.uiState.presentedThought?.text == "Checking the retry clock.")
+        #expect(viewModel.uiState.presentedThought?.durationMs == 2_000)
+        #expect(viewModel.uiState.liveThoughtPartID == nil)
+
+        viewModel.closeThought()
+        #expect(viewModel.uiState.presentedThought == nil)
+    }
+
+    @Test func liveThought_idleSessionShowsNoThinkingPill() async throws {
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: Self.thoughtTurn(streaming: true))
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        try #require(await waitUntil { viewModel.uiState.timeline == .ready || viewModel.uiState.timeline == .empty })
+        #expect(viewModel.uiState.liveThoughtPartID == nil)
+        viewModel.openLiveThought()
+        #expect(viewModel.uiState.presentedThought == nil)
+    }
+
     @Test func abortSession_setsOptimisticIdle() async {
         let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
         let viewModel = makeViewModel(sessionRepository: sessionRepository)

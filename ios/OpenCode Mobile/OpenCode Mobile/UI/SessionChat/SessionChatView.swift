@@ -590,6 +590,7 @@ struct SessionChatView: View {
                 syncingIndicatorLabel: viewModel.uiState.syncingIndicatorLabel,
                 workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
                 workingIndicatorFading: viewModel.uiState.workingIndicatorFading,
+                isThinking: viewModel.uiState.liveThoughtPartID != nil,
                 isTurnWorking: viewModel.uiState.isTurnWorking,
                 isTurnActive: viewModel.uiState.sessionStatusLabel != nil,
                 isAwaitingUser: viewModel.uiState.permissionRequest != nil
@@ -766,6 +767,8 @@ struct SessionChatView: View {
                 trigger: ProductAnalytics.Trigger.present
             )
             showPendingPromptsSheet = true
+        case .thinking:
+            viewModel.openLiveThought()
         case .requestFailed, .sideQuestionsRunning:
             break
         }
@@ -819,6 +822,15 @@ struct SessionChatView: View {
                         break
                     }
                 },
+                onOpenLink: { SessionChatView.openServerLink($0) }
+            )
+            // The thought opened from the Thinking pill. The Screen Model owns it, so the text
+            // keeps streaming in and settles in place (#1118).
+            .sessionChatToolDetailSheet(
+                target: Binding(
+                    get: { viewModel.uiState.presentedThought?.detailTarget },
+                    set: { if $0 == nil { viewModel.closeThought() } }
+                ),
                 onOpenLink: { SessionChatView.openServerLink($0) }
             )
             // Waits for any view-owned sheet to close so the picker never stacks on one.
@@ -1394,6 +1406,7 @@ struct SessionChatView: View {
             || selectTextTarget != nil
             || showPendingPromptsSheet
             || toolDetailTarget != nil
+            || viewModel.uiState.presentedThought != nil
             || showSessionTodosSheet
             || showSubagentsSheet
             || viewModel.uiState.shellOutput != nil

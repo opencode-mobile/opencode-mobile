@@ -563,6 +563,7 @@
     <string name="session_chat_activity_action_retry">Retry</string>
     <string name="session_chat_activity_action_open">Open</string>
     <string name="session_chat_activity_action_open_up_next">Open Up next</string>
+    <string name="session_chat_activity_action_show_thought">Show thought</string>
     <plurals name="session_chat_activity_collapsed_show_count">
         <item quantity="one">Show %1$d activity</item>
         <item quantity="other">Show %1$d activities</item>

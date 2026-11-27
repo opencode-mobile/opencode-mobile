@@ -7424,6 +7424,75 @@ class SessionChatViewModelTest {
             assertEquals(listOf("ses-1", "ses-1"), sessionRepository.childSessionRequests)
         }
 
+    // Live thought sheet (#1118)
+
+    private fun thoughtTurn(
+        streaming: Boolean,
+        followedByText: Boolean = false,
+    ): List<Message> {
+        val parts =
+            buildList {
+                add(
+                    MessagePart.Reasoning(
+                        text = if (streaming) "Checking the retry" else "Checking the retry clock.",
+                        isStreaming = streaming,
+                        id = "r1",
+                        timeStartEpochMs = 1_000,
+                        timeEndEpochMs = if (streaming) null else 3_000,
+                    ),
+                )
+                if (followedByText) add(MessagePart.Text(text = "Found it.", isStreaming = true, id = "t1"))
+            }
+        return listOf(
+            Message(id = "user-1", role = MessageRole.User, text = "Why is it flaky?"),
+            Message(id = "assistant-1", role = MessageRole.Assistant, text = "", parts = parts),
+        )
+    }
+
+    @Test
+    fun liveThought_pillOpensTheThoughtWhichStreamsThenSettlesInPlace() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(messages = thoughtTurn(streaming = true))
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("r1", viewModel.uiState.value.liveThoughtPartId)
+            assertNull(viewModel.uiState.value.presentedThought)
+
+            viewModel.openLiveThought()
+            assertEquals(
+                SessionChatThoughtSheetState(partId = "r1", text = "Checking the retry", isStreaming = true, durationMs = null),
+                viewModel.uiState.value.presentedThought,
+            )
+
+            repository.messages = thoughtTurn(streaming = false, followedByText = true)
+            viewModel.refreshMessages()
+            advanceUntilIdle()
+            assertEquals(
+                SessionChatThoughtSheetState(partId = "r1", text = "Checking the retry clock.", isStreaming = false, durationMs = 2_000),
+                viewModel.uiState.value.presentedThought,
+            )
+            assertNull(viewModel.uiState.value.liveThoughtPartId)
+
+            viewModel.closeThought()
+            assertNull(viewModel.uiState.value.presentedThought)
+        }
+
+    @Test
+    fun liveThought_idleSessionShowsNoThinkingPill() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository(messages = thoughtTurn(streaming = true)))
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.liveThoughtPartId)
+            viewModel.openLiveThought()
+            assertNull(viewModel.uiState.value.presentedThought)
+        }
+
     @Test
     fun abort_parentSuccessChildFailure_clearsWorking() =
         runTest(testDispatcher) {
