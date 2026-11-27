@@ -700,7 +700,7 @@ class ChangesViewModelTest {
             viewModel.bind("s", "/w", "user", ChangeSource.LastTurn)
             advanceUntilIdle()
             val error = viewModel.uiState.value.phase as ChangesPhase.Error
-            assertEquals(TurnDiffUnavailable.MESSAGE, error.message.english())
+            assertEquals("This turn moved folders, so its changes can't be shown together.", error.message.english())
         }
 
     private fun row(

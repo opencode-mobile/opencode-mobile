@@ -169,7 +169,7 @@ import dev.opencode.mobile.ui.sessionchat.ToolResultInspector
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
-import dev.opencode.mobile.ui.sessionchat.displayLabel
+import dev.opencode.mobile.ui.sessionchat.displayLabelRes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.yield
@@ -1092,7 +1092,7 @@ private fun SessionChatMessageRowContent(
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
                 FallbackMessageBubble(
-                    roleLabel = message.role.displayLabel(),
+                    roleLabel = stringResource(message.role.displayLabelRes()),
                     text = message.text,
                 )
         }

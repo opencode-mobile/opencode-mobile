@@ -589,15 +589,17 @@ class ChangesViewModel(
     }
 }
 
-/** Copy for a last-turn diff the server will not build because the turn moved folders. */
+/**
+ * A last-turn diff the server will not build because the turn moved folders. The app shows
+ * `changes_error_turn_moved_folders`; [SERVER_MARKER] is the server's own wording it matches.
+ */
 object TurnDiffUnavailable {
-    const val MESSAGE = "This turn moved folders, so its changes can't be shown together."
     const val SERVER_MARKER = "Turn range spans a location change"
 
-    fun userFacing(error: Throwable): String? {
-        val http = error as? SessionError.Http ?: return null
+    fun matches(error: Throwable): Boolean {
+        val http = error as? SessionError.Http ?: return false
         val text = listOfNotNull(http.message, http.body).joinToString("\n")
-        return MESSAGE.takeIf { text.contains(SERVER_MARKER) }
+        return text.contains(SERVER_MARKER)
     }
 }
 
@@ -607,7 +609,7 @@ private fun Throwable.isUnsupportedVcs() = this is SessionError.Http && statusCo
 
 /** The moved-folders text, the server's own message verbatim, or a fallback when it has none. */
 private fun Throwable.userMessage(): UiText {
-    if (TurnDiffUnavailable.userFacing(this) != null) return UiText.resource(R.string.changes_error_turn_moved_folders)
+    if (TurnDiffUnavailable.matches(this)) return UiText.resource(R.string.changes_error_turn_moved_folders)
     ServerErrorMessage.text(this)?.let { return it }
     val serverMessage =
         when (this) {

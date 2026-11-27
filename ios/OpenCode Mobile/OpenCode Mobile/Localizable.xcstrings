@@ -15858,6 +15858,78 @@
         }
       }
     },
+    "timeline.role.assistant" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistant"
+          }
+        }
+      }
+    },
+    "timeline.role.command" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command"
+          }
+        }
+      }
+    },
+    "timeline.role.message" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message"
+          }
+        }
+      }
+    },
+    "timeline.role.notice" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notice"
+          }
+        }
+      }
+    },
+    "timeline.role.tool" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tool"
+          }
+        }
+      }
+    },
+    "timeline.role.you" : {
+      "comment" : "Who wrote a message the timeline shows as plain text (the \"<role>: <text>\" fallback row).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You"
+          }
+        }
+      }
+    },
     "timeline.state.creating_subtitle" : {
       "extractionState" : "manual",
       "localizations" : {

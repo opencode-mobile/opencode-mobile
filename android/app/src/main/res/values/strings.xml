@@ -871,6 +871,13 @@
     <string name="timeline_explore_title">Explored — %1$s</string>
     <!-- Joins two parts of a list. -->
     <string name="timeline_list_separator">%1$s · %2$s</string>
+    <!-- Who wrote a message the timeline shows as plain text (the "<role>: <text>" fallback row). -->
+    <string name="timeline_role_you">You</string>
+    <string name="timeline_role_assistant">Assistant</string>
+    <string name="timeline_role_command">Command</string>
+    <string name="timeline_role_tool">Tool</string>
+    <string name="timeline_role_notice">Notice</string>
+    <string name="timeline_role_message">Message</string>
     <!-- Joins two tool names in a list. -->
     <string name="timeline_list_comma">%1$s, %2$s</string>
     <plurals name="timeline_activity_count_step">

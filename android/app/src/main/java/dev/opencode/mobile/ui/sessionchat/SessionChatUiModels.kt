@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import androidx.annotation.StringRes
 import dev.opencode.mobile.ui.main.AddProjectSheetUi
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.AgentMention
@@ -1141,12 +1142,13 @@ data class SessionChatAttachmentItem(
         ) + thumbnailPath.hashCode()
 }
 
-fun MessageRole.displayLabel(): String =
+@StringRes
+fun MessageRole.displayLabelRes(): Int =
     when (this) {
-        MessageRole.User -> "You"
-        MessageRole.Assistant -> "Assistant"
-        MessageRole.Command -> "Command"
-        MessageRole.Tool -> "Tool"
-        MessageRole.Notice -> "Notice"
-        MessageRole.Unknown -> "Message"
+        MessageRole.User -> R.string.timeline_role_you
+        MessageRole.Assistant -> R.string.timeline_role_assistant
+        MessageRole.Command -> R.string.timeline_role_command
+        MessageRole.Tool -> R.string.timeline_role_tool
+        MessageRole.Notice -> R.string.timeline_role_notice
+        MessageRole.Unknown -> R.string.timeline_role_message
     }

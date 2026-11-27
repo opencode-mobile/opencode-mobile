@@ -792,17 +792,17 @@ nonisolated enum MessageRole: String, Sendable {
     var displayLabel: String {
         switch self {
         case .user:
-            "You"
+            String(localized: "timeline.role.you", defaultValue: "You")
         case .assistant:
-            "Assistant"
+            String(localized: "timeline.role.assistant", defaultValue: "Assistant")
         case .command:
-            "Command"
+            String(localized: "timeline.role.command", defaultValue: "Command")
         case .tool:
-            "Tool"
+            String(localized: "timeline.role.tool", defaultValue: "Tool")
         case .notice:
-            "Notice"
+            String(localized: "timeline.role.notice", defaultValue: "Notice")
         case .unknown:
-            "Message"
+            String(localized: "timeline.role.message", defaultValue: "Message")
         }
     }
 }
