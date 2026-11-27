@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -236,8 +238,35 @@ class SessionChatWorktreeMove(
         form.dismiss()
     }
 
-    fun openSheet() {
+    fun openSheet(boundWorktree: String? = null) {
+        sheetWorktree = boundWorktree
         _state.update { it.copy(sheetVisible = true) }
+        claimSheetBranches()
+    }
+
+    /** The checkout whose project the open sheet lists. */
+    private var sheetWorktree: String? = null
+    private var branchClaimJob: Job? = null
+
+    /**
+     * While the sheet is open, Home looks up the branches of the worktrees it lists (#1124); the
+     * claim ends when the sheet closes or Session Chat goes away.
+     */
+    private fun claimSheetBranches() {
+        if (branchClaimJob?.isActive == true) return
+        branchClaimJob =
+            scope.launch {
+                try {
+                    combine(state, homeProjectsSnapshot.projects) { region, _ ->
+                        val listed = homeProjectsSnapshot.projectContaining(sheetWorktree)?.worktrees.orEmpty()
+                        region.sheetVisible to listed.map { it.directory }
+                    }.distinctUntilChanged()
+                        .takeWhile { (visible, _) -> visible }
+                        .collect { (_, directories) -> homeProjectsSnapshot.showBranches(this@SessionChatWorktreeMove, directories) }
+                } finally {
+                    homeProjectsSnapshot.showBranches(this@SessionChatWorktreeMove, emptyList())
+                }
+            }
     }
 
     /** Closes the sheet and the form inside it. */

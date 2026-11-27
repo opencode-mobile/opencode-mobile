@@ -26,6 +26,15 @@ class SessionListItemIndexTest {
     }
 
     @Test
+    fun visibleItemIndicesMapToTheirRowsSkippingHeadersAndTheFooter() {
+        // 0 header, 1 a, 2 b, 3 header, 4 c, 5 header, 6 d, 7 e, 8 loading footer.
+        assertEquals(listOf("b", "c"), sessionsAtItemIndices(sections, listOf(2, 3, 4)).map { it.id })
+        assertEquals(listOf("e"), sessionsAtItemIndices(sections, listOf(7, 8)).map { it.id })
+        assertEquals(emptyList<SessionListSession>(), sessionsAtItemIndices(sections, listOf(0, 3)))
+        assertEquals(emptyList<SessionListSession>(), sessionsAtItemIndices(sections, emptyList()))
+    }
+
+    @Test
     fun missingSessionHasNoIndex() {
         assertNull(sessionListItemIndex(sections, "zzz"))
         assertNull(sessionListItemIndex(emptyList(), "a"))

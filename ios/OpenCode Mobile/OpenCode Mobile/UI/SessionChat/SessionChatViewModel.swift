@@ -783,6 +783,18 @@ final class SessionChatViewModel {
         commands.openForkDialog(currentTitle: uiState.sessionTitle, atMessageID: messageID)
     }
 
+    /// Worktrees whose branch Session Chat shows now, for Home's branch lookups (#1124): the
+    /// draft's, the draft's Worktree sheet rows while open, and the Move sheet rows while open.
+    func shownBranchDirectories(moveProject: HomeProject?, draftWorktreeSheetOpen: Bool) -> [String] {
+        var directories = newSessionDraft.shownBranchDirectories(worktreeSheetOpen: draftWorktreeSheetOpen)
+        if uiState.moveSheetVisible, let moveProject {
+            for worktree in moveProject.worktrees where !directories.contains(worktree.directory) {
+                directories.append(worktree.directory)
+            }
+        }
+        return directories
+    }
+
     // MARK: Move to worktree
 
     func openMoveToWorktree() {

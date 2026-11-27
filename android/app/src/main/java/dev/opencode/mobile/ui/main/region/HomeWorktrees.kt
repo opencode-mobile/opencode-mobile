@@ -20,12 +20,10 @@ import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.ui.main.HomeBranchLookups
-import dev.opencode.mobile.ui.main.HomeBranchWindow
 import dev.opencode.mobile.ui.main.HomeDirectoryRows
 import dev.opencode.mobile.ui.main.HomePathLoad
 import dev.opencode.mobile.ui.main.HomeWorktreeIndex
 import dev.opencode.mobile.ui.main.HomeWorktreeLoader
-import dev.opencode.mobile.ui.main.ProjectSectionUi
 import dev.opencode.mobile.ui.main.homeExtraDirectories
 import dev.opencode.mobile.ui.main.withSessionMoved
 import kotlinx.coroutines.CancellationException
@@ -64,8 +62,6 @@ internal class HomeWorktrees(
     private val serverBaseUrl: () -> String,
     /** Home's current projects (from the Loaded content). */
     private val projects: () -> List<HomeProject>,
-    /** Home's current sections (from the Loaded content); their rows decide which branches to look up. */
-    private val sections: () -> List<ProjectSectionUi>,
     /** Added paths with running live observations; empty while none run. */
     private val observedWorktrees: () -> List<String>,
     /** Whether Home's live observations run. */
@@ -126,6 +122,13 @@ internal class HomeWorktrees(
     /** A checkout created in Session Chat (Move to worktree) lists here at once. */
     suspend fun followRefreshRequests() {
         homeProjectsSnapshot.worktreeRefreshRequests.collect(::refreshProjectWorktrees)
+    }
+
+    /** Session Chat's worktree lists ask for the branches they show. */
+    suspend fun followShownBranches() {
+        homeProjectsSnapshot.shownBranchDirectories.collect { directories ->
+            showBranches(HomeBranchLookups.Source.SessionChat, directories)
+        }
     }
 
     /** The Worktrees screen lists Home's projects and sessions. */
@@ -383,12 +386,25 @@ internal class HomeWorktrees(
     }
 
     /**
-     * Branch names for the directories Home shows ([HomeBranchWindow]) not asked since the last
-     * reload. Runs on every inventory change and every content change, so rows that arrive later
-     * get their lookup; a directory already asked is not asked again.
+     * Branch lookups for each project's main checkout: v2 only knows a project is a repository
+     * from a known branch, and the New session label names it. Runs on every inventory change;
+     * every other directory is looked up only while something shows it ([showBranches]).
      */
-    fun requestBranches() {
-        branchLookups.lookUp(HomeBranchWindow.directories(projects(), sections(), index.extraSessions))
+    private fun requestBranches() {
+        branchLookups.show(
+            HomeBranchLookups.Source.MainCheckouts,
+            projects()
+                .filter { it.projectId != null }
+                .flatMap { project -> project.worktrees.filter { it.isMain }.map { it.directory } },
+        )
+    }
+
+    /** [directories] are what [source] shows now (Home rows, the picker, Session Chat's lists). */
+    fun showBranches(
+        source: HomeBranchLookups.Source,
+        directories: Collection<String>,
+    ) {
+        branchLookups.show(source, directories.map { ServerPathPolicy.canonical(it.trim()) })
     }
 
     /**

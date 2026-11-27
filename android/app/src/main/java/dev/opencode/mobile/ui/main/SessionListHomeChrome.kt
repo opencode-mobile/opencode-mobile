@@ -171,6 +171,31 @@ object SessionListHomeChrome {
         }
     }
 
+    /**
+     * Worktrees whose branch the picker and dock show now (#1124): the expanded project's listed
+     * worktrees while the picker is open, and the selected worktree scope (the dock pill).
+     */
+    fun shownBranchDirectories(
+        projects: List<Project>,
+        state: HomeProjectPickerState,
+        pickerShown: Boolean,
+        selectedFilterId: String,
+        worktreesEnabled: Boolean = true,
+    ): List<String> {
+        if (!worktreesEnabled) return emptyList()
+        val listed =
+            if (pickerShown) {
+                projects
+                    .filter { it.hasManyWorktrees && state.isExpanded(it.id) }
+                    .flatMap { project -> state.visibleWorktrees(project.id, project.worktrees).map { it.directory } }
+            } else {
+                emptyList()
+            }
+        val selected =
+            projects.flatMap { it.worktrees }.firstOrNull { it.scopeId == selectedFilterId }?.directory
+        return (listed + listOfNotNull(selected)).distinct()
+    }
+
     /** "Show all N" / "Show fewer" under expanded project [key] with more than the limit; null otherwise. */
     fun showAllLabel(
         state: HomeProjectPickerState,

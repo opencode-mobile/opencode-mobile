@@ -40,6 +40,22 @@ final class SessionChatNewSessionDraft {
     private let composerModelSelection: () -> SessionModelSelection?
     private var baseBranchesTask: Task<Void, Never>?
 
+    /// Worktrees whose branch the draft shows now (#1124): its own worktree, plus every worktree
+    /// the Worktree sheet lists while `worktreeSheetOpen`. Empty without a draft.
+    func shownBranchDirectories(worktreeSheetOpen: Bool) -> [String] {
+        guard let draft = state.draft else { return [] }
+        var directories: [String] = []
+        if case let .worktree(directory, _) = draft.place { directories.append(directory) }
+        if worktreeSheetOpen,
+           let project = NewSessionDraftPresentation.project(of: draft, in: state.context.projects)
+        {
+            for worktree in project.worktrees where !directories.contains(worktree.directory) {
+                directories.append(worktree.directory)
+            }
+        }
+        return directories
+    }
+
     init(
         draft: NewSessionDraft?,
         profileKey: String?,

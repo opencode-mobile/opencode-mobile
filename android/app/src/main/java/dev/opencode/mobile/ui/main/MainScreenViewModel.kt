@@ -173,7 +173,6 @@ class MainScreenViewModel
                 scope = viewModelScope,
                 serverBaseUrl = { serverBaseUrl },
                 projects = { projectList.projects() },
-                sections = { (projectList.content as? MainScreenUiState.Loaded)?.sections.orEmpty() },
                 observedWorktrees = { projectList.observedWorktrees },
                 observing = { projectList.observing },
                 observeRows = { directory -> projectList.observeHomeRows(directory) },
@@ -256,6 +255,7 @@ class MainScreenViewModel
                 // A checkout created in Session Chat (Move to worktree) lists here at once.
                 worktreesRegion.followRefreshRequests()
             }
+            viewModelScope.launch { worktreesRegion.followShownBranches() }
             viewModelScope.launch {
                 // The Worktrees screen lists Home's projects and sessions and asks Home to act.
                 worktreesRegion.publishWorktrees(
@@ -791,6 +791,12 @@ class MainScreenViewModel
             worktreesEnabled: Boolean = true,
         ): Boolean =
             projectList.canLoadMore(moreSessionDirectories, scopeId, worktreesEnabled)
+
+        /** [directories] are what [source] on Home shows a branch for now; only those are looked up (#1124). */
+        internal fun showBranches(
+            source: HomeBranchLookups.Source,
+            directories: List<String>,
+        ) = worktreesRegion.showBranches(source, directories)
 
         /**
          * The Home list scrolled near its end in [scopeId]: every observed directory of that scope

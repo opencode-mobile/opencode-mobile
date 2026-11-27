@@ -479,6 +479,8 @@ struct ProjectListHomeViewModelTests {
             sessionCache: cache
         )
         await live.refresh()
+        #expect(await waitUntil { homeSession(live, id: "s-tax") != nil && live.uiState.projects.first?.worktrees.count == 2 })
+        showHomeRowsOnScreen(live)
         let expectedLayout = HomeWorktreeLayout(
             directories: ["/repo", "/wt/tax"],
             branches: ["/repo": "main", "/wt/tax": "feature/tax-rounding"]
@@ -607,12 +609,15 @@ struct ProjectListHomeViewModelTests {
         // Home reloads (the inventory grows) while the first branch load is still waiting.
         await viewModel.refresh()
         #expect(await waitUntil { viewModel.uiState.projects.first?.worktrees.count == 3 })
-        #expect(await waitUntil { Set(vcs.waitingDirectories) == ["/repo", "/wt/tax", "/wt/export"] })
+        #expect(await waitUntil { homeSession(viewModel, id: "s-tax") != nil })
+        // The list shows the two rows; nothing shows /wt/export, so it is never asked (#1124).
+        showHomeRowsOnScreen(viewModel)
+        #expect(await waitUntil { Set(vcs.waitingDirectories) == ["/repo", "/wt/tax"] })
         vcs.open()
 
         // Rows are built off the main actor, so they can land after the branches.
         let shown = await waitUntil {
-            viewModel.uiState.projects.first?.worktrees.map(\.branch) == ["main", "feature/export", "feature/tax-rounding"]
+            viewModel.uiState.projects.first?.worktrees.map(\.branch) == ["main", nil, "feature/tax-rounding"]
                 && homeSession(viewModel, id: "s-tax") != nil
                 && homeSession(viewModel, id: "s-main") != nil
         }
@@ -672,6 +677,8 @@ struct ProjectListHomeViewModelTests {
         )
 
         await viewModel.refresh()
+        #expect(await waitUntil { homeSession(viewModel, id: "s-tax") != nil && viewModel.uiState.projects.first?.worktrees.count == 2 })
+        showHomeRowsOnScreen(viewModel)
 
         // Rows are built off the main actor, so they can land after the branches.
         let shown = await waitUntil {
@@ -2715,6 +2722,14 @@ struct ProjectListHomeViewModelTests {
 private func homeSession(_ viewModel: ProjectListHomeViewModel, id: String) -> SessionListItem? {
     guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else { return nil }
     return sections.flatMap(\.allSessions).first { $0.id == id }
+}
+
+/// What Home's list reports once its rows are on screen (#1124).
+@MainActor
+private func showHomeRowsOnScreen(_ viewModel: ProjectListHomeViewModel) {
+    guard case let .loaded(sections, _, _, _) = viewModel.uiState.content else { return }
+    let rows = sections.crossProjectSessionListSessions(projects: viewModel.uiState.projects)
+    viewModel.showBranches(.homeRows, rows.map(\.directory))
 }
 
 @MainActor

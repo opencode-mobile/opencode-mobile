@@ -204,6 +204,49 @@ struct SessionListHomeChromeTests {
         )
     }
 
+    @Test func shownBranchDirectories_coverTheExpandedProjectsListedWorktreesAndTheSelectedScope() {
+        let others = (1 ... 7).map { "/src/repo-\($0)" }
+        let big = HomeProjectGrouping.group(
+            addedPaths: ["/src/repo"],
+            resolutions: ["/src/repo": resolution],
+            inventories: ["/src/repo": ["/src/repo"] + others]
+        )[0]
+        let directories = big.worktrees.map(\.directory)
+        var expanded = HomeProjectPickerState()
+        expanded.toggleExpanded("prj")
+        let selected = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-3")
+
+        func shown(
+            _ state: HomeProjectPickerState,
+            pickerShown: Bool,
+            selectedFilterId: String = "prj",
+            worktreesEnabled: Bool = true
+        ) -> [String] {
+            SessionListHomeChrome.shownBranchDirectories(
+                projects: [big, playground],
+                state: state,
+                pickerShown: pickerShown,
+                selectedFilterId: selectedFilterId,
+                worktreesEnabled: worktreesEnabled
+            )
+        }
+
+        // Closed picker, project scope: nothing beyond the main checkouts Home always asks for.
+        #expect(shown(expanded, pickerShown: false).isEmpty)
+        // The dock pill shows the selected worktree's branch.
+        #expect(shown(HomeProjectPickerState(), pickerShown: false, selectedFilterId: selected) == ["/src/repo-3"])
+        // An expanded project lists its first five; Show all lists the rest.
+        #expect(shown(expanded, pickerShown: true) == Array(directories.prefix(5)))
+        var all = expanded
+        all.toggleShowAll("prj")
+        #expect(shown(all, pickerShown: true).count == 8)
+        // Editing collapses every project; worktrees off shows no branch at all.
+        var editing = expanded
+        editing.setEditing(true)
+        #expect(shown(editing, pickerShown: true).isEmpty)
+        #expect(shown(expanded, pickerShown: true, selectedFilterId: selected, worktreesEnabled: false).isEmpty)
+    }
+
     private let resolution = HomeProjectResolution(id: "prj", canonical: "/src/repo", isRepository: true)
 
     private var repo: HomeProject {

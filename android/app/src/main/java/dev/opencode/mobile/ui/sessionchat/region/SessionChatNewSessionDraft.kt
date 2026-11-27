@@ -38,6 +38,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -106,6 +109,37 @@ class SessionChatNewSessionDraft(
 
     private val draft: NewSessionDraft? get() = _state.value.draft
 
+    private var branchClaimJob: Job? = null
+
+    /**
+     * While a draft shows, Home looks up the branch of its worktree, and of every worktree the
+     * Worktree sheet lists while it is open (#1124). The claim ends with the draft or the screen.
+     */
+    private fun claimDraftBranches() {
+        if (branchClaimJob?.isActive == true) return
+        branchClaimJob =
+            scope.launch {
+                try {
+                    combine(_state, homeProjectsSnapshot.projects) { region, projects ->
+                        val draft = region.draft ?: return@combine null
+                        val listed =
+                            if (region.sheet == NewSessionDraftSheet.Worktree) {
+                                NewSessionDraftPresentation.project(draft, projects).worktrees.map { it.directory }
+                            } else {
+                                emptyList()
+                            }
+                        (listOfNotNull((draft.place as? NewSessionPlace.Worktree)?.directory) + listed).distinct()
+                    }.distinctUntilChanged()
+                        .takeWhile { it != null }
+                        .collect { directories ->
+                            homeProjectsSnapshot.showBranches(this@SessionChatNewSessionDraft, directories.orEmpty())
+                        }
+                } finally {
+                    homeProjectsSnapshot.showBranches(this@SessionChatNewSessionDraft, emptyList())
+                }
+            }
+    }
+
     /** Claims the profile's draft, or a fresh one at [worktree], for this screen; not adopted yet. */
     fun claim(worktree: String): NewSessionDraft {
         val profileId = currentProfileId()
@@ -128,6 +162,7 @@ class SessionChatNewSessionDraft(
     /** Session Chat now shows [draft]. */
     fun adopt(draft: NewSessionDraft) {
         _state.update { it.copy(draft = draft) }
+        claimDraftBranches()
     }
 
     /** Runs [block] (binding regions to the draft's checkout) without copying composer states. */

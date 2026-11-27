@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.ui.main.HomeBranchLookups.Outcome
+import dev.opencode.mobile.ui.main.HomeBranchLookups.Source
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -30,7 +31,7 @@ class HomeBranchLookupsTest {
                     answers.removeFirst()
                 }
 
-            lookups.lookUp(listOf("/repo"))
+            lookups.show(Source.HomeRows, listOf("/repo"))
             runCurrent()
             assertEquals(emptyMap<String, String>(), lookups.branches)
 
@@ -40,7 +41,21 @@ class HomeBranchLookupsTest {
         }
 
     @Test
-    fun aFolderThatNeverSettlesStopsAfterTheRetries() =
+    fun aColdMainCheckoutThatSettlesLateStillGetsItsBranch() =
+        runTest {
+            // A cold v2 location can take longer than a few seconds to detect git.
+            val answers = ArrayDeque(listOf<Outcome>(Outcome.Unknown, Outcome.Unknown, Outcome.Unknown, Outcome.Branch("main")))
+            val lookups = lookups { answers.removeFirst() }
+
+            lookups.show(Source.MainCheckouts, listOf("/repo"))
+            advanceTimeBy(1_000 + 3_000 + 1)
+            assertEquals(emptyMap<String, String>(), lookups.branches)
+            advanceTimeBy(10_000)
+            assertEquals(mapOf("/repo" to "main"), lookups.branches)
+        }
+
+    @Test
+    fun aFolderThatNeverSettlesStopsAfterTheRetriesUntilRefresh() =
         runTest {
             var calls = 0
             val lookups =
@@ -49,22 +64,42 @@ class HomeBranchLookupsTest {
                     Outcome.Unknown
                 }
 
-            lookups.lookUp(listOf("/plain"))
+            lookups.show(Source.HomeRows, listOf("/plain"))
             advanceUntilIdle()
-            assertEquals(3, calls)
+            assertEquals(1 + HomeBranchLookups.DEFAULT_RETRY_DELAYS_MS.size, calls)
             assertEquals(emptyMap<String, String>(), lookups.branches)
 
-            // Nothing asks again on its own, and neither does another lookUp (every Home content
-            // change calls one): only an explicit refresh does.
-            advanceTimeBy(60_000)
-            assertEquals(3, calls)
-            lookups.lookUp(listOf("/plain"))
+            // Showing it again (Home reports on every scroll) asks nothing; a refresh does.
+            lookups.show(Source.HomeRows, emptyList())
+            lookups.show(Source.HomeRows, listOf("/plain"))
+            lookups.show(Source.Picker, listOf("/plain"))
             advanceUntilIdle()
-            assertEquals(3, calls)
+            assertEquals(5, calls)
             lookups.refresh()
-            lookups.lookUp(listOf("/plain"))
             advanceUntilIdle()
-            assertEquals(6, calls)
+            assertEquals(10, calls)
+        }
+
+    @Test
+    fun aDecidedAnswerIsNotAskedAgainUntilRefresh() =
+        runTest {
+            var calls = 0
+            val lookups =
+                lookups {
+                    calls += 1
+                    Outcome.Branch(null)
+                }
+
+            lookups.show(Source.HomeRows, listOf("/gone"))
+            advanceUntilIdle()
+            lookups.show(Source.HomeRows, emptyList())
+            lookups.show(Source.HomeRows, listOf("/gone"))
+            advanceUntilIdle()
+            assertEquals(1, calls)
+
+            lookups.refresh()
+            advanceUntilIdle()
+            assertEquals(2, calls)
         }
 
     @Test
@@ -82,7 +117,7 @@ class HomeBranchLookupsTest {
                     Outcome.Branch("dev")
                 }
 
-            lookups.lookUp((1..10).map { "/wt/$it" })
+            lookups.show(Source.HomeRows, (1..10).map { "/wt/$it" })
             runCurrent()
             assertEquals(3, peak)
 
@@ -93,15 +128,110 @@ class HomeBranchLookupsTest {
         }
 
     @Test
+    fun mainCheckoutsAreAskedBeforeRows() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val calls = mutableListOf<String>()
+            val lookups =
+                lookups { directory ->
+                    calls += directory
+                    gate.await()
+                    Outcome.Branch("dev")
+                }
+
+            lookups.show(Source.HomeRows, listOf("/wt/a", "/wt/b", "/wt/c", "/wt/d"))
+            lookups.show(Source.MainCheckouts, listOf("/repo"))
+            runCurrent()
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            // The first three started before the main checkout was known; it goes next.
+            assertEquals(listOf("/wt/a", "/wt/b", "/wt/c", "/repo", "/wt/d"), calls)
+        }
+
+    @Test
+    fun aQueuedDirectoryNothingShowsAnyMoreIsNeverAsked() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val calls = mutableListOf<String>()
+            val lookups =
+                lookups { directory ->
+                    calls += directory
+                    gate.await()
+                    Outcome.Branch("dev")
+                }
+
+            // A fast scroll: rows 1..10 pass by, rows 9 and 10 stay.
+            lookups.show(Source.HomeRows, (1..10).map { "/wt/$it" })
+            runCurrent()
+            lookups.show(Source.HomeRows, listOf("/wt/9", "/wt/10"))
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(listOf("/wt/1", "/wt/2", "/wt/3", "/wt/9", "/wt/10"), calls)
+            // A request that was already running keeps its answer.
+            assertEquals(setOf("/wt/1", "/wt/2", "/wt/3", "/wt/9", "/wt/10"), lookups.branches.keys)
+        }
+
+    @Test
+    fun aRetryWaitsOnlyWhileTheDirectoryIsShown() =
+        runTest {
+            var calls = 0
+            val lookups =
+                lookups {
+                    calls += 1
+                    Outcome.Unknown
+                }
+
+            lookups.show(Source.HomeRows, listOf("/wt/x"))
+            runCurrent()
+            assertEquals(1, calls)
+            lookups.show(Source.HomeRows, emptyList())
+            advanceUntilIdle()
+            assertEquals(1, calls)
+
+            // Shown again later: a fresh ladder.
+            lookups.show(Source.HomeRows, listOf("/wt/x"))
+            runCurrent()
+            assertEquals(2, calls)
+        }
+
+    @Test
+    fun aDirectoryShownByTwoSourcesStaysWhileEitherShowsIt() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val calls = mutableListOf<String>()
+            val lookups =
+                HomeBranchLookups(
+                    scope = this,
+                    fetch = { directory ->
+                        calls += directory
+                        gate.await()
+                        Outcome.Branch("dev")
+                    },
+                    onChange = {},
+                    maxInFlight = 1,
+                )
+
+            lookups.show(Source.HomeRows, listOf("/wt/a", "/wt/b"))
+            lookups.show(Source.SessionChat, listOf("/wt/b"))
+            runCurrent()
+            lookups.show(Source.HomeRows, emptyList())
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(listOf("/wt/a", "/wt/b"), calls)
+        }
+
+    @Test
     fun anUnknownAnswerKeepsTheLastKnownBranch() =
         runTest {
-            val answers = ArrayDeque(listOf<Outcome>(Outcome.Branch("dev"), Outcome.Unknown, Outcome.Unknown, Outcome.Unknown))
-            val lookups = lookups { answers.removeFirst() }
+            val answers = ArrayDeque(listOf<Outcome>(Outcome.Branch("dev")))
+            val lookups = lookups { answers.removeFirstOrNull() ?: Outcome.Unknown }
 
-            lookups.lookUp(listOf("/repo"))
+            lookups.show(Source.HomeRows, listOf("/repo"))
             advanceUntilIdle()
             lookups.refresh()
-            lookups.lookUp(listOf("/repo"))
             advanceUntilIdle()
 
             assertEquals(mapOf("/repo" to "dev"), lookups.branches)
@@ -113,10 +243,9 @@ class HomeBranchLookupsTest {
             val answers = ArrayDeque(listOf<Outcome>(Outcome.Branch("dev"), Outcome.Branch(null)))
             val lookups = lookups { answers.removeFirst() }
 
-            lookups.lookUp(listOf("/repo"))
+            lookups.show(Source.HomeRows, listOf("/repo"))
             advanceUntilIdle()
             lookups.refresh()
-            lookups.lookUp(listOf("/repo"))
             advanceUntilIdle()
 
             assertEquals(emptyMap<String, String>(), lookups.branches)
@@ -133,10 +262,9 @@ class HomeBranchLookupsTest {
                     if (call == 1) first.await() else Outcome.Branch("new")
                 }
 
-            lookups.lookUp(listOf("/repo"))
+            lookups.show(Source.HomeRows, listOf("/repo"))
             runCurrent()
             lookups.refresh()
-            lookups.lookUp(listOf("/repo"))
             runCurrent()
             first.complete(Outcome.Branch("old"))
             advanceUntilIdle()
@@ -145,25 +273,23 @@ class HomeBranchLookupsTest {
         }
 
     @Test
-    fun answeredDirectoriesAreNotAskedAgainUntilRefresh() =
+    fun refreshAsksOnlyWhatIsShown() =
         runTest {
-            var calls = 0
+            val calls = mutableListOf<String>()
             val lookups =
-                lookups {
-                    calls += 1
+                lookups { directory ->
+                    calls += directory
                     Outcome.Branch("dev")
                 }
 
-            lookups.lookUp(listOf("/repo"))
+            lookups.show(Source.HomeRows, listOf("/wt/a", "/wt/b"))
             advanceUntilIdle()
-            lookups.lookUp(listOf("/repo"))
-            advanceUntilIdle()
-            assertEquals(1, calls)
-
+            lookups.show(Source.HomeRows, listOf("/wt/b"))
+            calls.clear()
             lookups.refresh()
-            lookups.lookUp(listOf("/repo"))
             advanceUntilIdle()
-            assertEquals(2, calls)
+
+            assertEquals(listOf("/wt/b"), calls)
         }
 
     @Test
@@ -178,7 +304,7 @@ class HomeBranchLookupsTest {
                     onChange = { changes += it },
                     retryDelaysMs = emptyList(),
                 )
-            lookups.lookUp(listOf("/repo", "/wt/gone"))
+            lookups.show(Source.HomeRows, listOf("/repo", "/wt/gone"))
             advanceUntilIdle()
             changes.clear()
 
@@ -191,12 +317,11 @@ class HomeBranchLookupsTest {
             assertEquals(1, changes.size)
 
             // An unknown live answer keeps the cached branch; a settled one replaces it.
-            lookups.lookUp(listOf("/wt/tax"))
+            lookups.show(Source.Picker, listOf("/wt/tax"))
             advanceUntilIdle()
             assertEquals("feature/tax-rounding", lookups.branches["/wt/tax"])
             answers["/wt/tax"] = Outcome.Branch("feature/tax-v2")
             lookups.refresh()
-            lookups.lookUp(listOf("/wt/tax"))
             advanceUntilIdle()
             assertEquals("feature/tax-v2", lookups.branches["/wt/tax"])
         }
@@ -222,12 +347,31 @@ class HomeBranchLookupsTest {
                     retryDelaysMs = emptyList(),
                 )
 
-            lookups.lookUp(listOf("/a", "/b", "/c"))
+            lookups.show(Source.HomeRows, listOf("/a", "/b", "/c", "/d"))
             lookups.clear()
             advanceUntilIdle()
 
             assertEquals(emptyMap<String, String>(), lookups.branches)
             assertEquals(0, changes)
+            immediate.cancel()
+        }
+
+    @Test
+    fun anImmediateDispatcherStillLimitsAndFinishesEveryLookup() =
+        runTest {
+            val immediate = CoroutineScope(UnconfinedTestDispatcher(testScheduler) + Job())
+            val lookups =
+                HomeBranchLookups(
+                    scope = immediate,
+                    fetch = { directory -> if (directory == "/wt/plain") Outcome.Unknown else Outcome.Branch("dev") },
+                    onChange = {},
+                    retryDelaysMs = listOf(0L),
+                )
+
+            lookups.show(Source.HomeRows, (1..5).map { "/wt/$it" } + "/wt/plain")
+            advanceUntilIdle()
+
+            assertEquals((1..5).map { "/wt/$it" }.toSet(), lookups.branches.keys)
             immediate.cancel()
         }
 

@@ -86,6 +86,9 @@ struct SessionChatView: View {
     @State private var draftSheet: NewSessionCardRowKind?
     @Environment(\.homeProjects) private var homeProjects
     @Environment(\.refreshHomeWorktrees) private var refreshHomeWorktrees
+    @Environment(\.showHomeWorktreeBranches) private var showHomeWorktreeBranches
+    /// This screen's claim on Home's branch lookups.
+    @State private var branchClaimOwner = UUID().uuidString
     @Environment(\.homeAddProject) private var homeAddProject
     @Environment(\.homeRunningCounts) private var homeRunningCounts
 
@@ -277,6 +280,20 @@ struct SessionChatView: View {
                 viewModel.updateDraftContext(context)
                 viewModel.refreshWorktreeInventory = refreshHomeWorktrees
             }
+            .onChange(
+                of: viewModel.shownBranchDirectories(moveProject: moveProject, draftWorktreeSheetOpen: draftSheet == .worktree),
+                initial: true
+            ) { _, directories in
+                showHomeWorktreeBranches(branchClaimOwner, directories)
+            }
+            .onAppear {
+                // Back from a pushed screen: claim again what onDisappear withdrew.
+                showHomeWorktreeBranches(
+                    branchClaimOwner,
+                    viewModel.shownBranchDirectories(moveProject: moveProject, draftWorktreeSheetOpen: draftSheet == .worktree)
+                )
+            }
+            .onDisappear { showHomeWorktreeBranches(branchClaimOwner, []) }
             .sessionChatImageViewer(
                 state: viewModel.uiState.imageViewer,
                 loader: viewModel.attachmentImageLoader,

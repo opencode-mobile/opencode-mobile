@@ -2918,18 +2918,21 @@ class MainScreenViewModelTest {
                         mainWorktree: String?,
                     ): WorktreeLoad = WorktreeLoad.Loaded(listOf("/repo", "/wt/tax"), listsSessions = false)
                 }
-            createViewModel(
-                connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
-                sessionRepository =
-                    FakeSessionRepository(
-                        mutableMapOf("/repo" to sessions),
-                        branches = mapOf("/repo" to "main", "/wt/tax" to "feature/tax-rounding"),
-                    ),
-                sessionCache = cache,
-                worktreeRepository = listedWorktrees,
-                serverProtocol = ServerProtocol.V2,
-            )
+            val live =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionRepository =
+                        FakeSessionRepository(
+                            mutableMapOf("/repo" to sessions),
+                            branches = mapOf("/repo" to "main", "/wt/tax" to "feature/tax-rounding"),
+                        ),
+                    sessionCache = cache,
+                    worktreeRepository = listedWorktrees,
+                    serverProtocol = ServerProtocol.V2,
+                )
+            advanceUntilIdle()
+            live.showRowsOnScreen()
             advanceUntilIdle()
             assertEquals(
                 WorktreeLayout(
@@ -2991,6 +2994,8 @@ class MainScreenViewModelTest {
                             branches = mapOf("/repo" to "dev", "/repo-wt" to "feature/x"),
                         ),
                 )
+            advanceUntilIdle()
+            viewModel.showRowsOnScreen()
             advanceUntilIdle()
 
             val loaded = viewModel.uiState.value.content as MainScreenUiState.Loaded
@@ -3211,8 +3216,10 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun branchLookupsCoverOnlyTheMainCheckoutAndTheDirectoriesOfListedRows() =
+    fun branchLookupsAskTheMainCheckoutAndThenOnlyWhatHomeShows() =
         runTest(testDispatcher) {
+            // #1124: a repository with dozens of worktrees must not make the server open a
+            // location for each of them.
             val inventory = listOf("/repo") + (0 until 40).map { "/wt/w%02d".format(it) }
             val worktrees =
                 object : WorktreeRepository by UnavailableWorktreeRepository {
@@ -3233,17 +3240,32 @@ class MainScreenViewModelTest {
                             ),
                     ),
                 )
-            createViewModel(
-                connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
-                sessionRepository = sessionRepository,
-                worktreeRepository = worktrees,
-            )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionRepository = sessionRepository,
+                    worktreeRepository = worktrees,
+                )
             advanceUntilIdle()
+            assertEquals(listOf<String?>("/repo"), sessionRepository.vcsDirectories)
 
-            assertEquals(setOf("/repo", "/wt/w03", "/wt/w07"), sessionRepository.vcsDirectories.toSet())
-            assertEquals(3, sessionRepository.vcsDirectories.size)
+            // The list reports the rows on screen; the picker lists the first five worktrees.
+            viewModel.showRowsOnScreen()
+            viewModel.showBranches(HomeBranchLookups.Source.Picker, inventory.take(5))
+            advanceUntilIdle()
+            assertEquals(
+                setOf("/repo", "/wt/w00", "/wt/w01", "/wt/w02", "/wt/w03", "/wt/w07"),
+                sessionRepository.vcsDirectories.toSet(),
+            )
+            assertEquals(6, sessionRepository.vcsDirectories.size)
         }
+
+    /** What Home's list reports once its rows are on screen. */
+    private fun MainScreenViewModel.showRowsOnScreen() {
+        val loaded = uiState.value.content as MainScreenUiState.Loaded
+        showBranches(HomeBranchLookups.Source.HomeRows, loaded.homeSessions().map { it.directory })
+    }
 
     private val repoProjects =
         mapOf(

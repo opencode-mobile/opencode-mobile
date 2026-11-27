@@ -406,10 +406,16 @@ final class HomeWorktrees {
         }
     }
 
-    /// Pull to refresh asks every worktree for its branch again.
+    /// Pull to refresh asks every shown worktree for its branch again.
     func refreshBranches() {
         branchLookups.refresh()
         lookUpBranchesForResolvedProjects()
+    }
+
+    /// `directories` are what `source` shows now (Home rows, the picker, Session Chat's lists);
+    /// only shown directories are looked up (#1124).
+    func showBranches(_ source: HomeBranchLookups.Source, _ directories: [String]) {
+        branchLookups.show(source, directories.map { ServerPathPolicy.canonical($0.trimmingCharacters(in: .whitespacesAndNewlines)) })
     }
 
     private func refetchMark(_ projectID: String) async {
@@ -448,11 +454,14 @@ final class HomeWorktrees {
         }
     }
 
-    /// Branch names load behind the session list for every worktree of a resolved project.
+    /// Each resolved project's main checkout is always looked up: v2 only knows a project is a
+    /// repository from a known branch, and the New session label names it. Every other worktree
+    /// waits until something shows it (`showBranches`).
     private func lookUpBranchesForResolvedProjects() {
-        for project in homeProjects() where project.memberPaths.contains(where: { state.resolutions[$0] != nil }) {
-            branchLookups.lookUp(project.worktrees.map(\.directory))
-        }
+        let mains = homeProjects()
+            .filter { project in project.memberPaths.contains(where: { state.resolutions[$0] != nil }) }
+            .flatMap { project in project.worktrees.filter(\.isMain).map(\.directory) }
+        branchLookups.show(.mainCheckouts, mains)
     }
 
     private func applyMark(_ update: WorktreeMarkUpdate) {
