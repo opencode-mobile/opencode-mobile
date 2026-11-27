@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeChildSessionRow
 import dev.opencode.mobile.ui.components.OpenCodeChildSessionRowStatus
@@ -69,7 +70,7 @@ fun ChildSessionRowGalleryScreen(modifier: Modifier = Modifier) {
                 OpenCodeChoiceBadge(label = "None", selected = status == null, onClick = { status = null })
                 OpenCodeChildSessionRowStatus.entries.forEach { option ->
                     OpenCodeChoiceBadge(
-                        label = option.label.replaceFirstChar { it.uppercaseChar() },
+                        label = stringResource(option.labelRes).replaceFirstChar { it.uppercaseChar() },
                         selected = status == option,
                         onClick = { status = option },
                     )

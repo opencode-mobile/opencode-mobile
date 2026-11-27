@@ -3316,6 +3316,62 @@
         }
       }
     },
+    "component.subagent_state.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "done"
+          }
+        }
+      }
+    },
+    "component.subagent_state.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "failed"
+          }
+        }
+      }
+    },
+    "component.subagent_state.running" : {
+      "comment" : "Where a subagent is, on task and child session rows; shown and spoken in lowercase after the title.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "running"
+          }
+        }
+      }
+    },
+    "component.subagent_state.stopped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "stopped"
+          }
+        }
+      }
+    },
+    "component.subagent_state.waiting_for_input" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "waiting for input"
+          }
+        }
+      }
+    },
     "component.thinking" : {
       "extractionState" : "manual",
       "localizations" : {

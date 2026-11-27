@@ -15,11 +15,11 @@ enum OpenCodeTaskRowState: CaseIterable, Equatable {
 
     var label: String {
         switch self {
-        case .running: "running"
-        case .waitingForInput: "waiting for input"
-        case .done: "done"
-        case .failed: "failed"
-        case .stopped: "stopped"
+        case .running: String(localized: "component.subagent_state.running", defaultValue: "running")
+        case .waitingForInput: String(localized: "component.subagent_state.waiting_for_input", defaultValue: "waiting for input")
+        case .done: String(localized: "component.subagent_state.done", defaultValue: "done")
+        case .failed: String(localized: "component.subagent_state.failed", defaultValue: "failed")
+        case .stopped: String(localized: "component.subagent_state.stopped", defaultValue: "stopped")
         }
     }
 

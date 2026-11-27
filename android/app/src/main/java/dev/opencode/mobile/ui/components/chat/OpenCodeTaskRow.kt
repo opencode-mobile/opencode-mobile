@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -33,10 +35,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 
 private val TaskRowCornerRadius = OpenCodeRadius.small
 private val TaskRowPaddingHorizontal = 12.dp
@@ -52,22 +59,23 @@ private val TaskRowChevronSize = 16.dp
 
 /** Where a background task (a subagent) is; drives the leading glyph and the detail tone. */
 enum class OpenCodeTaskRowState(
-    val label: String,
+    /** Spoken after the title and tag. */
+    @param:StringRes val labelRes: Int,
 ) {
     /** Spinner. */
-    Running("running"),
+    Running(R.string.component_subagent_state_running),
 
     /** Amber dot and amber detail: the task waits on a permission or question. */
-    WaitingForInput("waiting for input"),
+    WaitingForInput(R.string.component_subagent_state_waiting_for_input),
 
     /** Check mark. */
-    Done("done"),
+    Done(R.string.component_subagent_state_done),
 
     /** `!` and the detail (the reason) in the error tone. */
-    Failed("failed"),
+    Failed(R.string.component_subagent_state_failed),
 
     /** `!` and the detail (the reason) in the error tone; the run was stopped first. */
-    Stopped("stopped"),
+    Stopped(R.string.component_subagent_state_stopped),
 }
 
 /**
@@ -95,6 +103,7 @@ fun OpenCodeTaskRow(
             detail = detail,
             detailCaption = detailCaption,
             time = time,
+            lookup = ResourcesUiTextLookup(LocalResources.current),
         )
     val shape = RoundedCornerShape(TaskRowCornerRadius)
     Surface(
@@ -240,8 +249,9 @@ internal fun buildTaskRowAccessibilityLabel(
     detail: String?,
     detailCaption: String?,
     time: String?,
+    lookup: UiTextLookup,
 ): String =
-    listOf(title, tag, state.label, detail, detailCaption, time)
+    listOf(title, tag, UiText.resource(state.labelRes).resolve(lookup), detail, detailCaption, time)
         .filterNot { it.isNullOrBlank() }
         .joinToString(", ")
 
