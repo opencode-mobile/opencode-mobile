@@ -73,7 +73,7 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
 
         OpenCodeOutgoingMessage(
             text = sample.text,
-            metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            metadataLabel = "Build · DeepSeek V4 Flash",
             sentAtEpochMs = System.currentTimeMillis() - 26 * 60 * 60 * 1000L,
             attachments = sample.attachments,
             modifier = Modifier.fillMaxWidth(),
@@ -88,14 +88,14 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
         )
         OpenCodeOutgoingMessage(
             text = "Use the staging bucket instead.",
-            metadataLabel = "Build · DeepSeek V4 Flash · 9:06 PM",
+            metadataLabel = "Build · DeepSeek V4 Flash",
             steering = OpenCodeOutgoingMessageSteering.Delivered(showsLabel = true),
             modifier = Modifier.fillMaxWidth(),
             onClick = {},
         )
         OpenCodeOutgoingMessage(
             text = "And skip the migration step.",
-            metadataLabel = "Build · DeepSeek V4 Flash · 9:07 PM",
+            metadataLabel = "Build · DeepSeek V4 Flash",
             steering = OpenCodeOutgoingMessageSteering.Pending(showsLabel = true),
             modifier = Modifier.fillMaxWidth(),
         )
@@ -108,7 +108,7 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
         )
         OpenCodeOutgoingMessage(
             text = "Match the layout in the screenshot",
-            metadataLabel = "Build · DeepSeek V4 Flash · 9:08 PM",
+            metadataLabel = "Build · DeepSeek V4 Flash",
             label = OpenCodeOutgoingMessageLabel("Goal", OpenCodeIcons.RadioButtonChecked),
             modifier = Modifier.fillMaxWidth(),
             onClick = {},

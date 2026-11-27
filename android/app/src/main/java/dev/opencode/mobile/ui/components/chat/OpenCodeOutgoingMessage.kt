@@ -442,7 +442,7 @@ private fun OpenCodeOutgoingMessageSteeringPreview() {
             )
             OpenCodeOutgoingMessage(
                 text = "And skip the migration step.",
-                metadataLabel = "Build · DeepSeek V4 Flash · 9:06 PM",
+                metadataLabel = "Build · DeepSeek V4 Flash",
                 steering = OpenCodeOutgoingMessageSteering.Pending(showsLabel = false),
             )
         }
