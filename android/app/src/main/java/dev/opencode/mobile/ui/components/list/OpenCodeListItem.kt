@@ -131,7 +131,10 @@ enum class OpenCodeListItemVariant {
 
 /** How a Standard row's title and subtitle use the width they have. */
 enum class OpenCodeListItemTextFlow {
-    /** One line each, ending in an ellipsis. */
+    /**
+     * One line each, ending in an ellipsis. [OpenCodeListItemStyle.Card] rows name a setting or
+     * destination, so their title and plain subtitle wrap instead, keeping longer translations whole.
+     */
     SingleLine,
 
     /**
@@ -385,6 +388,7 @@ fun OpenCodeListItem(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
+                        val textMaxLines = if (style == OpenCodeListItemStyle.Card) Int.MAX_VALUE else textFlow.maxLines
 
                         Column(
                             modifier = Modifier.weight(1f),
@@ -395,7 +399,7 @@ fun OpenCodeListItem(
                                     text = listItemTitleText(title, titleHighlight),
                                     color = if (enabled) textStrong else textWeaker,
                                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                                    maxLines = textFlow.maxLines,
+                                    maxLines = textMaxLines,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = titleModifier,
                                 )
@@ -425,7 +429,7 @@ fun OpenCodeListItem(
                                     text = subtitle,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = if (enabled) textBase else textWeaker,
-                                    maxLines = textFlow.maxLines,
+                                    maxLines = textMaxLines,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }

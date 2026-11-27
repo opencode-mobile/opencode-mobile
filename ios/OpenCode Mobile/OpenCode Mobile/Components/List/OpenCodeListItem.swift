@@ -122,7 +122,8 @@ struct OpenCodeListItemStatus: Equatable {
 
 /// How a standard row's title and subtitle use the width they have.
 enum OpenCodeListItemTextFlow {
-    /// One line each, ending in an ellipsis.
+    /// One line each, ending in an ellipsis. `.card` rows name a setting or destination, so
+    /// their title and plain subtitle wrap instead, keeping longer translations whole.
     case singleLine
     /// Every word shows, for rows whose text is the choice being made. The start decorator stays
     /// beside the first line. Put these rows in a container that scrolls.
@@ -482,6 +483,10 @@ struct OpenCodeListItem<Trailing: View>: View {
         }
     }
 
+    private var textLineLimit: Int? {
+        style == .card ? nil : textFlow.lineLimit
+    }
+
     private var standardContent: some View {
         HStack(alignment: textFlow.rowAlignment, spacing: 12) {
             startDecoratorContent
@@ -491,8 +496,8 @@ struct OpenCodeListItem<Trailing: View>: View {
                     titleText
                         .font(OpenCodeTypography.Style.body.font(scale: textScale).weight(.semibold))
                         .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
-                        .lineLimit(textFlow.lineLimit)
-                        .fixedSize(horizontal: false, vertical: textFlow == .wrapped)
+                        .lineLimit(textLineLimit)
+                        .fixedSize(horizontal: false, vertical: textLineLimit == nil)
                     if let titleTag {
                         OpenCodeTag(titleTag, size: .small)
                     }
@@ -509,8 +514,8 @@ struct OpenCodeListItem<Trailing: View>: View {
                     Text(openCode: subtitle)
                         .font(OpenCodeTypography.Style.caption.font(scale: textScale))
                         .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
-                        .lineLimit(textFlow.lineLimit)
-                        .fixedSize(horizontal: false, vertical: textFlow == .wrapped)
+                        .lineLimit(textLineLimit)
+                        .fixedSize(horizontal: false, vertical: textLineLimit == nil)
                 }
 
                 if let detailSegments {

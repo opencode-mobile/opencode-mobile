@@ -154,6 +154,7 @@ private struct AppOnboardingPageView: View {
                         OpenCodeListItem(
                             title: row.title,
                             subtitle: row.detail,
+                            textFlow: .wrapped,
                             startDecorator: .icon(
                                 AppOnboardingCopy.featureIcon(for: row.id),
                                 accessibilityLabel: row.title
