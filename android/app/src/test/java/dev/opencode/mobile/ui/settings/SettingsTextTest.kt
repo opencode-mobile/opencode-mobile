@@ -18,10 +18,11 @@ class SettingsTextTest {
         val summary = ServersSummary(count = 2, activeName = "servers.title")
 
         assertEquals(
-            UiText.resource(R.string.settings_servers_summary_saved_active, 2, UiText.verbatim("servers.title")),
+            UiText.plural(R.plurals.settings_servers_summary_saved_active, 2, 2, UiText.verbatim("servers.title")),
             summary.subtitle,
         )
         assertEquals("2 saved · servers.title active", summary.subtitle.english())
+        assertEquals("1 saved · servers.title active", ServersSummary(count = 1, activeName = "servers.title").subtitle.english())
     }
 
     @Test

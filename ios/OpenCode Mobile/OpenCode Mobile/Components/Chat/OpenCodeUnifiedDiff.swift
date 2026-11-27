@@ -8,6 +8,19 @@ enum UnifiedDiffRowKind: String, Sendable, Equatable {
     case deletion
 }
 
+extension UnifiedDiffRowKind {
+    /// Read before a row's line numbers.
+    var spokenName: String {
+        switch self {
+        case .hunk: String(localized: "component.unified_diff.row_kind.hunk", defaultValue: "hunk")
+        case .metadata: String(localized: "component.unified_diff.row_kind.metadata", defaultValue: "metadata")
+        case .context: String(localized: "component.unified_diff.row_kind.context", defaultValue: "context")
+        case .addition: String(localized: "component.unified_diff.row_kind.addition", defaultValue: "addition")
+        case .deletion: String(localized: "component.unified_diff.row_kind.deletion", defaultValue: "deletion")
+        }
+    }
+}
+
 enum UnifiedDiffContextMode: Sendable, Equatable {
     case collapsed
     case expanded
@@ -340,26 +353,30 @@ enum UnifiedDiffParser {
 struct OpenCodeUnifiedDiff: View {
     let file: FileDiff
 
-    /// "Modified file src/a.swift, 3 additions, 1 deletions".
+    /// "Modified file src/a.swift, 3 additions, 1 deletion".
     private var fileSummary: LocalizedStringResource {
+        Self.fileSummary(file)
+    }
+
+    static func fileSummary(_ file: FileDiff) -> LocalizedStringResource {
         let path = file.path
-        let additions = file.additions
-        let deletions = file.deletions
+        let additions = String(localized: "changes.count.additions", defaultValue: "\(file.additions) additions")
+        let deletions = String(localized: "changes.count.deletions", defaultValue: "\(file.deletions) deletions")
         return switch file.status {
         case .added:
             LocalizedStringResource(
                 "component.unified_diff.summary_added",
-                defaultValue: "Added file \(path), \(additions) additions, \(deletions) deletions"
+                defaultValue: "Added file \(path), \(additions), \(deletions)"
             )
         case .deleted:
             LocalizedStringResource(
                 "component.unified_diff.summary_deleted",
-                defaultValue: "Deleted file \(path), \(additions) additions, \(deletions) deletions"
+                defaultValue: "Deleted file \(path), \(additions), \(deletions)"
             )
         case .modified:
             LocalizedStringResource(
                 "component.unified_diff.summary_modified",
-                defaultValue: "Modified file \(path), \(additions) additions, \(deletions) deletions"
+                defaultValue: "Modified file \(path), \(additions), \(deletions)"
             )
         }
     }
@@ -517,7 +534,18 @@ struct OpenCodeUnifiedDiff: View {
     }
 
     private func accessibilityLabel(_ row: UnifiedDiffRow) -> String {
-        let location = [row.oldLine.map { "old line \($0)" }, row.newLine.map { "new line \($0)" }].compactMap { $0 }.joined(separator: ", ")
-        return "\(row.kind.rawValue), \(location), \(row.text)"
+        Self.accessibilityLabel(row)
+    }
+
+    /// "addition, new line 12, let x = 1": the kind, the line numbers, then the code.
+    static func accessibilityLabel(_ row: UnifiedDiffRow) -> String {
+        let oldLine = row.oldLine.map { line in
+            String(localized: "component.unified_diff.old_line", defaultValue: "old line \(line)")
+        }
+        let newLine = row.newLine.map { line in
+            String(localized: "component.unified_diff.new_line", defaultValue: "new line \(line)")
+        }
+        let location = [oldLine, newLine].compactMap { $0 }.joined(separator: ", ")
+        return "\(row.kind.spokenName), \(location), \(row.text)"
     }
 }

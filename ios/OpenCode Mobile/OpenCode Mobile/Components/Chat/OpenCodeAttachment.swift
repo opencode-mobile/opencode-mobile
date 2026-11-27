@@ -65,6 +65,11 @@ struct OpenCodeAttachmentChip: View {
     var onOpen: ((String) -> Void)?
     let onRemove: (String) -> Void
 
+    /// "notes.txt, Text": the file name, then its kind or upload detail.
+    static func accessibilityLabel(filename: String, detail: String) -> String {
+        String(localized: "component.attachment.accessibility_label", defaultValue: "\(filename), \(detail)")
+    }
+
     init(
         attachment: OpenCodeAttachmentPresentation,
         onOpen: ((String) -> Void)? = nil,
@@ -84,13 +89,13 @@ struct OpenCodeAttachmentChip: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(attachment.filename), \(attachment.detailLabel)")
+                .accessibilityLabel(Self.accessibilityLabel(filename: attachment.filename, detail: attachment.detailLabel))
                 .accessibilityAddTraits(.isButton)
                 .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: OpenCodeRadius.small), activate: { onOpen(attachment.id) })
             } else {
                 chipLabel
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(attachment.filename), \(attachment.detailLabel)")
+                    .accessibilityLabel(Self.accessibilityLabel(filename: attachment.filename, detail: attachment.detailLabel))
             }
             Button(action: { onRemove(attachment.id) }) {
                 OpenCodeIconImage(icon: .close, size: 20)
@@ -193,7 +198,7 @@ struct OpenCodeMessageAttachment: View {
         .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(attachment.filename), \(attachment.variant.label)")
+        .accessibilityLabel(OpenCodeAttachmentChip.accessibilityLabel(filename: attachment.filename, detail: attachment.variant.label))
     }
 }
 

@@ -86,7 +86,7 @@ struct OpenCodeReviewChangesPill: View {
     }
 
     static func fileLabel(changedFileCount: Int) -> String {
-        "\(changedFileCount) \(changedFileCount == 1 ? "file" : "files")"
+        String(localized: "component.review_changes_pill.files", defaultValue: "\(changedFileCount) files")
     }
 
     static func visibleSummary(changedFileCount: Int, additions: Int, deletions: Int) -> String {
@@ -102,8 +102,12 @@ struct OpenCodeReviewChangesPill: View {
             fileLabel: fileLabel(changedFileCount: changedFileCount),
             additionLabel: additions > 0 ? "+\(additions)" : nil,
             deletionLabel: deletions > 0 ? "−\(deletions)" : nil,
-            additionAccessibilityLabel: additions > 0 ? "\(additions) \(additions == 1 ? "addition" : "additions")" : nil,
-            deletionAccessibilityLabel: deletions > 0 ? "\(deletions) \(deletions == 1 ? "deletion" : "deletions")" : nil
+            additionAccessibilityLabel: additions > 0
+                ? String(localized: "changes.count.additions", defaultValue: "\(additions) additions")
+                : nil,
+            deletionAccessibilityLabel: deletions > 0
+                ? String(localized: "changes.count.deletions", defaultValue: "\(deletions) deletions")
+                : nil
         )
     }
 
@@ -140,7 +144,12 @@ private struct ReviewChangesPillSummary {
     }
 
     var accessibilityLabel: String {
-        ["Review changes", fileLabel, additionAccessibilityLabel, deletionAccessibilityLabel]
+        [
+            String(localized: "component.review_changes_pill.title", defaultValue: "Review changes"),
+            fileLabel,
+            additionAccessibilityLabel,
+            deletionAccessibilityLabel,
+        ]
             .compactMap { $0 }
             .joined(separator: ", ")
     }

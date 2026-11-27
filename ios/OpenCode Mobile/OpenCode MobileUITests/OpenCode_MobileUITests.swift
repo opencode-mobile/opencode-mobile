@@ -42,7 +42,7 @@ final class OpenCode_MobileUITests: XCTestCase {
         file.tap()
 
         XCTAssertTrue(app.staticTexts["Sources/App.swift"].waitForExistence(timeout: 5))
-        let diff = app.descendants(matching: .any)["Modified file Sources/App.swift, 1 additions, 1 deletions"]
+        let diff = app.descendants(matching: .any)["Modified file Sources/App.swift, 1 addition, 1 deletion"]
         let longLine = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS %@", "horizontalScrollingFixture")
         ).firstMatch

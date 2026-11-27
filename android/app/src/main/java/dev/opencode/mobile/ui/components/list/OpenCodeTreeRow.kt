@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -138,6 +140,8 @@ fun OpenCodeTreeRow(
         label = "treeRowDisclosure",
     )
     val resolvedSubtitle = subtitle?.takeIf { it.isNotBlank() }
+    val expandedLabel = stringResource(R.string.common_expanded)
+    val collapsedLabel = stringResource(R.string.common_collapsed)
     val description =
         listOfNotNull(
             title,
@@ -164,8 +168,8 @@ fun OpenCodeTreeRow(
                     contentDescription = description
                     this.selected = selected
                     when (disclosure) {
-                        OpenCodeTreeRowDisclosure.Expanded -> stateDescription = "Expanded"
-                        OpenCodeTreeRowDisclosure.Collapsed -> stateDescription = "Collapsed"
+                        OpenCodeTreeRowDisclosure.Expanded -> stateDescription = expandedLabel
+                        OpenCodeTreeRowDisclosure.Collapsed -> stateDescription = collapsedLabel
                         OpenCodeTreeRowDisclosure.None -> Unit
                     }
                 },

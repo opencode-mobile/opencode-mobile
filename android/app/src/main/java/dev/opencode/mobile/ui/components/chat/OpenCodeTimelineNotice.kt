@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -24,6 +25,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -72,6 +74,7 @@ fun OpenCodeTimelineNotice(
     val weak = openCodeColor("text-weak")
     val style = MaterialTheme.typography.bodySmall
     val description = listOfNotNull(label, shownValue).joinToString(" ")
+    val disclosure = stringResource(if (expanded) R.string.common_expanded else R.string.common_collapsed)
     Row(
         modifier =
             modifier
@@ -88,7 +91,7 @@ fun OpenCodeTimelineNotice(
                     contentDescription = description
                     if (toggle != null) {
                         role = Role.Button
-                        stateDescription = if (expanded) "Expanded" else "Collapsed"
+                        stateDescription = disclosure
                         onClick {
                             toggle()
                             true
