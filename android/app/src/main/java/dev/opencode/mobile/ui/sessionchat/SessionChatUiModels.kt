@@ -45,6 +45,29 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellOutputUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
+/**
+ * A model variant as shown in the composer chip and picker: the server's variant name verbatim,
+ * or the app's own "Default" (`session_chat_variant_default`, same key on iOS).
+ */
+object SessionChatVariantText {
+    fun label(variant: String?): UiText =
+        if (variant == null || variant.equals(ModelSelection.DefaultVariantLabel, ignoreCase = true)) {
+            UiText.resource(R.string.session_chat_variant_default)
+        } else {
+            UiText.verbatim(TitleCaseIdentifier.displayName(variant))
+        }
+}
+
+/** The composer's model notices; model names come from the server and stay arguments. */
+object SessionChatModelNotice {
+    val loadFailed: UiText get() = UiText.resource(R.string.session_chat_model_notice_load_failed)
+    val noneUsable: UiText get() = UiText.resource(R.string.session_chat_model_notice_none_usable)
+    val variantUnavailable: UiText get() = UiText.resource(R.string.session_chat_model_notice_variant_unavailable)
+
+    fun modelUnavailable(modelLabel: String): UiText =
+        UiText.resource(R.string.session_chat_model_notice_model_unavailable, UiText.verbatim(modelLabel))
+}
+
 data class SessionChatComposerState(
     val text: String = "",
     val attachments: List<Attachment> = emptyList(),
@@ -53,9 +76,9 @@ data class SessionChatComposerState(
     val selectedMode: String = SelectableAgent.DefaultId,
     val selectableAgents: List<SelectableAgent> = SelectableAgent.Fallback,
     val selectedVariant: String? = null,
-    val modelNotice: String? = null,
+    val modelNotice: UiText? = null,
     val isModelSelectionReady: Boolean = false,
-    val modelCatalogError: String? = null,
+    val modelCatalogError: UiText? = null,
     val agentMentions: List<AgentMention> = emptyList(),
     val fileMentions: List<FileMention> = emptyList(),
     val skillMentions: List<SkillMention> = emptyList(),
@@ -78,8 +101,9 @@ data class SessionChatComposerState(
     val selectedModelLabel: String
         get() = if (isModelSelectionReady) selectedModel?.modelLabel ?: "Model" else "Loading model…"
 
-    val selectedVariantLabel: String
-        get() = TitleCaseIdentifier.displayName(selectedVariant ?: ModelSelection.DefaultVariantLabel)
+    /** The server's variant name, or the app's own "Default". */
+    val selectedVariantLabel: UiText
+        get() = SessionChatVariantText.label(selectedVariant)
 
     val variantOptions: List<String>
         get() = listOf(ModelSelection.DefaultVariantLabel) + selectedModel?.option?.variants.orEmpty()
@@ -144,7 +168,7 @@ data class SessionRenameUiState(
     val isDialogVisible: Boolean = false,
     val draftTitle: String = "",
     val isSubmitting: Boolean = false,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
 )
 
 enum class SessionChatSnackbarTone {

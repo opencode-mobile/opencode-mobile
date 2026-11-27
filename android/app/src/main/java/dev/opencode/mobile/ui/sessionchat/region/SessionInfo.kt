@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
 import android.util.Log
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
@@ -22,6 +23,7 @@ import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionRenameUiState
@@ -186,7 +188,7 @@ class SessionInfo(
                 .trim()
         if (trimmed.isEmpty()) {
             _state.update {
-                it.copy(rename = it.rename.copy(errorMessage = EMPTY_TITLE_ERROR))
+                it.copy(rename = it.rename.copy(errorMessage = UiText.resource(R.string.home_session_error_empty_title)))
             }
             return
         }
@@ -538,12 +540,13 @@ class SessionInfo(
         worktree: String,
     ): Boolean = boundSessionId == sessionId && boundWorktree == worktree
 
-    private fun renameErrorMessage(throwable: Throwable): String =
+    /** Server text stays verbatim; the app's own fallbacks are keyed (same keys as Home). */
+    private fun renameErrorMessage(throwable: Throwable): UiText =
         when (throwable) {
-            is SessionError.Http -> throwable.message ?: "Request failed"
-            is SessionError.Transport -> "Unable to reach the server"
-            is SessionError.Decoding -> "Unable to read server response"
-            else -> throwable.message ?: "Something went wrong"
+            is SessionError.Http -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_request_failed)
+            is SessionError.Transport -> UiText.resource(R.string.connection_error_unreachable)
+            is SessionError.Decoding -> UiText.resource(R.string.home_session_error_unreadable_response)
+            else -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_generic)
         }
 
     private fun logI(message: String) {
@@ -564,7 +567,6 @@ class SessionInfo(
 
     companion object {
         private const val TAG = "SessionInfo"
-        private const val EMPTY_TITLE_ERROR = "Enter a session title"
         const val ARCHIVE_ERROR = "Couldn't archive session."
         const val DELETE_ERROR = "Couldn't delete session."
     }

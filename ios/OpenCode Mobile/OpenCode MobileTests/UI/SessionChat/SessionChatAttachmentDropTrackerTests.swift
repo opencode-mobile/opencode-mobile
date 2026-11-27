@@ -22,7 +22,7 @@ struct SessionChatAttachmentDropTrackerTests {
         tracker.update(inside: true, items: { image }, context: { noImages })
 
         #expect(tracker.summary?.rejected == true)
-        #expect(tracker.summary?.subtitle == AttachmentDropRouting.imageUnsupportedMessage)
+        #expect(tracker.summary?.subtitle == .reason(AttachmentDropRouting.imageUnsupportedMessage))
         #expect(tracker.operation == .forbidden)
         let attaches = tracker.finish()
         #expect(!attaches)

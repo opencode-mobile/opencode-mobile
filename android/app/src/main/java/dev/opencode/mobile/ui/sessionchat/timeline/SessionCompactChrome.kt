@@ -11,9 +11,9 @@ object SessionCompactChrome {
     val statusLabel: UiText = UiText.resource(R.string.session_chat_compact_status)
 
     /**
-     * The same label for the working indicator, whose session status labels are still plain
-     * strings end to end (shared with the session status chrome). Moves to [statusLabel] when
-     * that pipeline carries UiText.
+     * Sentinel for the working indicator, whose session status labels are still plain strings
+     * end to end (shared with the session status chrome). Not shown: the turn pill shows
+     * [statusLabel] for it. Goes away when that pipeline carries UiText.
      */
     const val STATUS_LABEL = "Compacting…"
 

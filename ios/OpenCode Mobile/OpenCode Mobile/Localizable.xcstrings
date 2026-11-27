@@ -1019,6 +1019,152 @@
         }
       }
     },
+    "attachment_drop.adds_to_draft" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds them to the message you are writing"
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_files" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop to attach files"
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_files_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_images" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop to attach images"
+          }
+        }
+      }
+    },
+    "attachment_drop.attach_images_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld image"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Drop to attach %lld images"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "attachment_drop.reject_many" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't attach these"
+          }
+        }
+      }
+    },
+    "attachment_drop.reject_one" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't attach this"
+          }
+        }
+      }
+    },
+    "attachment_drop.skipped_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld will be skipped"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld will be skipped"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "attachment_drop.skipped_detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "attachment_drop.some_skipped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some will be skipped"
+          }
+        }
+      }
+    },
     "bottom_sheet.close" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5706,6 +5852,17 @@
         }
       }
     },
+    "files.error.server_status" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server responded with %lld."
+          }
+        }
+      }
+    },
     "files.find_error" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10214,6 +10371,50 @@
         }
       }
     },
+    "session_chat.model_notice.load_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to load models. Tap Model to retry."
+          }
+        }
+      }
+    },
+    "session_chat.model_notice.model_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected model is unavailable. Using %@."
+          }
+        }
+      }
+    },
+    "session_chat.model_notice.none_usable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usable models are available. Tap Model to retry."
+          }
+        }
+      }
+    },
+    "session_chat.model_notice.variant_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remembered Variant is unavailable. Using Default."
+          }
+        }
+      }
+    },
     "session_chat.more_options" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10232,6 +10433,61 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Current worktree"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't move the session: %@"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.menu_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to worktree…"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.moves_after_turn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moves to %@ after this turn."
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.no_other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This project has no other worktrees"
+          }
+        }
+      }
+    },
+    "session_chat.move_worktree.sheet_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to worktree"
           }
         }
       }
@@ -10480,6 +10736,50 @@
         }
       }
     },
+    "session_chat.side_question.copied" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Answer copied"
+          }
+        }
+      }
+    },
+    "session_chat.side_question.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/btw failed: “%@”"
+          }
+        }
+      }
+    },
+    "session_chat.side_question.unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/btw needs a newer opencode server."
+          }
+        }
+      }
+    },
+    "session_chat.side_question.unsupported" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "/btw needs an opencode v2 server that answers side questions. This server can't answer without adding to the conversation."
+          }
+        }
+      }
+    },
     "session_chat.suggestion.badge_mcp" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10554,6 +10854,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "session_chat.variant_default" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
           }
         }
       }

@@ -247,7 +247,7 @@ final class SessionChatCommands {
         notifyChange()
         state.pendingSessionReplace = ChildSessionNavigationTarget(
             sessionID: OptimisticSessionCreate.placeholderSessionID,
-            sessionTitle: "New Session",
+            sessionTitle: OptimisticSessionCreate.placeholderTitle,
             worktree: worktree,
             optimisticNavigationInstanceID: UUID()
         )

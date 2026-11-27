@@ -305,7 +305,7 @@ class SessionChatCommands(
                 pendingSessionReplace =
                     ChildSessionNavigationTarget(
                         sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                        sessionTitle = "New Session",
+                        sessionTitle = OptimisticSessionCreate.PLACEHOLDER_TITLE,
                         worktree = worktree,
                         optimisticNavigationInstanceId =
                             java.util.UUID

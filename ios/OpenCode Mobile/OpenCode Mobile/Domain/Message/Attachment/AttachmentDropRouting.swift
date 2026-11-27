@@ -29,10 +29,24 @@ nonisolated enum AttachmentDropRoute: Equatable, Sendable {
     case skipped(reason: String)
 }
 
+/// Drag-over card text: app text from the String Catalog, or a skip reason shown as is.
+nonisolated enum AttachmentDropText: Equatable, Sendable {
+    case localized(LocalizedStringResource)
+    /// The routing reason, already a display string.
+    case reason(String)
+
+    var resolved: String {
+        switch self {
+        case let .localized(resource): String(localized: resource)
+        case let .reason(reason): reason
+        }
+    }
+}
+
 /// The drag-over card: what a drop would attach, or why nothing can be.
 nonisolated struct AttachmentDropSummary: Equatable, Sendable {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringResource
+    let subtitle: AttachmentDropText
     /// Kinds of the first accepted items, at most `AttachmentDropRouting.maxPreviews`.
     let previews: [AttachmentDropKind]
     /// Nothing in the drag can be attached: the card shows its error style.
@@ -46,7 +60,6 @@ nonisolated enum AttachmentDropRouting {
     static let imageUnsupportedMessage = "This model does not support image attachments."
     static let pdfUnsupportedMessage = "This model does not support PDF attachments."
     static let maxPreviews = 4
-    private static let addsToDraft = "Adds them to the message you are writing"
 
     static func route(_ item: AttachmentDropItem, context: AttachmentDropContext) -> AttachmentDropRoute {
         if item.kind == .folder { return .skipped(reason: folderMessage) }
@@ -85,25 +98,48 @@ nonisolated enum AttachmentDropRouting {
         let skipped = routed.count - accepted.count
         guard !accepted.isEmpty else {
             return AttachmentDropSummary(
-                title: countKnown && items.count == 1 ? "Can't attach this" : "Can't attach these",
-                subtitle: firstReason ?? "",
+                title: countKnown && items.count == 1
+                    ? LocalizedStringResource("attachment_drop.reject_one", defaultValue: "Can't attach this")
+                    : LocalizedStringResource("attachment_drop.reject_many", defaultValue: "Can't attach these"),
+                subtitle: .reason(firstReason ?? ""),
                 previews: [],
                 rejected: true
             )
         }
-        let noun = accepted.allSatisfy { $0.kind == .image } ? "image" : "file"
-        let title = countKnown
-            ? "Drop to attach \(accepted.count) \(noun)\(accepted.count == 1 ? "" : "s")"
-            : "Drop to attach \(noun)s"
-        let subtitle: String
+        let images = accepted.allSatisfy { $0.kind == .image }
+        let count = accepted.count
+        let title: LocalizedStringResource = switch (countKnown, images) {
+        case (true, true):
+            LocalizedStringResource("attachment_drop.attach_images_count", defaultValue: "Drop to attach \(count) images")
+        case (true, false):
+            LocalizedStringResource("attachment_drop.attach_files_count", defaultValue: "Drop to attach \(count) files")
+        case (false, true):
+            LocalizedStringResource("attachment_drop.attach_images", defaultValue: "Drop to attach images")
+        case (false, false):
+            LocalizedStringResource("attachment_drop.attach_files", defaultValue: "Drop to attach files")
+        }
+        let subtitle: LocalizedStringResource
         if let firstReason {
-            subtitle = countKnown ? "\(skipped) will be skipped · \(firstReason)" : "Some will be skipped · \(firstReason)"
+            // The reason is still English routing text (#886 follow-up), passed as an argument.
+            let skippedText = countKnown
+                ? String(localized: LocalizedStringResource(
+                    "attachment_drop.skipped_count",
+                    defaultValue: "\(skipped) will be skipped"
+                ))
+                : String(localized: "attachment_drop.some_skipped", defaultValue: "Some will be skipped")
+            subtitle = LocalizedStringResource(
+                "attachment_drop.skipped_detail",
+                defaultValue: "\(skippedText) · \(firstReason)"
+            )
         } else {
-            subtitle = addsToDraft
+            subtitle = LocalizedStringResource(
+                "attachment_drop.adds_to_draft",
+                defaultValue: "Adds them to the message you are writing"
+            )
         }
         return AttachmentDropSummary(
             title: title,
-            subtitle: subtitle,
+            subtitle: .localized(subtitle),
             previews: accepted.prefix(maxPreviews).map(\.kind),
             rejected: false
         )

@@ -11,12 +11,25 @@ struct SessionChatComposerStateTests {
             selectedMode: SelectableAgent.defaultID,
             selectedVariant: "high"
         )
-        #expect(state.selectedVariantLabel == "High")
+        #expect(state.selectedVariantLabel.resolved == "High")
         state.selectedVariant = "very-high"
         #expect(state.selectedVariant == "very-high")
-        #expect(state.selectedVariantLabel == "Very High")
+        #expect(state.selectedVariantLabel.resolved == "Very High")
         state.selectedVariant = nil
-        #expect(state.selectedVariantLabel == "Default")
+        #expect(state.selectedVariantLabel.resolved == "Default")
+    }
+
+    /// The server's variant names stay verbatim; only the app's own Default is looked up.
+    @Test func variantText_keysOnlyTheAppDefault() {
+        #expect(SessionChatVariantText.label("high") == .verbatim("High"))
+        for variant in [nil, "Default", "default"] as [String?] {
+            guard case let .localized(resource) = SessionChatVariantText.label(variant).storage else {
+                Issue.record("\(variant ?? "nil") is not localised")
+                continue
+            }
+            #expect(resource.key == "session_chat.variant_default")
+            #expect(String(localized: resource) == "Default")
+        }
     }
 
     @Test func selectedModelLabel_titleCasesIdFallback() {
