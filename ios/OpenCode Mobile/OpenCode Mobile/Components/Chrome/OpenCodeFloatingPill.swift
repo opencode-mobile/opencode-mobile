@@ -60,11 +60,11 @@ enum OpenCodeFloatingPillState: CaseIterable, Equatable {
     /// Spoken after the label.
     var spokenName: String {
         switch self {
-        case .live: "In progress"
-        case .ready: "Ready"
-        case .needsAttention: "Needs attention"
-        case .error: "Error"
-        case .done: "Done"
+        case .live: String(localized: "component.floating_pill.state.live", defaultValue: "In progress")
+        case .ready: String(localized: "component.floating_pill.state.ready", defaultValue: "Ready")
+        case .needsAttention: String(localized: "component.floating_pill.state.needs_attention", defaultValue: "Needs attention")
+        case .error: String(localized: "component.floating_pill.state.error", defaultValue: "Error")
+        case .done: String(localized: "component.floating_pill.state.done", defaultValue: "Done")
         }
     }
 }
@@ -165,11 +165,15 @@ enum OpenCodeFloatingPillStyle {
         state: OpenCodeFloatingPillState,
         override: String? = nil
     ) -> String {
-        override ?? "\(layout.label), \(state.spokenName)"
+        if let override { return override }
+        let label = layout.label
+        let spokenState = state.spokenName
+        return String(localized: "component.floating_pill.accessibility_label", defaultValue: "\(label), \(spokenState)")
     }
 
     static func closeAccessibilityLabel(layout: OpenCodeFloatingPillLayout, override: String? = nil) -> String {
-        "Dismiss \(override ?? layout.label)"
+        let label = override ?? layout.label
+        return String(localized: "component.floating_pill.dismiss", defaultValue: "Dismiss \(label)")
     }
 }
 

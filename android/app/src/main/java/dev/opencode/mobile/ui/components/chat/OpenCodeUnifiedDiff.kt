@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -32,6 +33,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -43,10 +45,14 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.theme.openCodeTextScaled
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 
 enum class UnifiedDiffRowKind { Hunk, Metadata, Context, Addition, Deletion }
 
@@ -544,12 +550,13 @@ private fun UnifiedDiffRowView(
             UnifiedDiffRowKind.Hunk, UnifiedDiffRowKind.Metadata -> openCodeColor("syntax-diff-unknown")
             UnifiedDiffRowKind.Context -> MaterialTheme.colorScheme.onSurface
         }
+    val rowDescription = row.accessibilityLabel(ResourcesUiTextLookup(LocalResources.current))
     Row(
         modifier =
             modifier
                 .background(background)
                 .heightIn(min = 20.dp)
-                .clearAndSetSemantics { contentDescription = row.accessibilityLabel() },
+                .clearAndSetSemantics { contentDescription = rowDescription },
     ) {
         Text(row.oldLine?.toString().orEmpty(), Modifier.width(gutterWidth), maxLines = 1, softWrap = false, style = CodeTextStyle)
         Text(row.newLine?.toString().orEmpty(), Modifier.width(gutterWidth), maxLines = 1, softWrap = false, style = CodeTextStyle)
@@ -586,5 +593,21 @@ private fun UnifiedDiffRowKind.marker() =
         else -> ""
     }
 
-private fun UnifiedDiffRow.accessibilityLabel() =
-    listOfNotNull(kind.name.lowercase(), oldLine?.let { "old line $it" }, newLine?.let { "new line $it" }, text).joinToString(", ")
+/** "addition, new line 12, let x = 1": the kind, the line numbers, then the code. */
+internal fun UnifiedDiffRow.accessibilityLabel(lookup: UiTextLookup): String =
+    listOfNotNull(
+        UiText.resource(kind.spokenName()).resolve(lookup),
+        oldLine?.let { UiText.resource(R.string.component_unified_diff_old_line, it).resolve(lookup) },
+        newLine?.let { UiText.resource(R.string.component_unified_diff_new_line, it).resolve(lookup) },
+        text,
+    ).joinToString(", ")
+
+@StringRes
+private fun UnifiedDiffRowKind.spokenName(): Int =
+    when (this) {
+        UnifiedDiffRowKind.Hunk -> R.string.component_unified_diff_row_kind_hunk
+        UnifiedDiffRowKind.Metadata -> R.string.component_unified_diff_row_kind_metadata
+        UnifiedDiffRowKind.Context -> R.string.component_unified_diff_row_kind_context
+        UnifiedDiffRowKind.Addition -> R.string.component_unified_diff_row_kind_addition
+        UnifiedDiffRowKind.Deletion -> R.string.component_unified_diff_row_kind_deletion
+    }

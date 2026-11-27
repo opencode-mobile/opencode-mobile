@@ -8,6 +8,19 @@ enum UnifiedDiffRowKind: String, Sendable, Equatable {
     case deletion
 }
 
+extension UnifiedDiffRowKind {
+    /// Read before a row's line numbers.
+    var spokenName: String {
+        switch self {
+        case .hunk: String(localized: "component.unified_diff.row_kind.hunk", defaultValue: "hunk")
+        case .metadata: String(localized: "component.unified_diff.row_kind.metadata", defaultValue: "metadata")
+        case .context: String(localized: "component.unified_diff.row_kind.context", defaultValue: "context")
+        case .addition: String(localized: "component.unified_diff.row_kind.addition", defaultValue: "addition")
+        case .deletion: String(localized: "component.unified_diff.row_kind.deletion", defaultValue: "deletion")
+        }
+    }
+}
+
 enum UnifiedDiffContextMode: Sendable, Equatable {
     case collapsed
     case expanded
@@ -521,7 +534,18 @@ struct OpenCodeUnifiedDiff: View {
     }
 
     private func accessibilityLabel(_ row: UnifiedDiffRow) -> String {
-        let location = [row.oldLine.map { "old line \($0)" }, row.newLine.map { "new line \($0)" }].compactMap { $0 }.joined(separator: ", ")
-        return "\(row.kind.rawValue), \(location), \(row.text)"
+        Self.accessibilityLabel(row)
+    }
+
+    /// "addition, new line 12, let x = 1": the kind, the line numbers, then the code.
+    static func accessibilityLabel(_ row: UnifiedDiffRow) -> String {
+        let oldLine = row.oldLine.map { line in
+            String(localized: "component.unified_diff.old_line", defaultValue: "old line \(line)")
+        }
+        let newLine = row.newLine.map { line in
+            String(localized: "component.unified_diff.new_line", defaultValue: "new line \(line)")
+        }
+        let location = [oldLine, newLine].compactMap { $0 }.joined(separator: ", ")
+        return "\(row.kind.spokenName), \(location), \(row.text)"
     }
 }

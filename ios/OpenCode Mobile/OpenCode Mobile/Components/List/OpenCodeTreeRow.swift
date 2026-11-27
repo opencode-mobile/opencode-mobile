@@ -186,8 +186,10 @@ struct OpenCodeTreeRow: View {
     private var accessibilityValue: String {
         switch kind {
         case let .folder(isExpanded):
-            if state == .loading { return "Loading" }
-            return isExpanded ? "Expanded" : "Collapsed"
+            if state == .loading { return String(localized: "component.tree_row.loading", defaultValue: "Loading") }
+            return isExpanded
+                ? String(localized: "common.expanded", defaultValue: "Expanded")
+                : String(localized: "common.collapsed", defaultValue: "Collapsed")
         case .file:
             return ""
         }

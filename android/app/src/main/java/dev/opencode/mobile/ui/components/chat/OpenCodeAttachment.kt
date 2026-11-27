@@ -102,6 +102,7 @@ fun OpenCodeAttachmentChip(
     enabled: Boolean = true,
 ) {
     val kindLabel = attachment.variant.kindLabel()
+    val description = stringResource(R.string.component_attachment_accessibility_label, attachment.filename, kindLabel)
     val uploading = attachment.uploadState as? OpenCodeAttachmentUploadState.InProgress
     Box(
         modifier =
@@ -133,7 +134,7 @@ fun OpenCodeAttachmentChip(
                 attachment,
                 Modifier
                     .weight(1f)
-                    .semantics { contentDescription = "${attachment.filename}, $kindLabel" },
+                    .semantics { contentDescription = description },
                 detail = uploading?.let { uploadDetail(it) },
             )
             IconButton(onClick = { onRemove(attachment.id) }, enabled = enabled, modifier = Modifier.size(36.dp)) {
@@ -194,6 +195,7 @@ private fun OpenCodeMessageAttachmentChip(
     modifier: Modifier,
 ) {
     val kindLabel = attachment.variant.kindLabel()
+    val description = stringResource(R.string.component_attachment_accessibility_label, attachment.filename, kindLabel)
     Row(
         modifier =
             modifier
@@ -201,7 +203,7 @@ private fun OpenCodeMessageAttachmentChip(
                 .border(1.dp, openCodeColor("border-weaker-base"), AttachmentShape)
                 .background(openCodeColor("surface-raised-base"), AttachmentShape)
                 .padding(8.dp)
-                .semantics { contentDescription = "${attachment.filename}, $kindLabel" },
+                .semantics { contentDescription = description },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {

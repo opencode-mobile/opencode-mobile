@@ -19,8 +19,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.resolve
 
 /** "Thinking" while a thought is streaming, or "Thought · Ns" once it settles. */
 @Composable
@@ -30,7 +33,7 @@ fun OpenCodeReasoningRow(
     durationLabel: String? = null,
     onClick: (() -> Unit)? = null,
 ) {
-    val label = reasoningLabel(state, durationLabel)
+    val label = reasoningLabel(state, durationLabel).resolve()
     val collapsed = state == OpenCodeChatActivityState.Collapsed
     Row(
         modifier =
@@ -76,13 +79,17 @@ fun OpenCodeReasoningRow(
     }
 }
 
-private fun reasoningLabel(
+internal fun reasoningLabel(
     state: OpenCodeChatActivityState,
     durationLabel: String?,
-): String =
+): UiText =
     when (state) {
-        OpenCodeChatActivityState.Working -> "Thinking"
+        OpenCodeChatActivityState.Working -> UiText.resource(R.string.component_thinking)
         OpenCodeChatActivityState.Expanded ->
-            if (durationLabel.isNullOrBlank()) "Thought" else "Thought · $durationLabel"
-        OpenCodeChatActivityState.Idle, OpenCodeChatActivityState.Collapsed -> "Thought"
+            if (durationLabel.isNullOrBlank()) {
+                UiText.resource(R.string.tool_title_thought)
+            } else {
+                UiText.resource(R.string.component_reasoning_row_thought_duration, UiText.verbatim(durationLabel))
+            }
+        OpenCodeChatActivityState.Idle, OpenCodeChatActivityState.Collapsed -> UiText.resource(R.string.tool_title_thought)
     }

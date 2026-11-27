@@ -1451,6 +1451,48 @@
     <string name="component_activity_status_running">running</string>
     <!-- Where a subagent is, on task and child session rows; shown and spoken in lowercase after the title. -->
     <string name="component_subagent_state_running">running</string>
+    <!-- Spoken after a todo's text. %1$s is the todo, %2$s its status, such as in progress. -->
+    <string name="component_todo_item_accessibility_label">%1$s, %2$s</string>
+    <string name="component_todo_item_status_pending">pending</string>
+    <string name="component_todo_item_status_in_progress">in progress</string>
+    <string name="component_todo_item_status_completed">completed</string>
+    <string name="component_todo_item_status_cancelled">cancelled</string>
+    <!-- Accessibility label of the todos pill. %1$d completed todos, %2$d todos in total. -->
+    <string name="component_todos_pill_accessibility_label">Session todos, %1$d of %2$d completed</string>
+    <!-- Accessibility label of the todos pill. %1$d completed todos, %2$d todos in total, %3$s the todo in progress. -->
+    <string name="component_todos_pill_accessibility_label_active">Session todos, %1$d of %2$d completed, %3$s</string>
+    <!-- A settled thought. %1$s is how long it took, such as 4s. -->
+    <string name="component_reasoning_row_thought_duration">Thought · %1$s</string>
+    <!-- Accessibility hint on a thought row that opens the full thought. -->
+    <string name="component_reasoning_row_shows_thought_hint">Shows the full thought</string>
+    <!-- Accessibility: a diff row's kind, read before its line numbers. -->
+    <string name="component_unified_diff_row_kind_hunk">hunk</string>
+    <string name="component_unified_diff_row_kind_metadata">metadata</string>
+    <string name="component_unified_diff_row_kind_context">context</string>
+    <string name="component_unified_diff_row_kind_addition">addition</string>
+    <string name="component_unified_diff_row_kind_deletion">deletion</string>
+    <string name="component_unified_diff_old_line">old line %1$d</string>
+    <string name="component_unified_diff_new_line">new line %1$d</string>
+    <!-- Accessibility: a floating pill's state, read after its label. -->
+    <string name="component_floating_pill_state_live">In progress</string>
+    <string name="component_floating_pill_state_ready">Ready</string>
+    <string name="component_floating_pill_state_needs_attention">Needs attention</string>
+    <string name="component_floating_pill_state_error">Error</string>
+    <string name="component_floating_pill_state_done">Done</string>
+    <!-- %1$s is the pill's label, %2$s its state, such as Ready. -->
+    <string name="component_floating_pill_accessibility_label">%1$s, %2$s</string>
+    <!-- Close button of a floating pill. %1$s is the pill's label. -->
+    <string name="component_floating_pill_dismiss">Dismiss %1$s</string>
+    <!-- Accessibility state of a folder or a toggling row. -->
+    <string name="common_expanded">Expanded</string>
+    <string name="common_collapsed">Collapsed</string>
+    <!-- Accessibility value of a folder that is loading its children. -->
+    <string name="component_tree_row_loading">Loading</string>
+    <!-- Accessibility hints of a timeline notice whose value can expand. -->
+    <string name="component_timeline_notice_shows_one_line_hint">Shows one line</string>
+    <string name="component_timeline_notice_shows_full_value_hint">Shows the full value</string>
+    <!-- Accessibility label of an attachment. %1$s is the file name, %2$s its kind or detail, such as Image. -->
+    <string name="component_attachment_accessibility_label">%1$s, %2$s</string>
     <string name="component_subagent_state_waiting_for_input">waiting for input</string>
     <string name="component_subagent_state_done">done</string>
     <string name="component_subagent_state_failed">failed</string>

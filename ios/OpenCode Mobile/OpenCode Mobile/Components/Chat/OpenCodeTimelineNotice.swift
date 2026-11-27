@@ -101,7 +101,7 @@ struct OpenCodeTimelineNotice: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
         .accessibilityAddTraits(tapAction != nil ? .isButton : [])
-        .accessibilityHint(toggles ? (isExpanded ? "Shows one line" : "Shows the full value") : "")
+        .accessibilityHint(accessibilityHint)
         .openCodeKeyboardFocusable(
             .insetRoundedRectangle(cornerRadius: OpenCodeRadius.small),
             enabled: tapAction != nil,
@@ -111,6 +111,13 @@ struct OpenCodeTimelineNotice: View {
 
     private var accessibilityText: String {
         [label, value, tag].compactMap { $0 }.joined(separator: " ")
+    }
+
+    private var accessibilityHint: Text {
+        guard toggles else { return Text(verbatim: "") }
+        return isExpanded
+            ? Text("component.timeline_notice.shows_one_line_hint")
+            : Text("component.timeline_notice.shows_full_value_hint")
     }
 
     static let movedGlyph = "\u{21B3}"
