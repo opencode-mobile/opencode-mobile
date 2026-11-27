@@ -12529,17 +12529,19 @@
       }
     },
     "settings.app_lock.subtitle_available" : {
+      "comment" : "Uses Apple's names for the unlock methods. Android words the same key with its own names.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Require your face, fingerprint or device passcode when the app returns from the background"
+            "value" : "Require Face ID, Touch ID or your passcode when the app returns from the background"
           }
         }
       }
     },
     "settings.app_lock.subtitle_unavailable" : {
+      "comment" : "Uses Apple's word passcode. Android words the same key as a screen lock.",
       "extractionState" : "manual",
       "localizations" : {
         "en" : {

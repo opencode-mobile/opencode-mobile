@@ -1152,8 +1152,10 @@
     <string name="settings_clear_session_cache_dialog_message">Removes cached sessions and messages. Your connection and credentials stay.</string>
     <string name="settings_clear">Clear</string>
     <string name="settings_app_lock_title">App Lock</string>
-    <string name="settings_app_lock_subtitle_available">Require your face, fingerprint or device passcode when the app returns from the background</string>
-    <string name="settings_app_lock_subtitle_unavailable">Set a device passcode to use App Lock</string>
+    <!-- App Lock uses each platform's own names for the unlock methods, so the
+         English differs from iOS on purpose. -->
+    <string name="settings_app_lock_subtitle_available">Require your fingerprint, face or screen lock when the app returns from the background</string>
+    <string name="settings_app_lock_subtitle_unavailable">Set a screen lock on this device to use App Lock</string>
     <string name="settings_privacy_policy_title">Privacy Policy</string>
     <string name="settings_privacy_policy_subtitle">How the apps handle data</string>
     <string name="settings_analytics_title">Analytics &amp; crash reports</string>
