@@ -11352,6 +11352,18 @@
         }
       }
     },
+    "session_chat.send_stalled" : {
+      "comment" : "Snackbar when a prompt upload has gone unanswered for a while; its action retries the send.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Still sending…"
+          }
+        }
+      }
+    },
     "session_chat.shell.duration_hours" : {
       "extractionState" : "manual",
       "localizations" : {

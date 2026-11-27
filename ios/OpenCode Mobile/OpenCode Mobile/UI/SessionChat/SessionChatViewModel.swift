@@ -950,7 +950,9 @@ final class SessionChatViewModel {
     static var branchCopiedMessage: String {
         String(localized: "session_chat.branch_copied", defaultValue: "Branch name copied")
     }
-    static let sendStalledMessage = "Still sending…"
+    static var sendStalledMessage: String {
+        String(localized: "session_chat.send_stalled", defaultValue: "Still sending…")
+    }
 
     /// Retry on the "Still sending…" snackbar.
     func retryStalledSend() {

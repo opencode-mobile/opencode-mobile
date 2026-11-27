@@ -65,6 +65,7 @@ const ANDROID_ONLY = new Set([
 const IOS_ONLY = new Set([
   "server_health.error_log_date_time", // iOS joins date and time itself; Android's DateUtils formats both
   "attachment.error.invalid_data", // iOS validates a loaded data: URL against its type; Android builds its own
+  "session_chat.send_stalled", // iOS-only stalled-upload snackbar with Retry (#1002); Android has no stall watch yet
 ]);
 
 const ANDROID_PLACEHOLDER = /%(?:\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?[sdfxXoeEgGc]/g;
