@@ -3025,6 +3025,18 @@
         }
       }
     },
+    "component.message_time.yesterday" : {
+      "comment" : "The day under a message's send time when it was sent yesterday, shown by dragging the message and read by screen readers.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yesterday"
+          }
+        }
+      }
+    },
     "component.outgoing_message.label" : {
       "extractionState" : "manual",
       "localizations" : {

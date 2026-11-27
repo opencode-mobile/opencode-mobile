@@ -1,5 +1,9 @@
 package dev.opencode.mobile.ui.components
 
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.time.LocalizedDateTimeFormat
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -26,7 +30,13 @@ class OpenCodeMessageTimeRevealTest {
     private fun time(
         sentAt: Long,
         is24Hour: Boolean = false,
-    ) = OpenCodeMessageTime.of(sentAt, nowEpochMs = now, zone = utc, locale = Locale.US, is24Hour = is24Hour)
+    ) = OpenCodeMessageTime.of(
+        sentAt,
+        nowEpochMs = now,
+        // en-US patterns as Android's CLDR data gives them for "hm" and "Hm".
+        formats = LocalizedDateTimeFormat(Locale.US, utc, timePattern = if (is24Hour) "HH:mm" else "h:mm a"),
+        yesterday = YESTERDAY,
+    )
 
     @Test
     fun todayShowsOnlyTheTime() {
@@ -60,17 +70,40 @@ class OpenCodeMessageTimeRevealTest {
 
     @Test
     fun olderShortDateFollowsTheLocalesPattern() {
-        val german =
+        assertEquals("22. Okt.", german(at(2026, 10, 22, 10, 0)).day)
+        assertEquals("10:00", german(at(2026, 10, 22, 10, 0)).time)
+        assertEquals("Dienstag", german(at(2026, 10, 27, 10, 0)).day)
+        assertEquals("Gestern", german(at(2026, 10, 28, 21, 5)).day)
+    }
+
+    @Test
+    fun timeFollowsTheLocalesPattern() {
+        // Korean puts the day period first ("a h:mm" for the "hm" skeleton).
+        val korean =
             OpenCodeMessageTime.of(
-                at(2026, 10, 22, 10, 0),
+                at(2026, 10, 29, 21, 5),
                 nowEpochMs = now,
-                zone = utc,
-                locale = Locale.GERMANY,
-                is24Hour = true,
-                monthDayPattern = "d. MMM",
+                formats = LocalizedDateTimeFormat(Locale.KOREA, utc, timePattern = "a h:mm"),
+                yesterday = YESTERDAY,
             )
-        assertEquals("22. Okt.", german.day)
-        assertEquals("10:00", german.time)
+        assertEquals("오후 9:05", korean.time)
+    }
+
+    @Test
+    fun yesterdayIsTheKeyedString() {
+        assertEquals("Yesterday", UiText.resource(R.string.component_message_time_yesterday).english())
+    }
+
+    private fun german(sentAt: Long) =
+        OpenCodeMessageTime.of(
+            sentAt,
+            nowEpochMs = now,
+            formats = LocalizedDateTimeFormat(Locale.GERMANY, utc, monthDayPattern = "d. MMM", timePattern = "HH:mm"),
+            yesterday = "Gestern",
+        )
+
+    private companion object {
+        const val YESTERDAY = "Yesterday"
     }
 
     @Test
