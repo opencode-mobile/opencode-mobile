@@ -247,6 +247,8 @@ struct SessionChatMoveToWorktreeTests {
         let plain = SessionError.http(statusCode: 404, message: "Session not found")
         #expect(SessionChatMoveToWorktree.serverMessage(plain) == "Session not found")
         #expect(SessionChatMoveToWorktree.serverMessage(SessionError.transport("Offline")) == "Offline")
+        let silent = SessionError.http(statusCode: 500, message: #"{"_tag":"UnknownError"}"#)
+        #expect(SessionChatMoveToWorktree.serverMessage(silent) == "Request failed")
     }
 
     @Test func copyMatchesTheContract() {

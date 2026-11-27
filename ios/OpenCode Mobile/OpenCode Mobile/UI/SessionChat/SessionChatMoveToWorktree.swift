@@ -32,12 +32,13 @@ enum SessionChatMoveToWorktree {
 
     /// The server's own words for a failed move. A 400 is `InvalidRequestError`
     /// (`{"_tag":"InvalidRequestError","message":"…"}`), which the shared mapping keeps as the
-    /// raw body.
+    /// raw body. A JSON body with no message reads the app's own "Request failed".
     static func serverMessage(_ error: Error) -> String {
         if case let .http(_, body)? = error as? SessionError, let body {
             let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.hasPrefix("{") {
-                return ServerErrorMessage.bodyMessage(trimmed) ?? "Request failed"
+                return ServerErrorMessage.bodyMessage(trimmed)
+                    ?? String(localized: "session_chat.activity.request_failed", defaultValue: "Request failed")
             }
             if !trimmed.isEmpty { return trimmed }
         }
