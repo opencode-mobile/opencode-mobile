@@ -29,7 +29,6 @@ final class SessionChatComposer {
     private var uploadTasks: [String: Task<Void, Never>] = [:]
     private var uploadFractions: [String: Double] = [:]
     private let foregroundEventStream: (any ForegroundEventStream)?
-    private let sentTimeFormatter: DateFormatter
     private var loadedCatalog: ModelSelectionCatalog?
     private var cachedSelection: SessionModelSelection?
     private var newSessionPreference: SessionModelSelection?
@@ -99,10 +98,6 @@ final class SessionChatComposer {
         self.attachmentUploadRepository = attachmentUploadRepository
         self.foregroundEventStream = foregroundEventStream
         self.catalogRetryDelaysMs = catalogRetryDelaysMs
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "h:mm a"
-        self.sentTimeFormatter = formatter
         seedFromCatalogStore()
         Task {
             await self.loadCachedSelection()
@@ -1837,12 +1832,12 @@ final class SessionChatComposer {
         case failedWithFallback
     }
 
+    /// Like `SessionChatTimelineProjector.metadataLabel`: the view adds the sent time in the reader's locale.
     private func metadataLabel(mode: String, model: String?, variant: String?) -> String {
         [
             TitleCaseIdentifier.displayName(for: mode),
             model.map { TitleCaseIdentifier.displayName(for: $0) },
             variant.map { TitleCaseIdentifier.displayName(for: $0) },
-            formatSentTime(Date()),
         ].compactMap { $0 }.joined(separator: " · ")
     }
 
@@ -1863,10 +1858,6 @@ final class SessionChatComposer {
             return build.id
         }
         return catalog[0].id
-    }
-
-    private func formatSentTime(_ date: Date) -> String {
-        sentTimeFormatter.string(from: date)
     }
 
     private func updateComposer(_ update: (inout SessionChatComposerState) -> Void) {

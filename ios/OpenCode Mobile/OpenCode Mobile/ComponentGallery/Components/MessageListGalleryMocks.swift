@@ -22,7 +22,7 @@ extension MessageListGalleryMessage: MessageListTimelineHeightEstimating {
 }
 
 enum MessageListGalleryMocks {
-    private static let userMetadata = "Build · DeepSeek V4 Flash · 9:05 PM"
+    private static let userMetadata = "Build · DeepSeek V4 Flash"
 
     static let messages: [MessageListGalleryMessage] = [
         MessageListGalleryMessage(

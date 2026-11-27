@@ -93,7 +93,7 @@ private struct OutgoingMessageTrailingMaxWidthLayout: Layout {
 struct OpenCodeOutgoingMessage: View {
     let content: [OpenCodeOutgoingMessageContent]
     let renderedMarkdown: NativeMarkdownDocument?
-    /// Agent, model and time; read by VoiceOver, no longer drawn.
+    /// Agent and model; read by VoiceOver with the sent time, no longer drawn.
     let metadataLabel: String
     /// Revealed by dragging the message left. Nil: no reveal.
     let sentAt: Date?
@@ -195,11 +195,13 @@ struct OpenCodeOutgoingMessage: View {
         sentAt.map { OpenCodeMessageTime(sentAt: $0) }
     }
 
-    /// The agent, model and time the drag reveal hides from VoiceOver, plus the
-    /// day when the message is not from today.
+    /// The agent and model (`metadataLabel`) and the time the drag reveal hides from VoiceOver,
+    /// plus the day when the message is not from today. `time` is already in the reader's locale.
     static func accessibilityValue(metadataLabel: String, time: OpenCodeMessageTime?) -> String {
-        guard !metadataLabel.isEmpty else { return time?.spokenLabel ?? "" }
-        return [time?.day, metadataLabel].compactMap { $0 }.joined(separator: ", ")
+        let details = [metadataLabel.isEmpty ? nil : metadataLabel, time?.time]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+        return [time?.day, details.isEmpty ? nil : details].compactMap { $0 }.joined(separator: ", ")
     }
 
     private var accessibilityValue: String {
@@ -388,7 +390,7 @@ private func attributedCommandDisplayText(_ text: String) -> AttributedString {
 #Preview("Short") {
     OpenCodeOutgoingMessage(
         text: "Based on the standard 2026 pricing for DHL in Germany, confirm the package class.",
-        metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
+        metadataLabel: "Build · DeepSeek V4 Flash",
         sentAt: Date()
     )
         .padding()
@@ -398,7 +400,7 @@ private func attributedCommandDisplayText(_ text: String) -> AttributedString {
 #Preview("Long") {
     OpenCodeOutgoingMessage(
         text: outgoingMessageLongPreviewText,
-        metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM"
+        metadataLabel: "Build · DeepSeek V4 Flash"
     )
         .padding()
         .openCodeTheme()
@@ -409,12 +411,12 @@ private func attributedCommandDisplayText(_ text: String) -> AttributedString {
     VStack(spacing: 12) {
         OpenCodeOutgoingMessage(
             text: "Use the staging bucket instead.",
-            metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
+            metadataLabel: "Build · DeepSeek V4 Flash",
             steering: .delivered(showsLabel: true)
         )
         OpenCodeOutgoingMessage(
             text: "And skip the migration step.",
-            metadataLabel: "Build · DeepSeek V4 Flash · 9:06 PM",
+            metadataLabel: "Build · DeepSeek V4 Flash",
             steering: .pending(showsLabel: false)
         )
     }
