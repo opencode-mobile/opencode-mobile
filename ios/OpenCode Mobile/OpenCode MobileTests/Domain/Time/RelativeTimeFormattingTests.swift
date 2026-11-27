@@ -26,11 +26,30 @@ struct RelativeTimeFormattingTests {
     }
 
     @Test func formatsAbsoluteDateBeyondOneWeek() {
+        // 2023-11-06T22:13:20Z
         let epochMs = now - 8 * 86_400_000
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "MMM d"
-        let expected = formatter.string(from: Date(timeIntervalSince1970: TimeInterval(epochMs) / 1000))
-        #expect(RelativeTimeFormatting.format(epochMs: epochMs, nowEpochMs: now) == expected)
+        let utc = TimeZone(identifier: "UTC")!
+        #expect(RelativeTimeFormatting.format(
+            epochMs: epochMs,
+            nowEpochMs: now,
+            locale: Locale(identifier: "en_US"),
+            timeZone: utc
+        ) == "Nov 6")
+    }
+
+    @Test func absoluteDateFollowsTheLocaleAndTimeZone() {
+        let epochMs = now - 8 * 86_400_000
+        #expect(RelativeTimeFormatting.format(
+            epochMs: epochMs,
+            nowEpochMs: now,
+            locale: Locale(identifier: "de_DE"),
+            timeZone: TimeZone(identifier: "UTC")!
+        ) == "6. Nov.")
+        #expect(RelativeTimeFormatting.format(
+            epochMs: epochMs,
+            nowEpochMs: now,
+            locale: Locale(identifier: "en_US"),
+            timeZone: TimeZone(identifier: "Asia/Tokyo")!
+        ) == "Nov 7")
     }
 }

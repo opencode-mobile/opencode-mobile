@@ -33,6 +33,15 @@ sealed interface UiText {
         val value: String,
     ) : UiText
 
+    /**
+     * A moment shown as [style] in the reader's locale and time zone. Formatted when resolved,
+     * like the other cases, so a language change does not leave an English date in UI state.
+     */
+    data class DateTime(
+        val epochMs: Long,
+        val style: DateTimeStyle,
+    ) : UiText
+
     companion object {
         fun resource(
             @StringRes id: Int,
@@ -52,7 +61,18 @@ sealed interface UiText {
         ): UiText = Plural(id, count, args.toList())
 
         fun verbatim(value: String): UiText = Verbatim(value)
+
+        fun dateTime(
+            epochMs: Long,
+            style: DateTimeStyle,
+        ): UiText = DateTime(epochMs, style)
     }
+}
+
+/** How a [UiText.DateTime] is written. Each style follows the locale's own pattern. */
+enum class DateTimeStyle {
+    /** Month and day without the year: "Nov 27" in en-US, "27. Nov." in de-DE. */
+    MonthDay,
 }
 
 /** Where resolved text comes from. Android resources in the app; a fake in unit tests. */
@@ -67,6 +87,12 @@ interface UiTextLookup {
         count: Int,
         args: Array<out Any>,
     ): String
+
+    /** [epochMs] written as [style] in this lookup's locale and time zone. */
+    fun dateTime(
+        epochMs: Long,
+        style: DateTimeStyle,
+    ): String
 }
 
 fun UiText.resolve(lookup: UiTextLookup): String =
@@ -74,6 +100,7 @@ fun UiText.resolve(lookup: UiTextLookup): String =
         is UiText.Verbatim -> value
         is UiText.Resource -> lookup.string(id, resolveArgs(args, lookup))
         is UiText.Plural -> lookup.plural(id, count, resolveArgs(args, lookup))
+        is UiText.DateTime -> lookup.dateTime(epochMs, style)
     }
 
 private fun resolveArgs(

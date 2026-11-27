@@ -84,7 +84,7 @@ struct SessionChatTimelineProjectorTests {
             id: "optimistic-1",
             role: .user,
             text: "Hello",
-            metadataLabel: "build · deepseek-v4-flash-free · high · 10:21 AM",
+            metadataLabel: "build · deepseek-v4-flash-free · high",
             isPending: true,
             blocks: [
                 .text(
@@ -127,7 +127,7 @@ struct SessionChatTimelineProjectorTests {
         )
         #expect(reconciled.rows.map(\.id) == ["server-1"])
         #expect(reconciled.rows.allSatisfy { !$0.isPending })
-        #expect(reconciled.rows[0].metadataLabel == "build · deepseek-v4-flash-free · high · 10:21 AM")
+        #expect(reconciled.rows[0].metadataLabel == "build · deepseek-v4-flash-free · high")
         #expect(reconciled.removedRowIDs.contains("optimistic-1"))
         #expect(reconciled.insertedRowIDs.contains("server-1"))
     }
@@ -497,7 +497,7 @@ struct SessionChatTimelineProjectorTests {
             id: "optimistic-photo",
             role: .user,
             text: "What is it",
-            metadataLabel: "build · 1:21 PM",
+            metadataLabel: "build",
             isPending: true,
             blocks: [
                 .text(
@@ -619,7 +619,7 @@ struct SessionChatTimelineProjectorTests {
             id: "optimistic-photo",
             role: .user,
             text: "What",
-            metadataLabel: "Build · MiMo V2.5 Free · 7:58 PM",
+            metadataLabel: "Build · MiMo V2.5 Free",
             isPending: true,
             blocks: [
                 .text(
@@ -654,7 +654,7 @@ struct SessionChatTimelineProjectorTests {
         #expect(reconciled.rows.allSatisfy { !$0.isPending })
         #expect(reconciled.removedRowIDs.contains("optimistic-photo"))
         #expect(reconciled.rows[0].hasAttachments)
-        #expect(reconciled.rows[0].metadataLabel == "Build · MiMo V2.5 Free · 7:58 PM")
+        #expect(reconciled.rows[0].metadataLabel == "Build · MiMo V2.5 Free")
     }
 
     @Test func optimisticFile_reconcilesOntoNewestTextOnlyWhenHistorySharesText() {
@@ -666,7 +666,7 @@ struct SessionChatTimelineProjectorTests {
             id: "optimistic-photo",
             role: .user,
             text: "What",
-            metadataLabel: "Build · 7:58 PM",
+            metadataLabel: "Build",
             isPending: true,
             blocks: [
                 .text(
@@ -705,7 +705,7 @@ struct SessionChatTimelineProjectorTests {
         #expect(reconciled.rows.map(\.id) == ["msg-old", "msg-new"])
         #expect(!reconciled.rows[0].hasAttachments)
         #expect(reconciled.rows[1].hasAttachments)
-        #expect(reconciled.rows[1].metadataLabel == "Build · 7:58 PM")
+        #expect(reconciled.rows[1].metadataLabel == "Build")
         #expect(reconciled.removedRowIDs.contains("optimistic-photo"))
     }
 
@@ -910,7 +910,7 @@ struct SessionChatTimelineProjectorTests {
             id: "optimistic-1",
             role: .user,
             text: "Hello",
-            metadataLabel: "build · deepseek-v4-flash-free · high · 10:21 AM",
+            metadataLabel: "build · deepseek-v4-flash-free · high",
             pendingDelivery: .steer,
             isPending: true,
             blocks: [
@@ -941,7 +941,7 @@ struct SessionChatTimelineProjectorTests {
             id: "optimistic-1",
             role: .user,
             text: "Hello",
-            metadataLabel: "build · deepseek-v4-flash-free · high · 10:21 AM",
+            metadataLabel: "build · deepseek-v4-flash-free · high",
             isPending: true,
             blocks: [
                 .text(
@@ -1077,7 +1077,7 @@ struct SessionChatTimelineProjectorTests {
             id: "optimistic-file",
             role: .user,
             text: "",
-            metadataLabel: "Build · 10:21 AM",
+            metadataLabel: "Build",
             isPending: true,
             blocks: [
                 .attachment(blockID: PresentationBlockId.direct("local-file"), file: pendingFile),

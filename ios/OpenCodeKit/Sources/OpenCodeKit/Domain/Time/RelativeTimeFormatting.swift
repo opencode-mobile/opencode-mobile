@@ -1,16 +1,15 @@
 import Foundation
 
 /// Short relative time ("now", "5m ago", "2d ago"), then the month and day after a week.
-/// Resolved from the String Catalog when called.
+/// Resolved from the String Catalog when called; the month and day follows `locale`'s own
+/// pattern ("Nov 27" in en-US, "27. Nov." in de-DE) in `timeZone`.
 public enum RelativeTimeFormatting {
-    private static let absoluteFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "MMM d"
-        return formatter
-    }()
-
-    public static func format(epochMs: Int64, nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) -> String {
+    public static func format(
+        epochMs: Int64,
+        nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000),
+        locale: Locale = .current,
+        timeZone: TimeZone = .current
+    ) -> String {
         let deltaMs = max(0, nowEpochMs - epochMs)
         let minutes = deltaMs / 60_000
         let hours = deltaMs / 3_600_000
@@ -28,6 +27,8 @@ public enum RelativeTimeFormatting {
             return String(localized: LocalizedStringResource("relative_time.days_ago", defaultValue: "\(days)d ago"))
         }
         let date = Date(timeIntervalSince1970: TimeInterval(epochMs) / 1000)
-        return absoluteFormatter.string(from: date)
+        return date.formatted(
+            Date.FormatStyle(locale: locale, timeZone: timeZone).month(.abbreviated).day()
+        )
     }
 }

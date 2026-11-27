@@ -1436,6 +1436,8 @@
     <string name="component_activity_status_running">running</string>
     <!-- Accessibility: read after a filter tab that has something new since it was last viewed. -->
     <string name="component_filter_tabs_unseen">new</string>
+    <!-- One letter drawn small before the text size slider and large after it, to show smaller and larger text. Not read aloud. Use a common capital letter of your script. -->
+    <string name="component_text_size_slider_sample_letter">A</string>
     <string name="component_composer_reverting_title">Reverting this message</string>
     <!-- Title of a session that has none yet. -->
     <string name="session_new_title">New Session</string>

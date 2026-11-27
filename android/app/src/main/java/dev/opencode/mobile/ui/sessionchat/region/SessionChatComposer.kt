@@ -96,10 +96,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.UUID
 
 /**
@@ -2079,12 +2075,12 @@ class SessionChatComposer(
         option: ModelSelectionOption,
     ): String? = remembered?.takeIf { it.isNotBlank() && it in option.variants }
 
+    /** Like [TimelineProjector.metadataLabel]: the view adds the sent time in the current locale. */
     private fun composerMetadataLabel(composer: SessionChatComposerState): String =
         listOfNotNull(
             composer.selectedModeLabel,
             composer.selectedModel?.modelLabel,
             composer.selectedVariant?.let(TitleCaseIdentifier::displayName),
-            formatSentTime(System.currentTimeMillis()),
         ).joinToString(" · ")
 
     private fun applySelectableAgents(agents: List<SelectableAgent>) {
@@ -2253,12 +2249,6 @@ class SessionChatComposer(
         return (listOf(leading) + skillMentions).sortedBy { it.start }
     }
 
-    private fun formatSentTime(epochMs: Long): String =
-        Instant
-            .ofEpochMilli(epochMs)
-            .atZone(ZoneId.systemDefault())
-            .format(SentTimeFormatter)
-
     private fun unsupportedAttachmentMessage(rejected: List<Attachment>): String {
         val kinds = rejected.map { it.kind }.toSet()
         return when (kinds) {
@@ -2305,7 +2295,6 @@ class SessionChatComposer(
         const val ModelFilterThreshold = 10
         const val PENDING_SEND_TIMEOUT_ERROR = "Couldn't send. Try again."
         const val SHELL_CANNOT_QUEUE_ERROR = "Shell commands can't be queued. Switch to Steer to run it now."
-        private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
     }
 
     private sealed interface InitialSelection {

@@ -3281,6 +3281,18 @@
         }
       }
     },
+    "component.text_size_slider.sample_letter" : {
+      "comment" : "One letter drawn small before the text size slider and large after it, to show smaller and larger text. Not read aloud. Use a common capital letter of your script.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A"
+          }
+        }
+      }
+    },
     "component.thinking" : {
       "extractionState" : "manual",
       "localizations" : {

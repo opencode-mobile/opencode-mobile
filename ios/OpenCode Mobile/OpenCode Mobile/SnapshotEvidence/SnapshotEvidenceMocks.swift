@@ -51,7 +51,7 @@ struct SnapshotEvidenceMessage: Identifiable, Sendable {
 
 enum SnapshotEvidenceMocks {
     static let sessionTitle = "Assistant message"
-    static let userMetadata = "Build · DeepSeek V4 Flash · 9:05 PM"
+    static let userMetadata = "Build · DeepSeek V4 Flash"
     static let childSessionTitle = "Find auth bugs"
     /// Home filtered to a worktree with no sessions while sibling worktrees have some.
     static let worktreeEmptyMessage = SessionListWorktreeEmptyCopy.otherWorktrees

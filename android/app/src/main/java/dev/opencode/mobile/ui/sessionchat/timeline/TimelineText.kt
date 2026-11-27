@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.DateTimeStyle
 import dev.opencode.mobile.domain.text.UiText
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -59,11 +60,19 @@ private sealed class UiTextSurrogate {
         val value: String,
     ) : UiTextSurrogate()
 
+    @Serializable
+    @SerialName("date_time")
+    data class DateTime(
+        val epochMs: Long,
+        val style: DateTimeStyle,
+    ) : UiTextSurrogate()
+
     fun toUiText(): UiText =
         when (this) {
             is Resource -> UiText.Resource(id, args.map { it.value() })
             is Plural -> UiText.Plural(id, count, args.map { it.value() })
             is Verbatim -> UiText.Verbatim(value)
+            is DateTime -> UiText.DateTime(epochMs, style)
         }
 
     companion object {
@@ -72,6 +81,7 @@ private sealed class UiTextSurrogate {
                 is UiText.Resource -> Resource(text.id, text.args.map(UiTextArgSurrogate::from))
                 is UiText.Plural -> Plural(text.id, text.count, text.args.map(UiTextArgSurrogate::from))
                 is UiText.Verbatim -> Verbatim(text.value)
+                is UiText.DateTime -> DateTime(text.epochMs, text.style)
             }
     }
 }

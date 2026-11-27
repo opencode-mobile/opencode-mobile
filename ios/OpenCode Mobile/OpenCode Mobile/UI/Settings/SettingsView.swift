@@ -620,7 +620,7 @@ struct SettingsView: View {
 
             OpenCodeListItem(
                 title: "settings.star_on_github.title",
-                subtitle: .verbatim("opencode-mobile/opencode-mobile"),
+                subtitle: .verbatim(SourceCode.repository),
                 style: .card,
                 startDecorator: .icon(.star, accessibilityLabel: "settings.star_on_github.title"),
                 accessory: .disclosure,

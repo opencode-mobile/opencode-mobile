@@ -28,6 +28,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -36,11 +37,14 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.domain.text.DateTimeStyle
+import dev.opencode.mobile.domain.time.LocalizedDateTimeFormat
 import dev.opencode.mobile.theme.openCodeColor
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.format.TextStyle
@@ -78,6 +82,8 @@ data class OpenCodeMessageTime(
             zone: ZoneId = ZoneId.systemDefault(),
             locale: Locale = Locale.getDefault(),
             is24Hour: Boolean,
+            /** The locale's month-and-day pattern ("MMMd" skeleton); en-US "MMM d" by default. */
+            monthDayPattern: String = "MMM d",
         ): OpenCodeMessageTime {
             val sent = Instant.ofEpochMilli(sentAtEpochMs).atZone(zone)
             val sentDay = sent.toLocalDate()
@@ -89,7 +95,7 @@ data class OpenCodeMessageTime(
                     days <= 0 -> null
                     days == 1L -> YESTERDAY
                     days <= 6 -> sentDay.dayOfWeek.getDisplayName(TextStyle.FULL, locale)
-                    else -> shortDate(sentDay, today, locale)
+                    else -> shortDate(sentDay, today, locale, monthDayPattern)
                 }
             return OpenCodeMessageTime(time = time, day = day)
         }
@@ -98,9 +104,13 @@ data class OpenCodeMessageTime(
             date: LocalDate,
             today: LocalDate,
             locale: Locale,
+            monthDayPattern: String,
         ): String =
             if (date.year == today.year) {
-                date.format(DateTimeFormatter.ofPattern("MMM d", locale))
+                LocalizedDateTimeFormat(locale, ZoneOffset.UTC, monthDayPattern).format(
+                    date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+                    DateTimeStyle.MonthDay,
+                )
             } else {
                 date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
             }
@@ -152,7 +162,16 @@ object OpenCodeTimeRevealDrag {
 fun rememberOpenCodeMessageTime(sentAtEpochMs: Long?): OpenCodeMessageTime? {
     if (sentAtEpochMs == null) return null
     val is24Hour = DateFormat.is24HourFormat(LocalContext.current)
-    return remember(sentAtEpochMs, is24Hour) { OpenCodeMessageTime.of(sentAtEpochMs, is24Hour = is24Hour) }
+    // The configuration locale, so a language change re-formats the day and time.
+    val locale = LocalConfiguration.current.locales[0]
+    return remember(sentAtEpochMs, is24Hour, locale) {
+        OpenCodeMessageTime.of(
+            sentAtEpochMs,
+            locale = locale,
+            is24Hour = is24Hour,
+            monthDayPattern = DateFormat.getBestDateTimePattern(locale, "MMMd"),
+        )
+    }
 }
 
 /**

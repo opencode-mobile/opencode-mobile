@@ -51,7 +51,8 @@ struct OpenCodeStepSlider: View {
     }
 
     private func glyph(size: CGFloat) -> some View {
-        Text(verbatim: "A")
+        // Keyed so a translation can use a letter of its own script.
+        Text("component.text_size_slider.sample_letter")
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(OpenCodeColors.textBase)
             .accessibilityHidden(true)

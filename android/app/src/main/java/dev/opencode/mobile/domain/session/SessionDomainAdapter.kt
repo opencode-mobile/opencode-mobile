@@ -31,10 +31,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 class SessionDomainAdapter {
     fun toSession(dto: SessionDto): Session =
@@ -118,7 +114,6 @@ class SessionDomainAdapter {
             id = session.id,
             title = session.title,
             statusLabel = statusLabel,
-            updatedAtLabel = session.updatedAtEpochMs?.let(::updatedAtLabel),
             updatedAtEpochMs = session.updatedAtEpochMs,
             isReady = isReady,
             statusStale = statusStale,
@@ -358,18 +353,6 @@ class SessionDomainAdapter {
             is JsonConvertException -> SessionError.Decoding(throwable)
             else -> SessionError.Transport(throwable)
         }
-
-    private fun updatedAtLabel(epochMs: Long): String =
-        Instant
-            .ofEpochMilli(epochMs)
-            .atZone(ZoneId.systemDefault())
-            .format(updatedAtFormatter)
-
-    private companion object {
-        val updatedAtFormatter: DateTimeFormatter =
-            DateTimeFormatter
-                .ofPattern("MMM d • h:mm a", Locale.US)
-    }
 
     private fun toTokenUsage(dto: MessageTokensDto?): MessageTokenUsage? {
         dto ?: return null

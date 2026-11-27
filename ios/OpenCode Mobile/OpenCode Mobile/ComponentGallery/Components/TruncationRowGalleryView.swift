@@ -34,7 +34,7 @@ struct TruncationRowGalleryView: View {
                         )
                     ),
                 ],
-                metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
+                metadataLabel: "Build · DeepSeek V4 Flash",
                 onTap: {}
             )
         }

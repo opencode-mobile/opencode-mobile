@@ -74,7 +74,6 @@ data class SessionSummary(
     val id: String,
     val title: String,
     val statusLabel: String? = null,
-    val updatedAtLabel: String? = null,
     val updatedAtEpochMs: Long? = null,
     val isReady: Boolean = false,
     val statusStale: Boolean = false,

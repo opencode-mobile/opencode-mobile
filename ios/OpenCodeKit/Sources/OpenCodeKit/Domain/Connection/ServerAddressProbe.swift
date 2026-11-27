@@ -12,6 +12,11 @@ import Foundation
 /// opencode answers the unauthenticated request with `401`. That makes the host a
 /// *candidate*; it never makes it *reachable*.
 public enum ServerAddressProbe {
+    /// HTTP reason phrase for the 401 this probe reports when a password is needed but none
+    /// was given. Wire-level detail like a server's own message, never shown in the UI:
+    /// `ServerProbeError.probeUserMessage` and `errorDescription` ignore it.
+    static let unauthorizedReasonPhrase = "Unauthorized"
+
     /// How a candidate answered the unauthenticated health request.
     public enum Answer: Equatable, Sendable {
         /// Health answered without credentials (server running without a password).
@@ -118,7 +123,7 @@ public enum ServerAddressProbe {
                 return Resolution(
                     answers: answers,
                     chosen: chosen,
-                    outcome: .failure(ServerProbeError.http(statusCode: 401, message: "Unauthorized"))
+                    outcome: .failure(ServerProbeError.http(statusCode: 401, message: unauthorizedReasonPhrase))
                 )
             }
         }

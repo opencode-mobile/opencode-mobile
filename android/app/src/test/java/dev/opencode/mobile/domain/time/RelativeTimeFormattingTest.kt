@@ -1,13 +1,11 @@
 package dev.opencode.mobile.domain.time
 
+import dev.opencode.mobile.domain.text.DateTimeStyle
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.text.EnglishStrings
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class RelativeTimeFormattingTest {
@@ -39,12 +37,12 @@ class RelativeTimeFormattingTest {
 
     @Test
     fun formatsAbsoluteDateBeyondOneWeek() {
+        // 2023-11-06T22:13:20Z; EnglishStrings writes dates in en-US and UTC.
         val epochMs = now - TimeUnit.DAYS.toMillis(8)
-        val expected =
-            Instant
-                .ofEpochMilli(epochMs)
-                .atZone(ZoneId.systemDefault())
-                .format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
-        assertEquals(expected, RelativeTimeFormatting.format(epochMs, now).resolve(EnglishStrings))
+        val text = RelativeTimeFormatting.format(epochMs, now)
+
+        // Left unformatted in UI state, so the view writes it in the current locale.
+        assertEquals(UiText.dateTime(epochMs, DateTimeStyle.MonthDay), text)
+        assertEquals("Nov 6", text.resolve(EnglishStrings))
     }
 }

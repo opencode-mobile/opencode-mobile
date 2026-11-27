@@ -153,8 +153,8 @@ sealed interface OpenCodeOutgoingMessageContent {
 }
 
 /**
- * A user message, trailing-aligned. [metadataLabel] (agent, model, time) is read by
- * TalkBack but not drawn; dragging the message left reveals [sentAtEpochMs].
+ * A user message, trailing-aligned. [metadataLabel] (agent, model) and [sentAtEpochMs] are
+ * read by TalkBack but not drawn; dragging the message left reveals [sentAtEpochMs].
  */
 @Composable
 fun OpenCodeOutgoingMessage(
@@ -359,15 +359,15 @@ private fun Modifier.pendingSteerOutline(color: Color): Modifier =
     }
 
 /**
- * The agent, model and time the drag reveal hides from TalkBack, plus the day when
- * the message is not from today.
+ * The agent and model ([metadataLabel]) and the time the drag reveal hides from TalkBack,
+ * plus the day when the message is not from today. [time] is already in the reader's locale.
  */
 fun outgoingMessageAccessibilityValue(
     metadataLabel: String,
     time: OpenCodeMessageTime?,
 ): String {
-    if (metadataLabel.isEmpty()) return time?.spokenLabel.orEmpty()
-    return listOfNotNull(time?.day, metadataLabel).joinToString(", ")
+    val details = listOfNotNull(metadataLabel.ifEmpty { null }, time?.time).joinToString(" · ")
+    return listOfNotNull(time?.day, details.ifEmpty { null }).joinToString(", ")
 }
 
 @Composable
@@ -413,7 +413,7 @@ private fun OpenCodeOutgoingMessageShortPreview() {
     OpenCodeTheme(darkTheme = false) {
         OpenCodeOutgoingMessage(
             text = "Based on the standard 2026 pricing for DHL in Germany, confirm the package class.",
-            metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            metadataLabel = "Build · DeepSeek V4 Flash",
             sentAtEpochMs = System.currentTimeMillis(),
         )
     }
@@ -425,7 +425,7 @@ private fun OpenCodeOutgoingMessageLongPreview() {
     OpenCodeTheme(darkTheme = true) {
         OpenCodeOutgoingMessage(
             text = OutgoingMessageLongPreviewText,
-            metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            metadataLabel = "Build · DeepSeek V4 Flash",
         )
     }
 }
@@ -437,12 +437,12 @@ private fun OpenCodeOutgoingMessageSteeringPreview() {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OpenCodeOutgoingMessage(
                 text = "Use the staging bucket instead.",
-                metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+                metadataLabel = "Build · DeepSeek V4 Flash",
                 steering = OpenCodeOutgoingMessageSteering.Delivered(showsLabel = true),
             )
             OpenCodeOutgoingMessage(
                 text = "And skip the migration step.",
-                metadataLabel = "Build · DeepSeek V4 Flash · 9:06 PM",
+                metadataLabel = "Build · DeepSeek V4 Flash",
                 steering = OpenCodeOutgoingMessageSteering.Pending(showsLabel = false),
             )
         }

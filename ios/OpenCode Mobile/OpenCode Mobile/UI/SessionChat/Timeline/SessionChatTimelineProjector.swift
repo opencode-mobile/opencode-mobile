@@ -7,41 +7,21 @@ import Foundation
 /// Must stay `nonisolated` so structural conversion can run off MainActor
 /// (Android already projects on a worker dispatcher).
 nonisolated enum SessionChatTimelineProjector {
-    private static let sentTimeLock = NSLock()
-    private static let sentTimeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "h:mm a"
-        return formatter
-    }()
-
-    /// Thread-safe metadata label used by off-main projection.
+    /// Agent, model and variant for VoiceOver, used by off-main projection. The sent time is
+    /// not part of it: the outgoing message writes `sentAtEpochMs` in the reader's locale (#886).
     static func metadataLabel(for message: Message) -> String {
-        metadataLabel(
-            mode: message.mode,
-            model: message.model,
-            variant: message.variant,
-            sentAtEpochMs: message.sentAtEpochMs
-        )
+        metadataLabel(mode: message.mode, model: message.model, variant: message.variant)
     }
 
     static func metadataLabel(
         mode: String?,
         model: String?,
-        variant: String? = nil,
-        sentAtEpochMs: Int64? = nil
+        variant: String? = nil
     ) -> String {
-        let timeLabel: String? = sentAtEpochMs.map { epochMs in
-            let date = Date(timeIntervalSince1970: TimeInterval(epochMs) / 1_000)
-            sentTimeLock.lock()
-            defer { sentTimeLock.unlock() }
-            return sentTimeFormatter.string(from: date)
-        }
-        return [
+        [
             mode.map { TitleCaseIdentifier.displayName(for: $0) },
             model.map { TitleCaseIdentifier.displayName(for: $0) },
             variant.map { TitleCaseIdentifier.displayName(for: $0) },
-            timeLabel,
         ].compactMap { $0 }.joined(separator: " · ")
     }
 

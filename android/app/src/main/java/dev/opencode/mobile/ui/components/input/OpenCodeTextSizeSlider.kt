@@ -28,12 +28,14 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -78,6 +80,8 @@ fun OpenCodeTextSizeSlider(
     // A raised-surface thumb disappears on a dark card, so dark mode uses the strong ink instead.
     val thumbColor = if (LocalOpenCodeDarkTheme.current) textStrong else openCodeColor("surface-raised-base")
     val thumbBorder = openCodeColor("border-weak-base")
+    // Keyed so a translation can use a letter of its own script.
+    val sampleLetter = stringResource(R.string.component_text_size_slider_sample_letter)
 
     Column(
         modifier =
@@ -114,7 +118,7 @@ fun OpenCodeTextSizeSlider(
             horizontalArrangement = Arrangement.spacedBy(TextSizeSliderSpacing),
         ) {
             Text(
-                text = "A",
+                text = sampleLetter,
                 style = MaterialTheme.typography.labelSmall,
                 color = textBase,
                 modifier = Modifier.clearAndSetSemantics {},
@@ -176,7 +180,7 @@ fun OpenCodeTextSizeSlider(
                 },
             )
             Text(
-                text = "A",
+                text = sampleLetter,
                 style = MaterialTheme.typography.titleLarge,
                 color = textBase,
                 modifier = Modifier.clearAndSetSemantics {},
