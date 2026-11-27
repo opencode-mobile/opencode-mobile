@@ -436,6 +436,14 @@
         <item quantity="other">%1$d lines</item>
     </plurals>
     <string name="file_viewer_meta">%1$s · %2$s</string>
+    <!-- A size in kilobytes, such as 1.5 KB. %1$s is the number, already written in the reader's locale. -->
+    <string name="byte_count_kilobytes">%1$s KB</string>
+    <!-- A size in megabytes, such as 1.5 MB. %1$s is the number, already written in the reader's locale. -->
+    <string name="byte_count_megabytes">%1$s MB</string>
+    <!-- A size in gigabytes, such as 1.5 GB. %1$s is the number, already written in the reader's locale. -->
+    <string name="byte_count_gigabytes">%1$s GB</string>
+    <!-- A size in terabytes, such as 1.5 TB. %1$s is the number, already written in the reader's locale. -->
+    <string name="byte_count_terabytes">%1$s TB</string>
     <plurals name="file_viewer_size_bytes">
         <item quantity="one">%1$d byte</item>
         <item quantity="other">%1$d bytes</item>
@@ -1201,9 +1209,6 @@
     <string name="settings_session_cache_size_label">Session Cache Size</string>
     <string name="settings_session_cache_empty">Empty</string>
     <string name="settings_session_cache_bytes">%1$d B</string>
-    <string name="settings_session_cache_kilobytes">%1$d KB</string>
-    <string name="settings_session_cache_megabytes">%1$s MB</string>
-    <string name="settings_session_cache_gigabytes">%1$s GB</string>
     <string name="settings_clear_session_cache_title">Clear Session Cache</string>
     <string name="settings_clear_session_cache_subtitle">Remove cached sessions and messages</string>
     <string name="settings_clear_session_cache_dialog_title">Clear session cache?</string>
@@ -1551,6 +1556,8 @@
     <string name="component_filter_tabs_unseen">new</string>
     <!-- One letter drawn small before the text size slider and large after it, to show smaller and larger text. Not read aloud. Use a common capital letter of your script. -->
     <string name="component_text_size_slider_sample_letter">A</string>
+    <!-- The day under a message's send time when it was sent yesterday, shown by dragging the message and read by screen readers. -->
+    <string name="component_message_time_yesterday">Yesterday</string>
     <string name="component_composer_reverting_title">Reverting this message</string>
     <!-- Title of a session that has none yet. -->
     <string name="session_new_title">New Session</string>

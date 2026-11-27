@@ -1,14 +1,13 @@
 package dev.opencode.mobile.domain.home
 
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.DateTimeStyle
 import dev.opencode.mobile.domain.text.UiText
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
@@ -54,7 +53,6 @@ object HomeSessionLadder {
         recentWindowHours: Int,
         nowEpochMs: Long,
         zoneId: ZoneId = ZoneId.systemDefault(),
-        locale: Locale = Locale.getDefault(),
     ): List<HomeSessionLadderSection<T>> {
         if (sessions.isEmpty()) return emptyList()
 
@@ -83,8 +81,6 @@ object HomeSessionLadder {
         }
 
         val today = Instant.ofEpochMilli(nowEpochMs).atZone(zoneId).toLocalDate()
-        val dayFormatter =
-            DateTimeFormatter.ofPattern("EEEE, MMM d", locale)
         for (offset in 0 until DAY_WINDOW_COUNT) {
             val day = today.minusDays(offset.toLong())
             val startMs = day.atStartOfDay(zoneId).toInstant().toEpochMilli()
@@ -104,7 +100,8 @@ object HomeSessionLadder {
                 when (offset) {
                     0 -> UiText.resource(R.string.session_list_section_today)
                     1 -> UiText.resource(R.string.session_list_section_yesterday)
-                    else -> UiText.verbatim(day.format(dayFormatter))
+                    // Written in the reader's locale when shown ("Monday, Aug 3"; #886).
+                    else -> UiText.dateTime(middayEpochMs(day, zoneId), DateTimeStyle.WeekdayMonthDay)
                 }
             sections +=
                 HomeSessionLadderSection(
@@ -127,7 +124,6 @@ object HomeSessionLadder {
             }
         if (older.isEmpty()) return sections
 
-        val weekFormatter = DateTimeFormatter.ofPattern("MMM d", locale)
         val weekBuckets = linkedMapOf<LocalDate, MutableList<T>>()
         for (session in older) {
             val updated = updatedAtEpochMs(session) ?: Long.MIN_VALUE
@@ -148,8 +144,8 @@ object HomeSessionLadder {
                 val title =
                     UiText.resource(
                         R.string.session_list_section_week_of,
-                        weekStart.format(weekFormatter),
-                        weekEnd.format(weekFormatter),
+                        UiText.dateTime(middayEpochMs(weekStart, zoneId), DateTimeStyle.MonthDay),
+                        UiText.dateTime(middayEpochMs(weekEnd, zoneId), DateTimeStyle.MonthDay),
                     )
                 sections +=
                     HomeSessionLadderSection(
@@ -162,4 +158,18 @@ object HomeSessionLadder {
 
         return sections
     }
+
+    /**
+     * Midday of [day] in [zoneId]: the moment a section title names. Midday, so the reader's time
+     * zone at display names the same day even if it is a few hours off [zoneId].
+     */
+    private fun middayEpochMs(
+        day: LocalDate,
+        zoneId: ZoneId,
+    ): Long =
+        day
+            .atTime(12, 0)
+            .atZone(zoneId)
+            .toInstant()
+            .toEpochMilli()
 }

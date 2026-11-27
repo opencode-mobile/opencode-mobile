@@ -195,7 +195,7 @@ private struct ServerHealthTiles: View {
                 )
                 OpenCodeStatTile(
                     label: OpenCodeText(LocalizedStringResource("server_health.between_drops", defaultValue: "Between drops")),
-                    value: report.meanTimeBetweenDropsMs.map(ServerHealthFormat.duration) ?? ServerHealthText.placeholder,
+                    value: report.meanTimeBetweenDropsMs.map { ServerHealthFormat.duration($0) } ?? ServerHealthText.placeholder,
                     detail: report.drops > 0
                         ? OpenCodeText(LocalizedStringResource(
                             "server_health.between_drops_detail",

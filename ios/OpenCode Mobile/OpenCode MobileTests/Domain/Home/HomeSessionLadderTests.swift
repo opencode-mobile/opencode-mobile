@@ -113,9 +113,18 @@ struct HomeSessionLadderTests {
         #expect(group([]).isEmpty)
     }
 
+    @Test func group_namesOlderDaysInTheLocaleAndTheCalendarsZone() {
+        // Three days before Wednesday 2026-08-05 in Los Angeles: Sunday 2026-08-02, 15:00 PDT.
+        let sunday = [Item(id: "sunday", updatedAtEpochMs: now - 3 * 86_400_000)]
+
+        #expect(group(sunday, windowHours: 2).map(\.title) == ["Sunday, Aug 2"])
+        #expect(group(sunday, windowHours: 2, locale: Locale(identifier: "de_DE")).map(\.title) == ["Sonntag, 2. Aug."])
+    }
+
     private func group(
         _ sessions: [Item],
-        windowHours: Int = 4
+        windowHours: Int = 4,
+        locale: Locale = Locale(identifier: "en_US")
     ) -> [HomeSessionLadderSection<Item>] {
         HomeSessionLadder.group(
             sessions: sessions,
@@ -124,7 +133,7 @@ struct HomeSessionLadderTests {
             recentWindowHours: windowHours,
             nowEpochMs: now,
             calendar: calendar,
-            locale: Locale(identifier: "en_US")
+            locale: locale
         )
     }
 }

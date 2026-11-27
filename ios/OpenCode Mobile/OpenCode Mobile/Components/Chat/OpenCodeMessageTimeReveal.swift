@@ -7,7 +7,10 @@ struct OpenCodeMessageTime: Equatable {
     let time: String
     let day: String?
 
-    static let yesterday = "Yesterday"
+    /// The day under the time for a message sent yesterday, from the String Catalog.
+    static var yesterday: String {
+        String(localized: "component.message_time.yesterday", defaultValue: "Yesterday")
+    }
 
     /// Time in the locale's 12/24-hour style. Day: nil today, "Yesterday", the
     /// weekday within the last week, otherwise a short date (with the year when

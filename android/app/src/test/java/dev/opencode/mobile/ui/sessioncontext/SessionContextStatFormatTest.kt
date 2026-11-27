@@ -1,5 +1,8 @@
 package dev.opencode.mobile.ui.sessioncontext
 
+import dev.opencode.mobile.domain.text.resolve
+import dev.opencode.mobile.ui.text.GermanFormatsStrings
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.ZoneOffset
@@ -37,5 +40,11 @@ class SessionContextStatFormatTest {
         assertEquals("—", english.format(SessionContextStatValue.Moment(null)))
         assertEquals("—", english.format(SessionContextStatValue.Text(null)))
         assertEquals("1,234", german.format(SessionContextStatValue.Text("1,234")))
+    }
+
+    @Test
+    fun breakdownPercentFollowsTheLocale() {
+        assertEquals("12.5%", breakdownPercent(12.5).english())
+        assertEquals("12,5\u00A0%", breakdownPercent(12.5).resolve(GermanFormatsStrings))
     }
 }

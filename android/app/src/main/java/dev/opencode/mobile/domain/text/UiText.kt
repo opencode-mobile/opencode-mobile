@@ -42,6 +42,21 @@ sealed interface UiText {
         val style: DateTimeStyle,
     ) : UiText
 
+    /**
+     * A number written in the reader's locale when resolved ("1.5" in en-US, "1,5" in de-DE),
+     * with [minFractionDigits] to [maxFractionDigits] decimals, rounded half up, grouped.
+     * With [percent], [value] is a percentage (75.0 for 75%) written with the locale's percent
+     * sign ("75.0%", "75,0 %"). [suffix] is a unit symbol written right after it, as is, for
+     * units that are not keyed yet (the TUI-style "6.4s").
+     */
+    data class Number(
+        val value: Double,
+        val minFractionDigits: Int = 0,
+        val maxFractionDigits: Int = 0,
+        val suffix: String = "",
+        val percent: Boolean = false,
+    ) : UiText
+
     companion object {
         fun resource(
             @StringRes id: Int,
@@ -66,6 +81,18 @@ sealed interface UiText {
             epochMs: Long,
             style: DateTimeStyle,
         ): UiText = DateTime(epochMs, style)
+
+        fun number(
+            value: Double,
+            minFractionDigits: Int = 0,
+            maxFractionDigits: Int = 0,
+        ): UiText = Number(value, minFractionDigits, maxFractionDigits)
+
+        /** [value] is a percentage: 75.0 for 75%. */
+        fun percent(
+            value: Double,
+            fractionDigits: Int,
+        ): UiText = Number(value, fractionDigits, fractionDigits, percent = true)
     }
 }
 
@@ -73,6 +100,9 @@ sealed interface UiText {
 enum class DateTimeStyle {
     /** Month and day without the year: "Nov 27" in en-US, "27. Nov." in de-DE. */
     MonthDay,
+
+    /** Weekday, month and day: "Friday, Nov 27" in en-US, "Freitag, 27. Nov." in de-DE. */
+    WeekdayMonthDay,
 }
 
 /** Where resolved text comes from. Android resources in the app; a fake in unit tests. */
@@ -93,6 +123,9 @@ interface UiTextLookup {
         epochMs: Long,
         style: DateTimeStyle,
     ): String
+
+    /** [number] written in this lookup's locale. */
+    fun number(number: UiText.Number): String
 }
 
 fun UiText.resolve(lookup: UiTextLookup): String =
@@ -101,6 +134,7 @@ fun UiText.resolve(lookup: UiTextLookup): String =
         is UiText.Resource -> lookup.string(id, resolveArgs(args, lookup))
         is UiText.Plural -> lookup.plural(id, count, resolveArgs(args, lookup))
         is UiText.DateTime -> lookup.dateTime(epochMs, style)
+        is UiText.Number -> lookup.number(this)
     }
 
 private fun resolveArgs(

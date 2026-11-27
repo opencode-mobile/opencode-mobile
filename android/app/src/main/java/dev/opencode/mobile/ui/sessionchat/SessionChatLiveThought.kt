@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.thoughtDetailTarget
+import java.util.Locale
 
 /**
  * The thought the thought sheet shows. Resolved from the loaded messages on every publish, so
@@ -96,8 +97,11 @@ object SessionChatLiveThought {
  * The standard thought sheet. Its subline reads [thinkingLabel] ("Thinking…") while the thought
  * streams and the duration once it settles.
  */
-internal fun SessionChatThoughtSheetState.detailTarget(thinkingLabel: String): SessionChatToolDetailTarget =
+internal fun SessionChatThoughtSheetState.detailTarget(
+    thinkingLabel: String,
+    locale: Locale,
+): SessionChatToolDetailTarget =
     thoughtDetailTarget(
         text = text,
-        durationLabel = if (isStreaming) thinkingLabel else SessionChatTimelineBlocks.thoughtDurationLabel(durationMs),
+        durationLabel = if (isStreaming) thinkingLabel else SessionChatTimelineBlocks.thoughtDurationLabel(durationMs, locale),
     )

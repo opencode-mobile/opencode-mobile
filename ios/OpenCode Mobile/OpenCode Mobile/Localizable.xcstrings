@@ -1308,6 +1308,54 @@
         }
       }
     },
+    "byte_count.gigabytes" : {
+      "comment" : "A size in gigabytes, such as 1.5 GB. %@ is the number, already written in the reader's locale.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ GB"
+          }
+        }
+      }
+    },
+    "byte_count.kilobytes" : {
+      "comment" : "A size in kilobytes, such as 1.5 KB. %@ is the number, already written in the reader's locale.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ KB"
+          }
+        }
+      }
+    },
+    "byte_count.megabytes" : {
+      "comment" : "A size in megabytes, such as 1.5 MB. %@ is the number, already written in the reader's locale.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ MB"
+          }
+        }
+      }
+    },
+    "byte_count.terabytes" : {
+      "comment" : "A size in terabytes, such as 1.5 TB. %@ is the number, already written in the reader's locale.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ TB"
+          }
+        }
+      }
+    },
     "changes.accessibility.file" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3345,6 +3393,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Image %@"
+          }
+        }
+      }
+    },
+    "component.message_time.yesterday" : {
+      "comment" : "The day under a message's send time when it was sent yesterday, shown by dragging the message and read by screen readers.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yesterday"
           }
         }
       }
@@ -13988,39 +14048,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Empty"
-          }
-        }
-      }
-    },
-    "settings.session_cache.gigabytes" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ GB"
-          }
-        }
-      }
-    },
-    "settings.session_cache.kilobytes" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld KB"
-          }
-        }
-      }
-    },
-    "settings.session_cache.megabytes" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ MB"
           }
         }
       }

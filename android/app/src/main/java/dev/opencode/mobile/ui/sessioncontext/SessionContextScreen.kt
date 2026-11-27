@@ -216,7 +216,7 @@ private fun ContextBreakdown(items: List<SessionContextBreakdownItem>) {
                             stringResource(
                                 R.string.session_context_breakdown_legend,
                                 stringResource(labelFor(item.kind)),
-                                percentText(item.displayPercent),
+                                breakdownPercent(item.displayPercent).resolve(),
                             ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -253,4 +253,5 @@ private fun labelFor(kind: SessionContextBreakdownKind): Int =
     }
 
 /** One decimal and a percent sign, as before: `12.5%`. */
-private fun percentText(value: Double): String = "%.1f%%".format(value)
+/** A breakdown part's share with one decimal, in the reader's locale: "12.5%", "12,5 %". */
+internal fun breakdownPercent(value: Double): UiText = UiText.percent(value, fractionDigits = 1)

@@ -28,28 +28,27 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.text.DateTimeStyle
 import dev.opencode.mobile.domain.time.LocalizedDateTimeFormat
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.text.currentLocale
+import dev.opencode.mobile.ui.text.platformDateTimeFormat
 import kotlinx.coroutines.launch
 import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.hypot
@@ -69,51 +68,34 @@ data class OpenCodeMessageTime(
         get() = listOfNotNull(day, time).joinToString(", ")
 
     companion object {
-        const val YESTERDAY = "Yesterday"
-
         /**
-         * Time in the 12/24-hour style asked for. Day: null today, "Yesterday", the
-         * weekday within the last week, otherwise a short date (with the year when
-         * it is not this year's).
+         * Time in [formats]' locale and 12/24-hour pattern. Day: null today, [yesterday], the
+         * weekday within the last week, otherwise a short date (with the year when it is not
+         * this year's). Days are counted in [formats]' time zone.
          */
         fun of(
             sentAtEpochMs: Long,
             nowEpochMs: Long = System.currentTimeMillis(),
-            zone: ZoneId = ZoneId.systemDefault(),
-            locale: Locale = Locale.getDefault(),
-            is24Hour: Boolean,
-            /** The locale's month-and-day pattern ("MMMd" skeleton); en-US "MMM d" by default. */
-            monthDayPattern: String = "MMM d",
+            formats: LocalizedDateTimeFormat,
+            /** The keyed "Yesterday" (`component_message_time_yesterday`). */
+            yesterday: String,
         ): OpenCodeMessageTime {
+            val zone = formats.zone
+            val locale = formats.locale
             val sent = Instant.ofEpochMilli(sentAtEpochMs).atZone(zone)
             val sentDay = sent.toLocalDate()
             val today = Instant.ofEpochMilli(nowEpochMs).atZone(zone).toLocalDate()
-            val time = sent.format(DateTimeFormatter.ofPattern(if (is24Hour) "HH:mm" else "h:mm a", locale))
             val days = ChronoUnit.DAYS.between(sentDay, today)
             val day =
                 when {
                     days <= 0 -> null
-                    days == 1L -> YESTERDAY
+                    days == 1L -> yesterday
                     days <= 6 -> sentDay.dayOfWeek.getDisplayName(TextStyle.FULL, locale)
-                    else -> shortDate(sentDay, today, locale, monthDayPattern)
+                    sentDay.year == today.year -> formats.format(sentAtEpochMs, DateTimeStyle.MonthDay)
+                    else -> sentDay.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
                 }
-            return OpenCodeMessageTime(time = time, day = day)
+            return OpenCodeMessageTime(time = formats.time(sentAtEpochMs), day = day)
         }
-
-        private fun shortDate(
-            date: LocalDate,
-            today: LocalDate,
-            locale: Locale,
-            monthDayPattern: String,
-        ): String =
-            if (date.year == today.year) {
-                LocalizedDateTimeFormat(locale, ZoneOffset.UTC, monthDayPattern).format(
-                    date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
-                    DateTimeStyle.MonthDay,
-                )
-            } else {
-                date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale))
-            }
     }
 }
 
@@ -163,13 +145,13 @@ fun rememberOpenCodeMessageTime(sentAtEpochMs: Long?): OpenCodeMessageTime? {
     if (sentAtEpochMs == null) return null
     val is24Hour = DateFormat.is24HourFormat(LocalContext.current)
     // The configuration locale, so a language change re-formats the day and time.
-    val locale = LocalConfiguration.current.locales[0]
-    return remember(sentAtEpochMs, is24Hour, locale) {
+    val locale = currentLocale()
+    val yesterday = stringResource(R.string.component_message_time_yesterday)
+    return remember(sentAtEpochMs, is24Hour, locale, yesterday) {
         OpenCodeMessageTime.of(
             sentAtEpochMs,
-            locale = locale,
-            is24Hour = is24Hour,
-            monthDayPattern = DateFormat.getBestDateTimePattern(locale, "MMMd"),
+            formats = platformDateTimeFormat(locale, is24Hour = is24Hour),
+            yesterday = yesterday,
         )
     }
 }
