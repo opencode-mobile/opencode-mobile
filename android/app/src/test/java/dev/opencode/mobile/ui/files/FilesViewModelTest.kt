@@ -9,9 +9,11 @@ import dev.opencode.mobile.domain.filesystem.ProjectFileLineSpans
 import dev.opencode.mobile.domain.filesystem.ProjectFilesException
 import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
 import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.CodeTokenRole
 import dev.opencode.mobile.ui.components.OpenCodeCodeLine
+import dev.opencode.mobile.ui.text.GermanFormatsStrings
 import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -356,6 +358,8 @@ class FilesViewModelTest {
         assertEquals("10 MB", formatFileSize(10_485_760).english())
         assertEquals("1 MB", formatFileSize(999_600).english())
         assertEquals("2.1 GB", formatFileSize(2_100_000_000).english())
+        assertEquals("1,5 KB", formatFileSize(1_500).resolve(GermanFormatsStrings))
+        assertEquals("2,1 GB", formatFileSize(2_100_000_000).resolve(GermanFormatsStrings))
     }
 
     @Test

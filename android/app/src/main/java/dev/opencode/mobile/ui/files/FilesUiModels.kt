@@ -5,7 +5,6 @@ import dev.opencode.mobile.domain.filesystem.ProjectEntry
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.components.OpenCodeCodeLine
-import java.util.Locale
 import kotlin.math.roundToLong
 
 /** Children of one folder in the File Browser tree. */
@@ -154,22 +153,25 @@ data class FilesUiState(
 
 /**
  * Decimal file size such as `40 MB` or `1.5 KB`, matching the platform file-size formatters.
- * Byte counts are a plural resource; unit symbols and the number format stay as they are.
+ * Byte counts are a plural resource; the unit is keyed and the number is a [UiText.Number],
+ * written in the reader's locale when resolved ("1,5 KB" in de-DE).
  */
 internal fun formatFileSize(bytes: Long): UiText {
     if (bytes < 1_000) return UiText.plural(R.plurals.file_viewer_size_bytes, bytes.toInt())
-    val units = listOf("KB", "MB", "GB", "TB")
+    val units =
+        listOf(R.string.byte_count_kilobytes, R.string.byte_count_megabytes, R.string.byte_count_gigabytes, R.string.byte_count_terabytes)
     var value = bytes / 1_000.0
     var unit = 0
     while (value >= 999.5 && unit < units.lastIndex) {
         value /= 1_000.0
         unit++
     }
+    // One decimal under 10 when it is not zero ("1.5 KB", "1 MB"), whole numbers above.
     val number =
         if (value < 10) {
-            String.format(Locale.US, "%.1f", value).removeSuffix(".0")
+            UiText.number(value, maxFractionDigits = 1)
         } else {
-            value.roundToLong().toString()
+            UiText.number(value.roundToLong().toDouble())
         }
-    return UiText.verbatim("$number ${units[unit]}")
+    return UiText.resource(units[unit], number)
 }
