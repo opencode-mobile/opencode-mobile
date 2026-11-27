@@ -28,10 +28,10 @@ class AttachmentDropRoutingTest {
         cases.forEach { case ->
             val expected = case.getValue("expected").jsonObject
             val route = AttachmentDropRouting.route(item(case.getValue("item").jsonObject), context(case["context"]?.jsonObject))
-            val wanted =
-                expected["skipped"]?.jsonPrimitive?.content?.let(AttachmentDropRoute::Skipped)
-                    ?: AttachmentDropRoute.Accepted
-            assertEquals(case.name(), wanted, route)
+            val wanted = expected["skipped"]?.jsonPrimitive?.content
+            val skipped = (route as? AttachmentDropRoute.Skipped)?.reason?.text?.english()
+            assertEquals(case.name(), wanted, skipped)
+            assertEquals(case.name(), wanted == null, route == AttachmentDropRoute.Accepted)
         }
     }
 

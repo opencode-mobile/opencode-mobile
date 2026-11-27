@@ -2119,7 +2119,7 @@ struct SessionChatViewModelTests {
         try handle.close()
 
         await viewModel.addAttachmentFiles([file])
-        await waitUntil { viewModel.uiState.snackbar?.message == AttachmentLimits.tooLargeMessage }
+        await waitUntil { viewModel.uiState.snackbar?.message == "This file is larger than 20 MB." }
 
         #expect(viewModel.uiState.composer.attachments.isEmpty)
     }

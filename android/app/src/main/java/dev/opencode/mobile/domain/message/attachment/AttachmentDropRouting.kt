@@ -31,14 +31,14 @@ sealed interface AttachmentDropRoute {
     data object Accepted : AttachmentDropRoute
 
     data class Skipped(
-        val reason: String,
+        val reason: AttachmentRejection,
     ) : AttachmentDropRoute
 }
 
 /** The drag-over card: what a drop would attach, or why nothing can be. */
 data class AttachmentDropSummary(
     val title: UiText,
-    /** Why items are skipped carries the routing reason; see [AttachmentDropRoute.Skipped]. */
+    /** Why items are skipped carries the first routing reason; see [AttachmentDropRoute.Skipped]. */
     val subtitle: UiText,
     /** Kinds of the first accepted items, at most [AttachmentDropRouting.MAX_PREVIEWS]. */
     val previews: List<AttachmentDropKind>,
@@ -51,9 +51,6 @@ data class AttachmentDropSummary(
  * the drag-over card. Shared with iOS through `shared/attachment-drop/attachment-drop-cases.json`.
  */
 object AttachmentDropRouting {
-    const val FOLDER_ERROR = "Folders can't be attached."
-    const val IMAGE_UNSUPPORTED_ERROR = "This model does not support image attachments."
-    const val PDF_UNSUPPORTED_ERROR = "This model does not support PDF attachments."
     const val MAX_PREVIEWS = 4
 
     /** `DocumentsContract.Document.MIME_TYPE_DIR`, without pulling the Android class into the domain. */
@@ -65,12 +62,12 @@ object AttachmentDropRouting {
         item: AttachmentDropItem,
         context: AttachmentDropContext,
     ): AttachmentDropRoute {
-        if (item.kind == AttachmentDropKind.Folder) return AttachmentDropRoute.Skipped(FOLDER_ERROR)
+        if (item.kind == AttachmentDropKind.Folder) return AttachmentDropRoute.Skipped(AttachmentRejection.Folder)
         val duplicate =
             item.filename != null &&
                 item.byteCount != null &&
                 context.draft.any { it.filename == item.filename && it.byteCount == item.byteCount }
-        if (duplicate) return AttachmentDropRoute.Skipped(AttachmentUploadPolicy.DUPLICATE_ERROR)
+        if (duplicate) return AttachmentDropRoute.Skipped(AttachmentRejection.Duplicate)
         val fits = item.byteCount == null || item.byteCount <= AttachmentLimits.MAX_DECODED_BYTES
         val inline =
             when (item.kind) {
@@ -82,10 +79,10 @@ object AttachmentDropRouting {
         if ((inline && fits) || context.uploadAvailable) return AttachmentDropRoute.Accepted
         val reason =
             when {
-                item.kind == AttachmentDropKind.Image && !context.imagesSupported -> IMAGE_UNSUPPORTED_ERROR
-                item.kind == AttachmentDropKind.Pdf && !context.pdfSupported -> PDF_UNSUPPORTED_ERROR
-                !fits -> AttachmentLimits.TOO_LARGE_ERROR
-                else -> AttachmentIngestionService.UNSUPPORTED_ERROR
+                item.kind == AttachmentDropKind.Image && !context.imagesSupported -> AttachmentRejection.ModelWithoutImages
+                item.kind == AttachmentDropKind.Pdf && !context.pdfSupported -> AttachmentRejection.ModelWithoutPdf
+                !fits -> AttachmentRejection.TooLarge()
+                else -> AttachmentRejection.UnsupportedType
             }
         return AttachmentDropRoute.Skipped(reason)
     }
@@ -112,7 +109,7 @@ object AttachmentDropRouting {
                     UiText.resource(
                         if (countKnown && items.size == 1) R.string.attachment_drop_reject_one else R.string.attachment_drop_reject_many,
                     ),
-                subtitle = UiText.verbatim(firstReason.orEmpty()),
+                subtitle = firstReason?.text ?: UiText.verbatim(""),
                 previews = emptyList(),
                 rejected = true,
             )
@@ -125,7 +122,6 @@ object AttachmentDropRouting {
                 images -> UiText.resource(R.string.attachment_drop_attach_images)
                 else -> UiText.resource(R.string.attachment_drop_attach_files)
             }
-        // The reason is still English routing text (#886 follow-up), passed as an argument.
         val subtitle =
             when {
                 firstReason == null -> UiText.resource(R.string.attachment_drop_adds_to_draft)
@@ -133,13 +129,13 @@ object AttachmentDropRouting {
                     UiText.resource(
                         R.string.attachment_drop_skipped_detail,
                         UiText.plural(R.plurals.attachment_drop_skipped_count, skipped),
-                        UiText.verbatim(firstReason),
+                        firstReason.text,
                     )
                 else ->
                     UiText.resource(
                         R.string.attachment_drop_skipped_detail,
                         UiText.resource(R.string.attachment_drop_some_skipped),
-                        UiText.verbatim(firstReason),
+                        firstReason.text,
                     )
             }
         return AttachmentDropSummary(

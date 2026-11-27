@@ -26,27 +26,13 @@ nonisolated struct AttachmentDropContext: Sendable {
 
 nonisolated enum AttachmentDropRoute: Equatable, Sendable {
     case accepted
-    case skipped(reason: String)
-}
-
-/// Drag-over card text: app text from the String Catalog, or a skip reason shown as is.
-nonisolated enum AttachmentDropText: Equatable, Sendable {
-    case localized(LocalizedStringResource)
-    /// The routing reason, already a display string.
-    case reason(String)
-
-    var resolved: String {
-        switch self {
-        case let .localized(resource): String(localized: resource)
-        case let .reason(reason): reason
-        }
-    }
+    case skipped(reason: AttachmentRejection)
 }
 
 /// The drag-over card: what a drop would attach, or why nothing can be.
 nonisolated struct AttachmentDropSummary: Equatable, Sendable {
     let title: LocalizedStringResource
-    let subtitle: AttachmentDropText
+    let subtitle: LocalizedStringResource
     /// Kinds of the first accepted items, at most `AttachmentDropRouting.maxPreviews`.
     let previews: [AttachmentDropKind]
     /// Nothing in the drag can be attached: the card shows its error style.
@@ -56,16 +42,13 @@ nonisolated struct AttachmentDropSummary: Equatable, Sendable {
 /// Routes pasted and dropped items through the #644 policy before their bytes are read, and words
 /// the drag-over card. Shared with Android through `shared/attachment-drop/attachment-drop-cases.json`.
 nonisolated enum AttachmentDropRouting {
-    static let folderMessage = "Folders can't be attached."
-    static let imageUnsupportedMessage = "This model does not support image attachments."
-    static let pdfUnsupportedMessage = "This model does not support PDF attachments."
     static let maxPreviews = 4
 
     static func route(_ item: AttachmentDropItem, context: AttachmentDropContext) -> AttachmentDropRoute {
-        if item.kind == .folder { return .skipped(reason: folderMessage) }
+        if item.kind == .folder { return .skipped(reason: .folder) }
         if let filename = item.filename, let byteCount = item.byteCount,
            AttachmentDuplicate.isDuplicate(filename: filename, byteCount: byteCount, in: context.draft) {
-            return .skipped(reason: AttachmentDuplicate.message)
+            return .skipped(reason: .duplicate)
         }
         let fits = item.byteCount.map { $0 <= AttachmentLimits.maxDecodedBytes } ?? true
         let inline = switch item.kind {
@@ -75,10 +58,10 @@ nonisolated enum AttachmentDropRouting {
         case .file, .folder: false
         }
         if (inline && fits) || context.uploadAvailable { return .accepted }
-        if item.kind == .image, !context.imagesSupported { return .skipped(reason: imageUnsupportedMessage) }
-        if item.kind == .pdf, !context.pdfSupported { return .skipped(reason: pdfUnsupportedMessage) }
-        if !fits { return .skipped(reason: AttachmentLimits.tooLargeMessage) }
-        return .skipped(reason: AttachmentLoadError.unsupportedType.localizedDescription)
+        if item.kind == .image, !context.imagesSupported { return .skipped(reason: .modelWithoutImages) }
+        if item.kind == .pdf, !context.pdfSupported { return .skipped(reason: .modelWithoutPDF) }
+        if !fits { return .skipped(reason: .tooLarge()) }
+        return .skipped(reason: .unsupportedType)
     }
 
     /// `nil` when `items` is empty (a text-only drag shows no card). `countKnown` is false when the
@@ -91,7 +74,7 @@ nonisolated enum AttachmentDropRouting {
         guard !items.isEmpty else { return nil }
         let routed = items.map { ($0, route($0, context: context)) }
         let accepted = routed.filter { $0.1 == .accepted }.map(\.0)
-        let firstReason = routed.lazy.compactMap { entry -> String? in
+        let firstReason = routed.lazy.compactMap { entry -> AttachmentRejection? in
             if case let .skipped(reason) = entry.1 { return reason }
             return nil
         }.first
@@ -101,7 +84,8 @@ nonisolated enum AttachmentDropRouting {
                 title: countKnown && items.count == 1
                     ? LocalizedStringResource("attachment_drop.reject_one", defaultValue: "Can't attach this")
                     : LocalizedStringResource("attachment_drop.reject_many", defaultValue: "Can't attach these"),
-                subtitle: .reason(firstReason ?? ""),
+                // Every item was skipped, so there is a reason.
+                subtitle: (firstReason ?? .unreadable).text,
                 previews: [],
                 rejected: true
             )
@@ -120,7 +104,6 @@ nonisolated enum AttachmentDropRouting {
         }
         let subtitle: LocalizedStringResource
         if let firstReason {
-            // The reason is still English routing text (#886 follow-up), passed as an argument.
             let skippedText = countKnown
                 ? String(localized: LocalizedStringResource(
                     "attachment_drop.skipped_count",
@@ -129,7 +112,7 @@ nonisolated enum AttachmentDropRouting {
                 : String(localized: "attachment_drop.some_skipped", defaultValue: "Some will be skipped")
             subtitle = LocalizedStringResource(
                 "attachment_drop.skipped_detail",
-                defaultValue: "\(skippedText) · \(firstReason)"
+                defaultValue: "\(skippedText) · \(String(localized: firstReason.text))"
             )
         } else {
             subtitle = LocalizedStringResource(
@@ -139,7 +122,7 @@ nonisolated enum AttachmentDropRouting {
         }
         return AttachmentDropSummary(
             title: title,
-            subtitle: .localized(subtitle),
+            subtitle: subtitle,
             previews: accepted.prefix(maxPreviews).map(\.kind),
             rejected: false
         )

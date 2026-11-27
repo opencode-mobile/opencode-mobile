@@ -675,7 +675,8 @@ data class SessionChatComposerRegionState(
     val isSending: Boolean = false,
     val sendProgressPercent: Int? = null,
     val isAborting: Boolean = false,
-    val errorMessage: String? = null,
+    /** Attachment rejections are keyed text; send and command failures are the server's words. */
+    val errorMessage: UiText? = null,
     val abortErrorMessage: String? = null,
     val serverCommands: List<ServerCommand> = emptyList(),
     val mentionableAgents: List<MentionableAgent> = emptyList(),

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -30,10 +31,11 @@ class AttachmentIngestionServiceTest {
         assertEquals(10, small.size)
 
         val error =
-            assertThrows(IllegalArgumentException::class.java) {
+            assertThrows(AttachmentRejectedException::class.java) {
                 AttachmentIngestionService.readBounded(ByteArrayInputStream(ByteArray(11) { 1 }), limit = 10)
             }
-        assertEquals(AttachmentLimits.TOO_LARGE_ERROR, error.message)
+        assertEquals(AttachmentRejection.TooLarge(), error.rejection)
+        assertEquals("This file is larger than 20 MB.", error.rejection.text.english())
     }
 
     @Test
@@ -59,11 +61,12 @@ class AttachmentIngestionServiceTest {
     @Test
     fun ingest_unsupportedType_rejectsSelection() {
         val error =
-            assertThrows(IllegalArgumentException::class.java) {
+            assertThrows(AttachmentRejectedException::class.java) {
                 service.ingest("archive.zip", "application/zip", byteArrayOf(1, 2, 3))
             }
 
-        assertEquals(AttachmentIngestionService.UNSUPPORTED_ERROR, error.message)
+        assertEquals(AttachmentRejection.UnsupportedType, error.rejection)
+        assertEquals("Only images, PDFs, or text files can be attached here.", error.rejection.text.english())
     }
 
     @Test
@@ -81,7 +84,7 @@ class AttachmentIngestionServiceTest {
     @Test
     fun ingest_rejectsDecodedBytesOverTwentyMebibytes() {
         val error =
-            assertThrows(IllegalArgumentException::class.java) {
+            assertThrows(AttachmentRejectedException::class.java) {
                 service.ingest(
                     "huge.pdf",
                     "application/pdf",
@@ -89,7 +92,7 @@ class AttachmentIngestionServiceTest {
                 )
             }
 
-        assertEquals(AttachmentLimits.TOO_LARGE_ERROR, error.message)
+        assertEquals(AttachmentRejection.TooLarge(), error.rejection)
     }
 
     @Test

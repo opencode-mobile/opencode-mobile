@@ -1019,6 +1019,116 @@
         }
       }
     },
+    "attachment.error.duplicate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file has already been uploaded"
+          }
+        }
+      }
+    },
+    "attachment.error.folder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folders can't be attached."
+          }
+        }
+      }
+    },
+    "attachment.error.invalid_data" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment data is invalid."
+          }
+        }
+      }
+    },
+    "attachment.error.model_no_images" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This model does not support image attachments."
+          }
+        }
+      }
+    },
+    "attachment.error.model_no_pdf" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This model does not support PDF attachments."
+          }
+        }
+      }
+    },
+    "attachment.error.model_some" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This model does not support some of the selected attachments."
+          }
+        }
+      }
+    },
+    "attachment.error.too_large" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is larger than %lld MB."
+          }
+        }
+      }
+    },
+    "attachment.error.unreadable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment could not be read."
+          }
+        }
+      }
+    },
+    "attachment.error.unsupported_type" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only images, PDFs, or text files can be attached here."
+          }
+        }
+      }
+    },
+    "attachment.error.upload_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upload failed"
+          }
+        }
+      }
+    },
     "attachment_drop.adds_to_draft" : {
       "extractionState" : "manual",
       "localizations" : {

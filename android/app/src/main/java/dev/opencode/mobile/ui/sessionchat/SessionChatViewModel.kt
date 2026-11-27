@@ -47,6 +47,7 @@ import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.AttachmentIngestionResult
+import dev.opencode.mobile.domain.message.AttachmentRejection
 import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
@@ -1109,8 +1110,8 @@ class SessionChatViewModel
             composer.removeAttachment(id)
         }
 
-        fun reportAttachmentError(message: String) {
-            composer.reportAttachmentError(message)
+        fun reportAttachmentError(rejection: AttachmentRejection) {
+            composer.reportAttachmentError(rejection)
         }
 
         fun retryModelCatalog() {
@@ -2156,7 +2157,7 @@ class SessionChatViewModel
                         infoState.unarchiveFailed -> UiText.resource(R.string.archived_sessions_unarchive_failed)
                         infoState.lifecycleErrorMessage != null -> UiText.verbatim(infoState.lifecycleErrorMessage)
                         worktreeMove.state.value.errorMessage != null -> worktreeMove.state.value.errorMessage
-                        composerState.errorMessage != null -> UiText.verbatim(composerState.errorMessage)
+                        composerState.errorMessage != null -> composerState.errorMessage
                         composerState.abortErrorMessage != null -> UiText.verbatim(composerState.abortErrorMessage)
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
                         goal.state.value.notice != null -> goal.state.value.notice

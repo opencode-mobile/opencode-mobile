@@ -39,6 +39,7 @@ import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentIngestionResult
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
+import dev.opencode.mobile.domain.message.AttachmentRejection
 import dev.opencode.mobile.domain.message.AttachmentUpload
 import dev.opencode.mobile.domain.message.AttachmentUploadResult
 import dev.opencode.mobile.domain.message.AttachmentUploadService
@@ -8940,7 +8941,7 @@ class SessionChatViewModelTest {
 
             val added =
                 viewModel.addPastedOrDroppedAttachments(
-                    AttachmentIngestionResult(emptyList(), listOf("The attachment could not be read.")),
+                    AttachmentIngestionResult(emptyList(), listOf(AttachmentRejection.Unreadable)),
                     skippedFolders = 0,
                 )
             runCurrent()
@@ -9042,7 +9043,7 @@ class SessionChatViewModelTest {
                     .isEmpty(),
             )
             assertEquals(
-                AttachmentLimits.TOO_LARGE_ERROR,
+                "This file is larger than 20 MB.",
                 viewModel.uiState.value.snackbar
                     ?.message
                     ?.english(),

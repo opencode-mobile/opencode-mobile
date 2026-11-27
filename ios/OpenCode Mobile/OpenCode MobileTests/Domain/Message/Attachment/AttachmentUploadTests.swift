@@ -146,7 +146,7 @@ struct AttachmentUploadPolicyTests {
         #expect(AttachmentDuplicate.isDuplicate(filename: "a.txt", byteCount: 10, in: draft))
         #expect(!AttachmentDuplicate.isDuplicate(filename: "a.txt", byteCount: 11, in: draft))
         #expect(!AttachmentDuplicate.isDuplicate(filename: "b.txt", byteCount: 10, in: draft))
-        #expect(AttachmentDuplicate.message == "This file has already been uploaded")
+        #expect(String(localized: AttachmentRejection.duplicate.text) == "This file has already been uploaded")
     }
 
     @Test func failureTableClassifiesEveryRow() {

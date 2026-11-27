@@ -34,7 +34,7 @@ class AttachmentUploadPolicyTest {
     fun withoutUploadsEverythingGoesTheDataUrlWayWithTheOldLimit() {
         assertEquals(AttachmentDestination.Inline, destination("text/plain", 10, visionModel, false))
         assertEquals(
-            AttachmentDestination.Reject(AttachmentLimits.TOO_LARGE_ERROR),
+            AttachmentDestination.Reject(AttachmentRejection.TooLarge()),
             destination("image/png", limit + 1, visionModel, false),
         )
     }

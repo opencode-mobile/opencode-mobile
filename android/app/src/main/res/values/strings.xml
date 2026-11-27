@@ -540,6 +540,15 @@
     <string name="session_chat_side_question_unavailable">/btw needs a newer opencode server.</string>
     <string name="session_chat_side_question_copied">Answer copied</string>
     <string name="session_chat_side_question_failed">/btw failed: “%1$s”</string>
+    <string name="attachment_error_folder">Folders can\'t be attached.</string>
+    <string name="attachment_error_duplicate">This file has already been uploaded</string>
+    <string name="attachment_error_too_large">This file is larger than %1$d MB.</string>
+    <string name="attachment_error_unsupported_type">Only images, PDFs, or text files can be attached here.</string>
+    <string name="attachment_error_model_no_images">This model does not support image attachments.</string>
+    <string name="attachment_error_model_no_pdf">This model does not support PDF attachments.</string>
+    <string name="attachment_error_model_some">This model does not support some of the selected attachments.</string>
+    <string name="attachment_error_unreadable">The attachment could not be read.</string>
+    <string name="attachment_error_upload_failed">Upload failed</string>
     <string name="attachment_drop_reject_one">Can\'t attach this</string>
     <string name="attachment_drop_reject_many">Can\'t attach these</string>
     <plurals name="attachment_drop_attach_images_count">

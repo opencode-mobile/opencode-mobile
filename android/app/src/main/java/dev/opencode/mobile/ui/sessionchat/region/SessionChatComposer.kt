@@ -25,10 +25,9 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentDestination
-import dev.opencode.mobile.domain.message.AttachmentDropRouting
 import dev.opencode.mobile.domain.message.AttachmentIngestionResult
-import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.AttachmentKind
+import dev.opencode.mobile.domain.message.AttachmentRejection
 import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.AttachmentUpload
 import dev.opencode.mobile.domain.message.AttachmentUploadPolicy
@@ -43,6 +42,7 @@ import dev.opencode.mobile.domain.message.PromptModelSelection
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgress
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
+import dev.opencode.mobile.domain.message.text
 import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
 import dev.opencode.mobile.domain.model.ModelCatalogStore
@@ -998,9 +998,9 @@ class SessionChatComposer(
         }
         discardStoredAttachments(duplicates + tooLarge)
         when {
-            tooLarge.isNotEmpty() -> reportAttachmentError(AttachmentLimits.TOO_LARGE_ERROR)
-            duplicates.isNotEmpty() -> reportAttachmentError(AttachmentUploadPolicy.DUPLICATE_ERROR)
-            rejected.isNotEmpty() -> reportAttachmentError(unsupportedAttachmentMessage(rejected))
+            tooLarge.isNotEmpty() -> reportAttachmentError(AttachmentRejection.TooLarge())
+            duplicates.isNotEmpty() -> reportAttachmentError(AttachmentRejection.Duplicate)
+            rejected.isNotEmpty() -> reportAttachmentError(unsupportedAttachmentRejection(rejected))
             staged.isNotEmpty() -> _state.update { it.copy(errorMessage = null) }
         }
         if (rejected.isNotEmpty()) discardStoredAttachments(rejected)
@@ -1023,7 +1023,7 @@ class SessionChatComposer(
         val error = result.errors.firstOrNull()
         when {
             quiet && error != null -> reportAttachmentError(error)
-            quiet && skippedFolders > 0 -> reportAttachmentError(AttachmentDropRouting.FOLDER_ERROR)
+            quiet && skippedFolders > 0 -> reportAttachmentError(AttachmentRejection.Folder)
         }
         return _state.value.composer.attachments.size > before
     }
@@ -1092,17 +1092,17 @@ class SessionChatComposer(
                     null -> updateAttachment(attachment.id) { it.copy(upload = AttachmentUpload.Inline) }
                     InlineRejection.TooLarge -> {
                         dropAttachment(attachment.id)
-                        reportAttachmentError(AttachmentLimits.TOO_LARGE_ERROR)
+                        reportAttachmentError(AttachmentRejection.TooLarge())
                     }
                     InlineRejection.Unsupported -> {
                         dropAttachment(attachment.id)
-                        reportAttachmentError(unsupportedAttachmentMessage(listOf(attachment)))
+                        reportAttachmentError(unsupportedAttachmentRejection(listOf(attachment)))
                     }
                 }
             }
             AttachmentUploadResult.TransportFailure -> {
                 dropAttachment(attachment.id)
-                reportAttachmentError(AttachmentUploadPolicy.UPLOAD_FAILED_ERROR)
+                reportAttachmentError(AttachmentRejection.UploadFailed)
             }
         }
     }
@@ -1144,9 +1144,9 @@ class SessionChatComposer(
         dropAttachment(id)
     }
 
-    fun reportAttachmentError(message: String) {
-        _state.update { it.copy(errorMessage = message) }
-        DiagnosticLog.warning(DiagnosticLogArea.Chat, "attachment rejected error=$message")
+    fun reportAttachmentError(rejection: AttachmentRejection) {
+        _state.update { it.copy(errorMessage = rejection.text) }
+        DiagnosticLog.warning(DiagnosticLogArea.Chat, "attachment rejected error=${rejection.logMessage}")
     }
 
     fun selectModel(option: ModelSelectionOption) {
@@ -1549,7 +1549,7 @@ class SessionChatComposer(
         if (_state.value.isSending || !composer.isModelSelectionReady) return false
         // Like the TUI and web app, a command runs now or not at all; it cannot wait in the queue.
         if (supportsFollowUp && isSessionBusy && composer.followUpDelivery == FollowUpDelivery.Queue) {
-            _state.update { it.copy(errorMessage = SHELL_CANNOT_QUEUE_ERROR) }
+            _state.update { it.copy(errorMessage = UiText.verbatim(SHELL_CANNOT_QUEUE_ERROR)) }
             return false
         }
         val submittedText = composer.text
@@ -1590,7 +1590,7 @@ class SessionChatComposer(
                     submittedAttachments = emptyList(),
                     submittedAttachmentRevisions = emptyMap(),
                 )
-                _state.update { it.copy(errorMessage = errorMessage(throwable)) }
+                _state.update { it.copy(errorMessage = UiText.verbatim(errorMessage(throwable))) }
             }
         }
         return true
@@ -2250,13 +2250,13 @@ class SessionChatComposer(
         return (listOf(leading) + skillMentions).sortedBy { it.start }
     }
 
-    private fun unsupportedAttachmentMessage(rejected: List<Attachment>): String {
+    private fun unsupportedAttachmentRejection(rejected: List<Attachment>): AttachmentRejection {
         val kinds = rejected.map { it.kind }.toSet()
         return when (kinds) {
-            setOf(AttachmentKind.Image) -> "This model does not support image attachments."
-            setOf(AttachmentKind.Pdf) -> "This model does not support PDF attachments."
-            setOf(AttachmentKind.File) -> AttachmentIngestionService.UNSUPPORTED_ERROR
-            else -> "This model does not support some of the selected attachments."
+            setOf(AttachmentKind.Image) -> AttachmentRejection.ModelWithoutImages
+            setOf(AttachmentKind.Pdf) -> AttachmentRejection.ModelWithoutPdf
+            setOf(AttachmentKind.File) -> AttachmentRejection.UnsupportedType
+            else -> AttachmentRejection.ModelWithoutSome
         }
     }
 

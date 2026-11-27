@@ -30,8 +30,6 @@ nonisolated enum AttachmentDuplicate {
     static func isDuplicate(filename: String, byteCount: Int64, in draft: [Attachment]) -> Bool {
         draft.contains { $0.filename == filename && $0.byteCount == byteCount }
     }
-
-    static let message = "This file has already been uploaded"
 }
 
 /// What a finished upload request means (#644 failure table).

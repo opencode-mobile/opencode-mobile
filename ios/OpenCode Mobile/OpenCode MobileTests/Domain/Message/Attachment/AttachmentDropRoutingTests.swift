@@ -102,11 +102,10 @@ struct AttachmentDropRoutingTests {
         let cases = try Self.vectors().routes
         #expect(!cases.isEmpty)
         for vector in cases {
-            let expected: AttachmentDropRoute = vector.expected.skipped.map { .skipped(reason: $0) } ?? .accepted
-            #expect(
-                AttachmentDropRouting.route(try Self.item(vector.item), context: Self.context(vector.context)) == expected,
-                "\(vector.name)"
-            )
+            let route = AttachmentDropRouting.route(try Self.item(vector.item), context: Self.context(vector.context))
+            let skipped: String? = if case let .skipped(reason) = route { String(localized: reason.text) } else { nil }
+            #expect(skipped == vector.expected.skipped, "\(vector.name)")
+            #expect((route == .accepted) == (vector.expected.skipped == nil), "\(vector.name)")
         }
     }
 
@@ -138,7 +137,7 @@ struct AttachmentDropRoutingTests {
             let resolved = summary.map {
                 EnglishSummary(
                     title: String(localized: $0.title),
-                    subtitle: $0.subtitle.resolved,
+                    subtitle: String(localized: $0.subtitle),
                     previews: $0.previews,
                     rejected: $0.rejected
                 )

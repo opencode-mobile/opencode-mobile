@@ -734,10 +734,10 @@ final class SessionChatComposer {
         }
         if !duplicates.isEmpty {
             discardStoredAttachments(duplicates)
-            setAttachmentError(AttachmentDuplicate.message)
+            setAttachmentError(.duplicate)
         } else if !rejected.isEmpty {
             discardStoredAttachments(rejected)
-            setAttachmentError(Self.unsupportedAttachmentMessage(for: rejected))
+            setAttachmentError(Self.unsupportedAttachmentRejection(for: rejected))
         } else if !accepted.isEmpty {
             state.errorMessage = nil
             notifyChange()
@@ -766,12 +766,12 @@ final class SessionChatComposer {
                 OpenCodeLog.sessionChat.info("attachment accepted mime=\(attachment.mime) bytes=\(data.count) count=1")
             }
         } catch {
-            setAttachmentError(error.localizedDescription)
+            setAttachmentError(error.attachmentRejection)
         }
     }
 
     func reportAttachmentReadFailure() {
-        setAttachmentError(AttachmentLoadError.unreadableFile.localizedDescription)
+        setAttachmentError(.unreadable)
     }
 
     func addAttachmentFiles(_ urls: [URL]) async {
@@ -790,7 +790,7 @@ final class SessionChatComposer {
             return error
         }
         if let failure = failures.first, state.errorMessage == nil {
-            setAttachmentError(failure.localizedDescription)
+            setAttachmentError(failure.attachmentRejection)
         }
         OpenCodeLog.sessionChat.info("attachments selected accepted=\(attachments.count) rejected=\(result.count - attachments.count)")
     }
@@ -804,9 +804,9 @@ final class SessionChatComposer {
         await addAttachmentFiles(urls)
         let quiet = state.errorMessage == nil || state.errorMessage == errorBefore
         if quiet, unreadable > 0 {
-            setAttachmentError(AttachmentLoadError.unreadableFile.localizedDescription)
+            setAttachmentError(.unreadable)
         } else if quiet, skippedFolders > 0 {
-            setAttachmentError(AttachmentDropRouting.folderMessage)
+            setAttachmentError(.folder)
         }
         return state.composer.attachments.count > before
     }
@@ -836,7 +836,7 @@ final class SessionChatComposer {
 
     private func startUpload(_ attachment: Attachment) {
         guard let repository = attachmentUploadRepository, let fileURL = attachment.fileURL else {
-            removeFailedUpload(id: attachment.id, message: AttachmentUploadError.failedMessage)
+            removeFailedUpload(id: attachment.id, rejection: .uploadFailed)
             return
         }
         let id = attachment.id
@@ -886,9 +886,9 @@ final class SessionChatComposer {
         guard let attachment = state.composer.attachments.first(where: { $0.id == id }) else { return }
         switch error {
         case .cancelled:
-            removeFailedUpload(id: id, message: nil)
+            removeFailedUpload(id: id, rejection: nil)
         case .failed:
-            removeFailedUpload(id: id, message: AttachmentUploadError.failedMessage)
+            removeFailedUpload(id: id, rejection: .uploadFailed)
         case .contractMiss:
             // The route no longer matches: send this file the old way, with its old errors.
             state.composer.streamedUploadAvailable = false
@@ -898,7 +898,7 @@ final class SessionChatComposer {
 
     private func sendInline(replacing attachment: Attachment) async {
         guard let fileURL = attachment.fileURL else {
-            removeFailedUpload(id: attachment.id, message: AttachmentLoadError.unreadableFile.localizedDescription)
+            removeFailedUpload(id: attachment.id, rejection: .unreadable)
             return
         }
         let name = attachment.filename
@@ -930,19 +930,19 @@ final class SessionChatComposer {
             } else {
                 // Refused (for example a model without image input; the error is already shown).
                 AttachmentLimits.discard(file.fileURL)
-                removeFailedUpload(id: attachment.id, message: nil)
+                removeFailedUpload(id: attachment.id, rejection: nil)
             }
         case let .failure(failure):
-            removeFailedUpload(id: attachment.id, message: failure.localizedDescription)
+            removeFailedUpload(id: attachment.id, rejection: failure.attachmentRejection)
         }
     }
 
-    private func removeFailedUpload(id: String, message: String?) {
+    private func removeFailedUpload(id: String, rejection: AttachmentRejection?) {
         let removed = state.composer.attachments.filter { $0.id == id }
         attachmentRevisions[id] = nil
         updateComposer { $0.attachments.removeAll { $0.id == id } }
         discardStoredAttachments(removed)
-        if let message { setAttachmentError(message) }
+        if let rejection { setAttachmentError(rejection) }
     }
 
     private func cancelUpload(id: String) {
@@ -957,21 +957,19 @@ final class SessionChatComposer {
         uploadFractions = [:]
     }
 
-    private func setAttachmentError(_ message: String) {
-        state.errorMessage = message
-        OpenCodeLog.sessionChat.warning("attachment rejected error=\(message)")
+    /// The composer's error snackbar carries plain strings; the rejection's keyed text is
+    /// resolved from the String Catalog here.
+    private func setAttachmentError(_ rejection: AttachmentRejection) {
+        state.errorMessage = String(localized: rejection.text)
+        OpenCodeLog.sessionChat.warning("attachment rejected error=\(rejection.logMessage)")
         notifyChange()
     }
 
-    private static func unsupportedAttachmentMessage(for rejected: [Attachment]) -> String {
+    private static func unsupportedAttachmentRejection(for rejected: [Attachment]) -> AttachmentRejection {
         let kinds = Set(rejected.map(\.kind))
-        if kinds == [.image] {
-            return "This model does not support image attachments."
-        }
-        if kinds == [.pdf] {
-            return "This model does not support PDF attachments."
-        }
-        return "This model does not support some of the selected attachments."
+        if kinds == [.image] { return .modelWithoutImages }
+        if kinds == [.pdf] { return .modelWithoutPDF }
+        return .modelWithoutSome
     }
 
     func selectModel(_ option: ModelSelectionOption) {

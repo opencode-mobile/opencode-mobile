@@ -34,13 +34,13 @@ class AttachmentIngestionService private constructor(
         nameWhenMissing: (mime: String?) -> String? = { null },
     ): AttachmentIngestionResult {
         val attachments = mutableListOf<Attachment>()
-        val errors = mutableListOf<String>()
+        val errors = mutableListOf<AttachmentRejection>()
         uris.forEach { uri ->
             runCatching { if (uploadAvailable) ingestStreamed(uri, nameWhenMissing) else ingest(uri, nameWhenMissing) }
                 .onSuccess { attachments += it }
                 .onFailure { throwable ->
-                    val message = throwable.message ?: READ_ERROR
-                    errors += message
+                    errors += throwable.attachmentRejection()
+                    val message = throwable.message ?: throwable::class.simpleName
                     DiagnosticLog.warning(DiagnosticLogArea.Chat, "attachment rejected error=$message")
                 }
         }
@@ -64,7 +64,7 @@ class AttachmentIngestionService private constructor(
             try {
                 contentResolver.openInputStream(uri)?.use { input ->
                     stored.outputStream().use { output -> copyCapturingHead(input, output, head) }
-                } ?: throw IllegalArgumentException(READ_ERROR)
+                } ?: throw AttachmentRejectedException(AttachmentRejection.Unreadable)
             } catch (error: Throwable) {
                 runCatching { stored.delete() }
                 throw error
@@ -97,15 +97,15 @@ class AttachmentIngestionService private constructor(
         val contentResolver = requireNotNull(contentResolver)
         val metadata = metadata(uri, nameWhenMissing)
         if (metadata.size != null && metadata.size > AttachmentLimits.MAX_DECODED_BYTES) {
-            throw IllegalArgumentException(AttachmentLimits.TOO_LARGE_ERROR)
+            throw AttachmentRejectedException(AttachmentRejection.TooLarge())
         }
         val accepted =
             acceptedType(contentResolver.getType(uri), metadata.filename)
-                ?: throw IllegalArgumentException(UNSUPPORTED_ERROR)
+                ?: throw AttachmentRejectedException(AttachmentRejection.UnsupportedType)
         // Providers may report no size; never buffer more than the limit before deciding.
         val bytes =
             contentResolver.openInputStream(uri)?.use { readBounded(it, AttachmentLimits.MAX_DECODED_BYTES) }
-                ?: throw IllegalArgumentException(READ_ERROR)
+                ?: throw AttachmentRejectedException(AttachmentRejection.Unreadable)
         return ingest(metadata.filename, accepted, bytes)
     }
 
@@ -114,7 +114,7 @@ class AttachmentIngestionService private constructor(
         rawMime: String?,
         bytes: ByteArray,
     ): Attachment {
-        val accepted = acceptedType(rawMime, filename) ?: throw IllegalArgumentException(UNSUPPORTED_ERROR)
+        val accepted = acceptedType(rawMime, filename) ?: throw AttachmentRejectedException(AttachmentRejection.UnsupportedType)
         return ingest(filename, accepted, bytes)
     }
 
@@ -124,10 +124,10 @@ class AttachmentIngestionService private constructor(
         bytes: ByteArray,
     ): Attachment {
         if (bytes.size.toLong() > AttachmentLimits.MAX_DECODED_BYTES) {
-            throw IllegalArgumentException(AttachmentLimits.TOO_LARGE_ERROR)
+            throw AttachmentRejectedException(AttachmentRejection.TooLarge())
         }
         if (AttachmentDataUrl.kind(accepted.mime) == null) {
-            throw IllegalArgumentException(UNSUPPORTED_ERROR)
+            throw AttachmentRejectedException(AttachmentRejection.UnsupportedType)
         }
         val preview =
             if (accepted.kind == AttachmentKind.Image) {
@@ -228,7 +228,7 @@ class AttachmentIngestionService private constructor(
     companion object {
         /**
          * Reads at most [limit] bytes; one byte past the limit throws
-         * [AttachmentLimits.TOO_LARGE_ERROR] instead of growing the buffer further (#755).
+         * [AttachmentRejection.TooLarge] instead of growing the buffer further (#755).
          */
         internal fun readBounded(
             input: InputStream,
@@ -241,7 +241,7 @@ class AttachmentIngestionService private constructor(
                 val read = input.read(buffer)
                 if (read < 0) break
                 total += read
-                if (total > limit) throw IllegalArgumentException(AttachmentLimits.TOO_LARGE_ERROR)
+                if (total > limit) throw AttachmentRejectedException(AttachmentRejection.TooLarge())
                 output.write(buffer, 0, read)
             }
             return output.toByteArray()
@@ -266,8 +266,6 @@ class AttachmentIngestionService private constructor(
             return total
         }
 
-        const val UNSUPPORTED_ERROR = "Only images, PDFs, or text files can be attached here."
-        const val READ_ERROR = "The attachment could not be read."
         internal const val MAX_PREVIEW_BYTES = 128 * 1024
         private val IMAGE_MIMES = setOf("image/png", "image/jpeg", "image/gif", "image/webp")
         internal val TEXT_EXTENSIONS =
@@ -357,5 +355,6 @@ internal object AttachmentThumbnailer {
 
 data class AttachmentIngestionResult(
     val attachments: List<Attachment>,
-    val errors: List<String>,
+    /** Why each other item was not ingested, in order. */
+    val errors: List<AttachmentRejection>,
 )

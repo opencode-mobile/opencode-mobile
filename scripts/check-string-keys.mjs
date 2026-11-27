@@ -64,6 +64,7 @@ const ANDROID_ONLY = new Set([
 /** iOS-only catalog keys, by iOS key. */
 const IOS_ONLY = new Set([
   "server_health.error_log_date_time", // iOS joins date and time itself; Android's DateUtils formats both
+  "attachment.error.invalid_data", // iOS validates a loaded data: URL against its type; Android builds its own
 ]);
 
 const ANDROID_PLACEHOLDER = /%(?:\d+\$)?[-#+ 0,(]*\d*(?:\.\d+)?[sdfxXoeEgGc]/g;

@@ -81,6 +81,7 @@ import dev.opencode.mobile.domain.message.AttachmentDropSummary
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.attachmentRejection
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.resolve
@@ -489,7 +490,7 @@ private fun SessionChatScreenBody(
                         DiagnosticLogAttachment.from(DiagnosticLogBuffer.shared)
                     }
                 }.getOrElse {
-                    viewModel.reportAttachmentError(AttachmentIngestionService.READ_ERROR)
+                    viewModel.reportAttachmentError(it.attachmentRejection())
                     return@launch
                 }
             viewModel.addAttachments(listOf(attachment))

@@ -254,7 +254,7 @@ struct SessionChatView: View {
                     OpenCodeDropOverlay(
                         variant: summary.rejected ? .reject : .accept,
                         title: OpenCodeText(summary.title),
-                        subtitle: summary.subtitle.openCodeText,
+                        subtitle: OpenCodeText(summary.subtitle),
                         previews: summary.previews.map(\.attachmentVariant)
                     )
                     .allowsHitTesting(false)
