@@ -55,7 +55,7 @@ class SessionContextViewModelTest {
 
             assertEquals(SessionContextTimelineState.Ready, viewModel.uiState.value.timeline)
             assertEquals(
-                "Loaded",
+                SessionContextStatValue.Text("Loaded"),
                 viewModel.uiState.value.display
                     ?.stats
                     ?.first { it.id == "session" }
@@ -96,7 +96,7 @@ class SessionContextViewModelTest {
             val stats = viewModel.uiState.value.display?.stats.orEmpty()
             val session = stats.first { it.id == "session" }
             assertEquals(UiText.resource(R.string.session_context_stat_session), session.label)
-            assertEquals("Loaded", session.value)
+            assertEquals(SessionContextStatValue.Text("Loaded"), session.value)
             assertEquals("Cache Tokens (read/write)", stats.first { it.id == "cache" }.label.english())
             assertEquals("Last Activity", stats.first { it.id == "activity" }.label.english())
         }
