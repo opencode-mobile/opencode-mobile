@@ -7,13 +7,14 @@ nonisolated enum ServerHealthFormat {
         "\(value) ms"
     }
 
-    /// "4.2 s" (one decimal under 10 s), "42 s", "12 m", "2 h 18 m", "3 d 4 h".
-    static func duration(_ milliseconds: Int64) -> String {
+    /// "4.2 s" (one decimal under 10 s), "42 s", "12 m", "2 h 18 m", "3 d 4 h". The tenths of
+    /// a second use `locale`'s decimal separator ("4,2 s" in de-DE).
+    static func duration(_ milliseconds: Int64, locale: Locale = .current) -> String {
         let ms = max(0, milliseconds)
         if ms < 60_000 {
             if ms < 10_000 {
-                let tenths = ms / 100
-                return "\(tenths / 10).\(tenths % 10) s"
+                let seconds = Double(ms / 100) / 10
+                return "\(seconds.formatted(.number.precision(.fractionLength(1)).locale(locale))) s"
             }
             return "\(ms / 1000) s"
         }
@@ -29,8 +30,8 @@ nonisolated enum ServerHealthFormat {
     }
 
     /// `duration` for a time axis, without a zero trailing unit: "1 h", "7 d", but "1 h 5 m".
-    static func axisDuration(_ milliseconds: Int64) -> String {
-        let text = duration(milliseconds)
+    static func axisDuration(_ milliseconds: Int64, locale: Locale = .current) -> String {
+        let text = duration(milliseconds, locale: locale)
         for zero in [" 0 m", " 0 h"] where text.hasSuffix(zero) {
             return String(text.dropLast(zero.count))
         }
@@ -54,13 +55,15 @@ nonisolated enum ServerHealthFormat {
     }
 
     /// One decimal; two decimals from 99.95 up to (not including) 100, truncated, so 99.97%
-    /// never reads as 100.0%.
-    static func percent(_ value: Double) -> String {
+    /// never reads as 100.0%. Written in `locale` ("99,9 %" in de-DE).
+    static func percent(_ value: Double, locale: Locale = .current) -> String {
         if value >= 99.95, value < 100 {
             // The epsilon keeps 99.97 (stored as 99.96999…) from truncating to 99.96.
             let hundredths = min(9999, Int((value * 100 + 1e-6).rounded(.down)))
-            return String(format: "%d.%02d%%", hundredths / 100, hundredths % 100)
+            return (Double(hundredths) / 10_000).formatted(.percent.precision(.fractionLength(2)).locale(locale))
         }
-        return String(format: "%.1f%%", value)
+        // Rounded to one decimal first, half away from zero like the "%.1f" it replaces.
+        let tenths = (value * 10).rounded(.toNearestOrAwayFromZero) / 1_000
+        return tenths.formatted(.percent.precision(.fractionLength(1)).locale(locale))
     }
 }

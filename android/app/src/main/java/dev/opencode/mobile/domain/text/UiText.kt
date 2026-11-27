@@ -45,14 +45,16 @@ sealed interface UiText {
     /**
      * A number written in the reader's locale when resolved ("1.5" in en-US, "1,5" in de-DE),
      * with [minFractionDigits] to [maxFractionDigits] decimals, rounded half up, grouped.
-     * [suffix] is a unit symbol written right after it, as is, for units that are not keyed yet
-     * (the TUI-style "6.4s").
+     * With [percent], [value] is a percentage (75.0 for 75%) written with the locale's percent
+     * sign ("75.0%", "75,0 %"). [suffix] is a unit symbol written right after it, as is, for
+     * units that are not keyed yet (the TUI-style "6.4s").
      */
     data class Number(
         val value: Double,
         val minFractionDigits: Int = 0,
         val maxFractionDigits: Int = 0,
         val suffix: String = "",
+        val percent: Boolean = false,
     ) : UiText
 
     companion object {
@@ -85,6 +87,12 @@ sealed interface UiText {
             minFractionDigits: Int = 0,
             maxFractionDigits: Int = 0,
         ): UiText = Number(value, minFractionDigits, maxFractionDigits)
+
+        /** [value] is a percentage: 75.0 for 75%. */
+        fun percent(
+            value: Double,
+            fractionDigits: Int,
+        ): UiText = Number(value, fractionDigits, fractionDigits, percent = true)
     }
 }
 

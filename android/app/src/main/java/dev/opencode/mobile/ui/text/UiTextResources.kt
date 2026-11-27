@@ -4,6 +4,7 @@ import android.content.res.Resources
 import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalResources
 import dev.opencode.mobile.domain.text.DateTimeStyle
 import dev.opencode.mobile.domain.text.LocalizedNumberFormat
@@ -57,6 +58,11 @@ fun platformDateTimeFormat(
         weekdayMonthDayPattern = DateFormat.getBestDateTimePattern(locale, "EEEEMMMd"),
         timePattern = DateFormat.getBestDateTimePattern(locale, if (is24Hour) "Hm" else "hm"),
     )
+
+/** The current configuration's locale; recomposes when the language changes. */
+@Composable
+@ReadOnlyComposable
+fun currentLocale(): Locale = LocalConfiguration.current.locales[0]
 
 /** Resolves in the current configuration; recomposes when the locale changes, like stringResource. */
 @Composable

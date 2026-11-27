@@ -11,12 +11,13 @@ object LocalizedNumberFormat {
         locale: Locale,
     ): String {
         val format =
-            NumberFormat.getNumberInstance(locale).apply {
+            (if (number.percent) NumberFormat.getPercentInstance(locale) else NumberFormat.getNumberInstance(locale)).apply {
                 minimumFractionDigits = number.minFractionDigits
                 maximumFractionDigits = number.maxFractionDigits
                 // Half up, like the String.format("%.1f") it replaces.
                 roundingMode = RoundingMode.HALF_UP
             }
-        return format.format(number.value) + number.suffix
+        val value = if (number.percent) number.value / 100 else number.value
+        return format.format(value) + number.suffix
     }
 }

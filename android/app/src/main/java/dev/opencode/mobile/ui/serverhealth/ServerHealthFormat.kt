@@ -4,6 +4,8 @@ import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.serverhealth.ServerHealthConnectionState
 import dev.opencode.mobile.domain.serverhealth.ServerHealthFailureCategory
 import dev.opencode.mobile.domain.serverhealth.ServerHealthRange
+import dev.opencode.mobile.domain.text.LocalizedNumberFormat
+import dev.opencode.mobile.domain.text.UiText
 import java.util.Locale
 import kotlin.math.floor
 import kotlin.math.roundToLong
@@ -12,11 +14,18 @@ import kotlin.math.roundToLong
 object ServerHealthFormat {
     fun milliseconds(value: Int): String = "$value ms"
 
-    /** `4.2 s` under 10 s, `42 s` under a minute, `12 m`, `2 h 18 m`, then `3 d 4 h`. */
-    fun duration(ms: Long): String {
+    /**
+     * `4.2 s` under 10 s, `42 s` under a minute, `12 m`, `2 h 18 m`, then `3 d 4 h`. The tenths
+     * of a second use [locale]'s decimal separator ("4,2 s" in de-DE).
+     */
+    fun duration(
+        ms: Long,
+        locale: Locale,
+    ): String {
         val safe = ms.coerceAtLeast(0)
         return when {
-            safe < 10_000 -> "${safe / 1_000}.${(safe % 1_000) / 100} s"
+            safe < 10_000 ->
+                LocalizedNumberFormat.format(UiText.Number(safe / 100 / 10.0, 1, 1), locale) + " s"
             safe < 60_000 -> "${safe / 1_000} s"
             safe < 3_600_000 -> "${safe / 60_000} m"
             safe < 86_400_000 -> "${safe / 3_600_000} h ${(safe % 3_600_000) / 60_000} m"
@@ -25,20 +34,29 @@ object ServerHealthFormat {
     }
 
     /** [duration] for a time axis, without a zero trailing unit: `1 h`, `7 d`, but `1 h 5 m`. */
-    fun axisDuration(ms: Long): String = duration(ms).removeSuffix(" 0 m").removeSuffix(" 0 h")
+    fun axisDuration(
+        ms: Long,
+        locale: Locale,
+    ): String = duration(ms, locale).removeSuffix(" 0 m").removeSuffix(" 0 h")
 
     /** The measured time to show, or null when nothing was measured. */
-    fun measuredDuration(observedMs: Long): String? = if (observedMs > 0) duration(observedMs) else null
+    fun measuredDuration(
+        observedMs: Long,
+        locale: Locale,
+    ): String? = if (observedMs > 0) duration(observedMs, locale) else null
 
-    /** One decimal; two from 99.95 up to (not including) 100, so 99.97% never reads as 100.0%. */
-    fun percent(value: Double): String {
+    /**
+     * One decimal; two from 99.95 up to (not including) 100, so 99.97% never reads as 100.0%.
+     * Written in the reader's locale when resolved ("99,9 %" in de-DE).
+     */
+    fun percent(value: Double): UiText {
         val twoDecimals = value >= 99.95 && value < 100.0
         if (twoDecimals) {
             val truncated = floor(value * 100 + 1e-6) / 100
-            return String.format(Locale.ROOT, "%.2f%%", truncated)
+            return UiText.percent(truncated, fractionDigits = 2)
         }
         val rounded = (value * 10).roundToLong() / 10.0
-        return String.format(Locale.ROOT, "%.1f%%", rounded)
+        return UiText.percent(rounded, fractionDigits = 1)
     }
 
     fun statusLabel(state: ServerHealthConnectionState): Int =

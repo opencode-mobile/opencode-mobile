@@ -64,6 +64,7 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStrip
 import dev.opencode.mobile.ui.components.OpenCodeStatusStripSegment
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.text.currentLocale
 import dev.opencode.mobile.ui.text.resolve
 
 @Composable
@@ -213,13 +214,14 @@ private fun ServerHealthHero(uiState: ServerHealthUiState) {
 private fun ServerHealthTiles(report: ServerHealthReport) {
     val unknown = stringResource(R.string.server_health_unknown_value)
     val noDrops = stringResource(R.string.server_health_no_drops)
+    val locale = currentLocale()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OpenCodeStatTile(
                 label = stringResource(R.string.server_health_uptime),
-                value = report.uptimePercent?.let(ServerHealthFormat::percent) ?: unknown,
+                value = report.uptimePercent?.let { ServerHealthFormat.percent(it).resolve() } ?: unknown,
                 detail =
-                    ServerHealthFormat.measuredDuration(report.observedMs)?.let {
+                    ServerHealthFormat.measuredDuration(report.observedMs, locale)?.let {
                         stringResource(R.string.server_health_uptime_detail, it)
                     },
                 modifier = Modifier.weight(1f),
@@ -231,7 +233,7 @@ private fun ServerHealthTiles(report: ServerHealthReport) {
                     when {
                         report.drops == 0 -> noDrops
                         report.medianRecoveryMs != null ->
-                            stringResource(R.string.server_health_reconnects_detail, ServerHealthFormat.duration(report.medianRecoveryMs))
+                            stringResource(R.string.server_health_reconnects_detail, ServerHealthFormat.duration(report.medianRecoveryMs, locale))
                         else -> null
                     },
                 modifier = Modifier.weight(1f),
@@ -240,13 +242,13 @@ private fun ServerHealthTiles(report: ServerHealthReport) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OpenCodeStatTile(
                 label = stringResource(R.string.server_health_error_rate),
-                value = report.errorRatePercent?.let(ServerHealthFormat::percent) ?: unknown,
+                value = report.errorRatePercent?.let { ServerHealthFormat.percent(it).resolve() } ?: unknown,
                 detail = stringResource(R.string.server_health_error_rate_detail, report.failedChecks, report.checks),
                 modifier = Modifier.weight(1f),
             )
             OpenCodeStatTile(
                 label = stringResource(R.string.server_health_between_drops),
-                value = report.meanTimeBetweenDropsMs?.let(ServerHealthFormat::duration) ?: unknown,
+                value = report.meanTimeBetweenDropsMs?.let { ServerHealthFormat.duration(it, locale) } ?: unknown,
                 detail = if (report.drops == 0) noDrops else stringResource(R.string.server_health_between_drops_detail),
                 modifier = Modifier.weight(1f),
             )
@@ -260,12 +262,12 @@ private fun openAxisLabels(report: ServerHealthReport): OpenCodeChartAxisLabels 
     val first = report.openBuckets.firstOrNull()?.startMs ?: report.rangeStartMs
     val last = report.openBuckets.lastOrNull()?.endMs ?: report.nowMs
     return OpenCodeChartAxisLabels(
-        start = stringResource(R.string.server_health_axis_ago, ServerHealthFormat.axisDuration(report.nowMs - first)),
+        start = stringResource(R.string.server_health_axis_ago, ServerHealthFormat.axisDuration(report.nowMs - first, currentLocale())),
         end =
             if (last >= report.nowMs) {
                 stringResource(R.string.server_health_now)
             } else {
-                stringResource(R.string.server_health_axis_ago, ServerHealthFormat.axisDuration(report.nowMs - last))
+                stringResource(R.string.server_health_axis_ago, ServerHealthFormat.axisDuration(report.nowMs - last, currentLocale()))
             },
     )
 }
@@ -336,7 +338,7 @@ private fun ServerHealthCharts(report: ServerHealthReport) {
     }
     val connectionSummary =
         report.uptimePercent?.let {
-            stringResource(R.string.server_health_connection_summary, ServerHealthFormat.percent(it))
+            stringResource(R.string.server_health_connection_summary, ServerHealthFormat.percent(it).resolve())
         }
     OpenCodeChartCard(
         title = stringResource(R.string.server_health_connection),
@@ -460,7 +462,7 @@ private fun ServerHealthErrorLogRow(entry: ServerHealthErrorLogEntry) {
                 stringResource(
                     R.string.server_health_error_log_repeated,
                     entry.count,
-                    ServerHealthFormat.duration(entry.lastAtMs - entry.firstAtMs),
+                    ServerHealthFormat.duration(entry.lastAtMs - entry.firstAtMs, currentLocale()),
                 )
             "$source · $repeated"
         } else {
@@ -507,7 +509,7 @@ private fun ServerHealthServerCard(
                 label = stringResource(R.string.server_health_last_restart),
                 value =
                     report.lastRestartAtMs?.let {
-                        stringResource(R.string.server_health_last_restart_ago, ServerHealthFormat.duration(report.nowMs - it))
+                        stringResource(R.string.server_health_last_restart_ago, ServerHealthFormat.duration(report.nowMs - it, currentLocale()))
                     } ?: stringResource(R.string.server_health_last_restart_none),
             )
             OpenCodeKeyValueRow(
