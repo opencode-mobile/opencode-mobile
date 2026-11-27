@@ -341,12 +341,14 @@ private fun StepTrailing(
                 maxLines = 1,
             )
         (item.additions ?: 0) > 0 || (item.deletions ?: 0) > 0 ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                item.additions?.takeIf { it > 0 }?.let {
-                    Text(text = "+$it", style = mono, color = openCodeColor("diff-add"), maxLines = 1)
-                }
-                item.deletions?.takeIf { it > 0 }?.let {
-                    Text(text = "−$it", style = mono, color = openCodeColor("diff-delete"), maxLines = 1)
+            OpenCodeLeftToRightCounts {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    item.additions?.takeIf { it > 0 }?.let {
+                        Text(text = "+$it", style = mono, color = openCodeColor("diff-add"), maxLines = 1)
+                    }
+                    item.deletions?.takeIf { it > 0 }?.let {
+                        Text(text = "−$it", style = mono, color = openCodeColor("diff-delete"), maxLines = 1)
+                    }
                 }
             }
     }

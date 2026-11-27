@@ -515,6 +515,8 @@ private func diffCounts(additions: Int, deletions: Int) -> some View {
                 .foregroundStyle(OpenCodeColors.diffDelete)
         }
     }
+    // Counts read left to right in every layout, as "+12 −5".
+    .environment(\.layoutDirection, .leftToRight)
 }
 
 private func toneColor(_ tone: ToolResultPresentation.StatusTone) -> Color {

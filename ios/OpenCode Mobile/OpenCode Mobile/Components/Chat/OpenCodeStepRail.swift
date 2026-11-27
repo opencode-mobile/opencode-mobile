@@ -499,16 +499,10 @@ private struct StepRailStepLine: View {
     }
 
     private var diffText: Text? {
-        var parts: [Text] = []
-        if let additions, additions > 0 {
-            parts.append(Text("+\(additions)").foregroundColor(OpenCodeColors.diffAdd))
-        }
-        if let deletions, deletions > 0 {
-            if !parts.isEmpty { parts.append(Text(" ")) }
-            parts.append(Text("\u{2212}\(deletions)").foregroundColor(OpenCodeColors.diffDelete))
-        }
-        guard !parts.isEmpty else { return nil }
-        return parts.reduce(Text("")) { $0 + $1 }
+        let visibleAdditions = additions.flatMap { $0 > 0 ? $0 : nil }
+        let visibleDeletions = deletions.flatMap { $0 > 0 ? $0 : nil }
+        guard visibleAdditions != nil || visibleDeletions != nil else { return nil }
+        return OpenCodeDiffStat.text(additions: visibleAdditions, deletions: visibleDeletions)
     }
 }
 

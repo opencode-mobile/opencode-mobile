@@ -56,6 +56,8 @@ struct OpenCodeDiffStat: View {
             HStack(spacing: Self.splitSpacing) {
                 sideLabels
             }
+            // Counts read left to right in every layout, as "+12 −5".
+            .environment(\.layoutDirection, .leftToRight)
         case .space, .wide:
             inlineText
                 .font(style.font)
@@ -63,7 +65,8 @@ struct OpenCodeDiffStat: View {
         }
     }
 
-    /// Colored count run for embedding in an existing `Text` concatenation.
+    /// Colored count run for embedding in an existing `Text` concatenation. The run is a
+    /// left-to-right isolate, so "+12 −5" keeps its sign order inside right-to-left text.
     static func text(
         additions: Int?,
         deletions: Int?,
@@ -80,8 +83,14 @@ struct OpenCodeDiffStat: View {
             }
             parts.append(Text(deletionLabel(deletions)).foregroundColor(deletionColor(enabled: enabled)))
         }
-        return parts.reduce(Text("")) { $0 + $1 }
+        guard !parts.isEmpty else { return Text(verbatim: "") }
+        return parts.reduce(Text(verbatim: leftToRightIsolate)) { $0 + $1 } + Text(verbatim: popDirectionalIsolate)
     }
+
+    /// U+2066 LEFT-TO-RIGHT ISOLATE; closed by `popDirectionalIsolate`.
+    static let leftToRightIsolate = "\u{2066}"
+    /// U+2069 POP DIRECTIONAL ISOLATE.
+    static let popDirectionalIsolate = "\u{2069}"
 
     static func additionLabel(_ additions: Int) -> String { "+\(additions)" }
 

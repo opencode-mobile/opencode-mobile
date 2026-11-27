@@ -358,11 +358,19 @@ private fun StepRow(
                 )
             }
         }
-        step.additions?.takeIf { it > 0 }?.let {
-            Text(text = "+$it", style = activityMonoCaption(), color = openCodeColor("diff-add"), maxLines = 1)
-        }
-        step.deletions?.takeIf { it > 0 }?.let {
-            Text(text = "−$it", style = activityMonoCaption(), color = openCodeColor("diff-delete"), maxLines = 1)
+        val additions = step.additions?.takeIf { it > 0 }
+        val deletions = step.deletions?.takeIf { it > 0 }
+        if (additions != null || deletions != null) {
+            OpenCodeLeftToRightCounts {
+                Row(horizontalArrangement = Arrangement.spacedBy(SheetSpacing), verticalAlignment = Alignment.CenterVertically) {
+                    additions?.let {
+                        Text(text = "+$it", style = activityMonoCaption(), color = openCodeColor("diff-add"), maxLines = 1)
+                    }
+                    deletions?.let {
+                        Text(text = "−$it", style = activityMonoCaption(), color = openCodeColor("diff-delete"), maxLines = 1)
+                    }
+                }
+            }
         }
         if (elapsed != null) {
             Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
