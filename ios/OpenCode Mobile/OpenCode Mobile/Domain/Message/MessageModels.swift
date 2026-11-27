@@ -152,6 +152,10 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     }
 
     func withParts(_ parts: [MessagePart]) -> Message {
+        with(text: text, parts: parts)
+    }
+
+    func with(text: String, parts: [MessagePart]) -> Message {
         Message(
             id: id,
             role: role,

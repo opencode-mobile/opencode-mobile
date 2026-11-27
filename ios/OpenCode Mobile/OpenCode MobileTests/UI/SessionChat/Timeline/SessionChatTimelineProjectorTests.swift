@@ -412,6 +412,33 @@ struct SessionChatTimelineProjectorTests {
         #expect(projected.rows[0].text == plain)
     }
 
+    @Test(arguments: [(stepRail: true, activityCard: false), (stepRail: false, activityCard: true)])
+    func mergedTurn_rowTextCoversEveryStep(style: (stepRail: Bool, activityCard: Bool)) {
+        func shell(_ id: String) -> MessagePart {
+            .tool(ToolPart(id: id, toolName: "bash", status: .completed, input: ["command": .string("ls")]))
+        }
+        // v2 sends each model step as its own assistant message; both styles merge them into one row.
+        let steps = [
+            makeMessage(id: "step-1", parts: [text("t1", "First step."), shell("b1")], text: "First step.", sentAtEpochMs: 1),
+            makeMessage(id: "step-2", parts: [shell("b2")], text: "", sentAtEpochMs: 2),
+            makeMessage(id: "step-3", parts: [text("t3", "Second step."), shell("b3")], text: "Second step.", sentAtEpochMs: 3),
+            makeMessage(id: "step-4", parts: [text("t4", "Final answer.")], text: "Final answer.", sentAtEpochMs: 4),
+        ]
+
+        let frame = DisplayFrameBuilder.build(
+            sessionKey: "session-a",
+            frameRevision: 1,
+            sourceRevision: 1,
+            displayMessages: steps.map { DisplayMessage(message: $0, renderedMarkdown: nil) },
+            stepRail: style.stepRail,
+            activityCard: style.activityCard
+        )
+        let projected = project(frame)
+
+        #expect(projected.rows.count == 1)
+        #expect(projected.rows.first?.text == "First step.\n\nSecond step.\n\nFinal answer.")
+    }
+
     @Test func displayFrameBuilder_keepsEmptyStreamingAssistant() {
         let message = makeMessage(
             id: "msg-2",

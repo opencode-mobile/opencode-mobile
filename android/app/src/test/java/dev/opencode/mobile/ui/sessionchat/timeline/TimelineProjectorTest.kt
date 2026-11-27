@@ -2154,6 +2154,52 @@ class TimelineProjectorTest {
                 ),
         )
 
+    @Test
+    fun mergedTurn_stepRail_rowTextCoversEveryStep() {
+        assertEquals("First step.\n\nSecond step.\n\nFinal answer.", projectMergedTurn(stepRail = true).rows.single().text)
+    }
+
+    @Test
+    fun mergedTurn_activityCard_rowTextCoversEveryStep() {
+        assertEquals("First step.\n\nSecond step.\n\nFinal answer.", projectMergedTurn(activityCard = true).rows.single().text)
+    }
+
+    /** v2 sends each model step as its own assistant message; both styles merge them into one row. */
+    private fun projectMergedTurn(
+        stepRail: Boolean = false,
+        activityCard: Boolean = false,
+    ): TimelineFrame {
+        fun shell(id: String) = MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = id)
+
+        fun step(
+            id: String,
+            text: String,
+            parts: List<MessagePart>,
+        ): DisplayMessageBody {
+            val blocks =
+                when (val result = SessionChatTimelineBlocks.build(MessageRole.Assistant, parts, stepRail = stepRail, activityCard = activityCard)) {
+                    is SessionChatTimelineBlocksResult.Ok -> result.blocks
+                    SessionChatTimelineBlocksResult.MissingPartIds -> error("expected Ok")
+                }
+            return DisplayMessageBody(Message(id = id, role = MessageRole.Assistant, text = text, parts = parts), blocks)
+        }
+        val bodies =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                listOf(
+                    step("step-1", "First step.", listOf(MessagePart.Text("First step.", id = "t1"), shell("b1"))),
+                    step("step-2", "", listOf(shell("b2"))),
+                    step("step-3", "Second step.", listOf(MessagePart.Text("Second step.", id = "t3"), shell("b3"))),
+                    step("step-4", "Final answer.", listOf(MessagePart.Text("Final answer.", id = "t4"))),
+                ),
+                collapseConsecutiveToolCalls = false,
+                stepRail = stepRail,
+                activityCard = activityCard,
+            )
+        return TimelineProjector.project(
+            frame = DisplayFrame(sessionKey = "session", frameRevision = 1L, sourceRevision = 0L, messages = bodies),
+        )
+    }
+
     private fun projectUser(
         text: String,
         isWaitingForPickup: Boolean,
