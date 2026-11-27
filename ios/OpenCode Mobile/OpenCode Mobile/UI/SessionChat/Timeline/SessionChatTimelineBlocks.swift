@@ -1048,7 +1048,7 @@ nonisolated enum SessionChatTimelineBlocks {
             } else if mergesTurns {
                 blocks = attachMemberRootMarkdown(blocks, members: Array(run))
             }
-            var message = first.message
+            var message = first.message.with(text: mergedText(run), parts: first.message.parts)
             message.stopReason = run.last?.message.stopReason
             message.failure = run.reversed().compactMap(\.message.failure).first
             merged.append(
@@ -1062,6 +1062,14 @@ nonisolated enum SessionChatTimelineBlocks {
             index = end
         }
         return merged
+    }
+
+    /// The text of every merged message, so Copy message and Select text cover the
+    /// whole turn rather than its first step.
+    private static func mergedText(_ run: ArraySlice<DisplayMessageBody>) -> String {
+        run.map(\.message.text)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: "\n\n")
     }
 
     /// History markdown rides on each member's message root; after a step rail
