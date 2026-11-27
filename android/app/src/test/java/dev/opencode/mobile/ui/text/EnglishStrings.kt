@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.text
 
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.text.DateTimeStyle
+import dev.opencode.mobile.domain.text.LocalizedNumberFormat
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.domain.text.resolve
@@ -13,18 +14,66 @@ import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * Resolves [UiText] against the English `res/values/strings.xml`, so JVM unit tests can
- * assert on the text users read without Robolectric. Dates are en-US in UTC ([DATES]).
+ * Resolves [UiText] against the English `res/values/strings.xml` the way Android does for a
+ * configuration in [locale]: format arguments, numbers and dates follow [locale], the words stay
+ * English. JVM unit tests use it to assert on the text users read without Robolectric, and
+ * without depending on the host's locale or time zone.
  */
-object EnglishStrings : UiTextLookup {
-    /** en-US patterns (as Android's CLDR data gives them) in UTC, independent of the host. */
-    val DATES = LocalizedDateTimeFormat(Locale.US, ZoneOffset.UTC, monthDayPattern = "MMM d")
+open class StringsXmlLookup(
+    private val locale: Locale,
+    private val dates: LocalizedDateTimeFormat,
+) : UiTextLookup {
+    override fun string(
+        id: Int,
+        args: Array<out Any>,
+    ): String {
+        val format = StringsXml.strings.getValue(StringsXml.stringNames.getValue(id))
+        return if (args.isEmpty()) format else String.format(locale, format, *args)
+    }
 
-    private val stringNames: Map<Int, String> by lazy { resourceNames(R.string::class.java) }
-    private val pluralNames: Map<Int, String> by lazy { resourceNames(R.plurals::class.java) }
+    override fun plural(
+        id: Int,
+        count: Int,
+        args: Array<out Any>,
+    ): String {
+        val items = StringsXml.plurals.getValue(StringsXml.pluralNames.getValue(id))
+        val format = if (count == 1) items.getValue("one") else items.getValue("other")
+        return String.format(locale, format, *args)
+    }
 
-    private val strings = mutableMapOf<String, String>()
-    private val plurals = mutableMapOf<String, Map<String, String>>()
+    override fun dateTime(
+        epochMs: Long,
+        style: DateTimeStyle,
+    ): String = dates.format(epochMs, style)
+
+    override fun number(number: UiText.Number): String = LocalizedNumberFormat.format(number, locale)
+}
+
+/** en-US in UTC, with the patterns Android's CLDR data gives en-US. */
+object EnglishStrings : StringsXmlLookup(Locale.US, LocalizedDateTimeFormat(Locale.US, ZoneOffset.UTC))
+
+/**
+ * The English words with German (de-DE) numbers and dates in UTC, as Android shows a string that
+ * has no German translation yet: for tests that the locale reaches the formatting.
+ */
+object GermanFormatsStrings : StringsXmlLookup(
+    Locale.GERMANY,
+    LocalizedDateTimeFormat(
+        Locale.GERMANY,
+        ZoneOffset.UTC,
+        // Android's CLDR patterns for de-DE.
+        monthDayPattern = "d. MMM",
+        weekdayMonthDayPattern = "EEEE, d. MMM",
+        timePattern = "HH:mm",
+    ),
+)
+
+private object StringsXml {
+    val stringNames: Map<Int, String> by lazy { resourceNames(R.string::class.java) }
+    val pluralNames: Map<Int, String> by lazy { resourceNames(R.plurals::class.java) }
+
+    val strings = mutableMapOf<String, String>()
+    val plurals = mutableMapOf<String, Map<String, String>>()
 
     init {
         val file =
@@ -50,31 +99,7 @@ object EnglishStrings : UiTextLookup {
         }
     }
 
-    override fun string(
-        id: Int,
-        args: Array<out Any>,
-    ): String {
-        val format = strings.getValue(stringNames.getValue(id))
-        return if (args.isEmpty()) format else String.format(format, *args)
-    }
-
-    override fun plural(
-        id: Int,
-        count: Int,
-        args: Array<out Any>,
-    ): String {
-        val items = plurals.getValue(pluralNames.getValue(id))
-        val format = if (count == 1) items.getValue("one") else items.getValue("other")
-        return String.format(format, *args)
-    }
-
-    override fun dateTime(
-        epochMs: Long,
-        style: DateTimeStyle,
-    ): String = DATES.format(epochMs, style)
-
-    private fun resourceNames(type: Class<*>): Map<Int, String> =
-        type.fields.associate { field -> field.getInt(null) to field.name }
+    private fun resourceNames(type: Class<*>): Map<Int, String> = type.fields.associate { field -> field.getInt(null) to field.name }
 
     private fun unescape(raw: String): String =
         raw

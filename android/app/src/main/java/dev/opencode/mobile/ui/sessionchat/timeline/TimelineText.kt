@@ -67,12 +67,22 @@ private sealed class UiTextSurrogate {
         val style: DateTimeStyle,
     ) : UiTextSurrogate()
 
+    @Serializable
+    @SerialName("number")
+    data class Number(
+        val value: Double,
+        val minFractionDigits: Int,
+        val maxFractionDigits: Int,
+        val suffix: String,
+    ) : UiTextSurrogate()
+
     fun toUiText(): UiText =
         when (this) {
             is Resource -> UiText.Resource(id, args.map { it.value() })
             is Plural -> UiText.Plural(id, count, args.map { it.value() })
             is Verbatim -> UiText.Verbatim(value)
             is DateTime -> UiText.DateTime(epochMs, style)
+            is Number -> UiText.Number(value, minFractionDigits, maxFractionDigits, suffix)
         }
 
     companion object {
@@ -82,6 +92,7 @@ private sealed class UiTextSurrogate {
                 is UiText.Plural -> Plural(text.id, text.count, text.args.map(UiTextArgSurrogate::from))
                 is UiText.Verbatim -> Verbatim(text.value)
                 is UiText.DateTime -> DateTime(text.epochMs, text.style)
+                is UiText.Number -> Number(text.value, text.minFractionDigits, text.maxFractionDigits, text.suffix)
             }
     }
 }
