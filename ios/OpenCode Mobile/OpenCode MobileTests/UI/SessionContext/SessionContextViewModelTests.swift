@@ -78,6 +78,11 @@ struct SessionContextViewModelTests {
         #expect(stats["created"] == "27.11.2026, 15:04")
     }
 
+    @Test func breakdownPercentFollowsTheLocale() {
+        #expect(SessionContextView.breakdownPercent(12.5, locale: Locale(identifier: "en_US")) == "12.5%")
+        #expect(SessionContextView.breakdownPercent(12.5, locale: Locale(identifier: "de_DE")) == "12,5\u{00A0}%")
+    }
+
     /// Stat values by id for a snapshot with numbers, formatted in `locale` and UTC.
     private static func formattedStats(locale: Locale) async -> [String: String] {
         let snapshot = SessionContextSnapshot(
