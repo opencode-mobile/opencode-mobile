@@ -138,7 +138,8 @@ internal fun SessionChatToolDetailSheet(
         },
         pinnedTop = {
             if (presentation != null) {
-                ToolResultPinnedHeader(presentation)
+                // Pinned content is not inset by the sheet; match the body's inset (as on iOS).
+                ToolResultPinnedHeader(presentation, Modifier.openCodeBottomSheetContentInset())
             }
         },
         pinnedBottom =
