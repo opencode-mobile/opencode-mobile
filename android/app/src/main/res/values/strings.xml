@@ -1555,6 +1555,10 @@
     <string name="component_reasoning_row_thought_duration">Thought · %1$s</string>
     <!-- How long a thought took, under a minute: the number is already written in the reader's locale ("6.4"); "s" is the seconds unit. -->
     <string name="component_reasoning_row_duration_seconds">%1$ss</string>
+    <!-- How long a thought took, in the TUI's compact units: milliseconds, then minutes and seconds, then hours and minutes. -->
+    <string name="component_reasoning_row_duration_ms">%1$dms</string>
+    <string name="component_reasoning_row_duration_minutes_seconds">%1$dm %2$ds</string>
+    <string name="component_reasoning_row_duration_hours_minutes">%1$dh %2$dm</string>
     <!-- Accessibility hint on a thought row that opens the full thought. -->
     <string name="component_reasoning_row_shows_thought_hint">Shows the full thought</string>
     <!-- Accessibility: a diff row's kind, read before its line numbers. -->

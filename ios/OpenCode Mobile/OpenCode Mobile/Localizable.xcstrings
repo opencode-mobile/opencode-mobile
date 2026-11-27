@@ -3557,6 +3557,42 @@
         }
       }
     },
+    "component.reasoning_row.duration_hours_minutes" : {
+      "comment" : "How long a thought took, in the TUI's compact units. Hours, then minutes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lldh %2$lldm"
+          }
+        }
+      }
+    },
+    "component.reasoning_row.duration_minutes_seconds" : {
+      "comment" : "How long a thought took, in the TUI's compact units. Minutes, then seconds.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lldm %2$llds"
+          }
+        }
+      }
+    },
+    "component.reasoning_row.duration_ms" : {
+      "comment" : "How long a thought took, in the TUI's compact units. Milliseconds.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lldms"
+          }
+        }
+      }
+    },
     "component.reasoning_row.duration_seconds" : {
       "comment" : "How long a thought took, under a minute: the number is already written in the reader's locale (\"6.4\"); \"s\" is the seconds unit.",
       "extractionState" : "manual",
