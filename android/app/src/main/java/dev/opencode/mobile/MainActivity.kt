@@ -206,7 +206,7 @@ class MainActivity : FragmentActivity() {
         prompt.authenticate(
             BiometricPrompt.PromptInfo
                 .Builder()
-                .setTitle("Unlock OpenCode Mobile")
+                .setTitle(getString(R.string.app_lock_prompt_title))
                 .setAllowedAuthenticators(AppLockAvailability.ALLOWED_AUTHENTICATORS)
                 .build(),
         )

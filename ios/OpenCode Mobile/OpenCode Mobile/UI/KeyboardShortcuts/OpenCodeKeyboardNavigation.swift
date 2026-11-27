@@ -256,7 +256,9 @@ nonisolated enum OpenCodeEscapeResolver {
 
 /// "Press Tab to answer with the keyboard" under a permission or question prompt.
 nonisolated enum OpenCodePromptKeyboardHint {
-    static let text = "Press Tab to answer with the keyboard"
+    static var text: String {
+        String(localized: "component.keyboard_hint.prompt", defaultValue: "Press Tab to answer with the keyboard")
+    }
 
     /// Shown only with a hardware keyboard, and only until focus is inside the prompt.
     static func isVisible(hardwareKeyboardConnected: Bool, focusInsidePrompt: Bool) -> Bool {

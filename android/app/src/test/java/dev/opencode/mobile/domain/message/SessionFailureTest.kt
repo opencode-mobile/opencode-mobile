@@ -1,6 +1,8 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.text.resolve
+import dev.opencode.mobile.ui.text.EnglishStrings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -83,14 +85,14 @@ class SessionFailureTest {
 
     @Test
     fun retryAfterLabelUsesSecondsThenMinutes() {
-        assertEquals("Try again in 1 s", SessionFailure.retryAfterLabel(1L))
-        assertEquals("Try again in 12 s", SessionFailure.retryAfterLabel(11_200L))
-        assertEquals("Try again in 90 s", SessionFailure.retryAfterLabel(90_000L))
-        assertEquals("Try again in 2 min", SessionFailure.retryAfterLabel(90_001L))
-        assertEquals("Try again in 4 min", SessionFailure.retryAfterLabel(240_000L))
-        assertEquals("Try again in 60 min", SessionFailure.retryAfterLabel(3_600_000L))
-        assertNull(SessionFailure.retryAfterLabel(0L))
-        assertNull(SessionFailure.retryAfterLabel(-1_000L))
+        assertEquals("Try again in 1 s", SessionFailure.retryAfterLabel(1L)?.resolve(EnglishStrings))
+        assertEquals("Try again in 12 s", SessionFailure.retryAfterLabel(11_200L)?.resolve(EnglishStrings))
+        assertEquals("Try again in 90 s", SessionFailure.retryAfterLabel(90_000L)?.resolve(EnglishStrings))
+        assertEquals("Try again in 2 min", SessionFailure.retryAfterLabel(90_001L)?.resolve(EnglishStrings))
+        assertEquals("Try again in 4 min", SessionFailure.retryAfterLabel(240_000L)?.resolve(EnglishStrings))
+        assertEquals("Try again in 60 min", SessionFailure.retryAfterLabel(3_600_000L)?.resolve(EnglishStrings))
+        assertNull(SessionFailure.retryAfterLabel(0L)?.resolve(EnglishStrings))
+        assertNull(SessionFailure.retryAfterLabel(-1_000L)?.resolve(EnglishStrings))
     }
 
     @Test

@@ -1,10 +1,12 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.session.ServerErrorReason
+import dev.opencode.mobile.domain.text.UiText
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -331,10 +333,12 @@ data class SessionFailure(
         private val json = serverPayloadJson()
 
         /** "Try again in N s", minutes above 90 s; null once the wait is over. */
-        fun retryAfterLabel(remainingMs: Long): String? {
+        fun retryAfterLabel(remainingMs: Long): UiText? {
             if (remainingMs <= 0) return null
-            if (remainingMs <= SECONDS_LIMIT_MS) return "Try again in ${ceilDiv(remainingMs, 1_000L)} s"
-            return "Try again in ${ceilDiv(remainingMs, 60_000L)} min"
+            if (remainingMs <= SECONDS_LIMIT_MS) {
+                return UiText.resource(R.string.session_chat_failure_retry_after_seconds, ceilDiv(remainingMs, 1_000L))
+            }
+            return UiText.resource(R.string.session_chat_failure_retry_after_minutes, ceilDiv(remainingMs, 60_000L))
         }
 
         private fun ceilDiv(

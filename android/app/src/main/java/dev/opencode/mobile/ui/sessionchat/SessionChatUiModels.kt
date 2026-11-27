@@ -241,7 +241,7 @@ data class ComposerDictationUiState(
     val languageLabel: String = "",
     val onDevice: Boolean = true,
     val startedAtEpochMs: Long = 0L,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
     /** Model download progress, 0..1, while [phase] is ModelDownloading; null when unknown. */
     val downloadProgress: Float? = null,
 )
@@ -363,7 +363,7 @@ data class SessionChatUiState(
     val mcpPageVisible: Boolean = false,
     val mcpServers: List<McpServer> = emptyList(),
     val mcpLoading: Boolean = false,
-    val mcpErrorMessage: String? = null,
+    val mcpErrorMessage: UiText? = null,
     val mcpSummary: McpServerSummary = McpServerSummary.Empty,
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
@@ -691,7 +691,7 @@ data class SessionChatComposerRegionState(
     val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
     val fileSuggestions: List<SessionChatAtSuggestion> = emptyList(),
     val fileSuggestionQuery: String? = null,
-    val followUpNotice: String? = null,
+    val followUpNotice: UiText? = null,
 )
 
 fun ServerCommand.toSlashSuggestion(): SessionChatSlashSuggestion =
@@ -753,7 +753,7 @@ data class SessionInfoRegionState(
     val composerEnabled: Boolean = false,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val isLifecycleActionInFlight: Boolean = false,
-    val lifecycleErrorMessage: String? = null,
+    val lifecycleErrorMessage: UiText? = null,
     val shouldLeaveSession: Boolean = false,
     val errorMessage: String? = null,
     /** When the open session was archived; null while it is not (or not loaded yet). */
@@ -968,7 +968,7 @@ data class SessionChatCommandsRegionState(
     val mcpPageVisible: Boolean = false,
     val mcpServers: List<McpServer> = emptyList(),
     val mcpLoading: Boolean = false,
-    val mcpErrorMessage: String? = null,
+    val mcpErrorMessage: UiText? = null,
     val mcpSummary: McpServerSummary = McpServerSummary.Empty,
     val hasPendingRevert: Boolean = false,
     /** First reverted message while a revert is pending; the timeline hides it and later turns. */

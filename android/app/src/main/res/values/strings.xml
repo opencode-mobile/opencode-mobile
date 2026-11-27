@@ -1057,6 +1057,46 @@
     <string name="session_chat_timeline_style_notice">Timeline: %1$s. Change it any time in Settings.</string>
     <!-- Snackbar after the branch pill copied the branch name. -->
     <string name="session_chat_branch_copied">Branch name copied</string>
+    <!-- Snackbar after the follow-up delivery toggle. -->
+    <string name="session_chat_follow_up_switched_steer">Switched to Steer</string>
+    <string name="session_chat_follow_up_switched_queue">Switched to Queue</string>
+    <!-- Countdown under a rate-limited failure: whole seconds up to 90, then minutes. -->
+    <string name="session_chat_failure_retry_after_seconds">Try again in %1$d s</string>
+    <string name="session_chat_failure_retry_after_minutes">Try again in %1$d min</string>
+    <!-- Caption under a steering message that waits for the next step. -->
+    <string name="component_outgoing_message_pending_caption">Pending · sends at the next step</string>
+    <!-- Shown under a permission or question prompt while a hardware keyboard is connected. -->
+    <string name="component_keyboard_hint_prompt">Press Tab to answer with the keyboard</string>
+    <!-- Session status bar context ring, for screen readers. -->
+    <string name="component_session_status_bar_context_usage">Context usage %1$d percent</string>
+    <string name="component_session_status_bar_context_usage_unavailable">Context usage unavailable</string>
+    <!-- System biometric or passcode prompt title when App Lock is on. -->
+    <string name="app_lock_prompt_title">Unlock OpenCode Mobile</string>
+    <!-- Session Branch Pill: the label when the changes have no line counts. -->
+    <plurals name="component_branch_pill_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <!-- Session Branch Pill popover: how many files have uncommitted changes. -->
+    <plurals name="component_branch_pill_uncommitted_files">
+        <item quantity="one">%1$d uncommitted file</item>
+        <item quantity="other">%1$d uncommitted files</item>
+    </plurals>
+    <!-- Session Branch Pill accessibility. The branch name is the argument. -->
+    <string name="component_branch_pill_a11y_branch">Branch %1$s</string>
+    <string name="component_branch_pill_a11y_worktree_branch">Worktree branch %1$s</string>
+    <!-- Session Branch Pill accessibility: the branch or file, then what changed. -->
+    <string name="component_branch_pill_a11y_no_changes">%1$s, no changes</string>
+    <string name="component_branch_pill_a11y_detail">%1$s, %2$s</string>
+    <string name="component_branch_pill_a11y_added">%1$s, %2$d added</string>
+    <string name="component_branch_pill_a11y_removed">%1$s, %2$d removed</string>
+    <string name="session_chat_archive_failed">Couldn\'t archive session.</string>
+    <string name="session_chat_delete_failed">Couldn\'t delete session.</string>
+    <string name="session_chat_mcp_load_failed">Couldn\'t load MCP servers. Check the connection and try again.</string>
+    <string name="session_chat_create_failed">Unable to create session</string>
+    <!-- Android: a queued send the server never picked up. -->
+    <string name="session_chat_send_timed_out">Couldn\'t send. Try again.</string>
+    <string name="session_chat_shell_cannot_queue">Shell commands can\'t be queued. Switch to Steer to run it now.</string>
     <!-- A permission or question reply failed. The _reason forms end with the server's reason. -->
     <string name="session_chat_reply_error_permission">Couldn\'t send your reply. Try again.</string>
     <string name="session_chat_reply_error_permission_reason">Couldn\'t send your reply. %1$s.</string>
@@ -1654,6 +1694,9 @@
         <item quantity="other">Also denies %1$d other waiting requests.</item>
     </plurals>
     <string name="dictation_stopped">Dictation stopped</string>
+    <!-- Android speech recognizer errors. -->
+    <string name="dictation_microphone_failed">Couldn\'t use the microphone</string>
+    <string name="dictation_busy">Dictation is busy</string>
     <string name="component_composer_question_position">%1$d of %2$d</string>
     <string name="session_list_status_ready">Ready</string>
     <string name="session_list_dock_hint_swipe">Opens the project filter. Swipe to switch projects.</string>

@@ -538,7 +538,7 @@ private fun SessionChatScreenBody(
 
                 override fun onUnavailable(
                     phase: ComposerDictationPhase,
-                    message: String?,
+                    message: UiText?,
                 ) {
                     viewModel.beginDictationUnavailable(phase, message)
                 }
@@ -2023,7 +2023,7 @@ private fun SessionChatScreenBody(
                 SessionChatMcpServersSheetContent(
                     servers = uiState.mcpServers,
                     loading = uiState.mcpLoading,
-                    errorMessage = uiState.mcpErrorMessage,
+                    errorMessage = uiState.mcpErrorMessage?.resolve(),
                     summary = uiState.mcpSummary,
                 )
             } else {

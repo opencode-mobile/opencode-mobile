@@ -2287,10 +2287,11 @@ struct SessionChatView: View {
     }
 
     private func dictationStatus(_ state: ComposerDictationUiState) -> String {
+        let listening = String(localized: "dictation.status_listening", defaultValue: "Listening")
         if state.onDevice {
-            return "Listening · \(state.languageLabel) · on-device"
+            return String(localized: "dictation.status_line_on_device", defaultValue: "\(listening) · \(state.languageLabel) · on-device")
         }
-        return "Listening · \(state.languageLabel)"
+        return String(localized: "dictation.status_line", defaultValue: "\(listening) · \(state.languageLabel)")
     }
 
     private func refreshDictationSupport() async {

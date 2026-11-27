@@ -344,6 +344,18 @@
         }
       }
     },
+    "app_lock.prompt_title" : {
+      "comment" : "System biometric or passcode prompt title when App Lock is on.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock OpenCode Mobile"
+          }
+        }
+      }
+    },
     "appearance.code_highlight.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2427,6 +2439,78 @@
         }
       }
     },
+    "component.branch_pill.a11y_added" : {
+      "comment" : "Session Branch Pill accessibility: the branch or file, then what changed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$lld added"
+          }
+        }
+      }
+    },
+    "component.branch_pill.a11y_branch" : {
+      "comment" : "Session Branch Pill accessibility. The branch name is the argument.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branch %@"
+          }
+        }
+      }
+    },
+    "component.branch_pill.a11y_detail" : {
+      "comment" : "Session Branch Pill accessibility: the branch or file, then what changed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "component.branch_pill.a11y_no_changes" : {
+      "comment" : "Session Branch Pill accessibility: the branch or file, then what changed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, no changes"
+          }
+        }
+      }
+    },
+    "component.branch_pill.a11y_removed" : {
+      "comment" : "Session Branch Pill accessibility: the branch or file, then what changed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, %2$lld removed"
+          }
+        }
+      }
+    },
+    "component.branch_pill.a11y_worktree_branch" : {
+      "comment" : "Session Branch Pill accessibility. The branch name is the argument.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Worktree branch %@"
+          }
+        }
+      }
+    },
     "component.branch_pill.based_on" : {
       "comment" : "%1$s is the base branch name.",
       "extractionState" : "manual",
@@ -2450,6 +2534,30 @@
         }
       }
     },
+    "component.branch_pill.files" : {
+      "comment" : "Session Branch Pill: the label when the changes have no line counts.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "component.branch_pill.shows_details_hint" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2457,6 +2565,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Shows branch details"
+          }
+        }
+      }
+    },
+    "component.branch_pill.uncommitted_files" : {
+      "comment" : "Session Branch Pill popover: how many files have uncommitted changes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld uncommitted file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld uncommitted files"
+                }
+              }
+            }
           }
         }
       }
@@ -3445,6 +3577,18 @@
         }
       }
     },
+    "component.keyboard_hint.prompt" : {
+      "comment" : "Shown under a permission or question prompt while a hardware keyboard is connected.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Press Tab to answer with the keyboard"
+          }
+        }
+      }
+    },
     "component.list_item.show_actions" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3509,6 +3653,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Long press to show message actions"
+          }
+        }
+      }
+    },
+    "component.outgoing_message.pending_caption" : {
+      "comment" : "Caption under a steering message that waits for the next step.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pending · sends at the next step"
           }
         }
       }
@@ -3785,6 +3941,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@. %2$@"
+          }
+        }
+      }
+    },
+    "component.session_status_bar.context_usage" : {
+      "comment" : "Session status bar context ring, for screen readers.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Context usage %lld percent"
+          }
+        }
+      }
+    },
+    "component.session_status_bar.context_usage_unavailable" : {
+      "comment" : "Session status bar context ring, for screen readers.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Context usage unavailable"
           }
         }
       }
@@ -9824,6 +10004,17 @@
         }
       }
     },
+    "session_chat.archive_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't archive session."
+          }
+        }
+      }
+    },
     "session_chat.archived_banner" : {
       "comment" : "%@ is when the open session was archived, such as 2d ago.",
       "extractionState" : "manual",
@@ -10179,6 +10370,17 @@
         }
       }
     },
+    "session_chat.create_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to create session"
+          }
+        }
+      }
+    },
     "session_chat.delete_dialog.confirm" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10208,6 +10410,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Delete session"
+          }
+        }
+      }
+    },
+    "session_chat.delete_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't delete session."
+          }
+        }
+      }
+    },
+    "session_chat.failure.retry_after_minutes" : {
+      "comment" : "Countdown under a rate-limited failure, in minutes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again in %lld min"
+          }
+        }
+      }
+    },
+    "session_chat.failure.retry_after_seconds" : {
+      "comment" : "Countdown under a rate-limited failure, in whole seconds.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again in %lld s"
+          }
+        }
+      }
+    },
+    "session_chat.follow_up.switched_queue" : {
+      "comment" : "Snackbar after the follow-up delivery toggle.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switched to Queue"
+          }
+        }
+      }
+    },
+    "session_chat.follow_up.switched_steer" : {
+      "comment" : "Snackbar after the follow-up delivery toggle.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switched to Steer"
           }
         }
       }
@@ -11061,6 +11322,17 @@
         }
       }
     },
+    "session_chat.mcp_load_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load MCP servers. Check the connection and try again."
+          }
+        }
+      }
+    },
     "session_chat.menu.archive" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11564,6 +11836,18 @@
         }
       }
     },
+    "session_chat.send_failed_offline" : {
+      "comment" : "iOS: a send tried while the connection is not live.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send. Retry when the connection is live."
+          }
+        }
+      }
+    },
     "session_chat.send_stalled" : {
       "comment" : "Snackbar when a prompt upload has gone unanswered for a while; its action retries the send.",
       "extractionState" : "manual",
@@ -11572,6 +11856,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Still sending…"
+          }
+        }
+      }
+    },
+    "session_chat.server_changed" : {
+      "comment" : "iOS: the active server changed while a send was on its way.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server changed before this was sent. Your draft is kept."
           }
         }
       }
@@ -11671,6 +11967,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couldn't stop the shell. Try again."
+          }
+        }
+      }
+    },
+    "session_chat.shell_cannot_queue" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shell commands can't be queued. Switch to Steer to run it now."
           }
         }
       }

@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.dictation
 
 import android.speech.SpeechRecognizer
+import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -74,7 +75,7 @@ class ContinuousDictationTest {
 
                 override fun onUnavailable(
                     phase: ComposerDictationPhase,
-                    message: String?,
+                    message: UiText?,
                 ) {
                     events += "unavailable:$phase"
                 }

@@ -572,7 +572,7 @@ class SessionInfo(
 
     companion object {
         private const val TAG = "SessionInfo"
-        const val ARCHIVE_ERROR = "Couldn't archive session."
-        const val DELETE_ERROR = "Couldn't delete session."
+        val ARCHIVE_ERROR: UiText = UiText.resource(R.string.session_chat_archive_failed)
+        val DELETE_ERROR: UiText = UiText.resource(R.string.session_chat_delete_failed)
     }
 }

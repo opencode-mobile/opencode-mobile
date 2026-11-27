@@ -1006,7 +1006,7 @@ class SessionChatViewModel
 
         fun beginDictationUnavailable(
             phase: ComposerDictationPhase,
-            message: String? = null,
+            message: UiText? = null,
             languageLabel: String = "",
         ) {
             dictation.beginUnavailable(phase, message, languageLabel)
@@ -2155,14 +2155,16 @@ class SessionChatViewModel
                     when {
                         draftSendError != null -> draftSendError
                         infoState.unarchiveFailed -> UiText.resource(R.string.archived_sessions_unarchive_failed)
-                        infoState.lifecycleErrorMessage != null -> UiText.verbatim(infoState.lifecycleErrorMessage)
+                        infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
                         worktreeMove.state.value.errorMessage != null -> worktreeMove.state.value.errorMessage
                         composerState.errorMessage != null -> composerState.errorMessage
                         composerState.abortErrorMessage != null -> composerState.abortErrorMessage
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
                         goal.state.value.notice != null -> goal.state.value.notice
                         turnDiffNotice != null -> TimelineText.verbatim(turnDiffNotice)
-                        infoState.errorMessage != null -> UiText.verbatim(infoState.errorMessage)
+                        infoState.errorMessage != null ->
+                            infoState.errorMessage.takeIf { it.isNotBlank() }?.let(UiText::verbatim)
+                                ?: UiText.resource(R.string.timeline_failure_session_work_failed)
                         inboxSnapshot.permissionRequests.isEmpty() &&
                             inboxSnapshot.permissionTopologyError != null -> inboxSnapshot.permissionTopologyError
                         inboxSnapshot.questionRequests.isEmpty() &&
@@ -2177,7 +2179,7 @@ class SessionChatViewModel
                     transientError,
                     retryNewSessionDraft = transientError != null && transientError == draftSendError,
                     sideQuestions.state.value.notice,
-                    TimelineText.verbatim(composerState.followUpNotice)
+                    composerState.followUpNotice
                         ?: worktreeMove.state.value.notice
                         ?: commandsState.actionSuccessMessage
                         ?: branchCopiedNotice

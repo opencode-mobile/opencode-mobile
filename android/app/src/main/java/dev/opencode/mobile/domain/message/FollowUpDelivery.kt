@@ -1,5 +1,8 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+
 enum class FollowUpDelivery(
     val wireValue: String,
 ) {
@@ -7,11 +10,11 @@ enum class FollowUpDelivery(
     Queue("queue"),
     ;
 
-    val switchedSnackbar: String
+    val switchedSnackbar: UiText
         get() =
             when (this) {
-                Steer -> "Switched to Steer"
-                Queue -> "Switched to Queue"
+                Steer -> UiText.resource(R.string.session_chat_follow_up_switched_steer)
+                Queue -> UiText.resource(R.string.session_chat_follow_up_switched_queue)
             }
 
     fun toggled(): FollowUpDelivery =

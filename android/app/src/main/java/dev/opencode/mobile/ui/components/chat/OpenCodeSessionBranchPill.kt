@@ -38,10 +38,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.rememberUiTextLookup
+import dev.opencode.mobile.ui.text.resolve
 import kotlin.math.roundToInt
 
 /** Popover width when the screen allows it; narrower screens keep the corner slot's inset. */
@@ -65,8 +70,8 @@ data class OpenCodeSessionBranchChangedFile(
     val visibleDeletions: Int? get() = deletions.takeIf { it > 0 }
 
     /** "src/a.kt, 61 added"; a file without line counts reads its path only. */
-    val accessibilityLabel: String
-        get() = OpenCodeSessionBranchSummary.spokenCounts(path, additions, deletions)
+    val accessibilityLabel: UiText
+        get() = OpenCodeSessionBranchSummary.spokenCounts(UiText.verbatim(path), additions, deletions)
 }
 
 /**
@@ -90,7 +95,7 @@ data class OpenCodeSessionBranchSummary(
      * "+128 −14" with zero sides left out, or "2 files" when the changes have no line counts.
      * Null without changes: the pill shows its icon only.
      */
-    val changeLabel: String?
+    val changeLabel: UiText?
         get() {
             if (!hasChanges) return null
             val parts =
@@ -98,20 +103,25 @@ data class OpenCodeSessionBranchSummary(
                     if (additions > 0) add("+$additions")
                     if (deletions > 0) add("−$deletions")
                 }
-            return if (parts.isEmpty()) fileCount(files.size) else parts.joinToString(" ")
+            return if (parts.isEmpty()) fileCount(files.size) else UiText.verbatim(parts.joinToString(" "))
         }
 
-    val pillLayout: OpenCodeFloatingPillLayout
-        get() =
-            changeLabel?.let { OpenCodeFloatingPillLayout.IconLabel(icon, it) }
-                ?: OpenCodeFloatingPillLayout.IconOnly(icon, accessibilityLabel)
+    fun pillLayout(text: UiTextLookup): OpenCodeFloatingPillLayout =
+        changeLabel?.let { OpenCodeFloatingPillLayout.IconLabel(icon, it.resolve(text)) }
+            ?: OpenCodeFloatingPillLayout.IconOnly(icon, accessibilityLabel.resolve(text))
 
     /** "Branch feature-x, 128 added, 14 removed" or "Branch feature-x, no changes". */
-    val accessibilityLabel: String
+    val accessibilityLabel: UiText
         get() {
-            val name = "${if (isWorktree) "Worktree branch" else "Branch"} $branch"
-            if (!hasChanges) return "$name, no changes"
-            if (additions == 0 && deletions == 0) return "$name, ${uncommittedFileCount(files.size)}"
+            val name =
+                UiText.resource(
+                    if (isWorktree) R.string.component_branch_pill_a11y_worktree_branch else R.string.component_branch_pill_a11y_branch,
+                    branch,
+                )
+            if (!hasChanges) return UiText.resource(R.string.component_branch_pill_a11y_no_changes, name)
+            if (additions == 0 && deletions == 0) {
+                return UiText.resource(R.string.component_branch_pill_a11y_detail, name, uncommittedFileCount(files.size))
+            }
             return spokenCounts(name, additions, deletions)
         }
 
@@ -120,7 +130,7 @@ data class OpenCodeSessionBranchSummary(
         get() = baseBranch?.takeIf { it.isNotEmpty() && it != branch }
 
     /** "3 uncommitted files"; null without changes. Worded so it does not read as a diff against the base. */
-    val fileCountLabel: String?
+    val fileCountLabel: UiText?
         get() = if (hasChanges) uncommittedFileCount(files.size) else null
 
     /** Popover totals: a zero side is null, as on the pill. */
@@ -128,7 +138,7 @@ data class OpenCodeSessionBranchSummary(
     val visibleDeletions: Int? get() = deletions.takeIf { it > 0 }
 
     /** "3 uncommitted files, 106 added"; null without changes. */
-    val fileCountAccessibilityLabel: String?
+    val fileCountAccessibilityLabel: UiText?
         get() = fileCountLabel?.let { spokenCounts(it, additions, deletions) }
 
     /** The most-changed files by lines added plus removed, ties by path. */
@@ -142,21 +152,21 @@ data class OpenCodeSessionBranchSummary(
         /** The popover lists at most this many files. */
         const val TOP_FILE_LIMIT = 3
 
-        private fun fileCount(count: Int): String = "$count ${if (count == 1) "file" else "files"}"
+        private fun fileCount(count: Int): UiText = UiText.plural(R.plurals.component_branch_pill_files, count)
 
-        private fun uncommittedFileCount(count: Int): String = "$count uncommitted ${if (count == 1) "file" else "files"}"
+        private fun uncommittedFileCount(count: Int): UiText = UiText.plural(R.plurals.component_branch_pill_uncommitted_files, count)
 
         /** "prefix, 128 added, 14 removed" with zero sides left out. */
         fun spokenCounts(
-            prefix: String,
+            prefix: UiText,
             additions: Int,
             deletions: Int,
-        ): String =
-            buildList {
-                add(prefix)
-                if (additions > 0) add("$additions added")
-                if (deletions > 0) add("$deletions removed")
-            }.joinToString(", ")
+        ): UiText {
+            var text = prefix
+            if (additions > 0) text = UiText.resource(R.string.component_branch_pill_a11y_added, text, additions)
+            if (deletions > 0) text = UiText.resource(R.string.component_branch_pill_a11y_removed, text, deletions)
+            return text
+        }
     }
 }
 
@@ -179,12 +189,13 @@ fun OpenCodeSessionBranchPill(
     var anchorLeftPx by remember { mutableIntStateOf(0) }
     val clipboard = LocalClipboardManager.current
     val windowWidthPx = LocalWindowInfo.current.containerSize.width
+    val text = rememberUiTextLookup()
 
     Box(modifier = modifier.onGloballyPositioned { anchorLeftPx = it.positionInWindow().x.roundToInt() }) {
         OpenCodeFloatingPill(
-            layout = summary.pillLayout,
+            layout = summary.pillLayout(text),
             state = OpenCodeFloatingPillState.Ready,
-            accessibilityLabel = summary.accessibilityLabel,
+            accessibilityLabel = summary.accessibilityLabel.resolve(text),
             onClick = { expanded = true },
         )
         OpenCodeAnchoredCard(
@@ -267,11 +278,12 @@ fun OpenCodeSessionBranchPopoverContent(
                     ),
                 verticalArrangement = Arrangement.spacedBy(BranchPopoverFileRowSpacing),
             ) {
-                summary.fileCountLabel?.let { label ->
+                summary.fileCountLabel?.resolve()?.let { label ->
+                    val description = summary.fileCountAccessibilityLabel?.resolve() ?: label
                     Row(
                         modifier =
                             Modifier.fillMaxWidth().clearAndSetSemantics {
-                                contentDescription = summary.fileCountAccessibilityLabel ?: label
+                                contentDescription = description
                             },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -281,10 +293,11 @@ fun OpenCodeSessionBranchPopoverContent(
                     }
                 }
                 summary.topFiles.forEach { file ->
+                    val fileDescription = file.accessibilityLabel.resolve()
                     Row(
                         modifier =
                             Modifier.fillMaxWidth().clearAndSetSemantics {
-                                contentDescription = file.accessibilityLabel
+                                contentDescription = fileDescription
                             },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),

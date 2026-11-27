@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.components
 
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.EnglishStrings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -20,10 +22,10 @@ class OpenCodeSessionBranchSummaryTest {
         val summary = OpenCodeSessionBranchSummary("feature-x", baseBranch = "main", files = files)
 
         assertTrue(summary.hasChanges)
-        assertEquals("+128 −14", summary.changeLabel)
-        assertFalse(summary.changeLabel!!.contains("feature-x"))
-        assertEquals(OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.GitBranch, "+128 −14"), summary.pillLayout)
-        assertEquals("Branch feature-x, 128 added, 14 removed", summary.accessibilityLabel)
+        assertEquals("+128 −14", summary.changeLabel?.resolve(EnglishStrings))
+        assertFalse(summary.changeLabel!!.resolve(EnglishStrings).contains("feature-x"))
+        assertEquals(OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.GitBranch, "+128 −14"), summary.pillLayout(EnglishStrings))
+        assertEquals("Branch feature-x, 128 added, 14 removed", summary.accessibilityLabel?.resolve(EnglishStrings))
     }
 
     @Test
@@ -31,13 +33,13 @@ class OpenCodeSessionBranchSummaryTest {
         val summary = OpenCodeSessionBranchSummary("feature-x", baseBranch = "main")
 
         assertFalse(summary.hasChanges)
-        assertNull(summary.changeLabel)
-        assertEquals("Branch feature-x, no changes", summary.accessibilityLabel)
+        assertNull(summary.changeLabel?.resolve(EnglishStrings))
+        assertEquals("Branch feature-x, no changes", summary.accessibilityLabel?.resolve(EnglishStrings))
         assertEquals(
             OpenCodeFloatingPillLayout.IconOnly(OpenCodeIcons.GitBranch, "Branch feature-x, no changes"),
-            summary.pillLayout,
+            summary.pillLayout(EnglishStrings),
         )
-        assertNull(summary.fileCountLabel)
+        assertNull(summary.fileCountLabel?.resolve(EnglishStrings))
         assertTrue(summary.topFiles.isEmpty())
     }
 
@@ -46,11 +48,11 @@ class OpenCodeSessionBranchSummaryTest {
         val summary = OpenCodeSessionBranchSummary("feature-x", isWorktree = true, files = files)
 
         assertEquals(OpenCodeIcons.CallSplit, summary.icon)
-        assertEquals(OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.CallSplit, "+128 −14"), summary.pillLayout)
-        assertEquals("Worktree branch feature-x, 128 added, 14 removed", summary.accessibilityLabel)
+        assertEquals(OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.CallSplit, "+128 −14"), summary.pillLayout(EnglishStrings))
+        assertEquals("Worktree branch feature-x, 128 added, 14 removed", summary.accessibilityLabel?.resolve(EnglishStrings))
         assertEquals(
             OpenCodeFloatingPillLayout.IconOnly(OpenCodeIcons.CallSplit, "Worktree branch feature-x, no changes"),
-            OpenCodeSessionBranchSummary("feature-x", isWorktree = true).pillLayout,
+            OpenCodeSessionBranchSummary("feature-x", isWorktree = true).pillLayout(EnglishStrings),
         )
     }
 
@@ -64,12 +66,12 @@ class OpenCodeSessionBranchSummaryTest {
                 files = listOf(OpenCodeSessionBranchChangedFile("a.png", 0, 0), OpenCodeSessionBranchChangedFile("b.png", 0, 0)),
             )
 
-        assertEquals("+5", added.changeLabel)
-        assertEquals("Branch x, 5 added", added.accessibilityLabel)
-        assertEquals("−3", removed.changeLabel)
-        assertEquals('−', removed.changeLabel!!.first())
-        assertEquals("2 files", binary.changeLabel)
-        assertEquals("Branch x, 2 uncommitted files", binary.accessibilityLabel)
+        assertEquals("+5", added.changeLabel?.resolve(EnglishStrings))
+        assertEquals("Branch x, 5 added", added.accessibilityLabel?.resolve(EnglishStrings))
+        assertEquals("−3", removed.changeLabel?.resolve(EnglishStrings))
+        assertEquals('−', removed.changeLabel!!.resolve(EnglishStrings).first())
+        assertEquals("2 files", binary.changeLabel?.resolve(EnglishStrings))
+        assertEquals("Branch x, 2 uncommitted files", binary.accessibilityLabel?.resolve(EnglishStrings))
     }
 
     @Test
@@ -86,7 +88,7 @@ class OpenCodeSessionBranchSummaryTest {
             )
 
         assertEquals(listOf("b.kt", "big.kt", "a.kt"), summary.topFiles.map { it.path })
-        assertEquals("5 uncommitted files", summary.fileCountLabel)
+        assertEquals("5 uncommitted files", summary.fileCountLabel?.resolve(EnglishStrings))
     }
 
     @Test
@@ -98,10 +100,10 @@ class OpenCodeSessionBranchSummaryTest {
             )
 
         assertEquals(listOf("y", "z"), summary.topFiles.map { it.path })
-        assertEquals("2 uncommitted files", summary.fileCountLabel)
+        assertEquals("2 uncommitted files", summary.fileCountLabel?.resolve(EnglishStrings))
         assertEquals(
             "1 uncommitted file",
-            OpenCodeSessionBranchSummary("x", files = listOf(OpenCodeSessionBranchChangedFile("a", 1, 0))).fileCountLabel,
+            OpenCodeSessionBranchSummary("x", files = listOf(OpenCodeSessionBranchChangedFile("a", 1, 0))).fileCountLabel?.resolve(EnglishStrings),
         )
     }
 
@@ -121,18 +123,18 @@ class OpenCodeSessionBranchSummaryTest {
 
         assertNull(deletionOnly.visibleAdditions)
         assertEquals(42, deletionOnly.visibleDeletions)
-        assertEquals("src/old.ts, 42 removed", deletionOnly.accessibilityLabel)
+        assertEquals("src/old.ts, 42 removed", deletionOnly.accessibilityLabel?.resolve(EnglishStrings))
         assertNull(binary.visibleAdditions)
         assertNull(binary.visibleDeletions)
-        assertEquals("assets/logo.png", binary.accessibilityLabel)
+        assertEquals("assets/logo.png", binary.accessibilityLabel?.resolve(EnglishStrings))
         assertNull(summary.visibleAdditions)
         assertEquals(42, summary.visibleDeletions)
-        assertEquals("2 uncommitted files, 42 removed", summary.fileCountAccessibilityLabel)
+        assertEquals("2 uncommitted files, 42 removed", summary.fileCountAccessibilityLabel?.resolve(EnglishStrings))
         assertEquals(listOf("src/old.ts", "assets/logo.png"), summary.topFiles.map { it.path })
-        listOf(deletionOnly.accessibilityLabel, binary.accessibilityLabel, summary.fileCountAccessibilityLabel!!, summary.accessibilityLabel)
+        listOf(deletionOnly.accessibilityLabel?.resolve(EnglishStrings), binary.accessibilityLabel?.resolve(EnglishStrings), summary.fileCountAccessibilityLabel!!.resolve(EnglishStrings), summary.accessibilityLabel?.resolve(EnglishStrings))
             .forEach {
-                assertFalse(it.contains("0 added"))
-                assertFalse(it.contains("0 removed"))
+                assertFalse(it!!.contains("0 added"))
+                assertFalse(it!!.contains("0 removed"))
             }
     }
 
@@ -142,7 +144,7 @@ class OpenCodeSessionBranchSummaryTest {
 
         assertEquals(128, summary.visibleAdditions)
         assertEquals(14, summary.visibleDeletions)
-        assertEquals("3 uncommitted files, 128 added, 14 removed", summary.fileCountAccessibilityLabel)
-        assertEquals("b.kt, 100 added, 2 removed", files[0].accessibilityLabel)
+        assertEquals("3 uncommitted files, 128 added, 14 removed", summary.fileCountAccessibilityLabel?.resolve(EnglishStrings))
+        assertEquals("b.kt, 100 added, 2 removed", files[0].accessibilityLabel?.resolve(EnglishStrings))
     }
 }

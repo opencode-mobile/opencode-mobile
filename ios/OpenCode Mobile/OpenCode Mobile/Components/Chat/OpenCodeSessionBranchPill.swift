@@ -63,9 +63,16 @@ struct OpenCodeSessionBranchSummary: Equatable {
 
     /// "Branch feature-x, 128 added, 14 removed" or "Branch feature-x, no changes".
     var accessibilityLabel: String {
-        let name = "\(isWorktree ? "Worktree branch" : "Branch") \(branch)"
-        guard hasChanges else { return "\(name), no changes" }
-        guard additions > 0 || deletions > 0 else { return "\(name), \(Self.uncommittedFileCount(files.count))" }
+        let name = isWorktree
+            ? String(localized: "component.branch_pill.a11y_worktree_branch", defaultValue: "Worktree branch \(branch)")
+            : String(localized: "component.branch_pill.a11y_branch", defaultValue: "Branch \(branch)")
+        guard hasChanges else {
+            return String(localized: "component.branch_pill.a11y_no_changes", defaultValue: "\(name), no changes")
+        }
+        guard additions > 0 || deletions > 0 else {
+            let files = Self.uncommittedFileCount(files.count)
+            return String(localized: "component.branch_pill.a11y_detail", defaultValue: "\(name), \(files)")
+        }
         return Self.spokenCounts(prefix: name, additions: additions, deletions: deletions)
     }
 
@@ -100,19 +107,23 @@ struct OpenCodeSessionBranchSummary: Equatable {
     }
 
     private static func fileCount(_ count: Int) -> String {
-        "\(count) \(count == 1 ? "file" : "files")"
+        String(localized: "component.branch_pill.files", defaultValue: "\(count) files")
     }
 
     private static func uncommittedFileCount(_ count: Int) -> String {
-        "\(count) uncommitted \(count == 1 ? "file" : "files")"
+        String(localized: "component.branch_pill.uncommitted_files", defaultValue: "\(count) uncommitted files")
     }
 
     /// "prefix, 128 added, 14 removed" with zero sides left out.
     static func spokenCounts(prefix: String, additions: Int, deletions: Int) -> String {
-        var parts = [prefix]
-        if additions > 0 { parts.append("\(additions) added") }
-        if deletions > 0 { parts.append("\(deletions) removed") }
-        return parts.joined(separator: ", ")
+        var text = prefix
+        if additions > 0 {
+            text = String(localized: "component.branch_pill.a11y_added", defaultValue: "\(text), \(additions) added")
+        }
+        if deletions > 0 {
+            text = String(localized: "component.branch_pill.a11y_removed", defaultValue: "\(text), \(deletions) removed")
+        }
+        return text
     }
 }
 

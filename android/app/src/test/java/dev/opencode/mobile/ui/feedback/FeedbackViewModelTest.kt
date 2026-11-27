@@ -393,7 +393,7 @@ class FeedbackViewModelTest {
         val viewModel = viewModel()
         viewModel.open(FeedbackScreen.Settings)
 
-        viewModel.beginDictationUnavailable(ComposerDictationPhase.PermissionDenied, "Microphone access is off")
+        viewModel.beginDictationUnavailable(ComposerDictationPhase.PermissionDenied, UiText.verbatim("Microphone access is off"))
 
         assertTrue(viewModel.state.value.dictationTakesOverCompose)
         assertEquals("Report a problem", viewModel.state.value.sheetTitle.english())
