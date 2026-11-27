@@ -1,18 +1,25 @@
 package dev.opencode.mobile.ui.text
 
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.DateTimeStyle
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.domain.text.resolve
+import dev.opencode.mobile.domain.time.LocalizedDateTimeFormat
 import org.w3c.dom.Element
 import java.io.File
+import java.time.ZoneOffset
+import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * Resolves [UiText] against the English `res/values/strings.xml`, so JVM unit tests can
- * assert on the text users read without Robolectric.
+ * assert on the text users read without Robolectric. Dates are en-US in UTC ([DATES]).
  */
 object EnglishStrings : UiTextLookup {
+    /** en-US patterns (as Android's CLDR data gives them) in UTC, independent of the host. */
+    val DATES = LocalizedDateTimeFormat(Locale.US, ZoneOffset.UTC, monthDayPattern = "MMM d")
+
     private val stringNames: Map<Int, String> by lazy { resourceNames(R.string::class.java) }
     private val pluralNames: Map<Int, String> by lazy { resourceNames(R.plurals::class.java) }
 
@@ -60,6 +67,11 @@ object EnglishStrings : UiTextLookup {
         val format = if (count == 1) items.getValue("one") else items.getValue("other")
         return String.format(format, *args)
     }
+
+    override fun dateTime(
+        epochMs: Long,
+        style: DateTimeStyle,
+    ): String = DATES.format(epochMs, style)
 
     private fun resourceNames(type: Class<*>): Map<Int, String> =
         type.fields.associate { field -> field.getInt(null) to field.name }

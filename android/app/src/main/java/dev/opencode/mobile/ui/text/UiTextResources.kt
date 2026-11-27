@@ -1,17 +1,26 @@
 package dev.opencode.mobile.ui.text
 
 import android.content.res.Resources
+import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalResources
+import dev.opencode.mobile.domain.text.DateTimeStyle
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.text.UiTextLookup
 import dev.opencode.mobile.domain.text.resolve
+import dev.opencode.mobile.domain.time.LocalizedDateTimeFormat
+import java.time.ZoneId
+import java.util.Locale
 
-/** [UiTextLookup] backed by Android [Resources]. */
+/** [UiTextLookup] backed by Android [Resources]; dates follow the same configuration's locale. */
 class ResourcesUiTextLookup(
     private val resources: Resources,
 ) : UiTextLookup {
+    private val dates: LocalizedDateTimeFormat by lazy {
+        platformDateTimeFormat(resources.configuration.locales[0])
+    }
+
     override fun string(
         id: Int,
         args: Array<out Any>,
@@ -22,7 +31,23 @@ class ResourcesUiTextLookup(
         count: Int,
         args: Array<out Any>,
     ): String = resources.getQuantityString(id, count, *args)
+
+    override fun dateTime(
+        epochMs: Long,
+        style: DateTimeStyle,
+    ): String = dates.format(epochMs, style)
 }
+
+/** [LocalizedDateTimeFormat] with the platform's CLDR patterns for [locale], in the device time zone. */
+fun platformDateTimeFormat(
+    locale: Locale,
+    zone: ZoneId = ZoneId.systemDefault(),
+): LocalizedDateTimeFormat =
+    LocalizedDateTimeFormat(
+        locale = locale,
+        zone = zone,
+        monthDayPattern = DateFormat.getBestDateTimePattern(locale, "MMMd"),
+    )
 
 /** Resolves in the current configuration; recomposes when the locale changes, like stringResource. */
 @Composable

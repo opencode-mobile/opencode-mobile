@@ -1,18 +1,15 @@
 package dev.opencode.mobile.domain.time
 
 import dev.opencode.mobile.R
+import dev.opencode.mobile.domain.text.DateTimeStyle
 import dev.opencode.mobile.domain.text.UiText
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-/** Short relative time ("now", "5m ago", "2d ago"), then the month and day after a week. */
+/**
+ * Short relative time ("now", "5m ago", "2d ago"), then the month and day after a week. The
+ * month and day is a [UiText.DateTime], written in the reader's locale when resolved.
+ */
 object RelativeTimeFormatting {
-    private val absoluteFormatter: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("MMM d", Locale.US)
-
     fun format(
         epochMs: Long,
         nowEpochMs: Long = System.currentTimeMillis(),
@@ -26,13 +23,7 @@ object RelativeTimeFormatting {
             minutes < 60L -> UiText.plural(R.plurals.relative_time_minutes_ago, minutes.toInt())
             hours < 24L -> UiText.plural(R.plurals.relative_time_hours_ago, hours.toInt())
             days < 7L -> UiText.plural(R.plurals.relative_time_days_ago, days.toInt())
-            else ->
-                UiText.verbatim(
-                    Instant
-                        .ofEpochMilli(epochMs)
-                        .atZone(ZoneId.systemDefault())
-                        .format(absoluteFormatter),
-                )
+            else -> UiText.dateTime(epochMs, DateTimeStyle.MonthDay)
         }
     }
 }
