@@ -5694,6 +5694,17 @@
         }
       }
     },
+    "files.error.server_status" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server responded with %lld."
+          }
+        }
+      }
+    },
     "files.find_error" : {
       "extractionState" : "manual",
       "localizations" : {

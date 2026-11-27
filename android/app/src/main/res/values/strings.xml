@@ -407,6 +407,7 @@
     <string name="files_find_no_match">No files match “%1$s”</string>
     <string name="files_find_no_match_detail">Server search skips ignored folders.</string>
     <string name="files_error_check_server_connection">Check the connection to the server and try again.</string>
+    <string name="files_error_server_status">The server responded with %1$d.</string>
     <string name="files_no_file_title">Open a file from the tree</string>
     <string name="files_no_file_message">Opened files stay as tabs</string>
     <string name="files_path_copied">Path copied</string>
