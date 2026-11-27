@@ -16,7 +16,6 @@ import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.domain.worktree.RemoveWorktreeRequest
 import dev.opencode.mobile.domain.worktree.WorktreeRemoveError
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /** One worktree row: never the main checkout. */
 data class WorktreeRowUi(

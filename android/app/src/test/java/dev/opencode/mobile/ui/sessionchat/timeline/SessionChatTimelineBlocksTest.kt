@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
@@ -8,6 +9,8 @@ import dev.opencode.mobile.domain.message.PresentationBlockId
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.ui.text.EnglishStrings
+import dev.opencode.mobile.ui.text.GermanFormatsStrings
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
@@ -21,7 +24,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import dev.opencode.mobile.ui.text.english
-import java.util.Locale
 
 class SessionChatTimelineBlocksTest {
     @Test
@@ -319,13 +321,16 @@ class SessionChatTimelineBlocksTest {
 
     @Test
     fun thoughtDurationLabel_matchesTuiBuckets() {
-        assertEquals("438ms", SessionChatTimelineBlocks.thoughtDurationLabel(438, Locale.US))
-        assertEquals("6.4s", SessionChatTimelineBlocks.thoughtDurationLabel(6400, Locale.US))
-        assertEquals("2m 7s", SessionChatTimelineBlocks.thoughtDurationLabel(127_000, Locale.US))
-        assertNull(SessionChatTimelineBlocks.thoughtDurationLabel(null, Locale.US))
-        // The decimal follows the reader's locale; the TUI's unit letters stay.
-        assertEquals("6,4s", SessionChatTimelineBlocks.thoughtDurationLabel(6400, Locale.GERMANY))
-        assertEquals(UiText.Number(6.4, 1, 1, suffix = "s"), SessionChatTimelineBlocks.thoughtDuration(6400))
+        assertEquals("438ms", SessionChatTimelineBlocks.thoughtDurationLabel(438, EnglishStrings))
+        assertEquals("6.4s", SessionChatTimelineBlocks.thoughtDurationLabel(6400, EnglishStrings))
+        assertEquals("2m 7s", SessionChatTimelineBlocks.thoughtDurationLabel(127_000, EnglishStrings))
+        assertNull(SessionChatTimelineBlocks.thoughtDurationLabel(null, EnglishStrings))
+        // The decimal follows the reader's locale; the seconds unit is keyed around it.
+        assertEquals("6,4s", SessionChatTimelineBlocks.thoughtDurationLabel(6400, GermanFormatsStrings))
+        assertEquals(
+            UiText.resource(R.string.component_reasoning_row_duration_seconds, UiText.Number(6.4, 1, 1)),
+            SessionChatTimelineBlocks.thoughtDuration(6400),
+        )
     }
 
     @Test

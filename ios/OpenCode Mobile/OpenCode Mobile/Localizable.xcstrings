@@ -3486,6 +3486,18 @@
         }
       }
     },
+    "component.reasoning_row.duration_seconds" : {
+      "comment" : "How long a thought took, under a minute: the number is already written in the reader's locale (\"6.4\"); \"s\" is the seconds unit.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@s"
+          }
+        }
+      }
+    },
     "component.reasoning_row.shows_thought_hint" : {
       "comment" : "Accessibility hint on a thought row that opens the full thought.",
       "extractionState" : "manual",

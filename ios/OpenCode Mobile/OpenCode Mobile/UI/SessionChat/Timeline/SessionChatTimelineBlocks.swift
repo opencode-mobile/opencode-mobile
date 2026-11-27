@@ -1849,7 +1849,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     /// How long a thought took, in the TUI's buckets ("438ms", "6.4s", "2m 7s", "1h 5m"). The
-    /// decimal follows `locale` ("6,4s" in de-DE); the unit letters stay.
+    /// decimal follows `locale` ("6,4s" in de-DE); the seconds unit is keyed around it.
     static func thoughtDurationLabel(_ durationMs: Int64?, locale: Locale = .current) -> String? {
         guard let duration = durationMs, duration >= 0 else { return nil }
         if duration < 1_000 { return "\(duration)ms" }
@@ -1857,7 +1857,11 @@ nonisolated enum SessionChatTimelineBlocks {
             let seconds = (Double(duration) / 1000.0).formatted(
                 .number.precision(.fractionLength(1)).rounded(rule: .toNearestOrAwayFromZero).locale(locale)
             )
-            return "\(seconds)s"
+            return String(
+                localized: "component.reasoning_row.duration_seconds",
+                defaultValue: "\(seconds)s",
+                locale: locale
+            )
         }
         if duration < 3_600_000 {
             let minutes = duration / 60_000

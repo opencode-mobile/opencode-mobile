@@ -18,6 +18,6 @@ object LocalizedNumberFormat {
                 roundingMode = RoundingMode.HALF_UP
             }
         val value = if (number.percent) number.value / 100 else number.value
-        return format.format(value) + number.suffix
+        return format.format(value)
     }
 }

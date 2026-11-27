@@ -14,7 +14,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.Locale
 
 class SessionChatLiveThoughtTest {
     private fun user(
@@ -109,10 +108,10 @@ class SessionChatLiveThoughtTest {
     @Test
     fun sheetSublineSaysThinkingUntilTheThoughtSettles() {
         val live = SessionChatThoughtSheetState(partId = "r1", text = "Checking.", isStreaming = true, durationMs = null)
-        assertEquals("Thinking…", live.detailTarget("Thinking…", Locale.US).presentation?.thoughtDuration())
+        assertEquals("Thinking…", live.detailTarget("Thinking…", EnglishStrings).presentation?.thoughtDuration())
         val settled = SessionChatThoughtSheetState(partId = "r1", text = "Checking.", isStreaming = false, durationMs = 1_500)
-        assertEquals("1.5s", settled.detailTarget("Thinking…", Locale.US).presentation?.thoughtDuration())
-        assertEquals("Checking.", settled.detailTarget("Thinking…", Locale.US).body)
+        assertEquals("1.5s", settled.detailTarget("Thinking…", EnglishStrings).presentation?.thoughtDuration())
+        assertEquals("Checking.", settled.detailTarget("Thinking…", EnglishStrings).body)
     }
 
     private fun ToolResultPresentation.thoughtDuration(): String? = (this as? ToolResultPresentation.Thought)?.durationLabel

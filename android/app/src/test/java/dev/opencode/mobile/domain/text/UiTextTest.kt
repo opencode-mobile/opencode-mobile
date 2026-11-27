@@ -33,7 +33,7 @@ class UiTextTest {
             style: DateTimeStyle,
         ): String = "$style@$epochMs"
 
-        override fun number(number: UiText.Number): String = "${number.value}${number.suffix}"
+        override fun number(number: UiText.Number): String = "${number.value}"
     }
 
     @Test

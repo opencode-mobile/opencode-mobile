@@ -16,7 +16,6 @@ import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRemoveError
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.ui.text.EnglishStrings
-import java.lang.reflect.Proxy
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,6 +33,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.lang.reflect.Proxy
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorktreesViewModelTest {

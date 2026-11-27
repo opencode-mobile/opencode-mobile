@@ -10,7 +10,6 @@ import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.session.ServerErrorMessage
 import dev.opencode.mobile.domain.text.UiText
 import dev.opencode.mobile.network.ActiveConnectionManager
-import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import javax.inject.Inject
 
 class DefaultWorktreeRepository(
     private val remote: WorktreeRemote,

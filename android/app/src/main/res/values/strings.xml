@@ -1520,6 +1520,8 @@
     <string name="component_todos_pill_accessibility_label_active">Session todos, %1$d of %2$d completed, %3$s</string>
     <!-- A settled thought. %1$s is how long it took, such as 4s. -->
     <string name="component_reasoning_row_thought_duration">Thought · %1$s</string>
+    <!-- How long a thought took, under a minute: the number is already written in the reader's locale ("6.4"); "s" is the seconds unit. -->
+    <string name="component_reasoning_row_duration_seconds">%1$ss</string>
     <!-- Accessibility hint on a thought row that opens the full thought. -->
     <string name="component_reasoning_row_shows_thought_hint">Shows the full thought</string>
     <!-- Accessibility: a diff row's kind, read before its line numbers. -->

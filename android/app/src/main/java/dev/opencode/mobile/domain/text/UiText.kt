@@ -46,14 +46,13 @@ sealed interface UiText {
      * A number written in the reader's locale when resolved ("1.5" in en-US, "1,5" in de-DE),
      * with [minFractionDigits] to [maxFractionDigits] decimals, rounded half up, grouped.
      * With [percent], [value] is a percentage (75.0 for 75%) written with the locale's percent
-     * sign ("75.0%", "75,0 %"). [suffix] is a unit symbol written right after it, as is, for
-     * units that are not keyed yet (the TUI-style "6.4s").
+     * sign ("75.0%", "75,0 %"). A unit goes in a keyed format string that takes the number as
+     * an argument (`component_reasoning_row_duration_seconds`: "%1$ss").
      */
     data class Number(
         val value: Double,
         val minFractionDigits: Int = 0,
         val maxFractionDigits: Int = 0,
-        val suffix: String = "",
         val percent: Boolean = false,
     ) : UiText
 

@@ -51,10 +51,10 @@ import dev.opencode.mobile.domain.message.questionAnswers
 import dev.opencode.mobile.domain.message.skillName
 import dev.opencode.mobile.domain.message.summaryCallCount
 import dev.opencode.mobile.domain.message.writeContent
-import dev.opencode.mobile.domain.text.LocalizedNumberFormat
 import dev.opencode.mobile.domain.text.UiText
+import dev.opencode.mobile.domain.text.UiTextLookup
+import dev.opencode.mobile.domain.text.resolve
 import dev.opencode.mobile.markdown.MarkdownDocument
-import java.util.Locale
 
 /** How much of a limited user message the timeline shows. */
 data class SessionChatTextLimit(
@@ -1465,28 +1465,24 @@ object SessionChatTimelineBlocks {
         }
     }
 
-    /** [thoughtDuration] written in [locale]: "6.4s" in en-US, "6,4s" in de-DE. */
+    /** [thoughtDuration] resolved with [text]: "6.4s" in en-US, "6,4s" in de-DE. */
     fun thoughtDurationLabel(
         durationMs: Long?,
-        locale: Locale,
-    ): String? =
-        when (val text = thoughtDuration(durationMs)) {
-            null -> null
-            is UiText.Number -> LocalizedNumberFormat.format(text, locale)
-            is UiText.Verbatim -> text.value
-            else -> error("thoughtDuration is a number or verbatim text")
-        }
+        text: UiTextLookup,
+    ): String? = thoughtDuration(durationMs)?.resolve(text)
 
     /**
      * How long a thought took, in the TUI's buckets ("438ms", "6.4s", "2m 7s", "1h 5m"). The
-     * seconds with a decimal are a [UiText.Number], so they follow the reader's locale.
+     * seconds with a decimal are a keyed unit around a [UiText.Number], so the number follows
+     * the reader's locale and the unit can be translated.
      */
     fun thoughtDuration(durationMs: Long?): UiText? {
         val duration = durationMs ?: return null
         if (duration < 0) return null
         return when {
             duration < 1_000 -> UiText.verbatim("${duration}ms")
-            duration < 60_000 -> UiText.Number(duration / 1000.0, 1, 1, suffix = "s")
+            duration < 60_000 ->
+                UiText.resource(R.string.component_reasoning_row_duration_seconds, UiText.Number(duration / 1000.0, 1, 1))
             duration < 3_600_000 -> {
                 val minutes = duration / 60_000
                 val seconds = (duration % 60_000) / 1_000

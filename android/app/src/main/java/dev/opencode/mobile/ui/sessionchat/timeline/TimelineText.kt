@@ -73,7 +73,6 @@ private sealed class UiTextSurrogate {
         val value: Double,
         val minFractionDigits: Int,
         val maxFractionDigits: Int,
-        val suffix: String,
         val percent: Boolean = false,
     ) : UiTextSurrogate()
 
@@ -83,7 +82,7 @@ private sealed class UiTextSurrogate {
             is Plural -> UiText.Plural(id, count, args.map { it.value() })
             is Verbatim -> UiText.Verbatim(value)
             is DateTime -> UiText.DateTime(epochMs, style)
-            is Number -> UiText.Number(value, minFractionDigits, maxFractionDigits, suffix, percent)
+            is Number -> UiText.Number(value, minFractionDigits, maxFractionDigits, percent)
         }
 
     companion object {
@@ -93,7 +92,7 @@ private sealed class UiTextSurrogate {
                 is UiText.Plural -> Plural(text.id, text.count, text.args.map(UiTextArgSurrogate::from))
                 is UiText.Verbatim -> Verbatim(text.value)
                 is UiText.DateTime -> DateTime(text.epochMs, text.style)
-                is UiText.Number -> Number(text.value, text.minFractionDigits, text.maxFractionDigits, text.suffix, text.percent)
+                is UiText.Number -> Number(text.value, text.minFractionDigits, text.maxFractionDigits, text.percent)
             }
     }
 }

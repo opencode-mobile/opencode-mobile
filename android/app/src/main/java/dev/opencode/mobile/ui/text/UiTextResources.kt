@@ -4,6 +4,7 @@ import android.content.res.Resources
 import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalResources
 import dev.opencode.mobile.domain.text.DateTimeStyle
@@ -63,6 +64,17 @@ fun platformDateTimeFormat(
 @Composable
 @ReadOnlyComposable
 fun currentLocale(): Locale = LocalConfiguration.current.locales[0]
+
+/**
+ * A [UiTextLookup] for the current configuration, kept across recompositions and replaced when
+ * the resources or locale change, for code that resolves text outside a composable.
+ */
+@Composable
+fun rememberUiTextLookup(): UiTextLookup {
+    val resources = LocalResources.current
+    val locale = currentLocale()
+    return remember(resources, locale) { ResourcesUiTextLookup(resources) }
+}
 
 /** Resolves in the current configuration; recomposes when the locale changes, like stringResource. */
 @Composable

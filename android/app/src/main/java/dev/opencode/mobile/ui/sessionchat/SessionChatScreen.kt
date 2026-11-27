@@ -185,6 +185,7 @@ import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
 import dev.opencode.mobile.ui.text.currentLocale
+import dev.opencode.mobile.ui.text.rememberUiTextLookup
 import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.ui.worktree.NewWorktreeRow
 import dev.opencode.mobile.ui.worktree.WorktreeCreateFormActions
@@ -1812,7 +1813,7 @@ private fun SessionChatScreenBody(
         // streaming in and settles in place (#1118).
         val thinkingLabel = stringResource(R.string.component_thinking_ellipsis)
         SessionChatToolDetailSheet(
-            target = uiState.presentedThought?.detailTarget(thinkingLabel, currentLocale()),
+            target = uiState.presentedThought?.detailTarget(thinkingLabel, rememberUiTextLookup()),
             onDismiss = viewModel::closeThought,
             onOpenLink = { openSessionExternalLink(sheetContext, it) },
         )
