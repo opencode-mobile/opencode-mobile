@@ -59,6 +59,21 @@ class OpenCodeMessageTimeRevealTest {
     }
 
     @Test
+    fun olderShortDateFollowsTheLocalesPattern() {
+        val german =
+            OpenCodeMessageTime.of(
+                at(2026, 10, 22, 10, 0),
+                nowEpochMs = now,
+                zone = utc,
+                locale = Locale.GERMANY,
+                is24Hour = true,
+                monthDayPattern = "d. MMM",
+            )
+        assertEquals("22. Okt.", german.day)
+        assertEquals("10:00", german.time)
+    }
+
+    @Test
     fun futureTimesCountAsToday() {
         assertNull(time(at(2026, 10, 30, 1, 0)).day)
     }
@@ -102,10 +117,11 @@ class OpenCodeMessageTimeRevealTest {
     fun accessibilityValueKeepsAgentModelAndTime() {
         assertEquals(
             "Build · DeepSeek V4 Flash · 9:05 PM",
-            outgoingMessageAccessibilityValue("Build · DeepSeek V4 Flash · 9:05 PM", time(at(2026, 10, 29, 21, 5))),
+            outgoingMessageAccessibilityValue("Build · DeepSeek V4 Flash", time(at(2026, 10, 29, 21, 5))),
         )
         val yesterday = time(at(2026, 10, 28, 21, 5))
-        assertEquals("Yesterday, Build · 9:05 PM", outgoingMessageAccessibilityValue("Build · 9:05 PM", yesterday))
+        assertEquals("Yesterday, Build · 9:05 PM", outgoingMessageAccessibilityValue("Build", yesterday))
         assertEquals("Yesterday, 9:05 PM", outgoingMessageAccessibilityValue("", yesterday))
+        assertEquals("Build", outgoingMessageAccessibilityValue("Build", null))
     }
 }
