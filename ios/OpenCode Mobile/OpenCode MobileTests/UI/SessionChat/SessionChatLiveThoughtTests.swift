@@ -96,7 +96,8 @@ struct SessionChatLiveThoughtTests {
         let live = SessionChatThoughtSheetState(partID: "r1", text: "Checking.", isStreaming: true, durationMs: nil)
         #expect(thoughtPresentation(live)?.durationLabel == "Thinking\u{2026}")
         let settled = SessionChatThoughtSheetState(partID: "r1", text: "Checking.", isStreaming: false, durationMs: 1_500)
-        #expect(thoughtPresentation(settled)?.durationLabel == "1.5s")
+        // Locale-dependent number ("1.5s", "1,5s"); `SessionChatTimelineBlocksTests` pins locales.
+        #expect(thoughtPresentation(settled)?.durationLabel == SessionChatTimelineBlocks.thoughtDurationLabel(1_500))
         #expect(settled.detailTarget.body == "Checking.")
     }
 

@@ -84,7 +84,10 @@ struct SessionChatStepRailTests {
         ])
         let thought = rails[0].steps[0]
         #expect(thought.kind == .thought)
-        #expect(thought.title.resolved == "Thought \u{00B7} 2.1s")
+        // The number follows the reader's locale ("2.1s", "2,1s"); `SessionChatTimelineBlocksTests`
+        // pins locales for the format itself.
+        let duration = try #require(SessionChatTimelineBlocks.thoughtDurationLabel(2_100))
+        #expect(thought.title.resolved == "Thought \u{00B7} \(duration)")
         #expect(thought.thoughtText == "Plan")
     }
 
